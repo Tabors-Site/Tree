@@ -1,15 +1,10 @@
 const chalk = require("chalk");
-const TreeAPI = require("../api");
 const { load, save, requireAuth, currentNodeId, currentZone } = require("../config");
+const { getApi } = require("../helpers");
 const { registerDynamic } = require("./dynamic");
 
-function getApi() {
-  const cfg = requireAuth();
-  return new TreeAPI(cfg.apiKey);
-}
-
 async function showConfig() {
-  const api = getApi();
+  const api = getApi(requireAuth());
   const data = await api.getLandConfig();
   const config = data.config || {};
   const keys = Object.keys(config);
@@ -227,7 +222,7 @@ module.exports = (program) => {
     .action(async (key) => {
       if (!key) return console.log(chalk.yellow("Usage: config get <key>  (e.g. config get LAND_NAME)"));
       try {
-        const api = getApi();
+        const api = getApi(requireAuth());
         const data = await api.getLandConfigValue(key);
         const val = data.value;
         if (val === null || val === undefined) {
@@ -246,7 +241,7 @@ module.exports = (program) => {
     .action(async (key, value) => {
       if (!key || !value) return console.log(chalk.yellow("Usage: config set <key> <value>  (e.g. config set LAND_NAME \"My Land\")"));
       try {
-        const api = getApi();
+        const api = getApi(requireAuth());
         await api.setLandConfig(key, value);
         console.log(chalk.green(`Set ${key} = ${value}`));
       } catch (e) {

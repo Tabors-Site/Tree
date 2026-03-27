@@ -1,7 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 /**
  * Periodic cleanup of orphaned upload files.
- * Scans the uploads directory for files not referenced by any Note or RawIdea.
+ * Scans the uploads directory for files not referenced by any model with file content.
  * Runs on a configurable interval (default: every 6 hours).
  * Only deletes files older than a grace period (default: 1 hour) to avoid
  * racing with in-progress uploads.
@@ -62,15 +62,23 @@ export async function cleanOrphanedUploads({ graceMs = DEFAULT_GRACE_MS } = {}) 
     if (note.content) referencedFiles.add(note.content);
   }
 
-  // Also check RawIdea if the model exists (extension may not be loaded)
+  // Check all registered models for file references. Extensions register models
+  // at boot via the loader. We don't import from extensions. We iterate whatever
+  // Mongoose has in its global registry. If a model has a contentType field,
+  // it might reference uploaded files. This is future-proof: any extension that
+  // stores file references will be checked without the seed knowing its name.
   try {
     const mongoose = (await import("mongoose")).default;
-    const RawIdea = mongoose.models.RawIdea;
-    if (RawIdea) {
-      const riCursor = RawIdea.find({ contentType: CONTENT_TYPE.FILE }).select("content").lean().cursor();
-      for await (const ri of riCursor) {
-        if (ri.content) referencedFiles.add(ri.content);
-      }
+    for (const [name, model] of Object.entries(mongoose.models)) {
+      if (name === "Note") continue; // already checked above
+      const paths = model.schema?.paths || {};
+      if (!paths.contentType || !paths.content) continue;
+      try {
+        const cursor = model.find({ contentType: CONTENT_TYPE.FILE }).select("content").lean().cursor();
+        for await (const doc of cursor) {
+          if (doc.content) referencedFiles.add(doc.content);
+        }
+      } catch {}
     }
   } catch {}
 

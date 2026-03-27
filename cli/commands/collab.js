@@ -10,7 +10,7 @@ module.exports = (program) => {
     .action(async () => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+        return console.log(chalk.yellow("Enter a tree first."));
       const api = getApi(cfg);
       try {
         const data = await api.getRoot(cfg.activeRootId);
@@ -119,7 +119,7 @@ module.exports = (program) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: kick <username or userId>"));
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+        return console.log(chalk.yellow("Enter a tree first."));
       const api = getApi(cfg);
       const userReceiving = parts.join(" ");
       try {
@@ -135,7 +135,7 @@ module.exports = (program) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: owner <username or userId>"));
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+        return console.log(chalk.yellow("Enter a tree first."));
       const api = getApi(cfg);
       const userReceiving = parts.join(" ");
       try {

@@ -1179,10 +1179,14 @@ export async function orchestrateTreeRequest({
   let treeSummary = null;
   if (rootId) {
     try {
-      treeSummary = await buildDeepTreeSummary(rootId, {
-        includeEncodings: true,
-      });
- log.verbose("Tree Orchestrator", " treeSummary for librarian:\n", treeSummary);
+      let encodingMap = null;
+      try {
+        const { getExtension } = await import("../loader.js");
+        const uExt = getExtension("understanding");
+        if (uExt?.exports?.getEncodingMap) encodingMap = await uExt.exports.getEncodingMap(rootId);
+      } catch {}
+      treeSummary = await buildDeepTreeSummary(rootId, { encodingMap });
+      log.verbose("Tree Orchestrator", " treeSummary for librarian:\n", treeSummary);
     } catch (err) {
  log.error("Tree Orchestrator", " Pre-fetch tree summary failed:", err.message);
     }
@@ -1475,11 +1479,15 @@ async function runQueryFlow({
   let treeSummary = null;
   if (rootId) {
     try {
-      treeSummary = await buildDeepTreeSummary(rootId, {
-        includeEncodings: true,
-      });
+      let encodingMap = null;
+      try {
+        const { getExtension } = await import("../loader.js");
+        const uExt = getExtension("understanding");
+        if (uExt?.exports?.getEncodingMap) encodingMap = await uExt.exports.getEncodingMap(rootId);
+      } catch {}
+      treeSummary = await buildDeepTreeSummary(rootId, { encodingMap });
     } catch (err) {
- log.error("Tree Orchestrator", "Query: tree summary failed:", err.message);
+      log.error("Tree Orchestrator", "Query: tree summary failed:", err.message);
     }
   }
 

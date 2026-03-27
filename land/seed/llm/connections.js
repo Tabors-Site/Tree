@@ -22,12 +22,6 @@ import { clearUserClientCache } from "../ws/conversation.js";
 import crypto from "crypto";
 import { getLandConfigValue } from "../landConfig.js";
 import dns from "dns/promises";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 
 const ENCRYPTION_KEY = process.env.CUSTOM_LLM_API_SECRET_KEY;
 const ALGORITHM = "aes-256-cbc";
@@ -336,7 +330,8 @@ export async function updateLlmConnection(userId, connectionId, { name, baseUrl,
   );
 
   // Bust cache if this connection is currently assigned
-  const userSlots = user.metadata?.userLlm?.slots || {};
+  const userLlmMeta = user.metadata instanceof Map ? user.metadata.get("userLlm") : user.metadata?.userLlm;
+  const userSlots = userLlmMeta?.assignments || {};
   if (user.llmDefault === connectionId || Object.values(userSlots).includes(connectionId)) {
     clearUserClientCache(userId);
   }
@@ -361,7 +356,8 @@ export async function deleteLlmConnection(userId, connectionId) {
     if (user.llmDefault === connectionId) {
       updates.llmDefault = null;
     }
-    const userSlots = user.metadata?.userLlm?.slots || {};
+    const userLlmMeta = user.metadata instanceof Map ? user.metadata.get("userLlm") : user.metadata?.userLlm;
+  const userSlots = userLlmMeta?.assignments || {};
     for (const [s, val] of Object.entries(userSlots)) {
       if (val === connectionId) {
         updates[`metadata.userLlm.slots.${s}`] = null;

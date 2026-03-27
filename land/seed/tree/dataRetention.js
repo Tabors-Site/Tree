@@ -31,12 +31,19 @@ export async function runRetentionCleanup() {
     try {
       const cutoff = new Date(now.getTime() - chatDays * 24 * 60 * 60 * 1000);
       let totalDeleted = 0;
-      // Batch delete to avoid blocking the DB on huge collections
-      let batch;
+      // Batch delete: find IDs first, then delete by ID set.
+      // deleteMany().limit() is not supported by MongoDB. Without batching,
+      // one massive delete could block the DB for minutes on large collections.
+      let batchCount;
       do {
-        batch = await Chat.deleteMany({ "startMessage.time": { $lt: cutoff } }).limit(DELETE_BATCH_SIZE);
-        totalDeleted += batch.deletedCount || 0;
-      } while (batch.deletedCount >= DELETE_BATCH_SIZE);
+        const ids = await Chat.find({ "startMessage.time": { $lt: cutoff } })
+          .select("_id").limit(DELETE_BATCH_SIZE).lean();
+        batchCount = ids.length;
+        if (batchCount > 0) {
+          await Chat.deleteMany({ _id: { $in: ids.map(d => d._id) } });
+          totalDeleted += batchCount;
+        }
+      } while (batchCount >= DELETE_BATCH_SIZE);
       if (totalDeleted > 0) {
         log.info("Retention", `Deleted ${totalDeleted} chat records older than ${chatDays} days`);
       }
@@ -51,11 +58,16 @@ export async function runRetentionCleanup() {
     try {
       const cutoff = new Date(now.getTime() - contribDays * 24 * 60 * 60 * 1000);
       let totalDeleted = 0;
-      let batch;
+      let batchCount;
       do {
-        batch = await Contribution.deleteMany({ date: { $lt: cutoff } }).limit(DELETE_BATCH_SIZE);
-        totalDeleted += batch.deletedCount || 0;
-      } while (batch.deletedCount >= DELETE_BATCH_SIZE);
+        const ids = await Contribution.find({ date: { $lt: cutoff } })
+          .select("_id").limit(DELETE_BATCH_SIZE).lean();
+        batchCount = ids.length;
+        if (batchCount > 0) {
+          await Contribution.deleteMany({ _id: { $in: ids.map(d => d._id) } });
+          totalDeleted += batchCount;
+        }
+      } while (batchCount >= DELETE_BATCH_SIZE);
       if (totalDeleted > 0) {
         log.info("Retention", `Deleted ${totalDeleted} contribution records older than ${contribDays} days`);
       }

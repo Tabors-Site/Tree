@@ -1,9 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
-import log from "../log.js";
-import mongoose from "mongoose";
 import Node from "../models/node.js";
 import Note from "../models/note.js";
-import User from "../models/user.js";
 import { hooks } from "../hooks.js";
 import { NODE_STATUS, DELETED, CONTENT_TYPE, SYSTEM_OWNER } from "../protocol.js";
 import { getAncestorChain } from "./ancestorCache.js";
@@ -37,9 +34,7 @@ export async function buildPathStrings(nodeIds) {
   return results;
 }
 
-// getRootNodesForUser removed. Navigation state (metadata.nav.roots) is owned
-// by the navigation extension. Use its exports:
-//   getExtension("navigation")?.exports?.getUserRootsWithNames(userId)
+
 
 export async function resolveRootNode(nodeId) {
   if (!nodeId) {
@@ -221,45 +216,9 @@ export function setTreeSummaryLimits(depth, nodes) {
 
 export async function buildDeepTreeSummary(
   rootId,
-  { includeEncodings = false, includeIds = false } = {},
+  { includeIds = false, encodingMap = null } = {},
 ) {
   let nodeCount = 0;
-
-  // Optionally load navigation encodings from the latest understanding run
-  let encodingMap = null;
-  if (includeEncodings) {
-    try {
-      const UnderstandingRun = mongoose.models.UnderstandingRun;
-      const UnderstandingNode = mongoose.models.UnderstandingNode;
-      if (!UnderstandingRun || !UnderstandingNode) throw new Error("skip");
-
-      const latestRun = await UnderstandingRun.findOne({
-        rootNodeId: rootId,
-        perspective: { $regex: /^Summarize this section/ },
-      })
-        .sort({ createdAt: -1 })
-        .select("_id")
-        .lean();
-
-      if (latestRun) {
-        const runId = latestRun._id;
-        const uNodes = await UnderstandingNode.find({})
-          .select("realNodeId perspectiveStates")
-          .lean();
-        encodingMap = new Map();
-        for (const uNode of uNodes) {
-          const state =
-            uNode.perspectiveStates?.get?.(runId) ||
-            (uNode.perspectiveStates && uNode.perspectiveStates[runId]);
-          if (state?.encoding) {
-            encodingMap.set(uNode.realNodeId, state.encoding);
-          }
-        }
-      }
-    } catch (err) {
-      log.warn("Tree", "Failed to load understanding encodings:", err.message);
-    }
-  }
 
   async function walkNode(nodeId, depth) {
     if (nodeCount >= TREE_SUMMARY_MAX_NODES) return null;

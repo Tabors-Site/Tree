@@ -88,7 +88,7 @@ const LandPage = () => {
       <section className="lp-section" id="start">
         <div className="lp-container">
           <h2 className="lp-section-title">Start a land</h2>
-          <p className="lp-section-sub">Four commands.</p>
+          <p className="lp-section-sub">One command. Interactive setup walks you through the rest.</p>
 
           <div className="lp-terminal">
             <div className="lp-term-header">
@@ -105,30 +105,15 @@ const LandPage = () => {
                 <span className="lp-term-prompt">$</span> cd my-land
               </div>
               <div className="lp-term-line">
-                <span className="lp-term-comment"># edit .env with your MongoDB URI and LLM key</span>
-              </div>
-              <div className="lp-term-line">
                 <span className="lp-term-prompt">$</span> npm start
               </div>
-            </div>
-          </div>
-
-          <div style={{height: 24}} />
-
-          <div className="lp-terminal">
-            <div className="lp-term-header">
-              <span className="lp-term-dot" style={{background: "#ff5f56"}} />
-              <span className="lp-term-dot" style={{background: "#ffbd2e"}} />
-              <span className="lp-term-dot" style={{background: "#27c93f"}} />
-              <span className="lp-term-title">output</span>
-            </div>
-            <div className="lp-term-body">
-              <div className="lp-term-line"><span className="lp-term-green">TreeOS Land starting...</span></div>
-              <div className="lp-term-line"><span className="lp-term-output">Connected to MongoDB</span></div>
-              <div className="lp-term-line"><span className="lp-term-output">Loaded 14 base extensions</span></div>
-              <div className="lp-term-line"><span className="lp-term-green">Land running at http://localhost:3000</span></div>
               <div className="lp-term-line" />
-              <div className="lp-term-line"><span className="lp-term-dim">First boot: create your admin account at /setup</span></div>
+              <div className="lp-term-line"><span className="lp-term-output">  Welcome to TreeOS.</span></div>
+              <div className="lp-term-line"><span className="lp-term-dim">  First-run setup. Answer a few questions to configure your Land.</span></div>
+              <div className="lp-term-line" />
+              <div className="lp-term-line"><span className="lp-term-output">  Domain (localhost): </span><span className="lp-term-green">mysite.com</span></div>
+              <div className="lp-term-line"><span className="lp-term-output">  Land name (My Land): </span><span className="lp-term-green">Research Lab</span></div>
+              <div className="lp-term-line"><span className="lp-term-output">  Port (3000): </span></div>
             </div>
           </div>
         </div>
@@ -346,29 +331,39 @@ const LandPage = () => {
         <div className="lp-container">
           <div className="lp-footer-grid">
             <div className="lp-footer-col">
-              <h4>Learn</h4>
+              <h4>Docs</h4>
               <a href="/guide">Guide</a>
-              <a href="/cli">CLI Reference</a>
               <a href="/seed">The Seed</a>
-            </div>
-            <div className="lp-footer-col">
-              <h4>Build</h4>
-              <a href="/extensions">Extensions</a>
-              <a href="/build">Build Your Own</a>
+              <a href="/ai">The AI</a>
               <a href="/cascade">Cascade</a>
+              <a href="/flow">The Flow</a>
+              <a href="/extensions">Extensions</a>
+              <a href="/build">Build</a>
+              <a href="/network">The Network</a>
+              <a href="/mycelium">Mycelium</a>
+              <a href="/land">Start a Land</a>
+              <a href="/cli">CLI</a>
             </div>
             <div className="lp-footer-col">
-              <h4>Connect</h4>
-              <a href="/network">The Network</a>
-              <a href="https://horizon.treeos.ai" target="_blank" rel="noopener">Extension Directory</a>
+              <h4>TreeOS</h4>
+              <a href="/app">Site</a>
+              <a href="/about/api">API</a>
+              <a href="/about/gateway">Gateway</a>
+              <a href="/about/energy">Energy</a>
+            </div>
+            <div className="lp-footer-col">
+              <h4>Community</h4>
+              <a href="https://horizon.treeos.ai">Horizon</a>
+              <a href="/blog">Blog</a>
             </div>
             <div className="lp-footer-col">
               <h4>Source</h4>
-              <a href="https://github.com/taaborr/treeos" target="_blank" rel="noopener">GitHub</a>
+              <a href="https://github.com/Tabors-Site/Tree">GitHub</a>
+              <a href="https://github.com/Tabors-Site/Tree/blob/main/LICENSE">AGPL-3.0 License</a>
             </div>
           </div>
           <div className="lp-footer-bottom">
-            TreeOS is open source. AGPL-3.0.
+            TreeOS . AGPL-3.0 . <a href="https://tabors.site" style={{color: "inherit", textDecoration: "none"}}>Tabor Holly</a>
           </div>
         </div>
       </footer>

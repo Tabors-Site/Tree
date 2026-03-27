@@ -240,7 +240,7 @@ function getTimeoutForMode(modeKey, nodeMetadata = null) {
 
 // ─────────────────────────────────────────────────────────────────────────
 // ENCRYPTION HELPERS (must match whatever you use when saving)
-// ─────────────────────────────────────────────────────────p────────────────
+// ─────────────────────────────────────────────────────────────────────────
 
 const ALGORITHM = "aes-256-cbc";
 
@@ -517,7 +517,7 @@ export async function resolveRootLlmForMode(rootId, modeKey) {
  */
 export function clearUserClientCache(userId) {
   // Clear all slot entries for this user
-  for (var key of userClientCache.keys()) {
+  for (const key of userClientCache.keys()) {
     if (key === userId || key.startsWith(userId + ":")) {
       userClientCache.delete(key);
     }

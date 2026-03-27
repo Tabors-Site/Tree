@@ -3,13 +3,8 @@
 // These are thin API callers. No remote code execution.
 
 const chalk = require("chalk");
-const TreeAPI = require("../api");
 const { load, requireAuth, currentNodeId, getProtocolCli, currentZone } = require("../config");
-
-function getApi() {
-  const cfg = requireAuth();
-  return new TreeAPI(cfg.apiKey);
-}
+const { getApi } = require("../helpers");
 
 /**
  * Resolve endpoint placeholders like :nodeId, :version, :id
@@ -149,8 +144,8 @@ function registerDynamic(program, cfgOverride) {
         .description(`${decl.description} ${chalk.dim(`[${extName}]`)}`)
         .action(async (...actionArgs) => {
           try {
-            const api = getApi();
-            const cfg = load();
+            const cfg = requireAuth();
+            const api = getApi(cfg);
 
             // Scope enforcement: reject if current zone doesn't match declared scope
             if (cmd._scope) {

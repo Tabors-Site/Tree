@@ -510,10 +510,10 @@ const LandingPage = () => {
       </section>
 
       {/* ── INSTALL CTA ── */}
-      <section className="lp-section" ref={installRef}>
+      <section className="lp-section">
         <div className="lp-container">
           <h2 className="lp-section-title">Get Started</h2>
-          <p className="lp-section-sub">One package. Two commands.</p>
+          <p className="lp-section-sub">One command. Interactive setup walks you through the rest.</p>
           <div className="lp-terminal">
             <div className="lp-term-header">
               <span className="lp-term-dot red"></span>
@@ -522,13 +522,16 @@ const LandingPage = () => {
               <span className="lp-term-title">Terminal</span>
             </div>
             <div className="lp-term-body">
-              <div className="lp-term-line"><span className="lp-term-prompt">$</span> npm install -g treeos</div>
-              <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line lp-term-comment"># Start a land (server)</div>
-              <div className="lp-term-line"><span className="lp-term-prompt">$</span> treeos land</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">$</span> npx create-treeos-land my-land</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">$</span> cd my-land</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">$</span> npm start</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line lp-term-output">  Welcome to TreeOS.</div>
-              <div className="lp-term-line lp-term-output">  Domain (localhost): _</div>
+              <div className="lp-term-line lp-term-output" style={{color: "rgba(255,255,255,0.5)"}}>  First-run setup. Answer a few questions to configure your Land.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line lp-term-output">  Domain (localhost): <span style={{color: "#27c93f"}}>mysite.com</span></div>
+              <div className="lp-term-line lp-term-output">  Land name (My Land): <span style={{color: "#27c93f"}}>Research Lab</span></div>
+              <div className="lp-term-line lp-term-output">  Port (3000): </div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line lp-term-comment"># Or connect to an existing land</div>
               <div className="lp-term-line"><span className="lp-term-prompt">$</span> treeos connect https://treeos.ai</div>
@@ -580,13 +583,13 @@ const LandingPage = () => {
               <a href="/build">Build</a>
               <a href="/network">The Network</a>
               <a href="/mycelium">Mycelium</a>
+              <a href="/land">Start a Land</a>
+              <a href="/cli">CLI</a>
             </div>
             <div className="lp-footer-col">
               <h4>TreeOS</h4>
-              <a href="/land">Start a Land</a>
               <a href="/app">Site</a>
               <a href="/about/api">API</a>
-              <a href="/cli">CLI</a>
               <a href="/about/gateway">Gateway</a>
               <a href="/about/energy">Energy</a>
             </div>

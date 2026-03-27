@@ -1,16 +1,8 @@
 const chalk = require("chalk");
-const TreeAPI = require("../api");
 const { createProxyApi } = require("../api");
 const { load, save, requireAuth, currentNodeId, currentPath, currentLand, hasExtension } = require("../config");
-const { getChildren, flattenTree, findChild } = require("../helpers");
+const { getChildren, flattenTree, findChild, getApi } = require("../helpers");
 const { printNode, printTable } = require("../display");
-
-/** Return an API that auto-proxies when inside a remote tree */
-function getApi(cfg) {
-  return cfg.remoteDomain
-    ? createProxyApi(cfg.apiKey, cfg.remoteDomain)
-    : new TreeAPI(cfg.apiKey);
-}
 
 /** Clear session and go to land level (/) */
 function goLand(cfg) {
@@ -533,7 +525,7 @@ module.exports = (program) => {
     .action(async (opts) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("Enter a tree first. Run: cd <name>"));
+        return console.log(chalk.yellow("Enter a tree first."));
       const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
@@ -559,7 +551,7 @@ module.exports = (program) => {
     .action(async ({ month, year }) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("Enter a tree first. Run: cd <name>"));
+        return console.log(chalk.yellow("Enter a tree first."));
       const api = getApi(cfg);
       try {
         const opts = {};
@@ -601,7 +593,7 @@ module.exports = (program) => {
       const input = parts.join(" ").trim();
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+        return console.log(chalk.yellow("Enter a tree first."));
       const api = getApi(cfg);
       try {
         if (input === "clear") {

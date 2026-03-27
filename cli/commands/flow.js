@@ -1,11 +1,6 @@
 const chalk = require("chalk");
 const { requireAuth } = require("../config");
-const TreeAPI = require("../api");
-
-function getApi() {
-  const cfg = requireAuth();
-  return new TreeAPI(cfg.apiKey);
-}
+const { getApi } = require("../helpers");
 
 module.exports = (program) => {
   program
@@ -14,7 +9,7 @@ module.exports = (program) => {
     .option("-l, --limit <n>", "Max results (default 20)", "20")
     .action(async (signalId, opts) => {
       try {
-        const api = getApi();
+        const api = getApi(requireAuth());
 
         if (signalId) {
           const data = await api.get(`/flow/${encodeURIComponent(signalId)}`);

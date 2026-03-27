@@ -73,9 +73,16 @@ export async function init(core) {
 
   core.hooks.register("afterRegister", async ({ user, email }) => {
     if (!email) return;
-    const normalizedEmail = email.trim().toLowerCase();
     const freshUser = await User.findById(user._id);
     if (!freshUser) return;
+
+    // Don't overwrite if email metadata already exists (verify route sets verified: true first)
+    const existing = freshUser.metadata instanceof Map
+      ? freshUser.metadata.get("email")
+      : freshUser.metadata?.email;
+    if (existing?.address) return;
+
+    const normalizedEmail = email.trim().toLowerCase();
     if (freshUser.metadata instanceof Map) {
       freshUser.metadata.set("email", { address: normalizedEmail, verified: false });
     } else {

@@ -1,12 +1,7 @@
 const chalk = require("chalk");
 const fetch = require("node-fetch");
-const TreeAPI = require("../api");
 const { requireAuth, load, save, currentNodeId } = require("../config");
-
-function getApi() {
-  const cfg = requireAuth();
-  return new TreeAPI(cfg.apiKey);
-}
+const { getApi } = require("../helpers");
 
 async function refreshProtocolCache(nodeId) {
   try {
@@ -68,7 +63,7 @@ Examples:
     .description("List all loaded extensions")
     .action(async () => {
       try {
-        const api = getApi();
+        const api = getApi(requireAuth());
         const data = await api.getExtensions();
 
         if (!data.loaded || data.loaded.length === 0) {
@@ -115,7 +110,7 @@ Examples:
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext info <name>. Run 'ext list' to see loaded extensions."));
       const name = parts.join("-");
       try {
-        const api = getApi();
+        const api = getApi(requireAuth());
         const data = await api.getExtension(name);
 
         if (!data.manifest) {
@@ -285,7 +280,7 @@ Examples:
       const name = parts[0];
       const version = parts[1] || null;
       try {
-        const api = getApi();
+        const api = getApi(requireAuth());
         console.log(chalk.dim(`Fetching ${name}${version ? "@" + version : ""} from registry...`));
         const data = await api.installExtension(name, version);
         console.log(chalk.green(`Installed: ${name} v${data.version || "?"}`));
@@ -331,7 +326,7 @@ Examples:
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext update <name>. Updates to latest version from registry."));
       const name = parts.join("-");
       try {
-        const api = getApi();
+        const api = getApi(requireAuth());
 
         // Get current installed version
         const protocol = await api.get("/protocol");
@@ -374,7 +369,7 @@ Examples:
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext publish <name>. Run 'ext list' to see local extensions."));
       const name = parts.join("-");
       try {
-        const api = getApi();
+        const api = getApi(requireAuth());
         console.log(chalk.dim(`Publishing ${name} to registry...`));
         const data = await api.publishExtension(name);
         console.log(chalk.green(`Published: ${data.name} v${data.version}`));
@@ -390,7 +385,7 @@ Examples:
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext disable <name>. Run 'ext list' to see loaded extensions."));
       const name = parts.join("-");
       try {
-        const api = getApi();
+        const api = getApi(requireAuth());
 
         // Validate extension exists on this land
         const allManifests = await api.get("/land/extensions");
@@ -428,7 +423,7 @@ Examples:
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext enable <name>. Run 'ext list' to see disabled extensions."));
       const name = parts.join("-");
       try {
-        const api = getApi();
+        const api = getApi(requireAuth());
         const data = await api.enableExtension(name);
         if (data?.error) return console.log(chalk.red(data.error));
         console.log(chalk.green(`Enabled: ${name}`));
@@ -447,7 +442,7 @@ Examples:
       const name = parts.join("-");
 
       try {
-        const api = getApi();
+        const api = getApi(requireAuth());
 
         // Validate and check dependencies
         const allManifests = await api.get("/land/extensions");
@@ -595,7 +590,7 @@ Examples:
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: bundle install <name>. Run 'bundle list' to find bundles."));
       const name = parts.join("-");
       try {
-        const api = getApi();
+        const api = getApi(requireAuth());
         const horizonUrl = "https://horizon.treeos.ai";
 
         // Fetch bundle from registry
@@ -802,7 +797,7 @@ Examples:
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: os install <name>. Run 'os list' to find OS distributions. Run 'os info <name>' first."));
       const name = parts.join("-");
       try {
-        const api = getApi();
+        const api = getApi(requireAuth());
         const horizonUrl = "https://horizon.treeos.ai";
 
         console.log(chalk.dim(`Fetching OS ${name} from directory...`));

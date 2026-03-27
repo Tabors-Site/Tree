@@ -17,7 +17,7 @@ module.exports = (program) => {
       const content = parts.join(" ");
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+        return console.log(chalk.yellow("Enter a tree first."));
       const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
@@ -103,7 +103,7 @@ module.exports = (program) => {
       if (!noteId) return console.log(chalk.yellow("Usage: rm-note <noteId> -f"));
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+        return console.log(chalk.yellow("Enter a tree first."));
       if (!force)
         return console.log(
           chalk.yellow(`Delete note ${noteId}? Pass -f to confirm.`),
@@ -126,7 +126,7 @@ module.exports = (program) => {
     .action(async () => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+        return console.log(chalk.yellow("Enter a tree first."));
       const api = getApi(cfg);
       try {
         const data = await api.getBook(currentNodeId(cfg));
@@ -175,7 +175,7 @@ module.exports = (program) => {
     .action(async ({ global: isGlobal, tree: isTree, version }) => {
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+        return console.log(chalk.yellow("Enter a tree first."));
       const api = getApi(cfg);
       try {
         if (isGlobal || isTree) {
@@ -231,7 +231,7 @@ module.exports = (program) => {
       if (!key || !value) return console.log(chalk.yellow("Usage: value <key> <value>"));
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+        return console.log(chalk.yellow("Enter a tree first."));
       const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
@@ -250,7 +250,7 @@ module.exports = (program) => {
       if (!key || !goal) return console.log(chalk.yellow("Usage: goal <key> <goal>"));
       const cfg = requireAuth();
       if (!cfg.activeRootId)
-        return console.log(chalk.yellow("No tree selected. Run: use <name>, roots, or mkroot <name>"));
+        return console.log(chalk.yellow("Enter a tree first."));
       const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);

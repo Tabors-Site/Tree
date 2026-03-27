@@ -3,10 +3,11 @@ import { setServices } from "./core.js";
 import { setModels as setJobModels, startPruneJob, stopPruneJob } from "./pruneJob.js";
 
 export async function init(core) {
+  const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setServices({
     models: core.models,
     contributions: core.contributions,
-    llm: core.llm,
+    llm: { ...core.llm, runChat: (opts) => core.llm.runChat({ ...opts, llmPriority: BG }) },
     energy: core.energy || null,
   });
 

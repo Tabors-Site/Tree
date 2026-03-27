@@ -638,9 +638,11 @@
   .lp-cli-features { grid-template-columns: repeat(2, 1fr); }
   .lp-footer-grid { grid-template-columns: 1fr 1fr; }
   .lp-hero-ctas { flex-direction: column; align-items: center; }
+  .lp-hero-ctas-sub { display: none; }
 }
 
 @media (max-width: 480px) {
+  .lp-container { padding: 0 24px; }
   .lp-title { font-size: 42px; }
   .lp-tree-icon { font-size: 56px; }
   .lp-section { padding: 60px 0; }

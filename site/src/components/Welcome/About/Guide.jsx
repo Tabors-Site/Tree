@@ -9,14 +9,18 @@ const Guide = () => {
         <div className="lp-hero-inner">
           <h1 className="lp-title">The Guide</h1>
           <p className="lp-subtitle">Simple to advanced. Everything you need to know.</p>
-          <div className="lp-hero-ctas">
+          <div className="lp-hero-ctas lp-hero-ctas-sub">
             <a className="lp-btn lp-btn-secondary" href="/">Home</a>
             <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
             <a className="lp-btn lp-btn-secondary" href="/ai">The AI</a>
             <a className="lp-btn lp-btn-secondary" href="/cascade">Cascade</a>
             <a className="lp-btn lp-btn-secondary" href="/flow">The Flow</a>
             <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
+            <a className="lp-btn lp-btn-secondary" href="/build">Build</a>
             <a className="lp-btn lp-btn-secondary" href="/network">The Network</a>
+            <a className="lp-btn lp-btn-secondary" href="/mycelium">Mycelium</a>
+            <a className="lp-btn lp-btn-secondary" href="/land">Start a Land</a>
+            <a className="lp-btn lp-btn-secondary" href="/cli">CLI</a>
           </div>
         </div>
       </section>
@@ -870,6 +874,39 @@ export async function init(core) {
       {/* ── FOOTER ── */}
       <footer className="lp-footer">
         <div className="lp-container">
+          <div className="lp-footer-grid">
+            <div className="lp-footer-col">
+              <h4>Docs</h4>
+              <a href="/guide">Guide</a>
+              <a href="/seed">The Seed</a>
+              <a href="/ai">The AI</a>
+              <a href="/cascade">Cascade</a>
+              <a href="/flow">The Flow</a>
+              <a href="/extensions">Extensions</a>
+              <a href="/build">Build</a>
+              <a href="/network">The Network</a>
+              <a href="/mycelium">Mycelium</a>
+              <a href="/land">Start a Land</a>
+              <a href="/cli">CLI</a>
+            </div>
+            <div className="lp-footer-col">
+              <h4>TreeOS</h4>
+              <a href="/app">Site</a>
+              <a href="/about/api">API</a>
+              <a href="/about/gateway">Gateway</a>
+              <a href="/about/energy">Energy</a>
+            </div>
+            <div className="lp-footer-col">
+              <h4>Community</h4>
+              <a href="https://horizon.treeos.ai">Horizon</a>
+              <a href="/blog">Blog</a>
+            </div>
+            <div className="lp-footer-col">
+              <h4>Source</h4>
+              <a href="https://github.com/Tabors-Site/Tree">GitHub</a>
+              <a href="https://github.com/Tabors-Site/Tree/blob/main/LICENSE">AGPL-3.0 License</a>
+            </div>
+          </div>
           <div className="lp-footer-bottom">
             TreeOS . AGPL-3.0 . <a href="https://tabors.site" style={{color: "inherit", textDecoration: "none"}}>Tabor Holly</a>
           </div>

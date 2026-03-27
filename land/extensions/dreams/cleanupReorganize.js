@@ -44,9 +44,15 @@ export async function orchestrateReorganize({
 
   try {
     // STEP 1: ANALYZE TREE STRUCTURE
+    let encodingMap = null;
+    try {
+      const { getExtension } = await import("../loader.js");
+      const uExt = getExtension("understanding");
+      if (uExt?.exports?.getEncodingMap) encodingMap = await uExt.exports.getEncodingMap(rootId);
+    } catch {}
     const treeSummary = await buildDeepTreeSummary(rootId, {
-      includeEncodings: true,
       includeIds: true,
+      encodingMap,
     });
 
     const { parsed: plan } = await rt.runStep("tree:cleanup-analyze", {

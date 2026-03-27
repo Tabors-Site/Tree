@@ -344,7 +344,7 @@ export function registeredSessionCount() {
 export function setSessionAbort(sessionId, abortController) {
   // Only store abort controllers for sessions that exist.
   // Orphan sweep catches stragglers, but this prevents the common case.
-  if (!sessions.has(sessionId) && !sessionId) return;
+  if (!sessionId || !sessions.has(sessionId)) return;
   sessionAbortControllers.set(sessionId, abortController);
 }
 

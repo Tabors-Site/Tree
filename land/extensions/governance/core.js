@@ -123,3 +123,67 @@ export function getGovernanceState() {
   }
   return cachedState; // Return stale data rather than null. Refresh happens in background.
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// EXTENSION UPDATE CHECK
+// Cached separately from governance. Refreshed on the same hourly cycle.
+// ─────────────────────────────────────────────────────────────────────────
+
+let cachedUpdates = null;
+let updateCacheTimestamp = 0;
+
+/**
+ * Check installed extensions against the registry for available updates.
+ * Returns { updates: [{ name, installed, available }], checkedAt }
+ */
+export async function checkExtensionUpdates() {
+  const urls = getDirectoryUrls();
+  if (urls.length === 0) return { updates: [], checkedAt: new Date().toISOString() };
+
+  try {
+    const { getLoadedManifests } = await import("../../extensions/loader.js");
+    const manifests = getLoadedManifests();
+    const horizonUrl = urls[0];
+
+    const res = await fetch(`${horizonUrl}/extensions?limit=100`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return { updates: [], checkedAt: new Date().toISOString() };
+
+    const data = await res.json();
+    const registryExts = data.extensions || data || [];
+
+    const registryMap = new Map();
+    for (const ext of registryExts) {
+      const existing = registryMap.get(ext.name);
+      if (!existing || compareSemver(ext.version, existing) > 0) {
+        registryMap.set(ext.name, ext.version);
+      }
+    }
+
+    const updates = [];
+    for (const m of manifests) {
+      const registryVersion = registryMap.get(m.name);
+      if (!registryVersion) continue;
+      if (compareSemver(registryVersion, m.version) > 0) {
+        updates.push({ name: m.name, installed: m.version, available: registryVersion });
+      }
+    }
+
+    cachedUpdates = { updates, checkedAt: new Date().toISOString() };
+    updateCacheTimestamp = Date.now();
+    return cachedUpdates;
+  } catch {
+    return cachedUpdates || { updates: [], checkedAt: new Date().toISOString() };
+  }
+}
+
+/**
+ * Get cached extension update info.
+ */
+export function getExtensionUpdates() {
+  if (cachedUpdates && Date.now() - updateCacheTimestamp < CACHE_TTL) {
+    return cachedUpdates;
+  }
+  return cachedUpdates;
+}

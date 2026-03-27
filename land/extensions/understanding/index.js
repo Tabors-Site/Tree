@@ -6,6 +6,45 @@ import tools from "./tools.js";
 import understand from "./modes/understand.js";
 import understandSummarize from "./modes/understandSummarize.js";
 
+/**
+ * Build a Map of nodeId -> encoding string from the latest understanding run.
+ * Called by tree-orchestrator, raw-ideas, dreams when building tree summaries.
+ * The seed's buildDeepTreeSummary accepts this map as a parameter.
+ */
+async function getEncodingMap(rootId) {
+  try {
+    const latestRun = await UnderstandingRun.findOne({
+      rootNodeId: rootId,
+      perspective: { $regex: /^Summarize this section/ },
+    }).sort({ createdAt: -1 }).select("_id nodeMap").lean();
+
+    if (!latestRun) return null;
+
+    // Scope to nodes in this run only. nodeMap has realNodeId -> understandingNodeId.
+    const runId = String(latestRun._id);
+    const uNodeIds = latestRun.nodeMap instanceof Map
+      ? [...latestRun.nodeMap.values()]
+      : Object.values(latestRun.nodeMap || {});
+
+    if (uNodeIds.length === 0) return null;
+
+    const uNodes = await UnderstandingNode.find({ _id: { $in: uNodeIds } })
+      .select("realNodeId perspectiveStates").lean();
+
+    const map = new Map();
+    for (const uNode of uNodes) {
+      const state = uNode.perspectiveStates?.get?.(runId)
+        || (uNode.perspectiveStates && uNode.perspectiveStates[runId]);
+      if (state?.encoding) {
+        map.set(uNode.realNodeId, state.encoding);
+      }
+    }
+    return map.size > 0 ? map : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function init(core) {
   // Wire core services into core.js and routes.js
   const understanding = await import("./core.js");
@@ -33,7 +72,7 @@ export async function init(core) {
     if (!rootId) return;
     try {
       const latestRun = await UnderstandingRun.findOne({
-        rootId: String(rootId),
+        rootNodeId: String(rootId),
         status: "completed",
       }).sort({ lastCompletedAt: -1 }).select("encodingHistory perspective").lean();
       if (!latestRun?.encodingHistory?.length) return;
@@ -53,6 +92,7 @@ export async function init(core) {
       createUnderstandingRun: understanding.createUnderstandingRun,
       findOrCreateUnderstandingRun: understanding.findOrCreateUnderstandingRun,
       prepareIncrementalRun: understanding.prepareIncrementalRun,
+      getEncodingMap,
     },
   };
 }

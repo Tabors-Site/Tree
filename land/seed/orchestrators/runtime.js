@@ -6,12 +6,6 @@
 
 import log from "../log.js";
 import jwt from "jsonwebtoken";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required");
 const JWT_SECRET = process.env.JWT_SECRET;

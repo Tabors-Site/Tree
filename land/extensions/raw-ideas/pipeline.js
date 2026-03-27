@@ -148,7 +148,12 @@ export async function orchestrateRawIdeaPlacement({
 
     const rootSummaries = await Promise.all(
       roots.map(async (r) => {
-        const summary = await buildDeepTreeSummary(r._id, { includeEncodings: true }).catch(() => "(summary unavailable)");
+        let encodingMap = null;
+        try {
+          const uExt = getExtension("understanding");
+          if (uExt?.exports?.getEncodingMap) encodingMap = await uExt.exports.getEncodingMap(r._id);
+        } catch {}
+        const summary = await buildDeepTreeSummary(r._id, { encodingMap }).catch(() => "(summary unavailable)");
         return { rootId: r._id, name: r.name, summary };
       }),
     );
