@@ -1,0 +1,14 @@
+{
+  "name": "create-treeos",
+  "version": "0.1.0",
+  "description": "Scaffold a TreeOS land server. npx create-treeos my-land",
+  "bin": "./index.js",
+  "type": "module",
+  "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/taborgreat/TreeOS"
+  },
+  "keywords": ["treeos", "ai", "kernel", "agents", "scaffold"],
+  "files": ["index.js", "template/"]
+}

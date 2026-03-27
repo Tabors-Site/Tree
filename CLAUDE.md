@@ -317,3 +317,41 @@ INVALID_INPUT means garbage the kernel can't parse. Not "I understood your reque
 - Extension data namespaced by extension name in metadata
 - Core NEVER imports from extensions/. Extensions import from seed.
 - Dynamic imports with try/catch for optional cross-extension deps
+
+## Patterns That Repeat (read this before building anything)
+
+**Six rules. Never violated.**
+1. Seed never imports from extensions
+2. Extensions import from seed
+3. Extensions reach each other through `getExtension()` or hooks
+4. Extension data lives in metadata Maps, never in seed schemas
+5. Seed schemas never change
+6. Zero `getExtension()` calls in seed
+
+**Resolution chains walk the ancestor cache.** Extension scope, tool scope, mode resolution, LLM resolution, persona resolution, perspective filter resolution. All walk the parent chain. All use the same cached snapshot per message.
+
+**enrichContext is how extensions speak to the AI.** The kernel builds the prompt. Extensions inject context through this sequential hook. Guard every enrichContext handler: check if relevant data exists before injecting. Never run expensive queries unconditionally.
+
+**before hooks intercept. after hooks react.** Before hooks are sequential and can cancel. After hooks are parallel and fire-and-forget. Two exceptions: enrichContext and onCascade are sequential because handlers read each other's additions.
+
+**setExtMeta for all metadata writes.** Extensions can only write to their own namespace. Direct Map manipulation is only acceptable for atomic MongoDB operations that can't go through read-modify-write (long-memory's $push/$slice, gap-detection's $set).
+
+**OrchestratorRuntime for multi-step pipelines.** Single LLM call: use runChat. Multi-step background pipeline: use OrchestratorRuntime with init, runStep, trackStep, cleanup. The runtime handles session lifecycle, lock management, abort signals, chain tracking.
+
+**LLM_PRIORITY on every LLM call.** HUMAN for CLI/web. GATEWAY for external channels. INTERACTIVE for scout/explore. BACKGROUND for intent/dreams/codebook/compression. Without priority tags, background extensions starve human responses.
+
+**Confined scope for dangerous extensions.** Shell, solana, scripts declare `scope: "confined"`. Inactive everywhere by default. `ext-allow` at specific positions.
+
+## Extension Ecosystem (90 extensions, 4 bundles)
+
+**Base TreeOS (18):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember.
+
+**treeos-cascade (8):** propagation, perspective-filter, sealed-transport, codebook, gap-detection, long-memory, pulse, flow.
+
+**treeos-intelligence (13):** tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, competence, reflect, evolve.
+
+**treeos-connect (8):** gateway, gateway-telegram, gateway-discord, gateway-webhook, gateway-email, gateway-sms, gateway-slack, gateway-matrix.
+
+**treeos-maintenance (5):** prune, reroot, changelog, digest, delegate.
+
+**Standalone (8):** persona, mycelium, peer-review, seed-export, channels, governance, teach, split.

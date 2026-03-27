@@ -1,0 +1,96 @@
+import log from "../seed/log.js";
+import { signCanopyToken } from "./identity.js";
+import { getPeerByDomain, getPeerBaseUrl } from "./peers.js";
+
+const UNREACHABLE_STATUSES = new Set(["blocked", "dead", "unreachable"]);
+
+/**
+ * Create an OpenAI-compatible proxy client that routes LLM calls
+ * through a remote user's home land.
+ *
+ * The home land resolves the user's actual LLM connection, runs inference,
+ * and deducts energy. Tool execution stays local on the calling land.
+ */
+export function createCanopyLlmProxyClient({ userId, homeLand, slot }) {
+  return {
+    _isCanopyProxy: true,
+    chat: {
+      completions: {
+        async create(params, opts) {
+          // Bail immediately if caller already aborted
+          if (opts?.signal?.aborted) {
+            throw new Error("LLM proxy request aborted");
+          }
+
+          const peer = await getPeerByDomain(homeLand);
+          if (!peer || UNREACHABLE_STATUSES.has(peer.status)) {
+            throw new Error(
+              !peer
+                ? "Home land not found as peer: " + homeLand
+                : "Home land status is " + peer.status + ": " + homeLand
+            );
+          }
+
+          const token = await signCanopyToken(userId, homeLand);
+          const baseUrl = getPeerBaseUrl(peer);
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 19 * 60 * 1000);
+
+          // Forward caller's abort signal
+          if (opts?.signal) {
+            opts.signal.addEventListener("abort", () => controller.abort());
+          }
+
+          log.debug("Canopy", "LLM proxy call to %s for user %s (slot: %s)", homeLand, userId, slot || "main");
+
+          try {
+            const res = await fetch(baseUrl + "/canopy/llm/proxy", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "CanopyToken " + token,
+              },
+              body: JSON.stringify({
+                messages: params.messages,
+                model: params.model,
+                tools: params.tools,
+                tool_choice: params.tool_choice,
+                slot: slot || "main",
+              }),
+              signal: controller.signal,
+            });
+
+            if (!res.ok) {
+              // Try to parse JSON error, fall back to status text
+              let message;
+              try {
+                const errData = await res.json();
+                message = errData.message || errData.error || res.statusText;
+              } catch {
+                message = "HTTP " + res.status + ": " + res.statusText;
+              }
+              throw new Error("LLM proxy failed: " + message);
+            }
+
+            const data = await res.json();
+
+            const result = data.data || data;
+            if (data.status === "error" || !result.completion) {
+              const errMsg = (data.error && data.error.message) || data.error;
+              const errCode = (data.error && data.error.code) || "";
+              throw new Error(
+                errCode === "LLM_NOT_CONFIGURED" || errMsg === "no_llm"
+                  ? "No LLM connection configured on home land"
+                  : errMsg || "LLM proxy request failed"
+              );
+            }
+
+            return result.completion;
+          } finally {
+            clearTimeout(timeout);
+          }
+        },
+      },
+    },
+  };
+}

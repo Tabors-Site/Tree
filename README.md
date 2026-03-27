@@ -9,9 +9,9 @@ Four primitives: structure (nodes in hierarchies), intelligence (conversation lo
 You need Node.js 18+ and MongoDB running.
 
 ```
-git clone https://github.com/Tabors-Site/Tree && cd Tree
-npm install
-npm start
+npx create-treeos my-land
+cd my-land
+node boot.js
 ```
 
 First run walks you through setup: domain, name, MongoDB, and extension selection from the registry. After that, your land boots.
@@ -51,7 +51,9 @@ Notes are the base content unit. A note can be plain text or any file type (imag
 
 ## Extensions
 
-The core handles nodes, notes, auth, and AI conversation. Everything else is an extension.
+90 extensions across four bundles. The kernel handles nodes, notes, auth, and AI conversation. Everything else is an extension.
+
+> **WARNING:** Extensions run in the same Node.js process as the kernel. They can access the filesystem, network, and database. Review all third-party extension code before installing. The kernel is safe. Extensions are as safe as the code they contain.
 
 ```
 treeos ext list                    # See what's loaded
@@ -79,36 +81,16 @@ Three levels: **active** (full access), **restricted** (read-only tools), **bloc
 
 Example: a Health tree with fitness and food extensions. Each branch restricts the other to read-only. The fitness coach references nutrition data. The food coach sees exercise history. Neither modifies the other's branch.
 
-### Built-in extensions
+### Four bundles
 
-| Extension | What it does |
-|-----------|-------------|
-| fitness | Personal fitness coaching, workout programming, and exercise tracking |
-| food | Calorie and macro tracking, meal planning, and nutritional coaching |
-| understanding | Bottom up tree compression. Summarizes node layers with LLM for navigational context. |
-| scripts | Sandboxed JavaScript execution on nodes with safe functions for values, goals, and status |
-| prestige | Node versioning. Complete a version and start a new generation. |
-| schedules | Date scheduling and calendar views for nodes |
-| energy | Daily energy budget with tier based limits and per action costs |
-| billing | Stripe subscription tiers and energy purchases |
-| raw-ideas | Quick capture of unstructured ideas with automatic tree placement |
-| dreams | Background tree maintenance. Runs cleanup, short term drain, and understanding on a schedule. |
-| blog | Publish blog posts on your land |
-| book | Compile notes into shareable documents per node |
-| solana | Solana wallets, token holdings, and Jupiter swaps per node |
-| api-keys | User API keys for programmatic access to the tree API |
-| email | Email verification for registration and password reset |
-| user-llm | Custom LLM connections with per user and per tree model assignment |
-| gateway | External channel integration for Telegram, Discord, and web widgets |
-| html-rendering | Server rendered HTML pages with share token authentication |
-| console | Formatted log output with three severity levels for clean server monitoring |
-| tree-orchestrator | Core conversation orchestrator for chat, place, and query |
-| land-manager | Autonomous land management agent for health monitoring |
-| shell | Execute shell commands from AI conversation |
-| transactions | Value transactions between nodes with approval policies |
-| deleted-revive | Soft delete branches and revive them later |
-| values | Numeric values and goals on nodes with tree wide accumulation |
-| user-queries | User level data access for notes, tags, contributions, and notifications |
+| Bundle | Count | What it is |
+|--------|-------|-----------|
+| **treeos-cascade** | 8 | The nervous system. Signals propagate, get filtered, compressed, monitored. |
+| **treeos-intelligence** | 13 | Self-awareness. The tree compresses, detects contradictions, profiles users, acts autonomously, searches, explores, traces, maps boundaries, tracks competence, notices conversational shifts, proposes new extensions. |
+| **treeos-connect** | 8 | External channels. Telegram, Discord, Slack, email, SMS, webhooks, Matrix. |
+| **treeos-maintenance** | 5 | Hygiene. Prune dead branches, reorganize, changelog, daily digest, delegate stuck work. |
+
+Plus 18 base extensions (ship with every land), 8 standalone, and domain-specific extensions for fitness, food, solana, billing, and more.
 
 ### Building an extension
 
@@ -202,17 +184,19 @@ treeos search "fitness"
 
 ```
 land/
-  core/           Protocol logic (nodes, notes, auth, hooks, log)
-  db/models/      Mongoose models (node, user, contribution, note, etc.)
-  extensions/     Modular packages (20+ built-in)
-  ws/             WebSocket system (AI conversation, modes, tools)
-  mcp/            MCP server (AI tool execution)
-  canopy/         Land identity, peering, proxy
-  boot.js         Setup wizard + server boot
+  seed/           The kernel. Two schemas, conversation loop, hooks, cascade.
+  extensions/     90 extensions across four bundles plus standalone.
+  canopy/         Federation. Peering, proxy, events, identity.
+  routes/         HTTP API endpoints.
+  orchestrators/  Pipeline runtime, locks, helpers.
+  mcp/            MCP server (AI tool execution).
+  boot.js         Setup wizard + server boot.
+  server.js       Express setup + graceful shutdown.
 
-cli/              CLI client (treeos command)
-site/             React + Vite frontend (optional)
-horizon/        The Horizon (land discovery + extension registry)
+cli/              CLI client (treeos command). Separate install.
+site/             React + Vite frontend (treeos.ai). Separate deploy.
+horizon/          The Horizon (land discovery + extension registry). Separate server.
+create-treeos/    Scaffolder (npx create-treeos my-land).
 ```
 
 ## Protocol

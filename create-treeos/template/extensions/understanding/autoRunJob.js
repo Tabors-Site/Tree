@@ -1,0 +1,132 @@
+// jobs/understandingAutoRun.js
+// Daily job: creates and runs a navigation-focused understanding pass per tree.
+// Produces per-node encodings that enhance tree summaries for librarian/scout navigation.
+
+import log from "../../seed/log.js";
+import Node from "../../seed/models/node.js";
+import User from "../../seed/models/user.js";
+import { findOrCreateUnderstandingRun } from "./core.js";
+import { orchestrateUnderstanding } from "./pipeline.js";
+import { userHasLlm } from "../../seed/ws/conversation.js";
+
+// ─────────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────────
+
+const NAV_PERSPECTIVE =
+  "Summarize this section as if it is a node inside a larger knowledge tree. " +
+  "Write from a perspective that understands this content will sit between a parent above and possible branches below. " +
+  "Compress the meaning upward (what this contributes to the bigger picture) while preserving clarity downward " +
+  "(what direction this section points toward). Emphasize the core idea, remove detail noise.";
+
+const MIN_TREE_CHILDREN = 2; // skip trees with fewer than this many children
+
+// ─────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────
+
+let jobTimer = null;
+
+// ─────────────────────────────────────────────────────────────────────────
+// SINGLE TREE HANDLER
+// ─────────────────────────────────────────────────────────────────────────
+
+async function processTree(rootNode) {
+  const rootId = rootNode._id.toString();
+  const userId = rootNode.rootOwner.toString();
+
+  // Skip tiny trees
+  if (!rootNode.children || rootNode.children.length < MIN_TREE_CHILDREN) {
+ log.debug("Understanding", `  Skipping "${rootNode.name}" — too few children (${rootNode.children?.length || 0})`);
+    return;
+  }
+
+  // Resolve username
+  const user = await User.findById(userId).select("username").lean();
+  if (!user) {
+ log.warn("Understanding", ` Understanding auto-run: no user for tree ${rootId}`);
+    return;
+  }
+
+  // Skip if owner has no LLM and root has no LLM assigned
+  const hasRootLlm = !!(rootNode.llmDefault && rootNode.llmDefault !== "none");
+  if (!hasRootLlm && !await userHasLlm(userId)) {
+ log.debug("Understanding", `  Skipping understanding for "${rootNode.name}" — owner has no LLM connection`);
+    return;
+  }
+
+ log.debug("Understanding", `  Understanding auto-run: starting for tree "${rootNode.name}" [${rootId.slice(0, 8)}]`);
+
+  try {
+    // Find existing run or create a new one
+    const run = await findOrCreateUnderstandingRun(
+      rootId,
+      userId,
+      NAV_PERSPECTIVE,
+      true, // wasAi
+    );
+
+    // Run the orchestrator
+    await orchestrateUnderstanding({
+      rootId,
+      userId,
+      username: user.username,
+      runId: run.understandingRunId,
+      source: "background",
+    });
+
+ log.debug("Understanding", `  Understanding auto-run complete for tree "${rootNode.name}"`);
+  } catch (err) {
+ log.error("Understanding", ` Understanding auto-run failed for tree "${rootNode.name}":`, err.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// JOB RUN
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function runUnderstandingAutoJob() {
+ log.verbose("Understanding", " Understanding auto-run job starting...");
+
+  try {
+    // Find all root nodes (trees)
+    const rootNodes = await Node.find({ rootOwner: { $nin: [null, "SYSTEM"] } })
+      .select("_id name rootOwner children llmAssignments")
+      .lean();
+
+    if (rootNodes.length === 0) {
+ log.verbose("Understanding", " No trees found — skipping.");
+      return;
+    }
+
+    // Pick the biggest tree (most children) for now
+    const biggest = rootNodes.reduce((best, node) =>
+      (node.children?.length || 0) > (best.children?.length || 0) ? node : best,
+    );
+
+ log.debug("Understanding", `  Targeting biggest tree: "${biggest.name}" (${biggest.children?.length || 0} children)`);
+    await processTree(biggest);
+  } catch (err) {
+ log.error("Understanding", " Understanding auto-run job error:", err.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// START / STOP
+// ─────────────────────────────────────────────────────────────────────────
+
+export function startUnderstandingAutoJob({ intervalMs = 24 * 60 * 60 * 1000 } = {}) {
+  if (jobTimer) clearInterval(jobTimer);
+
+ log.info("Understanding", ` Understanding auto-run job started (interval: ${intervalMs / 1000}s)`);
+  jobTimer = setInterval(runUnderstandingAutoJob, intervalMs);
+  return jobTimer;
+}
+
+export function stopUnderstandingAutoJob() {
+  if (jobTimer) {
+    clearInterval(jobTimer);
+    jobTimer = null;
+ log.info("Understanding", "⏹ Understanding auto-run job stopped");
+  }
+}

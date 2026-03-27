@@ -1,5 +1,7 @@
 # Extension Format
 
+> **WARNING:** This is a new community and we are developing extensions together. There may be bad actors, and while the kernel is safe, extensions can reach into your filesystem and much more. Review all extension code yourself if it's unknown. Extensions have full access to the Node.js process. The blocklist on shell is defense in depth, not a sandbox. The real security boundary is the operator's judgment. Install what you trust. Review what you don't.
+
 ## Directory Structure
 
 ```

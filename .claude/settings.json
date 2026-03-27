@@ -396,7 +396,9 @@
       "Read(//home/tabor/github/Tree/$b/**)",
       "Bash(grep -n \"Fourteen\\\\|Eighteen\\\\|eighteen\\\\|14\\\\|18 base\" /home/tabor/github/Tree/site/src/components/Welcome/Landing/*.jsx)",
       "Bash(grep -rn \"fourteen\\\\|twelve extension\\\\|twenty.* extension\\\\|25 ext\\\\|80 ext\\\\|85 ext\" /home/tabor/github/Tree/site/src/ --include=*.jsx -i)",
-      "Bash(grep -rn \"25 ext\\\\|30 ext\\\\|40 ext\\\\|50 ext\\\\|sixty\\\\|fifty\\\\|thirty.three\\\\|thirty-three\" /home/tabor/github/Tree/site/src/ --include=*.jsx -i)"
+      "Bash(grep -rn \"25 ext\\\\|30 ext\\\\|40 ext\\\\|50 ext\\\\|sixty\\\\|fifty\\\\|thirty.three\\\\|thirty-three\" /home/tabor/github/Tree/site/src/ --include=*.jsx -i)",
+      "Bash(chmod +x /home/tabor/github/Tree/create-treeos/build-template.sh)",
+      "Bash(bash build-template.sh)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
