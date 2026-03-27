@@ -43,7 +43,7 @@ const Guide = () => {
             that everything builds on.
           </P>
           <P>
-            TreeOS is one operating system built on the seed. It ships with 90 extensions across
+            TreeOS is one operating system built on the seed. It ships with 91 extensions across
             four bundles: cascade network, intelligence, external channels, maintenance, plus
             the base OS, developer tools, data, content, and gateways. But TreeOS is just one interpretation. A medical
             platform, a code review pipeline, a research assistant could all be built on the same kernel.
@@ -59,7 +59,7 @@ const Guide = () => {
         <div className="lp-container" style={{maxWidth: 800}}>
           <h2 className="lp-section-title">Quick Start</h2>
           <P>Run a land (server):</P>
-          <Code>{`git clone https://github.com/Tabors-Site/Tree && cd Tree
+          <Code>{`git clone https://github.com/taborgreat/TreeOS && cd Tree
 npm run install:all
 npm start`}</Code>
           <P>First boot walks you through setup: domain, name, LLM connection, extension selection.</P>
@@ -280,13 +280,13 @@ treeos ext-scope                   # shows both global and confined status`}</Co
             resolves everything. Four bundles cover the major capabilities:
           </P>
           <P style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", lineHeight: 1.7}}>
-            <strong style={{color: "rgba(255,255,255,0.6)"}}>base TreeOS</strong> (18): treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember.<br/>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>base TreeOS</strong> (19): treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, approve.<br/>
             <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-cascade</strong> (8): propagation, perspective-filter, sealed-transport, codebook, gap-detection, long-memory, pulse, flow.<br/>
             <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-intelligence</strong> (13): tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, competence, reflect, evolve.<br/>
             <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-connect</strong> (8): gateway, gateway-telegram, gateway-discord, gateway-webhook, gateway-email, gateway-sms, gateway-slack, gateway-matrix.<br/>
             <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-maintenance</strong> (5): prune, reroot, changelog, digest, delegate.<br/>
             <strong style={{color: "rgba(255,255,255,0.6)"}}>standalone</strong> (8): persona, mycelium, peer-review, seed-export, channels, governance, teach, split.<br/>
-            <strong style={{color: "rgba(255,255,255,0.6)"}}>90 extensions total</strong>. Eighteen base. Thirty-four in bundles. Eight standalone. The rest domain-specific.
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>91 extensions total</strong>. Nineteen base. Thirty-four in bundles. Eight standalone. The rest domain-specific.
           </P>
           <P>
             Install from the registry: <code>treeos ext install treeos-cascade</code>.
@@ -793,7 +793,7 @@ export async function init(core) {
             <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
             <a className="lp-btn lp-btn-secondary" href="/network">The Network</a>
             <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>
-            <a className="lp-btn lp-btn-secondary" href="https://github.com/Tabors-Site/Tree">GitHub</a>
+            <a className="lp-btn lp-btn-secondary" href="https://github.com/taborgreat/TreeOS">GitHub</a>
           </div>
         </div>
       </section>
@@ -904,8 +904,8 @@ export async function init(core) {
             </div>
             <div className="lp-footer-col">
               <h4>Source</h4>
-              <a href="https://github.com/Tabors-Site/Tree">GitHub</a>
-              <a href="https://github.com/Tabors-Site/Tree/blob/main/LICENSE">AGPL-3.0 License</a>
+              <a href="https://github.com/taborgreat/TreeOS">GitHub</a>
+              <a href="https://github.com/taborgreat/TreeOS/blob/main/LICENSE">AGPL-3.0 License</a>
             </div>
           </div>
           <div className="lp-footer-bottom">

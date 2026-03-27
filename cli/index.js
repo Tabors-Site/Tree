@@ -354,38 +354,31 @@ const startShell = module.exports.startShell = async () => {
     let _hintLine = "";
 
     function clearHint() {
-      if (_hintLine) {
-        // Save cursor, move down one line, clear it, restore cursor
-        process.stdout.write("\x1b[s\x1b[B\x1b[2K\x1b[u");
-        _hintLine = "";
-      }
+      _hintLine = "";
     }
 
     function showHint(text) {
-      clearHint();
-      if (!text) return;
-      // Truncate to terminal width to prevent wrapping into the input line
-      const cols = process.stdout.columns || 80;
-      const truncated = text.length > cols - 2 ? text.slice(0, cols - 5) + "..." : text;
-      _hintLine = truncated;
-      // Print newline to make space, write hint, move cursor back up to input line
-      process.stdout.write("\x1b[s\n\x1b[2K\x1b[92m" + truncated + "\x1b[0m\x1b[u");
+      _hintLine = text || "";
     }
 
     // Replace the current line content in readline
     function setLine(text) {
-      // Move to start of line input, clear, write new content
       rl.line = text;
       rl.cursor = text.length;
-      // Clear the visible line and rewrite
       process.stdout.write("\r");
-      // Rewrite prompt + new line
       const cfg = load();
       const user = cfg.username || cfg.userId || "?";
       const land = currentLand(cfg);
       const session = cfg.activeSession ? chalk.magenta(` @${cfg.activeSession}`) : "";
       const p = chalk.green(user) + chalk.dim("@") + chalk.dim(land) + chalk.dim(currentPath(cfg)) + session + chalk.bold.cyan(" \u203a ");
-      process.stdout.write(p + text + "\x1b[0K");
+      // Show hint inline after the command text (dim, same line)
+      const hint = _hintLine ? chalk.dim("  " + _hintLine) : "";
+      process.stdout.write(p + text + hint + "\x1b[0K");
+      // Move cursor back to end of actual text (before hint)
+      if (_hintLine) {
+        const hintLen = _hintLine.length + 2; // +2 for leading spaces
+        process.stdout.write(`\x1b[${hintLen}D`);
+      }
     }
 
     function getMatchDescription(match, context) {

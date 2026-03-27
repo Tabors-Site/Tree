@@ -94,8 +94,8 @@ router.post(
   },
 );
 
-// GET list raw ideas
-router.get("/user/:userId/raw-ideas", authenticateOptional, async (req, res) => {
+// GET list raw ideas (requires auth: JWT or share token)
+router.get("/user/:userId/raw-ideas", authenticate, async (req, res) => {
   try {
     const userId = req.params.userId;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");

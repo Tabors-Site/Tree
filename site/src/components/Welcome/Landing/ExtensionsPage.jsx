@@ -344,7 +344,7 @@ const ExtensionsPage = () => {
             A coding OS with architect and review modes. A research OS with citation and synthesis modes.
           </p>
           <p className="lp-section-sub" style={{fontStyle: "italic", color: "rgba(255,255,255,0.3)"}}>
-            90 extensions across four bundles plus standalone. All growing from twelve schema
+            91 extensions across four bundles plus standalone. All growing from twelve schema
             fields and a metadata Map. Enough extensions built on a kernel form an operating system.
             Operating systems are good starting grounds for people to build off of.
           </p>
@@ -409,8 +409,8 @@ const ExtensionsPage = () => {
             </div>
             <div className="lp-footer-col">
               <h4>Source</h4>
-              <a href="https://github.com/Tabors-Site/Tree">GitHub</a>
-              <a href="https://github.com/Tabors-Site/Tree/blob/main/LICENSE">AGPL-3.0 License</a>
+              <a href="https://github.com/taborgreat/TreeOS">GitHub</a>
+              <a href="https://github.com/taborgreat/TreeOS/blob/main/LICENSE">AGPL-3.0 License</a>
             </div>
           </div>
           <div className="lp-footer-bottom">

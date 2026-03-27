@@ -56,7 +56,7 @@ land/
 │   ├── contribution.js # Audit trail
 │   ├── chat.js        # AI conversation sessions
 │   └── llmConnection.js # LLM endpoint storage
-├── extensions/        # 90 extensions. ALL optional functionality lives here.
+├── extensions/        # 91 extensions. ALL optional functionality lives here.
 │   ├── _template/     # Scaffold for new extensions
 │   ├── loader.js      # Scans manifests, validates deps, wires routes/tools/modes/hooks/jobs
 │   ├── EXTENSION_FORMAT.md  # Full extension developer documentation
@@ -342,9 +342,9 @@ INVALID_INPUT means garbage the kernel can't parse. Not "I understood your reque
 
 **Confined scope for dangerous extensions.** Shell, solana, scripts declare `scope: "confined"`. Inactive everywhere by default. `ext-allow` at specific positions.
 
-## Extension Ecosystem (90 extensions, 4 bundles)
+## Extension Ecosystem (91 extensions, 4 bundles)
 
-**Base TreeOS (18):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember.
+**Base TreeOS (19):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, approve.
 
 **treeos-cascade (8):** propagation, perspective-filter, sealed-transport, codebook, gap-detection, long-memory, pulse, flow.
 

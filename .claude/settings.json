@@ -398,7 +398,14 @@
       "Bash(grep -rn \"fourteen\\\\|twelve extension\\\\|twenty.* extension\\\\|25 ext\\\\|80 ext\\\\|85 ext\" /home/tabor/github/Tree/site/src/ --include=*.jsx -i)",
       "Bash(grep -rn \"25 ext\\\\|30 ext\\\\|40 ext\\\\|50 ext\\\\|sixty\\\\|fifty\\\\|thirty.three\\\\|thirty-three\" /home/tabor/github/Tree/site/src/ --include=*.jsx -i)",
       "Bash(chmod +x /home/tabor/github/Tree/create-treeos/build-template.sh)",
-      "Bash(bash build-template.sh)"
+      "Bash(bash build-template.sh)",
+      "Bash(grep -rn \"90 extensions\\\\|Eighteen base\\\\|Ninety\\\\|89 ext\\\\|88 ext\" /home/tabor/github/Tree/site/src/ --include=*.jsx)",
+      "Bash(grep -r \"LLM\\\\|llm\\\\|api\" /home/tabor/github/Tree/create-treeos/template/*.js)",
+      "Bash(grep -r \"HORIZON_URL\\\\|LLM\\\\|custom.*llm\" /home/tabor/github/Tree/create-treeos/template --include=*.js)",
+      "Bash(grep -r \"question\\\\|ask\\\\|readline\\\\|prompt\" /home/tabor/github/Tree/create-treeos/template --include=*.js)",
+      "Read(//^| Key | Default/,/^$/**)",
+      "Bash(git -C /home/tabor/github/Tree log --oneline -10 -- cli/index.js)",
+      "Bash(git -C /home/tabor/github/Tree diff e9d67d4~1..e9d67d4 -- cli/index.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
@@ -422,7 +429,8 @@
       "/tmp",
       "/home/tabor/github/Tree/land/extensions",
       "/home/tabor/github/Tree/land/extensions/peer-review",
-      "/home/tabor/github/Tree/land/extensions/explore"
+      "/home/tabor/github/Tree/land/extensions/explore",
+      "/home/tabor/github/Tree/land/seed"
     ]
   }
 }

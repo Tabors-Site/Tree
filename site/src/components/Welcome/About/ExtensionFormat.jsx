@@ -6,14 +6,14 @@ const ExtensionFormat = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("https://raw.githubusercontent.com/Tabors-Site/Tree/main/land/extensions/EXTENSION_FORMAT.md")
+    fetch("https://raw.githubusercontent.com/taborgreat/TreeOS/main/land/extensions/EXTENSION_FORMAT.md")
       .then(r => r.text())
       .then(text => {
         setContent(text);
         setLoading(false);
       })
       .catch(() => {
-        setContent("Failed to load. View on GitHub: https://github.com/Tabors-Site/Tree/blob/main/land/extensions/EXTENSION_FORMAT.md");
+        setContent("Failed to load. View on GitHub: https://github.com/taborgreat/TreeOS/blob/main/land/extensions/EXTENSION_FORMAT.md");
         setLoading(false);
       });
   }, []);
@@ -141,7 +141,7 @@ const ExtensionFormat = () => {
             {" | "}
             <a href="/about/cli">CLI Guide</a>
             {" | "}
-            <a href="https://github.com/Tabors-Site/Tree/blob/main/land/extensions/EXTENSION_FORMAT.md">View on GitHub</a>
+            <a href="https://github.com/taborgreat/TreeOS/blob/main/land/extensions/EXTENSION_FORMAT.md">View on GitHub</a>
           </div>
         </div>
       </div>

@@ -51,7 +51,7 @@ Notes are the base content unit. A note can be plain text or any file type (imag
 
 ## Extensions
 
-90 extensions across four bundles. The kernel handles nodes, notes, auth, and AI conversation. Everything else is an extension.
+91 extensions across four bundles. The kernel handles nodes, notes, auth, and AI conversation. Everything else is an extension.
 
 > **WARNING:** Extensions run in the same Node.js process as the kernel. They can access the filesystem, network, and database. Review all third-party extension code before installing. The kernel is safe. Extensions are as safe as the code they contain.
 
@@ -185,7 +185,7 @@ treeos search "fitness"
 ```
 land/
   seed/           The kernel. Two schemas, conversation loop, hooks, cascade.
-  extensions/     90 extensions across four bundles plus standalone.
+  extensions/     91 extensions across four bundles plus standalone.
   canopy/         Federation. Peering, proxy, events, identity.
   routes/         HTTP API endpoints.
   orchestrators/  Pipeline runtime, locks, helpers.

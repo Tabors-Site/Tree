@@ -183,7 +183,7 @@ const LandPage = () => {
               </p>
             </div>
             <div className="lp-card">
-              <h3>Eighteen base extensions</h3>
+              <h3>Nineteen base extensions</h3>
               <p>
                 Navigation, orchestration, dashboard, notifications, monitoring, team
                 collaboration, presence detection, purpose tracking, cognitive phase
@@ -359,8 +359,8 @@ const LandPage = () => {
             </div>
             <div className="lp-footer-col">
               <h4>Source</h4>
-              <a href="https://github.com/Tabors-Site/Tree">GitHub</a>
-              <a href="https://github.com/Tabors-Site/Tree/blob/main/LICENSE">AGPL-3.0 License</a>
+              <a href="https://github.com/taborgreat/TreeOS">GitHub</a>
+              <a href="https://github.com/taborgreat/TreeOS/blob/main/LICENSE">AGPL-3.0 License</a>
             </div>
           </div>
           <div className="lp-footer-bottom">

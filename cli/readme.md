@@ -294,6 +294,19 @@ Install, manage, and build modular capabilities. Commands from installed extensi
 | `ext uninstall <name>`     | Remove extension directory (data stays in DB)   |
 | `ext publish <name>`       | Publish to the registry                         |
 
+### Bundles and OS
+
+Install entire capability bundles or full OS distributions in one command.
+
+| Command                    | Description                                           |
+| -------------------------- | ----------------------------------------------------- |
+| `bundle list`              | List available bundles from the directory              |
+| `bundle info <name>`       | Full details, member list, size estimate               |
+| `bundle install <name>`    | Install all member extensions                          |
+| `os list`                  | List available OS distributions                        |
+| `os info <name>`           | Everything it installs, configures, and expects        |
+| `os install <name>`        | Install everything: bundles, extensions, config         |
+
 ### Per-Node AI Customization
 
 Control what the AI can do and how it thinks at every node. Inherits parent to child.
@@ -479,6 +492,140 @@ If you skip `connect`, the CLI defaults to `https://treeOS.ai`.
 
 ---
 
+### Extension-Provided Commands
+
+These appear when the extension is installed. Run `help` to refresh.
+
+| Command                      | Extension      | Description                                          |
+| ---------------------------- | -------------- | ---------------------------------------------------- |
+| `scout <query>`              | scout          | Triangulate across the tree with five search strategies |
+| `explore <query>`            | explore        | Navigate downward through a branch to find information  |
+| `explore deep <query>`       | explore        | More iterations, lower confidence threshold             |
+| `explore map`                | explore        | Last exploration map at this position                   |
+| `trace <concept>`            | trace          | Follow one thread through the entire tree chronologically |
+| `changelog`                  | changelog      | What changed at this branch. `--since 7d`, `--land`    |
+| `digest`                     | digest         | Today's daily briefing from the tree                    |
+| `delegate`                   | delegate       | Pending work suggestions for team members               |
+| `competence`                 | competence     | Knowledge boundaries at this position                   |
+| `governance`                 | governance     | Governance status for all configured directories        |
+| `evolve`                     | evolve         | Detected patterns and extension proposals               |
+| `flow`                       | flow           | Cascade signals scoped to current position              |
+| `inverse`                    | inverse-tree   | Your profile as the AI sees it                          |
+| `intent`                     | intent         | Autonomous intent queue and recent executions            |
+| `intent pause`               | intent         | Pause autonomous behavior on this tree                  |
+| `intent history`             | intent         | What the tree did on its own                            |
+
+---
+
+## Deep Dive: @Sessions
+
+Sessions are the most powerful feature of the CLI. They let you hold multiple parallel conversations at different positions in the tree, switch between them instantly, and never lose context.
+
+### The basics
+
+```
+@fitness how's my bench press progress
+```
+
+This creates a session called `fitness`, pins it to your current position, and sends the message. The AI responds with full context of that branch. You can navigate anywhere else and keep talking to it.
+
+### Why sessions matter
+
+Without sessions, the AI context follows your navigation. `cd` somewhere and the AI forgets where you were. Sessions break that coupling. The AI at `@fitness` always thinks from the position where you created it, regardless of where you are now.
+
+### Multiple conversations at once
+
+```
+cd Health/Fitness
+@fitness what should I do today
+
+cd /Work/Backend
+@work what's blocking the auth refactor
+
+cd /Life/Journal
+@journal I've been thinking about balance
+
+@fitness add 10 lbs to squat
+@work create a ticket for the token migration
+@journal that felt good to write down
+```
+
+Three sessions. Three positions. Three AI contexts. You're standing at `/Life/Journal` but talking to all three branches. Each one responds from its own position with its own tools, modes, and context.
+
+### Switching vs sending
+
+- `@fitness hello` sends a message to the fitness session
+- `@fitness` alone (no message) switches your active session. The prompt changes. All subsequent `chat` commands go to that session without the prefix.
+- `@default` switches back to the default session that follows your navigation.
+
+### The prompt tells you
+
+```
+tabor@treeos.ai/Life/Journal @fitness >
+```
+
+This means: you're at `/Life/Journal` but your active session is `@fitness`. A plain `chat` message would go to the fitness session, not to Journal.
+
+### Sessions survive navigation
+
+```
+@fitness log bench 135x8
+cd /                           # navigate to land root
+@fitness and squats 225x5      # still talks to Health/Fitness
+home                           # go to user home
+@fitness what's my weekly total # still talks to Health/Fitness
+```
+
+The session doesn't care where you are. It talks to where it was born.
+
+### Managing sessions
+
+```
+sessions                       # list all active sessions
+sessions kill fitness          # end a session
+@default                       # back to following navigation
+```
+
+### When to use sessions vs navigation
+
+**Navigate** when you want to work at a position. `cd Work/API` and then `chat`, `note`, `place`. The AI context matches where you are.
+
+**Use sessions** when you want to talk to multiple positions without navigating back and forth. `@fitness` from anywhere. `@work` from anywhere. The AI remembers.
+
+### Hypothetical: sessions across trees
+
+Imagine three trees: Health, Work, Personal.
+
+```
+@health log my run today, 5k in 28 minutes
+@work the deploy finished, update the status
+@journal feeling productive today
+```
+
+Three trees. Three conversations. One terminal. Each session holds its own tree root, node position, and AI context. You never navigate between trees. The sessions are your portals.
+
+### Hypothetical: sessions with extensions
+
+With the intent extension installed, sessions become even more powerful:
+
+```
+@fitness what did the tree do overnight
+```
+
+The AI at `@fitness` checks intent history for the Health tree and tells you: "Intent compressed the old workout logs and nudged you about running." You didn't navigate there. You asked from wherever you were.
+
+With delegate installed:
+
+```
+@team-api any delegate suggestions for me
+```
+
+The AI checks delegate suggestions near your session position and tells you what needs attention.
+
+Sessions turn the CLI from a navigation tool into a command center. You don't go to the work. The work comes to you.
+
+---
+
 ## How It Works
 
 All commands map to the [Tree REST API](https://treeOS.ai/about/api). Named sessions use `sessionHandle` to maintain conversation context across messages. Remote tree operations route through the [Canopy protocol](https://treeOS.ai/about) via `/canopy/proxy/:domain/*`. Config stored in `~/.treeos/config.json`.
@@ -493,4 +640,4 @@ All commands map to the [Tree REST API](https://treeOS.ai/about/api). Named sess
 - [CLI Guide](https://treeOS.ai/about/cli)
 - [Extensions](https://treeOS.ai/about/extensions)
 - [The Horizon](https://horizon.treeOS.ai)
-- [GitHub](https://github.com/Tabors-Site/Tree)
+- [GitHub](https://github.com/taborgreat/TreeOS)

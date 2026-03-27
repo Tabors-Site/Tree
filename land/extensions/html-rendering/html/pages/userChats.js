@@ -103,7 +103,7 @@ export function renderChats({ userId, chats, sessions, username, token, sessionI
       const phases = [];
       let currentPlan = null;
       for (const step of steps) {
-        const mode = step.aiContext?.path || "";
+        const mode = step.aiContext?.mode || "";
         if (mode === "translator") {
           currentPlan = null;
           phases.push({ type: "translate", step });
@@ -159,7 +159,7 @@ export function renderChats({ userId, chats, sessions, username, token, sessionI
       <details class="chain-substep">
         <summary class="chain-substep-summary">
           <span class="chain-dot ${dotClass}"></span>
-          <span class="chain-step-mode">${modeLabel(chat.aiContext?.path)}</span>
+          <span class="chain-step-mode">${modeLabel(chat.aiContext?.mode)}</span>
           ${targetName ? `<span class="chain-step-target">${esc(targetName)}</span>` : ""}
           ${tc?.stepResult === "failed" ? `<span class="chain-step-failed">FAILED</span>` : ""}
           ${tc?.resultDetail && tc.stepResult === "failed" ? `<span class="chain-step-fail-reason">${truncate(tc.resultDetail, 60)}</span>` : ""}
@@ -241,7 +241,7 @@ export function renderChats({ userId, chats, sessions, username, token, sessionI
           <div class="chain-phase chain-phase-plan">
             <div class="chain-phase-header">
               <span class="chain-phase-icon">\uD83D\uDCCB</span>
-              <span class="chain-phase-label">${modeLabel(m.aiContext?.path)}</span>
+              <span class="chain-phase-label">${modeLabel(m.aiContext?.mode)}</span>
               ${targetName ? `<span class="chain-step-target">${esc(targetName)}</span>` : ""}
               ${
                 tc?.planStepIndex != null && tc?.planTotalSteps != null
@@ -269,7 +269,7 @@ export function renderChats({ userId, chats, sessions, username, token, sessionI
           <details class="chain-phase chain-phase-respond">
             <summary class="chain-phase-summary">
               <span class="chain-phase-icon">\uD83D\uDCAC</span>
-              <span class="chain-phase-label">${modeLabel(s.aiContext?.path)}</span>
+              <span class="chain-phase-label">${modeLabel(s.aiContext?.mode)}</span>
               ${renderModelBadge(s)}
               ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
             </summary>
@@ -305,14 +305,14 @@ export function renderChats({ userId, chats, sessions, username, token, sessionI
                       : stc?.stepResult === "success"
                         ? "\u2713 "
                         : "";
-                return `${icon}${modeLabel(s.aiContext?.path)}`;
+                return `${icon}${modeLabel(s.aiContext?.mode)}`;
               })
               .join(" \u2192 ");
             const label = targetName ? `\uD83D\uDCCB ${esc(targetName)}` : "\uD83D\uDCCB";
             return sub ? `${label}: ${sub}` : label;
           }
           if (p.type === "respond") return "\uD83D\uDCAC";
-          return modeLabel(p.step?.aiContext?.path);
+          return modeLabel(p.step?.aiContext?.mode);
         })
         .join("  ");
 
@@ -408,7 +408,7 @@ export function renderChats({ userId, chats, sessions, username, token, sessionI
       <li class="note-card">
         <div class="chat-header">
           <div class="chat-header-left">
-            <span class="chat-mode">${modeLabel(chat.aiContext?.path)}</span>
+            <span class="chat-mode">${modeLabel(chat.aiContext?.mode)}</span>
             ${treeLink}
             <span class="chat-model">${esc(modelName)}</span>
           </div>

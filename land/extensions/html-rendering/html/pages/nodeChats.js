@@ -103,7 +103,7 @@ const groupStepsIntoPhases = (steps) => {
   const phases = [];
   let currentPlan = null;
   for (const step of steps) {
-    const mode = step.aiContext?.path || "";
+    const mode = step.aiContext?.mode || "";
     if (mode === "translator") {
       currentPlan = null;
       phases.push({ type: "translate", step });
@@ -146,7 +146,7 @@ const renderSubstep = (chat, tokenQS) => {
       <details class="chain-substep">
         <summary class="chain-substep-summary">
           <span class="chain-dot ${dotClass}"></span>
-          <span class="chain-step-mode">${modeLabel(chat.aiContext?.path)}</span>
+          <span class="chain-step-mode">${modeLabel(chat.aiContext?.mode)}</span>
           ${targetName ? `<span class="chain-step-target">${esc(targetName)}</span>` : ""}
           ${tc?.stepResult === "failed" ? `<span class="chain-step-failed">FAILED</span>` : ""}
           ${tc?.resultDetail && tc.stepResult === "failed" ? `<span class="chain-step-fail-reason">${truncate(tc.resultDetail, 60)}</span>` : ""}
@@ -223,7 +223,7 @@ const renderPhases = (steps, tokenQS) => {
           <div class="chain-phase chain-phase-plan">
             <div class="chain-phase-header">
               <span class="chain-phase-icon">P</span>
-              <span class="chain-phase-label">${modeLabel(m.aiContext?.path)}</span>
+              <span class="chain-phase-label">${modeLabel(m.aiContext?.mode)}</span>
               ${targetName ? `<span class="chain-step-target">${esc(targetName)}</span>` : ""}
               ${tc?.planStepIndex != null && tc?.planTotalSteps != null ? `<span class="chain-step-counter">Step ${tc.planStepIndex} of ${tc.planTotalSteps}</span>` : ""}
               ${countBadges}
@@ -247,7 +247,7 @@ const renderPhases = (steps, tokenQS) => {
           <details class="chain-phase chain-phase-respond">
             <summary class="chain-phase-summary">
               <span class="chain-phase-icon">R</span>
-              <span class="chain-phase-label">${modeLabel(s.aiContext?.path)}</span>
+              <span class="chain-phase-label">${modeLabel(s.aiContext?.mode)}</span>
               ${renderModelBadge(s)}
               ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
             </summary>
@@ -283,14 +283,14 @@ const renderPhases = (steps, tokenQS) => {
                   : stc?.stepResult === "success"
                     ? "v "
                     : "";
-            return `${icon}${modeLabel(s.aiContext?.path)}`;
+            return `${icon}${modeLabel(s.aiContext?.mode)}`;
           })
           .join(" > ");
         const label = targetName ? `P ${esc(targetName)}` : "P";
         return sub ? `${label}: ${sub}` : label;
       }
       if (p.type === "respond") return "R";
-      return modeLabel(p.step?.aiContext?.path);
+      return modeLabel(p.step?.aiContext?.mode);
     })
     .join("  ");
 
@@ -373,7 +373,7 @@ const renderChain = (chain, tokenQS, token) => {
       <li class="note-card">
         <div class="chat-header">
           <div class="chat-header-left">
-            <span class="chat-mode">${modeLabel(chat.aiContext?.path)}</span>
+            <span class="chat-mode">${modeLabel(chat.aiContext?.mode)}</span>
             ${treeLink}
             <span class="chat-model">${esc(modelName)}</span>
           </div>

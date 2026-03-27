@@ -117,7 +117,7 @@ const AboutHome = () => {
         <div className="ah-section">
           <div className="ah-section-title">What This Land Runs</div>
           <div className="ah-section-text">
-            90 extensions. Full AI orchestration. LLM failover. Per-node customization.
+            91 extensions. Full AI orchestration. LLM failover. Per-node customization.
             Daily dream cycles. Federation with the Canopy network.
           </div>
         </div>
