@@ -143,102 +143,61 @@ async function pickExtensions(horizonUrl) {
     return;
   }
 
+  const extMap = {};
+  for (const ext of extensions) extMap[ext.name] = ext;
+
+  // ── Extension architecture ──
+  // Base TreeOS always installs. Bundles and extras are optional.
+
+  const BASE = [
+    "treeos", "tree-orchestrator", "land-manager", "navigation", "starter-types",
+    "console", "dashboard", "notifications", "monitor", "llm-response-formatting",
+    "team", "user-tiers", "html-rendering", "water", "heartbeat", "purpose", "phase", "remember",
+  ];
+
+  const BUNDLES = {
+    "treeos-cascade":      { label: "Cascade (nervous system, 8 extensions)", count: 8 },
+    "treeos-intelligence": { label: "Intelligence (self-awareness, 13 extensions)", count: 13 },
+    "treeos-connect":      { label: "Connect (external channels, 8 extensions)", count: 8 },
+    "treeos-maintenance":  { label: "Maintenance (hygiene, 5 extensions)", count: 5 },
+  };
+
+  const STANDALONE = ["persona", "mycelium", "peer-review", "seed-export", "channels", "governance", "teach", "split"];
+  const DOMAIN = ["fitness", "food", "solana", "scripts"];
+  const USER_MGMT = ["api-keys", "user-llm", "user-queries", "email"];
+  const DATA = ["values", "schedules", "prestige", "transactions", "energy", "billing"];
+  const SYSTEM = ["backup", "deleted-revive", "book", "blog"];
+
+  const bundleNames = Object.keys(BUNDLES);
+  const allKnown = new Set([...BASE, ...bundleNames, ...STANDALONE, ...DOMAIN, ...USER_MGMT, ...DATA, ...SYSTEM]);
+
   const rl = (await import("readline/promises")).createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
-  console.log(`\n  ${extensions.length} extensions available.\n`);
-  const mode = await rl.question("  Install all extensions (a), recommended only (r), or choose individually (c)? (a/r/c): ");
-  const installMode = mode.trim().toLowerCase();
+  console.log(`\n  Extensions\n`);
+  console.log("  (1) Full TreeOS        All bundles and extras. Recommended.");
+  console.log("  (2) Base OS only       18 core extensions. Add more later.");
+  console.log("  (3) None               Bare kernel. Install extensions with the CLI.\n");
 
-  if (installMode === "a") {
-    // Install everything
-    console.log(`\n  Installing all ${extensions.length} extensions...\n`);
-    rl.close();
-    const selected = extensions;
-    // Jump to install (reuse code below)
-    return await installSelected(selected, horizonUrl);
-  }
-
-  // Categorize extensions
-  const REQUIRED = ["tree-orchestrator"];
-  const CORE_AI = ["understanding", "dreams", "raw-ideas"];
-  const DATA = ["values", "schedules", "prestige", "transactions", "energy", "billing"];
-  const TOOLS = ["scripts", "solana", "gateway", "api-keys", "user-llm"];
-  const CONTENT = ["blog", "book", "email", "html-rendering"];
-  const SYSTEM = ["user-queries", "deleted-revive", "console"];
-
-  const extMap = {};
-  for (const ext of extensions) extMap[ext.name] = ext;
-
-  if (installMode === "r") {
-    const recommended = [...REQUIRED, ...CORE_AI, ...SYSTEM].filter(n => extMap[n]);
-    console.log(`\n  Installing ${recommended.length} recommended extensions...\n`);
-    for (const name of recommended) console.log(`    ${name}`);
-    rl.close();
-    return await installSelected(recommended.map(n => extMap[n]), horizonUrl);
-  }
-
-  const categories = [
-    { title: "Required (chat/place/query need this)", names: REQUIRED, defaultYes: true, force: true },
-    { title: "AI Intelligence (recommended)", names: CORE_AI, defaultYes: true },
-    { title: "Data and Tracking", names: DATA, defaultYes: false },
-    { title: "Tools and Integrations", names: TOOLS, defaultYes: false },
-    { title: "Content and Rendering", names: CONTENT, defaultYes: false },
-    { title: "System Utilities", names: SYSTEM, defaultYes: true },
-  ];
-
-  const selected = [];
-
-  for (const cat of categories) {
-    const available = cat.names.filter(n => extMap[n]);
-    if (!available.length) continue;
-
-    console.log(`\n  ${cat.title}:`);
-
-    if (cat.force) {
-      for (const name of available) {
-        console.log(`    ${name} v${extMap[name].version} (auto-installed)`);
-        selected.push(extMap[name]);
-      }
-      continue;
-    }
-
-    for (const name of available) {
-      const ext = extMap[name];
-      const hint = cat.defaultYes ? "(Y/n)" : "(y/N)";
-      const answer = await rl.question(
-        `    ${name} v${ext.version} . ${ext.description || ""} ${hint}: `
-      );
-      const yes = cat.defaultYes
-        ? (!answer.trim() || answer.toLowerCase().startsWith("y"))
-        : (answer.toLowerCase().startsWith("y"));
-      if (yes) selected.push(ext);
-    }
-  }
-
-  // Catch any extensions not in categories
-  const categorized = new Set([...REQUIRED, ...CORE_AI, ...DATA, ...TOOLS, ...CONTENT, ...SYSTEM]);
-  const uncategorized = extensions.filter(e => !categorized.has(e.name));
-  if (uncategorized.length) {
-    console.log(`\n  Other:`);
-    for (const ext of uncategorized) {
-      const answer = await rl.question(
-        `    ${ext.name} v${ext.version} . ${ext.description || ""} (y/N): `
-      );
-      if (answer.toLowerCase().startsWith("y")) selected.push(ext);
-    }
-  }
-
+  const mode = (await rl.question("  Choose (1/2/3): ")).trim();
   rl.close();
 
-  if (selected.length === 0) {
-    console.log("\n  No extensions selected. Install later with: treeos ext install <name>\n");
+  if (mode === "3") {
+    console.log("\n  No extensions. Install later with: treeos ext install <name>\n");
     return;
   }
 
-  await installSelected(selected, horizonUrl);
+  if (mode === "2") {
+    const selected = BASE.filter(n => extMap[n]).map(n => extMap[n]);
+    console.log(`\n  Installing ${selected.length} base extensions...\n`);
+    return await installSelected(selected, horizonUrl);
+  }
+
+  // Default: full install
+  console.log(`\n  Installing all ${extensions.length} extensions...\n`);
+  return await installSelected(extensions, horizonUrl);
 }
 
 async function installSelected(selected, horizonUrl) {

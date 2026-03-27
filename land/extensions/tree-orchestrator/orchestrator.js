@@ -55,6 +55,121 @@ import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 import { resolveMode } from "../../seed/ws/modes/registry.js";
 
 // ─────────────────────────────────────────────────────────────────────────
+// INTELLIGENCE BRIEF (cached per tree, 60s TTL)
+// Collects signals from installed extensions so the librarian sees the
+// tree's living state, not just its skeleton.
+// ─────────────────────────────────────────────────────────────────────────
+
+const briefCache = new Map(); // rootId -> { brief, timestamp }
+const BRIEF_TTL = 60000;
+const BRIEF_CACHE_MAX = 100;
+
+async function getIntelligenceBrief(rootId, userId) {
+  const cached = briefCache.get(rootId);
+  if (cached && Date.now() - cached.timestamp < BRIEF_TTL) return cached.brief;
+
+  const brief = await buildIntelligenceBrief(rootId, userId);
+
+  // Evict oldest if at capacity
+  if (briefCache.size >= BRIEF_CACHE_MAX && !briefCache.has(rootId)) {
+    const oldest = briefCache.keys().next().value;
+    briefCache.delete(oldest);
+  }
+  briefCache.set(rootId, { brief, timestamp: Date.now() });
+  return brief;
+}
+
+async function buildIntelligenceBrief(rootId, userId) {
+  let getExtension;
+  try {
+    ({ getExtension } = await import("../loader.js"));
+  } catch { return null; }
+
+  const sections = [];
+
+  // Competence: what the tree knows and doesn't know
+  try {
+    const comp = getExtension("competence");
+    if (comp?.exports?.getCompetence) {
+      const data = await comp.exports.getCompetence(rootId);
+      if (data?.totalQueries >= 10) {
+        const strong = (data.strongTopics || []).slice(0, 5).join(", ");
+        const weak = (data.weakTopics || []).slice(0, 5).join(", ");
+        if (strong || weak) {
+          sections.push(`Competence: answers well on [${strong || "unknown"}]. Weak on [${weak || "unknown"}]. Answer rate: ${Math.round((data.answerRate || 0) * 100)}%.`);
+        }
+      }
+    }
+  } catch {}
+
+  // Explore: last exploration map at root
+  try {
+    const exp = getExtension("explore");
+    if (exp?.exports?.getExploreMap) {
+      const map = await exp.exports.getExploreMap(rootId);
+      if (map && map.confidence > 0) {
+        const findings = (map.map || []).slice(0, 3).map(f => f.nodeName || f.nodeId).join(", ");
+        const gaps = (map.gaps || []).slice(0, 2).join("; ");
+        sections.push(`Explored: ${map.coverage} coverage, ${map.nodesExplored} nodes checked. Key areas: ${findings || "none"}.${gaps ? " Gaps: " + gaps : ""}`);
+      }
+    }
+  } catch {}
+
+  // Contradiction: unresolved conflicts
+  try {
+    const con = getExtension("contradiction");
+    if (con?.exports?.getUnresolved) {
+      const unresolved = await con.exports.getUnresolved(rootId);
+      if (Array.isArray(unresolved) && unresolved.length > 0) {
+        const top = unresolved.slice(0, 2).map(c => `"${c.claim}" vs "${c.conflictsWith}"`).join("; ");
+        sections.push(`Contradictions: ${unresolved.length} unresolved. ${top}`);
+      }
+    }
+  } catch {}
+
+  // Purpose: thesis and coherence
+  try {
+    const pur = getExtension("purpose");
+    if (pur) {
+      const root = await Node.findById(rootId).select("metadata").lean();
+      const meta = root?.metadata instanceof Map ? root.metadata.get("purpose") : root?.metadata?.purpose;
+      if (meta?.thesis) {
+        const coherence = meta.recentCoherence != null ? ` Coherence: ${Math.round(meta.recentCoherence * 100)}%.` : "";
+        sections.push(`Purpose: "${meta.thesis}"${coherence}`);
+      }
+    }
+  } catch {}
+
+  // Evolution: dormant branches
+  try {
+    const evo = getExtension("evolution");
+    if (evo?.exports?.getDormant) {
+      const dormant = await evo.exports.getDormant(rootId);
+      if (Array.isArray(dormant) && dormant.length > 0) {
+        const names = dormant.slice(0, 3).map(d => d.name || d.nodeName).join(", ");
+        sections.push(`Dormant: ${dormant.length} branch${dormant.length > 1 ? "es" : ""}. ${names}.`);
+      }
+    }
+  } catch {}
+
+  // Remember: recent departures
+  try {
+    const rem = getExtension("remember");
+    if (rem) {
+      const root = await Node.findById(rootId).select("metadata").lean();
+      const meta = root?.metadata instanceof Map ? root.metadata.get("remember") : root?.metadata?.remember;
+      if (meta?.departed?.length > 0) {
+        const recent = meta.departed.slice(-3).map(d => `${d.name} (${d.note})`).join("; ");
+        sections.push(`Departed: ${recent}`);
+      }
+    }
+  } catch {}
+
+  if (sections.length === 0) return null;
+  return "Intelligence:\n" + sections.map(s => "  " + s).join("\n");
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // MODE RESOLUTION HELPER
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -711,8 +826,8 @@ async function executePlanSteps({
         structure: {
           includeChildren: true,
           includeParentChain: true,
-          includeValues: false,
-          includeNotes: false,
+          includeValues: true,
+          includeNotes: true,
         },
         edit: {
           includeChildren: true,
@@ -1186,9 +1301,14 @@ export async function orchestrateTreeRequest({
         if (uExt?.exports?.getEncodingMap) encodingMap = await uExt.exports.getEncodingMap(rootId);
       } catch {}
       treeSummary = await buildDeepTreeSummary(rootId, { encodingMap });
+
+      // Append live intelligence signals from installed extensions
+      const brief = await getIntelligenceBrief(rootId, userId);
+      if (brief) treeSummary += "\n\n" + brief;
+
       log.verbose("Tree Orchestrator", " treeSummary for librarian:\n", treeSummary);
     } catch (err) {
- log.error("Tree Orchestrator", " Pre-fetch tree summary failed:", err.message);
+      log.error("Tree Orchestrator", " Pre-fetch tree summary failed:", err.message);
     }
   }
 
@@ -1486,6 +1606,9 @@ async function runQueryFlow({
         if (uExt?.exports?.getEncodingMap) encodingMap = await uExt.exports.getEncodingMap(rootId);
       } catch {}
       treeSummary = await buildDeepTreeSummary(rootId, { encodingMap });
+
+      const brief = await getIntelligenceBrief(rootId, userId);
+      if (brief) treeSummary += "\n\n" + brief;
     } catch (err) {
       log.error("Tree Orchestrator", "Query: tree summary failed:", err.message);
     }
@@ -2245,12 +2368,30 @@ async function scoutExistingStructure({
     if (signal?.aborted) return { adapted: false };
 
     // Find a child that matches the directive's target
-    const match = findMatchingChild(
+    let match = findMatchingChild(
       currentCtx.children,
       directiveLower,
       quotedNames,
       words,
     );
+
+    // Competence: prefer a competent sibling over a weak or absent name match
+    if (!match || !quotedNames.some(q => match.name.toLowerCase() === q.toLowerCase())) {
+      try {
+        const compExt = (await import("../loader.js")).getExtension("competence");
+        if (compExt?.exports?.getCompetence) {
+          for (const child of currentCtx.children) {
+            if (child === match) continue;
+            const comp = await compExt.exports.getCompetence(child.id || child._id);
+            if (comp?.strongTopics?.some(t => directiveLower.includes(t.toLowerCase()))) {
+              match = child;
+              break;
+            }
+          }
+        }
+      } catch {}
+    }
+
     if (!match) break;
 
     // Found a matching child — dive deeper

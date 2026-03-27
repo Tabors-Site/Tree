@@ -53,6 +53,45 @@ const Guide = () => {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 1b. THE FULL PICTURE */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">The Full Picture</h2>
+          <P>
+            Connect a tree to a Reddit subreddit. A comment arrives. The gateway resolves the user,
+            checks energy, queues it. The orchestrator classifies intent. The AI responds with full
+            context: structure, notes, purpose thesis, competence map, behavioral profile, conversation
+            history. The reply posts back as a threaded comment.
+          </P>
+          <P>
+            The intelligence bundle works in the background. The tree compresses its own knowledge.
+            It detects contradictions between branches. It profiles each user from their behavior.
+            It searches semantically. It notices when conversations go poorly and adjusts. It proposes
+            new extensions when users repeatedly do something nothing handles.
+          </P>
+          <P>
+            A research community runs a tree with branches per topic. Reddit comments get placed into
+            the right branch. The tree compresses weekly, surfacing contradictions. Dream cycles
+            reorganize overnight. A digest goes out each morning via Telegram.
+          </P>
+          <P>
+            A personal tree connected to Telegram. You text it thoughts throughout the day. Raw-ideas
+            captures and auto-places them. Navigate to /Finance and solana tools appear. Navigate to
+            /Health/Food and calorie tracking activates. Different position, different AI.
+          </P>
+          <P style={{color: "rgba(255,255,255,0.4)", fontSize: "0.9rem"}}>
+            A persistent AI that lives in a structure, accumulates context across every channel,
+            knows itself, communicates internally through cascade, and connects to the outside world
+            through gateways. Every extension reads from every other. The whole is more than the parts.
+          </P>
+          <P style={{color: "rgba(255,255,255,0.25)", fontSize: "0.8rem", textAlign: "center", marginTop: 24}}>
+            Be careful attaching IoT or sensory gateways. At some point this thing starts feeling.
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
       {/* 2. QUICK START */}
       {/* ══════════════════════════════════════════════════════════════ */}
       <section className="lp-section lp-section-alt">
