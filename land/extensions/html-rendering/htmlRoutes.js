@@ -28,10 +28,12 @@ async function resolveVersion(nodeId, version) {
 }
 import { getNodeChats } from "../../seed/ws/chatHistory.js";
 import { getConnectionsForUser, getAllRootLlmSlots } from "../../seed/llm/connections.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import getNodeName from "../../routes/api/helpers/getNameById.js";
 import { getExtension } from "../loader.js";
 import { isHtmlEnabled } from "./config.js";
+
+let _metadata = null;
+export function setMetadata(metadata) { _metadata = metadata; }
 
 export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
   const router = express.Router();
@@ -294,14 +296,14 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
       const { getAllToolNamesForBigMode, getSubModes } = await import("../../seed/ws/modes/registry.js");
       const { resolveTools } = await import("../../seed/ws/tools.js");
       const { filterToolNamesByScope } = await import("../../seed/tree/extensionScope.js");
-      const { getExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+      // metadata functions provided via setMetadata
 
       const toolZones = isLandRoot ? ["tree", "home", "land"] : [node.rootOwner ? "tree" : "home"];
       const allToolNames = [...new Set(toolZones.flatMap(z => getAllToolNamesForBigMode(z)))];
       const filteredToolNames = filterToolNamesByScope(allToolNames, scope.blocked, scope.restricted);
       const toolDefs = resolveTools(allToolNames);
 
-      const toolConfig = getExtMeta(node, "tools");
+      const toolConfig = _metadata.getExtMeta(node, "tools");
       const nodeBlocked = new Set(toolConfig.blocked || []);
       const nodeAllowed = new Set(toolConfig.allowed || []);
 
@@ -332,7 +334,7 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
         ? [...(getSubModes("tree") || []), ...(getSubModes("home") || []), ...(getSubModes("land") || [])]
         : getSubModes(node.rootOwner ? "tree" : "home") || [];
 
-      const modeOverrides = getExtMeta(node, "modes");
+      const modeOverrides = _metadata.getExtMeta(node, "modes");
 
       const modes = allModes.map(m => {
         const owner = getModeOwner(m.key);
@@ -901,11 +903,11 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
     try {
       const node = await Node.findById(req.params.nodeId);
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
-      const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
-      const modes = getExtMeta(node, "modes");
+      // metadata functions provided via setMetadata
+      const modes = _metadata.getExtMeta(node, "modes");
       if (req.body.intent && req.body.modeKey) modes[req.body.intent] = req.body.modeKey;
       if (req.body.clearIntent) delete modes[req.body.clearIntent];
-      await setExtMeta(node, "modes", Object.keys(modes).length > 0 ? modes : undefined);
+      await _metadata.setExtMeta(node, "modes", Object.keys(modes).length > 0 ? modes : undefined);
       await node.save();
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
@@ -919,8 +921,8 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
     try {
       const node = await Node.findById(req.params.nodeId);
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
-      const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
-      const toolConfig = getExtMeta(node, "tools");
+      // metadata functions provided via setMetadata
+      const toolConfig = _metadata.getExtMeta(node, "tools");
       if (req.body.allow) {
         toolConfig.allowed = [...new Set([...(toolConfig.allowed || []), ...req.body.allow])];
       }
@@ -929,7 +931,7 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
       }
       if (req.body.clearAllowed) toolConfig.allowed = [];
       if (req.body.clearBlocked) toolConfig.blocked = [];
-      await setExtMeta(node, "tools", Object.keys(toolConfig).length > 0 ? toolConfig : undefined);
+      await _metadata.setExtMeta(node, "tools", Object.keys(toolConfig).length > 0 ? toolConfig : undefined);
       await node.save();
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
@@ -943,16 +945,16 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
     try {
       const node = await Node.findById(req.params.nodeId);
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
-      const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+      // metadata functions provided via setMetadata
       const { clearScopeCache } = await import("../../seed/tree/extensionScope.js");
-      const extConfig = getExtMeta(node, "extensions");
+      const extConfig = _metadata.getExtMeta(node, "extensions");
       if (req.body.block) {
         extConfig.blocked = [...new Set([...(extConfig.blocked || []), ...req.body.block])];
       }
       if (req.body.allow) {
         extConfig.blocked = (extConfig.blocked || []).filter(e => !req.body.allow.includes(e));
       }
-      await setExtMeta(node, "extensions", Object.keys(extConfig).length > 0 ? extConfig : undefined);
+      await _metadata.setExtMeta(node, "extensions", Object.keys(extConfig).length > 0 ? extConfig : undefined);
       await node.save();
       clearScopeCache();
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
@@ -1000,7 +1002,7 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
       const node = await Node.findById(req.params.rootId);
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Tree not found");
 
-      const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+      // metadata functions provided via setMetadata
       const { clearScopeCache } = await import("../../seed/tree/extensionScope.js");
 
       // Apply config updates from body
@@ -1009,7 +1011,7 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
       for (const [key, value] of Object.entries(req.body)) {
         config[key] = value;
       }
-      await setExtMeta(node, "config", config);
+      await _metadata.setExtMeta(node, "config", config);
       await node.save();
       clearScopeCache();
 
@@ -1042,10 +1044,10 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
       const node = await Node.findById(nodeId);
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
-      const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
-      const { getExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+      // metadata functions provided via setMetadata
+      // metadata functions provided via setMetadata
       const { clearScopeCache } = await import("../../seed/tree/extensionScope.js");
-      const extConfig = getExtMeta(node, "extensions") || {};
+      const extConfig = _metadata.getExtMeta(node, "extensions") || {};
 
       if (req.body.block) {
         const name = req.body.block;
@@ -1056,7 +1058,7 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
         extConfig.blocked = (extConfig.blocked || []).filter(e => e !== name);
       }
 
-      await setExtMeta(node, "extensions", Object.keys(extConfig).length > 0 ? extConfig : undefined);
+      await _metadata.setExtMeta(node, "extensions", Object.keys(extConfig).length > 0 ? extConfig : undefined);
       await node.save();
       clearScopeCache();
 
@@ -1075,8 +1077,8 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
       const node = await Node.findById(nodeId);
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
-      const { setExtMeta, getExtMeta } = await import("../../seed/tree/extensionMetadata.js");
-      const toolConfig = getExtMeta(node, "tools") || {};
+      // metadata functions provided via setMetadata
+      const toolConfig = _metadata.getExtMeta(node, "tools") || {};
 
       if (req.body.block) {
         const name = req.body.block;
@@ -1090,7 +1092,7 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
       }
 
       const hasConfig = (toolConfig.allowed?.length || 0) + (toolConfig.blocked?.length || 0) > 0;
-      await setExtMeta(node, "tools", hasConfig ? toolConfig : undefined);
+      await _metadata.setExtMeta(node, "tools", hasConfig ? toolConfig : undefined);
       await node.save();
 
       const qs = req.query.token ? `?token=${req.query.token}&html` : "?html";

@@ -15,7 +15,8 @@ import { getExtension } from "../loader.js";
 import { orchestrateDreamNotify } from "./dreamNotify.js";
 import { userHasLlm } from "../../seed/ws/conversation.js";
 import { acquireLock, releaseLock } from "../../seed/orchestrators/locks.js";
-import { setExtMeta } from "../../seed/tree/extensionMetadata.js";
+let _metadata = null;
+export function setMetadata(metadata) { _metadata = metadata; }
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -222,7 +223,7 @@ async function runTreeDream(rootNode) {
     if (rootDoc) {
       const dreamMeta = rootDoc.metadata?.get?.("dreams") || rootDoc.metadata?.dreams || {};
       dreamMeta.lastDreamAt = new Date();
-      await setExtMeta(rootDoc, "dreams", dreamMeta);
+      await _metadata.setExtMeta(rootDoc, "dreams", dreamMeta);
       await rootDoc.save();
     }
     log.verbose("Dreams", ` Dream complete for "${rootNode.name}"`);

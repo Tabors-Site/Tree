@@ -1,8 +1,9 @@
 import log from "../../seed/log.js";
 import tools from "./tools.js";
-import { writeTrace, getMemory, getLongMemoryConfig } from "./core.js";
+import { setMetadata, writeTrace, getMemory, getLongMemoryConfig } from "./core.js";
 
 export async function init(core) {
+  setMetadata(core.metadata);
   const config = await getLongMemoryConfig();
 
   // Listen to every cascade event and write a trace to the receiving node.

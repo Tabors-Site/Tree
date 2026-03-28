@@ -19,6 +19,7 @@ export async function init(core) {
       return core.llm.runChat({ ...opts, llmPriority: BG });
     } },
     energy: core.energy || null,
+    metadata: core.metadata,
   });
 
   // ── enrichContext: surface active lessons to the AI ──────────────────

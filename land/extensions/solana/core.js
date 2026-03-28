@@ -13,26 +13,27 @@ import {
   createTransferInstruction,
 } from "@solana/spl-token";
 import crypto from "crypto";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 // Node model wired from init via setModels
 let Node = null;
+let _metadata = null;
 export function setModels(models) { Node = models.Node; }
+export function setMetadata(metadata) { _metadata = metadata; }
 
 /* ------------------------------------------------------------------ */
 /*  Wallet metadata helpers                                            */
 /* ------------------------------------------------------------------ */
 
 function getWallet(node, versionIndex) {
-  const meta = getExtMeta(node, "solana");
+  const meta = _metadata.getExtMeta(node, "solana");
   return meta.wallets?.[versionIndex] || null;
 }
 
 async function setWallet(node, versionIndex, walletData) {
-  const meta = getExtMeta(node, "solana");
+  const meta = _metadata.getExtMeta(node, "solana");
   if (!meta.wallets) meta.wallets = {};
   meta.wallets[versionIndex] = walletData;
-  await setExtMeta(node, "solana", meta);
+  await _metadata.setExtMeta(node, "solana", meta);
 }
 
 const JUP_BASE = "https://api.jup.ag/ultra/v1";
@@ -155,12 +156,11 @@ export async function syncVersionSOLBalance(node, versionIndex) {
   const lamports = await connection.getBalance(pubkey);
 
   // Store SOL balance in metadata.values
-  const { getExtMeta, setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
-  const values = getExtMeta(node, "values") || {};
+  const values = _metadata.getExtMeta(node, "values") || {};
   values._auto__sol = lamports;
   // Note: cross-namespace write to "values" for auto-SOL balance display.
   // Uses _auto__ prefix convention to distinguish from user-set values.
-  await setExtMeta(node, "values", values);
+  await _metadata.setExtMeta(node, "values", values);
 
   return lamports;
 }
@@ -183,8 +183,7 @@ export async function getVersionWalletInfo(nodeId, versionIndex) {
   }
 
   // Read values from metadata
-  const { getExtMeta } = await import("../../seed/tree/extensionMetadata.js");
-  const values = getExtMeta(node, "values") || {};
+  const values = _metadata.getExtMeta(node, "values") || {};
 
   const tokens = [];
 
@@ -438,8 +437,7 @@ export async function syncVersionTokenHoldings(node, versionIndex) {
   const wallet = getWallet(node, versionIndex);
   if (!wallet?.publicKey) return null;
 
-  const { getExtMeta, setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
-  const values = getExtMeta(node, "values") || {};
+  const values = _metadata.getExtMeta(node, "values") || {};
 
   const pubkey = wallet.publicKey;
   const holdings = await fetchHoldings(pubkey);
@@ -513,7 +511,7 @@ export async function syncVersionTokenHoldings(node, versionIndex) {
     }
   }
 
-  await setExtMeta(node, "values", values);
+  await _metadata.setExtMeta(node, "values", values);
 
   return {
     tokens: seenMints.length,
@@ -592,8 +590,7 @@ export async function swapFromVersion({
   }
 
   const node = await Node.findById(nodeId);
-  const { getExtMeta } = await import("../../seed/tree/extensionMetadata.js");
-  const values = getExtMeta(node, "values") || {};
+  const values = _metadata.getExtMeta(node, "values") || {};
   const signer = await getVersionKeypair(node, versionIndex);
   const taker = signer.publicKey.toBase58();
 

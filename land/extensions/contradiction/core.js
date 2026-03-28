@@ -16,9 +16,11 @@ import { v4 as uuidv4 } from "uuid";
 
 let _runChat = null;
 let _checkCascade = null;
+let _metadata = null;
 export function setServices(services) {
   _runChat = services.runChat;
   _checkCascade = services.checkCascade;
+  _metadata = services.metadata;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -50,15 +52,12 @@ export async function getContradictionConfig() {
  * Same pattern as codebook's compressionThreshold.
  */
 export async function incrementNoteCount(nodeId) {
-  const result = await Node.findByIdAndUpdate(
-    nodeId,
-    { $inc: { "metadata.contradiction.notesSinceLastScan": 1 } },
-    { new: true, select: "metadata" },
-  ).lean();
-  if (!result) return 0;
-  const meta = result.metadata instanceof Map
-    ? result.metadata.get("contradiction") || {}
-    : result.metadata?.contradiction || {};
+  await _metadata.incExtMeta(nodeId, "contradiction", "notesSinceLastScan", 1);
+  const node = await Node.findById(nodeId).select("metadata").lean();
+  if (!node) return 0;
+  const meta = node.metadata instanceof Map
+    ? node.metadata.get("contradiction") || {}
+    : node.metadata?.contradiction || {};
   return meta.notesSinceLastScan || 0;
 }
 
@@ -66,9 +65,7 @@ export async function incrementNoteCount(nodeId) {
  * Reset the note counter after a scan.
  */
 export async function resetNoteCount(nodeId) {
-  await Node.findByIdAndUpdate(nodeId, {
-    $set: { "metadata.contradiction.notesSinceLastScan": 0 },
-  });
+  await _metadata.batchSetExtMeta(nodeId, "contradiction", { notesSinceLastScan: 0 });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -202,9 +199,9 @@ export async function writeContradictions(nodeId, contradictions) {
       ...active,
       ...resolved.slice(-(config.maxContradictionsPerNode - active.length)),
     ].slice(-config.maxContradictionsPerNode);
-    await Node.findByIdAndUpdate(nodeId, { $set: { "metadata.contradictions": trimmed } });
+    await _metadata.setExtMeta(await Node.findById(nodeId), "contradictions", trimmed);
   } else {
-    await Node.findByIdAndUpdate(nodeId, { $set: { "metadata.contradictions": all } });
+    await _metadata.setExtMeta(await Node.findById(nodeId), "contradictions", all);
   }
 }
 
@@ -255,9 +252,7 @@ export async function resolveContradiction(nodeId, contradictionId) {
   entry.status = "resolved";
   entry.resolvedAt = new Date().toISOString();
 
-  await Node.findByIdAndUpdate(nodeId, {
-    $set: { "metadata.contradictions": contradictions },
-  });
+  await _metadata.setExtMeta(await Node.findById(nodeId), "contradictions", contradictions);
 
   return entry;
 }

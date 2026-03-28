@@ -2,6 +2,7 @@ import {
   startTreeDreamJob,
   stopTreeDreamJob,
   runTreeDreamJob,
+  setMetadata as setDreamMetadata,
 } from "./treeDream.js";
 import router from "./routes.js";
 
@@ -14,6 +15,8 @@ import dreamSummary from "./modes/dreamSummary.js";
 import dreamThought from "./modes/dreamThought.js";
 
 export async function init(core) {
+  setDreamMetadata(core.metadata);
+
   // Register dream/cleanup/drain modes + LLM slot mappings
   core.modes.registerMode("tree:cleanup-analyze", cleanupAnalyze, "dreams");
   core.modes.registerMode("tree:cleanup-expand-scan", cleanupExpandScan, "dreams");

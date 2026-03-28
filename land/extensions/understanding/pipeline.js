@@ -345,9 +345,14 @@ export async function orchestrateUnderstanding({
       rootEncoding,
     };
   } catch (err) {
-    log.error("Understanding", `Understanding orchestration error for root ${rootId}:`, err.message);
-    rt.setError(err.message, "tree:understand");
-    return { success: false, error: err.message };
+    const isAbort = rt.aborted || err.name === "AbortError" || err.message?.includes("aborted");
+    if (isAbort) {
+      log.info("Understanding", `Run ${understandingRunId} stopped by user (${nodesProcessed} nodes processed)`);
+    } else {
+      log.error("Understanding", `Understanding orchestration error for root ${rootId}:`, err.message);
+      rt.setError(err.message, "tree:understand");
+    }
+    return { success: isAbort, stopped: isAbort, error: isAbort ? null : err.message };
   } finally {
     try {
       const currentRun = await UnderstandingRun.findById(understandingRunId).select("status").lean();

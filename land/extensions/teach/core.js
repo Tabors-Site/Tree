@@ -5,7 +5,6 @@
 // LLM distills raw extension state into actionable natural language insights.
 
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getExtension } from "../loader.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 import { v4 as uuidv4 } from "uuid";
@@ -14,12 +13,14 @@ let Node = null;
 let logContribution = async () => {};
 let runChat = null;
 let useEnergy = async () => ({ energyUsed: 0 });
+let _metadata = null;
 
-export function setServices({ models, contributions, llm, energy }) {
+export function setServices({ models, contributions, llm, energy, metadata }) {
   Node = models.Node;
   logContribution = contributions.logContribution;
   runChat = llm.runChat;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
+  _metadata = metadata;
 }
 
 const TEACH_VERSION = "1.0.0";
@@ -55,7 +56,7 @@ const COLLECTORS = [
     collect: async (rootId) => {
       const root = await Node.findById(rootId).select("metadata").lean();
       if (!root) return null;
-      const pruneMeta = getExtMeta(root, "prune");
+      const pruneMeta = _metadata.getExtMeta(root, "prune");
       if (!pruneMeta?.history?.length) return null;
       return JSON.stringify({
         totalPruned: pruneMeta.history.reduce((s, h) => s + (h.pruned || 0), 0),
@@ -280,7 +281,7 @@ export async function importLessons(rootId, lessonSet, userId) {
   const root = await Node.findById(rootId);
   if (!root) throw new Error("Tree root not found");
 
-  const meta = getExtMeta(root, "teach");
+  const meta = _metadata.getExtMeta(root, "teach");
   if (!meta.lessons) meta.lessons = [];
   if (!meta.dismissed) meta.dismissed = [];
 
@@ -302,7 +303,7 @@ export async function importLessons(rootId, lessonSet, userId) {
     added++;
   }
 
-  await setExtMeta(root, "teach", meta);
+  await _metadata.setExtMeta(root, "teach", meta);
 
   await logContribution({
     userId,
@@ -362,7 +363,7 @@ export async function dismissLesson(rootId, lessonId, userId) {
   const root = await Node.findById(rootId);
   if (!root) throw new Error("Tree root not found");
 
-  const meta = getExtMeta(root, "teach");
+  const meta = _metadata.getExtMeta(root, "teach");
   if (!meta.lessons) return { dismissed: false };
   if (!meta.dismissed) meta.dismissed = [];
 
@@ -374,7 +375,7 @@ export async function dismissLesson(rootId, lessonId, userId) {
   lesson.dismissedBy = userId;
   meta.dismissed.push(lesson);
 
-  await setExtMeta(root, "teach", meta);
+  await _metadata.setExtMeta(root, "teach", meta);
 
   log.verbose("Teach", `Dismissed lesson "${lesson.insight.slice(0, 60)}..." at ${rootId}`);
 
@@ -389,7 +390,7 @@ export async function getLessons(rootId) {
   const root = await Node.findById(rootId).select("metadata").lean();
   if (!root) throw new Error("Tree root not found");
 
-  const meta = getExtMeta(root, "teach");
+  const meta = _metadata.getExtMeta(root, "teach");
   return {
     lessons: meta.lessons || [],
     dismissed: meta.dismissed || [],

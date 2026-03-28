@@ -8,7 +8,6 @@
  */
 
 import log from "../../seed/log.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getUserMeta } from "../../seed/tree/userMetadata.js";
 import {
   configure,
@@ -25,6 +24,7 @@ export async function init(core) {
   configure({
     Node: core.models.Node,
     hooks: core.hooks,
+    metadata: core.metadata,
   });
 
   let fallbackTimer = null;
@@ -192,8 +192,10 @@ export async function init(core) {
 
   // ── Import router and tools ──
 
-  const { default: router } = await import("./routes.js");
-  const { default: tools } = await import("./tools.js");
+  const { default: router, setMetadata: setRouteMetadata } = await import("./routes.js");
+  setRouteMetadata(core.metadata);
+  const { default: tools, setMetadata: setToolMetadata } = await import("./tools.js");
+  setToolMetadata(core.metadata);
 
   log.info("Scheduler", "Loaded. The clock watches the calendar.");
 

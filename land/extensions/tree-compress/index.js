@@ -12,6 +12,7 @@ export async function init(core) {
       return core.llm.runChat({ ...opts, llmPriority: BG });
     },
     editStatus,
+    metadata: core.metadata,
   });
 
   // ── onTreeTripped: auto-compress as revival strategy ───────────────

@@ -9,16 +9,17 @@
 
 import log from "../../seed/log.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 // ── Dependencies (set by configure) ──
 
 let _Node = null;
 let _hooks = null;
+let _metadata = null;
 
-export function configure({ Node, hooks }) {
+export function configure({ Node, hooks, metadata }) {
   _Node = Node;
   _hooks = hooks;
+  _metadata = metadata;
 }
 
 // ── Per-tree cached timelines ──
@@ -223,7 +224,7 @@ export async function recordCompletion(node, scheduledFor) {
   if (!doc) return;
 
   const config = await getConfig(null); // maxCompletions is global
-  const existing = getExtMeta(doc, "scheduler");
+  const existing = _metadata.getExtMeta(doc, "scheduler");
   const completions = Array.isArray(existing.completions) ? existing.completions : [];
 
   const scheduledTime = new Date(scheduledFor).getTime();
@@ -237,7 +238,7 @@ export async function recordCompletion(node, scheduledFor) {
     completions.shift();
   }
 
-  await setExtMeta(doc, "scheduler", { completions });
+  await _metadata.setExtMeta(doc, "scheduler", { completions });
 
   log.verbose("Scheduler", `Recorded completion for "${doc.name}": ${deltaMinutes > 0 ? "+" : ""}${deltaMinutes}min`);
 }

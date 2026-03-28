@@ -1,8 +1,10 @@
 import log from "../../seed/log.js";
 import tools from "./tools.js";
-import { extractNamespaces, findGaps, writeGaps, getGaps, clearGaps } from "./core.js";
+import { setMetadata, extractNamespaces, findGaps, writeGaps, getGaps, clearGaps } from "./core.js";
 
 export async function init(core) {
+  setMetadata(core.metadata);
+
   // After each cascade delivery, inspect the signal for extension namespaces
   // that don't match any loaded extension. Write gap records to the receiving node.
   core.hooks.register("onCascade", async (hookData) => {

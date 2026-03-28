@@ -6,7 +6,6 @@
  */
 
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta, incExtMeta, batchSetExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { setNodeMode } from "../../seed/ws/modes/registry.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
@@ -15,11 +14,13 @@ import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 let _Node = null;
 let _runChat = null;
 let _hooks = null;
+let _metadata = null;
 
-export function configure({ Node, runChat, hooks }) {
+export function configure({ Node, runChat, hooks, metadata }) {
   _Node = Node;
   _runChat = runChat;
   _hooks = hooks;
+  _metadata = metadata;
 }
 
 // ── Food node roles ──
@@ -54,7 +55,7 @@ export async function scaffold(foodRootId, userId) {
   ];
 
   for (const { node, role } of nodes) {
-    await setExtMeta(node, "food", { role });
+    await _metadata.setExtMeta(node, "food", { role });
   }
 
   // Set mode overrides so chat at Log uses food-log, chat at Daily uses food-daily
@@ -84,7 +85,7 @@ export async function scaffold(foodRootId, userId) {
   // Mark root as initialized
   const rootNode = await _Node.findById(foodRootId);
   if (rootNode) {
-    await setExtMeta(rootNode, "food", { initialized: true });
+    await _metadata.setExtMeta(rootNode, "food", { initialized: true });
   }
 
   const ids = {
@@ -262,13 +263,13 @@ export async function deliverMacros(logNodeId, foodNodes, parsed, userId) {
   // Fallback: atomic increment on macro nodes
   if (!usedChannels && foodNodes) {
     if (foodNodes.protein && totals.protein > 0) {
-      await incExtMeta(foodNodes.protein.id, "values", "today", totals.protein);
+      await _metadata.incExtMeta(foodNodes.protein.id, "values", "today", totals.protein);
     }
     if (foodNodes.carbs && totals.carbs > 0) {
-      await incExtMeta(foodNodes.carbs.id, "values", "today", totals.carbs);
+      await _metadata.incExtMeta(foodNodes.carbs.id, "values", "today", totals.carbs);
     }
     if (foodNodes.fats && totals.fats > 0) {
-      await incExtMeta(foodNodes.fats.id, "values", "today", totals.fats);
+      await _metadata.incExtMeta(foodNodes.fats.id, "values", "today", totals.fats);
     }
   }
 }
@@ -295,7 +296,7 @@ export async function handleMacroCascade(node, payload) {
 
   if (amount <= 0) return;
 
-  await incExtMeta(node, "values", "today", amount);
+  await _metadata.incExtMeta(node, "values", "today", amount);
 
   log.verbose("Food", `${role}: +${amount}g (node ${String(node._id).slice(0, 8)}...)`);
 }
@@ -337,7 +338,7 @@ export async function checkDailyReset(rootId) {
   if (hadData) {
     const root = await _Node.findById(rootId);
     if (root) {
-      const existing = getExtMeta(root, "food");
+      const existing = _metadata.getExtMeta(root, "food");
       const history = Array.isArray(existing.history) ? existing.history : [];
       history.push({
         date: lastReset.get(rootId) || new Date(Date.now() - 86400000).toISOString().slice(0, 10),
@@ -347,14 +348,14 @@ export async function checkDailyReset(rootId) {
       });
       // Cap at 90 days
       while (history.length > 90) history.shift();
-      await setExtMeta(root, "food", { ...existing, history });
+      await _metadata.setExtMeta(root, "food", { ...existing, history });
     }
   }
 
   // Reset today values on macro nodes
   for (const role of ["protein", "carbs", "fats"]) {
     if (!foodNodes[role]) continue;
-    await batchSetExtMeta(foodNodes[role].id, "values", { today: 0 });
+    await _metadata.batchSetExtMeta(foodNodes[role].id, "values", { today: 0 });
   }
 
   lastReset.set(rootId, today);
@@ -439,8 +440,8 @@ export async function saveProfile(foodRootId, profile, foodNodes) {
   // Save profile on root
   const root = await _Node.findById(foodRootId);
   if (root) {
-    const existing = getExtMeta(root, "food");
-    await setExtMeta(root, "food", { ...existing, profile, initialized: true });
+    const existing = _metadata.getExtMeta(root, "food");
+    await _metadata.setExtMeta(root, "food", { ...existing, profile, initialized: true });
   }
 
   // Set goals on macro nodes
@@ -452,7 +453,7 @@ export async function saveProfile(foodRootId, profile, foodNodes) {
 
   for (const [role, goal] of Object.entries(goalMap)) {
     if (!goal || !foodNodes[role]) continue;
-    await batchSetExtMeta(foodNodes[role].id, "goals", { today: goal });
-    await batchSetExtMeta(foodNodes[role].id, "values", { today: 0 });
+    await _metadata.batchSetExtMeta(foodNodes[role].id, "goals", { today: goal });
+    await _metadata.batchSetExtMeta(foodNodes[role].id, "values", { today: 0 });
   }
 }

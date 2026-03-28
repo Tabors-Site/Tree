@@ -9,11 +9,12 @@
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
 import { SYSTEM_ROLE } from "../../seed/protocol.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _runChat = null;
+let _metadata = null;
 export function setRunChat(fn) { _runChat = fn; }
+export function configure({ metadata }) { _metadata = metadata; }
 
 const MAX_HISTORY = 30;
 
@@ -276,7 +277,7 @@ export async function generateDigest() {
 
   // Push to gateway if configured
   try {
-    const digestMeta = getExtMeta(landRoot, "digest") || {};
+    const digestMeta = _metadata.getExtMeta(landRoot, "digest") || {};
     if (digestMeta.gatewayChannel) {
       const { getExtension } = await import("../loader.js");
       const gatewayExt = getExtension("gateway");
@@ -302,7 +303,7 @@ export async function generateDigest() {
  */
 async function writeDigest(landRoot, briefing) {
   try {
-    const meta = getExtMeta(landRoot, "digest") || {};
+    const meta = _metadata.getExtMeta(landRoot, "digest") || {};
     meta.latest = briefing;
 
     if (!meta.history) meta.history = [];
@@ -313,7 +314,7 @@ async function writeDigest(landRoot, briefing) {
     });
     meta.history = meta.history.slice(0, MAX_HISTORY);
 
-    await setExtMeta(landRoot, "digest", meta);
+    await _metadata.setExtMeta(landRoot, "digest", meta);
     await landRoot.save();
   } catch (err) {
     log.debug("Digest", `Failed to write digest: ${err.message}`);

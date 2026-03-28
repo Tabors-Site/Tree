@@ -1,6 +1,6 @@
 import log from "../../seed/log.js";
 import { setServices } from "./core.js";
-import { setModels as setJobModels, startPruneJob, stopPruneJob } from "./pruneJob.js";
+import { setModels as setJobModels, setMetadata as setJobMetadata, startPruneJob, stopPruneJob } from "./pruneJob.js";
 
 export async function init(core) {
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
@@ -12,12 +12,15 @@ export async function init(core) {
       return core.llm.runChat({ ...opts, llmPriority: BG });
     } },
     energy: core.energy || null,
+    metadata: core.metadata,
   });
 
   setJobModels(core.models);
+  setJobMetadata(core.metadata);
 
-  const { default: router, setModels } = await import("./routes.js");
+  const { default: router, setModels, setMetadata: setRouteMetadata } = await import("./routes.js");
   setModels(core.models);
+  setRouteMetadata(core.metadata);
 
   log.info("Prune", "Tree pruning engine loaded");
 

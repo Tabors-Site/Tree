@@ -6,15 +6,16 @@
  */
 
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta, batchSetExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _Node = null;
 let _runChat = null;
+let _metadata = null;
 
-export function configure({ Node, runChat }) {
+export function configure({ Node, runChat, metadata }) {
   _Node = Node;
   _runChat = runChat;
+  _metadata = metadata;
 }
 
 // ── Constants ──
@@ -157,12 +158,12 @@ export async function deliverToExerciseNodes(fitnessNodes, parsed) {
     fields.lastWorked = parsed.date;
 
     // Atomic update on the exercise node
-    await batchSetExtMeta(match.id, "values", fields);
+    await _metadata.batchSetExtMeta(match.id, "values", fields);
 
     // Record to exercise history
     const node = await _Node.findById(match.id);
     if (node) {
-      const existing = getExtMeta(node, "fitness");
+      const existing = _metadata.getExtMeta(node, "fitness");
       const history = Array.isArray(existing.history) ? existing.history : [];
       const bestSet = Math.max(...exercise.sets.map(s => s.reps));
 
@@ -175,7 +176,7 @@ export async function deliverToExerciseNodes(fitnessNodes, parsed) {
       });
 
       while (history.length > MAX_HISTORY) history.shift();
-      await setExtMeta(node, "fitness", { ...existing, history, role: existing.role });
+      await _metadata.setExtMeta(node, "fitness", { ...existing, history, role: existing.role });
     }
 
     log.verbose("Fitness", `Updated ${exercise.name}: ${exercise.sets.map(s => `${s.weight}x${s.reps}`).join("/")}`);

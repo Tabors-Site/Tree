@@ -2,6 +2,7 @@ import log from "../../seed/log.js";
 import tools from "./tools.js";
 import {
   setRunChat,
+  setMetadata,
   getPurposeConfig,
   deriveThesis,
   checkCoherence,
@@ -21,6 +22,7 @@ export async function init(core) {
     if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
     return core.llm.runChat({ ...opts, llmPriority: BG });
   });
+  setMetadata(core.metadata);
 
   const config = await getPurposeConfig();
 

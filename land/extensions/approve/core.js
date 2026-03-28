@@ -14,7 +14,6 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { v4 as uuidv4 } from "uuid";
 
 // In-memory pending requests. Map<requestId, { resolve, reject, request }>
@@ -24,10 +23,12 @@ const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 min default, configurable
 
 let _emitToUser = null;
 let _notify = null;
+let _metadata = null;
 
-export function setServices({ websocket, notifications, gateway }) {
+export function setServices({ websocket, notifications, gateway, metadata }) {
   if (websocket?.emitToUser) _emitToUser = websocket.emitToUser;
   if (notifications) _notify = notifications;
+  if (metadata) _metadata = metadata;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -80,12 +81,12 @@ export async function watchTool(nodeId, toolName) {
   const node = await Node.findById(nodeId);
   if (!node) throw new Error("Node not found");
 
-  const meta = getExtMeta(node, "approve") || {};
+  const meta = _metadata.getExtMeta(node, "approve") || {};
   if (!meta.watchlist) meta.watchlist = [];
   if (meta.watchlist.includes(toolName)) return meta.watchlist;
 
   meta.watchlist.push(toolName);
-  await setExtMeta(node, "approve", meta);
+  await _metadata.setExtMeta(node, "approve", meta);
   await node.save();
   return meta.watchlist;
 }
@@ -97,11 +98,11 @@ export async function unwatchTool(nodeId, toolName) {
   const node = await Node.findById(nodeId);
   if (!node) throw new Error("Node not found");
 
-  const meta = getExtMeta(node, "approve") || {};
+  const meta = _metadata.getExtMeta(node, "approve") || {};
   if (!meta.watchlist) return [];
 
   meta.watchlist = meta.watchlist.filter(t => t !== toolName);
-  await setExtMeta(node, "approve", meta);
+  await _metadata.setExtMeta(node, "approve", meta);
   await node.save();
   return meta.watchlist;
 }

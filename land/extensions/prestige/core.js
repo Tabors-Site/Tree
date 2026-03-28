@@ -1,15 +1,16 @@
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getExtension } from "../loader.js";
 
 // Services wired from init() via setServices()
 let Node = null;
 let logContribution = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
+let _metadata = null;
 
-export function setServices({ models, contributions }) {
+export function setServices({ models, contributions, metadata }) {
   Node = models.Node;
   logContribution = contributions.logContribution;
+  if (metadata) _metadata = metadata;
 }
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
@@ -21,7 +22,7 @@ export async function resolveVersion(nodeId, version) {
   if (version === "latest") {
     const node = await Node.findById(nodeId).select("metadata").lean();
     if (!node) throw new Error("Node not found");
-    const prestige = getExtMeta(node, "prestige");
+    const prestige = _metadata.getExtMeta(node, "prestige");
     return prestige?.current || 0;
   }
   return Number(version);
@@ -49,7 +50,7 @@ async function addPrestige({
     action: "prestige",
   });
 
-  const prestigeData = getExtMeta(node, "prestige");
+  const prestigeData = _metadata.getExtMeta(node, "prestige");
   const currentLevel = prestigeData.current || 0;
 
   await addPrestigeToNode(node);
@@ -95,7 +96,7 @@ async function addPrestigeToNode(node) {
   prestigeData.current = currentLevel + 1;
 
   // Write prestige metadata (own namespace only)
-  await setExtMeta(node, "prestige", prestigeData);
+  await _metadata.setExtMeta(node, "prestige", prestigeData);
 
   // Reset values via the values extension's export (not direct namespace write)
   const valuesExt = getExtension("values");

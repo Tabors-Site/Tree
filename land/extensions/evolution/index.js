@@ -1,6 +1,6 @@
 import log from "../../seed/log.js";
 import tools from "./tools.js";
-import { setRunChat, bumpMetric, recordVisit, getPatterns } from "./core.js";
+import { setRunChat, setMetadata, bumpMetric, recordVisit, getPatterns } from "./core.js";
 import { startAnalysisJob, stopAnalysisJob } from "./job.js";
 
 export async function init(core) {
@@ -9,6 +9,7 @@ export async function init(core) {
     if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
     return core.llm.runChat({ ...opts, llmPriority: BG });
   });
+  setMetadata(core.metadata);
 
   // ── afterNote: track activity ──────────────────────────────────────
   core.hooks.register("afterNote", async ({ nodeId, userId, contentType, action }) => {

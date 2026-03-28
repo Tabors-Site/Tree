@@ -15,12 +15,13 @@ import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
 import Note from "../../seed/models/note.js";
 import { SYSTEM_ROLE, CONTENT_TYPE } from "../../seed/protocol.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 import { v4 as uuidv4 } from "uuid";
 
 let _runChat = null;
+let _metadata = null;
 export function setRunChat(fn) { _runChat = fn; }
+export function configure({ metadata }) { _metadata = metadata; }
 
 const MAX_PATTERNS = 30;
 const MAX_PROPOSALS = 20;
@@ -165,7 +166,7 @@ export async function storePatterns(patterns) {
   const landRoot = await getLandRoot();
   if (!landRoot) return;
 
-  const meta = getExtMeta(landRoot, "evolve") || {};
+  const meta = _metadata.getExtMeta(landRoot, "evolve") || {};
   const existing = meta.patterns || [];
   const dismissed = new Set((meta.dismissed || []).map(d => d.type));
 
@@ -189,7 +190,7 @@ export async function storePatterns(patterns) {
   }
 
   meta.patterns = existing.slice(0, MAX_PATTERNS);
-  await setExtMeta(landRoot, "evolve", meta);
+  await _metadata.setExtMeta(landRoot, "evolve", meta);
   await landRoot.save();
 }
 
@@ -205,7 +206,7 @@ export async function generateProposals() {
   const landRoot = await getLandRoot();
   if (!landRoot) return [];
 
-  const meta = getExtMeta(landRoot, "evolve") || {};
+  const meta = _metadata.getExtMeta(landRoot, "evolve") || {};
   const patterns = (meta.patterns || []).filter(p => p.status === "detected" && p.count >= MIN_OCCURRENCES);
 
   if (patterns.length === 0) return [];
@@ -312,7 +313,7 @@ export async function generateProposals() {
 
   meta.proposals = proposals.slice(0, MAX_PROPOSALS);
   meta.patterns = meta.patterns; // preserve updates
-  await setExtMeta(landRoot, "evolve", meta);
+  await _metadata.setExtMeta(landRoot, "evolve", meta);
   await landRoot.save();
 
   return proposals.filter(p => p.status === "pending");
@@ -325,14 +326,14 @@ export async function generateProposals() {
 export async function getPatterns() {
   const landRoot = await getLandRoot();
   if (!landRoot) return [];
-  const meta = getExtMeta(landRoot, "evolve") || {};
+  const meta = _metadata.getExtMeta(landRoot, "evolve") || {};
   return (meta.patterns || []).filter(p => p.status !== "dismissed" && p.status !== "resolved");
 }
 
 export async function getProposals() {
   const landRoot = await getLandRoot();
   if (!landRoot) return [];
-  const meta = getExtMeta(landRoot, "evolve") || {};
+  const meta = _metadata.getExtMeta(landRoot, "evolve") || {};
   return (meta.proposals || []).filter(p => p.status === "pending");
 }
 
@@ -340,7 +341,7 @@ export async function dismissPattern(patternId) {
   const landRoot = await getLandRoot();
   if (!landRoot) return null;
 
-  const meta = getExtMeta(landRoot, "evolve") || {};
+  const meta = _metadata.getExtMeta(landRoot, "evolve") || {};
   const pattern = (meta.patterns || []).find(p => p.id === patternId);
   if (!pattern) return null;
 
@@ -353,7 +354,7 @@ export async function dismissPattern(patternId) {
     if (p.patternType === pattern.type) p.status = "dismissed";
   }
 
-  await setExtMeta(landRoot, "evolve", meta);
+  await _metadata.setExtMeta(landRoot, "evolve", meta);
   await landRoot.save();
   return pattern;
 }
@@ -362,14 +363,14 @@ export async function approveProposal(proposalId) {
   const landRoot = await getLandRoot();
   if (!landRoot) return null;
 
-  const meta = getExtMeta(landRoot, "evolve") || {};
+  const meta = _metadata.getExtMeta(landRoot, "evolve") || {};
   const proposal = (meta.proposals || []).find(p => p.id === proposalId);
   if (!proposal) return null;
 
   proposal.status = "approved";
   proposal.approvedAt = new Date().toISOString();
 
-  await setExtMeta(landRoot, "evolve", meta);
+  await _metadata.setExtMeta(landRoot, "evolve", meta);
   await landRoot.save();
   return proposal;
 }

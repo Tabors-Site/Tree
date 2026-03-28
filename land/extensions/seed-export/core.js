@@ -6,7 +6,6 @@
 // 3. analyzeSeed: read a seed file without planting, report requirements
 
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 import { createNode } from "../../seed/tree/treeManagement.js";
 import { getExtension } from "../loader.js";
@@ -14,11 +13,13 @@ import { getExtension } from "../loader.js";
 let Node = null;
 let logContribution = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
+let _metadata = null;
 
-export function setServices({ models, contributions, energy }) {
+export function setServices({ models, contributions, energy, metadata }) {
   Node = models.Node;
   logContribution = contributions.logContribution;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
+  if (metadata) _metadata = metadata;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -345,7 +346,7 @@ export async function plantTreeSeed(seedData, userId, username) {
       if (nodeDoc) {
         for (const [ns, data] of Object.entries(nodeData.metadata)) {
           try {
-            await setExtMeta(nodeDoc, ns, data);
+            await _metadata.setExtMeta(nodeDoc, ns, data);
           } catch (err) {
             log.debug("SeedExport", `Failed to write metadata namespace "${ns}": ${err.message}`);
           }

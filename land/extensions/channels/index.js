@@ -1,10 +1,8 @@
 import log from "../../seed/log.js";
 import tools from "./tools.js";
 import { setServices, deliverToChannels, getChannels, createChannel, removeChannel, acceptInvite } from "./core.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
-
 export async function init(core) {
-  setServices({ models: core.models });
+  setServices({ models: core.models, metadata: core.metadata });
 
   // ── onCascade: deliver signals through channel subscriptions ────────
   //

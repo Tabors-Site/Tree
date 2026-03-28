@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import router, { pageRouter } from "./routes.js";
-import buildHtmlRoutes from "./htmlRoutes.js";
+import buildHtmlRoutes, { setMetadata as setHtmlMetadata } from "./htmlRoutes.js";
 import appRouter from "./app/app.js";
 import chatRouter from "./app/chat.js";
 import setupRouter from "./app/setup.js";
@@ -74,6 +74,7 @@ function registerPage(method, path, ...handlers) {
 }
 
 export async function init(core) {
+  setHtmlMetadata(core.metadata);
   const User = core.models.User;
 
   // Register share token auth strategy so authenticateOptional picks it up

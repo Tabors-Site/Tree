@@ -1,9 +1,11 @@
 import { z } from "zod";
 import Node from "../../seed/models/node.js";
 import User from "../../seed/models/user.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import log from "../../seed/log.js";
 import { SYSTEM_ROLE, DELETED } from "../../seed/protocol.js";
+
+let _metadata = null;
+export function setMetadata(metadata) { _metadata = metadata; }
 
 async function requireAdmin(userId) {
   const user = await User.findById(userId).select("isAdmin").lean();
@@ -454,7 +456,6 @@ export default function getTools() {
           const node = await Node.findById(nodeId);
           if (!node) return { content: [{ type: "text", text: "Node not found" }] };
 
-          const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
           const { clearScopeCache } = await import("../../seed/tree/extensionScope.js");
 
           const config = {};
@@ -462,9 +463,9 @@ export default function getTools() {
           if (restricted && Object.keys(restricted).length) config.restricted = restricted;
 
           if (Object.keys(config).length === 0) {
-            await setExtMeta(node, "extensions", null);
+            await _metadata.setExtMeta(node, "extensions", null);
           } else {
-            await setExtMeta(node, "extensions", config);
+            await _metadata.setExtMeta(node, "extensions", config);
           }
           await node.save();
           clearScopeCache();

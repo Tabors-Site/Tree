@@ -1,11 +1,12 @@
 import log from "../../seed/log.js";
 import tools from "./tools.js";
-import { setRunChat, generateDigest, getDigestConfig } from "./core.js";
+import { configure, setRunChat, generateDigest, getDigestConfig } from "./core.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
 
 let _jobTimer = null;
 
 export async function init(core) {
+  configure({ metadata: core.metadata });
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setRunChat(async (opts) => {
     if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };

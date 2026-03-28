@@ -3,7 +3,7 @@ import fs from "fs";
 import RawIdea from "./model.js";
 import { DELETED } from "../../seed/protocol.js";
 import { createNote } from "../../seed/tree/notes.js";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { getUserMeta, setUserMeta, incUserMeta } from "../../seed/tree/userMetadata.js";
 import { getExtension } from "../loader.js";
 
 // Services wired from init() via setServices()
@@ -147,9 +147,7 @@ async function createRawIdea({
     ? Math.ceil(file.size / 1024)
     : Math.ceil(Buffer.byteLength(finalContent || "", "utf8") / 1024);
   if (sizeKB > 0) {
-    await User.findByIdAndUpdate(userId, {
-      $inc: { "metadata.storage.usageKB": sizeKB },
-    });
+    await incUserMeta(userId, "storage", "usageKB", sizeKB);
   }
 
   // ── LOG ────────────────────────────────────────

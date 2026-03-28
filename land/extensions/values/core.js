@@ -1,13 +1,13 @@
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
-
 // Services wired from init() via setServices()
 let Node = null;
 let logContribution = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
+let _metadata = null;
 
-export function setServices({ models, contributions }) {
+export function setServices({ models, contributions, metadata }) {
   Node = models.Node;
   logContribution = contributions.logContribution;
+  if (metadata) _metadata = metadata;
 }
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
@@ -43,11 +43,11 @@ function findExistingKey(obj, incomingKey) {
 const truncate6 = (n) => Math.trunc(n * 1e6) / 1e6;
 
 function getNodeValues(node) {
-  return { ...getExtMeta(node, "values") };
+  return { ..._metadata.getExtMeta(node, "values") };
 }
 
 function getNodeGoals(node) {
-  return { ...getExtMeta(node, "goals") };
+  return { ..._metadata.getExtMeta(node, "goals") };
 }
 
 async function setValueForNode({
@@ -80,7 +80,7 @@ async function setValueForNode({
   const { energyUsed } = await useEnergy({ userId, action: "editValue" });
 
   values[finalKey] = numericValue;
-  await setExtMeta(node, "values", values);
+  await _metadata.setExtMeta(node, "values", values);
 
   await logContribution({
     userId, nodeId, wasAi, chatId, sessionId,
@@ -127,7 +127,7 @@ async function setGoalForNode({
   const { energyUsed } = await useEnergy({ userId, action: "editGoal" });
 
   goals[finalKey] = numericGoal;
-  await setExtMeta(node, "goals", goals);
+  await _metadata.setExtMeta(node, "goals", goals);
 
   await logContribution({
     userId, nodeId, wasAi, chatId, sessionId,

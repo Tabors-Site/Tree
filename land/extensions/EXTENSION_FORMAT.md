@@ -767,32 +767,52 @@ Jobs are auto-started after DB connect via `startExtensionJobs()`.
 ## Per-Node Data Storage (metadata)
 
 Extensions MUST store per-node data in `node.metadata` under their extension name.
-Do NOT add fields to the core Node schema. Use the metadata helpers:
+Do NOT add fields to the core Node schema. Use `core.metadata` from the services bundle:
 
 ```js
-import { getExtMeta, setExtMeta, mergeExtMeta } from "../../seed/tree/extensionMetadata.js";
+// In init(core) or any function with core in scope:
 
 // Read
-const data = getExtMeta(node, "my-extension");  // returns {} if empty
+const data = core.metadata.getExtMeta(node, "my-extension");  // returns {} if empty
 
-// Write (full replace)
-setExtMeta(node, "my-extension", { wallets: {}, config: {} });
+// Write (full replace, needs document)
+await core.metadata.setExtMeta(node, "my-extension", { wallets: {}, config: {} });
 
-// Partial update (shallow merge)
-mergeExtMeta(node, "my-extension", { lastSync: new Date() });
+// Partial update (shallow merge, needs document)
+await core.metadata.mergeExtMeta(node, "my-extension", { lastSync: new Date() });
+
+// Atomic increment (by ID or document, no read-modify-write)
+await core.metadata.incExtMeta(nodeId, "my-extension", "counter", 1);
+
+// Atomic capped array push (by ID or document)
+await core.metadata.pushExtMeta(nodeId, "my-extension", "history", { ts: Date.now() }, 50);
+
+// Atomic multi-field set (by ID or document)
+await core.metadata.batchSetExtMeta(nodeId, "my-extension", { a: 1, b: 2, c: 3 });
+
+// Remove namespace entirely (on uninstall or cleanup)
+await core.metadata.unsetExtMeta(nodeId, "my-extension");
 ```
 
-### Namespace enforcement through the scoped core
-
-Extensions can also use `core.metadata.setExtMeta(node, data)` through the scoped core. When called this way, the namespace is automatically bound to the calling extension's name. The extension cannot write to another extension's namespace. A `Namespace violation` error is thrown if the namespace doesn't match the caller.
+For files outside `init()` (core.js, tools.js, routes.js), receive metadata through a configure pattern:
 
 ```js
-// Through scoped core (namespace enforced, recommended):
-await core.metadata.setExtMeta(node, "my-extension", { key: "value" });
+// In core.js:
+let _metadata = null;
+export function configure({ metadata }) { _metadata = metadata; }
+// Then use _metadata.getExtMeta, _metadata.setExtMeta, etc.
 
-// Direct import from seed (no enforcement, still works for kernel code and utilities):
-import { setExtMeta } from "../../seed/tree/extensionMetadata.js";
-setExtMeta(node, "my-extension", { key: "value" });
+// In index.js init(core):
+import { configure } from "./core.js";
+configure({ metadata: core.metadata });
+```
+
+User metadata follows the same pattern via `core.userMetadata`:
+
+```js
+const prefs = core.userMetadata.getUserMeta(user, "my-extension");
+await core.userMetadata.incUserMeta(userId, "my-extension", "visits", 1);
+await core.userMetadata.batchSetUserMeta(userId, "my-extension", { theme: "dark" });
 ```
 
 Both paths are valid. The scoped core path prevents accidental cross-namespace writes. The direct import path is for kernel code, migrations, and utilities that need to write to arbitrary namespaces.
@@ -899,13 +919,10 @@ tools-clear                      Remove all local config (inherit from parent)
 
 **From extension code:**
 ```js
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
-
-// Allow a tool programmatically
-const tools = getExtMeta(node, "tools") || {};
+// Allow a tool programmatically (use core.metadata, never import directly)
+const tools = core.metadata.getExtMeta(node, "tools") || {};
 tools.allowed = [...(tools.allowed || []), "my-custom-tool"];
-setExtMeta(node, "tools", tools);
-await node.save();
+await core.metadata.setExtMeta(node, "tools", tools);
 ```
 
 ## Per-Node Mode Overrides

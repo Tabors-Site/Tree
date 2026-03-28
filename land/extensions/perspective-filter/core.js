@@ -116,8 +116,10 @@ export async function shouldDeliver(node, payload) {
  * @param {string} nodeId
  * @param {object} perspective - { accept?: string[], reject?: string[] }
  */
+let _metadata = null;
+export function setMetadata(metadata) { _metadata = metadata; }
+
 export async function setPerspective(nodeId, perspective) {
-  const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
   const node = await Node.findById(nodeId);
   if (!node) throw new Error("Node not found");
 
@@ -129,7 +131,7 @@ export async function setPerspective(nodeId, perspective) {
     clean.reject = perspective.reject.map(String);
   }
 
-  setExtMeta(node, "perspective", clean);
+  _metadata.setExtMeta(node, "perspective", clean);
   await node.save();
   return clean;
 }
@@ -138,10 +140,9 @@ export async function setPerspective(nodeId, perspective) {
  * Clear the perspective filter on a node (inherit from parent again).
  */
 export async function clearPerspective(nodeId) {
-  const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
   const node = await Node.findById(nodeId);
   if (!node) throw new Error("Node not found");
 
-  setExtMeta(node, "perspective", {});
+  _metadata.setExtMeta(node, "perspective", {});
   await node.save();
 }

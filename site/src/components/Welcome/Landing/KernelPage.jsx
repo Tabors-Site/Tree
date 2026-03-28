@@ -45,7 +45,7 @@ const KernelPage = () => {
                 os: "Memory Management",
                 osDesc: "Allocates RAM to programs. Keeps them isolated so one can't crash another. Handles virtual memory and swapping.",
                 seed: "Metadata Isolation",
-                seedDesc: "Each extension gets its own namespace in the metadata Map. 512KB cap per namespace. 14MB document ceiling with pressure alerts at 80%. Five atomic operations: setExtMeta (full replace), mergeExtMeta (shallow merge), incExtMeta (counter increment), pushExtMeta (capped array append), batchSetExtMeta (multi-field set). Circuit breaker auto-disables crashing extensions. .flow partitions evict oldest data when full.",
+                seedDesc: "Each extension gets its own namespace in the metadata Map. 512KB cap per namespace. 14MB document ceiling with pressure alerts at 80%. Six atomic operations on nodes, five on users. incExtMeta for counters, pushExtMeta for capped arrays, batchSetExtMeta for multi-field writes. Same toolkit on both schemas. No extension needs direct MongoDB. Circuit breaker auto-disables crashing extensions. .flow partitions evict oldest data when full.",
               },
               {
                 os: "File System",
@@ -170,6 +170,7 @@ const KernelPage = () => {
               <p style={{marginTop: 12, fontSize: "0.85rem", color: "#666"}}>
                 7 fields. One default LLM connection. Extensions store energy budgets, API keys,
                 LLM slot assignments, storage usage, and preferences in metadata.
+                Same atomic toolkit as nodes: incUserMeta, pushUserMeta, batchSetUserMeta.
               </p>
             </div>
           </div>
@@ -501,6 +502,7 @@ const KernelPage = () => {
                   ["incExtMeta(node, ext, key, amt)", "Atomic counter"],
                   ["pushExtMeta(node, ext, key, item, cap)", "Capped array append"],
                   ["batchSetExtMeta(node, ext, fields)", "Multi-field atomic set"],
+                  ["unsetExtMeta(node, ext)", "Remove namespace entirely"],
                 ].map(([fn, desc]) => (
                   <div key={fn} style={{display: "flex", gap: 12}}>
                     <span style={{color: "#4ade80", minWidth: 300}}>{fn}</span>
@@ -509,8 +511,8 @@ const KernelPage = () => {
                 ))}
               </div>
               <p style={{marginTop: 8, fontSize: "0.8rem", color: "#555"}}>
-                incExtMeta, pushExtMeta, and batchSetExtMeta accept a node document or ID string.
-                All three use MongoDB atomic operators. No read-modify-write race.
+                incExtMeta, pushExtMeta, batchSetExtMeta, and unsetExtMeta accept a node document or ID string.
+                All use MongoDB atomic operators. No read-modify-write race. No direct MongoDB needed.
               </p>
             </div>
             <div style={{marginBottom: 24}}>
@@ -532,6 +534,28 @@ const KernelPage = () => {
               <p style={{fontSize: "0.8rem", color: "#888"}}>
                 isExtensionBlockedAtNode, getBlockedExtensionsAtNode, isToolReadOnly, getToolOwner, getModeOwner.
                 Extensions check their own blocked status. Guard enrichContext injections. Know who owns which tool or mode.
+              </p>
+            </div>
+            <div style={{marginBottom: 24}}>
+              <div style={{color: "#4ade80", fontSize: "0.9rem", fontWeight: 600, marginBottom: 12}}>core.userMetadata</div>
+              <div style={{fontFamily: "monospace", fontSize: "0.8rem", color: "#888", lineHeight: 2}}>
+                {[
+                  ["getUserMeta(user, key)", "Read namespace"],
+                  ["setUserMeta(user, key, data)", "Full replace (sync, caller saves)"],
+                  ["incUserMeta(user, key, field, amt)", "Atomic counter"],
+                  ["pushUserMeta(user, key, field, item, cap)", "Capped array append"],
+                  ["batchSetUserMeta(user, key, fields)", "Multi-field atomic set"],
+                  ["unsetUserMeta(user, key)", "Remove namespace entirely"],
+                ].map(([fn, desc]) => (
+                  <div key={fn} style={{display: "flex", gap: 12}}>
+                    <span style={{color: "#4ade80", minWidth: 300}}>{fn}</span>
+                    <span style={{color: "#666"}}>{desc}</span>
+                  </div>
+                ))}
+              </div>
+              <p style={{marginTop: 8, fontSize: "0.8rem", color: "#555"}}>
+                Same pattern as node metadata. Both schemas get the same atomic toolkit.
+                No extension needs direct MongoDB for user metadata.
               </p>
             </div>
             <div style={{marginBottom: 24}}>

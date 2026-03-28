@@ -316,3 +316,22 @@ export async function batchSetExtMeta(node, extName, fields) {
   invalidateNode(nodeId);
   return true;
 }
+
+/**
+ * Atomic namespace removal from a node's metadata.
+ * Uses MongoDB $unset. The key is removed entirely, not set to null.
+ * Document shrinks. Namespace is clean.
+ *
+ *   await unsetExtMeta(nodeId, "gaps");
+ *   // metadata.gaps is gone. getExtMeta returns {}.
+ */
+export async function unsetExtMeta(node, extName) {
+  if (!node || !extName) return false;
+  const nodeId = String(node._id || node);
+  await Node.updateOne(
+    { _id: nodeId },
+    { $unset: { [`metadata.${extName}`]: "" } }
+  );
+  invalidateNode(nodeId);
+  return true;
+}

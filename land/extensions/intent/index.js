@@ -1,13 +1,15 @@
 import log from "../../seed/log.js";
 import { setServices, startIntentJob, stopIntentJob } from "./intentJob.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
-
 export async function init(core) {
   setServices({
     models: core.models,
     contributions: core.contributions,
     energy: core.energy || null,
+    metadata: core.metadata,
   });
+
+  const { setMetadata: setCollectorMetadata } = await import("./stateCollector.js");
+  setCollectorMetadata(core.metadata);
 
   // enrichContext: surface intent data so the AI knows what the tree did autonomously
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
@@ -41,8 +43,9 @@ export async function init(core) {
     }
   }, "intent");
 
-  const { default: router, setModels } = await import("./routes.js");
+  const { default: router, setModels, setMetadata: setRouteMetadata } = await import("./routes.js");
   setModels(core.models);
+  setRouteMetadata(core.metadata);
 
   log.info("Intent", "Autonomous intent engine loaded");
 

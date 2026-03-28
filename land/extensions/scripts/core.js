@@ -1,29 +1,30 @@
 import vm from "node:vm";
 import { v4 as uuidv4 } from "uuid";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 // Services wired from init() via setServices()
 let Node = null;
 let Contribution = null;
 let logContribution = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
+let _metadata = null;
 
-export function setServices({ models, contributions }) {
+export function setServices({ models, contributions, metadata }) {
   Node = models.Node;
   Contribution = models.Contribution;
   logContribution = contributions.logContribution;
+  if (metadata) _metadata = metadata;
 }
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
 import { makeSafeFunctions } from "./scriptsFunctions/safeFunctions.js";
 
 function getScripts(node) {
-  const meta = getExtMeta(node, "scripts");
+  const meta = _metadata.getExtMeta(node, "scripts");
   return Array.isArray(meta.list) ? meta.list : [];
 }
 
 async function setScripts(node, list) {
-  await setExtMeta(node, "scripts", { list });
+  await _metadata.setExtMeta(node, "scripts", { list });
 }
 
 function findScript(scripts, scriptId) {

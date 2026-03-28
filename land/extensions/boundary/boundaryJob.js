@@ -8,12 +8,13 @@
 // the operator decides they do.
 
 import log from "../../seed/log.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { analyze } from "./core.js";
 
 let Node = null;
 let User = null;
+let _metadata = null;
 export function setModels(models) { Node = models.Node; User = models.User; }
+export function setMetadata(metadata) { _metadata = metadata; }
 
 let _timer = null;
 
@@ -55,7 +56,7 @@ async function runBoundaryCycle() {
 
     for (const root of roots) {
       try {
-        const boundaryMeta = getExtMeta(root, "boundary");
+        const boundaryMeta = _metadata.getExtMeta(root, "boundary");
         if (boundaryMeta.paused) continue;
 
         // Only re-analyze if stale or never analyzed

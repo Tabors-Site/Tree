@@ -1,8 +1,9 @@
 import log from "../../seed/log.js";
-import getTools from "./tools.js";
+import getTools, { setMetadata as setToolMetadata } from "./tools.js";
 import router from "./routes.js";
 
 export async function init(core) {
+  setToolMetadata(core.metadata);
   // Register a custom mode for land management conversations
   core.modes.registerMode("land:manager", {
     emoji: "🏗️",

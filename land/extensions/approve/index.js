@@ -12,6 +12,7 @@ export async function init(core) {
     websocket: core.websocket || null,
     notifications: notificationModel,
     gateway: null, // accessed dynamically in core.js
+    metadata: core.metadata,
   });
 
   // beforeToolCall: intercept watched tools

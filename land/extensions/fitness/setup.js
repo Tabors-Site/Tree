@@ -7,8 +7,13 @@
  */
 
 import log from "../../seed/log.js";
-import { setExtMeta, batchSetExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { setNodeMode } from "../../seed/ws/modes/registry.js";
+
+let _metadata = null;
+
+export function setMetadata(metadata) {
+  _metadata = metadata;
+}
 
 // ── Default programs ──
 
@@ -92,9 +97,9 @@ export async function scaffoldFitness(rootId, userId, options = {}) {
   const programNode = await createNode("Program", null, null, rootId, false, userId);
   const historyNode = await createNode("History", null, null, rootId, false, userId);
 
-  await setExtMeta(logNode, "fitness", { role: "log" });
-  await setExtMeta(programNode, "fitness", { role: "program" });
-  await setExtMeta(historyNode, "fitness", { role: "history" });
+  await _metadata.setExtMeta(logNode, "fitness", { role: "log" });
+  await _metadata.setExtMeta(programNode, "fitness", { role: "program" });
+  await _metadata.setExtMeta(historyNode, "fitness", { role: "history" });
 
   // Set mode overrides
   // Mode overrides: set on both the fitness root (so parent classifiers find it)
@@ -106,11 +111,11 @@ export async function scaffoldFitness(rootId, userId, options = {}) {
   const channelPairs = [];
   for (const [groupName, exercises] of Object.entries(program.groups)) {
     const groupNode = await createNode(groupName, null, null, rootId, false, userId);
-    await setExtMeta(groupNode, "fitness", { role: "muscle-group" });
+    await _metadata.setExtMeta(groupNode, "fitness", { role: "muscle-group" });
 
     for (const exercise of exercises) {
       const exNode = await createNode(exercise.name, null, null, groupNode._id, false, userId);
-      await setExtMeta(exNode, "fitness", { role: "exercise", history: [] });
+      await _metadata.setExtMeta(exNode, "fitness", { role: "exercise", history: [] });
 
       // Set initial values and goals
       const valFields = { weight: exercise.weight };
@@ -119,8 +124,8 @@ export async function scaffoldFitness(rootId, userId, options = {}) {
         valFields[`set${i}`] = 0;
         goalFields[`set${i}`] = program.repMax;
       }
-      await batchSetExtMeta(exNode._id, "values", valFields);
-      await batchSetExtMeta(exNode._id, "goals", goalFields);
+      await _metadata.batchSetExtMeta(exNode._id, "values", valFields);
+      await _metadata.batchSetExtMeta(exNode._id, "goals", goalFields);
 
       // Prepare channel creation (Log -> exercise)
       const channelName = exercise.name.toLowerCase().replace(/\s+/g, "-") + "-log";
@@ -168,7 +173,7 @@ export async function scaffoldFitness(rootId, userId, options = {}) {
   // Mark root as initialized
   const rootNode = await Node.findById(rootId);
   if (rootNode) {
-    await setExtMeta(rootNode, "fitness", {
+    await _metadata.setExtMeta(rootNode, "fitness", {
       initialized: true,
       goal,
       daysPerWeek: days,

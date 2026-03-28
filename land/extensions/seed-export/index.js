@@ -7,6 +7,7 @@ export async function init(core) {
     models: core.models,
     contributions: core.contributions,
     energy: core.energy || null,
+    metadata: core.metadata,
   });
 
   const { default: router } = await import("./routes.js");

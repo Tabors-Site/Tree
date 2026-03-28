@@ -18,9 +18,11 @@ import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _runChat = null;
 let _editStatus = null;
+let _metadata = null;
 export function setServices(services) {
   _runChat = services.runChat;
   _editStatus = services.editStatus;
+  _metadata = services.metadata;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -454,9 +456,7 @@ export async function decompressNode(nodeId, userId) {
   }
 
   // Update compress status but keep essence
-  await Node.findByIdAndUpdate(nodeId, {
-    $set: { "metadata.compress.status": "decompressed" },
-  });
+  await _metadata.batchSetExtMeta(nodeId, "compress", { status: "decompressed" });
 
   return { message: "Node decompressed. Notes visible again. Essence preserved." };
 }

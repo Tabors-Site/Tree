@@ -39,6 +39,7 @@ export async function init(core) {
         }
       : null,
     hooks: core.hooks,
+    metadata: core.metadata,
   });
 
   // Register modes

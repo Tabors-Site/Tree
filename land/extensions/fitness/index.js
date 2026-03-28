@@ -10,7 +10,6 @@ import log from "../../seed/log.js";
 import logMode from "./modes/log.js";
 import coachMode from "./modes/coach.js";
 import reviewMode from "./modes/review.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import {
   configure,
   isInitialized,
@@ -18,6 +17,7 @@ import {
   getExerciseState,
   checkProgression,
 } from "./core.js";
+import { setMetadata as setSetupMetadata } from "./setup.js";
 
 export async function init(core) {
   const runChat = core.llm?.runChat || null;
@@ -35,7 +35,9 @@ export async function init(core) {
           });
         }
       : null,
+    metadata: core.metadata,
   });
+  setSetupMetadata(core.metadata);
 
   // Register modes
   core.modes.registerMode("tree:fitness-log", logMode, "fitness");

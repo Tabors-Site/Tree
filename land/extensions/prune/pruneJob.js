@@ -7,12 +7,13 @@
 // Default off. The tree doesn't shed leaves unless the operator says so.
 
 import log from "../../seed/log.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { scanForCandidates, confirmPrune } from "./core.js";
 
 let Node = null;
 let User = null;
+let _metadata = null;
 export function setModels(models) { Node = models.Node; User = models.User; }
+export function setMetadata(metadata) { _metadata = metadata; }
 
 let _timer = null;
 
@@ -54,7 +55,7 @@ async function runPruneCycle() {
 
     for (const root of roots) {
       try {
-        const pruneMeta = getExtMeta(root, "prune");
+        const pruneMeta = _metadata.getExtMeta(root, "prune");
         if (pruneMeta.paused) continue;
 
         const userId = root.rootOwner?.toString();

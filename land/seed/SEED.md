@@ -120,7 +120,7 @@ Extensions receive `core` in `init(core)`. The full metadata toolkit, tree/note 
 
 ### Metadata (core.metadata)
 
-Six functions. No extension needs direct MongoDB for metadata.
+Seven functions. No extension needs direct MongoDB for node metadata.
 
 | Function | Operation | Use Case |
 |----------|-----------|----------|
@@ -130,8 +130,9 @@ Six functions. No extension needs direct MongoDB for metadata.
 | `incExtMeta(node, extName, key, amount)` | Atomic $inc | Counters, accumulators. By ID or document. |
 | `pushExtMeta(node, extName, key, item, maxLength)` | Atomic $push + $slice | Capped arrays, rolling history. By ID or document. |
 | `batchSetExtMeta(node, extName, fields)` | Atomic multi-field $set | Set multiple keys at once. By ID or document. |
+| `unsetExtMeta(node, extName)` | Atomic $unset | Remove namespace entirely. Document shrinks. |
 
-`incExtMeta`, `pushExtMeta`, and `batchSetExtMeta` accept a node document OR a nodeId string. No read-modify-write. No race conditions. MongoDB atomic operators handle concurrency.
+`incExtMeta`, `pushExtMeta`, `batchSetExtMeta`, and `unsetExtMeta` accept a node document OR a nodeId string. No read-modify-write. No race conditions. MongoDB atomic operators handle concurrency.
 
 ```js
 // Atomic increment (food macro tracking)
@@ -144,6 +145,9 @@ await core.metadata.pushExtMeta(nodeId, "scheduler", "completions", { date, delt
 await core.metadata.batchSetExtMeta(nodeId, "values", {
   weight: 135, set1: 10, set2: 10, set3: 8, totalVolume: 3780
 });
+
+// Remove namespace entirely on extension uninstall
+await core.metadata.unsetExtMeta(nodeId, "old-extension");
 ```
 
 ### Tree CRUD (core.tree)
@@ -153,6 +157,21 @@ await core.metadata.batchSetExtMeta(nodeId, "values", {
 ### Notes CRUD (core.notes)
 
 `core.notes.createNote`, `core.notes.editNote`, `core.notes.deleteNoteAndFile`, `core.notes.transferNote`, `core.notes.getNotes`. Programmatic note creation without direct seed imports.
+
+### User Metadata (core.userMetadata)
+
+Same pattern as node metadata, applied to users. Six functions.
+
+| Function | Operation | Use Case |
+|----------|-----------|----------|
+| `getUserMeta(user, key)` | Read namespace | Read extension data from a user |
+| `setUserMeta(user, key, data)` | Full replace (sync) | Write namespace. Caller must `await user.save()`. |
+| `incUserMeta(user, key, field, amount)` | Atomic $inc | Storage counters, energy tracking. By ID or document. |
+| `pushUserMeta(user, key, field, item, maxLength)` | Atomic $push + $slice | Phase history, activity logs. By ID or document. |
+| `batchSetUserMeta(user, key, fields)` | Atomic multi-field $set | Preference updates, config resets. By ID or document. |
+| `unsetUserMeta(user, key)` | Atomic $unset | Remove namespace entirely. Document shrinks. |
+
+`incUserMeta`, `pushUserMeta`, `batchSetUserMeta`, and `unsetUserMeta` accept a user document OR a userId string. Atomic. No read-modify-write.
 
 ### Extension Scope (core.scope)
 

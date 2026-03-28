@@ -11,6 +11,7 @@ export async function init(core) {
       return core.llm.runChat({ ...opts, llmPriority: BG });
     },
     checkCascade,
+    metadata: core.metadata,
   });
 
   // ── afterNote: throttled contradiction scanning ─────────────────────

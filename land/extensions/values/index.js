@@ -2,7 +2,7 @@ import getTools from "./tools.js";
 import { setServices, setEnergyService, setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat } from "./core.js";
 
 export async function init(core) {
-  setServices({ models: core.models, contributions: core.contributions });
+  setServices({ models: core.models, contributions: core.contributions, metadata: core.metadata });
   if (core.energy) setEnergyService(core.energy);
 
   const { default: router, setNodeModel } = await import("./routes.js");

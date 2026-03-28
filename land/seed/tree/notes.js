@@ -24,6 +24,7 @@ import { getLandConfigValue } from "../landConfig.js";
 import { fileURLToPath } from "url";
 import { resolveRootNode } from "./treeFetch.js";
 import { CONTENT_TYPE, DELETED, NODE_STATUS, ERR, ProtocolError } from "../protocol.js";
+import { incUserMeta } from "./userMetadata.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -144,7 +145,7 @@ async function createNote({
     ? Math.ceil(file.size / 1024)
     : Math.ceil(Buffer.byteLength(finalContent || "", "utf8") / 1024);
   if (sizeKB > 0) {
-    User.findByIdAndUpdate(userId, { $inc: { "metadata.storage.usageKB": sizeKB } }).catch(() => {});
+    incUserMeta(userId, "storage", "usageKB", sizeKB).catch(() => {});
   }
 
   hooks.run("afterNote", { note: newNote, nodeId, userId, contentType, sizeKB, action: "create" }).catch(() => {});
@@ -218,7 +219,7 @@ async function editNote({
   await note.save();
 
   if (deltaKB !== 0) {
-    User.findByIdAndUpdate(userId, { $inc: { "metadata.storage.usageKB": deltaKB } }).catch(() => {});
+    incUserMeta(userId, "storage", "usageKB", deltaKB).catch(() => {});
   }
 
   hooks.run("afterNote", { note, nodeId: note.nodeId, userId, contentType: note.contentType, sizeKB: newSizeKB, deltaKB, action: "edit" }).catch(() => {});

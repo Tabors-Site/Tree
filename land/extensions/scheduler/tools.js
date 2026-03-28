@@ -5,8 +5,10 @@ import {
   getWeekTimeline,
   calculateReliability,
 } from "./core.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import Node from "../../seed/models/node.js";
+
+let _metadata = null;
+export function setMetadata(metadata) { _metadata = metadata; }
 
 export default [
   {
@@ -90,7 +92,7 @@ export default [
           return { content: [{ type: "text", text: "Node not found." }] };
         }
 
-        const schedulerMeta = getExtMeta(node, "scheduler");
+        const schedulerMeta = _metadata.getExtMeta(node, "scheduler");
         if (!schedulerMeta?.completions?.length) {
           return {
             content: [{ type: "text", text: `"${node.name}" has no completion history yet.` }],

@@ -2,8 +2,10 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import Node from "../../seed/models/node.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { resolvePersonaFromChain, getAncestorChainFn } from "./index.js";
+
+let _metadata = null;
+export function setMetadata(metadata) { _metadata = metadata; }
 
 const router = express.Router();
 
@@ -71,7 +73,7 @@ router.post("/persona/set", authenticate, async (req, res) => {
     if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
     if (node.systemRole) return sendError(res, 403, ERR.FORBIDDEN, "Cannot set persona on system nodes");
 
-    let current = getExtMeta(node, "persona") || {};
+    let current = _metadata.getExtMeta(node, "persona") || {};
 
     if (fullPersona) {
       // Full replacement
@@ -92,7 +94,7 @@ router.post("/persona/set", authenticate, async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "Provide field+value or persona object");
     }
 
-    await setExtMeta(node, "persona", current);
+    await _metadata.setExtMeta(node, "persona", current);
 
     sendOk(res, { persona: current, nodeId });
   } catch (err) {
@@ -109,10 +111,10 @@ router.delete("/persona", authenticate, async (req, res) => {
     const node = await Node.findById(nodeId);
     if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
-    const existing = getExtMeta(node, "persona");
+    const existing = _metadata.getExtMeta(node, "persona");
     if (!existing) return sendOk(res, { message: "No persona to remove at this node" });
 
-    await setExtMeta(node, "persona", null);
+    await _metadata.setExtMeta(node, "persona", null);
     sendOk(res, { message: "Persona removed. This node now inherits from its parent." });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);

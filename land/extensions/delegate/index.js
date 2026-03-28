@@ -1,10 +1,11 @@
 import log from "../../seed/log.js";
 import tools from "./tools.js";
-import { generateSuggestions, getNearbySuggestions } from "./core.js";
+import { configure, generateSuggestions, getNearbySuggestions } from "./core.js";
 
 let _jobTimer = null;
 
 export async function init(core) {
+  configure({ metadata: core.metadata });
   // enrichContext: surface delegate suggestions when the suggested user is nearby
   core.hooks.register("enrichContext", async ({ context, node, meta, userId }) => {
     if (!userId) return;

@@ -8,7 +8,9 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
+
+let _metadata = null;
+export function configure({ metadata }) { _metadata = metadata; }
 
 const MAX_QUERIES = 100;
 
@@ -73,7 +75,7 @@ export async function recordQuery(nodeId, query, hadAnswer, confidence, userId) 
     const node = await Node.findById(nodeId);
     if (!node) return;
 
-    const meta = getExtMeta(node, "competence") || {};
+    const meta = _metadata.getExtMeta(node, "competence") || {};
     if (!meta.queries) meta.queries = [];
 
     meta.queries.push({
@@ -96,7 +98,7 @@ export async function recordQuery(nodeId, query, hadAnswer, confidence, userId) 
     meta.answerRate = computed.answerRate;
     meta.lastUpdated = Date.now();
 
-    await setExtMeta(node, "competence", meta);
+    await _metadata.setExtMeta(node, "competence", meta);
     await node.save();
   } catch (err) {
     log.debug("Competence", `recordQuery failed: ${err.message}`);

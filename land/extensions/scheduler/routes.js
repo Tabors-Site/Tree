@@ -7,8 +7,10 @@ import {
   getWeekTimeline,
   calculateReliability,
 } from "./core.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import Node from "../../seed/models/node.js";
+
+let _metadata = null;
+export function setMetadata(metadata) { _metadata = metadata; }
 
 const router = express.Router();
 
@@ -74,7 +76,7 @@ router.get("/scheduler/reliability/:nodeId", authenticate, async (req, res) => {
     const node = await Node.findById(nodeId).select("name metadata").lean();
     if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
-    const schedulerMeta = getExtMeta(node, "scheduler");
+    const schedulerMeta = _metadata.getExtMeta(node, "scheduler");
     if (!schedulerMeta?.completions?.length) {
       return sendOk(res, {
         nodeName: node.name,

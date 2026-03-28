@@ -1,12 +1,11 @@
 import log from "../../seed/log.js";
-import tools from "./tools.js";
+import tools, { setMetadata as setToolMetadata } from "./tools.js";
 import {
   setServices, triggerReview, handleReviewRequest,
   handleReviewResponse, getReviewConfig,
 } from "./core.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
-
 export async function init(core) {
+  setToolMetadata(core.metadata);
   const { deliverCascade } = await import("../../seed/tree/cascade.js");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
 
@@ -17,7 +16,7 @@ export async function init(core) {
     },
     deliverCascade,
     setExtMeta: core.metadata.setExtMeta,
-    getExtMeta,
+    getExtMeta: core.metadata.getExtMeta,
     mergeExtMeta: core.metadata.mergeExtMeta,
     emitToUser: core.websocket?.emitToUser || (() => {}),
     hooks: core.hooks,
@@ -116,7 +115,8 @@ export async function init(core) {
     }
   }, "peer-review");
 
-  const { default: router } = await import("./routes.js");
+  const { default: router, setMetadata: setRouteMetadata } = await import("./routes.js");
+  setRouteMetadata(core.metadata);
 
   return {
     router,

@@ -4,13 +4,14 @@
 // No tree walk. Subscriptions stored in metadata.channels on each endpoint.
 
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { deliverCascade } from "../../seed/tree/cascade.js";
 import { v4 as uuidv4 } from "uuid";
 
 let Node = null;
-export function setServices({ models }) {
+let _metadata = null;
+export function setServices({ models, metadata }) {
   Node = models.Node;
+  if (metadata) _metadata = metadata;
 }
 
 const CHANNEL_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,49}$/;
@@ -23,7 +24,7 @@ const MAX_CHANNELS_PER_NODE = 50;
 export async function getChannels(nodeId) {
   const node = await Node.findById(nodeId).select("metadata").lean();
   if (!node) throw new Error("Node not found");
-  const meta = getExtMeta(node, "channels");
+  const meta = _metadata.getExtMeta(node, "channels");
   return {
     subscriptions: meta.subscriptions || [],
     pending: meta.pending || [],
@@ -59,7 +60,7 @@ export async function createChannel({
   if (!targetNode) throw new Error("Target node not found");
 
   // Check for duplicate channel name between this pair
-  const sourceMeta = getExtMeta(sourceNode, "channels");
+  const sourceMeta = _metadata.getExtMeta(sourceNode, "channels");
   const subs = sourceMeta.subscriptions || [];
   if (subs.length >= MAX_CHANNELS_PER_NODE) {
     throw new Error(`Maximum ${MAX_CHANNELS_PER_NODE} channels per node`);
@@ -155,7 +156,7 @@ export async function acceptInvite(nodeId, channelName, userId) {
   const node = await Node.findById(nodeId).select("_id name metadata").lean();
   if (!node) throw new Error("Node not found");
 
-  const meta = getExtMeta(node, "channels");
+  const meta = _metadata.getExtMeta(node, "channels");
   const pending = meta.pending || [];
   const inviteIdx = pending.findIndex(p => p.channelName === channelName);
   if (inviteIdx === -1) throw new Error(`No pending invitation for channel "${channelName}"`);
@@ -193,9 +194,9 @@ export async function acceptInvite(nodeId, channelName, userId) {
   pending.splice(inviteIdx, 1);
   const nodeDoc = await Node.findById(nodeId);
   if (nodeDoc) {
-    const updated = getExtMeta(nodeDoc, "channels");
+    const updated = _metadata.getExtMeta(nodeDoc, "channels");
     updated.pending = pending;
-    await setExtMeta(nodeDoc, "channels", updated);
+    await _metadata.setExtMeta(nodeDoc, "channels", updated);
   }
 
   log.verbose("Channels", `Channel invitation "${channelName}" accepted at ${node.name}`);
@@ -234,7 +235,7 @@ export async function deliverToChannels(nodeId, signalPayload, signalId, depth) 
   const node = await Node.findById(nodeId).select("metadata").lean();
   if (!node) return [];
 
-  const meta = getExtMeta(node, "channels");
+  const meta = _metadata.getExtMeta(node, "channels");
   const subs = (meta.subscriptions || []).filter(
     s => s.active && (s.direction === "outbound" || s.direction === "bidirectional"),
   );
@@ -294,17 +295,17 @@ async function writeSubscription(nodeId, subscription) {
   const nodeDoc = await Node.findById(nodeId);
   if (!nodeDoc) throw new Error(`Node ${nodeId} not found for subscription write`);
 
-  const meta = getExtMeta(nodeDoc, "channels");
+  const meta = _metadata.getExtMeta(nodeDoc, "channels");
   if (!meta.subscriptions) meta.subscriptions = [];
   meta.subscriptions.push(subscription);
-  await setExtMeta(nodeDoc, "channels", meta);
+  await _metadata.setExtMeta(nodeDoc, "channels", meta);
 }
 
 async function writeInvitation(nodeId, invitation) {
   const nodeDoc = await Node.findById(nodeId);
   if (!nodeDoc) throw new Error(`Node ${nodeId} not found for invitation write`);
 
-  const meta = getExtMeta(nodeDoc, "channels");
+  const meta = _metadata.getExtMeta(nodeDoc, "channels");
   if (!meta.pending) meta.pending = [];
 
   // Replace existing invitation for same channel name from same source
@@ -316,20 +317,20 @@ async function writeInvitation(nodeId, invitation) {
   } else {
     meta.pending.push(invitation);
   }
-  await setExtMeta(nodeDoc, "channels", meta);
+  await _metadata.setExtMeta(nodeDoc, "channels", meta);
 }
 
 async function removeSubscription(nodeId, channelName) {
   const nodeDoc = await Node.findById(nodeId);
   if (!nodeDoc) return null;
 
-  const meta = getExtMeta(nodeDoc, "channels");
+  const meta = _metadata.getExtMeta(nodeDoc, "channels");
   if (!meta.subscriptions) return null;
 
   const idx = meta.subscriptions.findIndex(s => s.channelName === channelName);
   if (idx === -1) return null;
 
   const removed = meta.subscriptions.splice(idx, 1)[0];
-  await setExtMeta(nodeDoc, "channels", meta);
+  await _metadata.setExtMeta(nodeDoc, "channels", meta);
   return removed;
 }

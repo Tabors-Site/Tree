@@ -1,7 +1,6 @@
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
-import router from "./routes.js";
-import tools from "./tools.js";
+import router, { setMetadata as setRouteMetadata } from "./routes.js";
+import tools, { setMetadata as setToolMetadata } from "./tools.js";
 
 /**
  * Resolve the effective persona at a position by walking the ancestor chain.
@@ -59,6 +58,8 @@ export function getAncestorChainFn() { return _getAncestorChain; }
 
 export async function init(core) {
   _getAncestorChain = core.tree.getAncestorChain;
+  setRouteMetadata(core.metadata);
+  setToolMetadata(core.metadata);
 
   // beforeLLMCall: resolve persona from ancestor chain and prepend to system message.
   // Identity before location. The persona block goes before the position block.
