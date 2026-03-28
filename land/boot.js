@@ -201,7 +201,7 @@ async function pickExtensions(horizonUrl) {
   // Try Horizon registry first
   if (horizonUrl) {
     try {
-      const fetch = (await import("node-fetch")).default;
+      const fetch = globalThis.fetch || (await import("node-fetch")).default;
       console.log(`  Checking extension registry at ${horizonUrl}...`);
       const res = await fetch(`${horizonUrl}/extensions`, {
         headers: { "Content-Type": "application/json" },
@@ -405,7 +405,7 @@ async function pickExtensions(horizonUrl) {
 async function installSelected(selected, horizonUrl) {
   console.log(`\n  Installing ${selected.length} extensions...\n`);
 
-  const fetch = (await import("node-fetch")).default;
+  const fetch = globalThis.fetch || (await import("node-fetch")).default;
   const extDir = path.join(__dirname, "extensions");
 
   for (const ext of selected) {
