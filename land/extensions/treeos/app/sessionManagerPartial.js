@@ -1005,7 +1005,7 @@ export function dashboardJS() {
       socket.on("dashboardTreeData", function(data) {
         if (!data || data.rootId !== dashCurrentRootId) return;
         if (data.error) {
-          dashTreeCanvas.innerHTML = '<div style="color:var(--error);padding:16px">' + dashEscape(data.error) + '</div>';
+          dashTreeCanvas.innerHTML = '<div style="color:var(--error);padding:16px">' + dashEscape(data.error.message || data.error) + '</div>';
           return;
         }
         dashTreeData = data.tree;
