@@ -60,6 +60,12 @@ export async function createNode(
   if (name.startsWith("@")) {
     throw new Error("Node names cannot start with @");
   }
+  if (name === "~" || name.startsWith("~/")) {
+    throw new Error("Node names cannot be ~ (reserved for home)");
+  }
+  if (name.includes("/")) {
+    throw new Error("Node names cannot contain / (reserved for path separator)");
+  }
   const user = validatedUser ?? (await getUserOrThrow(userId));
 
 
@@ -495,16 +501,20 @@ export async function editNodeName({
   if (newName.startsWith("@")) {
     throw new Error("Node names cannot start with @");
   }
+  if (newName === "~" || newName.startsWith("~/")) {
+    throw new Error("Node names cannot be ~ (reserved for home)");
+  }
+  if (newName.includes("/")) {
+    throw new Error("Node names cannot contain / (reserved for path separator)");
+  }
   const node = await Node.findById(nodeId);
   if (!node) {
     throw new Error("Node not found");
   }
   if (node.systemRole) throw new Error("Cannot modify system nodes");
 
-
   const oldName = node.name;
-  node.name = newName;
-  await node.save();
+  await Node.findByIdAndUpdate(nodeId, { $set: { name: newName } });
 
   await logContribution({
     userId,

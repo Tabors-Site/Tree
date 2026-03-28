@@ -42,7 +42,8 @@ export const createApiKey = async (req, res) => {
       return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     }
 
-    let keys = getUserMeta(user, "apiKeys") || [];
+    let keys = getUserMeta(user, "apiKeys");
+    if (!Array.isArray(keys)) keys = [];
 
     if (revokeOld) {
       keys = keys.map((k) => ({ ...k, revoked: true }));

@@ -564,11 +564,11 @@ export function buildTools() {
 
     {
       name: "get-active-leaf-execution-frontier",
-      description: "Get the next executable leaf node for BE mode.",
+      description: "Get the next executable leaf node for focused work. Starts from the given node, not necessarily the tree root. Pass the current position to find leaves within that branch.",
       schema: {
         rootNodeId: z
           .string()
-          .describe("Root node of the active tree"),
+          .describe("Node to start from. Use current position for branch-scoped work, or tree root for whole-tree scan."),
       },
       annotations: {
         readOnlyHint: true,

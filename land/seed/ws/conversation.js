@@ -456,18 +456,10 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
 // Groups related modes under a single assignment key.
 // Resolution: mode-specific → placement fallback → user default
 // Extensions can register additional mappings via registerModeAssignment().
-const MODE_TO_ASSIGNMENT = {
-  // Core tree orchestration modes (kernel)
-  "tree:librarian": "placement",
-  "tree:navigate": "placement",
-  "tree:structure": "placement",
-  "tree:edit": "placement",
-  "tree:be": "placement",
-  "tree:get-context": "placement",
-  "tree:respond": "respond",
-  "tree:notes": "notes",
-  // Extension modes are registered via registerModeAssignment() during init
-};
+// Mode → LLM slot mapping. Starts empty. Extensions register their mappings
+// during init via registerModeAssignment(). The kernel provides the registry.
+// The kernel does not know what modes exist. That's extension territory.
+const MODE_TO_ASSIGNMENT = {};
 
 /**
  * Register a mode-to-LLM-slot mapping. Extensions call this during init
@@ -493,7 +485,7 @@ export async function resolveRootLlmForMode(rootId, modeKey) {
       .lean();
     if (!rootNode) return null;
 
-    const { getLlmAssignments } = await import("../seed/llm/assignments.js");
+    const { getLlmAssignments } = await import("../llm/assignments.js");
     const assignments = getLlmAssignments(rootNode);
 
     // "none" means LLM is explicitly off for this tree
@@ -547,6 +539,10 @@ export async function userHasLlm(userId) {
 // Each session holds: { modeKey, bigMode, messages[], rootId, _lastActive }
 const sessions = new Map();
 let MAX_CONVERSATION_SESSIONS = 50000; // hard cap to prevent OOM from leaked sessions
+
+// Persistent sessionId map for runChat (zone+rootId+userId -> sessionId).
+// Chains Chat documents together. Capped at 10K entries.
+const _runChatSessions = new Map();
 
 /**
  * Get or create session for a visitor.
@@ -691,6 +687,28 @@ export async function switchBigMode(visitorId, bigMode, ctx) {
 async function ensureSession(visitorId, ctx) {
   const session = getSession(visitorId);
 
+  // Self-healing: detect rootId mismatch. If the caller says we're in a different
+  // tree than the session thinks, clear messages and re-init. This catches race
+  // conditions where setRootId and switchMode happen out of order, and protects
+  // against stale context when callers forget to clear on tree transitions.
+  const incomingRootId = ctx.rootId || null;
+  if (session.rootId && incomingRootId && session.rootId !== incomingRootId) {
+    log.debug("LLM", `Root mismatch for ${visitorId}: session=${session.rootId}, ctx=${incomingRootId}. Clearing.`);
+    session.messages = [];
+    session.modeKey = null;
+    session.rootId = incomingRootId;
+  }
+
+  // Sync rootId from context if session doesn't have one yet
+  if (!session.rootId && incomingRootId) {
+    session.rootId = incomingRootId;
+  }
+
+  // Sync currentNodeId from context
+  if (ctx.currentNodeId) {
+    session.currentNodeId = ctx.currentNodeId;
+  }
+
   // Ensure we have a mode - default to home:default
   if (!session.modeKey) {
     await switchMode(visitorId, "home:default", ctx);
@@ -699,7 +717,7 @@ async function ensureSession(visitorId, ctx) {
   const mode = getMode(session.modeKey);
 
   // Snapshot ancestor chain for consistent resolution within this message.
-  // All resolution chains (scope, tools, mode, LLM, auth) read from this snapshot.
+  // All resolution chains (scope, tools, mode, LLM, config) read from this snapshot.
   const snapshotNodeId = session.currentNodeId || session.rootId || ctx.rootId;
   if (snapshotNodeId) {
     session._ancestorSnapshot = await snapshotAncestors(snapshotNodeId);
@@ -1617,17 +1635,14 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   const visitorId = `${contextKey}:${userId}`;
 
   // Persistent sessionId per zone (chains Chats together)
-  // Uses crypto.randomUUID() (sync) to avoid race condition between check and set
-  if (!runChat._sessions) runChat._sessions = new Map();
-  if (!runChat._sessions.has(visitorId)) {
-    // Cap static sessions map to prevent unbounded growth
-    if (runChat._sessions.size >= 10000) {
-      const first = runChat._sessions.keys().next().value;
-      runChat._sessions.delete(first);
+  if (!_runChatSessions.has(visitorId)) {
+    if (_runChatSessions.size >= MAX_CONVERSATION_SESSIONS) {
+      const first = _runChatSessions.keys().next().value;
+      _runChatSessions.delete(first);
     }
-    runChat._sessions.set(visitorId, crypto.randomUUID());
+    _runChatSessions.set(visitorId, crypto.randomUUID());
   }
-  const sessionId = runChat._sessions.get(visitorId);
+  const sessionId = _runChatSessions.get(visitorId);
 
   // Abort controller for cancellation (Ctrl+C, timeout, etc.)
   const abort = signal ? { signal } : new AbortController();

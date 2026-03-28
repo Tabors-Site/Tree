@@ -1,4 +1,4 @@
-// html-rendering/app/app.js
+// treeos/app/app.js - Dashboard page
 import express from "express";
 import { sendError, ERR } from "../../../seed/protocol.js";
 import User from "../../../seed/models/user.js";

@@ -61,6 +61,29 @@ export async function init(core) {
   core.modes.setDefaultMode("home", "home:default");
   core.modes.setDefaultMode("tree", "tree:navigate");
 
+  // Register LLM slots and mode-to-slot assignments.
+  // Operators assign models per slot: treeos llm tree-assign librarian <connectionId>
+  // Grouping: navigate (read-only, cheap), librarian (write, quality),
+  //           respond (user-facing, highest quality), notes (medium).
+  core.llm.registerRootLlmSlot("navigate");
+  core.llm.registerRootLlmSlot("librarian");
+  core.llm.registerRootLlmSlot("respond");
+  core.llm.registerRootLlmSlot("notes");
+  if (core.llm.registerModeAssignment) {
+    // Read-only tree observation
+    core.llm.registerModeAssignment("tree:navigate", "navigate");
+    core.llm.registerModeAssignment("tree:get-context", "navigate");
+    // Write operations (create, edit, restructure)
+    core.llm.registerModeAssignment("tree:librarian", "librarian");
+    core.llm.registerModeAssignment("tree:structure", "librarian");
+    core.llm.registerModeAssignment("tree:edit", "librarian");
+    core.llm.registerModeAssignment("tree:be", "librarian");
+    // User-facing conversation
+    core.llm.registerModeAssignment("tree:respond", "respond");
+    // Note operations
+    core.llm.registerModeAssignment("tree:notes", "notes");
+  }
+
   // Build MCP tools with zod schemas and handlers
   const tools = buildTools();
 
@@ -92,25 +115,43 @@ export async function init(core) {
 
       // Canopy admin pages
       const { isHtmlEnabled } = await import("../html-rendering/config.js");
+      const { renderCanopyAdmin, renderCanopyInvites, renderCanopyHorizon } = await import("./pages/canopy.js");
+      const { sendError: _sendError, ERR: _ERR } = await import("../../seed/protocol.js");
+
       registerPage("get", "/canopy/admin", authenticate, async (req, res) => {
-        if (!isHtmlEnabled()) return (await import("../../seed/protocol.js")).sendError(res, 404, "EXTENSION_NOT_FOUND", "HTML disabled");
+        if (!isHtmlEnabled()) return _sendError(res, 404, _ERR.EXTENSION_NOT_FOUND, "HTML disabled");
         try {
           const user = await core.models.User.findById(req.userId).select("isAdmin").lean();
-          if (!user?.isAdmin) return (await import("../../seed/protocol.js")).sendError(res, 403, "FORBIDDEN", "Admin required");
+          if (!user?.isAdmin) return _sendError(res, 403, _ERR.FORBIDDEN, "Admin required");
           const { getAllPeers } = await import("../../canopy/peers.js");
           const { getLandInfoPayload } = await import("../../canopy/identity.js");
           const { getPendingEventCount, getFailedEvents } = await import("../../canopy/events.js");
-          res.send(renderers.renderCanopyAdmin({ land: getLandInfoPayload(), peers: await getAllPeers(), pendingEvents: await getPendingEventCount(), failedEvents: await getFailedEvents() }));
-        } catch (err) { (await import("../../seed/protocol.js")).sendError(res, 500, "INTERNAL", err.message); }
+          res.send(renderCanopyAdmin({ land: getLandInfoPayload(), peers: await getAllPeers(), pendingEvents: await getPendingEventCount(), failedEvents: await getFailedEvents() }));
+        } catch (err) { _sendError(res, 500, _ERR.INTERNAL, err.message); }
+      });
+
+      registerPage("get", "/canopy/admin/invites", authenticate, async (req, res) => {
+        if (!isHtmlEnabled()) return _sendError(res, 404, _ERR.EXTENSION_NOT_FOUND, "HTML disabled");
+        try {
+          const user = await core.models.User.findById(req.userId).select("isAdmin").lean();
+          if (!user?.isAdmin) return _sendError(res, 403, _ERR.FORBIDDEN, "Admin required");
+          const mongoose = (await import("mongoose")).default;
+          const CanopyEvent = mongoose.models.CanopyEvent;
+          const RemoteUser = mongoose.models.RemoteUser;
+          const invites = CanopyEvent ? await CanopyEvent.find({ type: "invite" }).sort({ createdAt: -1 }).lean() : [];
+          const remoteUsers = RemoteUser ? await RemoteUser.find().lean() : [];
+          const localTrees = await core.models.Node.find({ rootOwner: { $exists: true, $ne: null } }).select("_id name").lean();
+          res.send(renderCanopyInvites({ invites, remoteUsers, localTrees }));
+        } catch (err) { _sendError(res, 500, _ERR.INTERNAL, err.message); }
       });
 
       registerPage("get", "/canopy/admin/horizon", authenticate, async (req, res) => {
-        if (!isHtmlEnabled()) return (await import("../../seed/protocol.js")).sendError(res, 404, "EXTENSION_NOT_FOUND", "HTML disabled");
+        if (!isHtmlEnabled()) return _sendError(res, 404, _ERR.EXTENSION_NOT_FOUND, "HTML disabled");
         try {
           const user = await core.models.User.findById(req.userId).select("isAdmin").lean();
-          if (!user?.isAdmin) return (await import("../../seed/protocol.js")).sendError(res, 403, "FORBIDDEN", "Admin required");
-          res.send(renderers.renderCanopyHorizon({ hasHorizon: !!process.env.HORIZON_URL }));
-        } catch (err) { (await import("../../seed/protocol.js")).sendError(res, 500, "INTERNAL", err.message); }
+          if (!user?.isAdmin) return _sendError(res, 403, _ERR.FORBIDDEN, "Admin required");
+          res.send(renderCanopyHorizon({ hasHorizon: !!process.env.HORIZON_URL }));
+        } catch (err) { _sendError(res, 500, _ERR.INTERNAL, err.message); }
       });
 
       log.info("TreeOS", "HTML pages registered via html-rendering");

@@ -97,31 +97,19 @@ router.get("/auth-redirect", async (req, res) => {
   }
 });
 
-// Share token management page (JWT only, never share token auth)
-router.get("/user/:userId/shareToken", authenticate, async (req, res) => {
+// Share token management (JSON API). HTML rendering handled by treeos htmlRoutes.
+router.get("/user/:userId/shareToken", authenticate, async (req, res, next) => {
   try {
+    if ("html" in req.query) return next("route"); // treeos htmlRoutes handles HTML
+
     const { userId } = req.params;
     const user = await User.findById(userId).select("username metadata").lean();
     if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
-    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-    const token = req.query.token ?? "";
-    const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
-
-    if (!wantHtml || !isHtmlEnabled()) {
-      const htmlMeta = getUserMeta(user, "html");
-      return sendOk(res, { userId, shareToken: htmlMeta?.shareToken || null });
-    }
-
-    const { getExtension } = await import("../loader.js");
-    const render = getExtension("html-rendering")?.exports?.renderShareToken;
-    if (!render) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "HTML rendering not available");
-
     const htmlMeta = getUserMeta(user, "html");
-    const savedShareToken = htmlMeta?.shareToken || null;
-    return res.send(render({ userId, user, token, tokenQS, savedShareToken }));
+    return sendOk(res, { userId, shareToken: htmlMeta?.shareToken || null });
   } catch (err) {
-    log.error("HTML", "Share token page error:", err.message);
+    log.error("HTML", "Share token error:", err.message);
     sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });

@@ -116,6 +116,24 @@ export function buildTreeosHtmlRoutes() {
   // USER PROFILE
   // ===================================================================
 
+  // Share token management page
+  router.get("/user/:userId/shareToken", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const user = await User.findById(userId).select("username metadata").lean();
+      if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
+      const token = req.query.token ?? "";
+      const tqs = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
+      const { getUserMeta: _gum } = await import("../../seed/tree/userMetadata.js");
+      const htmlMeta = _gum(user, "html");
+      const savedShareToken = htmlMeta?.shareToken || null;
+      return res.send(renderShareToken({ userId, user, token, tokenQS: tqs, savedShareToken }));
+    } catch (err) {
+      log.error("HTML", "Share token page error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
   router.get("/user/:userId", urlAuth, htmlOnly, async (req, res) => {
     try {
       const userId = req.params.userId;

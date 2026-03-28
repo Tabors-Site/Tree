@@ -2,7 +2,7 @@
 /* Error page (layout-wrapped)                       */
 /* ------------------------------------------------- */
 
-import { page } from "../../html-rendering/html/layout.js";
+import { page } from "./layout.js";
 
 export function errorHtml(status, title, message) {
   const css = `

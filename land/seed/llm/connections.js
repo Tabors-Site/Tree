@@ -235,7 +235,8 @@ function isValidUserSlot(slot) {
 }
 
 // Core tree slots. Extensions register additional via registerRootLlmSlot().
-const CORE_ROOT_SLOTS = new Set(["default", "placement", "respond", "notes"]);
+// Only "default" is kernel. Extensions register their own slots during init.
+const CORE_ROOT_SLOTS = new Set(["default"]);
 const _extRootSlots = new Set();
 
 export function registerRootLlmSlot(slot) {

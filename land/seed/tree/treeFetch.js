@@ -148,13 +148,20 @@ export async function getActiveLeafExecutionFrontier(rootId) {
   }
 
   const leaves = [];
+  const maxLeaves = 50; // cap to prevent unbounded traversal on large trees
+  const maxDepth = 30;  // safety depth limit
+  let nodesVisited = 0;
+  const maxNodes = Number(getLandConfigValue("subtreeNodeCap")) || 10000;
 
-  // ---- TRUE DFS (post-order) ----
+  // ---- DFS (post-order) with caps ----
   async function traverse(node, depth, path) {
+    if (leaves.length >= maxLeaves || nodesVisited >= maxNodes) return false;
+    if (depth > maxDepth) return false;
     if ((node.status || NODE_STATUS.ACTIVE) !== NODE_STATUS.ACTIVE) {
       return false;
     }
 
+    nodesVisited++;
     let foundDeeperActive = false;
 
     const childrenIds = Array.isArray(node.children) ? node.children : [];
@@ -172,6 +179,7 @@ export async function getActiveLeafExecutionFrontier(rootId) {
         .filter(Boolean);
 
       for (const child of orderedChildren) {
+        if (leaves.length >= maxLeaves) break;
         const childHasActive = await traverse(child, depth + 1, [
           ...path,
           child.name,
@@ -182,7 +190,7 @@ export async function getActiveLeafExecutionFrontier(rootId) {
       }
     }
 
-    if (!foundDeeperActive) {
+    if (!foundDeeperActive && leaves.length < maxLeaves) {
       leaves.push({
         nodeId: node._id.toString(),
         name: node.name,

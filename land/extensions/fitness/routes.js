@@ -54,20 +54,36 @@ router.post("/root/:rootId/fitness", authenticate, async (req, res) => {
     const username = user?.username || "user";
     const { runChat } = await import("../../seed/ws/conversation.js");
 
-    // ── PATH 1: First use. Scaffold and run setup conversation. ──
+    // ── PATH 1: First use. Ask preferences, then scaffold. ──
     const initialized = await isInitialized(rootId);
     if (!initialized) {
-      // Scaffold with defaults (coach will adjust)
-      await scaffoldFitness(rootId, userId, { goal: "hypertrophy", daysPerWeek: 4 });
+      // Check if user already provided setup preferences in their message
+      const setupMatch = message.match(/\b(strength|hypertrophy|general|default)\b/i);
+      const daysMatch = message.match(/\b([3-6])\s*(?:days?|x|times?)\b/i);
 
+      if (setupMatch || daysMatch || /\b(default|just set it up|quick start)\b/i.test(message)) {
+        // User gave enough info (or wants defaults). Scaffold and confirm.
+        const goal = setupMatch?.[1]?.toLowerCase() === "default" ? "hypertrophy" : (setupMatch?.[1]?.toLowerCase() || "hypertrophy");
+        const days = daysMatch ? parseInt(daysMatch[1]) : 4;
+        await scaffoldFitness(rootId, userId, { goal, daysPerWeek: days });
+
+        const { answer, chatId } = await runChat({
+          userId, username,
+          message: `Setup complete. Scaffolded ${goal} program, ${days} days/week. The user said: "${message}". Give them a brief summary of what was created and ask if they want to adjust anything.`,
+          mode: "tree:fitness-coach",
+          rootId, res, slot: "fitness",
+        });
+
+        if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:fitness-coach", setup: true });
+        return;
+      }
+
+      // User hasn't specified preferences. Ask first.
       const { answer, chatId } = await runChat({
-        userId,
-        username,
-        message: `First time setup. The user said: "${message}". The tree is already scaffolded with a default hypertrophy program (4 days). Ask them: What are you training for? (strength, hypertrophy, general fitness, or they have their own program). How many days per week? Then adjust the program accordingly.`,
+        userId, username,
+        message: `First time fitness setup. The user said: "${message}". Ask them two things:\n1. What's your training goal? (strength, hypertrophy, general fitness, or "default" for a standard hypertrophy program)\n2. How many days per week? (3, 4, or 5)\n\nKeep it brief. One message. They can also say "default" to skip and get a standard 4-day hypertrophy program.`,
         mode: "tree:fitness-coach",
-        rootId,
-        res,
-        slot: "fitness",
+        rootId, res, slot: "fitness",
       });
 
       if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:fitness-coach", setup: true });

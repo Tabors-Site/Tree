@@ -50,7 +50,7 @@ export default {
     "tree thinks, navigates, structures, edits, reads, writes, and responds.",
 
   needs: {
-    services: ["websocket"],
+    services: ["websocket", "llm"],
     models: ["Node", "User", "Note", "Contribution"],
   },
 

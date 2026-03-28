@@ -391,14 +391,14 @@ Examples:
 
         // Validate extension exists on this land
         const allManifests = await api.get("/land/extensions");
-        const known = (allManifests?.extensions || []).map(e => e.name);
+        const known = (allManifests?.loaded || allManifests?.extensions || []).map(e => e.name);
         if (!known.includes(name)) {
           return console.log(chalk.red(`Extension "${name}" not found on this land. Run 'ext list' to see loaded extensions.`));
         }
 
         // Warn if other extensions depend on this one
-        if (allManifests?.extensions) {
-          const dependents = allManifests.extensions
+        if (allManifests?.loaded) {
+          const dependents = (allManifests.loaded || [])
             .filter(e => e.name !== name && (e.needs?.extensions || e.manifest?.needs?.extensions || []).includes(name))
             .map(e => e.name);
           if (dependents.length > 0) {
