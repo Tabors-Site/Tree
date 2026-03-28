@@ -36,9 +36,9 @@ export function setServices({ models, contributions, llm, energy, metadata }) {
   if (metadata) _metadata = metadata;
 }
 
-function getDormancyDays() {
+async function getDormancyDays() {
   try {
-    const { getLandConfigValue } = require("../../seed/landConfig.js");
+    const { getLandConfigValue } = await import("../../seed/landConfig.js");
     return Number(getLandConfigValue("pruneDormancyDays")) || 90;
   } catch {
     return 90;
@@ -56,7 +56,7 @@ function getDormancyDays() {
 export async function scanForCandidates(rootId, userId) {
   await useEnergy({ userId, action: "pruneScan" });
 
-  const dormancyMs = getDormancyDays() * 24 * 60 * 60 * 1000;
+  const dormancyMs = (await getDormancyDays()) * 24 * 60 * 60 * 1000;
   const cutoff = new Date(Date.now() - dormancyMs);
 
   // Get all nodes in this tree
@@ -131,7 +131,7 @@ export async function scanForCandidates(rootId, userId) {
     const pruneMeta = _metadata.getExtMeta(root, "prune");
     pruneMeta.candidates = candidates;
     pruneMeta.lastScanAt = new Date().toISOString();
-    pruneMeta.dormancyDays = getDormancyDays();
+    pruneMeta.dormancyDays = (await getDormancyDays());
     await _metadata.setExtMeta(root, "prune", pruneMeta);
   }
 
@@ -224,7 +224,7 @@ async function pruneNode(candidate, rootId, userId, username) {
         userId,
         username,
         message:
-          `This node "${node.name}" is being pruned (no activity in ${getDormancyDays()} days). ` +
+          `This node "${node.name}" is being pruned (no activity in ${(await getDormancyDays())} days). ` +
           `Here is its content:\n\n${contentSummary.slice(0, 2000)}\n\n` +
           `Is there one essential fact or insight worth preserving? ` +
           `If yes, respond with just that fact in one sentence. If no, respond with "nothing".`,
@@ -266,7 +266,7 @@ async function pruneNode(candidate, rootId, userId, username) {
       prune: {
         nodeName: node.name,
         absorbed: didAbsorb,
-        dormancyDays: getDormancyDays(),
+        dormancyDays: (await getDormancyDays()),
       },
     },
   });

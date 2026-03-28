@@ -35,7 +35,6 @@ import { renderRootOverview } from "./pages/treeOverview.js";
 import { renderNotesList } from "./pages/notesList.js";
 import { renderTextNote, renderFileNote } from "./pages/noteDetail.js";
 import { renderEditorPage } from "./pages/editor.js";
-import { renderChat } from "./pages/chat.js";
 import { renderQueryPage } from "./pages/query.js";
 import { renderContributions } from "./pages/contributions.js";
 import { renderCommandCenter } from "./pages/commandCenter.js";
@@ -698,7 +697,7 @@ export function buildTreeosHtmlRoutes() {
   // PUT move node (update parent) -> redirect
   router.put("/node/:nodeId/parent", urlAuth, htmlOnly, async (req, res) => {
     try {
-      const { updateParent } = await import("../../seed/tree/treeManagement.js");
+      const { updateParentRelationship: updateParent } = await import("../../seed/tree/treeManagement.js");
       await updateParent({
         nodeId: req.params.nodeId,
         newParentId: req.body.newParentId,
@@ -720,7 +719,6 @@ export function buildTreeosHtmlRoutes() {
       if (req.body.intent && req.body.modeKey) modes[req.body.intent] = req.body.modeKey;
       if (req.body.clearIntent) delete modes[req.body.clearIntent];
       await setExtMeta(node, "modes", Object.keys(modes).length > 0 ? modes : undefined);
-      await node.save();
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Set modes redirect error:", err.message);
@@ -743,7 +741,6 @@ export function buildTreeosHtmlRoutes() {
       if (req.body.clearAllowed) toolConfig.allowed = [];
       if (req.body.clearBlocked) toolConfig.blocked = [];
       await setExtMeta(node, "tools", Object.keys(toolConfig).length > 0 ? toolConfig : undefined);
-      await node.save();
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Set tools redirect error:", err.message);
@@ -765,7 +762,6 @@ export function buildTreeosHtmlRoutes() {
         extConfig.blocked = (extConfig.blocked || []).filter(e => !req.body.allow.includes(e));
       }
       await setExtMeta(node, "extensions", Object.keys(extConfig).length > 0 ? extConfig : undefined);
-      await node.save();
       clearScopeCache();
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
@@ -821,10 +817,8 @@ export function buildTreeosHtmlRoutes() {
   // Edit name (form POSTs to /node/:nodeId/editName or /node/:nodeId/:version/editName)
   router.post("/node/:nodeId/:version/editName", urlAuth, htmlOnly, async (req, res) => {
     try {
-      const node = await Node.findById(req.params.nodeId);
-      if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
-      node.name = req.body.name;
-      await node.save();
+      const { editNodeName } = await import("../../seed/tree/treeManagement.js");
+      await editNodeName({ nodeId: req.params.nodeId, newName: req.body.name, userId: req.userId });
       return res.redirect(`/api/v1/node/${req.params.nodeId}/${req.params.version}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Edit name error:", err.message);
@@ -834,10 +828,8 @@ export function buildTreeosHtmlRoutes() {
 
   router.post("/node/:nodeId/editName", urlAuth, htmlOnly, async (req, res) => {
     try {
-      const node = await Node.findById(req.params.nodeId);
-      if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
-      node.name = req.body.name;
-      await node.save();
+      const { editNodeName } = await import("../../seed/tree/treeManagement.js");
+      await editNodeName({ nodeId: req.params.nodeId, newName: req.body.name, userId: req.userId });
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Edit name error:", err.message);
@@ -848,10 +840,8 @@ export function buildTreeosHtmlRoutes() {
   // Edit type (form POSTs to /node/:nodeId/editType)
   router.post("/node/:nodeId/editType", urlAuth, htmlOnly, async (req, res) => {
     try {
-      const node = await Node.findById(req.params.nodeId);
-      if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
-      node.type = req.body.type || null;
-      await node.save();
+      const { editNodeType } = await import("../../seed/tree/treeManagement.js");
+      await editNodeType({ nodeId: req.params.nodeId, newType: req.body.type || null, userId: req.userId });
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Edit type error:", err.message);
@@ -900,7 +890,7 @@ export function buildTreeosHtmlRoutes() {
   // Update parent (form POSTs to /node/:nodeId/updateParent)
   router.post("/node/:nodeId/updateParent", urlAuth, htmlOnly, async (req, res) => {
     try {
-      const { updateParent } = await import("../../seed/tree/treeManagement.js");
+      const { updateParentRelationship: updateParent } = await import("../../seed/tree/treeManagement.js");
       await updateParent({ nodeId: req.params.nodeId, newParentId: req.body.parentId, userId: req.userId });
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
@@ -947,7 +937,6 @@ export function buildTreeosHtmlRoutes() {
       if (req.body.endDate) schedule.endDate = req.body.endDate;
       if (req.body.recurrence) schedule.recurrence = req.body.recurrence;
       await setExtMeta(node, "schedule", Object.keys(schedule).length > 0 ? schedule : null);
-      await node.save();
       return res.redirect(`/api/v1/node/${req.params.nodeId}/${req.params.version}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Edit schedule error:", err.message);
@@ -970,7 +959,6 @@ export function buildTreeosHtmlRoutes() {
         config[key] = value;
       }
       await setExtMeta(node, "config", config);
-      await node.save();
       clearScopeCache();
 
       return res.redirect(`/api/v1/root/${req.params.rootId}${tokenQS(req)}`);
@@ -1015,7 +1003,6 @@ export function buildTreeosHtmlRoutes() {
       }
 
       await setExtMeta(node, "extensions", Object.keys(extConfig).length > 0 ? extConfig : undefined);
-      await node.save();
       clearScopeCache();
 
       const qs = req.query.token ? `?token=${req.query.token}&html` : "?html";

@@ -2,7 +2,7 @@
 /* HTML renderers for understanding pages           */
 /* ─────────────────────────────────────────────── */
 
-import { baseStyles } from "../html-rendering/html/baseStyles.js";
+import { page } from "../html-rendering/html/layout.js";
 import { esc, rainbow } from "../html-rendering/html/utils.js";
 
 /* =========================================================
@@ -24,7 +24,6 @@ export function renderUnderstandingRun({
   rootIsCompleted,
   tree,
   createdDate,
-  escapeHtml: _unused,
   renderTreeFn,
 }) {
   const renderTree = (node, depth = 0) => {
@@ -91,18 +90,8 @@ export function renderUnderstandingRun({
     return html;
   };
 
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#667eea">
-<title>Understanding · ${esc(run.perspective.slice(0, 40))}</title>
-  <style>
-    ${baseStyles}
-
-    /* =========================================================
+  const css = `
+        /* =========================================================
        GLASS BUTTONS
        ========================================================= */
     .glass-btn,
@@ -575,10 +564,9 @@ export function renderUnderstandingRun({
       font-size: 13px;
       font-weight: 500;
       display: none;
-    }
-  </style>
-</head>
-<body>
+    }`;
+
+  const body = `
   <div class="container">
 
     <div class="back-nav">
@@ -724,9 +712,10 @@ export function renderUnderstandingRun({
     }
 
   </div>
+`;
 
-  <script>
-    function togglePane(id) {
+  const js = `
+        function togglePane(id) {
       const body = document.getElementById('body-' + id);
       const chev = document.getElementById('chev-' + id);
       if (!body) return;
@@ -825,11 +814,9 @@ export function renderUnderstandingRun({
         label.textContent = '⏹ Stop';
         btn.disabled = false;
       }
-    }
-  </script>
-</body>
-</html>
-      `;
+    }`;
+
+  return page({ title: `Understanding · ${esc(run.perspective.slice(0, 40))}`, css, body, js });
 }
 
 
@@ -847,16 +834,8 @@ export function renderUnderstandingNode({
   backUnderstandingsUrl,
   realNodeUrl,
 }) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#667eea">
-<title>Understanding · ${esc(data.realNode.name)}</title>  <style>
-    ${baseStyles}
-
-    /* =========================================================
+  const css = `
+        /* =========================================================
        GLASS BUTTONS
        ========================================================= */
     .back-link {
@@ -1313,10 +1292,9 @@ export function renderUnderstandingNode({
       .context-grid { grid-template-columns: 1fr; }
       .enc-header { flex-direction: column; }
       .id-row code { font-size: 11px; }
-    }
-  </style>
-</head>
-<body>
+    }`;
+
+  const body = `
   <div class="container">
 
     <div class="back-nav">
@@ -1452,19 +1430,19 @@ ${esc(e.perspective)} · Layer ${e.currentLayer}
     }
 
   </div>
+`;
 
-  <script>
-    function copyId(elemId, btn) {
+  const js = `
+        function copyId(elemId, btn) {
       const el = document.getElementById(elemId);
       if (!el) return;
       navigator.clipboard.writeText(el.textContent.trim()).then(() => {
         btn.textContent = '✔️';
         setTimeout(() => btn.textContent = '📋', 900);
       });
-    }
-  </script>
-</body>
-</html>`;
+    }`;
+
+  return page({ title: `Understanding · ${esc(data.realNode.name)}`, css, body, js });
 }
 
 
@@ -1478,17 +1456,8 @@ export function renderUnderstandingsList({
   queryString,
   runCards,
 }) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#667eea">
-  <title>Understandings · ${data.rootName}</title>
-  <style>
-    ${baseStyles}
-
-    /* =========================================================
+  const css = `
+        /* =========================================================
        GLASS BUTTONS
        ========================================================= */
     .back-link,
@@ -1780,10 +1749,9 @@ export function renderUnderstandingsList({
       .create-form { flex-direction: column; }
       .create-input { width: 100%; min-width: 0; }
       .create-btn { width: 100%; }
-    }
-  </style>
-</head>
-<body>
+    }`;
+
+  const body = `
   <div class="container">
 
     <div class="back-nav">
@@ -1829,9 +1797,9 @@ export function renderUnderstandingsList({
       </form>
     </div>
 
-  </div>
-</body>
-</html>`;
+  </div>`;
+
+  return page({ title: `Understandings · ${data.rootName}`, css, body });
 }
 
 
@@ -1854,16 +1822,8 @@ export function renderRunNodeView({
   backTreeUrl,
   backRunUrl,
 }) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#667eea">
-<title>${esc(data.realNode.name)} – Compression</title>  <style>
-    ${baseStyles}
-
-    /* =========================================================
+  const css = `
+        /* =========================================================
        GLASS BUTTONS
        ========================================================= */
     .back-link {
@@ -2409,10 +2369,9 @@ export function renderRunNodeView({
       .header-meta { flex-direction: column; align-items: flex-start; }
       .refresh-toast { bottom: 16px; right: 16px; left: 16px; }
       .child-pane-header { padding: 12px 14px; }
-    }
-  </style>
-</head>
-<body>
+    }`;
+
+  const body = `
   <div class="container">
 
     <div class="back-nav">
@@ -2480,12 +2439,11 @@ export function renderRunNodeView({
     }
 
   </div>
+`;
 
-  ${
-    isCompleted
-      ? `
-  <script>
-    // Typewriter reveal
+  const js = isCompleted
+    ? `
+        // Typewriter reveal
     (function() {
       const full = ${JSON.stringify(finalMessage)};
       const el = document.getElementById('encodingText');
@@ -2518,12 +2476,9 @@ export function renderRunNodeView({
       if (!body) return;
       body.classList.toggle('open');
       chev?.classList.toggle('open');
-    }
-  </script>
-  `
-      : `
-  <script>
-    function toggleChild(id) {
+    }`
+    : `
+        function toggleChild(id) {
       const body = document.getElementById('cbody-' + id);
       const chev = document.getElementById('cchev-' + id);
       if (!body) return;
@@ -2539,12 +2494,9 @@ export function renderRunNodeView({
         setTimeout(() => window.location.reload(), 3000 + Math.random() * 1000);
       }
       check();
-    })();
-  </script>
-  `
-  }
-</body>
-</html>`;
+    })();`;
+
+  return page({ title: `${esc(data.realNode.name)} – Compression`, css, body, js });
 }
 
 /* =========================================================

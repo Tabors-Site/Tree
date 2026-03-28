@@ -3,6 +3,7 @@
 // Extracted from the monolithic MCP server and adapted for the extension system.
 
 import log from "../../seed/log.js";
+import { getExtension } from "../loader.js";
 import { z } from "zod";
 import { getTreeForAi, getNodeForAi } from "../../seed/tree/treeData.js";
 import {
@@ -542,14 +543,15 @@ export function buildTools() {
       },
       handler: async ({ userId }) => {
         try {
-          // getRootNodesForUser was removed from kernel.
-          // Look up user's roots directly from the User model.
-          const user = await User.findById(userId).select("roots").lean();
-          if (!user) return error("User not found");
-          const rootIds = user.roots || [];
-          if (rootIds.length === 0) return json([]);
-          const roots = await Node.find({ _id: { $in: rootIds } })
-            .select("_id name status type dateCreated")
+          // Roots live in metadata.nav.roots, managed by the navigation extension.
+          const nav = getExtension("navigation");
+          if (nav?.exports?.getUserRootsWithNames) {
+            const roots = await nav.exports.getUserRootsWithNames(userId);
+            return json(roots);
+          }
+          // Fallback: query nodes directly by rootOwner (works without navigation extension)
+          const roots = await Node.find({ rootOwner: userId })
+            .select("_id name status type dateCreated visibility")
             .lean();
           return json(roots);
         } catch (err) {

@@ -17,18 +17,18 @@ export function setMetadata(metadata) { _metadata = metadata; }
 
 let _timer = null;
 
-function getIntervalMs() {
+async function getIntervalMs() {
   try {
-    const { getLandConfigValue } = require("../../seed/landConfig.js");
+    const { getLandConfigValue } = await import("../../seed/landConfig.js");
     return Number(getLandConfigValue("pruneIntervalMs")) || 7 * 24 * 60 * 60 * 1000; // weekly default
   } catch {
     return 7 * 24 * 60 * 60 * 1000;
   }
 }
 
-export function startPruneJob() {
+export async function startPruneJob() {
   if (_timer) return;
-  const interval = getIntervalMs();
+  const interval = await getIntervalMs();
   _timer = setInterval(runPruneCycle, interval);
   if (_timer.unref) _timer.unref();
   log.info("Prune", `Prune job started (checking every ${Math.round(interval / (24 * 60 * 60 * 1000))}d)`);

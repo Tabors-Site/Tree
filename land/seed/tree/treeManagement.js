@@ -695,3 +695,42 @@ export async function editNodeType({
 
   return { node, oldType, newType };
 }
+
+/**
+ * Reorder a node's children array.
+ * Must contain the exact same IDs as the current children, just in a different order.
+ * Atomic $set. Contribution logged.
+ */
+export async function reorderChildren({
+  nodeId,
+  children: newOrder,
+  userId,
+  wasAi = false,
+  chatId = null,
+  sessionId = null,
+}) {
+  if (!Array.isArray(newOrder)) throw new Error("children must be an array");
+
+  const node = await Node.findById(nodeId);
+  if (!node) throw new Error("Node not found");
+  if (node.systemRole) throw new Error("Cannot modify system nodes");
+
+  const currentSet = new Set(node.children.map(String));
+  const newSet = new Set(newOrder.map(String));
+  if (currentSet.size !== newSet.size || ![...currentSet].every(id => newSet.has(id))) {
+    throw new Error("Reorder must contain the same children IDs");
+  }
+
+  await Node.updateOne({ _id: nodeId }, { $set: { children: newOrder } });
+
+  await logContribution({
+    userId,
+    nodeId,
+    action: "reorder",
+    wasAi,
+    chatId,
+    sessionId,
+  });
+
+  return { node };
+}

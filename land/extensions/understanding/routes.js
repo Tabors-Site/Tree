@@ -78,7 +78,7 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
 
 router.get(
   "/root/:nodeId/understandings/run/:runId",
-  authenticateOptional,
+  authenticate,
   async (req, res) => {
     try {
       const { runId, nodeId } = req.params;
@@ -269,7 +269,7 @@ router.get(
 
 router.get(
   "/root/:nodeId/understandings/:understandingNodeId",
-  authenticateOptional,
+  authenticate,
   async (req, res) => {
     try {
       const { understandingNodeId, nodeId } = req.params;
@@ -383,7 +383,7 @@ router.get(
     }
   },
 );
-router.get("/root/:nodeId/understandings", authenticateOptional, async (req, res) => {
+router.get("/root/:nodeId/understandings", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const queryString = buildQueryString(req);
@@ -435,7 +435,7 @@ router.get("/root/:nodeId/understandings", authenticateOptional, async (req, res
 
 router.get(
   "/root/:nodeId/understandings/run/:runId/:understandingNodeId",
-  authenticateOptional,
+  authenticate,
   async (req, res) => {
     try {
       const { runId, understandingNodeId, nodeId } = req.params;

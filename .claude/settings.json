@@ -451,7 +451,12 @@
       "Bash(curl -sL \"https://treeos.ai/blog/the-apple-is-the-tree/\")",
       "Bash(grep -E \"getExtension\\\\s*\\\\\\(\" land/seed/**/*.js)",
       "Bash(grep -E \"metadata\\\\.\\(blog|fitness|food|persona|solana|shell|scripts|dashboard|mycelium\\)\" land/seed/**/*.js)",
-      "Bash(grep -r \"= [0-9]\\\\{4,\\\\}\\\\|setTimeout\\\\|setInterval\" /home/tabor/github/Tree/land/seed --include=\"*.js\")"
+      "Bash(grep -r \"= [0-9]\\\\{4,\\\\}\\\\|setTimeout\\\\|setInterval\" /home/tabor/github/Tree/land/seed --include=\"*.js\")",
+      "Bash(grep -r \"User\\\\.findById.*select.*roots\\\\|roots.*1\\\\s*}\" /home/tabor/github/Tree/land --include=*.js --include=*.ts)",
+      "Bash(grep -r \"select.*\"\"roots\"\"\\\\|select.*roots\\\\|select\\(.*roots\" /home/tabor/github/Tree/land --include=*.js --include=*.ts)",
+      "Bash(grep -r \"user\\\\.roots\\\\|user\\\\?.roots\\\\|userData\\\\.roots\\\\|data\\\\.roots\" /home/tabor/github/Tree/land --include=*.js --include=*.ts)",
+      "Bash(grep -r metadata. /home/tabor/github/Tree/land/extensions/ --include=*.js)",
+      "Bash(xxd /home/tabor/github/Tree/land/extensions/understanding/html.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

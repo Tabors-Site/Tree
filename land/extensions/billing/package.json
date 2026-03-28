@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "name": "treeos-ext-billing",
   "version": "1.0.0",
   "private": true,
