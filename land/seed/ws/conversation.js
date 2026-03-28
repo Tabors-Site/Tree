@@ -883,29 +883,52 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
  *   maxToolIterations, toolCallTimeout (ms), toolResultMaxBytes,
  *   maxConversationMessages
  */
-function resolveNodeLlmConfig(ancestors) {
-  if (!ancestors || ancestors.length === 0) return {};
+/**
+ * Resolve per-position LLM config. Three-layer resolution:
+ *   1. Node config (metadata.llm.config) - operator override at position
+ *   2. Mode config (mode object fields) - mode knows its own needs
+ *   3. Land globals (the defaults) - safety ceiling
+ *
+ * Node wins over mode. Mode wins over land. All clamped to safe maximums.
+ */
+const LLM_CONFIG_KEYS = {
+  maxToolIterations: 100,
+  toolCallTimeout: 600000,       // 10 minutes max
+  toolResultMaxBytes: 1000000,   // 1MB max
+  maxConversationMessages: 200,
+};
+
+function resolveLlmConfig(ancestors, mode) {
   const config = {};
-  // Whitelisted keys with upper bounds matching global config clamping.
-  // Node overrides cannot exceed what the kernel allows globally.
-  const ALLOWED_KEYS = {
-    maxToolIterations: 100,
-    toolCallTimeout: 600000,       // 10 minutes max
-    toolResultMaxBytes: 1000000,   // 1MB max
-    maxConversationMessages: 200,
-  };
-  for (const node of ancestors) {
-    if (node.systemRole) break;
-    const llmConfig = node.metadata?.llm?.config;
-    if (!llmConfig || typeof llmConfig !== "object") continue;
-    for (const [key, maxVal] of Object.entries(ALLOWED_KEYS)) {
-      if (config[key] !== undefined) continue; // already set by closer node
-      const val = llmConfig[key];
+
+  // Layer 1: node config (walk ancestor chain, closest wins)
+  if (ancestors && ancestors.length > 0) {
+    for (const node of ancestors) {
+      if (node.systemRole) break;
+      const llmConfig = node.metadata?.llm?.config;
+      if (!llmConfig || typeof llmConfig !== "object") continue;
+      for (const [key, maxVal] of Object.entries(LLM_CONFIG_KEYS)) {
+        if (config[key] !== undefined) continue;
+        const val = llmConfig[key];
+        if (typeof val === "number" && isFinite(val) && val > 0) {
+          config[key] = Math.min(val, maxVal);
+        }
+      }
+    }
+  }
+
+  // Layer 2: mode config (fills gaps not set by node)
+  if (mode) {
+    for (const [key, maxVal] of Object.entries(LLM_CONFIG_KEYS)) {
+      if (config[key] !== undefined) continue;
+      const val = mode[key];
       if (typeof val === "number" && isFinite(val) && val > 0) {
         config[key] = Math.min(val, maxVal);
       }
     }
   }
+
+  // Layer 3: land globals (applied at usage site via ?? fallback)
   return config;
 }
 
@@ -1471,11 +1494,10 @@ export async function processMessage(visitorId, message, ctx) {
     });
   }
 
-  // Phase 5b: Resolve per-node LLM config from ancestor chain.
-  // Walks metadata.llm.config on each ancestor. First value found wins (closest to current node).
-  // Falls back to land-level config (the global defaults).
+  // Phase 5b: Resolve LLM config. Three layers: node > mode > land globals.
+  // Node config walks metadata.llm.config on ancestors. Mode declares its own needs.
   // Stored on session so callLLM and executeTool can read overrides.
-  session._nodeLlmConfig = resolveNodeLlmConfig(session._ancestorSnapshot);
+  session._nodeLlmConfig = resolveLlmConfig(session._ancestorSnapshot, mode);
 
   // Phase 6: Tool calling loop
   let response;
