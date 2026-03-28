@@ -20,8 +20,29 @@ import homeReflect from "./modes/home/reflect.js";
 import TOOL_DEFS from "./tools.js";
 
 export async function init(core) {
-  const { setModels } = await import("./handlers.js");
+  const { setModels, setCommandResolver } = await import("./handlers.js");
   setModels(core.models);
+
+  // Wire extension CLI command resolution for get-tree responses.
+  // The home AI calls get-tree and sees availableCommands so it can give
+  // specific directions ("fitness 'pushups 20'" not "note ...").
+  setCommandResolver(async (nodeId) => {
+    try {
+      const { getLoadedExtensionNames, getExtensionManifest } = await import("../loader.js");
+      const { isExtensionBlockedAtNode } = await import("../../seed/tree/extensionScope.js");
+      const cmds = [];
+      for (const name of getLoadedExtensionNames()) {
+        const manifest = getExtensionManifest(name);
+        if (!manifest?.provides?.cli?.length) continue;
+        if (await isExtensionBlockedAtNode(name, nodeId)) continue;
+        for (const cli of manifest.provides.cli) {
+          const cmd = cli.command?.split(" ")[0];
+          if (cmd) cmds.push(`${cmd}: ${cli.description || name}`);
+        }
+      }
+      return cmds;
+    } catch { return []; }
+  });
   // Register all tree modes
   core.modes.registerMode("tree:navigate", treeNavigate, "treeos");
   core.modes.registerMode("tree:structure", treeStructure, "treeos");

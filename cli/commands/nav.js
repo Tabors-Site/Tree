@@ -325,27 +325,53 @@ module.exports = (program) => {
         }
 
         if (cfg.atHome) {
-          // At /~ — cd into one of your roots (local or remote) by name
+          // At /~ — cd into one of your roots (local or remote) by name.
+          // Supports path chaining: cd "Life Plan/Goals/Health" enters tree then walks children.
           try {
             const data = await api.getUser(cfg.userId);
             const roots = data.roots || data.user?.roots || [];
             const remoteRoots = data.remoteRoots || [];
 
+            // Split on / for chaining. First segment is the tree name.
+            // Remaining segments chain into the tree as child navigation.
+            const segments = name.includes("/") ? name.split("/").filter(Boolean) : [name];
+            const treeName = segments[0];
+            const childSegments = segments.slice(1);
+
             // Try local roots first
-            const localTarget = findChild(roots, name);
+            const localTarget = findChild(roots, treeName);
             if (localTarget) {
               cfg.activeRootId = localTarget._id;
               cfg.activeRootName = localTarget.name;
               cfg.pathStack = [];
               cfg.isSystemRoot = false;
               save(cfg);
+
+              // Chain remaining segments as child navigation
+              for (const seg of childSegments) {
+                try {
+                  const nodeId = currentNodeId(cfg);
+                  const nodeData = await api.getNode(nodeId);
+                  const children = getChildren(nodeData);
+                  const child = findChild(children, seg);
+                  if (!child) {
+                    console.log(chalk.yellow(`Stopped at ${currentPath(cfg)} — no child matching "${seg}"`));
+                    break;
+                  }
+                  cfg.pathStack.push({ id: child._id, name: child.name });
+                  save(cfg);
+                } catch (e) {
+                  console.error(chalk.red(e.message));
+                  break;
+                }
+              }
               return;
             }
 
             // Try remote roots
             const remoteTarget = findChild(
               remoteRoots.map((r) => ({ _id: r.rootId, name: r.rootName, landDomain: r.landDomain })),
-              name,
+              treeName,
             );
             if (remoteTarget) {
               cfg.remoteDomain = remoteTarget.landDomain;
@@ -358,7 +384,7 @@ module.exports = (program) => {
               return;
             }
 
-            console.log(chalk.yellow(`No tree matching "${name}"`));
+            console.log(chalk.yellow(`No tree matching "${treeName}"`));
           } catch (e) {
             console.error(chalk.red(e.message));
           }

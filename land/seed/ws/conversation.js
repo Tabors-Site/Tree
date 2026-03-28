@@ -1401,7 +1401,18 @@ export async function processMessage(visitorId, message, ctx) {
   await prepareConversation(session, ctx, message, mode, visitorId);
 
   // Phase 5: Resolve tools for current position
-  const { tools } = await resolveToolsForPosition(session);
+  let { tools } = await resolveToolsForPosition(session);
+
+  // Query constraint: when readOnly is set, only tools registered with readOnlyHint
+  // are available. Write tools are filtered before the mode fires. The AI cannot
+  // mutate the tree during a query interaction.
+  if (ctx.readOnly) {
+    const { isToolReadOnly } = await import("../tree/extensionScope.js");
+    tools = tools.filter(t => {
+      const name = t.function?.name || t.name;
+      return name && isToolReadOnly(name);
+    });
+  }
 
   // Phase 6: Tool calling loop
   let response;
@@ -1537,7 +1548,7 @@ export function sessionCount() {
  *     nodeId: null,  // optional, for per-node context
  *   });
  */
-export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null, llmPriority = null }) {
+export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null, llmPriority = null, onToolResults = null }) {
   if (!userId || !message || !mode) {
     throw new Error("runChat requires userId, message, and mode");
   }
@@ -1645,6 +1656,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
       rootId,
       signal: abortSignal,
       llmPriority,
+      onToolResults,
     });
   } catch (err) {
     if (chat) {

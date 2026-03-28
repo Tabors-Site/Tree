@@ -53,6 +53,28 @@ export async function init(core) {
   }
 
   // ── onCascade: macro accumulation ──
+  // ── Boot self-heal: ensure food roots have mode override ──
+  core.hooks.register("afterBoot", async () => {
+    try {
+      const foodRoots = await core.models.Node.find({
+        "metadata.food.initialized": true,
+      }).select("_id metadata").lean();
+      for (const root of foodRoots) {
+        const modes = root.metadata instanceof Map
+          ? root.metadata.get("modes")
+          : root.metadata?.modes;
+        if (!modes?.respond) {
+          await core.models.Node.updateOne(
+            { _id: root._id },
+            { $set: { "metadata.modes.respond": "tree:food-log" } }
+          );
+          log.verbose("Food", `Self-healed mode override on ${String(root._id).slice(0, 8)}...`);
+        }
+      }
+    } catch {}
+  }, "food");
+
+  // ── onCascade: macro accumulation ──
   // When a signal arrives at a macro node via channel, increment the value.
   // No LLM call. Pure data routing.
 

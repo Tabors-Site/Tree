@@ -767,7 +767,10 @@ async function loadNetwork() {
   const section = document.getElementById("networkSection");
   const container = document.getElementById("networkLayer");
 
-  const peers = await fetchJson(API + "/canopy/admin/peers");
+  let peers;
+  try {
+    peers = await fetchJson(API + "/canopy/admin/peers");
+  } catch {}
   if (!peers?.length) {
     section.classList.add("nl-hidden");
     return;
@@ -815,10 +818,11 @@ function renderPeer(peer) {
 async function loadBreath() {
   const dot = document.getElementById("breathDot");
   const label = document.getElementById("breathLabel");
+  if (!dot || !label) return;
   const treeCount = roots?.length || 0;
 
   if (treeCount === 0) {
-    dot.classList.add("dormant");
+    dot.className = "fd-breath-dot dormant";
     label.textContent = "no trees";
     return;
   }
@@ -880,8 +884,14 @@ async function init() {
   renderTreeCards();
 
   // Load flow data and network in parallel (flow is independent of tree structure)
-  await Promise.all([loadPulseStrip(), loadNetwork()]);
+  await Promise.allSettled([loadPulseStrip(), loadNetwork()]);
   loadBreath().catch(() => {});
+
+  // Always update breath label even if loadBreath fails
+  const label = document.getElementById("breathLabel");
+  if (label && label.textContent === "loading...") {
+    label.textContent = roots.length + " tree" + (roots.length !== 1 ? "s" : "");
+  }
 
   // Poll flow data every 10s (updates pulse strip + signal badges on cards)
   setInterval(async () => {

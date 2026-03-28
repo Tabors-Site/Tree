@@ -11,6 +11,14 @@ export default {
     "target, the AI suggests increasing weight. History builds reliability patterns. " +
     "Guided workout mode walks you through today's session set by set.",
 
+  classifierHints: [
+    /\b\d+\s*x\s*\d+/i,
+    /\b(bench|squat|deadlift|press|curl|row|pull-?up|ohp|rdl|lat pulldown)\b/i,
+    /\b(workout|exercise|training|sets|reps|weight|pr|personal record)\b/i,
+    /\b(chest|back|legs|shoulders|core|calves|bicep|tricep)\b/i,
+    /\b(record|log|track|session|complete|finished)\b/i,
+  ],
+
   needs: {
     models: ["Node"],
     services: ["hooks", "metadata"],

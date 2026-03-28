@@ -97,8 +97,58 @@ const CLIAbout = () => {
         </div>
       </section>
 
-      {/* ── SESSIONS ── */}
+      {/* ── CHAT IS ALL YOU NEED ── */}
       <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 780}}>
+          <h2 className="lp-section-title">You Only Need Chat</h2>
+          <p style={{color: "rgba(255,255,255,0.6)", lineHeight: 1.9, fontSize: "0.92rem", marginBottom: 20}}>
+            A user can type <code>chat</code> for everything and never learn a single extension command.
+            The tree routes to the right mode automatically. Extension commands are shortcuts for people
+            who know them. <code>chat</code> is the universal entry point.
+          </p>
+
+          <div className="lp-terminal">
+            <div className="lp-term-header">
+              <span className="lp-term-dot red"></span>
+              <span className="lp-term-dot yellow"></span>
+              <span className="lp-term-dot green"></span>
+              <span className="lp-term-title">treeos</span>
+            </div>
+            <div className="lp-term-body">
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>chat "bench 135x10"</div>
+              <div className="lp-term-line lp-term-output">  Got it. Bench: 135x10/10/8. Up from 130 last session.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Food</span> <span className="lp-term-caret">› </span>chat "chicken and rice for lunch"</div>
+              <div className="lp-term-line lp-term-output">  Logged. 422 cal, 42g protein.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Projects/Backend</span> <span className="lp-term-caret">› </span>chat "how's the auth refactor going"</div>
+              <div className="lp-term-line lp-term-output">  The auth refactor has 3 open items...</div>
+            </div>
+          </div>
+
+          <p style={{color: "rgba(255,255,255,0.45)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 20}}>
+            Same command. Three positions. Three different modes fired. The user typed <code>chat</code> every
+            time. The prompt never changes. No "switching to fitness mode." No mode indicators. Position
+            tells you where. The mode is invisible.
+          </p>
+
+          <p style={{color: "rgba(255,255,255,0.45)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 12}}>
+            Extension commands like <code>fitness "bench 135"</code> skip the classifier and go
+            straight to the mode. On a local classifier with zero LLM calls, that saves microseconds.
+            The result is identical. Use them when you want to be explicit, or when the classifier
+            might be confused (at <code>/Health</code> where both fitness and food live).
+          </p>
+
+          <p style={{color: "rgba(255,255,255,0.35)", lineHeight: 1.8, fontSize: "0.85rem", marginTop: 12}}>
+            Day 1: you only know <code>chat</code>. Week 2: you notice <code>fitness</code> in the help
+            menu. Month 2: you use extension commands for speed and <code>chat</code> for everything else.
+            No tutorial needed. The user learns by doing.
+          </p>
+        </div>
+      </section>
+
+      {/* ── SESSIONS ── */}
+      <section className="lp-section lp-section-alt">
         <div className="lp-container" style={{maxWidth: 780}}>
           <h2 className="lp-section-title">Sessions</h2>
           <p className="lp-section-sub">

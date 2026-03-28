@@ -1236,6 +1236,8 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
       left: 0;
       min-width: 180px;
       max-width: 280px;
+      max-height: 60vh;
+      overflow-y: auto;
       background: rgba(var(--glass-rgb), 0.85);
       backdrop-filter: blur(var(--glass-blur)) saturate(140%);
       -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
@@ -2020,9 +2022,8 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
   renderModeDropdown();
   renderMobileModeBar();
 
-  const isTree = bigMode === 'tree';
-  $("modeBar").style.display = isTree ? 'none' : '';
-  $("mobileModeBar").style.display = isTree ? 'none' : '';
+  $("modeBar").style.display = '';
+  $("mobileModeBar").style.display = '';
   updateRootName(rootName);
 });
 
@@ -2170,19 +2171,14 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
     // Clear chat UI helper
     // ================================================================
 
-    const MODE_WELCOMES = {
-      "home:default": { icon: "🌳", title: "Welcome to " + CONFIG.landName, desc: "Your intelligent workspace is ready. Build, explore, and reflect." },
-      "home:raw-idea-placement": { icon: "💡", title: "Raw Ideas", desc: "Capture unstructured thoughts and gradually grow them into trees (work in progress)" },
-      "home:reflect": { icon: "🔮", title: "Reflect", desc: "Review your notes, tags, and contributions across all your trees" },
-      "tree:structure": { icon: "🏗️", title: "Structure Mode", desc: "Create, reorganize, and grow the overall shape of your tree" },
-      "tree:be": { icon: "🎯", title: "Be Mode", desc: "Focus on one active leaf at a time and work through it step by step" },
-      "tree:reflect": { icon: "🔮", title: "Reflect Mode", desc: "Look at your tree as a whole to spot gaps, patterns, and opportunities" },
-      "tree:edit": { icon: "✏️", title: "Edit Mode", desc: "Refine names, values, notes, and details within your tree" }
-    };
-
     function clearChatUI(carriedMessages, modeKey, emoji) {
       const valid = (carriedMessages || []).filter(m => m.content && m.content.trim());
-      const welcome = MODE_WELCOMES[modeKey] || { icon: "🌳" || "🌳", title: "Ready?", desc: "Let's grow." };
+      const activeMode = availableModes.find(m => m.key === modeKey);
+      const welcome = {
+        icon: emoji || activeMode?.emoji || "🌳",
+        title: activeMode?.label || (modeKey === "home:default" ? "Welcome to " + CONFIG.landName : "Ready"),
+        desc: "",
+      };
 
       [chatMessages, mobileChatMessages].forEach(container => {
         container.innerHTML = '';

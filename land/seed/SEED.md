@@ -110,6 +110,8 @@ Same pattern. Extensions register. The kernel resolves. Failure falls back to th
 
 **MCP transport ordering.** The MCP SDK locks tool registration after `server.connect(transport)`. Extensions register tools during the wire phase. Transport connects after wire completes. Reordering breaks silently: the AI has no tools and nothing errors.
 
+**Query constraint.** When `readOnly` is set in the processMessage context, only tools registered with `readOnlyHint: true` are available. Write tools are filtered before the mode fires. The AI cannot mutate the tree during a query interaction. Orchestrators pass `readOnly: true` when the command is `query`. The mode never knows. The tools just aren't there.
+
 **Auth fallthrough.** `authenticateOptional` tries every registered auth strategy. If none match, request continues anonymously. Extensions register share token, public access, API key strategies. The kernel pipeline handles them all.
 
 ## Resolution Chains

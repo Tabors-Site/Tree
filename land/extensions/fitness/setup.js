@@ -96,6 +96,9 @@ export async function scaffoldFitness(rootId, userId, options = {}) {
   await setExtMeta(historyNode, "fitness", { role: "history" });
 
   // Set mode overrides
+  // Mode overrides: set on both the fitness root (so parent classifiers find it)
+  // and the Log node (so direct chat at Log uses fitness mode)
+  await Node.updateOne({ _id: rootId }, { $set: { "metadata.modes.respond": "tree:fitness-log" } });
   await Node.updateOne({ _id: logNode._id }, { $set: { "metadata.modes.respond": "tree:fitness-log" } });
 
   // Create muscle group nodes and exercises

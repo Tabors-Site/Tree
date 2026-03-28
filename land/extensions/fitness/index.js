@@ -48,6 +48,29 @@ export async function init(core) {
     core.llm.registerModeAssignment("tree:fitness-review", "fitnessReview");
   }
 
+  // ── Boot self-heal: ensure fitness roots have mode override ──
+  // Existing trees scaffolded before the mode-on-root fix need this.
+  core.hooks.register("afterBoot", async () => {
+    try {
+      // Find all nodes with metadata.fitness.initialized = true
+      const fitnessRoots = await core.models.Node.find({
+        "metadata.fitness.initialized": true,
+      }).select("_id metadata").lean();
+      for (const root of fitnessRoots) {
+        const modes = root.metadata instanceof Map
+          ? root.metadata.get("modes")
+          : root.metadata?.modes;
+        if (!modes?.respond) {
+          await core.models.Node.updateOne(
+            { _id: root._id },
+            { $set: { "metadata.modes.respond": "tree:fitness-log" } }
+          );
+          log.verbose("Fitness", `Self-healed mode override on ${String(root._id).slice(0, 8)}...`);
+        }
+      }
+    } catch {}
+  }, "fitness");
+
   // ── onCascade: exercise data accumulation ──
   // When a signal arrives at an exercise node via channel, update its values.
 

@@ -57,6 +57,9 @@ export async function scaffold(foodRootId, userId) {
   }
 
   // Set mode overrides so chat at Log uses food-log, chat at Daily uses food-daily
+  // Mode overrides: set on the food root (so parent classifiers find it)
+  // and on Log/Daily nodes (so direct chat uses the right mode)
+  await _Node.updateOne({ _id: foodRootId }, { $set: { "metadata.modes.respond": "tree:food-log" } });
   await _Node.updateOne({ _id: logNode._id }, { $set: { "metadata.modes.respond": "tree:food-log" } });
   await _Node.updateOne({ _id: dailyNode._id }, { $set: { "metadata.modes.respond": "tree:food-daily" } });
 

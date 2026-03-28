@@ -18,6 +18,7 @@ import {
 } from "./mcp.js";
 import { getNodeName } from "../tree/treeData.js";
 import { getLandConfigValue } from "../landConfig.js";
+import { getModeOwner, getBlockedExtensionsAtNode } from "../tree/extensionScope.js";
 import Node from "../models/node.js";
 // orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
 import { getOrchestrator } from "../orchestratorRegistry.js";
@@ -385,13 +386,25 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       // Always send available modes so frontend stays in sync
       const activeMode = getCurrentMode(visitorId);
       const bigMode = activeMode?.split(":")[0] || newBigMode;
-      const subModes = getSubModes(bigMode);
+      let subModes = getSubModes(bigMode);
+
+      // Filter modes by extension scope at current position
+      if (activeRootId) {
+        try {
+          const scope = await getBlockedExtensionsAtNode(activeRootId);
+          subModes = subModes.filter(m => {
+            const owner = getModeOwner(m.key);
+            return !owner || !scope.blocked.has(owner);
+          });
+        } catch {}
+      }
+
       socket.emit(WS.AVAILABLE_MODES, {
         bigMode,
         modes: subModes,
         currentMode: activeMode,
         rootName,
-        rootId: activeRootId, // <-- add this
+        rootId: activeRootId,
       });
     });
 
@@ -461,7 +474,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       }
 
       const bigMode = currentMode?.split(":")[0] || BIG_MODES.HOME;
-      const subModes = getSubModes(bigMode);
+      let subModes = getSubModes(bigMode);
 
       const activeRootId = getRootId(visitorId);
       let rootName = null;
@@ -471,12 +484,23 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         } catch {}
       }
 
+      // Filter modes by extension scope at current position
+      if (activeRootId) {
+        try {
+          const scope = await getBlockedExtensionsAtNode(activeRootId);
+          subModes = subModes.filter(m => {
+            const owner = getModeOwner(m.key);
+            return !owner || !scope.blocked.has(owner);
+          });
+        } catch {}
+      }
+
       socket.emit(WS.AVAILABLE_MODES, {
         bigMode,
         modes: subModes,
         currentMode,
         rootName,
-        rootId: activeRootId, // <-- add this
+        rootId: activeRootId,
       });
     });
 

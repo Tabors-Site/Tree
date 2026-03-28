@@ -53,13 +53,21 @@ export function getMode(modeKey) {
  * Returns [{ key, emoji, label }]
  */
 export function getSubModes(bigMode) {
-  return Object.entries(ALL_MODES)
-    .filter(([key]) => key.startsWith(bigMode + ":"))
+  const all = Object.entries(ALL_MODES)
+    .filter(([key, mode]) => {
+      if (!key.startsWith(bigMode + ":")) return false;
+      // In home/land, hide internal modes. In tree, show everything.
+      if (bigMode !== "tree" && mode.hidden) return false;
+      return true;
+    })
     .map(([key, mode]) => ({
       key,
       emoji: mode.emoji,
       label: mode.label,
     }));
+  // Hide kernel fallbacks when real modes are registered
+  if (all.length > 1) return all.filter(m => !m.key.endsWith(":fallback"));
+  return all;
 }
 
 /**

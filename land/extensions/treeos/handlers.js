@@ -2,6 +2,7 @@
 // MCP tool handlers for the treeos extension.
 // Extracted from the monolithic MCP server and adapted for the extension system.
 
+import log from "../../seed/log.js";
 import { z } from "zod";
 import { getTreeForAi, getNodeForAi } from "../../seed/tree/treeData.js";
 import {
@@ -36,7 +37,9 @@ import { DELETED } from "../../seed/protocol.js";
 // Models wired from init via setModels
 let Node = null;
 let User = null;
+let _getAvailableCommands = null;
 export function setModels(models) { Node = models.Node; User = models.User; }
+export function setCommandResolver(fn) { _getAvailableCommands = fn; }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -192,6 +195,23 @@ export function buildTools() {
             JSON.stringify({ error: "Tree not found", nodeId }, null, 2),
           );
         }
+
+        // Append active extension CLI commands for this tree so the AI
+        // can give specific directions ("fitness 'pushups 20'" not "note ...")
+        if (_getAvailableCommands) {
+          try {
+            const cmds = await _getAvailableCommands(nodeId);
+            if (cmds?.length > 0) {
+              // treeData is a JSON string from getTreeForAi. Parse, add commands, pass object to json().
+              const parsed = JSON.parse(treeData);
+              parsed.availableCommands = cmds;
+              return json(parsed);
+            }
+          } catch (cmdErr) {
+            log.warn("TreeOS", `get-tree commands failed: ${cmdErr.message}`);
+          }
+        }
+
         return json(treeData);
       },
     },

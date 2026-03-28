@@ -19,35 +19,131 @@ import { getLandConfigValue } from "../../seed/landConfig.js";
 
 /**
  * Local intent classification. Zero LLM calls.
- * The user already classified by typing the command (chat/place/query/fitness/etc).
- * This catches the remaining cases within chat where the AI needs a hint.
- * Wrong classification doesn't break anything because the AI has all tools.
+ *
+ * Two jobs:
+ * 1. Extension routing: if a mode override is set at the current node AND
+ *    the message matches that extension's classifierHints, route directly
+ *    to the extension mode. One LLM call. No librarian.
+ * 2. Intent classification: greetings/questions → query, destructive → destructive,
+ *    action commands → place, everything else → place (librarian decides).
  */
-function localClassify(message) {
+async function localClassify(message, currentNodeId) {
   const lower = message.toLowerCase().trim();
+  const base = { summary: message.slice(0, 100), responseHint: "" };
+
+  // ── Extension routing (Path 2) ──
+  // Check if an extension mode claims this message. Two levels:
+  // 1. Current node's mode override (user is AT the extension node)
+  // 2. Direct children's mode overrides (user is one level above)
+  // Never walk ancestors. Modes resolve downward.
+  if (currentNodeId) {
+    try {
+      const { getClassifierHintsForMode } = await import("../loader.js");
+      const currentNode = await Node.findById(currentNodeId).select("metadata children").lean();
+
+      // Level 1: current node
+      const modes = currentNode?.metadata instanceof Map
+        ? currentNode.metadata.get("modes")
+        : currentNode?.metadata?.modes;
+      if (modes?.respond) {
+        const hints = getClassifierHintsForMode(modes.respond);
+        if (hints?.some(re => re.test(message))) {
+          return { intent: "extension", mode: modes.respond, confidence: 0.9, ...base };
+        }
+      }
+
+      // Level 2: direct children (do any of my children claim this message?)
+      if (currentNode?.children?.length > 0) {
+        const children = await Node.find({ _id: { $in: currentNode.children } })
+          .select("_id name metadata").lean();
+        for (const child of children) {
+          const childModes = child.metadata instanceof Map
+            ? child.metadata.get("modes")
+            : child.metadata?.modes;
+          if (!childModes?.respond) continue;
+          const hints = getClassifierHintsForMode(childModes.respond);
+          if (hints?.some(re => re.test(message))) {
+            return {
+              intent: "extension",
+              mode: childModes.respond,
+              targetNodeId: String(child._id),
+              confidence: 0.85,
+              ...base,
+            };
+          }
+        }
+      }
+
+      // Level 3: siblings (does a sibling of the current node claim this message?)
+      if (currentNode?.parent) {
+        const parentNode = await Node.findById(currentNode.parent).select("children").lean();
+        if (parentNode?.children?.length > 1) {
+          const siblingIds = parentNode.children
+            .map(id => String(id))
+            .filter(id => id !== String(currentNodeId));
+          if (siblingIds.length > 0) {
+            const siblings = await Node.find({ _id: { $in: siblingIds } })
+              .select("_id name metadata").lean();
+            for (const sib of siblings) {
+              const sibModes = sib.metadata instanceof Map
+                ? sib.metadata.get("modes")
+                : sib.metadata?.modes;
+              if (!sibModes?.respond) continue;
+              const hints = getClassifierHintsForMode(sibModes.respond);
+              if (hints?.some(re => re.test(message))) {
+                return {
+                  intent: "extension",
+                  mode: sibModes.respond,
+                  targetNodeId: String(sib._id),
+                  confidence: 0.8,
+                  ...base,
+                };
+              }
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // ── Standard classification ──
 
   // Conversational: skip librarian, go straight to respond
   if (/^(hey|hi|hello|thanks|ok|sure|yep|yeah|what's up|sup|yo|nice|cool|got it|good)\b/i.test(lower))
-    return { intent: "query", confidence: 0.9, summary: message.slice(0, 100), responseHint: "" };
+    return { intent: "query", confidence: 0.9, ...base };
 
   // Questions: read-only query flow
   if (/^(what|how|why|when|where|who|is |are |does |do |can |show |tell |list )/.test(lower))
-    return { intent: "query", confidence: 0.8, summary: message.slice(0, 100), responseHint: "" };
+    return { intent: "query", confidence: 0.8, ...base };
 
   // Destructive: needs LLM translation for safety
   if (/\b(delete|remove|move|merge|reorganize|clean up|mark .* completed?)\b/.test(lower))
-    return { intent: "destructive", confidence: 0.7, summary: message.slice(0, 100), responseHint: "" };
+    return { intent: "destructive", confidence: 0.7, ...base };
 
   // Explicit action commands: high-confidence placement
   if (/^(start|build|create|add|give me|set up|make|write|plan|draft|outline|design|launch|begin)\b/.test(lower))
-    return { intent: "place", confidence: 0.8, summary: message.slice(0, 100), responseHint: "" };
+    return { intent: "place", confidence: 0.8, ...base };
 
-  // Personal/reflective statements without action verbs: conversational query
+  // Personal/reflective statements: conversational query
   if (/^(i did|i was|it was|that was|we did|we were|he |she |they |it's been|i've been|i think|i feel|i guess|so |exactly|sounds good|makes sense)\b/.test(lower))
-    return { intent: "query", confidence: 0.7, summary: message.slice(0, 100), responseHint: "" };
+    return { intent: "query", confidence: 0.7, ...base };
 
-  // Everything else: placement (librarian decides what to do with it)
-  return { intent: "place", confidence: 0.6, summary: message.slice(0, 100), responseHint: "" };
+  // Everything else: placement (librarian decides)
+  return { intent: "place", confidence: 0.6, ...base };
+}
+
+/**
+ * Extract the behavioral constraint from the source type.
+ * The three commands (chat/place/query) are constraints on the router.
+ *
+ *   query  →  tools: read-only    response: full       writes: blocked
+ *   place  →  tools: all          response: minimal    writes: allowed
+ *   chat   →  tools: all          response: full       writes: allowed
+ */
+function extractBehavioral(sourceType) {
+  if (sourceType === "query") return "query";
+  if (sourceType === "place") return "place";
+  return "chat"; // default
 }
 import { setChatContext } from "../../seed/ws/chatTracker.js";
 import { isActiveNavigator } from "../../seed/ws/sessionRegistry.js";
@@ -208,7 +304,7 @@ const pendingOperations = new Map();
 
 // visitorId → [{ role: "user"|"assistant", content }]
 const orchestratorMemory = new Map();
-const MAX_MEMORY_TURNS = 6; // 3 exchanges (user + assistant each)
+const MAX_MEMORY_TURNS = 10; // 5 exchanges (user + assistant each)
 
 function getMemory(visitorId) {
   return orchestratorMemory.get(visitorId) || [];
@@ -1344,11 +1440,11 @@ export async function orchestrateTreeRequest({
         );
       }
       log.error("Tree Orchestrator", " Classification failed:", err.message);
-      classification = localClassify(message);
+      classification = await localClassify(message, getCurrentNodeId(visitorId) || rootId);
     }
   } else {
     // Default: local classification. Zero LLM calls.
-    classification = localClassify(message);
+    classification = await localClassify(message, getCurrentNodeId(visitorId) || rootId);
   }
   const classifyEnd = new Date();
 
@@ -1471,7 +1567,77 @@ export async function orchestrateTreeRequest({
   }
 
   // ────────────────────────────────────────────────────────
-  // ROUTE: LIBRARIAN (place/query) or DESTRUCTIVE (delete/move/merge)
+  // BEHAVIORAL CONSTRAINT (chat/place/query)
+  // ────────────────────────────────────────────────────────
+
+  const behavioral = extractBehavioral(sourceType);
+
+  // ────────────────────────────────────────────────────────
+  // PATH 2: EXTENSION DETECTED — route directly to extension mode
+  // One LLM call. No librarian. No navigation. No respond.
+  // ────────────────────────────────────────────────────────
+
+  if (classification.intent === "extension" && classification.mode) {
+    // If the classifier matched a child/sibling node, auto-navigate there.
+    // Query stays put (read-only browsing). Chat and place move the user.
+    const extTargetId = classification.targetNodeId || null;
+    if (extTargetId && behavioral !== "query") {
+      log.verbose("Tree Orchestrator",
+        `  Extension route: ${classification.mode} via ${extTargetId} (behavioral: ${behavioral}, auto-navigate)`);
+      socket.emit(WS.NAVIGATE, { nodeId: extTargetId, rootId });
+    } else {
+      log.verbose("Tree Orchestrator",
+        `  Extension route: ${classification.mode} (behavioral: ${behavioral}${extTargetId ? ", no nav (query)" : ""})`);
+    }
+
+    modesUsed.push(classification.mode);
+    emitStatus(socket, "intent", "");
+
+    // Switch to the extension's mode (use the extension node's rootId context)
+    await switchMode(visitorId, classification.mode, {
+      username, userId, rootId,
+      conversationMemory: formatMemoryContext(visitorId),
+      clearHistory: true,
+    });
+
+    // One LLM call. readOnly strips write tools for query constraint.
+    const result = await processMessage(visitorId, message, {
+      username, userId, rootId, signal, slot,
+      readOnly: behavioral === "query",
+      meta: { internal: false },
+      onToolResults(results) {
+        if (signal?.aborted) return;
+        for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+      },
+    });
+
+    emitStatus(socket, "done", "");
+
+    if (result?.answer) pushMemory(visitorId, message, result.answer);
+
+    // Apply behavioral constraint to response
+    if (behavioral === "place" && result?.answer) {
+      // Minimal response for place constraint
+      return {
+        success: true,
+        answer: result.answer.split("\n")[0], // first line only
+        modeKey: classification.mode,
+        modesUsed,
+        rootId,
+      };
+    }
+
+    return {
+      success: true,
+      answer: result?.answer || null,
+      modeKey: classification.mode,
+      modesUsed,
+      rootId,
+    };
+  }
+
+  // ────────────────────────────────────────────────────────
+  // PATH 3: LIBRARIAN (place/query) — merged navigate + execute
   // ────────────────────────────────────────────────────────
 
   if (classification.intent === "place" || classification.intent === "query") {
@@ -1487,6 +1653,7 @@ export async function orchestrateTreeRequest({
       classification,
       modesUsed,
       skipRespond,
+      behavioral,
       rt,
     });
   }
@@ -1724,16 +1891,17 @@ async function runLibrarianFlow({
   classification,
   modesUsed,
   skipRespond = false,
+  behavioral = "chat",
   rt,
 }) {
-  const meta = { username, userId, rootId };
+  const meta = { username, userId, rootId, slot: rt?.slot };
   const isQuery = classification.intent === "query";
 
-  // ── LIBRARIAN: navigate + decide ──
+  // ── MERGED LIBRARIAN: navigate + read + execute in one conversation ──
   emitStatus(
     socket,
     "navigate",
-    isQuery ? "Reading tree…" : "Walking the tree…",
+    isQuery ? "Reading tree…" : "Working…",
   );
 
   const libMode = await resolveModeForNode("librarian", getCurrentNodeId(visitorId) || rootId);
@@ -1746,174 +1914,127 @@ async function runLibrarianFlow({
   });
 
   const libStart = new Date();
-  const libPlan = await processMessage(visitorId, message, {
+
+  // The merged librarian has execution tools for placement.
+  // processMessage with internal:false lets it navigate, execute, AND respond
+  // all in one tool-calling loop. No plan handoff.
+  const libResult = await processMessage(visitorId, message, {
     ...meta,
     signal,
-    meta: { internal: true },
+    meta: { internal: isQuery }, // query: internal (parse JSON). place: external (natural response)
+    onToolResults(results) {
+      if (signal?.aborted) return;
+      for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+    },
   });
   const libEnd = new Date();
 
   if (signal?.aborted) return null;
-  emitModeResult(socket, "tree:librarian", libPlan);
-
-  // libPlan = { plan: [...], responseHint, summary, confidence }
-  // Same format as translator output → feeds directly into plan execution
-
-  // Handle librarian failure — fall back to simple response
-  if (
-    !libPlan ||
-    libPlan.action === "error" ||
-    (!libPlan.plan && !libPlan.responseHint)
-  ) {
- log.error("Tree Orchestrator", 
-      "❌ Librarian failed:",
-      libPlan?.reason || libPlan?.raw || "no response",
-    );
-
-    modesUsed.push("tree:librarian");
-    rt.trackStep("tree:librarian", {
-      input: message,
-      output: libPlan,
-      startTime: libStart,
-      endTime: libEnd,
-      llmProvider: libPlan?._llmProvider || rt.llmProvider,
-      treeContext: {
-        targetNodeId: rootId,
-        directive: classification.summary,
-        stepResult: "failed",
-      },
-    });
-
-    // Fall back to responding with what we have
-    if (skipRespond) {
-      return {
-        success: false,
-        answer: null,
-        modeKey: "tree:orchestrator",
-        modesUsed,
-        stepSummaries: [],
-      };
-    }
-    modesUsed.push("tree:respond");
-    const response = await runRespond({
-      visitorId,
-      socket,
-      signal,
-      ...meta,
-      nodeContext: null,
-      operationContext: null,
-      originalMessage: message,
-      responseHint:
-        classification.responseHint ||
-        "Respond naturally to the user's message.",
-      stepSummaries: [],
-    });
-
-    if (response) {
-      response.modesUsed = modesUsed;
-      response.confidence = classification.confidence;
-    }
-    return response;
-  }
 
   modesUsed.push("tree:librarian");
   rt.trackStep("tree:librarian", {
     input: message,
-    output: libPlan,
+    output: libResult?.answer?.slice(0, 500) || null,
     startTime: libStart,
     endTime: libEnd,
-    llmProvider: libPlan?._llmProvider || rt.llmProvider,
+    llmProvider: libResult?._internal?.connectionId ? { connectionId: libResult._internal.connectionId } : rt.llmProvider,
     treeContext: {
       targetNodeId: rootId,
       directive: classification.summary,
-      stepResult: libPlan?.plan ? "success" : "failed",
+      stepResult: libResult?.answer ? "success" : "failed",
     },
   });
 
-  const plan = libPlan?.plan || [];
-  const responseHint =
-    libPlan?.responseHint || classification.responseHint || "";
+  emitStatus(socket, "done", "");
 
- log.verbose("Tree Orchestrator", 
-    `📚 Librarian: ${plan.length} step(s) | "${libPlan?.summary || "no summary"}"`,
-  );
+  // ── Handle failure ──
+  if (!libResult || libResult.action === "error") {
+    log.error("Tree Orchestrator", "Librarian failed:", libResult?.reason || "no response");
+    if (skipRespond) return { success: false, answer: null, modeKey: "tree:orchestrator", modesUsed, stepSummaries: [] };
 
-  // ── QUERY: empty plan → skip execution, go to respond ──
-  if (plan.length === 0) {
-    if (skipRespond) {
-      return {
-        success: true,
-        answer: null,
-        modeKey: "tree:orchestrator",
-        modesUsed,
-        confidence: libPlan?.confidence || classification.confidence,
-        stepSummaries: [],
-      };
-    }
     modesUsed.push("tree:respond");
-    const respondStart = new Date();
-
     const response = await runRespond({
-      visitorId,
-      socket,
-      signal,
-      ...meta,
-      nodeContext: null,
-      operationContext: null,
+      visitorId, socket, signal, ...meta,
       originalMessage: message,
-      responseHint,
-      librarianContext: libPlan,
+      responseHint: classification.responseHint || "Respond naturally to the user's message.",
       stepSummaries: [],
     });
-
-    const respondEnd = new Date();
-    rt.trackStep("tree:respond", {
-      input: responseHint || "Respond to the user",
-      output: response?.answer || null,
-      startTime: respondStart,
-      endTime: respondEnd,
-      llmProvider: response?.llmProvider || rt.llmProvider,
-      treeContext: {
-        targetNodeId: rootId,
-        directive: responseHint || "Respond to the user",
-        stepResult: "success",
-      },
-    });
-
-    if (response) {
-      response.modesUsed = modesUsed;
-      response.confidence = libPlan?.confidence || classification.confidence;
-    }
+    if (response) { response.modesUsed = modesUsed; response.confidence = classification.confidence; }
     return response;
   }
 
-  // ── EXECUTE PLAN (reuse shared step loop) ──
-  const planResult = await executePlanSteps({
-    plan,
-    visitorId,
-    message,
-    socket,
-    signal,
-    username,
-    userId,
-    rootId,
-    modesUsed,
-    initialTargetNodeId: rootId,
-    initialTargetPath: null,
-    stepSummaries: [],
-    responseHint,
-    includeMemoryOnFirstStep: false, // librarian already had context
-    rt,
-  });
+  // ── Smart response: check if the librarian's answer is sufficient ──
 
-  return await respondToCompletion({
-    planResult,
-    visitorId, socket, signal, meta, message,
-    responseHint, modesUsed,
-    confidence: libPlan?.confidence || classification.confidence,
-    skipRespond, rt,
-    librarianContext: libPlan,
+  const lastContent = libResult?.answer || libResult?.content || "";
+  const hasNaturalResponse = lastContent.length > 20 && !/^(Tool |Error:|Failed:|{)/.test(lastContent);
+
+  // For query mode, the librarian returns JSON (internal:true) with responseHint.
+  // Always go to respond mode.
+  if (isQuery) {
+    // Parse the librarian's JSON output for responseHint
+    let librarianContext = libResult;
+    try {
+      const { parseJsonSafe } = await import("../../seed/orchestrators/helpers.js");
+      const parsed = parseJsonSafe(lastContent);
+      if (parsed?.responseHint) librarianContext = parsed;
+    } catch {}
+
+    if (skipRespond) {
+      return {
+        success: true, answer: null, modeKey: "tree:orchestrator",
+        modesUsed, confidence: librarianContext?.confidence || classification.confidence,
+        stepSummaries: [],
+      };
+    }
+
+    modesUsed.push("tree:respond");
+    const response = await runRespond({
+      visitorId, socket, signal, ...meta,
+      originalMessage: message,
+      responseHint: librarianContext?.responseHint || "",
+      librarianContext,
+      stepSummaries: [],
+    });
+    if (response) {
+      response.modesUsed = modesUsed;
+      response.confidence = librarianContext?.confidence || classification.confidence;
+    }
+    if (response?.answer) pushMemory(visitorId, message, response.answer);
+    return response;
+  }
+
+  // For placement: the merged librarian navigated AND executed in one conversation.
+  // Check if its response is user-friendly.
+
+  if (hasNaturalResponse) {
+    // Librarian wrote a good response. Use directly. Zero extra calls.
+    log.verbose("Tree Orchestrator", "Librarian response sufficient. Skipping respond mode.");
+    if (lastContent) pushMemory(visitorId, message, lastContent);
+    return {
+      success: true,
+      answer: behavioral === "place" ? lastContent.split("\n")[0] : lastContent,
+      modeKey: "tree:librarian",
+      modesUsed,
+      rootId,
+      confidence: 0.9,
+    };
+  }
+
+  // Librarian executed but response isn't user-friendly. Fall through to respond.
+  if (skipRespond) {
+    return { success: true, answer: lastContent || null, modeKey: "tree:orchestrator", modesUsed, stepSummaries: [] };
+  }
+
+  modesUsed.push("tree:respond");
+  const response = await runRespond({
+    visitorId, socket, signal, ...meta,
+    originalMessage: message,
+    responseHint: "Summarize what was just done. Be brief.",
+    stepSummaries: [],
   });
+  if (response) { response.modesUsed = modesUsed; response.confidence = 0.8; }
+  if (response?.answer) pushMemory(visitorId, message, response.answer);
+  return response;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

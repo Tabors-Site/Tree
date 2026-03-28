@@ -10,7 +10,7 @@ import { buildCoreServices } from "../seed/services.js";
 import { setExtensionToolResolver, registerMode, setModeRegistrationHook } from "../seed/ws/modes/registry.js";
 import { hooks } from "../seed/hooks.js";
 import { registerOrchestrator, allowOrchestratorExtension } from "../seed/orchestratorRegistry.js";
-import { registerModeOwner, registerToolOwner, getToolOwner } from "../seed/tree/extensionScope.js";
+import { registerModeOwner, registerToolOwner, getToolOwner, getModeOwner } from "../seed/tree/extensionScope.js";
 import log from "../seed/log.js";
 
 // Wire mode ownership tracking for spatial scoping
@@ -1123,6 +1123,20 @@ export function getExtensionManifest(name) {
  */
 export function getLoadedExtensionNames() {
   return [...loaded.keys()];
+}
+
+/**
+ * Get classifier hints for a mode key.
+ * Returns array of RegExp from the owning extension's manifest, or null.
+ * Used by the tree orchestrator for extension routing (Path 2).
+ */
+export function getClassifierHintsForMode(modeKey) {
+  try {
+    const extName = getModeOwner(modeKey);
+    if (!extName) return null;
+    const manifest = loaded.get(extName)?.manifest;
+    return Array.isArray(manifest?.classifierHints) ? manifest.classifierHints : null;
+  } catch { return null; }
 }
 
 export function getBootReport() {

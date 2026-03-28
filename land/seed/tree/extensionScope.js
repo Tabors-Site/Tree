@@ -137,6 +137,14 @@ export function getToolOwner(toolName) {
 }
 
 /**
+ * Check if a tool was registered as read-only (readOnlyHint: true).
+ * Used by the kernel's query constraint to filter write tools.
+ */
+export function isToolReadOnly(toolName) {
+  return _toolOwnership.get(toolName)?.readOnly ?? false;
+}
+
+/**
  * Remove all tool ownership entries for an extension.
  * Called during extension uninstall.
  */

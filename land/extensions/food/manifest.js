@@ -13,6 +13,12 @@ export default {
     "the app. Nine kernel primitives and five extension systems working together through " +
     "the tree's own structure.",
 
+  classifierHints: [
+    /\b(ate|had|eaten|drank|breakfast|lunch|dinner|snack|calories|protein|carbs|fats|macro)\b/i,
+    /\b(egg|chicken|rice|bread|salmon|banana|oat|milk|cheese|beef|pork|tofu|yogurt)\b/i,
+    /\b(meal|food|nutrition|diet|eat|hungry|cook)\b/i,
+  ],
+
   needs: {
     models: ["Node"],
     services: ["hooks", "metadata"],
