@@ -21,6 +21,8 @@ export default {
     "without touching the AI conversation. HTML views available when html-rendering is " +
     "installed.",
 
+  npm: ["@solana/spl-token@^0.4.14", "@solana/web3.js@^1.98.4"],
+
   needs: {
     models: ["Node"],
   },

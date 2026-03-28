@@ -27,6 +27,8 @@ export default {
     "and executions when the energy extension is installed. CLI commands expose script listing, " +
     "viewing, and execution without going through the AI.",
 
+  npm: ["axios@^1.12.2"],
+
   needs: {
     services: ["contributions", "hooks"],
     models: ["Node", "Contribution"],

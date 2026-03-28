@@ -23,6 +23,8 @@ export default {
     "The extension exports both getNotifications and the Notification model for direct use by " +
     "other extensions.",
 
+  npm: ["web-push@^3.6.7"],
+
   needs: {
     models: ["Node"],
   },

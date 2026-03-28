@@ -440,7 +440,8 @@
       "Bash(/tmp/audit_findings.md:*)",
       "Bash(grep -rn core.metadata /home/tabor/github/Tree/land/extensions/*/index.js)",
       "Bash(find /home/tabor/github/Tree/cli/src -type f -name *.js)",
-      "Bash(grep -rn setInterval /home/tabor/github/Tree/land/extensions/*/index.js /home/tabor/github/Tree/land/extensions/*/*.js)"
+      "Bash(grep -rn setInterval /home/tabor/github/Tree/land/extensions/*/index.js /home/tabor/github/Tree/land/extensions/*/*.js)",
+      "Bash(npm view:*)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

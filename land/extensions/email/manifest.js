@@ -32,6 +32,8 @@ export default {
     "transport configured via EMAIL_USER and EMAIL_PASS environment variables. If " +
     "html-rendering is installed, the forgot-password page renders as a styled HTML form.",
 
+  npm: ["nodemailer@^7.0.11"],
+
   needs: {
     services: ["auth"],
     models: ["User"],
