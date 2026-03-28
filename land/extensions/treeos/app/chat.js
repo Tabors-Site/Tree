@@ -1027,7 +1027,8 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
         const item = document.createElement("div");
         item.className = "tree-item";
-        item.onclick = () => selectTree(data.rootId, name);
+        const rootId = data.data?.rootId || data.rootId;
+        item.onclick = () => selectTree(rootId, name);
         item.innerHTML = \`
           <span class="tree-item-icon">🌳</span>
           <span class="tree-item-name">\${escapeHtml(name)}</span>\`;

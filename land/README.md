@@ -35,7 +35,7 @@ treeos start
 
 ```
 seed/           The kernel. Six models, a conversation loop, hooks, cascade, extension loader.
-extensions/     91 extensions. All optional. The kernel boots without any of them.
+extensions/     92 extensions. All optional. The kernel boots without any of them.
 routes/         HTTP API endpoints.
 orchestrators/  Pipeline runtime for multi-step AI operations.
 canopy/         Federation protocol. How lands find and talk to each other.
@@ -52,7 +52,17 @@ startup.js      Boot sequence. Indexes, config, migrations, extensions, jobs.
 | Standard | 50+ | Moderate | Personal use, small teams |
 | Full | 91 | Heavy | Production, public lands |
 
-Change profiles anytime by editing `extensions/.treeos-profile` (one extension name per line) and restarting.
+Change profiles anytime:
+
+```bash
+# Re-run the extension picker
+node boot.js --setup
+
+# Or edit manually: one extension name per line
+nano extensions/.treeos-profile
+```
+
+Then restart with `npm start`.
 
 ## The Six Rules
 
