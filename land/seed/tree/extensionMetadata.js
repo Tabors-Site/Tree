@@ -259,3 +259,60 @@ export async function mergeExtMeta(node, extName, partial, opts) {
   hooks.run("afterMetadataWrite", { nodeId, extName, data: safePartial }).catch(() => {});
   return true;
 }
+
+/**
+ * Atomic increment on a single key within an extension's metadata namespace.
+ * Uses MongoDB $inc. No read-modify-write. No race conditions.
+ *
+ *   await incExtMeta(node, "food", "values.today", 42);
+ *   // Atomically adds 42 to metadata.food.values.today
+ */
+export async function incExtMeta(node, extName, key, amount = 1) {
+  if (!node || !extName || !key) return false;
+  const nodeId = String(node._id || node);
+  await Node.updateOne(
+    { _id: nodeId },
+    { $inc: { [`metadata.${extName}.${key}`]: amount } }
+  );
+  invalidateNode(nodeId);
+  return true;
+}
+
+/**
+ * Atomic push to an array within an extension's metadata namespace.
+ * Uses MongoDB $push with $slice for a capped circular buffer.
+ *
+ *   await pushExtMeta(node, "scheduler", "completions", { date, delta }, 50);
+ *   // Atomically appends to metadata.scheduler.completions, keeps last 50
+ */
+export async function pushExtMeta(node, extName, key, item, maxLength = 100) {
+  if (!node || !extName || !key) return false;
+  const nodeId = String(node._id || node);
+  await Node.updateOne(
+    { _id: nodeId },
+    { $push: { [`metadata.${extName}.${key}`]: { $each: [item], $slice: -maxLength } } }
+  );
+  invalidateNode(nodeId);
+  return true;
+}
+
+/**
+ * Atomic multi-field set within an extension's metadata namespace.
+ * Uses MongoDB $set on individual keys. No read-modify-write.
+ * Accepts node document or nodeId string.
+ *
+ *   await batchSetExtMeta(nodeId, "values", { weight: 135, set1: 10, set2: 10, set3: 8 });
+ *   // Atomically sets metadata.values.weight, metadata.values.set1, etc.
+ */
+export async function batchSetExtMeta(node, extName, fields) {
+  if (!node || !extName || !fields || typeof fields !== "object") return false;
+  const nodeId = String(node._id || node);
+  const updates = {};
+  for (const [key, value] of Object.entries(fields)) {
+    updates[`metadata.${extName}.${key}`] = value;
+  }
+  if (Object.keys(updates).length === 0) return false;
+  await Node.updateOne({ _id: nodeId }, { $set: updates });
+  invalidateNode(nodeId);
+  return true;
+}

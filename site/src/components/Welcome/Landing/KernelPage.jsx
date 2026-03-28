@@ -45,7 +45,7 @@ const KernelPage = () => {
                 os: "Memory Management",
                 osDesc: "Allocates RAM to programs. Keeps them isolated so one can't crash another. Handles virtual memory and swapping.",
                 seed: "Metadata Isolation",
-                seedDesc: "Each extension gets its own namespace in the metadata Map. 512KB cap per namespace. 14MB document ceiling with pressure alerts at 80%. Atomic $set prevents concurrent writes from clobbering. Circuit breaker auto-disables crashing extensions. .flow partitions evict oldest data when full.",
+                seedDesc: "Each extension gets its own namespace in the metadata Map. 512KB cap per namespace. 14MB document ceiling with pressure alerts at 80%. Five atomic operations: setExtMeta (full replace), mergeExtMeta (shallow merge), incExtMeta (counter increment), pushExtMeta (capped array append), batchSetExtMeta (multi-field set). Circuit breaker auto-disables crashing extensions. .flow partitions evict oldest data when full.",
               },
               {
                 os: "File System",
@@ -195,7 +195,7 @@ const KernelPage = () => {
             </div>
             <div className="lp-card">
               <h3>Tree <code>/MyTree</code></h3>
-              <p>Inside a tree. Chat/place/query. The treeos extension registers navigate, structure, edit, respond, librarian. A different extension could register completely different modes.</p>
+              <p>Inside a tree. Three behavioral commands: <strong>chat</strong> (full tools, full response), <strong>place</strong> (full tools, minimal response), <strong>query</strong> (read-only tools, full response). The query constraint is enforced in the kernel. Every orchestrator gets it for free.</p>
             </div>
           </div>
         </div>
@@ -222,7 +222,7 @@ const KernelPage = () => {
               <div className="lp-step-num">2</div>
               <div className="lp-step-content">
                 <h4>Resolve Tools</h4>
-                <p>Three layers: mode base tools, extension-injected tools, per-node config (allowed/blocked). Then spatial extension scoping filters out tools from blocked or restricted extensions. The AI only sees what's permitted at this position.</p>
+                <p>Three layers: mode base tools, extension-injected tools, per-node config (allowed/blocked). Then spatial extension scoping filters out tools from blocked or restricted extensions. Query constraint: when readOnly is set, only tools with readOnlyHint pass through. The AI only sees what's permitted at this position.</p>
               </div>
             </div>
             <div className="lp-step">
@@ -276,7 +276,7 @@ const KernelPage = () => {
               </div>
             </div>
             <div className="lp-card">
-              <h3>After Hooks (16)</h3>
+              <h3>After Hooks (17)</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
                 Parallel, fire-and-forget. Errors logged, never block.
               </p>
@@ -290,6 +290,7 @@ const KernelPage = () => {
                 afterSessionCreate<br/>
                 afterSessionEnd<br/>
                 afterNavigate<br/>
+                <span style={{color: "#60a5fa"}}>onNodeNavigate</span><br/>
                 afterMetadataWrite<br/>
                 afterScopeChange<br/>
                 afterOwnershipChange<br/>
@@ -433,6 +434,7 @@ const KernelPage = () => {
               ["Never block inbound", "Cascade signals always accepted. Always produce a result. No configuration can prevent a signal from arriving."],
               ["Position injection", "Every AI prompt receives a [Position] block before the mode's content. The AI always knows where it is. Extension modes cannot exclude it."],
               ["Time injection", "Every AI prompt receives the current time in the land's timezone. Cannot be turned off."],
+              ["Query constraint", "When readOnly is set, only tools with readOnlyHint annotations are available. Write tools are filtered before the mode fires. The AI cannot mutate the tree during a query interaction. Every orchestrator gets this for free."],
               ["Extension router timeout", "Extension routes wrapped with 5s timeout. If an extension hangs, the kernel route handles the request. Extensions can never permanently shadow kernel routes."],
               ["Auth fallthrough", "authenticateOptional tries every registered auth strategy. If none match, request continues anonymously. The kernel pipeline handles them all."],
             ].map(([name, desc]) => (
@@ -476,6 +478,70 @@ const KernelPage = () => {
             All five reject on system nodes. All five validate the chain before writing.
             Extensions use <code>core.ownership.*</code>.
           </p>
+        </div>
+      </section>
+
+      {/* ── EXTENSION API ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container">
+          <h2 className="lp-section-title">Extension API</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Every extension receives <code>core</code> in its <code>init()</code> function.
+            The core services bundle exposes everything an extension needs without direct imports.
+            No extension should call MongoDB directly for metadata, node creation, or note management.
+          </p>
+          <div style={{maxWidth: 700, margin: "0 auto"}}>
+            <div style={{marginBottom: 24}}>
+              <div style={{color: "#4ade80", fontSize: "0.9rem", fontWeight: 600, marginBottom: 12}}>core.metadata</div>
+              <div style={{fontFamily: "monospace", fontSize: "0.8rem", color: "#888", lineHeight: 2}}>
+                {[
+                  ["getExtMeta(node, ext)", "Read namespace"],
+                  ["setExtMeta(node, ext, data)", "Full replace"],
+                  ["mergeExtMeta(node, ext, partial)", "Shallow merge"],
+                  ["incExtMeta(node, ext, key, amt)", "Atomic counter"],
+                  ["pushExtMeta(node, ext, key, item, cap)", "Capped array append"],
+                  ["batchSetExtMeta(node, ext, fields)", "Multi-field atomic set"],
+                ].map(([fn, desc]) => (
+                  <div key={fn} style={{display: "flex", gap: 12}}>
+                    <span style={{color: "#4ade80", minWidth: 300}}>{fn}</span>
+                    <span style={{color: "#666"}}>{desc}</span>
+                  </div>
+                ))}
+              </div>
+              <p style={{marginTop: 8, fontSize: "0.8rem", color: "#555"}}>
+                incExtMeta, pushExtMeta, and batchSetExtMeta accept a node document or ID string.
+                All three use MongoDB atomic operators. No read-modify-write race.
+              </p>
+            </div>
+            <div style={{marginBottom: 24}}>
+              <div style={{color: "#4ade80", fontSize: "0.9rem", fontWeight: 600, marginBottom: 8}}>core.tree</div>
+              <p style={{fontSize: "0.8rem", color: "#888"}}>
+                createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType.
+                Plus cache management, integrity check, and circuit breaker.
+              </p>
+            </div>
+            <div style={{marginBottom: 24}}>
+              <div style={{color: "#4ade80", fontSize: "0.9rem", fontWeight: 600, marginBottom: 8}}>core.notes</div>
+              <p style={{fontSize: "0.8rem", color: "#888"}}>
+                createNote, editNote, deleteNoteAndFile, transferNote, getNotes.
+                Programmatic note CRUD without direct seed imports.
+              </p>
+            </div>
+            <div style={{marginBottom: 24}}>
+              <div style={{color: "#4ade80", fontSize: "0.9rem", fontWeight: 600, marginBottom: 8}}>core.scope</div>
+              <p style={{fontSize: "0.8rem", color: "#888"}}>
+                isExtensionBlockedAtNode, getBlockedExtensionsAtNode, isToolReadOnly, getToolOwner, getModeOwner.
+                Extensions check their own blocked status. Guard enrichContext injections. Know who owns which tool or mode.
+              </p>
+            </div>
+            <div style={{marginBottom: 24}}>
+              <div style={{color: "#4ade80", fontSize: "0.9rem", fontWeight: 600, marginBottom: 8}}>core.modes</div>
+              <p style={{fontSize: "0.8rem", color: "#888"}}>
+                registerMode, setDefaultMode, setNodeMode.
+                Register custom AI modes. Set zone defaults. Set per-node mode overrides atomically.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 

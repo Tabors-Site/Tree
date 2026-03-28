@@ -6,7 +6,7 @@
  */
 
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
+import { getExtMeta, setExtMeta, batchSetExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _Node = null;
@@ -143,21 +143,21 @@ export async function deliverToExerciseNodes(fitnessNodes, parsed) {
     }
 
     // Build value updates
-    const updates = {};
+    const fields = {};
     const weight = exercise.sets[0]?.weight || 0;
-    updates["metadata.values.weight"] = weight;
+    fields.weight = weight;
 
     for (let i = 0; i < exercise.sets.length; i++) {
-      updates[`metadata.values.set${i + 1}`] = exercise.sets[i].reps;
+      fields[`set${i + 1}`] = exercise.sets[i].reps;
     }
 
     // Calculate total volume
     const totalVolume = exercise.sets.reduce((sum, s) => sum + (s.weight || 0) * (s.reps || 0), 0);
-    updates["metadata.values.totalVolume"] = totalVolume;
-    updates["metadata.values.lastWorked"] = parsed.date;
+    fields.totalVolume = totalVolume;
+    fields.lastWorked = parsed.date;
 
     // Atomic update on the exercise node
-    await _Node.updateOne({ _id: match.id }, { $set: updates });
+    await batchSetExtMeta(match.id, "values", fields);
 
     // Record to exercise history
     const node = await _Node.findById(match.id);

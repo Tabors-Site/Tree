@@ -7,7 +7,8 @@
  */
 
 import log from "../../seed/log.js";
-import { setExtMeta } from "../../seed/tree/extensionMetadata.js";
+import { setExtMeta, batchSetExtMeta } from "../../seed/tree/extensionMetadata.js";
+import { setNodeMode } from "../../seed/ws/modes/registry.js";
 
 // ── Default programs ──
 
@@ -98,8 +99,8 @@ export async function scaffoldFitness(rootId, userId, options = {}) {
   // Set mode overrides
   // Mode overrides: set on both the fitness root (so parent classifiers find it)
   // and the Log node (so direct chat at Log uses fitness mode)
-  await Node.updateOne({ _id: rootId }, { $set: { "metadata.modes.respond": "tree:fitness-log" } });
-  await Node.updateOne({ _id: logNode._id }, { $set: { "metadata.modes.respond": "tree:fitness-log" } });
+  await setNodeMode(rootId, "respond", "tree:fitness-log");
+  await setNodeMode(logNode._id, "respond", "tree:fitness-log");
 
   // Create muscle group nodes and exercises
   const channelPairs = [];
@@ -112,13 +113,14 @@ export async function scaffoldFitness(rootId, userId, options = {}) {
       await setExtMeta(exNode, "fitness", { role: "exercise", history: [] });
 
       // Set initial values and goals
-      const valUpdates = { "metadata.values.weight": exercise.weight };
-      const goalUpdates = {};
+      const valFields = { weight: exercise.weight };
+      const goalFields = {};
       for (let i = 1; i <= program.sets; i++) {
-        valUpdates[`metadata.values.set${i}`] = 0;
-        goalUpdates[`metadata.goals.set${i}`] = program.repMax;
+        valFields[`set${i}`] = 0;
+        goalFields[`set${i}`] = program.repMax;
       }
-      await Node.updateOne({ _id: exNode._id }, { $set: { ...valUpdates, ...goalUpdates } });
+      await batchSetExtMeta(exNode._id, "values", valFields);
+      await batchSetExtMeta(exNode._id, "goals", goalFields);
 
       // Prepare channel creation (Log -> exercise)
       const channelName = exercise.name.toLowerCase().replace(/\s+/g, "-") + "-log";

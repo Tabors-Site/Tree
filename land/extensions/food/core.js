@@ -6,7 +6,8 @@
  */
 
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
+import { getExtMeta, setExtMeta, incExtMeta, batchSetExtMeta } from "../../seed/tree/extensionMetadata.js";
+import { setNodeMode } from "../../seed/ws/modes/registry.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 // ── Dependencies (set by configure) ──
@@ -59,9 +60,9 @@ export async function scaffold(foodRootId, userId) {
   // Set mode overrides so chat at Log uses food-log, chat at Daily uses food-daily
   // Mode overrides: set on the food root (so parent classifiers find it)
   // and on Log/Daily nodes (so direct chat uses the right mode)
-  await _Node.updateOne({ _id: foodRootId }, { $set: { "metadata.modes.respond": "tree:food-log" } });
-  await _Node.updateOne({ _id: logNode._id }, { $set: { "metadata.modes.respond": "tree:food-log" } });
-  await _Node.updateOne({ _id: dailyNode._id }, { $set: { "metadata.modes.respond": "tree:food-daily" } });
+  await setNodeMode(foodRootId, "respond", "tree:food-log");
+  await setNodeMode(logNode._id, "respond", "tree:food-log");
+  await setNodeMode(dailyNode._id, "respond", "tree:food-daily");
 
   // Create channels: Log -> each macro node
   try {
@@ -258,25 +259,16 @@ export async function deliverMacros(logNodeId, foodNodes, parsed, userId) {
     log.warn("Food", `Channel delivery failed: ${err.message}`);
   }
 
-  // Fallback: direct $inc on macro nodes
+  // Fallback: atomic increment on macro nodes
   if (!usedChannels && foodNodes) {
     if (foodNodes.protein && totals.protein > 0) {
-      await _Node.updateOne(
-        { _id: foodNodes.protein.id },
-        { $inc: { "metadata.values.today": totals.protein } }
-      );
+      await incExtMeta(foodNodes.protein.id, "values", "today", totals.protein);
     }
     if (foodNodes.carbs && totals.carbs > 0) {
-      await _Node.updateOne(
-        { _id: foodNodes.carbs.id },
-        { $inc: { "metadata.values.today": totals.carbs } }
-      );
+      await incExtMeta(foodNodes.carbs.id, "values", "today", totals.carbs);
     }
     if (foodNodes.fats && totals.fats > 0) {
-      await _Node.updateOne(
-        { _id: foodNodes.fats.id },
-        { $inc: { "metadata.values.today": totals.fats } }
-      );
+      await incExtMeta(foodNodes.fats.id, "values", "today", totals.fats);
     }
   }
 }
@@ -303,10 +295,7 @@ export async function handleMacroCascade(node, payload) {
 
   if (amount <= 0) return;
 
-  await _Node.updateOne(
-    { _id: node._id },
-    { $inc: { "metadata.values.today": amount } }
-  );
+  await incExtMeta(node, "values", "today", amount);
 
   log.verbose("Food", `${role}: +${amount}g (node ${String(node._id).slice(0, 8)}...)`);
 }
@@ -365,10 +354,7 @@ export async function checkDailyReset(rootId) {
   // Reset today values on macro nodes
   for (const role of ["protein", "carbs", "fats"]) {
     if (!foodNodes[role]) continue;
-    await _Node.updateOne(
-      { _id: foodNodes[role].id },
-      { $set: { "metadata.values.today": 0 } }
-    );
+    await batchSetExtMeta(foodNodes[role].id, "values", { today: 0 });
   }
 
   lastReset.set(rootId, today);
@@ -466,9 +452,7 @@ export async function saveProfile(foodRootId, profile, foodNodes) {
 
   for (const [role, goal] of Object.entries(goalMap)) {
     if (!goal || !foodNodes[role]) continue;
-    await _Node.updateOne(
-      { _id: foodNodes[role].id },
-      { $set: { "metadata.goals.today": goal, "metadata.values.today": 0 } }
-    );
+    await batchSetExtMeta(foodNodes[role].id, "goals", { today: goal });
+    await batchSetExtMeta(foodNodes[role].id, "values", { today: 0 });
   }
 }

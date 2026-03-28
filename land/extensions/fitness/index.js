@@ -61,10 +61,7 @@ export async function init(core) {
           ? root.metadata.get("modes")
           : root.metadata?.modes;
         if (!modes?.respond) {
-          await core.models.Node.updateOne(
-            { _id: root._id },
-            { $set: { "metadata.modes.respond": "tree:fitness-log" } }
-          );
+          await core.modes.setNodeMode(root._id, "respond", "tree:fitness-log");
           log.verbose("Fitness", `Self-healed mode override on ${String(root._id).slice(0, 8)}...`);
         }
       }
@@ -87,17 +84,15 @@ export async function init(core) {
     if (!payload.sets?.length) return;
 
     // Update exercise values from cascade payload
-    const updates = {};
-    const weight = payload.sets[0]?.weight || 0;
-    updates["metadata.values.weight"] = weight;
+    const fields = {};
+    fields.weight = payload.sets[0]?.weight || 0;
     for (let i = 0; i < payload.sets.length; i++) {
-      updates[`metadata.values.set${i + 1}`] = payload.sets[i].reps;
+      fields[`set${i + 1}`] = payload.sets[i].reps;
     }
-    const totalVolume = payload.sets.reduce((sum, s) => sum + (s.weight || 0) * (s.reps || 0), 0);
-    updates["metadata.values.totalVolume"] = totalVolume;
-    updates["metadata.values.lastWorked"] = payload.date || new Date().toISOString().slice(0, 10);
+    fields.totalVolume = payload.sets.reduce((sum, s) => sum + (s.weight || 0) * (s.reps || 0), 0);
+    fields.lastWorked = payload.date || new Date().toISOString().slice(0, 10);
 
-    await core.models.Node.updateOne({ _id: node._id }, { $set: updates });
+    await core.metadata.batchSetExtMeta(node._id, "values", fields);
 
     hookData._resultStatus = "SUCCEEDED";
     hookData._resultExtName = "fitness";

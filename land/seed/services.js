@@ -6,7 +6,7 @@
 
 import log from "./log.js";
 import { hooks as hooksModule } from "./hooks.js";
-import { registerMode, setDefaultMode } from "./ws/modes/registry.js";
+import { registerMode, setDefaultMode, setNodeMode } from "./ws/modes/registry.js";
 import { registerOrchestrator, getOrchestrator } from "./orchestratorRegistry.js";
 import User from "./models/user.js";
 import Node from "./models/node.js";
@@ -47,8 +47,11 @@ import { emitNavigate, emitToUser, registerSocketHandler, unregisterSocketHandle
 import { OrchestratorRuntime } from "./orchestrators/runtime.js";
 import { acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks } from "./orchestrators/locks.js";
 import { ok, error, sendOk, sendError, ERR, WS, CASCADE } from "./protocol.js";
-import { getExtMeta, setExtMeta, mergeExtMeta } from "./tree/extensionMetadata.js";
+import { getExtMeta, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, batchSetExtMeta } from "./tree/extensionMetadata.js";
 import { deliverCascade } from "./tree/cascade.js";
+import { createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType } from "./tree/treeManagement.js";
+import { createNote, editNote, deleteNoteAndFile, transferNote, getNotes } from "./tree/notes.js";
+import { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, isToolReadOnly, getToolOwner, getModeOwner } from "./tree/extensionScope.js";
 import {
   addContributor, removeContributor,
   setOwner, removeOwner, transferOwnership,
@@ -158,24 +161,31 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
 
     // --- Hook system ---
     hooks: hooksModule,
-    modes: { registerMode, setDefaultMode },
+    modes: { registerMode, setDefaultMode, setNodeMode },
     orchestrators: { register: registerOrchestrator, get: getOrchestrator },
 
     // --- Ownership (contributor and rootOwner mutations, chain-validated) ---
     ownership: { addContributor, removeContributor, setOwner, removeOwner, transferOwnership },
 
-    // --- Tree infrastructure (cache, integrity, circuit breaker) ---
+    // --- Tree infrastructure (cache, integrity, circuit breaker, CRUD) ---
     tree: {
       getAncestorChain, snapshotAncestors, invalidateNode, invalidateAll, getCacheStats,
       checkIntegrity,
       checkTreeHealth, tripTree, reviveTree, isTreeAlive,
+      createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType,
     },
+
+    // --- Notes (programmatic note CRUD) ---
+    notes: { createNote, editNote, deleteNoteAndFile, transferNote, getNotes },
 
     // --- Node locks (structural mutation locks, tier 3 only) ---
     nodeLocks: { acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple, isNodeLocked, getStats: getNodeLockStats },
 
     // --- Metadata (namespace-enforced read/write for extension data on nodes) ---
-    metadata: { getExtMeta, setExtMeta, mergeExtMeta },
+    metadata: { getExtMeta, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, batchSetExtMeta },
+
+    // --- Extension scope (check blocked/allowed status at positions) ---
+    scope: { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, isToolReadOnly, getToolOwner, getModeOwner },
 
     // --- Cascade (extensions call deliverCascade to propagate signals) ---
     cascade: { deliverCascade },

@@ -114,6 +114,60 @@ Same pattern. Extensions register. The kernel resolves. Failure falls back to th
 
 **Auth fallthrough.** `authenticateOptional` tries every registered auth strategy. If none match, request continues anonymously. Extensions register share token, public access, API key strategies. The kernel pipeline handles them all.
 
+## Extension APIs (core services bundle)
+
+Extensions receive `core` in `init(core)`. The full metadata toolkit, tree/note CRUD, scope checking, and mode management are all available through the services bundle. Extensions should never call MongoDB directly for metadata operations.
+
+### Metadata (core.metadata)
+
+Six functions. No extension needs direct MongoDB for metadata.
+
+| Function | Operation | Use Case |
+|----------|-----------|----------|
+| `getExtMeta(node, extName)` | Read namespace | Read your extension's data from a node |
+| `setExtMeta(node, extName, data)` | Full replace | Write entire namespace (needs document) |
+| `mergeExtMeta(node, extName, partial)` | Shallow merge | Update specific keys (needs document) |
+| `incExtMeta(node, extName, key, amount)` | Atomic $inc | Counters, accumulators. By ID or document. |
+| `pushExtMeta(node, extName, key, item, maxLength)` | Atomic $push + $slice | Capped arrays, rolling history. By ID or document. |
+| `batchSetExtMeta(node, extName, fields)` | Atomic multi-field $set | Set multiple keys at once. By ID or document. |
+
+`incExtMeta`, `pushExtMeta`, and `batchSetExtMeta` accept a node document OR a nodeId string. No read-modify-write. No race conditions. MongoDB atomic operators handle concurrency.
+
+```js
+// Atomic increment (food macro tracking)
+await core.metadata.incExtMeta(nodeId, "values", "today", 42);
+
+// Atomic capped array push (scheduler completion history)
+await core.metadata.pushExtMeta(nodeId, "scheduler", "completions", { date, delta }, 50);
+
+// Atomic multi-field set (fitness exercise values)
+await core.metadata.batchSetExtMeta(nodeId, "values", {
+  weight: 135, set1: 10, set2: 10, set3: 8, totalVolume: 3780
+});
+```
+
+### Tree CRUD (core.tree)
+
+`core.tree.createNode`, `core.tree.createNodeBranch`, `core.tree.deleteNodeBranch`, `core.tree.updateParentRelationship`, `core.tree.editNodeName`, `core.tree.editNodeType`. Stable API through the services bundle. Path changes don't break extensions.
+
+### Notes CRUD (core.notes)
+
+`core.notes.createNote`, `core.notes.editNote`, `core.notes.deleteNoteAndFile`, `core.notes.transferNote`, `core.notes.getNotes`. Programmatic note creation without direct seed imports.
+
+### Extension Scope (core.scope)
+
+`core.scope.isExtensionBlockedAtNode(extName, nodeId)` lets extensions check their own blocked status. `core.scope.getBlockedExtensionsAtNode(nodeId)` returns the full blocked/restricted/allowed sets. `core.scope.isToolReadOnly(toolName)` checks the readOnlyHint flag. `core.scope.getToolOwner(toolName)` and `core.scope.getModeOwner(modeKey)` find which extension owns a tool or mode.
+
+### Mode Management (core.modes)
+
+`core.modes.registerMode(key, config, extName)` registers a custom mode. `core.modes.setDefaultMode(bigMode, key)` sets the default for a zone. `core.modes.setNodeMode(nodeId, intent, modeKey)` sets a per-node mode override atomically. Extensions use this to assign custom modes to specific nodes without direct MongoDB calls.
+
+### New Hooks
+
+**beforeNodeCreate** now includes `parentType` field in hook data. Extensions can validate parent-child type compatibility without re-querying.
+
+**onNodeNavigate** fires when the user navigates between nodes within a tree (cd Chest, cd Back). Distinct from `afterNavigate` which fires on tree root load only. Extensions use this for breadcrumb tracking, activity heatmaps, focus detection.
+
 ## Resolution Chains
 
 Every operation at a node goes through four resolution chains. Position determines capability.

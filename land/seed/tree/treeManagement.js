@@ -67,8 +67,14 @@ export async function createNode(
   values = values && typeof values === "object" ? values : {};
   goals = goals && typeof goals === "object" ? goals : {};
 
-  // beforeNodeCreate: extensions can modify or cancel
-  const hookData = { name, type, parentNodeID, isRoot, userId, values, goals, schedule, reeffectTime };
+  // beforeNodeCreate: extensions can modify or cancel.
+  // parentType included so extensions can validate parent-child type compatibility.
+  let parentType = null;
+  if (parentNodeID) {
+    const parentDoc = await Node.findById(parentNodeID).select("type").lean();
+    parentType = parentDoc?.type || null;
+  }
+  const hookData = { name, type, parentNodeID, parentType, isRoot, userId, values, goals, schedule, reeffectTime };
   const hookResult = await hooks.run("beforeNodeCreate", hookData);
   if (hookResult.cancelled) {
     const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;

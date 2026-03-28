@@ -317,6 +317,10 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         if (!getRootId(visitorId)) {
           setRootId(visitorId, nodeId);
         }
+        // In-tree navigation hook (distinct from afterNavigate which fires on root load)
+        if (socket.userId) {
+          hooks.run("onNodeNavigate", { userId: socket.userId, rootId: getRootId(visitorId), nodeId, socket }).catch(() => {});
+        }
       }
 
       // Update session registry meta for dashboard tracking

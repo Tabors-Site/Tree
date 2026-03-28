@@ -188,6 +188,9 @@ export async function orchestrateUnderstanding({
     }
   }
 
+  // Store runId in session meta so the stop route can find it
+  updateSessionMeta(rt.sessionId, { runId: understandingRunId });
+
   if (isSite) {
     setActiveNavigator(userId, rt.sessionId);
     const sess = getSession(rt.sessionId);

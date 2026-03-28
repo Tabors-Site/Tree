@@ -7,6 +7,7 @@ import { getLandConfigValue } from "../../landConfig.js";
 import { resolveTools } from "../tools.js";
 import { getNodeName } from "../../tree/treeData.js";
 import { treeFallback, homeFallback } from "./fallback.js";
+import Node from "../../models/node.js";
 
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -140,6 +141,22 @@ export function resolveMode(intent, bigMode, nodeMetadata = null, blockedExtensi
 
   // Layer 3: bigMode default
   return DEFAULT_MODES[bigMode] || defaultKey;
+}
+
+/**
+ * Set a per-node mode override. Extensions use this to assign custom modes
+ * to specific nodes (e.g., fitness-log on the Fitness root).
+ *
+ *   await setNodeMode(nodeId, "respond", "tree:fitness-log");
+ *   // Node's metadata.modes.respond = "tree:fitness-log"
+ */
+export async function setNodeMode(nodeId, intent, modeKey) {
+  if (!nodeId || !intent || !modeKey) return false;
+  await Node.updateOne(
+    { _id: String(nodeId) },
+    { $set: { [`metadata.modes.${intent}`]: modeKey } }
+  );
+  return true;
 }
 
 /**

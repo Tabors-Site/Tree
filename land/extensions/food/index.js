@@ -64,10 +64,7 @@ export async function init(core) {
           ? root.metadata.get("modes")
           : root.metadata?.modes;
         if (!modes?.respond) {
-          await core.models.Node.updateOne(
-            { _id: root._id },
-            { $set: { "metadata.modes.respond": "tree:food-log" } }
-          );
+          await core.modes.setNodeMode(root._id, "respond", "tree:food-log");
           log.verbose("Food", `Self-healed mode override on ${String(root._id).slice(0, 8)}...`);
         }
       }
