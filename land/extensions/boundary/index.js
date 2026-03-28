@@ -11,6 +11,9 @@ import {
 
 export async function init(core) {
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
+
+  core.llm.registerRootLlmSlot("boundary");
+
   setServices({
     models: core.models,
     contributions: core.contributions,

@@ -99,7 +99,6 @@ export async function recordQuery(nodeId, query, hadAnswer, confidence, userId) 
     meta.lastUpdated = Date.now();
 
     await _metadata.setExtMeta(node, "competence", meta);
-    await node.save();
   } catch (err) {
     log.debug("Competence", `recordQuery failed: ${err.message}`);
   }

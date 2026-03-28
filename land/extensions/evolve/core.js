@@ -191,7 +191,6 @@ export async function storePatterns(patterns) {
 
   meta.patterns = existing.slice(0, MAX_PATTERNS);
   await _metadata.setExtMeta(landRoot, "evolve", meta);
-  await landRoot.save();
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -289,6 +288,7 @@ export async function generateProposals() {
           message: prompt,
           mode: "tree:respond",
           rootId: null,
+          slot: "evolve",
         });
 
         const spec = answer ? parseJsonSafe(answer) : null;
@@ -314,7 +314,6 @@ export async function generateProposals() {
   meta.proposals = proposals.slice(0, MAX_PROPOSALS);
   meta.patterns = meta.patterns; // preserve updates
   await _metadata.setExtMeta(landRoot, "evolve", meta);
-  await landRoot.save();
 
   return proposals.filter(p => p.status === "pending");
 }
@@ -355,7 +354,6 @@ export async function dismissPattern(patternId) {
   }
 
   await _metadata.setExtMeta(landRoot, "evolve", meta);
-  await landRoot.save();
   return pattern;
 }
 
@@ -371,6 +369,5 @@ export async function approveProposal(proposalId) {
   proposal.approvedAt = new Date().toISOString();
 
   await _metadata.setExtMeta(landRoot, "evolve", meta);
-  await landRoot.save();
   return proposal;
 }

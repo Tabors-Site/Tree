@@ -17,6 +17,7 @@ import { CONTENT_TYPE } from "../../seed/protocol.js";
 const _pending = new Map();
 
 export async function init(core) {
+  core.llm.registerRootLlmSlot("purpose");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setRunChat(async (opts) => {
     if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };

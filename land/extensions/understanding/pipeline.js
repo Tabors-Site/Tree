@@ -167,7 +167,7 @@ export async function orchestrateUnderstanding({
     description: `Understanding: ${runPerspective}`,
     modeKeyForLlm: "tree:understand",
     source,
-    slot: "understand",
+    slot: "understanding",
     llmPriority: LLM_PRIORITY?.BACKGROUND || 4,
     lockNamespace: "understand",
     lockKey: understandingRunId,

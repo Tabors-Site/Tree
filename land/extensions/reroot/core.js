@@ -85,6 +85,7 @@ export async function analyze(rootId, userId, username) {
     message: prompt,
     mode: "tree:respond",
     rootId,
+    slot: "reroot",
   });
 
   if (!result?.answer) {

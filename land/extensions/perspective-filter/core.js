@@ -131,8 +131,7 @@ export async function setPerspective(nodeId, perspective) {
     clean.reject = perspective.reject.map(String);
   }
 
-  _metadata.setExtMeta(node, "perspective", clean);
-  await node.save();
+  await _metadata.setExtMeta(node, "perspective", clean);
   return clean;
 }
 
@@ -143,6 +142,5 @@ export async function clearPerspective(nodeId) {
   const node = await Node.findById(nodeId);
   if (!node) throw new Error("Node not found");
 
-  _metadata.setExtMeta(node, "perspective", {});
-  await node.save();
+  await _metadata.setExtMeta(node, "perspective", {});
 }

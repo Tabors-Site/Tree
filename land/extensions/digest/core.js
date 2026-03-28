@@ -255,6 +255,7 @@ export async function generateDigest() {
         message: prompt,
         mode: "tree:respond",
         rootId: null,
+        slot: "digest",
       });
       if (answer) parsed = parseJsonSafe(answer);
     } catch (err) {
@@ -315,7 +316,6 @@ async function writeDigest(landRoot, briefing) {
     meta.history = meta.history.slice(0, MAX_HISTORY);
 
     await _metadata.setExtMeta(landRoot, "digest", meta);
-    await landRoot.save();
   } catch (err) {
     log.debug("Digest", `Failed to write digest: ${err.message}`);
   }

@@ -158,6 +158,7 @@ async function processTree(root) {
     sessionType: "INTENT",
     description: `Intent cycle for tree ${root.name}`,
     modeKeyForLlm: "tree:respond",
+    slot: "intent",
     lockNamespace: "intent",
     lockKey: `intent:${rootId}`,
     llmPriority: LLM_PRIORITY?.BACKGROUND || 4,
@@ -273,7 +274,6 @@ async function processTree(root) {
           ...(meta.recentExecutions || []),
         ].slice(0, 20);
         await _metadata.setExtMeta(rootNode, "intent", meta);
-        await rootNode.save();
       }
     } catch (err) {
       log.debug("Intent", `Failed to write recent executions to metadata: ${err.message}`);

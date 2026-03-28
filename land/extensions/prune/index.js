@@ -3,6 +3,7 @@ import { setServices } from "./core.js";
 import { setModels as setJobModels, setMetadata as setJobMetadata, startPruneJob, stopPruneJob } from "./pruneJob.js";
 
 export async function init(core) {
+  core.llm.registerRootLlmSlot("prune");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setServices({
     models: core.models,

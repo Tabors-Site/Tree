@@ -1,6 +1,8 @@
 import log from "../../seed/log.js";
 import { setServices, startIntentJob, stopIntentJob } from "./intentJob.js";
 export async function init(core) {
+  core.llm.registerRootLlmSlot("intent");
+
   setServices({
     models: core.models,
     contributions: core.contributions,

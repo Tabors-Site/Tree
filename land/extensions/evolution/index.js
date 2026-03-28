@@ -4,6 +4,7 @@ import { setRunChat, setMetadata, bumpMetric, recordVisit, getPatterns } from ".
 import { startAnalysisJob, stopAnalysisJob } from "./job.js";
 
 export async function init(core) {
+  core.llm.registerRootLlmSlot("evolution");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setRunChat(async (opts) => {
     if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };

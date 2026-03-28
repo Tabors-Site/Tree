@@ -68,7 +68,6 @@ function getNodeValues(node) {
 // Write node values to metadata and save
 async function setNodeValues(node, values) {
   await _metadata.setExtMeta(node, "values", values);
-  await node.save();
 }
 
 function hasTradeValues(input) {
@@ -125,7 +124,6 @@ export async function setTransactionPolicy({ rootNodeId, policy, userId }) {
   }
 
   await _metadata.setExtMeta(root, "transactions", { ..._metadata.getExtMeta(root, "transactions"), policy });
-  await root.save();
 
   return {
     rootId: rootNodeId,

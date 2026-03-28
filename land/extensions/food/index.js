@@ -22,6 +22,8 @@ import {
 } from "./core.js";
 
 export async function init(core) {
+  core.llm.registerRootLlmSlot?.("food");
+
   // Wire dependencies
   const runChat = core.llm?.runChat || null;
   configure({

@@ -177,6 +177,7 @@ async function buildBranchProfiles(rootId, userId, username) {
         message: prompt,
         mode: "tree:respond",
         rootId,
+        slot: "boundary",
       });
 
       const parsed = parseJsonSafe(result?.answer);
@@ -338,6 +339,7 @@ async function buildSimilarityMatrix(profiles, userId, username, rootId) {
         message: prompt,
         mode: "tree:respond",
         rootId,
+        slot: "boundary",
       });
 
       const parsed = parseJsonSafe(result?.answer);
@@ -539,6 +541,7 @@ async function detectPatterns(profiles, matrix, branchIds, allNodes, userId, use
           message: prompt,
           mode: "tree:respond",
           rootId,
+          slot: "boundary",
         });
 
         const parsed = parseJsonSafe(result?.answer);

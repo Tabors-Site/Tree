@@ -9,6 +9,8 @@ export async function init(core) {
   const { deliverCascade } = await import("../../seed/tree/cascade.js");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
 
+  core.llm.registerRootLlmSlot?.("peerReview");
+
   setServices({
     runChat: async (opts) => {
       if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };

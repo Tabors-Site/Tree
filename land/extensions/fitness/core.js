@@ -112,6 +112,7 @@ export async function parseWorkout(message, userId, username, rootId) {
     message,
     mode: "tree:fitness-log",
     rootId,
+    slot: "fitness",
   });
 
   if (!answer) return null;

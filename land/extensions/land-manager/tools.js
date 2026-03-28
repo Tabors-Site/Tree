@@ -467,7 +467,6 @@ export default function getTools() {
           } else {
             await _metadata.setExtMeta(node, "extensions", config);
           }
-          await node.save();
           clearScopeCache();
 
           return { content: [{ type: "text", text: `Extension scope updated on "${node.name}". ${config.blocked?.length ? `Blocked: ${config.blocked.join(", ")}. ` : ""}${config.restricted ? `Restricted: ${JSON.stringify(config.restricted)}. ` : ""}Inherits to all children.` }] };

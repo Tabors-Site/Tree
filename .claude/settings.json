@@ -456,7 +456,11 @@
       "Bash(grep -r \"select.*\"\"roots\"\"\\\\|select.*roots\\\\|select\\(.*roots\" /home/tabor/github/Tree/land --include=*.js --include=*.ts)",
       "Bash(grep -r \"user\\\\.roots\\\\|user\\\\?.roots\\\\|userData\\\\.roots\\\\|data\\\\.roots\" /home/tabor/github/Tree/land --include=*.js --include=*.ts)",
       "Bash(grep -r metadata. /home/tabor/github/Tree/land/extensions/ --include=*.js)",
-      "Bash(xxd /home/tabor/github/Tree/land/extensions/understanding/html.js)"
+      "Bash(xxd /home/tabor/github/Tree/land/extensions/understanding/html.js)",
+      "Bash(find /home/tabor/github/Tree -name *sam* -o -name *verif* -o -name *test*plan*)",
+      "Bash(find /home/tabor/github/Tree/land -type f \\\\\\(-name *.test.* -o -name *spec* -o -name *verif* \\\\\\))",
+      "Bash(grep -l \"runChat\\\\|runPipeline\\\\|processMessage\" /home/tabor/github/Tree/land/extensions/*/index.js)",
+      "Bash(grep -rn \"router\\\\.post\\\\|router\\\\.put\\\\|router\\\\.delete\" /home/tabor/github/Tree/land/extensions/*/routes.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

@@ -326,7 +326,6 @@ Return ONLY JSON:
         meta.history = history.slice(0, 10);
         meta.lastTrace = traceResult;
         await _metadata.setExtMeta(rootNode, "trace", meta);
-        await rootNode.save();
       }
     } catch (err) {
       log.debug("Trace", `Failed to write trace metadata: ${err.message}`);

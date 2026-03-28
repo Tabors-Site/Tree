@@ -140,6 +140,7 @@ export async function detectContradictions(nodeId, noteContent, userId, username
       mode: "tree:respond",
       rootId,
       nodeId,
+      slot: "contradiction",
     });
 
     if (!answer) return [];

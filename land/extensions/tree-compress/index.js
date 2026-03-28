@@ -5,6 +5,7 @@ import { setServices, compressToBudget, compressTree, getCompressConfig, getComp
 export async function init(core) {
   // Wire services
   const { editStatus } = await import("../../seed/tree/statuses.js");
+  core.llm.registerRootLlmSlot("compress");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setServices({
     runChat: async (opts) => {

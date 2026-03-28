@@ -198,6 +198,7 @@ export async function analyzeTree(rootId, userId, username) {
         message: prompt,
         mode: "tree:respond",
         rootId,
+        slot: "evolution",
       });
 
       if (answer) {

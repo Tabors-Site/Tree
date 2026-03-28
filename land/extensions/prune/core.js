@@ -230,6 +230,7 @@ async function pruneNode(candidate, rootId, userId, username) {
           `If yes, respond with just that fact in one sentence. If no, respond with "nothing".`,
         mode: "tree:respond",
         rootId,
+        slot: "prune",
       });
 
       const answer = result?.answer?.trim();

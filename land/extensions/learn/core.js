@@ -194,6 +194,7 @@ export async function aiDecompose(text, userId, username, rootId) {
       message: prompt,
       mode: "tree:respond",
       rootId,
+      slot: "learn",
     });
 
     if (!answer) return null;

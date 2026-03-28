@@ -264,7 +264,6 @@ export async function generateSuggestions(rootId) {
       .slice(0, 50); // hard cap
 
     await _metadata.setExtMeta(rootDoc, "delegate", meta);
-    await rootDoc.save();
   }
 
   return suggestions;
@@ -311,7 +310,6 @@ export async function dismissSuggestion(rootId, suggestionId, userId) {
   suggestion.dismissedAt = new Date().toISOString();
 
   await _metadata.setExtMeta(root, "delegate", meta);
-  await root.save();
   return suggestion;
 }
 
@@ -332,7 +330,6 @@ export async function acceptSuggestion(rootId, suggestionId, userId) {
   suggestion.acceptedAt = new Date().toISOString();
 
   await _metadata.setExtMeta(root, "delegate", meta);
-  await root.save();
   return suggestion;
 }
 

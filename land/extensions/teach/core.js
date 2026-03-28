@@ -207,6 +207,7 @@ export async function extractLessons(rootId, userId, username) {
     message: prompt,
     mode: "tree:respond",
     rootId,
+    slot: "teach",
   });
 
   if (!result?.answer) throw new Error("Lesson extraction produced no result");

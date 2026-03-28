@@ -5,6 +5,9 @@ import { setServices, detectContradictions, writeContradictions, cascadeContradi
 export async function init(core) {
   const { checkCascade } = await import("../../seed/tree/cascade.js");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
+
+  core.llm.registerRootLlmSlot("contradiction");
+
   setServices({
     runChat: async (opts) => {
       if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };

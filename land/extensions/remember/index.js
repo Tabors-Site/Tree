@@ -47,7 +47,6 @@ export async function init(core) {
       }
 
       await core.metadata.setExtMeta(parentDoc, "remember", meta);
-      await parentDoc.save();
     } catch (err) {
       log.debug("Remember", `beforeNodeDelete memorial failed: ${err.message}`);
     }
@@ -87,7 +86,6 @@ export async function init(core) {
       }
 
       await core.metadata.setExtMeta(node, "remember", meta);
-      await node.save();
     } catch (err) {
       log.debug("Remember", `afterMetadataWrite split memorial failed: ${err.message}`);
     }

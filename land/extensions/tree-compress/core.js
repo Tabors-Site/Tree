@@ -262,6 +262,7 @@ async function compressNode(nodeId, depthMap, userId, username, rootId, config) 
       message: prompt,
       mode: "tree:respond",
       rootId,
+      slot: "compress",
     });
 
     if (!answer) return null;

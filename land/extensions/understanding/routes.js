@@ -1,7 +1,7 @@
 import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 import {
   createUnderstandingRun,
   findOrCreateUnderstandingRun,
@@ -40,6 +40,9 @@ function buildQueryString(req) {
 
 router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
   try {
+    if (req.authType === "shareToken" || req.authType === "publicAccess") {
+      return sendError(res, 403, ERR.FORBIDDEN, "Share tokens cannot create understanding runs");
+    }
     const { nodeId } = req.params;
     const { perspective = "general", incremental = false } = req.body;
     const userId = req.userId;
@@ -607,6 +610,9 @@ router.get(
 // ─────────────────────────────────────────────────────────────────────────
 
 router.post("/root/:nodeId/understandings/run/:runId/orchestrate", authenticate, async (req, res) => {
+  if (req.authType === "shareToken" || req.authType === "publicAccess") {
+    return sendError(res, 403, ERR.FORBIDDEN, "Share tokens cannot trigger understanding runs");
+  }
   const { nodeId, runId } = req.params;
   const userId = req.userId;
   const username = req.username;
@@ -631,6 +637,9 @@ router.post("/root/:nodeId/understandings/run/:runId/orchestrate", authenticate,
 });
 
 router.post("/root/:nodeId/understandings/run/:runId/stop", authenticate, async (req, res) => {
+  if (req.authType === "shareToken" || req.authType === "publicAccess") {
+    return sendError(res, 403, ERR.FORBIDDEN, "Share tokens cannot stop understanding runs");
+  }
   const { runId } = req.params;
   const userId = req.userId;
   const sessions = getSessionsForUser(userId);

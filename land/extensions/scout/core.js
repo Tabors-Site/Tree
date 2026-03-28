@@ -487,7 +487,6 @@ Synthesize an answer. Cite specific nodes. Name gaps where the tree lacks inform
         for (const g of result.gaps) existingGaps.add(g);
         meta.gaps = [...existingGaps].slice(0, 50);
         await _metadata.setExtMeta(node, "scout", meta);
-        await node.save();
       }
     } catch (err) {
       log.debug("Scout", `Failed to write scout metadata: ${err.message}`);

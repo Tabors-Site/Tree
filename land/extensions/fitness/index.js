@@ -20,6 +20,8 @@ import {
 import { setMetadata as setSetupMetadata } from "./setup.js";
 
 export async function init(core) {
+  core.llm.registerRootLlmSlot?.("fitness");
+
   const runChat = core.llm?.runChat || null;
   configure({
     Node: core.models.Node,

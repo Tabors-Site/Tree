@@ -87,7 +87,6 @@ export async function watchTool(nodeId, toolName) {
 
   meta.watchlist.push(toolName);
   await _metadata.setExtMeta(node, "approve", meta);
-  await node.save();
   return meta.watchlist;
 }
 
@@ -103,7 +102,6 @@ export async function unwatchTool(nodeId, toolName) {
 
   meta.watchlist = meta.watchlist.filter(t => t !== toolName);
   await _metadata.setExtMeta(node, "approve", meta);
-  await node.save();
   return meta.watchlist;
 }
 

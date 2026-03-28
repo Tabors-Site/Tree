@@ -100,6 +100,7 @@ export async function deriveThesis(rootId, userId) {
       message: prompt,
       mode: "tree:respond",
       rootId,
+      slot: "purpose",
     });
 
     if (!answer) return null;
@@ -163,6 +164,7 @@ export async function checkCoherence(noteContent, rootId, userId) {
       message: prompt,
       mode: "tree:respond",
       rootId,
+      slot: "purpose",
     });
 
     if (!answer) return null;
@@ -214,6 +216,7 @@ export async function checkCoherenceBatch(notes, rootId, userId) {
       message: prompt,
       mode: "tree:respond",
       rootId,
+      slot: "purpose",
     });
 
     if (!answer) return [];

@@ -67,6 +67,7 @@ router.post("/root/:rootId/fitness", authenticate, async (req, res) => {
         mode: "tree:fitness-coach",
         rootId,
         res,
+        slot: "fitness",
       });
 
       if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:fitness-coach", setup: true });
@@ -85,6 +86,7 @@ router.post("/root/:rootId/fitness", authenticate, async (req, res) => {
         userId, username, message,
         mode: "tree:fitness-coach",
         rootId, res,
+        slot: "fitness",
       });
       if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:fitness-coach" });
       return;
@@ -95,6 +97,7 @@ router.post("/root/:rootId/fitness", authenticate, async (req, res) => {
         userId, username, message,
         mode: "tree:fitness-review",
         rootId, res,
+        slot: "fitness",
       });
       if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:fitness-review" });
       return;

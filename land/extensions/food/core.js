@@ -203,6 +203,7 @@ export async function parseFood(message, userId, username, rootId) {
     message,
     mode: "tree:food-log",
     rootId,
+    slot: "food",
   });
 
   if (!answer) return null;

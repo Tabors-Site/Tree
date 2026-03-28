@@ -67,6 +67,7 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
         mode: "tree:food-coach",
         rootId,
         res,
+        slot: "food",
       });
 
       if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-coach", setup: true });
@@ -88,6 +89,7 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
         mode: "tree:food-daily",
         rootId,
         res,
+        slot: "food",
       });
 
       if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-daily" });

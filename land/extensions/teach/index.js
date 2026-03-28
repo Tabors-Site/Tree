@@ -11,6 +11,9 @@ import {
 
 export async function init(core) {
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
+
+  core.llm.registerRootLlmSlot("teach");
+
   setServices({
     models: core.models,
     contributions: core.contributions,

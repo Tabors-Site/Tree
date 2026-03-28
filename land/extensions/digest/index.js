@@ -7,6 +7,7 @@ let _jobTimer = null;
 
 export async function init(core) {
   configure({ metadata: core.metadata });
+  core.llm.registerRootLlmSlot("digest");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setRunChat(async (opts) => {
     if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
