@@ -420,7 +420,16 @@
       "Bash(grep -n \"fetch\\(\" /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/*.js)",
       "Bash(echo \"--- $file ---\" done)",
       "Bash(grep -n '\\\\$\\\\{' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/apiKeys.js)",
-      "Bash(grep -n 'fetch.*userId' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/*.js)"
+      "Bash(grep -n 'fetch.*userId' /home/tabor/github/Tree/land/extensions/html-rendering/html/pages/*.js)",
+      "Bash(grep -l \"export.*About\\\\|export.*Section\\\\|export.*API\" /home/tabor/github/Tree/site/src/components/Welcome/About/*.jsx)",
+      "Bash(ls -lh /home/tabor/github/Tree/site/src/components/Welcome/About/*.jsx)",
+      "Bash(xargs ls:*)",
+      "Bash(find /home/tabor/github/Tree -name *scheduler* -type f)",
+      "Bash(grep -r scheduler /home/tabor/github/Tree/land --include=*.md -l)",
+      "Bash(find /home/tabor/github -name SCHEDULER* -o -name *scheduler*spec*)",
+      "Bash(find /home/tabor/github/Tree/land -name *home* -type f ! -path */node_modules/*)",
+      "Bash(find /home/tabor/github/Tree/land -name \"*.js\" -type f -exec grep -l \"enrichContext\" {})",
+      "Bash(grep -n \"get-root-nodes\\\\|get-tree\\\\|create-tree\" /home/tabor/github/Tree/land/extensions/treeos/modes/home/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

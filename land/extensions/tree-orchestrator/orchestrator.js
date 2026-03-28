@@ -38,7 +38,15 @@ function localClassify(message) {
   if (/\b(delete|remove|move|merge|reorganize|clean up|mark .* completed?)\b/.test(lower))
     return { intent: "destructive", confidence: 0.7, summary: message.slice(0, 100), responseHint: "" };
 
-  // Everything else: placement
+  // Explicit action commands: high-confidence placement
+  if (/^(start|build|create|add|give me|set up|make|write|plan|draft|outline|design|launch|begin)\b/.test(lower))
+    return { intent: "place", confidence: 0.8, summary: message.slice(0, 100), responseHint: "" };
+
+  // Personal/reflective statements without action verbs: conversational query
+  if (/^(i did|i was|it was|that was|we did|we were|he |she |they |it's been|i've been|i think|i feel|i guess|so |exactly|sounds good|makes sense)\b/.test(lower))
+    return { intent: "query", confidence: 0.7, summary: message.slice(0, 100), responseHint: "" };
+
+  // Everything else: placement (librarian decides what to do with it)
   return { intent: "place", confidence: 0.6, summary: message.slice(0, 100), responseHint: "" };
 }
 import { setChatContext } from "../../seed/ws/chatTracker.js";
@@ -1394,15 +1402,13 @@ export async function orchestrateTreeRequest({
   // SHORT-MEMORY CHECK — explicit defer or vague placements
   // ────────────────────────────────────────────────────────
 
-  // Explicit user defer → force defer
+  // Only explicit "defer" intent triggers deferral (user said "hold this"/"park this").
+  // Normal "place" intents always flow to the librarian.
+  let deferDecision = { defer: false };
   if (classification.intent === "defer") {
+    deferDecision = { defer: true, reason: "User explicitly requested deferral" };
     classification.intent = "place"; // treat as place for the defer path
-    classification.placementAxes = null;
   }
-
-  const deferDecision = classification.intent === "place" && !classification.placementAxes
-      ? { defer: true, reason: "User explicitly requested deferral" }
-      : shouldDeferToMemory(classification);
   if (deferDecision.defer) {
  log.verbose("Tree Orchestrator", ` Deferred to short memory: ${deferDecision.reason}`);
 
@@ -2172,9 +2178,11 @@ async function runRespond({
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Decide whether a "place" classification should be deferred to short-term
- * memory instead of placed immediately. Based on the classifier's placement
- * axes: pathConfidence, domainNovelty, relationalComplexity.
+ * CURRENTLY UNUSED. No classifier (local or LLM) provides placementAxes.
+ * The defer decision is handled inline: only explicit "defer" intent triggers
+ * deferral. This function is preserved for a future classifier that returns
+ * { placementAxes: { pathConfidence, domainNovelty, relationalComplexity } }.
+ * Until then, it always returns { defer: false } and should not be wired in.
  *
  * @returns {{ defer: boolean, reason?: string }}
  */

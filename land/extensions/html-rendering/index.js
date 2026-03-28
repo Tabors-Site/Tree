@@ -4,6 +4,7 @@ import buildHtmlRoutes from "./htmlRoutes.js";
 import appRouter from "./app/app.js";
 import chatRouter from "./app/chat.js";
 import setupRouter from "./app/setup.js";
+import flowDashboardRouter from "./app/flowDashboard.js";
 import { renderLoginPage, renderRegisterPage, renderForgotPasswordPage } from "./pages.js";
 import * as renderers from "./renderers.js";
 import { resolveHtmlShareAccess } from "./shareAuth.js";
@@ -22,6 +23,7 @@ router.use("/", htmlRouter);
 pageRouter.use("/", appRouter);
 pageRouter.use("/", chatRouter);
 pageRouter.use("/", setupRouter);
+pageRouter.use("/", flowDashboardRouter);
 
 // Canopy admin pages (HTML-only, moved from routes/canopy.js)
 import authenticate from "../../seed/middleware/authenticate.js";

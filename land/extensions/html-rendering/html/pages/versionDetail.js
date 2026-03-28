@@ -818,6 +818,9 @@ export function renderVersionDetail({
       <a href="${backUrl}" class="back-link">
         View All Versions
       </a>
+      <a href="/api/v1/node/${nodeId}/command-center${qs}" class="back-link">
+        Command Center
+      </a>
     </div>
 
     <!-- Header -->

@@ -740,8 +740,10 @@ input[type="file"].hidden-input {
       <ul class="notes-list">
       ${notes
         .map((n) => {
+          const noteUserId = typeof n.userId === "object" ? n.userId?._id?.toString() : n.userId?.toString();
+          const noteUsername = (typeof n.userId === "object" ? n.userId?.username : null) || n.username;
           const isSelf =
-            currentUserId && n.userId && n.userId.toString() === currentUserId;
+            currentUserId && noteUserId && noteUserId === currentUserId;
           const rawPreview =
             n.contentType === "text"
               ? n.content.length > 169
@@ -750,9 +752,9 @@ input[type="file"].hidden-input {
               : n.content.split("/").pop();
           const preview = escapeHtml(rawPreview);
 
-          const userLabel = n.userId
-            ? `<a href="/api/v1/user/${n.userId}?token=${encodeURIComponent(token)}&html">${escapeHtml(n.username ?? n.userId)}</a>`
-            : escapeHtml(n.username ?? "Unknown user");
+          const userLabel = noteUserId
+            ? `<a href="/api/v1/user/${noteUserId}?token=${encodeURIComponent(token)}&html">${escapeHtml(noteUsername ?? noteUserId)}</a>`
+            : escapeHtml(noteUsername ?? "Unknown user");
 
           return `
           <li

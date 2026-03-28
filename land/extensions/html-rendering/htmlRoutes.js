@@ -10,7 +10,7 @@ import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
 import User from "../../seed/models/user.js";
 import mongoose from "mongoose";
-import { sendError, ERR, DELETED } from "../../seed/protocol.js";
+import { sendOk, sendError, ERR, DELETED } from "../../seed/protocol.js";
 import { getUserMeta } from "../../seed/tree/userMetadata.js";
 import { getTreeStructure } from "../../seed/tree/treeData.js";
 import { getContributions } from "../../seed/tree/contributions.js";
@@ -266,6 +266,133 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
       }));
     } catch (err) {
       log.error("HTML", "Node detail render error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // ── COMMAND CENTER ──────────────────────────────────────────────────
+  // Must be before /node/:nodeId/:version so "command-center" isn't matched as a version.
+
+  router.get("/node/:nodeId/command-center", urlAuth, async (req, res) => {
+    try {
+      const { nodeId } = req.params;
+      const node = await Node.findById(nodeId).select("name metadata parent rootOwner systemRole").lean();
+      if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
+
+      const rootId = node.rootOwner || nodeId;
+      const rootNode = rootId !== nodeId ? await Node.findById(rootId).select("name").lean() : node;
+
+      let path = node.name;
+      try { path = await buildPathString(nodeId); } catch {}
+
+      const { getBlockedExtensionsAtNode, getToolOwner, getModeOwner, getConfinedExtensions } = await import("../../seed/tree/extensionScope.js");
+      const scope = await getBlockedExtensionsAtNode(nodeId);
+      const confinedSet = getConfinedExtensions();
+
+      const isLandRoot = node.systemRole === "land-root";
+
+      const { getAllToolNamesForBigMode, getSubModes } = await import("../../seed/ws/modes/registry.js");
+      const { resolveTools } = await import("../../seed/ws/tools.js");
+      const { filterToolNamesByScope } = await import("../../seed/tree/extensionScope.js");
+      const { getExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+
+      const toolZones = isLandRoot ? ["tree", "home", "land"] : [node.rootOwner ? "tree" : "home"];
+      const allToolNames = [...new Set(toolZones.flatMap(z => getAllToolNamesForBigMode(z)))];
+      const filteredToolNames = filterToolNamesByScope(allToolNames, scope.blocked, scope.restricted);
+      const toolDefs = resolveTools(allToolNames);
+
+      const toolConfig = getExtMeta(node, "tools");
+      const nodeBlocked = new Set(toolConfig.blocked || []);
+      const nodeAllowed = new Set(toolConfig.allowed || []);
+
+      const tools = allToolNames.map(name => {
+        const def = toolDefs.find(d => d.function?.name === name);
+        const owner = getToolOwner(name);
+        const isFiltered = !filteredToolNames.includes(name);
+        const isNodeBlocked = nodeBlocked.has(name);
+
+        let status = "active";
+        if (isFiltered) status = scope.restricted?.has(owner) ? "restricted" : "blocked";
+        if (isNodeBlocked) status = "blocked";
+
+        return {
+          name,
+          description: def?.function?.description || "",
+          extName: owner || "core",
+          readOnly: owner?.readOnly || false,
+          destructive: def?.function?.annotations?.destructiveHint || false,
+          status,
+          nodeBlocked: isNodeBlocked,
+        };
+      });
+
+      // Land root sees all modes (blocking here cascades everywhere).
+      // Tree nodes see only tree modes. Home sees home modes.
+      const allModes = isLandRoot
+        ? [...(getSubModes("tree") || []), ...(getSubModes("home") || []), ...(getSubModes("land") || [])]
+        : getSubModes(node.rootOwner ? "tree" : "home") || [];
+
+      const modeOverrides = getExtMeta(node, "modes");
+
+      const modes = allModes.map(m => {
+        const owner = getModeOwner(m.key);
+        const isBlocked = owner ? scope.blocked.has(owner) : false;
+
+        return {
+          key: m.key,
+          emoji: m.emoji || "",
+          label: m.label || m.key,
+          bigMode: m.key.split(":")[0] || "tree",
+          extName: owner || "",
+          intent: m.key.split(":")[1] || "",
+          status: isBlocked ? "blocked" : "active",
+        };
+      });
+
+      const { getLoadedManifests } = await import("../../extensions/loader.js");
+      const manifests = getLoadedManifests();
+
+      const extensions = manifests.map(m => {
+        let status = "active";
+        if (scope.blocked.has(m.name)) status = "blocked";
+        else if (scope.restricted?.has(m.name)) status = "restricted";
+        else if (confinedSet.has(m.name) && !scope.allowed?.has(m.name)) status = "confined";
+
+        return {
+          name: m.name,
+          version: m.version || "",
+          description: m.description || "",
+          status,
+        };
+      }).sort((a, b) => {
+        const order = { active: 0, restricted: 1, confined: 2, blocked: 3 };
+        return (order[a.status] || 4) - (order[b.status] || 4);
+      });
+
+      const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+
+      if (!wantHtml) {
+        const active = tools.filter(t => t.status === "active");
+        const blocked = tools.filter(t => t.status !== "active");
+        return sendOk(res, {
+          node: { id: nodeId, name: node.name, path },
+          root: { id: rootId, name: rootNode?.name || rootId },
+          tools: { active: active.length, blocked: blocked.length, total: tools.length },
+          modes: modes.map(m => `${m.emoji} ${m.key} (${m.status})`),
+          extensions: extensions.map(e => `${e.name} (${e.status})`),
+        });
+      }
+
+      const qs = req.query.token ? `?token=${req.query.token}&html` : "?html";
+
+      const { renderCommandCenter } = await import("./html/pages/commandCenter.js");
+      return res.send(renderCommandCenter({
+        nodeId, nodeName: node.name || nodeId, rootId, rootName: rootNode?.name || rootId, path,
+        extensions, tools, modes, toolConfig, modeOverrides,
+        blocked: scope.blocked, restricted: scope.restricted, allowed: scope.allowed, confined: confinedSet, qs,
+      }));
+    } catch (err) {
+      log.error("HTML", "Command center error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
@@ -908,118 +1035,68 @@ export default function buildHtmlRoutes({ urlAuth, optionalAuth, renderers }) {
     }
   });
 
-  // ── COMMAND CENTER ──────────────────────────────────────────────────
-  // Full capability surface of a tree at any position.
-  // Tools, modes, extensions. Color-coded. Toggleable.
-
-  router.get("/node/:nodeId/command-center", urlAuth, htmlOnly, async (req, res) => {
+  // ── COMMAND CENTER: extension block/allow (HTML form POST) ──
+  router.post("/node/:nodeId/extensions", urlAuth, htmlOnly, async (req, res) => {
     try {
       const { nodeId } = req.params;
-      const node = await Node.findById(nodeId).select("name metadata parent rootOwner").lean();
+      const node = await Node.findById(nodeId);
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
-      // Resolve root
-      const rootId = node.rootOwner || nodeId;
-      const rootNode = rootId !== nodeId ? await Node.findById(rootId).select("name").lean() : node;
-
-      // Build path
-      let path = node.name;
-      try { path = await buildPathString(nodeId); } catch {}
-
-      // Extension scope at this node
-      const { getBlockedExtensionsAtNode, getToolOwner, getModeOwner, getConfinedExtensions } = await import("../../seed/tree/extensionScope.js");
-      const scope = await getBlockedExtensionsAtNode(nodeId);
-      const confinedSet = getConfinedExtensions();
-
-      // All tools
-      const { getAllToolNamesForBigMode, getSubModes } = await import("../../seed/ws/modes/registry.js");
-      const { resolveTools } = await import("../../seed/ws/tools.js");
-      const { filterToolNamesByScope } = await import("../../seed/tree/extensionScope.js");
+      const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
       const { getExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+      const { clearScopeCache } = await import("../../seed/tree/extensionScope.js");
+      const extConfig = getExtMeta(node, "extensions") || {};
 
-      const allToolNames = getAllToolNamesForBigMode("tree");
-      const filteredToolNames = filterToolNamesByScope(allToolNames, scope.blocked, scope.restricted);
-      const toolDefs = resolveTools(allToolNames);
+      if (req.body.block) {
+        const name = req.body.block;
+        extConfig.blocked = [...new Set([...(extConfig.blocked || []), name])];
+      }
+      if (req.body.allow) {
+        const name = req.body.allow;
+        extConfig.blocked = (extConfig.blocked || []).filter(e => e !== name);
+      }
 
-      const toolConfig = getExtMeta(node, "tools");
-      const nodeBlocked = new Set(toolConfig.blocked || []);
-      const nodeAllowed = new Set(toolConfig.allowed || []);
-
-      const tools = allToolNames.map(name => {
-        const def = toolDefs.find(d => d.function?.name === name);
-        const owner = getToolOwner(name);
-        const isFiltered = !filteredToolNames.includes(name);
-        const isNodeBlocked = nodeBlocked.has(name);
-
-        let status = "active";
-        if (isFiltered) status = scope.restricted?.has(owner?.extName) ? "restricted" : "blocked";
-        if (isNodeBlocked) status = "blocked";
-
-        return {
-          name,
-          description: def?.function?.description || "",
-          extName: owner?.extName || "unknown",
-          readOnly: owner?.readOnly || false,
-          destructive: def?.function?.annotations?.destructiveHint || false,
-          status,
-          nodeBlocked: isNodeBlocked,
-        };
-      });
-
-      // All modes
-      const treeModes = getSubModes("tree") || [];
-      const homeModes = getSubModes("home") || [];
-      const landModes = getSubModes("land") || [];
-      const allModes = [...treeModes, ...homeModes, ...landModes];
-
-      const modeOverrides = getExtMeta(node, "modes");
-
-      const modes = allModes.map(m => {
-        const owner = getModeOwner(m.key);
-        const isBlocked = owner ? scope.blocked.has(owner) : false;
-
-        return {
-          key: m.key,
-          emoji: m.emoji || "",
-          label: m.label || m.key,
-          bigMode: m.key.split(":")[0] || "tree",
-          extName: owner || "",
-          intent: m.key.split(":")[1] || "",
-          status: isBlocked ? "blocked" : "active",
-        };
-      });
-
-      // All extensions
-      const { getLoadedManifests } = await import("../../extensions/loader.js");
-      const manifests = getLoadedManifests();
-
-      const extensions = manifests.map(m => {
-        let status = "active";
-        if (scope.blocked.has(m.name)) status = "blocked";
-        else if (scope.restricted?.has(m.name)) status = "restricted";
-        else if (confinedSet.has(m.name) && !scope.allowed?.has(m.name)) status = "confined";
-
-        return {
-          name: m.name,
-          version: m.version || "",
-          description: m.description || "",
-          status,
-        };
-      }).sort((a, b) => {
-        const order = { active: 0, restricted: 1, confined: 2, blocked: 3 };
-        return (order[a.status] || 4) - (order[b.status] || 4);
-      });
+      await setExtMeta(node, "extensions", Object.keys(extConfig).length > 0 ? extConfig : undefined);
+      await node.save();
+      clearScopeCache();
 
       const qs = req.query.token ? `?token=${req.query.token}&html` : "?html";
-
-      const { renderCommandCenter } = await import("./html/commandCenter.js");
-      return res.send(renderCommandCenter({
-        nodeId, nodeName: node.name || nodeId, rootId, rootName: rootNode?.name || rootId, path,
-        extensions, tools, modes, toolConfig, modeOverrides,
-        blocked: scope.blocked, restricted: scope.restricted, allowed: scope.allowed, confined: confinedSet, qs,
-      }));
+      return res.redirect(`/api/v1/node/${nodeId}/command-center${qs}`);
     } catch (err) {
-      log.error("HTML", "Command center error:", err.message);
+      log.error("HTML", "CC ext toggle error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // ── COMMAND CENTER: tool block/allow (HTML form POST) ──
+  router.post("/node/:nodeId/tools", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { nodeId } = req.params;
+      const node = await Node.findById(nodeId);
+      if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
+
+      const { setExtMeta, getExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+      const toolConfig = getExtMeta(node, "tools") || {};
+
+      if (req.body.block) {
+        const name = req.body.block;
+        toolConfig.blocked = [...new Set([...(toolConfig.blocked || []), name])];
+        toolConfig.allowed = (toolConfig.allowed || []).filter(t => t !== name);
+      }
+      if (req.body.allow) {
+        const name = req.body.allow;
+        toolConfig.allowed = [...new Set([...(toolConfig.allowed || []), name])];
+        toolConfig.blocked = (toolConfig.blocked || []).filter(t => t !== name);
+      }
+
+      const hasConfig = (toolConfig.allowed?.length || 0) + (toolConfig.blocked?.length || 0) > 0;
+      await setExtMeta(node, "tools", hasConfig ? toolConfig : undefined);
+      await node.save();
+
+      const qs = req.query.token ? `?token=${req.query.token}&html` : "?html";
+      return res.redirect(`/api/v1/node/${nodeId}/command-center${qs}`);
+    } catch (err) {
+      log.error("HTML", "CC tool toggle error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
