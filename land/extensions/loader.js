@@ -847,8 +847,6 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           try {
             if (tool.handler) {
               // Full tool with handler: register on MCP server
-              // SDK signature: tool(name, description, schema, cb) - max 4 args
-              // Annotations go into the schema object if needed
               mcpServer.tool(
                 tool.name,
                 tool.description,
@@ -1245,6 +1243,12 @@ export async function uninstallExtension(name) {
     // Clean up tool definitions and mode registrations so stale entries
     // don't linger in the registry after uninstall.
     try {
+      // Remove from MCP replay array and invalidate active sessions
+      const { mcpServerInstance } = await import("../mcp/server.js");
+      if (mcpServerInstance?.removeToolsByOwner) {
+        mcpServerInstance.removeToolsByOwner(name, getToolOwner);
+      }
+      // Remove from tool definition registry
       const { unregisterToolsForExtension } = await import("../seed/ws/tools.js");
       unregisterToolsForExtension(name, getToolOwner);
     } catch {}

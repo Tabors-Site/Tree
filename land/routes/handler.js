@@ -121,6 +121,8 @@ export default async function registerURLRoutes(app, opts = {}) {
   await connectMcpTransport();
 
   app.post("/mcp", authenticateMCP, handleMcpRequest);
+  app.get("/mcp", authenticateMCP, handleMcpRequest);
+  app.delete("/mcp", authenticateMCP, handleMcpRequest);
 
   // Serve uploaded files (path matches seed/tree/notes.js and uploadCleanup.js)
   const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, "../uploads");

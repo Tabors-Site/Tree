@@ -13,6 +13,7 @@
  */
 
 import crypto from "crypto";
+import * as rendererExports from "./renderers.js";
 import router, { pageRouter } from "./routes.js";
 import buildHtmlRoutes, { setMetadata as setHtmlMetadata } from "./htmlRoutes.js";
 import { resolveHtmlShareAccess } from "./shareAuth.js";
@@ -126,6 +127,8 @@ export async function init(core) {
       resolvePublicRoot,
       isPublic,
       hasTreeLlm,
+      // All page renderers (used by extensions via html().renderXxx())
+      ...rendererExports,
     },
   };
 }

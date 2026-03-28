@@ -79,7 +79,8 @@ export default {
 | `ownership` | Tree ownership | `addContributor`, `removeContributor`, `transferOwnership` |
 | `tree` | Tree infrastructure | `getAncestorChain`, `checkIntegrity`, `isTreeAlive` |
 | `cascade` | Signal propagation | `deliverCascade` |
-| `metadata` | Node metadata | `getExtMeta`, `setExtMeta`, `mergeExtMeta` |
+| `metadata` | Node metadata | `getExtMeta`, `setExtMeta`, `mergeExtMeta`, `incExtMeta`, `pushExtMeta`, `batchSetExtMeta`, `unsetExtMeta` |
+| `userMetadata` | User metadata | `getUserMeta`, `setUserMeta`, `incUserMeta`, `pushUserMeta`, `batchSetUserMeta`, `unsetUserMeta` |
 | `protocol` | Error codes, constants | `sendOk`, `sendError`, `ERR`, `WS`, `CASCADE` |
 | `websocket` | Real-time events | `emitToUser`, `registerSocketHandler` |
 | `mcp` | MCP connections | `connectToMCP`, `closeMCPClient` |
@@ -98,7 +99,7 @@ Extensions load in topological order. If extension A depends on extension B (`ne
 
 ### hooks and modes are always available
 
-`core.hooks` and `core.modes` are injected into every scoped core regardless of declaration. You don't need to declare them. But declaring `services: ["hooks"]` documents intent and triggers the init diagnostic if something else is wrong.
+`core.hooks`, `core.modes`, `core.metadata`, and `core.userMetadata` are injected into every scoped core regardless of declaration. You never need to declare them. They are core infrastructure available to all extensions.
 
 ### Extension-provided services
 
@@ -416,7 +417,9 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 | Ownership | `core.ownership.*` | Yes |
 | Tree | `core.tree.*` | Yes |
 | Node Locks | `core.nodeLocks.*` | Yes |
-| Metadata | `core.metadata.*` (namespace-enforced) | Yes |
+| Metadata | `core.metadata.*` (namespace-enforced, 7 functions) | Yes (always injected) |
+| User Metadata | `core.userMetadata.*` (6 functions) | Yes (always injected) |
+| Scope | `core.scope.*` | Yes |
 | Cascade | `core.cascade.*` | Yes |
 | Protocol | `core.protocol.*` | Yes |
 | Energy | `core.energy.*` | No-op stub if extension not loaded |
@@ -826,18 +829,20 @@ Convention:
 - Reading metadata from core code (e.g. treeData) should use:
   `(node.metadata instanceof Map ? node.metadata.get("name") : node.metadata?.name)`
 
-### Core code fallback pattern
+### Reaching other extensions
 
-If core code optionally calls extension functionality, use a try/catch import with stubs:
+Use `getExtension()` to access another extension's exports. Never import extension files directly:
 
 ```js
-let mod;
-try { mod = await import("../../extensions/my-ext/core.js"); }
-catch { mod = { myFn: async () => { throw new Error("Extension not installed"); } }; }
-export const { myFn } = mod;
+import { getExtension } from "../loader.js";
+
+const gateway = getExtension("gateway");
+if (gateway?.exports?.dispatchNotifications) {
+  await gateway.exports.dispatchNotifications(rootId, notifications);
+}
 ```
 
-This lets core gracefully degrade when an extension is disabled.
+This returns null if the extension isn't installed. Safe. Decoupled.
 
 ## Custom AI Modes
 
@@ -992,10 +997,8 @@ ext-restrict food read            Restrict to read-only tools
 Extensions should check spatial scope before running AI conversations:
 
 ```js
-import { isExtensionBlockedAtNode } from "../../seed/tree/extensionScope.js";
-
-// In your route handler:
-if (await isExtensionBlockedAtNode("my-extension", rootId)) {
+// In your route handler (core.scope is always available):
+if (await core.scope.isExtensionBlockedAtNode("my-extension", rootId)) {
   return res.status(403).json({ error: "This extension is blocked on this branch." });
 }
 ```
@@ -1066,17 +1069,21 @@ No action = default GET. Unknown action shows available subcommands. Missing req
 
 ## Per-User Data Storage (metadata)
 
-Same pattern as per-node metadata. Extensions store user-scoped data in `user.metadata`:
+Same pattern as per-node metadata. Use `core.userMetadata` (always available, no declaration needed):
 
 ```js
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
-
 // Read
-const energy = getUserMeta(user, "energy");  // returns {} if empty
+const energy = core.userMetadata.getUserMeta(user, "energy");  // returns {} if empty
 
-// Write
-setUserMeta(user, "energy", { available: { amount: 100 } });
+// Write (sync, caller must save)
+core.userMetadata.setUserMeta(user, "energy", { available: { amount: 100 } });
 await user.save();
+
+// Atomic operations (by ID or document, no need to save)
+await core.userMetadata.incUserMeta(userId, "energy", "used", 5);
+await core.userMetadata.pushUserMeta(userId, "energy", "history", { ts: Date.now() }, 50);
+await core.userMetadata.batchSetUserMeta(userId, "energy", { available: 95, lastUsed: Date.now() });
+await core.userMetadata.unsetUserMeta(userId, "old-extension");
 ```
 
 Convention: namespace key matches your manifest name. Same rules as node metadata.
@@ -1187,7 +1194,7 @@ setRunChat(async (opts) => {
 
 **Injecting into enrichContext without guarding.** Every enrichContext handler should check if relevant data exists before injecting. If your extension has no data for this node, return early. Do not inject empty objects. Do not run database queries on every context build unless you have data to contribute.
 
-**Writing to metadata without setExtMeta.** Direct `node.metadata.set()` bypasses namespace ownership, document size guards, and the afterMetadataWrite hook. Always use `setExtMeta(node, "your-extension", data)`. The only exception is atomic MongoDB operations ($push/$slice, $inc) that cannot go through read-modify-write.
+**Writing to metadata without the kernel API.** Direct `node.metadata.set()` or `Node.updateOne({ $set: ... })` bypasses namespace ownership, document size guards, and the afterMetadataWrite hook. Always use `core.metadata.*` functions. The kernel provides atomic operations for every pattern: `incExtMeta` for counters, `pushExtMeta` for capped arrays, `batchSetExtMeta` for multi-field writes, `unsetExtMeta` for cleanup. There is no reason to use direct MongoDB for metadata.
 
 **Missing LLM_PRIORITY on background calls.** Every LLM call needs a priority. BACKGROUND for hooks and jobs. INTERACTIVE for user-triggered tools. GATEWAY for external channels. Without priority, background extensions compete with human chat.
 
