@@ -184,26 +184,50 @@ const PROFILES = {
 };
 
 async function pickExtensions(horizonUrl) {
-  if (!horizonUrl) return;
+  let extensions = [];
+  let isLocal = false;
 
-  let extensions;
-  try {
-    const fetch = (await import("node-fetch")).default;
-    console.log(`  Checking extension registry at ${horizonUrl}...`);
-    const res = await fetch(`${horizonUrl}/extensions`, {
-      headers: { "Content-Type": "application/json" },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    extensions = data.extensions || [];
-  } catch (err) {
-    console.log(`  Could not reach registry: ${err.message}`);
-    console.log("  Extensions will load from local extensions/ directory.\n");
-    return;
+  // Try Horizon registry first
+  if (horizonUrl) {
+    try {
+      const fetch = (await import("node-fetch")).default;
+      console.log(`  Checking extension registry at ${horizonUrl}...`);
+      const res = await fetch(`${horizonUrl}/extensions`, {
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      extensions = data.extensions || [];
+    } catch (err) {
+      console.log(`  Could not reach registry: ${err.message}`);
+    }
+  }
+
+  // Fallback: scan local extensions/ directory
+  if (extensions.length === 0) {
+    const extDir = path.join(__dirname, "extensions");
+    if (fs.existsSync(extDir)) {
+      const entries = fs.readdirSync(extDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
+        const manifestPath = path.join(extDir, entry.name, "manifest.js");
+        if (fs.existsSync(manifestPath)) {
+          try {
+            const { pathToFileURL } = await import("url");
+            const { default: manifest } = await import(pathToFileURL(manifestPath).href);
+            extensions.push({ name: manifest.name || entry.name, version: manifest.version || "1.0.0" });
+          } catch {}
+        }
+      }
+      if (extensions.length > 0) {
+        isLocal = true;
+        console.log(`  Found ${extensions.length} local extensions.\n`);
+      }
+    }
   }
 
   if (extensions.length === 0) {
-    console.log("  No extensions in registry.\n");
+    console.log("  No extensions found.\n");
     return;
   }
 
@@ -226,26 +250,39 @@ async function pickExtensions(horizonUrl) {
   const extMap = {};
   for (const ext of extensions) extMap[ext.name] = ext;
 
+  const finalize = async (selected) => {
+    const names = selected.map(e => e.name);
+    if (isLocal) {
+      // Write profile filter so the loader only loads selected extensions
+      const profilePath = path.join(__dirname, "extensions", ".treeos-profile");
+      fs.writeFileSync(profilePath, names.join("\n") + "\n", "utf8");
+      console.log(`  Profile saved. ${names.length} extensions will load on boot.\n`);
+    } else {
+      // Install from Horizon registry
+      await installSelected(selected, horizonUrl);
+    }
+  };
+
   if (choice === "1") {
     const profile = PROFILES.minimal;
     const selected = profile.extensions.filter(n => extMap[n]).map(n => extMap[n]);
-    console.log(`\n  Installing ${selected.length} extensions (${profile.label})...\n`);
+    console.log(`\n  ${profile.label}: ${selected.length} extensions.\n`);
     rl.close();
-    return await installSelected(selected, horizonUrl);
+    return await finalize(selected);
   }
 
   if (choice === "2") {
     const profile = PROFILES.standard;
     const selected = profile.extensions.filter(n => extMap[n]).map(n => extMap[n]);
-    console.log(`\n  Installing ${selected.length} extensions (${profile.label})...\n`);
+    console.log(`\n  ${profile.label}: ${selected.length} extensions.\n`);
     rl.close();
-    return await installSelected(selected, horizonUrl);
+    return await finalize(selected);
   }
 
   if (choice === "3") {
-    console.log(`\n  Installing all ${extensions.length} extensions...\n`);
+    console.log(`\n  Full: all ${extensions.length} extensions.\n`);
     rl.close();
-    return await installSelected(extensions, horizonUrl);
+    return await finalize(extensions);
   }
 
   // Custom: category-by-category selection
@@ -351,7 +388,7 @@ async function pickExtensions(horizonUrl) {
     return;
   }
 
-  await installSelected(selected, horizonUrl);
+  await finalize(selected);
 }
 
 async function installSelected(selected, horizonUrl) {

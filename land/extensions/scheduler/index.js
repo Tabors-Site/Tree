@@ -58,10 +58,15 @@ export async function init(core) {
     if (rootId) activeRoots.add(String(rootId));
   }, "scheduler");
 
-  // Fallback timer: if breath is not installed, scan every 60s
-  setTimeout(() => {
-    if (breathConnected) return; // breath is handling it
-    log.info("Scheduler", "Breath not detected. Starting fallback timer (60s).");
+  // Fallback timer: if breath extension is not installed, scan every 60s.
+  // Check directly via getExtension instead of waiting for an event.
+  setTimeout(async () => {
+    if (breathConnected) return;
+    try {
+      const { getExtension } = await import("../loader.js");
+      if (getExtension("breath")) return; // breath is installed, just hasn't fired yet
+    } catch {}
+    log.info("Scheduler", "Breath not installed. Starting fallback timer (60s).");
     fallbackTimer = setInterval(async () => {
       for (const rootId of activeRoots) {
         try {
@@ -76,7 +81,7 @@ export async function init(core) {
       }
     }, 60000);
     if (fallbackTimer.unref) fallbackTimer.unref();
-  }, 30000); // wait 30s to see if breath connects
+  }, 30000);
 
   // ── afterStatusChange ──
   // When a scheduled node is completed, record the completion.

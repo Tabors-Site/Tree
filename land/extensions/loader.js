@@ -75,6 +75,18 @@ function withExtensionTimeout(router, extName) {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DISABLED_FILE = path.join(__dirname, ".disabled");
 
+// Profile filter: if .treeos-profile exists, only listed extensions load.
+// Written by boot.js when user selects an install profile. One name per line.
+// If absent, all extensions load (backward compatible).
+let _profileFilter = null;
+try {
+  const profilePath = path.join(__dirname, ".treeos-profile");
+  if (fs.existsSync(profilePath)) {
+    const names = fs.readFileSync(profilePath, "utf8").split("\n").map(s => s.trim()).filter(Boolean);
+    if (names.length > 0) _profileFilter = new Set(names);
+  }
+} catch {}
+
 // ---------------------------------------------------------------------------
 // Disabled extensions file (synced to disk so loader can read before DB)
 // ---------------------------------------------------------------------------
@@ -1065,6 +1077,9 @@ async function discoverManifests() {
     try {
       // Skip template and hidden directories
       if (entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
+
+      // Profile filter: if .treeos-profile exists, only load listed extensions
+      if (_profileFilter && !_profileFilter.has(entry.name)) continue;
 
       if (entry.isDirectory()) {
         const manifestPath = path.join(__dirname, entry.name, "manifest.js");
