@@ -34,7 +34,7 @@ treeos start
 ## What's Inside
 
 ```
-seed/           The kernel. Two schemas, a conversation loop, hooks, cascade, extension loader.
+seed/           The kernel. Six models, a conversation loop, hooks, cascade, extension loader.
 extensions/     91 extensions. All optional. The kernel boots without any of them.
 routes/         HTTP API endpoints.
 orchestrators/  Pipeline runtime for multi-step AI operations.

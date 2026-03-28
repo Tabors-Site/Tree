@@ -11,7 +11,7 @@ const KernelPage = () => {
           <h1 className="lp-title">The Seed</h1>
           <p className="lp-subtitle">What runs when everything else is stripped away.</p>
           <p className="lp-tagline">
-            The kernel is called the seed. You plant it. It grows trees. Two schemas,
+            The kernel is called the seed. You plant it. It grows trees. Six models,
             a conversation loop, a hook system, a cascade engine, and an extension loader.
             Remove every extension and the seed still boots. It defines the data contract
             that extensions build on and the resolution chains that determine what happens
@@ -137,10 +137,12 @@ const KernelPage = () => {
       {/* ── SCHEMAS ── */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">Two Schemas</h2>
+          <h2 className="lp-section-title">Six Models, Two Maps</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            The entire data model is two documents. Everything an extension needs to store
-            goes in the metadata Map. The schemas never change. Ever.
+            Six kernel models. Two carry extensible metadata Maps (Node, User).
+            Four are fixed infrastructure (Note, Contribution, Chat, LlmConnection).
+            Everything an extension needs to store on a node or user goes in the metadata Map.
+            The schemas never change. Extensions can also create their own models for separate collections.
           </p>
           <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
             <div className="lp-card">
@@ -616,7 +618,7 @@ const KernelPage = () => {
             </div>
           </div>
           <p className="lp-section-sub" style={{marginTop: 20}}>
-            The kernel has four primitives. <strong style={{color: "#e5e5e5"}}>Structure</strong>: two schemas, nodes in hierarchies.{" "}
+            The kernel has four primitives. <strong style={{color: "#e5e5e5"}}>Structure</strong>: six models, nodes in hierarchies, two with extensible metadata Maps.{" "}
             <strong style={{color: "#e5e5e5"}}>Intelligence</strong>: the conversation loop, resolution chains.{" "}
             <strong style={{color: "#e5e5e5"}}>Extensibility</strong>: the loader, hooks, pub-sub.{" "}
             <strong style={{color: "#e5e5e5"}}>Communication</strong>: cascade, .flow, visible results.

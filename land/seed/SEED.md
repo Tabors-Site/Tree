@@ -9,7 +9,7 @@
 
 The kernel is called the seed. You plant it on a land. It grows trees.
 
-Two schemas, a conversation loop, a hook system, a cascade engine, an extension loader, and a response protocol. Remove every extension and the seed still boots. It defines the data contract that extensions build on, the resolution chains that determine what happens at every position, and the communication primitive that makes signals visible.
+Six models (Node, User, Note, Contribution, Chat, LlmConnection), a conversation loop, a hook system, a cascade engine, an extension loader, and a response protocol. Remove every extension and the seed still boots. It defines the data contract that extensions build on, the resolution chains that determine what happens at every position, and the communication primitive that makes signals visible. Two models carry extensible metadata Maps (Node and User). The other four have fixed schemas.
 
 
 ## Four Primitives
@@ -18,7 +18,7 @@ Everything in the seed serves one of four primitives. Everything else is emergen
 
 | Primitive | What it is | Key files |
 |-----------|-----------|-----------|
-| **Structure** | Two schemas (Node, User), nodes in hierarchies, metadata Maps | models/node.js, models/user.js |
+| **Structure** | Six models. Node and User carry extensible metadata Maps. Note, Contribution, Chat, LlmConnection are fixed. | models/*.js |
 | **Intelligence** | Conversation loop, LLM/tool/mode/position resolution, time and position injection | ws/conversation.js, ws/modes/registry.js, ws/mcp.js |
 | **Extensibility** | Extension loader, open hook system, pub/sub, spatial scoping, five registries | hooks.js, extensions/loader.js, tree/extensionScope.js |
 | **Communication** | Cascade signals, .flow system node, visible results, response protocol | tree/cascade.js, protocol.js |

@@ -146,8 +146,9 @@ export async function apiKeyAuthStrategy(req) {
 
   const prefix = apiKey.slice(0, 8);
   const candidates = await User.find({
-    "metadata.apiKeys.keyPrefix": prefix,
-    "metadata.apiKeys.revoked": { $ne: true },
+    "metadata.apiKeys": {
+      $elemMatch: { keyPrefix: prefix, revoked: { $ne: true } },
+    },
   });
 
   for (const user of candidates) {
