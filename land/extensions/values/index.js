@@ -14,6 +14,16 @@ export async function init(core) {
     if (Object.keys(goals).length > 0) context.goals = goals;
   }, "values");
 
+  try {
+    const { getExtension } = await import("../loader.js");
+    const htmlExt = getExtension("html-rendering");
+    if (htmlExt) {
+      const { default: buildHtmlRoutes } = await import("./htmlRoutes.js");
+      const htmlRouter = buildHtmlRoutes();
+      htmlExt.router.use("/", htmlRouter);
+    }
+  } catch {}
+
   return {
     router,
     tools: getTools(),

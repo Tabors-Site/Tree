@@ -12,6 +12,8 @@ import {
 import { getContributionsByUser } from "../../seed/tree/contributions.js";
 import getNodeName from "../../routes/api/helpers/getNameById.js";
 import { renderUserNotes } from "./pages/userNotes.js";
+import { renderChats } from "./pages/userChats.js";
+import { renderUserContributions } from "./pages/userContributions.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
 function escapeHtml(str) {
@@ -132,7 +134,7 @@ export default function createRouter(core) {
       }
 
       const user = await User.findById(userId).lean();
-      return res.send(await html().renderUserContributions({ userId, user, contributions, username: user?.username, getNodeName, token }));
+      return res.send(await renderUserContributions({ userId, user, contributions, username: user?.username, getNodeName, token }));
     } catch (err) {
  log.error("User Queries", "Error in /user/:userId/contributions:", err);
       sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -174,7 +176,7 @@ export default function createRouter(core) {
       const user = await User.findById(userId).lean();
       const username = user?.username || "Unknown user";
 
-      return res.send(html().renderChats({ userId, chats: allChats, sessions, username, token, sessionId }));
+      return res.send(renderChats({ userId, chats: allChats, sessions, username, token, sessionId }));
     } catch (err) {
  log.error("User Queries", err);
       sendError(res, 500, ERR.INTERNAL, err.message);

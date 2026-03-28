@@ -12,6 +12,7 @@ import {
   getScript,
 } from "./core.js";
 import { getExtension } from "../loader.js";
+import { renderScriptDetail, renderScriptHelp } from "./pages/scripts.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
 const router = express.Router();
@@ -46,7 +47,7 @@ router.get("/node/:nodeId/script/:scriptId", authenticateOptional, async (req, r
     }
 
     return res.send(
-      html().renderScriptDetail({ nodeId, script, contributions, qsWithQ }),
+      renderScriptDetail({ nodeId, script, contributions, qsWithQ }),
     );
   } catch (err) {
     log.error("Scripts", "Error fetching script:", err);
@@ -235,7 +236,7 @@ setValueForNode(node._id, "waitTime", newWaitTime, 0 + 1);`,
     const qsWithQ = qs ? `?${qs}` : "";
 
     return res.send(
-      html().renderScriptHelp({ nodeId, nodeName: node.name, data, qsWithQ }),
+      renderScriptHelp({ nodeId, nodeName: node.name, data, qsWithQ }),
     );
   } catch (err) {
     log.error("Scripts", "Error loading script help:", err);

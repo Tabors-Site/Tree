@@ -14,6 +14,16 @@ export async function init(core) {
     if (meta.reeffectTime) context.reeffectTime = meta.reeffectTime;
   }, "schedules");
 
+  try {
+    const { getExtension } = await import("../loader.js");
+    const htmlExt = getExtension("html-rendering");
+    if (htmlExt) {
+      const { default: buildHtmlRoutes } = await import("./htmlRoutes.js");
+      const htmlRouter = buildHtmlRoutes();
+      htmlExt.router.use("/", htmlRouter);
+    }
+  } catch {}
+
   return {
     router,
     tools,

@@ -131,7 +131,7 @@ children, parent, rootOwner, contributors, systemRole, metadata (Map)
 
 ### User
 ```
-_id, username, password, roots,
+_id, username, password,
 llmDefault, isAdmin, isRemote, homeLand, metadata (Map)
 ```
 

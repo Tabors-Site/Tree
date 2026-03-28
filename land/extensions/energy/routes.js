@@ -4,6 +4,7 @@ import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
+import { renderEnergy } from "./pages/energy.js";
 
 import { getUserMeta } from "../../seed/tree/userMetadata.js";
 import { getConnectionsForUser } from "../../seed/llm/connections.js";
@@ -66,7 +67,7 @@ router.get("/user/:userId/energy", authenticateOptional, async (req, res) => {
     }
 
     return res.send(
-      html().renderEnergy({
+      renderEnergy({
         userId,
         user,
         energyAmount,

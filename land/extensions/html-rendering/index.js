@@ -13,9 +13,7 @@
  */
 
 import crypto from "crypto";
-import * as rendererExports from "./renderers.js";
 import router, { pageRouter } from "./routes.js";
-import buildHtmlRoutes, { setMetadata as setHtmlMetadata } from "./htmlRoutes.js";
 import { resolveHtmlShareAccess } from "./shareAuth.js";
 import urlAuth from "./urlAuth.js";
 import authenticateLite from "./authenticateLite.js";
@@ -23,23 +21,6 @@ import { notFoundPage, errorHtml } from "./notFoundPage.js";
 import { resolvePublicRoot, isPublic, hasTreeLlm } from "./publicAccess.js";
 import { isHtmlEnabled } from "./config.js";
 import { sendError, ERR } from "../../seed/protocol.js";
-
-// ── Renderer registry ──
-// Extensions register renderers by name. htmlRoutes.js looks them up at call time.
-const _renderers = { notFoundPage, errorHtml };
-
-function registerRenderer(name, fn) {
-  if (typeof name !== "string" || typeof fn !== "function") return;
-  _renderers[name] = fn;
-}
-
-function getRenderers() {
-  return _renderers;
-}
-
-// Mount HTML intercept routes (passes renderer lookup, not static imports)
-const htmlRouter = buildHtmlRoutes({ urlAuth, optionalAuth: authenticateLite, renderers: _renderers });
-router.use("/", htmlRouter);
 
 function generateShareToken() {
   return crypto.randomBytes(16).toString("base64url");
@@ -58,7 +39,6 @@ function registerPage(method, path, ...handlers) {
 }
 
 export async function init(core) {
-  setHtmlMetadata(core.metadata);
   const User = core.models.User;
 
   // Register share token auth strategy
@@ -117,8 +97,6 @@ export async function init(core) {
     exports: {
       // Infrastructure (reusable by any OS distribution)
       registerPage,
-      registerRenderer,
-      getRenderers,
       urlAuth,
       authenticateLite,
       notFoundPage,
@@ -127,8 +105,6 @@ export async function init(core) {
       resolvePublicRoot,
       isPublic,
       hasTreeLlm,
-      // All page renderers (used by extensions via html().renderXxx())
-      ...rendererExports,
     },
   };
 }

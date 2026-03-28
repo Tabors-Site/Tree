@@ -5,6 +5,8 @@ import { createInvite, respondToInvite, getPendingInvitesForUser } from "./invit
 import { sendRemoteInvite } from "./remoteInvites.js";
 import { getAllTagsForUser } from "./tags.js";
 import { getExtension } from "../loader.js";
+import { renderInvites } from "./pages/invites.js";
+import { renderUserTags } from "./pages/userTags.js";
 
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
@@ -207,7 +209,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
       }
 
       const token = req.query.token ?? "";
-      return res.send(html().renderInvites({ userId, invites, token }));
+      return res.send(renderInvites({ userId, invites, token }));
     } catch (err) {
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
@@ -282,7 +284,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
       const user = await User.findById(userId).lean();
       const getNodeName = (await import("../../routes/api/helpers/getNameById.js")).default;
-      return res.send(await html().renderUserTags({ userId, user, notes, getNodeName, token }));
+      return res.send(await renderUserTags({ userId, user, notes, getNodeName, token }));
     } catch (err) {
       sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }

@@ -444,7 +444,14 @@
       "Bash(npm view:*)",
       "Bash(npm ls:*)",
       "Bash(curl -s -X POST http://localhost:3000/mcp -H \"Content-Type: application/json\" -H \"x-internal-token: test\" -d '{\"\"\"\"jsonrpc\"\"\"\":\"\"\"\"2.0\"\"\"\",\"\"\"\"id\"\"\"\":1,\"\"\"\"method\"\"\"\":\"\"\"\"initialize\"\"\"\",\"\"\"\"params\"\"\"\":{\"\"\"\"protocolVersion\"\"\"\":\"\"\"\"2025-11-25\"\"\"\",\"\"\"\"capabilities\"\"\"\":{},\"\"\"\"clientInfo\"\"\"\":{\"\"\"\"name\"\"\"\":\"\"\"\"test\"\"\"\",\"\"\"\"version\"\"\"\":\"\"\"\"1.0.0\"\"\"\"}}}')",
-      "Bash(echo $?)"
+      "Bash(echo $?)",
+      "Bash(curl -sL \"https://treeos.ai/blog/dont-be-a-robot/\")",
+      "Bash(curl -sL \"https://treeos.ai/blog/the-map-is-not-the-territory/\")",
+      "Bash(curl -sL \"https://treeos.ai/blog/living-truth/\")",
+      "Bash(curl -sL \"https://treeos.ai/blog/the-apple-is-the-tree/\")",
+      "Bash(grep -E \"getExtension\\\\s*\\\\\\(\" land/seed/**/*.js)",
+      "Bash(grep -E \"metadata\\\\.\\(blog|fitness|food|persona|solana|shell|scripts|dashboard|mycelium\\)\" land/seed/**/*.js)",
+      "Bash(grep -r \"= [0-9]\\\\{4,\\\\}\\\\|setTimeout\\\\|setInterval\" /home/tabor/github/Tree/land/seed --include=\"*.js\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

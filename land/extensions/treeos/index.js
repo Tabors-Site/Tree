@@ -73,33 +73,22 @@ export async function init(core) {
   try {
     const { getExtension } = await import("../loader.js");
     const htmlExt = getExtension("html-rendering");
-    if (htmlExt?.exports?.registerRenderer && htmlExt?.exports?.registerPage) {
-      const { registerRenderer, registerPage } = htmlExt.exports;
+    if (htmlExt?.exports?.registerPage) {
+      const { registerPage } = htmlExt.exports;
 
-      // Import all TreeOS page renderers from html-rendering's files
-      // (physical files stay in html-rendering for now, will move to treeos later)
-      const renderers = await import("../html-rendering/renderers.js");
-      for (const [name, fn] of Object.entries(renderers)) {
-        if (typeof fn === "function") registerRenderer(name, fn);
-      }
-
-      // Register login/register/forgot pages
-      const { renderLoginPage, renderRegisterPage, renderForgotPasswordPage } = await import("../html-rendering/pages.js");
-      registerRenderer("renderLoginPage", renderLoginPage);
-      registerRenderer("renderRegisterPage", renderRegisterPage);
-      registerRenderer("renderForgotPasswordPage", renderForgotPasswordPage);
-
-      // Register app pages (dashboard, chat, setup, flow)
-      const { default: appRouter } = await import("../html-rendering/app/app.js");
-      const { default: chatRouter } = await import("../html-rendering/app/chat.js");
-      const { default: setupRouter } = await import("../html-rendering/app/setup.js");
-      const { default: flowDashboardRouter } = await import("../html-rendering/app/flowDashboard.js");
+      // Register app pages (dashboard, chat, setup)
+      const { default: appRouter } = await import("./app/app.js");
+      const { default: chatRouter } = await import("./app/chat.js");
+      const { default: setupRouter } = await import("./app/setup.js");
       const authenticate = (await import("../../seed/middleware/authenticate.js")).default;
 
       htmlExt.pageRouter.use("/", appRouter);
       htmlExt.pageRouter.use("/", chatRouter);
       htmlExt.pageRouter.use("/", setupRouter);
-      htmlExt.pageRouter.use("/", flowDashboardRouter);
+
+      // Mount HTML intercept routes (before kernel routes)
+      const { buildTreeosHtmlRoutes } = await import("./htmlRoutes.js");
+      htmlExt.router.use("/", buildTreeosHtmlRoutes());
 
       // Canopy admin pages
       const { isHtmlEnabled } = await import("../html-rendering/config.js");

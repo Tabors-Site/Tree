@@ -26,6 +26,7 @@ import {
 } from "./core.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
+import { renderRawIdeasList, renderRawIdeaText, renderRawIdeaFile } from "./pages/rawIdeas.js";
 
 function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
   const fn = getExtension("html-rendering")?.exports?.notFoundPage;
@@ -153,7 +154,7 @@ router.get("/user/:userId/raw-ideas", authenticate, async (req, res) => {
     ];
 
     return res.send(
-      html().renderRawIdeasList({
+      renderRawIdeasList({
         userId, user, rawIdeas, query, statusFilter, tabs, tabUrl, token, AUTO_PLACE_ELIGIBLE,
       }),
     );
@@ -281,11 +282,11 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
     if (req.query.html !== undefined && getExtension("html-rendering")) {
       if (rawIdea.contentType === "text") {
         return res.send(
-          html().renderRawIdeaText({ userId, rawIdea, back, backText, userLink, hasToken, token }),
+          renderRawIdeaText({ userId, rawIdea, back, backText, userLink, hasToken, token }),
         );
       }
       return res.send(
-        html().renderRawIdeaFile({ userId, rawIdea, back, backText, userLink, hasToken, token }),
+        renderRawIdeaFile({ userId, rawIdea, back, backText, userLink, hasToken, token }),
       );
     }
 
