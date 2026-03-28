@@ -68,4 +68,20 @@ Change profiles anytime by editing `extensions/.treeos-profile` (one extension n
 - `seed/SEED.md` for kernel internals
 - `extensions/EXTENSION_FORMAT.md` for the full extension contract
 - `extensions/_template/` for a scaffold to copy
+
+## For Builders
+
+Your data survives configuration changes. Extension data lives in the metadata Map on every node and user. Mongoose does not drop unknown keys inside a Mixed map. That one detail is what makes everything below possible.
+
+Run the full stack for six months. Fitness tracking, food logging, cascade signals flowing between trees, intelligence extensions analyzing patterns, dreams running at 3am. Then switch to minimal profile (`node boot.js --setup`, pick Minimal). Restart. Eight extensions load. The rest go silent. Your server is light. Your LLM bill drops to zero idle cost.
+
+Three months later, switch back to full. Restart. Every extension finds its data exactly where it left it. The fitness history is there. The food log is there. The codebook compressions are there. The dream summaries are there. The tree remembers everything. It was sleeping, not dead.
+
+This works because:
+- Extension data is stored in the metadata Map, not in extension code
+- The `.treeos-profile` controls what LOADS, not what EXISTS
+- MongoDB keeps every key in the Map whether the extension is loaded or not
+- Extensions read their namespace on boot. If the data is there, they resume. If not, they initialize.
+
+Build a full OS distribution. Test it. Strip it to the kernel. Build a different one on the same database. Switch back. The data layer is permanent. The capability layer is swappable. That is the architecture.
 - https://treeos.ai for documentation

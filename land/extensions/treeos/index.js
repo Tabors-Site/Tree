@@ -68,6 +68,68 @@ export async function init(core) {
   const onAfterToolCall = buildNavigationHandler(core);
   core.hooks.register("afterToolCall", onAfterToolCall, "treeos");
 
+  // ── Register TreeOS HTML pages (if html-rendering is installed) ──
+  // html-rendering is infrastructure. TreeOS provides the actual pages.
+  try {
+    const { getExtension } = await import("../loader.js");
+    const htmlExt = getExtension("html-rendering");
+    if (htmlExt?.exports?.registerRenderer && htmlExt?.exports?.registerPage) {
+      const { registerRenderer, registerPage } = htmlExt.exports;
+
+      // Import all TreeOS page renderers from html-rendering's files
+      // (physical files stay in html-rendering for now, will move to treeos later)
+      const renderers = await import("../html-rendering/renderers.js");
+      for (const [name, fn] of Object.entries(renderers)) {
+        if (typeof fn === "function") registerRenderer(name, fn);
+      }
+
+      // Register login/register/forgot pages
+      const { renderLoginPage, renderRegisterPage, renderForgotPasswordPage } = await import("../html-rendering/pages.js");
+      registerRenderer("renderLoginPage", renderLoginPage);
+      registerRenderer("renderRegisterPage", renderRegisterPage);
+      registerRenderer("renderForgotPasswordPage", renderForgotPasswordPage);
+
+      // Register app pages (dashboard, chat, setup, flow)
+      const { default: appRouter } = await import("../html-rendering/app/app.js");
+      const { default: chatRouter } = await import("../html-rendering/app/chat.js");
+      const { default: setupRouter } = await import("../html-rendering/app/setup.js");
+      const { default: flowDashboardRouter } = await import("../html-rendering/app/flowDashboard.js");
+      const authenticate = (await import("../../seed/middleware/authenticate.js")).default;
+
+      htmlExt.pageRouter.use("/", appRouter);
+      htmlExt.pageRouter.use("/", chatRouter);
+      htmlExt.pageRouter.use("/", setupRouter);
+      htmlExt.pageRouter.use("/", flowDashboardRouter);
+
+      // Canopy admin pages
+      const { isHtmlEnabled } = await import("../html-rendering/config.js");
+      registerPage("get", "/canopy/admin", authenticate, async (req, res) => {
+        if (!isHtmlEnabled()) return (await import("../../seed/protocol.js")).sendError(res, 404, "EXTENSION_NOT_FOUND", "HTML disabled");
+        try {
+          const user = await core.models.User.findById(req.userId).select("isAdmin").lean();
+          if (!user?.isAdmin) return (await import("../../seed/protocol.js")).sendError(res, 403, "FORBIDDEN", "Admin required");
+          const { getAllPeers } = await import("../../canopy/peers.js");
+          const { getLandInfoPayload } = await import("../../canopy/identity.js");
+          const { getPendingEventCount, getFailedEvents } = await import("../../canopy/events.js");
+          res.send(renderers.renderCanopyAdmin({ land: getLandInfoPayload(), peers: await getAllPeers(), pendingEvents: await getPendingEventCount(), failedEvents: await getFailedEvents() }));
+        } catch (err) { (await import("../../seed/protocol.js")).sendError(res, 500, "INTERNAL", err.message); }
+      });
+
+      registerPage("get", "/canopy/admin/horizon", authenticate, async (req, res) => {
+        if (!isHtmlEnabled()) return (await import("../../seed/protocol.js")).sendError(res, 404, "EXTENSION_NOT_FOUND", "HTML disabled");
+        try {
+          const user = await core.models.User.findById(req.userId).select("isAdmin").lean();
+          if (!user?.isAdmin) return (await import("../../seed/protocol.js")).sendError(res, 403, "FORBIDDEN", "Admin required");
+          res.send(renderers.renderCanopyHorizon({ hasHorizon: !!process.env.HORIZON_URL }));
+        } catch (err) { (await import("../../seed/protocol.js")).sendError(res, 500, "INTERNAL", err.message); }
+      });
+
+      log.info("TreeOS", "HTML pages registered via html-rendering");
+    }
+  } catch (err) {
+    log.verbose("TreeOS", `HTML pages not registered: ${err.message}`);
+  }
+
   log.info("TreeOS", `Registered ${tools.length} tools, 10 modes, navigation hook`);
 
   return {

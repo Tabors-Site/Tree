@@ -64,8 +64,10 @@ MONGODB_URI=${values.MONGODB_URI}
 JWT_SECRET=${values.JWT_SECRET}
 CUSTOM_LLM_API_SECRET_KEY=${values.CUSTOM_LLM_API_SECRET_KEY}
 
-# Seeded into .config node on first boot, then managed there
+# Seeded into .config node on first boot
 LAND_NAME=${values.LAND_NAME}
+
+# Extension settings (read by extensions from .env, not seeded to .config)
 REQUIRE_EMAIL=${values.REQUIRE_EMAIL}
 ENABLE_FRONTEND_HTML=${values.ENABLE_FRONTEND_HTML}
 HORIZON_URL=${values.HORIZON_URL}
@@ -457,6 +459,19 @@ async function installSelected(selected, horizonUrl) {
 }
 
 async function boot() {
+  // node boot.js --setup: re-run extension picker without touching .env
+  if (process.argv.includes("--setup")) {
+    if (fs.existsSync(envPath)) {
+      const env = parseEnv(fs.readFileSync(envPath, "utf8"));
+      for (const [key, value] of Object.entries(env)) {
+        if (!process.env[key]) process.env[key] = value;
+      }
+    }
+    await pickExtensions(process.env.HORIZON_URL || DEFAULTS.HORIZON_URL);
+    console.log("  Done. Restart the server to apply.\n");
+    process.exit(0);
+  }
+
   let existingEnv = {};
 
   if (fs.existsSync(envPath)) {

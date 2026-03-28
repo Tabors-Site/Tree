@@ -54,7 +54,9 @@ export default {
     models: ["Node", "User", "Note", "Contribution"],
   },
 
-  optional: {},
+  optional: {
+    extensions: ["html-rendering"],
+  },
 
   provides: {
     routes: false,
