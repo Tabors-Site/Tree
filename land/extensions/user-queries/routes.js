@@ -1,7 +1,6 @@
 import log from "../../seed/log.js";
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
-import urlAuth from "../html-rendering/urlAuth.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import User from "../../seed/models/user.js";
 import { getChats } from "../../seed/ws/chatHistory.js";
@@ -15,8 +14,6 @@ import getNodeName from "../../routes/api/helpers/getNameById.js";
 import { renderUserNotes } from "./pages/userNotes.js";
 import { renderChats } from "./pages/userChats.js";
 import { renderUserContributions } from "./pages/userContributions.js";
-function html() { return getExtension("html-rendering")?.exports || {}; }
-
 function escapeHtml(str) {
   return String(str || "")
     .replace(/&/g, "&amp;")
@@ -27,9 +24,12 @@ function escapeHtml(str) {
 }
 
 export default function createRouter(core) {
+  const htmlExt = getExtension("html-rendering");
+  const htmlAuth = htmlExt?.exports?.urlAuth || authenticate;
+
   const router = express.Router();
 
-  router.get("/user/:userId/notes", urlAuth, async (req, res) => {
+  router.get("/user/:userId/notes", htmlAuth, async (req, res) => {
     try {
       const userId = req.params.userId;
       const startDate = req.query.startDate;
@@ -115,7 +115,7 @@ export default function createRouter(core) {
 
   // Tags route moved to extensions/team
 
-  router.get("/user/:userId/contributions", urlAuth, async (req, res) => {
+  router.get("/user/:userId/contributions", htmlAuth, async (req, res) => {
     try {
       const { userId } = req.params;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -142,7 +142,7 @@ export default function createRouter(core) {
     }
   });
 
-  router.get("/user/:userId/chats", urlAuth, async (req, res) => {
+  router.get("/user/:userId/chats", htmlAuth, async (req, res) => {
     try {
       const { userId } = req.params;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");

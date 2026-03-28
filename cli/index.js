@@ -373,12 +373,25 @@ const startShell = module.exports.startShell = async () => {
       const session = cfg.activeSession ? chalk.magenta(` @${cfg.activeSession}`) : "";
       const p = chalk.green(user) + chalk.dim("@") + chalk.dim(land) + chalk.dim(currentPath(cfg)) + session + chalk.bold.cyan(" \u203a ");
       // Show hint inline after the command text (dim, same line)
-      const hint = _hintLine ? chalk.dim("  " + _hintLine) : "";
+      // Truncate hint so it never wraps to the next line
+      let hint = "";
+      let hintVisLen = 0;
+      if (_hintLine) {
+        const cols = process.stdout.columns || 80;
+        const promptVisLen = p.replace(/\x1b\[[0-9;]*m/g, "").length;
+        const available = cols - promptVisLen - text.length - 2; // 2 for leading spaces
+        if (available > 3) {
+          const truncated = _hintLine.length > available
+            ? _hintLine.slice(0, available - 1) + "\u2026"
+            : _hintLine;
+          hint = chalk.dim("  " + truncated);
+          hintVisLen = truncated.length + 2;
+        }
+      }
       process.stdout.write(p + text + hint + "\x1b[0K");
       // Move cursor back to end of actual text (before hint)
-      if (_hintLine) {
-        const hintLen = _hintLine.length + 2; // +2 for leading spaces
-        process.stdout.write(`\x1b[${hintLen}D`);
+      if (hintVisLen) {
+        process.stdout.write(`\x1b[${hintVisLen}D`);
       }
     }
 
@@ -398,7 +411,7 @@ const startShell = module.exports.startShell = async () => {
       return desc.replace(/\x1b\[[0-9;]*m/g, "").trim();
     }
 
-    const rl = readline.createInterface({
+    let rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
       terminal: true,
@@ -407,7 +420,7 @@ const startShell = module.exports.startShell = async () => {
     });
 
     // Intercept tab before readline processes it
-    process.stdin.on("keypress", (ch, key) => {
+    const _onKeypress = (ch, key) => {
       if (key && key.name === "tab") {
         // First tab: compute matches from what the user has typed
         if (_tabMatches.length === 0) {
@@ -496,7 +509,8 @@ const startShell = module.exports.startShell = async () => {
         _tabContext = "";
         clearHint();
       }
-    });
+    };
+    process.stdin.on("keypress", _onKeypress);
 
     const prompt = () => {
       clearHint(); // remove any lingering hint line below
@@ -509,7 +523,26 @@ const startShell = module.exports.startShell = async () => {
       rl.prompt();
     };
 
-    rl.on("line", async (line) => {
+    function onClose() {
+      console.log(chalk.dim("\nBye!"));
+      process.exit(0);
+    }
+
+    function onSigint() {
+      if (global._treeosInFlight) {
+        global._treeosInFlight.abort();
+        return;
+      }
+      if (rl.line.length > 0) {
+        rl.write(null, { ctrl: true, name: "u" });
+        process.stdout.write("\n");
+        prompt();
+      } else {
+        rl.close();
+      }
+    }
+
+    async function onLine(line) {
       clearHint();
       _tabMatches = [];
       _tabIndex = -1;
@@ -542,40 +575,37 @@ const startShell = module.exports.startShell = async () => {
         cleanInput = "chat " + cleanInput;
       }
 
-      // Re-dispatch through Commander as if the user typed "tree <input>"
+      // Fully detach the shell readline and keypress listener so subcommands
+      // that create their own readline (login, register, llm add, passwd)
+      // don't fight over stdin with duplicate listeners
+      process.stdin.removeListener("keypress", _onKeypress);
+      rl.removeListener("close", onClose);
+      rl.close();
       try {
         await program.parseAsync(["node", "tree", ...shellSplit(cleanInput)]);
       } catch (e) {
-        // exitOverride throws instead of exiting — just swallow
         if (!e.code?.startsWith("commander.")) {
           console.error(chalk.red(e.message));
         }
       }
+      // Recreate shell readline and reattach listeners
+      rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        terminal: true,
+        completer(line) { return [[], line]; },
+      });
+      rl.on("line", onLine);
+      rl.on("close", onClose);
+      rl.on("SIGINT", onSigint);
+      process.stdin.on("keypress", _onKeypress);
 
       prompt();
-    });
+    }
 
-    rl.on("close", () => {
-      console.log(chalk.dim("\nBye!"));
-      process.exit(0);
-    });
-
-    rl.on("SIGINT", () => {
-      // If an AI request is in-flight, abort it instead of exiting
-      if (global._treeosInFlight) {
-        global._treeosInFlight.abort();
-        return;
-      }
-      if (rl.line.length > 0) {
-        // Line has content — clear it and re-prompt
-        rl.write(null, { ctrl: true, name: "u" });
-        process.stdout.write("\n");
-        prompt();
-      } else {
-        // Empty line — exit
-        rl.close();
-      }
-    });
+    rl.on("line", onLine);
+    rl.on("close", onClose);
+    rl.on("SIGINT", onSigint);
 
     prompt();
 };

@@ -1,12 +1,12 @@
 import log from "../../seed/log.js";
 import express from "express";
-import urlAuth from "../html-rendering/urlAuth.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { getNotifications } from "./core.js";
 
 const router = express.Router();
 
-router.get("/user/:userId/notifications", urlAuth, async (req, res) => {
+router.get("/user/:userId/notifications", authenticate, async (req, res) => {
   try {
     const { userId } = req.params;
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);

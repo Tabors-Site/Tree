@@ -178,14 +178,18 @@ const PROFILES = {
       // Infrastructure
       "breath", "scheduler", "schedules", "prestige",
       "persona", "peer-review", "channels",
+      // Core gateways
+      "gateway", "gateway-discord", "gateway-telegram", "gateway-reddit",
+      // User features
+      "instructions", "rings",
     ],
   },
 
   // Full: everything. All bundles. All connections. Heavy LLM usage.
   // For: power users, public lands, production deployments.
   full: {
-    label: "Full (everything including connections and billing)",
-    description: "All extensions. Gateway channels, billing, federation, teaching, splitting.",
+    label: "Full (everything)",
+    description: "All extensions. Every gateway, federation, teaching, splitting, and more.",
     extensions: "all",
   },
 };
@@ -248,7 +252,7 @@ async function pickExtensions(horizonUrl) {
   console.log("                 Good for: builders, testing, low-power setups.\n");
   console.log("  2. Standard    Full tree experience with intelligence and cascade.");
   console.log("                 Moderate LLM usage. Recommended for most users.\n");
-  console.log("  3. Full        Everything including gateway channels, billing, federation.");
+  console.log("  3. Full        Everything. All gateways, federation, teaching, splitting.");
   console.log("                 Heavy LLM usage. For production and public lands.\n");
   console.log("  4. Custom      Choose extensions individually by category.\n");
 
@@ -311,7 +315,7 @@ async function pickExtensions(horizonUrl) {
     },
     {
       title: "Intelligence (self-awareness, requires background LLM)",
-      names: ["tree-compress", "contradiction", "inverse-tree", "evolution", "intent", "embed", "scout", "explore", "trace", "boundary", "competence", "reflect", "evolve"],
+      names: ["tree-compress", "contradiction", "inverse-tree", "evolution", "intent", "embed", "scout", "explore", "trace", "boundary", "competence", "reflect", "evolve", "rings"],
       defaultYes: false,
     },
     {
@@ -331,12 +335,12 @@ async function pickExtensions(horizonUrl) {
     },
     {
       title: "Connections (gateway channels to Discord, Telegram, etc.)",
-      names: ["gateway", "gateway-telegram", "gateway-discord", "gateway-webhook", "gateway-email", "gateway-sms", "gateway-slack", "gateway-matrix"],
+      names: ["gateway", "gateway-telegram", "gateway-discord", "gateway-reddit", "gateway-webhook", "gateway-email", "gateway-sms", "gateway-slack", "gateway-matrix", "gateway-x"],
       defaultYes: false,
     },
     {
-      title: "Advanced (billing, federation, teaching, splitting)",
-      names: ["billing", "energy", "transactions", "seed-export", "teach", "split", "governance", "mycelium"],
+      title: "Advanced (federation, teaching, splitting)",
+      names: ["energy", "transactions", "seed-export", "teach", "split", "governance", "mycelium"],
       defaultYes: false,
     },
     {
@@ -444,9 +448,9 @@ async function installSelected(selected, horizonUrl) {
               name: `treeos-ext-${ext.name}`, version: "1.0.0", private: true, dependencies: deps,
             }, null, 2), "utf8");
 
-            const { execFileSync } = await import("child_process");
-            execFileSync("npm", ["install", "--production", "--no-fund", "--no-audit", "--ignore-scripts"], {
-              cwd: targetDir, stdio: "pipe", timeout: 60000,
+            const { execSync } = await import("child_process");
+            execSync("npm install --production --no-fund --no-audit --ignore-scripts", {
+              cwd: targetDir, stdio: "pipe", timeout: 60000, shell: true,
             });
             console.log(`    ${ext.name}: npm dependencies installed`);
           }

@@ -1,7 +1,6 @@
 import log from "../../seed/log.js";
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
-import urlAuth from "../html-rendering/urlAuth.js";
 
 // Node model wired from init via setNodeModel
 let _Node = null;
@@ -14,7 +13,11 @@ import {
 } from "./core.js";
 import { getExtension } from "../loader.js";
 import { renderScriptDetail, renderScriptHelp } from "./pages/scripts.js";
-function html() { return getExtension("html-rendering")?.exports || {}; }
+let htmlAuth = authenticate;
+export function resolveHtmlAuth() {
+  const htmlExt = getExtension("html-rendering");
+  if (htmlExt?.exports?.urlAuth) htmlAuth = htmlExt.exports.urlAuth;
+}
 
 const router = express.Router();
 
@@ -28,7 +31,7 @@ function filterQuery(req) {
 }
 
 // GET script detail
-router.get("/node/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/script/:scriptId", htmlAuth, async (req, res) => {
   try {
     const { nodeId, scriptId } = req.params;
 
@@ -125,7 +128,7 @@ router.post(
 );
 
 // Script help/reference page
-router.get("/node/:nodeId/scripts/help", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/scripts/help", htmlAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
 

@@ -2,7 +2,6 @@ import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import authenticate from "../../seed/middleware/authenticate.js";
-import urlAuth from "../html-rendering/urlAuth.js";
 import {
   createUnderstandingRun,
   findOrCreateUnderstandingRun,
@@ -15,6 +14,12 @@ import { orchestrateUnderstanding } from "./pipeline.js";
 import { getSessionsForUser, endSession, SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
 import { renderUnderstandingRun, renderUnderstandingNode, renderUnderstandingsList, renderRunNodeView, buildRunCards, buildRunNodeInputsHtml } from "./html.js";
 import { getExtension } from "../loader.js";
+
+let htmlAuth = authenticate;
+export function resolveHtmlAuth() {
+  const htmlExt = getExtension("html-rendering");
+  if (htmlExt?.exports?.urlAuth) htmlAuth = htmlExt.exports.urlAuth;
+}
 
 // Models wired from init via setModels
 let Node = null;
@@ -89,7 +94,7 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
 
 router.get(
   "/root/:nodeId/understandings/run/:runId",
-  authenticate,
+  htmlAuth,
   async (req, res) => {
     try {
       const { runId, nodeId } = req.params;
@@ -280,7 +285,7 @@ router.get(
 
 router.get(
   "/root/:nodeId/understandings/:understandingNodeId",
-  authenticate,
+  htmlAuth,
   async (req, res) => {
     try {
       const { understandingNodeId, nodeId } = req.params;
@@ -394,7 +399,7 @@ router.get(
     }
   },
 );
-router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
+router.get("/root/:nodeId/understandings", htmlAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const queryString = buildQueryString(req);
@@ -446,7 +451,7 @@ router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
 
 router.get(
   "/root/:nodeId/understandings/run/:runId/:understandingNodeId",
-  urlAuth,
+  htmlAuth,
   async (req, res) => {
     try {
       const { runId, understandingNodeId, nodeId } = req.params;

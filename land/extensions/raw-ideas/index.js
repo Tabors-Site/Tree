@@ -1,4 +1,5 @@
 import router from "./routes.js";
+import { resolveHtmlAuth } from "./routes.js";
 import tools from "./tools.js";
 import {
   startRawIdeaAutoPlaceJob,
@@ -10,6 +11,7 @@ import chooseRoot from "./modes/chooseRoot.js";
 import rawIdeaPlacement from "./modes/raw-idea-placement.js";
 
 export async function init(core) {
+  resolveHtmlAuth();
   const { setServices } = await import("./core.js");
   setServices({ models: core.models, contributions: core.contributions });
   if (core.energy) setEnergyService(core.energy);

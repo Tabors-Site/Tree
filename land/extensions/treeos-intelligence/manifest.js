@@ -4,7 +4,7 @@ export default {
   type: "bundle",
   builtFor: "kernel",
   description:
-    "Self-awareness. Thirteen extensions that teach the tree to know itself. " +
+    "Self-awareness. Fourteen extensions that teach the tree to know itself. " +
     "\n\n" +
     "Tree-compress monitors density and consolidates structure. Contradiction detects " +
     "conflicting truths across branches. Inverse-tree builds a model of the user from " +
@@ -18,6 +18,8 @@ export default {
     "Competence tracks which queries found answers and which found silence. Reflect notices " +
     "how the conversation is going and adjusts the AI's approach. Evolve watches what users " +
     "do that no extension handles, proposes existing extensions or generates specs for new ones. " +
+    "Rings takes monthly cross-sections of the entire tree and compresses them into annual " +
+    "character portraits. The further back, the less detail, but the character persists. " +
     "\n\n" +
     "Without this bundle, the tree holds data. With it, the tree understands its own data. " +
     "\n\n" +
@@ -38,6 +40,7 @@ export default {
       "competence",
       "reflect",
       "evolve",
+      "rings",
     ],
   },
 

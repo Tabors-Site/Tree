@@ -499,7 +499,10 @@
       "Bash(grep -rn \"console.error.*Failed to mount HTML\" /home/tabor/github/Tree/land/extensions/*/index.js)",
       "Bash(grep -rn \"getExtension.*html-rendering.*exports.*render\\\\|html\\(\\)\\\\.render\" /home/tabor/github/Tree/land/extensions/*/routes.js)",
       "Bash(grep -rn authenticateOptional /home/tabor/github/Tree/land/extensions/*/routes.js)",
-      "Bash(echo \"$f\")"
+      "Bash(echo \"$f\")",
+      "Bash(grep -rn \"completer\\\\|completion\\\\|tab\" /home/tabor/github/Tree/cli/*.js)",
+      "Bash(grep -r \"apple\\\\|kernel\\\\|constrain\" /home/tabor/github/Tree --include=*.js --include=*.jsx --include=*.ts --include=*.tsx --include=*.md --exclude-dir=node_modules)",
+      "Bash(grep -r \"blog\\\\|essay\\\\|post\" /home/tabor/github/Tree/land/seed --include=*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

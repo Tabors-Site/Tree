@@ -8,7 +8,11 @@ import {
 } from "./core.js";
 import { getExtension } from "../loader.js";
 import { renderBookPage, renderSharedBookPage, parseBool, normalizeStatusFilters, renderBookNode } from "./pages/book.js";
-function html() { return getExtension("html-rendering")?.exports || {}; }
+let htmlAuth = authenticate;
+export function resolveHtmlAuth() {
+  const htmlExt = getExtension("html-rendering");
+  if (htmlExt?.exports?.urlAuth) htmlAuth = htmlExt.exports.urlAuth;
+}
 
 function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
   const fn = getExtension("html-rendering")?.exports?.notFoundPage;
@@ -18,7 +22,7 @@ function notFoundPage(req, res, message = "This page doesn't exist or may have b
 
 const router = express.Router();
 
-router.get("/root/:nodeId/book", authenticate, async (req, res) => {
+router.get("/root/:nodeId/book", htmlAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
 

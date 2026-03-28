@@ -272,12 +272,13 @@ async function runNpmInstall(extDir, npmDeps, extName, opts = {}) {
     if (configured) timeout = Number(configured);
   } catch {}
 
-  const { execFileSync } = await import("child_process");
+  const { execSync } = await import("child_process");
   try {
-    execFileSync("npm", ["install", "--production", "--no-fund", "--no-audit", "--ignore-scripts"], {
+    execSync("npm install --production --no-fund --no-audit --ignore-scripts", {
       cwd: extDir,
       stdio: "pipe",
       timeout,
+      shell: true,
     });
     log.verbose("Extensions", `${extName}: npm install complete (${npmDeps.length} packages)`);
   } catch (err) {

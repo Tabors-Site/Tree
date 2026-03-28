@@ -1,6 +1,5 @@
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
-import urlAuth from "../html-rendering/urlAuth.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { createInvite, respondToInvite, getPendingInvitesForUser } from "./invites.js";
 import { sendRemoteInvite } from "./remoteInvites.js";
@@ -9,9 +8,9 @@ import { getExtension } from "../loader.js";
 import { renderInvites } from "./pages/invites.js";
 import { renderUserTags } from "./pages/userTags.js";
 
-function html() { return getExtension("html-rendering")?.exports || {}; }
-
 export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
+  const htmlExt = getExtension("html-rendering");
+  const htmlAuth = htmlExt?.exports?.urlAuth || authenticate;
   const router = express.Router();
   const { User, Node, Note } = core.models;
   const { logContribution } = core.contributions;
@@ -194,7 +193,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
   // ── Invite list + respond (moved from routes/api/user.js) ─────────
 
-  router.get("/user/:userId/invites", urlAuth, async (req, res) => {
+  router.get("/user/:userId/invites", htmlAuth, async (req, res) => {
     try {
       const { userId } = req.params;
 
@@ -257,7 +256,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
   // ── Tags (moved from extensions/user-queries) ─────────────────────
 
-  router.get("/user/:userId/tags", urlAuth, async (req, res) => {
+  router.get("/user/:userId/tags", htmlAuth, async (req, res) => {
     try {
       const userId = req.params.userId;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");

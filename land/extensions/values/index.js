@@ -5,8 +5,9 @@ export async function init(core) {
   setServices({ models: core.models, contributions: core.contributions, metadata: core.metadata });
   if (core.energy) setEnergyService(core.energy);
 
-  const { default: router, setNodeModel } = await import("./routes.js");
+  const { default: router, setNodeModel, resolveHtmlAuth } = await import("./routes.js");
   setNodeModel(core.models.Node);
+  resolveHtmlAuth();
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
     const values = meta.values || {};
     const goals = meta.goals || {};

@@ -2,10 +2,15 @@ import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import authenticate from "../../seed/middleware/authenticate.js";
-import urlAuth from "../html-rendering/urlAuth.js";
 import { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat, getNodeValues, getNodeGoals } from "./core.js";
 import { renderValues } from "./html.js";
 import { getExtension } from "../loader.js";
+
+let htmlAuth = authenticate;
+export function resolveHtmlAuth() {
+  const htmlExt = getExtension("html-rendering");
+  if (htmlExt?.exports?.urlAuth) htmlAuth = htmlExt.exports.urlAuth;
+}
 
 // Node model is wired via setServices() in core.js before routes are used.
 // Import here for the findNodeById helper used in GET routes.
@@ -47,7 +52,7 @@ router.post("/node/:nodeId/goal", authenticate, async (req, res) => {
   }
 });
 
-router.get("/node/:nodeId/values", urlAuth, async (req, res) => {
+router.get("/node/:nodeId/values", htmlAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
 
@@ -87,7 +92,7 @@ router.get("/node/:nodeId/values", urlAuth, async (req, res) => {
   }
 });
 
-router.get("/root/:rootId/values", urlAuth, async (req, res) => {
+router.get("/root/:rootId/values", authenticate, async (req, res) => {
   try {
     const result = await getGlobalValuesTreeAndFlat(req.params.rootId);
     sendOk(res, result);

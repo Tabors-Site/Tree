@@ -1,9 +1,14 @@
 import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import urlAuth from "../html-rendering/urlAuth.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 import { getExtension } from "../loader.js";
-function html() { return getExtension("html-rendering")?.exports || {}; }
+let htmlAuth = authenticate;
+export function resolveHtmlAuth() {
+  const htmlExt = getExtension("html-rendering");
+  if (htmlExt?.exports?.urlAuth) htmlAuth = htmlExt.exports.urlAuth;
+}
+
 import { renderEnergy } from "./pages/energy.js";
 
 import { getUserMeta } from "../../seed/tree/userMetadata.js";
@@ -26,7 +31,7 @@ function buildQueryString(req) {
   return filtered ? `?${filtered}` : "";
 }
 
-router.get("/user/:userId/energy", urlAuth, async (req, res) => {
+router.get("/user/:userId/energy", htmlAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const qs = buildQueryString(req);

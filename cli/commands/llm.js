@@ -40,18 +40,24 @@ module.exports = (program) => {
 
   program
     .command("llm [action] [args...]")
-    .description("Manage LLM connections: add, remove <id>, assign <slot> <id>, tree-assign <slot> <id>")
-    .action(async (action, args) => {
+    .description("Manage LLM connections: add, edit <id>, remove <id>, assign <slot> <id>, tree-assign <slot> <id>")
+    .option("--name <name>", "Connection name")
+    .option("--url <url>", "Base URL")
+    .option("--model <model>", "Model name")
+    .option("--key <key>", "API key")
+    .action(async (action, args, opts) => {
       if (!action) {
         console.log(chalk.bold("LLM Management\n"));
         console.log("  " + chalk.cyan("llms") + chalk.dim("                    List your connections"));
-        console.log("  " + chalk.cyan("llm add") + chalk.dim("                 Add a new LLM connection (interactive)"));
+        console.log("  " + chalk.cyan("llm add") + chalk.dim("                 Add (interactive, or use flags)"));
+        console.log("  " + chalk.cyan("llm edit <id>") + chalk.dim("           Edit a connection (use flags)"));
         console.log("  " + chalk.cyan("llm remove <id>") + chalk.dim("         Remove a connection"));
         console.log("  " + chalk.cyan("llm assign <slot> <id>") + chalk.dim("  Assign connection to user slot (main, rawIdea)"));
         console.log("  " + chalk.cyan("llm tree-assign <slot> <id>") + chalk.dim("  Assign to tree slot"));
         console.log("  " + chalk.cyan("llm clear <slot>") + chalk.dim("        Clear a user slot assignment"));
         console.log("  " + chalk.cyan("llm tree-clear <slot>") + chalk.dim("   Clear a tree slot assignment"));
         console.log();
+        console.log(chalk.bold("  Flags:") + chalk.dim("  --name, --url, --model, --key (for add/edit)"));
         console.log(chalk.bold("  User slots:") + chalk.dim("  main, rawIdea"));
         console.log(chalk.bold("  Tree slots:") + chalk.dim("  default, placement, respond, notes, understanding, cleanup, drain, notification"));
         return;
@@ -61,21 +67,39 @@ module.exports = (program) => {
       const api = getApi(cfg);
 
       if (action === "add") {
+        // Non-interactive if all flags provided
+        if (opts.name && opts.url && opts.model) {
+          try {
+            const data = await api.addLlmConnection(cfg.userId, {
+              name: opts.name,
+              baseUrl: opts.url,
+              model: opts.model,
+              apiKey: opts.key || "none",
+            });
+            console.log(chalk.green(`Added: ${opts.name}`));
+            console.log(chalk.dim(`ID: ${data.connection?._id || "?"}`));
+          } catch (e) {
+            console.error(chalk.red(e.message));
+          }
+          return;
+        }
+
+        // Interactive
         const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
         try {
           console.log(chalk.bold("\nAdd LLM Connection\n"));
           console.log(chalk.dim("Connect any OpenAI-compatible endpoint (Ollama, OpenRouter, Together, etc.)\n"));
 
-          const name = await ask(rl, chalk.cyan("  Name: "));
+          const name = opts.name || await ask(rl, chalk.cyan("  Name: "));
           if (!name.trim()) { rl.close(); return console.log(chalk.yellow("Cancelled.")); }
 
-          const baseUrl = await ask(rl, chalk.cyan("  Base URL (e.g. http://localhost:11434/v1): "));
+          const baseUrl = opts.url || await ask(rl, chalk.cyan("  Base URL (e.g. http://localhost:11434/v1): "));
           if (!baseUrl.trim()) { rl.close(); return console.log(chalk.yellow("Cancelled.")); }
 
-          const model = await ask(rl, chalk.cyan("  Model (e.g. qwen3:32b): "));
+          const model = opts.model || await ask(rl, chalk.cyan("  Model (e.g. qwen3:32b): "));
           if (!model.trim()) { rl.close(); return console.log(chalk.yellow("Cancelled.")); }
 
-          const apiKey = await ask(rl, chalk.cyan("  API Key (press enter for none): "));
+          const apiKey = opts.key || await ask(rl, chalk.cyan("  API Key (press enter for none): "));
 
           rl.close();
 
@@ -91,6 +115,26 @@ module.exports = (program) => {
           console.log(chalk.dim("Auto-assigned as default if no other connection was set."));
         } catch (e) {
           rl.close();
+          console.error(chalk.red(e.message));
+        }
+        return;
+      }
+
+      if (action === "edit") {
+        const id = args[0];
+        if (!id) return console.log(chalk.yellow("Usage: llm edit <connectionId> --name X --url X --model X --key X"));
+        const fields = {};
+        if (opts.name) fields.name = opts.name;
+        if (opts.url) fields.baseUrl = opts.url;
+        if (opts.model) fields.model = opts.model;
+        if (opts.key) fields.apiKey = opts.key;
+        if (Object.keys(fields).length === 0) {
+          return console.log(chalk.yellow("Provide at least one flag: --name, --url, --model, --key"));
+        }
+        try {
+          const data = await api.updateLlmConnection(cfg.userId, id, fields);
+          console.log(chalk.green(`Updated: ${data.connection?.name || id}`));
+        } catch (e) {
           console.error(chalk.red(e.message));
         }
         return;

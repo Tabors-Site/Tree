@@ -1,7 +1,6 @@
 import log from "../../seed/log.js";
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
-import urlAuth from "../html-rendering/urlAuth.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { getExtension } from "../loader.js";
 import { renderDeletedBranches } from "./pages/deleted.js";
@@ -15,9 +14,12 @@ import {
 import User from "../../seed/models/user.js";
 
 export default function createRouter(core) {
+  const htmlExt = getExtension("html-rendering");
+  const htmlAuth = htmlExt?.exports?.urlAuth || authenticate;
+
   const router = express.Router();
 
-  router.get("/user/:userId/deleted", urlAuth, async (req, res) => {
+  router.get("/user/:userId/deleted", htmlAuth, async (req, res) => {
     try {
       const { userId } = req.params;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");

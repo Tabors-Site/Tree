@@ -9,7 +9,6 @@ import { fileURLToPath } from "url";
 const __riDir = path.dirname(fileURLToPath(import.meta.url));
 import multer from "multer";
 import authenticate from "../../seed/middleware/authenticate.js";
-import urlAuth from "../html-rendering/urlAuth.js";
 import preUploadCheck from "../../seed/middleware/preUploadCheck.js";
 import { getLandUrl } from "../../canopy/identity.js";
 import { userHasLlm } from "../../seed/ws/conversation.js";
@@ -26,7 +25,12 @@ import {
   AUTO_PLACE_ELIGIBLE,
 } from "./core.js";
 import { getExtension } from "../loader.js";
-function html() { return getExtension("html-rendering")?.exports || {}; }
+let htmlAuth = authenticate;
+export function resolveHtmlAuth() {
+  const htmlExt = getExtension("html-rendering");
+  if (htmlExt?.exports?.urlAuth) htmlAuth = htmlExt.exports.urlAuth;
+}
+
 import { renderRawIdeasList, renderRawIdeaText, renderRawIdeaFile } from "./pages/rawIdeas.js";
 
 function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
@@ -97,7 +101,7 @@ router.post(
 );
 
 // GET list raw ideas (requires auth: JWT or share token)
-router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
+router.get("/user/:userId/raw-ideas", htmlAuth, async (req, res) => {
   try {
     const userId = req.params.userId;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");

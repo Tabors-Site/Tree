@@ -240,6 +240,9 @@ class TreeAPI {
   addLlmConnection(userId, { name, baseUrl, apiKey, model }) {
     return this.post(`/user/${userId}/custom-llm`, { name, baseUrl, apiKey, model });
   }
+  updateLlmConnection(userId, connectionId, fields) {
+    return this.put(`/user/${userId}/custom-llm/${connectionId}`, fields);
+  }
   deleteLlmConnection(userId, connectionId) {
     return this.del(`/user/${userId}/custom-llm/${connectionId}`);
   }
