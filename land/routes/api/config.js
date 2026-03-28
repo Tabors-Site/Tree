@@ -424,7 +424,7 @@ router.get("/land/root", authenticateOptional, async (req, res) => {
  * GET /api/v1/land/orchestrators
  * Shows which extension owns each conversation zone.
  */
-router.get("/land/orchestrators", (req, res) => {
+router.get("/land/orchestrators", authenticate, (req, res) => {
   const active = listOrchestrators();
   sendOk(res, {
     tree: active.tree || null,
@@ -437,7 +437,7 @@ router.get("/land/orchestrators", (req, res) => {
  * GET /api/v1/land/tools
  * Lists all MCP tools available in tree mode, with source info.
  */
-router.get("/land/tools", async (req, res) => {
+router.get("/land/tools", authenticate, async (req, res) => {
   try {
     const { getAllToolNamesForBigMode, getSubModes } = await import("../../seed/ws/modes/registry.js");
     const allTools = getAllToolNamesForBigMode("tree");
@@ -469,7 +469,7 @@ router.get("/land/tools", async (req, res) => {
  * GET /api/v1/land/modes
  * Lists all registered AI modes with their tools and metadata.
  */
-router.get("/land/modes", async (req, res) => {
+router.get("/land/modes", authenticate, async (req, res) => {
   try {
     const { getSubModes } = await import("../../seed/ws/modes/registry.js");
     const bigModes = ["tree", "home", "land"];

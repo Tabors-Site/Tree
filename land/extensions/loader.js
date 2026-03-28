@@ -494,6 +494,16 @@ function buildScopedCore(manifest, fullCore) {
     scoped.modes = fullCore.modes;
   }
 
+  // Metadata: always available (every extension reads/writes metadata)
+  if (fullCore.metadata) {
+    scoped.metadata = fullCore.metadata;
+  }
+
+  // User metadata: always available (extensions store per-user state)
+  if (fullCore.userMetadata) {
+    scoped.userMetadata = fullCore.userMetadata;
+  }
+
   // Auth strategy binding: wrap registerStrategy to auto-inject extension name.
   // Extensions must declare provides.authStrategies in manifest to register.
   if (scoped.auth?.registerStrategy) {

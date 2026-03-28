@@ -199,7 +199,7 @@ router.put(
   },
 );
 
-router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
+router.get("/node/:nodeId/:version/notes/:noteId", authenticate, async (req, res) => {
   try {
     const { nodeId, version, noteId } = req.params;
 
@@ -295,7 +295,7 @@ router.post("/node/:nodeId/notes", authenticate, useLatest, (req, res, next) => 
   router.handle(req, res, next);
 });
 
-router.get("/node/:nodeId/notes/:noteId", useLatest, (req, res, next) => {
+router.get("/node/:nodeId/notes/:noteId", authenticate, useLatest, (req, res, next) => {
   req.url = `/node/${req.params.nodeId}/${req.params.version}/notes/${req.params.noteId}`;
   router.handle(req, res, next);
 });

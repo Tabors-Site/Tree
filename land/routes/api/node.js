@@ -160,7 +160,7 @@ router.post("/node/:nodeId/updateParent", authenticate, async (req, res) => {
 });
 // ── Per-node mode overrides ──
 // Must be before /node/:nodeId/:version to avoid :version capturing "modes"
-router.get("/node/:nodeId/modes", async (req, res) => {
+router.get("/node/:nodeId/modes", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const node = await Node.findById(nodeId).select("name metadata").lean();
@@ -223,7 +223,7 @@ router.post("/node/:nodeId/modes", authenticate, async (req, res) => {
 
 // ── Per-node tool configuration ──
 // Must be before /node/:nodeId/:version to avoid :version capturing "tools"
-router.get("/node/:nodeId/tools", async (req, res) => {
+router.get("/node/:nodeId/tools", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const chain = [];
@@ -295,7 +295,7 @@ router.post("/node/:nodeId/tools", authenticate, async (req, res) => {
 // Shows blocked extensions at this position (with inheritance chain)
 // Shows which extensions are active vs blocked from the land's installed set
 // -----------------------------------------------------------------------------
-router.get("/node/:nodeId/extensions", async (req, res) => {
+router.get("/node/:nodeId/extensions", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { getBlockedExtensionsAtNode, getConfinedExtensions } = await import("../../seed/tree/extensionScope.js");
