@@ -93,8 +93,7 @@ async function interactiveSetup(existingEnv = {}) {
   };
 
   // Quick setup option for local development
-  console.log("  Quick setup for localhost? (Y/n): ");
-  const quickAnswer = await rl.question("  ");
+  const quickAnswer = await rl.question("  Quick setup for localhost? (Y/n): ");
   const quick = !quickAnswer.trim() || quickAnswer.toLowerCase().startsWith("y");
 
   const values = {};
