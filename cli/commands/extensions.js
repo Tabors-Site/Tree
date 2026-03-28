@@ -73,6 +73,8 @@ Examples:
 
         console.log(chalk.bold(`Extensions (${data.count} loaded)\n`));
 
+        // Compact list: name, version, badges. Full description via `ext info <name>`.
+        const maxName = Math.max(...data.loaded.map(e => e.name.length), 8);
         for (const ext of data.loaded) {
           const parts = [];
           if (ext.provides.routes) parts.push("routes");
@@ -80,14 +82,14 @@ Examples:
           if (ext.provides.jobs) parts.push("jobs");
           if (ext.provides.models.length) parts.push(`${ext.provides.models.length} models`);
 
-          const badges = parts.length ? chalk.dim(` [${parts.join(", ")}]`) : "";
-          console.log(`  ${chalk.cyan(ext.name)} ${chalk.dim("v" + ext.version)}${badges}`);
-          console.log(`  ${chalk.dim(ext.description)}`);
-
-          if (ext.needs.extensions?.length) {
-            console.log(`  ${chalk.dim("depends on:")} ${ext.needs.extensions.join(", ")}`);
-          }
-          console.log();
+          const badges = parts.length ? chalk.dim(` ${parts.join(", ")}`) : "";
+          const name = ext.name.padEnd(maxName);
+          // First sentence or first 80 chars of description
+          const short = ext.description
+            ? ext.description.split(/\.\s/)[0].slice(0, 80) + (ext.description.length > 80 ? "..." : "")
+            : "";
+          console.log(`  ${chalk.cyan(name)}  ${chalk.dim("v" + ext.version)}${badges}`);
+          if (short) console.log(`  ${"".padEnd(maxName)}  ${chalk.dim(short)}`);
         }
 
         if (data.disabled && data.disabled.length > 0) {

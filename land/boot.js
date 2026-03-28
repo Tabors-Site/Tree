@@ -6,6 +6,12 @@ import { createInterface } from "readline/promises";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Check dependencies before anything else
+if (!fs.existsSync(path.join(__dirname, "node_modules"))) {
+  console.error("\n  Dependencies not installed. Run:\n\n    npm install\n\n  Then try again.\n");
+  process.exit(1);
+}
+
 // Global error handlers
 process.on("unhandledRejection", (err) => {
   console.error("[KERNEL] Unhandled rejection:", err?.message || err);
