@@ -539,7 +539,7 @@ export function buildTreeosHtmlRoutes() {
   // NOTES
   // ===================================================================
 
-  router.get("/node/:nodeId/:version/notes/editor", urlAuth, async (req, res, next) => {
+  router.get("/node/:nodeId/:version/notes/editor", authenticate, async (req, res, next) => {
     if (!isHtmlEnabled()) return next("route");
     try {
       const { nodeId, version } = req.params;
@@ -554,7 +554,7 @@ export function buildTreeosHtmlRoutes() {
     }
   });
 
-  router.get("/node/:nodeId/:version/notes/:noteId/editor", urlAuth, async (req, res, next) => {
+  router.get("/node/:nodeId/:version/notes/:noteId/editor", authenticate, async (req, res, next) => {
     if (!isHtmlEnabled()) return next("route");
     try {
       const { nodeId, version, noteId } = req.params;

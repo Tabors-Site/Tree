@@ -2,6 +2,7 @@ import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import authenticate from "../../seed/middleware/authenticate.js";
+import urlAuth from "../html-rendering/urlAuth.js";
 import {
   createUnderstandingRun,
   findOrCreateUnderstandingRun,
@@ -393,7 +394,7 @@ router.get(
     }
   },
 );
-router.get("/root/:nodeId/understandings", authenticate, async (req, res) => {
+router.get("/root/:nodeId/understandings", urlAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const queryString = buildQueryString(req);
@@ -445,7 +446,7 @@ router.get("/root/:nodeId/understandings", authenticate, async (req, res) => {
 
 router.get(
   "/root/:nodeId/understandings/run/:runId/:understandingNodeId",
-  authenticate,
+  urlAuth,
   async (req, res) => {
     try {
       const { runId, understandingNodeId, nodeId } = req.params;

@@ -1008,7 +1008,7 @@ async function doSave() {
 
     if (!res.ok) {
       var errData = await res.json().catch(function() { return {}; });
-      throw new Error(errData.error || "Save failed (" + res.status + ")");
+      throw new Error((errData.error && errData.error.message) || errData.error || "Save failed (" + res.status + ")");
     }
 
     var data = await res.json();
@@ -1081,7 +1081,7 @@ document.getElementById("deleteConfirmBtn").onclick = async function() {
 
     if (!res.ok) {
       var errData = await res.json().catch(function() { return {}; });
-      throw new Error(errData.error || "Delete failed");
+      throw new Error((errData.error && errData.error.message) || errData.error || "Delete failed");
     }
 
     navigatingAway = true;

@@ -8,7 +8,8 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 const __riDir = path.dirname(fileURLToPath(import.meta.url));
 import multer from "multer";
-import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import urlAuth from "../html-rendering/urlAuth.js";
 import preUploadCheck from "../../seed/middleware/preUploadCheck.js";
 import { getLandUrl } from "../../canopy/identity.js";
 import { userHasLlm } from "../../seed/ws/conversation.js";
@@ -96,7 +97,7 @@ router.post(
 );
 
 // GET list raw ideas (requires auth: JWT or share token)
-router.get("/user/:userId/raw-ideas", authenticate, async (req, res) => {
+router.get("/user/:userId/raw-ideas", urlAuth, async (req, res) => {
   try {
     const userId = req.params.userId;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
