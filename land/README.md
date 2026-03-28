@@ -59,7 +59,7 @@ Change profiles anytime by editing `extensions/.treeos-profile` (one extension n
 1. Seed never imports from extensions
 2. Extensions import from seed
 3. Extensions reach each other through `getExtension()` or hooks
-4. Extension data lives in metadata Maps, never in seed schemas
+4. Extension data on nodes/users lives in metadata Maps, never as new schema fields. Extensions can create their own models for separate collections.
 5. Seed schemas never change
 6. Zero `getExtension()` calls in seed
 

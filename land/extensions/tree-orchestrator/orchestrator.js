@@ -1613,14 +1613,37 @@ export async function orchestrateTreeRequest({
 
     emitStatus(socket, "done", "");
 
-    if (result?.answer) pushMemory(visitorId, message, result.answer);
+    // If the extension mode returned JSON (parser modes like fitness-log),
+    // don't show raw JSON to the user. Build a human response.
+    let answer = result?.answer || null;
+    if (answer && /^\s*\{/.test(answer)) {
+      try {
+        const parsed = JSON.parse(answer);
+        // Build a human summary from the parsed data
+        if (parsed.exercises) {
+          // Fitness parser response
+          answer = parsed.exercises.map(ex => {
+            const sets = ex.sets?.map(s => s.weight > 0 ? `${s.weight}x${s.reps}` : `${s.reps}`).join("/") || "";
+            return `${ex.name}: ${sets}`;
+          }).join(", ") + ". Logged.";
+        } else if (parsed.items) {
+          // Food parser response
+          answer = parsed.items.map(i => `${i.name} (${i.calories}cal)`).join(", ") + ". Logged.";
+        } else {
+          answer = "Done.";
+        }
+      } catch {
+        // Not valid JSON, use as-is
+      }
+    }
+
+    if (answer) pushMemory(visitorId, message, answer);
 
     // Apply behavioral constraint to response
-    if (behavioral === "place" && result?.answer) {
-      // Minimal response for place constraint
+    if (behavioral === "place" && answer) {
       return {
         success: true,
-        answer: result.answer.split("\n")[0], // first line only
+        answer: answer.split("\n")[0],
         modeKey: classification.mode,
         modesUsed,
         rootId,
@@ -1629,7 +1652,7 @@ export async function orchestrateTreeRequest({
 
     return {
       success: true,
-      answer: result?.answer || null,
+      answer,
       modeKey: classification.mode,
       modesUsed,
       rootId,
