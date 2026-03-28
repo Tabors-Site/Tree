@@ -38,6 +38,7 @@ export default {
 
   optional: {
     services: ["energy"],
+    extensions: ["html-rendering"],
   },
 
   provides: {

@@ -99,8 +99,7 @@ export async function init(core) {
     const htmlExt = getExtension("html-rendering");
     if (htmlExt) {
       const { default: buildHtmlRoutes } = await import("./htmlRoutes.js");
-      const htmlRouter = buildHtmlRoutes();
-      htmlExt.router.use("/", htmlRouter);
+      htmlExt.router.use("/", buildHtmlRoutes());
     }
   } catch {}
 

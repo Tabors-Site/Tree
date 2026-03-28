@@ -460,7 +460,8 @@
       "Bash(find /home/tabor/github/Tree -name *sam* -o -name *verif* -o -name *test*plan*)",
       "Bash(find /home/tabor/github/Tree/land -type f \\\\\\(-name *.test.* -o -name *spec* -o -name *verif* \\\\\\))",
       "Bash(grep -l \"runChat\\\\|runPipeline\\\\|processMessage\" /home/tabor/github/Tree/land/extensions/*/index.js)",
-      "Bash(grep -rn \"router\\\\.post\\\\|router\\\\.put\\\\|router\\\\.delete\" /home/tabor/github/Tree/land/extensions/*/routes.js)"
+      "Bash(grep -rn \"router\\\\.post\\\\|router\\\\.put\\\\|router\\\\.delete\" /home/tabor/github/Tree/land/extensions/*/routes.js)",
+      "Bash(f=\"/home/tabor/github/Tree/land/extensions/$ext/manifest.js\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

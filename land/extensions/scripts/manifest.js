@@ -36,7 +36,7 @@ export default {
 
   optional: {
     services: ["energy"],
-    extensions: ["values", "prestige", "schedules"],
+    extensions: ["values", "prestige", "schedules", "html-rendering"],
   },
 
   provides: {

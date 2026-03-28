@@ -820,7 +820,7 @@ await core.userMetadata.batchSetUserMeta(userId, "my-extension", { theme: "dark"
 
 Both paths are valid. The scoped core path prevents accidental cross-namespace writes. The direct import path is for kernel code, migrations, and utilities that need to write to arbitrary namespaces.
 
-Four core namespaces (`tools`, `modes`, `extensions`, `cascade`) are always writable regardless of caller. These are kernel-owned shared configuration.
+Five core namespaces (`tools`, `modes`, `extensions`, `cascade`, `llm`) are always writable regardless of caller. These are kernel-owned shared configuration.
 
 Convention:
 - Namespace key MUST match your manifest `name`

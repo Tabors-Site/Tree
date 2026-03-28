@@ -187,7 +187,7 @@ const LandPage = () => {
               </p>
             </div>
             <div className="lp-card">
-              <h3>Nineteen base extensions</h3>
+              <h3>Twenty base extensions</h3>
               <p>
                 Navigation, orchestration, dashboard, notifications, monitoring, team
                 collaboration, presence detection, purpose tracking, cognitive phase

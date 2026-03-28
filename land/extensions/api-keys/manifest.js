@@ -34,7 +34,9 @@ export default {
     models: ["User"],
   },
 
-  optional: {},
+  optional: {
+    extensions: ["html-rendering"],
+  },
 
   provides: {
     models: {},

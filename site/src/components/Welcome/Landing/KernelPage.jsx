@@ -376,7 +376,7 @@ const KernelPage = () => {
       {/* ── RESOLUTION CHAINS ── */}
       <section className="lp-section">
         <div className="lp-container">
-          <h2 className="lp-section-title">Four Resolution Chains</h2>
+          <h2 className="lp-section-title">Five Resolution Chains</h2>
           <p className="lp-section-sub lp-section-sub-wide">
             Every operation at a node goes through resolution chains that determine what the AI
             can do and how it thinks. Each chain walks the parent hierarchy and applies layered rules.
@@ -417,10 +417,19 @@ const KernelPage = () => {
                 First match wins. Failover chain tried on failure.
               </p>
             </div>
+            <div className="lp-card">
+              <h3>5. LLM Config</h3>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                How does the model behave?
+                Per-node <code>metadata.llm.config</code> overrides for tool iterations, timeouts, context window size.
+                Walk parent chain, closest value wins. Falls back to land defaults.
+                A DevOps branch gets longer timeouts. A journal gets deeper context.
+              </p>
+            </div>
           </div>
           <p className="lp-section-sub" style={{marginTop: 20}}>
-            Navigate to a different node. All four chains re-resolve. Different tools appear.
-            Different mode fires. Different model runs. The tree reshapes around where you stand.
+            Navigate to a different node. All five chains re-resolve. Different tools appear.
+            Different mode fires. Different model runs. Different behavior constraints apply. The tree reshapes around where you stand.
           </p>
         </div>
       </section>
@@ -817,13 +826,13 @@ const KernelPage = () => {
               ["MCP spatial scoping", "Tool calls check isExtensionBlockedAtNode before dispatch. Same scoping as WebSocket."],
               ["MCP client cap", "5,000 max clients. Oldest evicted. 10s connect timeout. 5s close timeout. Stale sweep every 15m. Token isolation."],
               ["WebSocket safety", "Payload sanitization (200 char strings, 500 char JSON). ID validation (36 char cap). Auth failure logging. Broadcast event name validation."],
-              ["Metadata guard", "Blocked extensions can't write. Four core namespaces bypass. Key length max 50 chars. Nesting depth max 5 levels."],
+              ["Metadata guard", "Blocked extensions can't write. Five core namespaces (tools, modes, extensions, cascade, llm) bypass ownership check. Key length max 50 chars. Nesting depth max 5 levels."],
               ["Document size guard", "14MB ceiling. 512KB per namespace. onDocumentPressure at 80%."],
               ["Note count per node", "maxNotesPerNode (1000). Prevents runaway loops."],
               ["Contribution extensionData cap", "512KB per contribution. Prevents buggy extensions writing unbounded data."],
               [".flow partitioning", "Daily partitions. Circular overwrite. Retention by date."],
               ["Ownership chain", "rootOwner/contributor mutations validate parent chain. System nodes rejected."],
-              ["Ancestor cache", "One walk serves six resolution chains. Snapshot per message. Auto-invalidation on changes."],
+              ["Ancestor cache", "One walk serves five resolution chains. Snapshot per message. Auto-invalidation on changes."],
               ["Atomic metadata writes", "MongoDB $set per namespace. Concurrent writes never clobber."],
               ["DB health check", "Before each tool call. Dead DB tells AI to inform user. 30s socket timeout. 5s heartbeat. Event monitoring. Graceful shutdown."],
               ["SSRF protection", "Peer registration validates hostname. 15s timeout on all federation fetches."],

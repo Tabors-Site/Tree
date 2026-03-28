@@ -32,7 +32,7 @@ export default {
   },
 
   optional: {
-    extensions: [],
+    extensions: ["html-rendering"],
   },
 
   provides: {

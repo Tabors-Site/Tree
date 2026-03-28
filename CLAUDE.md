@@ -328,7 +328,7 @@ INVALID_INPUT means garbage the kernel can't parse. Not "I understood your reque
 5. Seed schemas never change
 6. Zero `getExtension()` calls in seed
 
-**Resolution chains walk the ancestor cache.** Extension scope, tool scope, mode resolution, LLM resolution, persona resolution, perspective filter resolution. All walk the parent chain. All use the same cached snapshot per message.
+**Resolution chains walk the ancestor cache.** Extension scope, tool scope, mode resolution, LLM connection, LLM config, persona resolution, perspective filter resolution. All walk the parent chain. All use the same cached snapshot per message.
 
 **enrichContext is how extensions speak to the AI.** The kernel builds the prompt. Extensions inject context through this sequential hook. Guard every enrichContext handler: check if relevant data exists before injecting. Never run expensive queries unconditionally.
 
@@ -344,7 +344,7 @@ INVALID_INPUT means garbage the kernel can't parse. Not "I understood your reque
 
 ## Extension Ecosystem (91 extensions, 4 bundles)
 
-**Base TreeOS (19):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, approve.
+**Base TreeOS (20):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, approve, instructions.
 
 **treeos-cascade (8):** propagation, perspective-filter, sealed-transport, codebook, gap-detection, long-memory, pulse, flow.
 

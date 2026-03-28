@@ -29,7 +29,9 @@ export default {
     models: ["Node"],
   },
 
-  optional: {},
+  optional: {
+    extensions: ["html-rendering"],
+  },
 
   provides: {
     models: {

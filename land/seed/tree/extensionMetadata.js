@@ -23,7 +23,7 @@ import { getLandConfigValue } from "../landConfig.js";
  * maxDocumentSizeBytes (default 14MB). Writes exceeding the limit rejected.
  */
 
-const CORE_NAMESPACES = new Set(["tools", "modes", "extensions", "cascade"]);
+const CORE_NAMESPACES = new Set(["tools", "modes", "extensions", "cascade", "llm"]);
 function MAX_METADATA_VALUE_BYTES() { return Math.max(1024, Math.min(Number(getLandConfigValue("metadataNamespaceMaxBytes")) || 524288, 2 * 1024 * 1024)); }
 const MAX_NAMESPACE_KEY_LENGTH = 50;
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);

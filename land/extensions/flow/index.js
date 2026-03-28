@@ -5,7 +5,8 @@ export async function init(core) {
 
   // Mount flow dashboard page if html-rendering is available
   try {
-    const htmlExt = (await import("../loader.js")).getExtension("html-rendering");
+    const { getExtension } = await import("../loader.js");
+    const htmlExt = getExtension("html-rendering");
     if (htmlExt?.pageRouter) {
       const { default: flowDashboardRouter } = await import("./app/flowDashboard.js");
       htmlExt.pageRouter.use("/", flowDashboardRouter);

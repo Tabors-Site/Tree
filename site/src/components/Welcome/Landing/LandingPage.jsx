@@ -47,9 +47,9 @@ const LandingPage = () => {
             <div className="lp-card" style={{display: "flex", flexDirection: "column"}}>
               <h3 style={{color: "#a78bfa"}}>Extensions</h3>
               <p style={{flex: 1}}>
-                Nineteen base extensions ship with every land. Four bundles add depth:
+                Twenty base extensions ship with every land. Four bundles add depth:
                 Cascade (8, the nervous system). Intelligence (13, self-awareness).
-                Connect (8, external channels). Maintenance (5, hygiene). 91 extensions total.
+                Connect (8, external channels). Maintenance (5, hygiene). 92 extensions total.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
                 <a href="/extensions" style={{color: "#a78bfa", fontSize: "0.9rem", fontWeight: 600, textDecoration: "none", borderBottom: "1px solid rgba(167, 139, 250, 0.3)", paddingBottom: 2}}>How extensions work</a>

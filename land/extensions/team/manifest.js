@@ -29,6 +29,7 @@ export default {
 
   optional: {
     services: ["energy", "websocket"],
+    extensions: ["html-rendering"],
   },
 
   provides: {

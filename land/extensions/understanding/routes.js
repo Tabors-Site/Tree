@@ -52,6 +52,13 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
       return sendError(res, 404, ERR.NODE_NOT_FOUND, "Root node not found");
     }
 
+    // Only tree owner or contributors can create understanding runs
+    const isOwner = rootNode.rootOwner?.toString() === userId;
+    const isContributor = (rootNode.contributors || []).some(c => c.toString() === userId);
+    if (!isOwner && !isContributor) {
+      return sendError(res, 403, ERR.FORBIDDEN, "Only tree owner or contributors can create understanding runs");
+    }
+
     // Check LLM access — tree owner needs an LLM or root must have one assigned
     const hasUserLlm = await userHasLlm(userId);
     const hasRootLlm = !!(rootNode.llmDefault && rootNode.llmDefault !== "none");
@@ -618,7 +625,12 @@ router.post("/root/:nodeId/understandings/run/:runId/orchestrate", authenticate,
   const username = req.username;
   const fromSite = req.body?.source === "user";
 
-  const rootNode = await Node.findById(nodeId).select("llmDefault metadata").lean();
+  const rootNode = await Node.findById(nodeId).select("rootOwner contributors llmDefault metadata").lean();
+  const isOwner = rootNode?.rootOwner?.toString() === userId;
+  const isContributor = (rootNode?.contributors || []).some(c => c.toString() === userId);
+  if (!isOwner && !isContributor) {
+    return sendError(res, 403, ERR.FORBIDDEN, "Only tree owner or contributors can run understandings");
+  }
   const hasRootLlm = !!(rootNode?.llmDefault && rootNode.llmDefault !== "none");
   if (!hasRootLlm && !(await userHasLlm(userId))) {
     return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");

@@ -189,12 +189,13 @@ Same pattern as node metadata, applied to users. Six functions.
 
 ## Resolution Chains
 
-Every operation at a node goes through four resolution chains. Position determines capability.
+Every operation at a node goes through five resolution chains. Position determines capability.
 
 1. **Extension scope**: Walk parent chain, accumulate `metadata.extensions.blocked[]` and `restricted`. Blocked = no tools, hooks, modes, metadata writes. Restricted = read-only tools only.
 2. **Tool scope**: Mode base tools + extension tools + per-node `metadata.tools.allowed/blocked`. Filtered by extension scope.
 3. **Mode resolution**: `metadata.modes[intent]` per-node override, then default mapping, then bigMode fallback.
 4. **LLM resolution**: Extension slot on tree, tree default, extension slot on user, user default.
+5. **LLM config**: Per-node `metadata.llm.config` overrides for maxToolIterations, toolCallTimeout, toolResultMaxBytes, maxConversationMessages. Walk parent chain, closest value wins. Falls back to land-level config.
 
 ### Confined Extensions
 
@@ -525,7 +526,7 @@ Defaults to OFF (`treeCircuitEnabled: false`).
 | enrichContext chain timeout | 15s cumulative cap for the entire enrichContext/onCascade handler chain. Per-handler timeout reduced to remaining budget. |
 | MCP spatial scoping | MCP tool calls check isExtensionBlockedAtNode before dispatch. Same spatial scoping guarantee as WebSocket conversations. |
 | Extension install rollback | Files written to staging directory. Atomic rename on success. Cleanup on failure. No partial installs. |
-| Metadata guard | Blocked extensions can't write to nodes. Four core namespaces (cascade, extensions, tools, modes) bypass blocking. |
+| Metadata guard | Blocked extensions can't write to nodes. Five core namespaces (tools, modes, extensions, cascade, llm) bypass blocking. |
 | Document size guard | Every metadata write checks total document size against maxDocumentSizeBytes (14MB default). Writes exceeding the limit rejected with DOCUMENT_SIZE_EXCEEDED. onDocumentPressure fires at 80% capacity. |
 | Per-namespace cap | metadataNamespaceMaxBytes (default 512KB) per extension namespace on nodes, users, and contribution extensionData. Configurable. 20 extensions at 512KB = 10MB, under the 14MB ceiling. |
 | Namespace key length | Max 50 chars for metadata namespace keys in setExtMeta. Same cap as node type. |
@@ -536,7 +537,7 @@ Defaults to OFF (`treeCircuitEnabled: false`).
 | Ownership chain | rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify. System nodes always rejected. transferOwnership uses bulkWrite for atomic two-op transfer. |
 | Node locks | Structural mutations (move, delete, transfer ownership) acquire short-lived in-memory locks. Reads and scoped writes proceed without locking. Sorted acquisition prevents deadlocks. 30s TTL expiry prevents permanent locks on crash. |
 | Tree circuit breaker | Health equation monitors node count, metadata density, error rate. Score > 1.0 trips the tree. No AI, no writes, no cascade. Read access stays. Extensions revive. Defaults to off. |
-| Ancestor cache | Shared cache for parent chain walks. One walk serves all six resolution chains. Snapshot per message for consistency. moveNode clears entire cache. deleteNode clears entries containing the deleted node. Metadata/ownership changes clear the affected node and descendants. |
+| Ancestor cache | Shared cache for parent chain walks. One walk serves all five resolution chains. Snapshot per message for consistency. moveNode clears entire cache. deleteNode clears entries containing the deleted node. Metadata/ownership changes clear the affected node and descendants. |
 | Session cap | 10K max (configurable) with oldest-first eviction. |
 | Core session types immutable | Extensions can register custom session types but cannot overwrite core types (websocket-chat, api-tree-chat, etc.). Prevents extension from breaking the stale sweep or navigator promotion. |
 | Scoped session cap | 20K max scoped session entries. Oldest evicted on overflow. Prevents unbounded growth from unique tree:root:user scope keys. |

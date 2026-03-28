@@ -3,11 +3,11 @@
  * Ancestor Path Cache
  *
  * One shared cache for the kernel's hottest path: walking parent chains.
- * Six resolution chains (extension scope, tool scope, mode, LLM, auth, ownership)
- * all walk the same parent hierarchy. Without caching, a tree 20 nodes deep
- * with all six traversals means 120 database queries before the AI does anything.
+ * Five resolution chains (extension scope, tool scope, mode, LLM connection, LLM config)
+ * plus auth and ownership all walk the same parent hierarchy. Without caching,
+ * a tree 20 nodes deep means dozens of database queries before the AI does anything.
  *
- * With caching, one walk serves all six. Shared ancestors are shared entries.
+ * With caching, one walk serves all chains. Shared ancestors are shared entries.
  * The cache stores structural and configuration data that changes rarely:
  * metadata, systemRole, rootOwner, contributors, parent. It does NOT store
  * notes, note content, or user-specific permission decisions.
