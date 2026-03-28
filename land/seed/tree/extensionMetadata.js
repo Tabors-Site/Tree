@@ -261,6 +261,15 @@ export async function mergeExtMeta(node, extName, partial, opts) {
 }
 
 /**
+ * Validate extName for atomic operations.
+ * Same checks as setExtMeta: key length, dangerous keys, type.
+ * Throws on failure so bad inputs never reach MongoDB.
+ */
+function validateAtomicExtName(extName) {
+  validateExtName(extName);
+}
+
+/**
  * Atomic increment on a single key within an extension's metadata namespace.
  * Uses MongoDB $inc. No read-modify-write. No race conditions.
  *
@@ -269,6 +278,9 @@ export async function mergeExtMeta(node, extName, partial, opts) {
  */
 export async function incExtMeta(node, extName, key, amount = 1) {
   if (!node || !extName || !key) return false;
+  validateAtomicExtName(extName);
+  if (typeof amount !== "number" || !isFinite(amount)) return false;
+  if (DANGEROUS_KEYS.has(key)) return false;
   const nodeId = String(node._id || node);
   await Node.updateOne(
     { _id: nodeId },
@@ -287,10 +299,16 @@ export async function incExtMeta(node, extName, key, amount = 1) {
  */
 export async function pushExtMeta(node, extName, key, item, maxLength = 100) {
   if (!node || !extName || !key) return false;
+  validateAtomicExtName(extName);
+  if (DANGEROUS_KEYS.has(key)) return false;
+  // Cap maxLength to prevent unbounded arrays
+  const safeCap = Math.min(Math.max(1, maxLength), 1000);
+  // Validate item is serializable
+  try { JSON.stringify(item); } catch { return false; }
   const nodeId = String(node._id || node);
   await Node.updateOne(
     { _id: nodeId },
-    { $push: { [`metadata.${extName}.${key}`]: { $each: [item], $slice: -maxLength } } }
+    { $push: { [`metadata.${extName}.${key}`]: { $each: [item], $slice: -safeCap } } }
   );
   invalidateNode(nodeId);
   return true;
@@ -306,12 +324,19 @@ export async function pushExtMeta(node, extName, key, item, maxLength = 100) {
  */
 export async function batchSetExtMeta(node, extName, fields) {
   if (!node || !extName || !fields || typeof fields !== "object") return false;
-  const nodeId = String(node._id || node);
+  validateAtomicExtName(extName);
+  // Validate fields: check for dangerous keys, serializable values
+  const entries = Object.entries(fields);
+  if (entries.length === 0) return false;
+  if (entries.length > 100) return false; // cap field count
   const updates = {};
-  for (const [key, value] of Object.entries(fields)) {
+  for (const [key, value] of entries) {
+    if (DANGEROUS_KEYS.has(key)) continue; // skip dangerous keys silently
+    try { JSON.stringify(value); } catch { continue; } // skip non-serializable
     updates[`metadata.${extName}.${key}`] = value;
   }
   if (Object.keys(updates).length === 0) return false;
+  const nodeId = String(node._id || node);
   await Node.updateOne({ _id: nodeId }, { $set: updates });
   invalidateNode(nodeId);
   return true;
@@ -327,6 +352,7 @@ export async function batchSetExtMeta(node, extName, fields) {
  */
 export async function unsetExtMeta(node, extName) {
   if (!node || !extName) return false;
+  validateAtomicExtName(extName);
   const nodeId = String(node._id || node);
   await Node.updateOne(
     { _id: nodeId },

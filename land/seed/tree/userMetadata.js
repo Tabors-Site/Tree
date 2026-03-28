@@ -110,6 +110,9 @@ export function setUserMeta(user, key, data) {
  */
 export async function incUserMeta(user, key, field, amount = 1) {
   if (!user || !key || !field) return false;
+  if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
+  if (DANGEROUS_KEYS.has(field)) return false;
+  if (typeof amount !== "number" || !isFinite(amount)) return false;
   const userId = String(user._id || user);
   await User.updateOne(
     { _id: userId },
@@ -126,10 +129,14 @@ export async function incUserMeta(user, key, field, amount = 1) {
  */
 export async function pushUserMeta(user, key, field, item, maxLength = 100) {
   if (!user || !key || !field) return false;
+  if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
+  if (DANGEROUS_KEYS.has(field)) return false;
+  const safeCap = Math.min(Math.max(1, maxLength), 1000);
+  try { JSON.stringify(item); } catch { return false; }
   const userId = String(user._id || user);
   await User.updateOne(
     { _id: userId },
-    { $push: { [`metadata.${key}.${field}`]: { $each: [item], $slice: -maxLength } } }
+    { $push: { [`metadata.${key}.${field}`]: { $each: [item], $slice: -safeCap } } }
   );
   return true;
 }
@@ -142,9 +149,14 @@ export async function pushUserMeta(user, key, field, item, maxLength = 100) {
  */
 export async function batchSetUserMeta(user, key, fields) {
   if (!user || !key || !fields || typeof fields !== "object") return false;
+  if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
+  const entries = Object.entries(fields);
+  if (entries.length === 0 || entries.length > 100) return false;
   const userId = String(user._id || user);
   const updates = {};
-  for (const [field, value] of Object.entries(fields)) {
+  for (const [field, value] of entries) {
+    if (DANGEROUS_KEYS.has(field)) continue;
+    try { JSON.stringify(value); } catch { continue; }
     updates[`metadata.${key}.${field}`] = value;
   }
   if (Object.keys(updates).length === 0) return false;
@@ -160,6 +172,7 @@ export async function batchSetUserMeta(user, key, fields) {
  */
 export async function unsetUserMeta(user, key) {
   if (!user || !key) return false;
+  if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
   const userId = String(user._id || user);
   await User.updateOne(
     { _id: userId },

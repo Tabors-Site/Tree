@@ -152,6 +152,11 @@ export function resolveMode(intent, bigMode, nodeMetadata = null, blockedExtensi
  */
 export async function setNodeMode(nodeId, intent, modeKey) {
   if (!nodeId || !intent || !modeKey) return false;
+  // Validate intent: safe key name, no dots/dollars/proto injection
+  if (typeof intent !== "string" || intent.length === 0 || intent.length > 50) return false;
+  if (/[.$]/.test(intent) || intent === "__proto__" || intent === "constructor" || intent === "prototype") return false;
+  // Validate modeKey: must be a registered mode
+  if (typeof modeKey !== "string" || !ALL_MODES[modeKey]) return false;
   await Node.updateOne(
     { _id: String(nodeId) },
     { $set: { [`metadata.modes.${intent}`]: modeKey } }
