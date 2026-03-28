@@ -1,7 +1,8 @@
 import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import urlAuth from "../html-rendering/urlAuth.js";
 import { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat, getNodeValues, getNodeGoals } from "./core.js";
 import { renderValues } from "./html.js";
 import { getExtension } from "../loader.js";
@@ -46,7 +47,7 @@ router.post("/node/:nodeId/goal", authenticate, async (req, res) => {
   }
 });
 
-router.get("/node/:nodeId/values", authenticateOptional, async (req, res) => {
+router.get("/node/:nodeId/values", urlAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
 
@@ -86,7 +87,7 @@ router.get("/node/:nodeId/values", authenticateOptional, async (req, res) => {
   }
 });
 
-router.get("/root/:rootId/values", authenticateOptional, async (req, res) => {
+router.get("/root/:rootId/values", urlAuth, async (req, res) => {
   try {
     const result = await getGlobalValuesTreeAndFlat(req.params.rootId);
     sendOk(res, result);

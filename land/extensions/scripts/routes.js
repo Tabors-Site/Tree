@@ -1,6 +1,7 @@
 import log from "../../seed/log.js";
 import express from "express";
-import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import urlAuth from "../html-rendering/urlAuth.js";
 
 // Node model wired from init via setNodeModel
 let _Node = null;
@@ -27,7 +28,7 @@ function filterQuery(req) {
 }
 
 // GET script detail
-router.get("/node/:nodeId/script/:scriptId", authenticateOptional, async (req, res) => {
+router.get("/node/:nodeId/script/:scriptId", urlAuth, async (req, res) => {
   try {
     const { nodeId, scriptId } = req.params;
 
@@ -124,7 +125,7 @@ router.post(
 );
 
 // Script help/reference page
-router.get("/node/:nodeId/scripts/help", authenticateOptional, async (req, res) => {
+router.get("/node/:nodeId/scripts/help", urlAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
 

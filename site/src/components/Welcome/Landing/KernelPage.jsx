@@ -11,8 +11,8 @@ const KernelPage = () => {
           <h1 className="lp-title">The Seed</h1>
           <p className="lp-subtitle">What runs when everything else is stripped away.</p>
           <p className="lp-tagline">
-            The kernel is called the seed. You plant it. It grows trees. Six models,
-            a conversation loop, a hook system, a cascade engine, and an extension loader.
+            The kernel is called the seed. You plant it. It grows trees. Two schemas with
+            metadata Maps, a conversation loop, a hook system, a cascade engine, and an extension loader.
             Remove every extension and the seed still boots. It defines the data contract
             that extensions build on and the resolution chains that determine what happens
             at every position in the tree.
@@ -137,12 +137,12 @@ const KernelPage = () => {
       {/* ── SCHEMAS ── */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">Six Models, Two Maps</h2>
+          <h2 className="lp-section-title">Two Schemas, Two Maps</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            Six kernel models. Two carry extensible metadata Maps (Node, User).
-            Four are fixed infrastructure (Note, Contribution, Chat, LlmConnection).
-            Everything an extension needs to store on a node or user goes in the metadata Map.
-            The schemas never change. Extensions can also create their own models for separate collections.
+            Two schemas carry extensible metadata Maps: Node and User. The Map is the invention.
+            Extensions store everything in it. Values, prestige, personas, cascade config, AI instructions.
+            Four supporting models exist for infrastructure (Note, Contribution, Chat, LlmConnection)
+            but they don't carry Maps. Extensions don't write to them. The schemas never change.
           </p>
           <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
             <div className="lp-card">
@@ -627,7 +627,7 @@ const KernelPage = () => {
             </div>
           </div>
           <p className="lp-section-sub" style={{marginTop: 20}}>
-            The kernel has four primitives. <strong style={{color: "#e5e5e5"}}>Structure</strong>: six models, nodes in hierarchies, two with extensible metadata Maps.{" "}
+            The kernel has four primitives. <strong style={{color: "#e5e5e5"}}>Structure</strong>: two schemas with metadata Maps, nodes in hierarchies. Four supporting models for infrastructure.{" "}
             <strong style={{color: "#e5e5e5"}}>Intelligence</strong>: the conversation loop, resolution chains.{" "}
             <strong style={{color: "#e5e5e5"}}>Extensibility</strong>: the loader, hooks, pub-sub.{" "}
             <strong style={{color: "#e5e5e5"}}>Communication</strong>: cascade, .flow, visible results.
@@ -703,92 +703,31 @@ const KernelPage = () => {
         <div className="lp-container">
           <h2 className="lp-section-title">Kernel Config</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            Every tunable value in the kernel. Set from the CLI, the API, or through the land-manager AI. No code changes. No restarts.
+            Set from the CLI, the API, or through the land-manager AI. No code changes. No restarts.
           </p>
           <div style={{maxWidth: 700, margin: "0 auto"}}>
             {[
               ["LAND_NAME", "Display name", "My Land"],
-              ["landUrl", "Land URL for SSRF protection and headers", "auto"],
+              ["landUrl", "Land URL for headers and SSRF protection", "auto"],
+              ["landLlmConnection", "Land-wide fallback LLM for users without their own", "null"],
               ["llmTimeout", "Seconds per LLM API call", "900"],
               ["llmMaxRetries", "Retry count on 429/500", "3"],
               ["maxToolIterations", "Tool calls per message", "15"],
               ["maxConversationMessages", "Context window size", "30"],
-              ["defaultModel", "Fallback LLM model", ""],
               ["noteMaxChars", "Max characters per note", "5000"],
               ["treeSummaryMaxDepth", "How deep AI sees the tree", "4"],
               ["treeSummaryMaxNodes", "How many nodes AI sees", "60"],
-              ["treeSearchResultLimit", "Max search results in tree context", "10"],
-              ["treeSummaryRecentNotes", "Recent notes shown per node in summary", "3"],
-              ["treeSummaryPreviewChars", "Characters of note content in preview", "200"],
-              ["chatContributionQueryLimit", "Max contributions linked per chat", "2000"],
-              ["chatHistoryMaxSessions", "Max sessions per chat history query", "50"],
-              ["chatHistoryMaxChatsPerSession", "Max chain steps loaded per session", "200"],
-              ["chatHistoryMaxDescendantIds", "Cap on includeChildren node expansion", "500"],
-              ["chatHistoryMaxContributions", "Cap on contributions per chat history query", "5000"],
-              ["carryMessages", "Messages carried across mode switch", "4"],
               ["sessionTTL", "Session idle timeout (seconds)", "900"],
-              ["staleSessionTimeout", "Stale session cleanup (seconds)", "1800"],
               ["maxSessions", "Max concurrent sessions", "10000"],
               ["chatRetentionDays", "Auto-delete chats after N days", "90"],
               ["contributionRetentionDays", "Auto-delete contributions after N days", "365"],
-              ["canopyEventRetentionDays", "Canopy event cleanup (canopy owns this)", "30"],
               ["timezone", "Land timezone for AI prompts", "auto"],
               ["disabledExtensions", "Extensions to skip on boot", "[]"],
-              ["cascadeEnabled", "Enable cascade signals on content writes", "false"],
-              ["resultTTL", "Seconds before cascade results cleaned from .flow", "604800"],
-              ["awaitingTimeout", "Seconds before awaiting status becomes failed", "300"],
-              ["cascadeMaxDepth", "Max propagation depth per signal", "50"],
-              ["cascadeMaxPayloadBytes", "Max signal payload size", "51200"],
-              ["cascadeRateLimit", "Max signals per node per minute", "60"],
-              ["cascadeMaxDeliveriesPerSignal", "Max child deliveries per signal", "500"],
-              ["chatRateLimit", "Max chat messages per rate window per user", "10"],
-              ["chatRateWindowMs", "Chat rate limit window (ms)", "60000"],
-              ["maxChatMessageChars", "Max characters per WebSocket chat message", "5000"],
-              ["maxMessageContentBytes", "Max bytes per message in conversation history", "32768"],
-              ["maxChatContentBytes", "Max bytes stored per chat message in DB", "100000"],
-              ["maxChainStepContentBytes", "Max bytes per orchestrator chain step log", "2000"],
-              ["maxSystemPromptChars", "Max system prompt length before truncation", "32000"],
-              ["maxScopedSessions", "Hard cap on scoped sessions (zone-specific)", "20000"],
-              ["maxAiContextEntries", "Hard cap on AI chat context tracking", "10000"],
-              ["requestQueueMaxDepth", "Max waiting tasks per queue key", "100"],
+              ["cascadeEnabled", "Enable cascade signals", "false"],
               ["uploadEnabled", "Master switch for uploads", "true"],
               ["maxUploadBytes", "Hard ceiling per upload", "104857600"],
-              ["allowedMimeTypes", "MIME prefix filter (null = all)", "null"],
-              ["maxDocumentSizeBytes", "Document size ceiling (2MB headroom under MongoDB 16MB)", "14680064"],
-              ["flowMaxResultsPerDay", "Max cascade results per daily partition", "10000"],
-              ["allowedFrameDomains", "CSP frame-ancestors domains", "[]"],
-              ["ancestorCacheTTL", "Parent chain cache TTL (ms)", "30000"],
-              ["integrityCheckInterval", "Tree fsck interval (ms, 24h default)", "86400000"],
-              ["treeCircuitEnabled", "Master switch for tree circuit breaker", "false"],
-              ["maxTreeNodes", "Node count threshold for health equation", "10000"],
-              ["maxTreeMetadataBytes", "Metadata size threshold", "1073741824"],
-              ["maxTreeErrorRate", "Errors per hour threshold", "100"],
-              ["circuitNodeWeight", "Node count weight in equation", "0.4"],
-              ["circuitDensityWeight", "Metadata density weight", "0.3"],
-              ["circuitErrorWeight", "Error rate weight", "0.3"],
-              ["circuitCheckInterval", "Health check interval (ms, 1h)", "3600000"],
-              ["toolCircuitThreshold", "Consecutive tool failures before session disable", "5"],
-              ["llmMaxConcurrent", "Max in-flight LLM calls across all users", "20"],
-              ["failoverTimeout", "Seconds to walk LLM failover stack before giving up", "15"],
-              ["toolCallTimeout", "Seconds before a tool call is killed", "60"],
-              ["toolResultMaxBytes", "Max tool result size before truncation (bytes)", "50000"],
-              ["maxNotesPerNode", "Max notes per node", "1000"],
-              ["maxConversationSessions", "Hard cap on in-memory conversation sessions", "50000"],
-              ["staleConversationTimeout", "Seconds before idle conversation is swept", "1800"],
-              ["maxRegisteredTools", "Max tools in the registry", "500"],
-              ["maxRegisteredModes", "Max modes in the registry", "200"],
-              ["landLlmConnection", "Land-wide fallback LLM connection ID for users without their own", "null"],
-              ["maxConnectionsPerUser", "Max custom LLM connections per user (1-100)", "15"],
-              ["maxOrchestrators", "Max registered orchestrators", "10"],
-              ["maxChainSteps", "Max steps per orchestrator pipeline (circuit breaker)", "500"],
-              ["maxOrchestratorLocks", "Hard cap on concurrent orchestrator locks", "10000"],
-              ["maxParseInputBytes", "Max input for JSON extraction from LLM responses", "200000"],
-              ["maxMcpClients", "Hard cap on MCP client pool", "5000"],
-              ["maxExtensionIndexes", "Max MongoDB indexes per extension", "20"],
-              ["maxInheritedStatusNodes", "Max nodes affected by one status cascade", "10000"],
               ["jwtExpiryDays", "JWT token lifetime in days (1-365)", "30"],
-              ["npmInstallTimeout", "Timeout for npm install in extension directories (ms)", "60000"],
-              ["seedVersion", "Current seed version (set by migration runner)", "0.1.0"],
+              ["treeCircuitEnabled", "Master switch for tree circuit breaker", "false"],
             ].map(([key, desc, def]) => (
               <div key={key} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -800,6 +739,106 @@ const KernelPage = () => {
                 {def && <span style={{color: "#555", fontSize: "0.8rem", fontFamily: "monospace"}}>{def}</span>}
               </div>
             ))}
+            <details style={{marginTop: 20}}>
+              <summary style={{color: "#888", cursor: "pointer", fontSize: "0.9rem", padding: "12px 0"}}>
+                Advanced Tuning ({[
+                  "carryMessages", "chatRateLimit", "chatRateWindowMs", "maxChatMessageChars",
+                  "maxMessageContentBytes", "maxChatContentBytes", "maxChainStepContentBytes",
+                  "maxSystemPromptChars", "maxScopedSessions", "maxAiContextEntries",
+                  "requestQueueMaxDepth", "staleSessionTimeout", "maxConversationSessions",
+                  "staleConversationTimeout", "llmMaxConcurrent", "failoverTimeout",
+                  "toolCallTimeout", "toolResultMaxBytes", "toolCircuitThreshold",
+                  "maxNotesPerNode", "maxConnectionsPerUser", "maxRegisteredTools",
+                  "maxRegisteredModes", "maxOrchestrators", "maxChainSteps",
+                  "maxOrchestratorLocks", "maxParseInputBytes", "maxMcpClients",
+                  "maxExtensionIndexes", "maxInheritedStatusNodes",
+                  "resultTTL", "awaitingTimeout", "cascadeMaxDepth", "cascadeMaxPayloadBytes",
+                  "cascadeRateLimit", "cascadeMaxDeliveriesPerSignal", "flowMaxResultsPerDay",
+                  "maxDocumentSizeBytes", "ancestorCacheTTL", "integrityCheckInterval",
+                  "allowedMimeTypes", "allowedFrameDomains", "allowedLlmDomains",
+                  "maxTreeNodes", "maxTreeMetadataBytes", "maxTreeErrorRate",
+                  "circuitNodeWeight", "circuitDensityWeight", "circuitErrorWeight",
+                  "circuitCheckInterval", "treeSummaryRecentNotes", "treeSummaryPreviewChars",
+                  "treeSearchResultLimit", "chatContributionQueryLimit",
+                  "chatHistoryMaxSessions", "chatHistoryMaxChatsPerSession",
+                  "chatHistoryMaxDescendantIds", "chatHistoryMaxContributions",
+                  "canopyEventRetentionDays", "npmInstallTimeout", "seedVersion",
+                ].length} keys. Most operators never touch these.)
+              </summary>
+              {[
+                ["carryMessages", "Messages carried across mode switch", "4"],
+                ["chatRateLimit", "Max chat messages per rate window", "10"],
+                ["chatRateWindowMs", "Chat rate limit window (ms)", "60000"],
+                ["maxChatMessageChars", "Max characters per WebSocket chat message", "5000"],
+                ["maxMessageContentBytes", "Max bytes per message in conversation history", "32768"],
+                ["maxChatContentBytes", "Max bytes stored per chat message in DB", "100000"],
+                ["maxChainStepContentBytes", "Max bytes per orchestrator chain step log", "2000"],
+                ["maxSystemPromptChars", "Max system prompt length before truncation", "32000"],
+                ["maxScopedSessions", "Hard cap on scoped sessions", "20000"],
+                ["maxAiContextEntries", "Hard cap on AI chat context tracking", "10000"],
+                ["requestQueueMaxDepth", "Max waiting tasks per queue key", "100"],
+                ["staleSessionTimeout", "Stale session cleanup (seconds)", "1800"],
+                ["maxConversationSessions", "Hard cap on conversation sessions", "50000"],
+                ["staleConversationTimeout", "Idle conversation sweep (seconds)", "1800"],
+                ["llmMaxConcurrent", "Max in-flight LLM calls", "20"],
+                ["failoverTimeout", "LLM failover stack timeout (seconds)", "15"],
+                ["toolCallTimeout", "Seconds before a tool call is killed", "60"],
+                ["toolResultMaxBytes", "Max tool result size (bytes)", "50000"],
+                ["toolCircuitThreshold", "Tool failures before session disable", "5"],
+                ["maxNotesPerNode", "Max notes per node", "1000"],
+                ["maxConnectionsPerUser", "Max LLM connections per user", "15"],
+                ["maxRegisteredTools", "Max tools in registry", "500"],
+                ["maxRegisteredModes", "Max modes in registry", "200"],
+                ["maxOrchestrators", "Max registered orchestrators", "10"],
+                ["maxChainSteps", "Max steps per pipeline", "500"],
+                ["maxOrchestratorLocks", "Concurrent orchestrator locks cap", "10000"],
+                ["maxParseInputBytes", "Max LLM JSON extraction input", "200000"],
+                ["maxMcpClients", "MCP client pool cap", "5000"],
+                ["maxExtensionIndexes", "Max indexes per extension", "20"],
+                ["maxInheritedStatusNodes", "Max nodes per status cascade", "10000"],
+                ["resultTTL", "Cascade result TTL (seconds)", "604800"],
+                ["awaitingTimeout", "Awaiting to failed timeout (seconds)", "300"],
+                ["cascadeMaxDepth", "Max propagation depth", "50"],
+                ["cascadeMaxPayloadBytes", "Max signal payload", "51200"],
+                ["cascadeRateLimit", "Max signals per node per minute", "60"],
+                ["cascadeMaxDeliveriesPerSignal", "Max deliveries per signal", "500"],
+                ["flowMaxResultsPerDay", "Max cascade results per day", "10000"],
+                ["maxDocumentSizeBytes", "Document size ceiling", "14680064"],
+                ["ancestorCacheTTL", "Parent chain cache TTL (ms)", "30000"],
+                ["integrityCheckInterval", "Tree fsck interval (ms)", "86400000"],
+                ["allowedMimeTypes", "Upload MIME filter (null = all)", "null"],
+                ["allowedFrameDomains", "CSP frame-ancestors domains", "[]"],
+                ["allowedLlmDomains", "LLM endpoint domain whitelist", "[]"],
+                ["maxTreeNodes", "Node count health threshold", "10000"],
+                ["maxTreeMetadataBytes", "Metadata size threshold", "1073741824"],
+                ["maxTreeErrorRate", "Errors per hour threshold", "100"],
+                ["circuitNodeWeight", "Node count weight", "0.4"],
+                ["circuitDensityWeight", "Metadata density weight", "0.3"],
+                ["circuitErrorWeight", "Error rate weight", "0.3"],
+                ["circuitCheckInterval", "Health check interval (ms)", "3600000"],
+                ["treeSummaryRecentNotes", "Recent notes per node in summary", "3"],
+                ["treeSummaryPreviewChars", "Note preview length (chars)", "200"],
+                ["treeSearchResultLimit", "Search results in tree context", "10"],
+                ["chatContributionQueryLimit", "Contributions linked per chat", "2000"],
+                ["chatHistoryMaxSessions", "Sessions per history query", "50"],
+                ["chatHistoryMaxChatsPerSession", "Chain steps per session", "200"],
+                ["chatHistoryMaxDescendantIds", "includeChildren expansion cap", "500"],
+                ["chatHistoryMaxContributions", "Contributions per history query", "5000"],
+                ["canopyEventRetentionDays", "Canopy event cleanup (days)", "30"],
+                ["npmInstallTimeout", "npm install timeout (ms)", "60000"],
+                ["seedVersion", "Current seed version", "0.1.0"],
+              ].map(([key, desc, def]) => (
+                <div key={key} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.03)",
+                  gap: 12,
+                }}>
+                  <code style={{color: "#4ade80", fontSize: "0.8rem", minWidth: 220}}>{key}</code>
+                  <span style={{color: "#666", fontSize: "0.8rem", flex: 1}}>{desc}</span>
+                  {def && <span style={{color: "#444", fontSize: "0.75rem", fontFamily: "monospace"}}>{def}</span>}
+                </div>
+              ))}
+            </details>
           </div>
         </div>
       </section>

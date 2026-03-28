@@ -6,7 +6,7 @@ This is a TreeOS land. An operating system for AI agents. You are inside a runni
 
 ```
 seed/              The kernel. NEVER modify.
-extensions/        91 extensions. This is where you build.
+extensions/        92 extensions. This is where you build.
 canopy/            Federation. How lands find and talk to each other.
 routes/            HTTP API. Core endpoints. Extensions add their own routes.
 orchestrators/     Pipeline runtime for multi-step AI operations.
@@ -84,7 +84,7 @@ Everything in the kernel serves one of four primitives:
 | **Extensibility** | Loader, 27 hooks, five registries. Spatial scoping. Extensions add all capabilities. |
 | **Communication** | Cascade signals, .flow system node, visible results. Signals propagate and get recorded. |
 
-## Extension ecosystem (91 extensions, 4 bundles)
+## Extension ecosystem (92 extensions, 4 bundles)
 
 **Base TreeOS (20):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, approve, instructions.
 

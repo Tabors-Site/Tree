@@ -20,6 +20,7 @@ import { getNodeName } from "../tree/treeData.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { getModeOwner, getBlockedExtensionsAtNode } from "../tree/extensionScope.js";
 import Node from "../models/node.js";
+import { resolveTreeAccess } from "../tree/treeAccess.js";
 // orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
 import { getOrchestrator } from "../orchestratorRegistry.js";
 import { enqueue } from "./requestQueue.js";
@@ -302,6 +303,23 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       const newBigMode = bigModeFromUrl(url);
       const currentMode = getCurrentMode(visitorId);
       const currentBig = currentMode?.split(":")[0] || null;
+
+      // Validate tree access before accepting rootId/nodeId from the client.
+      // Without this, a crafted WebSocket message could point the AI at another user's tree.
+      const targetId = rootId || nodeId;
+      if (targetId && socket.userId) {
+        try {
+          const access = await resolveTreeAccess(targetId, socket.userId);
+          if (!access.ok || !access.canWrite) {
+            log.warn("WS", `Access denied: ${socket.userId} tried to navigate to ${targetId}`);
+            rootId = null;
+            nodeId = null;
+          }
+        } catch {
+          rootId = null;
+          nodeId = null;
+        }
+      }
 
       // Update rootId when viewing a root URL
       if (rootId) {

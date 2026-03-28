@@ -11,7 +11,10 @@ export async function init(core) {
       const { default: flowDashboardRouter } = await import("./app/flowDashboard.js");
       htmlExt.pageRouter.use("/", flowDashboardRouter);
     }
-  } catch {}
+  } catch (err) {
+    const log = (await import("../../seed/log.js")).default;
+    log.warn("Flow", `Dashboard page not mounted: ${err.message}`);
+  }
 
   return {
     router,

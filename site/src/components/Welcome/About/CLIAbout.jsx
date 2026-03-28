@@ -81,7 +81,7 @@ const CLIAbout = () => {
             </div>
             <div className="lp-term-body">
               <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/</span> <span className="lp-term-caret">› </span>chat "what extensions are loaded"</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">  Land: You have 77 extensions loaded. 4 disabled...</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Land: 92 extensions loaded, all clear...</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">~</span> <span className="lp-term-caret">› </span>chat "what have I been working on"</div>
               <div className="lp-term-line lp-term-output lp-term-dim">  Home: Most active in Health and Projects this week...</div>
@@ -337,12 +337,26 @@ const CLIAbout = () => {
       <section className="lp-section">
         <div className="lp-container" style={{textAlign: "center"}}>
           <h2 className="lp-section-title">Get Started</h2>
-          <div style={{
-            maxWidth: 400, margin: "0 auto", padding: "16px 24px",
-            background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 8, fontFamily: "monospace", fontSize: "0.9rem", color: "rgba(255,255,255,0.6)",
-          }}>
-            npm install -g treeos
+          <div className="lp-terminal" style={{maxWidth: 480, margin: "0 auto", textAlign: "left"}}>
+            <div className="lp-term-header">
+              <span className="lp-term-dot red"></span>
+              <span className="lp-term-dot yellow"></span>
+              <span className="lp-term-dot green"></span>
+              <span className="lp-term-title">terminal</span>
+            </div>
+            <div className="lp-term-body">
+              <div className="lp-term-line lp-term-dim"># Install</div>
+              <div className="lp-term-line">npm install -g treeos</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line lp-term-dim"># Connect to a land</div>
+              <div className="lp-term-line">treeos connect https://treeos.ai</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line lp-term-dim"># Create your account</div>
+              <div className="lp-term-line">treeos register</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line lp-term-dim"># Start the shell</div>
+              <div className="lp-term-line">treeos start</div>
+            </div>
           </div>
           <div className="lp-cta-row">
             <a className="lp-btn lp-btn-primary" href="/">Home</a>

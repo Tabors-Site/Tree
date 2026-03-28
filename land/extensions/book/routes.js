@@ -7,6 +7,7 @@ import {
   generateBook as coreGenerateBook,
 } from "./core.js";
 import { getExtension } from "../loader.js";
+import { renderBookPage, renderSharedBookPage, parseBool, normalizeStatusFilters, renderBookNode } from "./pages/book.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
 function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
@@ -22,15 +23,15 @@ router.get("/root/:nodeId/book", authenticate, async (req, res) => {
     const { nodeId } = req.params;
 
     const options = {
-      latestVersionOnly: html().parseBool(req.query.latestVersionOnly),
-      lastNoteOnly: html().parseBool(req.query.lastNoteOnly),
-      leafNotesOnly: html().parseBool(req.query.leafNotesOnly),
-      filesOnly: html().parseBool(req.query.filesOnly),
-      textOnly: html().parseBool(req.query.textOnly),
-      statusFilters: html().normalizeStatusFilters(req.query),
+      latestVersionOnly: parseBool(req.query.latestVersionOnly),
+      lastNoteOnly: parseBool(req.query.lastNoteOnly),
+      leafNotesOnly: parseBool(req.query.leafNotesOnly),
+      filesOnly: parseBool(req.query.filesOnly),
+      textOnly: parseBool(req.query.textOnly),
+      statusFilters: normalizeStatusFilters(req.query),
     };
 
-    const tocEnabled = html().parseBool(req.query.toc);
+    const tocEnabled = parseBool(req.query.toc);
     const tocDepth = parseInt(req.query.tocDepth) || 0;
 
     const wantHtml = req.query.html !== undefined;
@@ -49,7 +50,7 @@ router.get("/root/:nodeId/book", authenticate, async (req, res) => {
       const token = req.query.token || "";
       const title = book?.nodeName ?? book?.nodeId ?? `Node ${nodeId}`;
       const content = hasContent
-        ? html().renderBookNode(book, 1, token)
+        ? renderBookNode(book, 1, token)
         : `
     <div class="empty-state">
       <div class="empty-state-icon"></div>
@@ -61,7 +62,7 @@ router.get("/root/:nodeId/book", authenticate, async (req, res) => {
   `;
 
       return res.send(
-        html().renderBookPage({
+        renderBookPage({
           nodeId,
           token,
           title,
@@ -152,7 +153,7 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
       const token = req.query.token || "";
       const title = book?.nodeName ?? book?.nodeId ?? `Node ${nodeId}`;
       const content = hasContent
-        ? html().renderBookNode(book, 1, token)
+        ? renderBookNode(book, 1, token)
         : `
     <div class="empty-state">
       <div class="empty-state-icon"></div>
@@ -164,7 +165,7 @@ router.get("/root/:nodeId/book/share/:shareId", async (req, res) => {
   `;
 
       return res.send(
-        html().renderSharedBookPage({
+        renderSharedBookPage({
           nodeId,
           shareId,
           title,

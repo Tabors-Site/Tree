@@ -2,54 +2,6 @@ import { page } from "../../html-rendering/html/layout.js";
 
 export function renderEnergy({ userId, user, energyAmount, additionalEnergy, plan, planExpiresAt, llmConnections, mainAssignment, rawIdeaAssignment, activeConn, hasLlm, connectionCount, isBasic, qs }) {
   const css = `
-body {
-  color: white;
-}
-
-
-  .glass-card > * {
-    position: relative;
-    z-index: 1;
-  }
-
-
-  /* =========================================================
-     GLASS CARDS
-     ========================================================= */
-  .glass-card {
-    background: rgba(var(--glass-water-rgb), var(--glass-alpha));
-    backdrop-filter: blur(22px) saturate(140%);
-    -webkit-backdrop-filter: blur(22px) saturate(140%);
-    border-radius: 16px;
-    padding: 28px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
-      inset 0 1px 0 rgba(255, 255, 255, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    margin-bottom: 24px;
-    animation: fadeInUp 0.6s ease-out both;
-    position: relative;
-    overflow: visible;
-  }
-
-  .glass-card::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05));
-    pointer-events: none;
-  }
-
-  .glass-card h2 {
-    font-size: 18px;
-    font-weight: 600;
-    color: white;
-    margin-bottom: 16px;
-    letter-spacing: -0.3px;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  }
-
-
   /* =========================================================
      ENERGY STATUS
      ========================================================= */

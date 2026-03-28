@@ -3,23 +3,12 @@ import { resolveRootNode } from "../../seed/tree/treeFetch.js";
 import {
   setModels, updateRecentRoots, getRecentRootsWithNames,
   addRoot, removeRoot, getUserRoots, getUserRootsWithNames,
-  migrateRootsToMetadata,
 } from "./core.js";
 
 const RECENT_ROOTS_EVENT = "recentRoots";
 
 export async function init(core) {
   setModels(core.models);
-
-  // ── Boot migration: copy old User.roots to metadata.nav.roots ──
-  try {
-    const migrated = await migrateRootsToMetadata();
-    if (migrated > 0) {
-      log.info("Navigation", `Migrated roots for ${migrated} user(s) from schema to metadata`);
-    }
-  } catch (err) {
-    log.error("Navigation", "Roots migration failed:", err.message);
-  }
 
   // ── Hook: afterNodeCreate ──
   // When a user creates a tree root, add it to their navigation list.

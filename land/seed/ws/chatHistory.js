@@ -151,7 +151,7 @@ function groupIntoSessions(sessionIds, chats) {
         chats: capped,
         startTime: capped[0]?.startMessage?.time || null,
         chatCount: capped.length,
-        truncated: sessionChats.length > MAX_CHATS_PER_SESSION,
+        truncated: sessionChats.length > MAX_CHATS_PER_SESSION(),
       };
     });
 }

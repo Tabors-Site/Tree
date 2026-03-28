@@ -41,38 +41,12 @@ function registerPage(method, path, ...handlers) {
 export async function init(core) {
   const User = core.models.User;
 
-  // Register share token auth strategy
-  core.auth.registerStrategy("shareToken", async (req) => {
-    const token = req.query?.token || req.headers?.["x-share-token"];
-    if (!token) return null;
-    const userId = req.params?.userId;
-    const nodeId = req.params?.nodeId || req.params?.rootId;
-    const result = await resolveHtmlShareAccess({ userId, nodeId, shareToken: token });
-    if (!result.allowed) return null;
-    return {
-      userId: result.matchedUserId,
-      username: result.matchedUsername,
-      extra: { isHtmlShare: true, shareScope: result.scope },
-    };
-  });
-
-  // Register public tree access strategy
-  core.auth.registerStrategy("publicAccess", async (req) => {
-    const nodeId = req.params?.nodeId || req.params?.rootId;
-    if (!nodeId) return null;
-    const rootInfo = await resolvePublicRoot(nodeId);
-    if (!rootInfo || !isPublic(rootInfo.visibility)) return null;
-    return {
-      userId: null,
-      username: null,
-      extra: {
-        isPublicAccess: true,
-        publicRootId: rootInfo.rootId,
-        publicRootOwner: rootInfo.rootOwner,
-        publicLlmDefault: rootInfo.llmDefault,
-      },
-    };
-  });
+  // Share token and public tree access are handled by urlAuth directly.
+  // They are NOT registered as kernel auth strategies because they provide
+  // view-only access to HTML pages. The kernel's authenticate middleware
+  // should only accept full credentials (JWT, API keys). If share tokens
+  // were in the kernel pipeline, any POST route using authenticate would
+  // accept them and allow mutations.
 
   // Write default htmlEnabled to .config if not set
   const { getLandConfigValue, setLandConfigValue } = await import("../../seed/landConfig.js");

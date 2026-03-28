@@ -54,7 +54,7 @@ export async function createPurchaseSession(req, res) {
       productName = "Additional Energy Boost";
     }
 
-    const successUrl = `${getLandUrl()}/app`;
+    const successUrl = `${getLandUrl()}/dashboard`;
     const cancelUrl = successUrl;
 
     const session = await stripe.checkout.sessions.create({

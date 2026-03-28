@@ -1146,7 +1146,7 @@ text-decoration: none;
         var msg = 'Send failed';
         try {
           var body = JSON.parse(xhr.responseText);
-          if (body.error) msg = body.error;
+          if (body.error) msg = body.error.message || body.error;
         } catch(e) {}
         alert(msg);
         sendBtn.classList.remove('loading');

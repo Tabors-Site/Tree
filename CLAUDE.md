@@ -51,17 +51,17 @@ land/
 │       └── userMetadata.js      # getUserMeta/setUserMeta for user.metadata
 ├── seed/models/       # Kernel models (6 files, zero extension models)
 │   ├── node.js        # _id, name, type, status, dateCreated, llmDefault, visibility, children, parent, rootOwner, contributors, systemRole, metadata
-│   ├── user.js        # _id, username, password, roots, llmDefault, isAdmin, isRemote, homeLand, metadata
+│   ├── user.js        # _id, username, password, llmDefault, isAdmin, isRemote, homeLand, metadata
 │   ├── note.js        # Text or file content attached to nodes
 │   ├── contribution.js # Audit trail
 │   ├── chat.js        # AI conversation sessions
 │   └── llmConnection.js # LLM endpoint storage
-├── extensions/        # 91 extensions. ALL optional functionality lives here.
+├── extensions/        # 92 extensions. ALL optional functionality lives here.
 │   ├── _template/     # Scaffold for new extensions
 │   ├── loader.js      # Scans manifests, validates deps, wires routes/tools/modes/hooks/jobs
 │   ├── EXTENSION_FORMAT.md  # Full extension developer documentation
 │   │
-│   │  # Base TreeOS (18 extensions, ship with every land)
+│   │  # Base TreeOS (20 extensions, ship with every land)
 │   ├── treeos/             # Home zone orchestrator
 │   ├── tree-orchestrator/  # Tree zone chat/place/query orchestrator (REPLACEABLE)
 │   ├── land-manager/       # Land zone management, extension install/config
@@ -342,7 +342,7 @@ INVALID_INPUT means garbage the kernel can't parse. Not "I understood your reque
 
 **Confined scope for dangerous extensions.** Shell, solana, scripts declare `scope: "confined"`. Inactive everywhere by default. `ext-allow` at specific positions.
 
-## Extension Ecosystem (91 extensions, 4 bundles)
+## Extension Ecosystem (92 extensions, 4 bundles)
 
 **Base TreeOS (20):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, approve, instructions.
 

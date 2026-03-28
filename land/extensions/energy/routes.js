@@ -1,7 +1,7 @@
 import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
+import urlAuth from "../html-rendering/urlAuth.js";
 import { getExtension } from "../loader.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
 import { renderEnergy } from "./pages/energy.js";
@@ -26,7 +26,7 @@ function buildQueryString(req) {
   return filtered ? `?${filtered}` : "";
 }
 
-router.get("/user/:userId/energy", authenticateOptional, async (req, res) => {
+router.get("/user/:userId/energy", urlAuth, async (req, res) => {
   try {
     const { userId } = req.params;
     const qs = buildQueryString(req);

@@ -3,7 +3,7 @@
 // No iframe, no tree view — just pick a tree and talk.
 
 import express from "express";
-import { sendOk, sendError, ERR } from "../../../seed/protocol.js";
+import { sendOk, sendError, ERR, DELETED } from "../../../seed/protocol.js";
 import User from "../../../seed/models/user.js";
 import Node from "../../../seed/models/node.js";
 import LlmConnection from "../../../seed/models/llmConnection.js";
@@ -65,7 +65,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     const rootIds = userRoots.map(String);
     let trees = [];
     if (rootIds.length > 0) {
-      trees = await Node.find({ _id: { $in: rootIds } })
+      trees = await Node.find({ _id: { $in: rootIds }, parent: { $ne: DELETED } })
         .select("_id name children")
         .lean();
     }

@@ -351,6 +351,7 @@ const startShell = module.exports.startShell = async () => {
     let _tabIndex = -1;
     let _tabPartial = "";   // what the user typed before first tab
     let _tabPrefix = "";    // leading part of line before the word being completed
+    let _tabContext = "";   // "cmd", "sub:X", or "ext-arg"
     let _hintLine = "";
 
     function clearHint() {
@@ -386,6 +387,9 @@ const startShell = module.exports.startShell = async () => {
       if (context === "cmd") {
         const meta = cmdMeta.get(match);
         desc = meta?.description || "";
+      } else if (context === "ext-arg") {
+        const cfg = load();
+        desc = cfg.landProtocol?.extensionDescriptions?.[match] || "";
       } else if (context.startsWith("sub:")) {
         const parentCmd = context.slice(4);
         const meta = cmdMeta.get(parentCmd);
@@ -409,6 +413,8 @@ const startShell = module.exports.startShell = async () => {
         if (_tabMatches.length === 0) {
           const line = rl.line || "";
           const parts = line.split(/\s+/);
+          const extArgTopLevel = new Set(["ext-block", "ext-allow", "ext-unallow", "ext-restrict"]);
+          const extArgSubs = new Set(["disable", "enable", "info", "uninstall", "update", "publish"]);
 
           if (parts.length <= 1) {
             // Completing command name (filtered by current zone)
@@ -422,7 +428,20 @@ const startShell = module.exports.startShell = async () => {
             _tabIndex = -1;
             _tabPartial = partial;
             _tabPrefix = "";
-          } else {
+            _tabContext = "cmd";
+          } else if (parts.length === 2 && extArgTopLevel.has(parts[0])) {
+            // ext-block/ext-allow <extName> completion
+            const cfg = load();
+            const extNames = (cfg.landProtocol?.extensions || []).sort();
+            const partial = parts[1] || "";
+            const hits = partial.length > 0 ? extNames.filter(n => n.startsWith(partial)) : extNames;
+            if (hits.length === 0) return;
+            _tabMatches = hits;
+            _tabIndex = -1;
+            _tabPartial = partial;
+            _tabPrefix = parts[0] + " ";
+            _tabContext = "ext-arg";
+          } else if (parts.length === 2) {
             // Completing subcommand
             const cmd = parts[0];
             const meta = cmdMeta.get(cmd);
@@ -437,24 +456,34 @@ const startShell = module.exports.startShell = async () => {
             _tabIndex = -1;
             _tabPartial = subPartial;
             _tabPrefix = cmd + " ";
+            _tabContext = "sub:" + cmd;
+          } else if (parts.length === 3 && parts[0] === "ext" && extArgSubs.has(parts[1])) {
+            // ext disable/enable/info <extName> completion
+            const cfg = load();
+            const extNames = (cfg.landProtocol?.extensions || []).sort();
+            const partial = parts[2] || "";
+            const hits = partial.length > 0 ? extNames.filter(n => n.startsWith(partial)) : extNames;
+            if (hits.length === 0) return;
+            _tabMatches = hits;
+            _tabIndex = -1;
+            _tabPartial = partial;
+            _tabPrefix = parts[0] + " " + parts[1] + " ";
+            _tabContext = "ext-arg";
+          } else {
+            return;
           }
         }
 
         // Cycle to next match
         _tabIndex = (_tabIndex + 1) % _tabMatches.length;
         const match = _tabMatches[_tabIndex];
-        const context = _tabPrefix ? "sub:" + _tabPrefix.trim() : "cmd";
+
+        // Set hint BEFORE setLine so it renders on the current draw
+        const desc = getMatchDescription(match, _tabContext || "cmd");
+        showHint(desc ? `${desc}` : "");
 
         // Fill the line with this match
         setLine(_tabPrefix + match);
-
-        // Show description hint
-        const desc = getMatchDescription(match, context);
-        if (desc) {
-          showHint(`  ${match} -- ${desc}`);
-        } else {
-          showHint(`  ${match}`);
-        }
         return;
       }
 
@@ -464,6 +493,7 @@ const startShell = module.exports.startShell = async () => {
         _tabIndex = -1;
         _tabPartial = "";
         _tabPrefix = "";
+        _tabContext = "";
         clearHint();
       }
     });

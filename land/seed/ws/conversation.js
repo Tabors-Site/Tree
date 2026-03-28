@@ -886,16 +886,23 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
 function resolveNodeLlmConfig(ancestors) {
   if (!ancestors || ancestors.length === 0) return {};
   const config = {};
-  const ALLOWED_KEYS = new Set(["maxToolIterations", "toolCallTimeout", "toolResultMaxBytes", "maxConversationMessages"]);
+  // Whitelisted keys with upper bounds matching global config clamping.
+  // Node overrides cannot exceed what the kernel allows globally.
+  const ALLOWED_KEYS = {
+    maxToolIterations: 100,
+    toolCallTimeout: 600000,       // 10 minutes max
+    toolResultMaxBytes: 1000000,   // 1MB max
+    maxConversationMessages: 200,
+  };
   for (const node of ancestors) {
     if (node.systemRole) break;
     const llmConfig = node.metadata?.llm?.config;
     if (!llmConfig || typeof llmConfig !== "object") continue;
-    for (const key of ALLOWED_KEYS) {
+    for (const [key, maxVal] of Object.entries(ALLOWED_KEYS)) {
       if (config[key] !== undefined) continue; // already set by closer node
       const val = llmConfig[key];
       if (typeof val === "number" && isFinite(val) && val > 0) {
-        config[key] = val;
+        config[key] = Math.min(val, maxVal);
       }
     }
   }

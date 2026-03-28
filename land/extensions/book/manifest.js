@@ -35,7 +35,9 @@ export default {
     models: ["Node", "Note"],
   },
 
-  optional: {},
+  optional: {
+    extensions: ["html-rendering"],
+  },
 
   provides: {
     models: {

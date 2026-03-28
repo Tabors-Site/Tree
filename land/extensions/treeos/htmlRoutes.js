@@ -22,6 +22,7 @@ import getNodeName from "../../routes/api/helpers/getNameById.js";
 import { getExtension } from "../loader.js";
 import { isHtmlEnabled } from "../html-rendering/config.js";
 import urlAuth from "../html-rendering/urlAuth.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 import authenticateLite from "../html-rendering/authenticateLite.js";
 import { htmlOnly, buildQS, tokenQS } from "../html-rendering/htmlHelpers.js";
 
@@ -658,7 +659,7 @@ export function buildTreeosHtmlRoutes() {
   // ===================================================================
 
   // POST create note -> redirect to notes list
-  router.post("/node/:nodeId/:version/notes", urlAuth, htmlOnly, async (req, res, next) => {
+  router.post("/node/:nodeId/:version/notes", authenticate, htmlOnly, async (req, res, next) => {
     try {
       const { createNote } = await import("../../seed/tree/notes.js");
       const { nodeId, version } = req.params;
@@ -681,7 +682,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // PUT edit node status -> redirect
-  router.put("/node/:nodeId/status", urlAuth, htmlOnly, async (req, res) => {
+  router.put("/node/:nodeId/status", authenticate, htmlOnly, async (req, res) => {
     try {
       const { editNodeStatus } = await import("../../seed/tree/statuses.js");
       await editNodeStatus({
@@ -697,7 +698,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // PUT edit node name -> redirect
-  router.put("/node/:nodeId/name", urlAuth, htmlOnly, async (req, res) => {
+  router.put("/node/:nodeId/name", authenticate, htmlOnly, async (req, res) => {
     try {
       const { editNodeName } = await import("../../seed/tree/treeManagement.js");
       await editNodeName({
@@ -713,7 +714,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // PUT move node (update parent) -> redirect
-  router.put("/node/:nodeId/parent", urlAuth, htmlOnly, async (req, res) => {
+  router.put("/node/:nodeId/parent", authenticate, htmlOnly, async (req, res) => {
     try {
       const { updateParentRelationship: updateParent } = await import("../../seed/tree/treeManagement.js");
       await updateParent({
@@ -729,7 +730,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // PUT set modes -> redirect
-  router.put("/node/:nodeId/modes", urlAuth, htmlOnly, async (req, res) => {
+  router.put("/node/:nodeId/modes", authenticate, htmlOnly, async (req, res) => {
     try {
       const node = await Node.findById(req.params.nodeId);
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
@@ -745,7 +746,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // PUT set tools -> redirect
-  router.put("/node/:nodeId/tools", urlAuth, htmlOnly, async (req, res) => {
+  router.put("/node/:nodeId/tools", authenticate, htmlOnly, async (req, res) => {
     try {
       const node = await Node.findById(req.params.nodeId);
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
@@ -767,7 +768,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // PUT set ext-scope -> redirect
-  router.put("/node/:nodeId/ext-scope", urlAuth, htmlOnly, async (req, res) => {
+  router.put("/node/:nodeId/ext-scope", authenticate, htmlOnly, async (req, res) => {
     try {
       const node = await Node.findById(req.params.nodeId);
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
@@ -789,7 +790,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // PUT reorder children -> redirect
-  router.put("/node/:nodeId/children", urlAuth, htmlOnly, async (req, res) => {
+  router.put("/node/:nodeId/children", authenticate, htmlOnly, async (req, res) => {
     try {
       const { reorderChildren } = await import("../../seed/tree/treeManagement.js");
       await reorderChildren({
@@ -805,7 +806,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // DELETE node -> redirect to deleted page
-  router.delete("/node/:nodeId", urlAuth, htmlOnly, async (req, res) => {
+  router.delete("/node/:nodeId", authenticate, htmlOnly, async (req, res) => {
     try {
       const { deleteNodeBranch } = await import("../../seed/tree/treeManagement.js");
       await deleteNodeBranch(req.params.nodeId, req.userId);
@@ -821,7 +822,7 @@ export function buildTreeosHtmlRoutes() {
   // detail pages, perform the operation, and redirect back to the page.
 
   // Delete node (form POSTs to /node/:nodeId/delete)
-  router.post("/node/:nodeId/delete", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/node/:nodeId/delete", authenticate, htmlOnly, async (req, res) => {
     try {
       const { deleteNodeBranch } = await import("../../seed/tree/treeManagement.js");
       await deleteNodeBranch(req.params.nodeId, req.userId);
@@ -833,7 +834,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // Edit name (form POSTs to /node/:nodeId/editName or /node/:nodeId/:version/editName)
-  router.post("/node/:nodeId/:version/editName", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/node/:nodeId/:version/editName", authenticate, htmlOnly, async (req, res) => {
     try {
       const { editNodeName } = await import("../../seed/tree/treeManagement.js");
       await editNodeName({ nodeId: req.params.nodeId, newName: req.body.name, userId: req.userId });
@@ -844,7 +845,7 @@ export function buildTreeosHtmlRoutes() {
     }
   });
 
-  router.post("/node/:nodeId/editName", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/node/:nodeId/editName", authenticate, htmlOnly, async (req, res) => {
     try {
       const { editNodeName } = await import("../../seed/tree/treeManagement.js");
       await editNodeName({ nodeId: req.params.nodeId, newName: req.body.name, userId: req.userId });
@@ -856,7 +857,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // Edit type (form POSTs to /node/:nodeId/editType)
-  router.post("/node/:nodeId/editType", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/node/:nodeId/editType", authenticate, htmlOnly, async (req, res) => {
     try {
       const { editNodeType } = await import("../../seed/tree/treeManagement.js");
       await editNodeType({ nodeId: req.params.nodeId, newType: req.body.type || null, userId: req.userId });
@@ -868,7 +869,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // Edit status (form POSTs to /node/:nodeId/:version/editStatus)
-  router.post("/node/:nodeId/:version/editStatus", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/node/:nodeId/:version/editStatus", authenticate, htmlOnly, async (req, res) => {
     try {
       const { editStatus } = await import("../../seed/tree/statuses.js");
       await editStatus({ nodeId: req.params.nodeId, status: req.body.status, userId: req.userId });
@@ -879,7 +880,7 @@ export function buildTreeosHtmlRoutes() {
     }
   });
 
-  router.post("/node/:nodeId/editStatus", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/node/:nodeId/editStatus", authenticate, htmlOnly, async (req, res) => {
     try {
       const { editStatus } = await import("../../seed/tree/statuses.js");
       await editStatus({ nodeId: req.params.nodeId, status: req.body.status, userId: req.userId });
@@ -891,7 +892,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // Create child (form POSTs to /node/:nodeId/createChild)
-  router.post("/node/:nodeId/createChild", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/node/:nodeId/createChild", authenticate, htmlOnly, async (req, res) => {
     try {
       const { createNode } = await import("../../seed/tree/treeManagement.js");
       const names = (req.body.name || "").split(",").map(n => n.trim()).filter(Boolean);
@@ -906,7 +907,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // Update parent (form POSTs to /node/:nodeId/updateParent)
-  router.post("/node/:nodeId/updateParent", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/node/:nodeId/updateParent", authenticate, htmlOnly, async (req, res) => {
     try {
       const { updateParentRelationship: updateParent } = await import("../../seed/tree/treeManagement.js");
       await updateParent({ nodeId: req.params.nodeId, newParentId: req.body.parentId, userId: req.userId });
@@ -918,7 +919,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // Prestige (form POSTs to /node/:nodeId/prestige or /node/:nodeId/:version/prestige)
-  router.post("/node/:nodeId/prestige", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/node/:nodeId/prestige", authenticate, htmlOnly, async (req, res) => {
     try {
       const prestigeExt = getExtension("prestige");
       if (!prestigeExt?.exports?.addPrestige) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Prestige extension not loaded");
@@ -930,7 +931,7 @@ export function buildTreeosHtmlRoutes() {
     }
   });
 
-  router.post("/node/:nodeId/:version/prestige", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/node/:nodeId/:version/prestige", authenticate, htmlOnly, async (req, res) => {
     try {
       const prestigeExt = getExtension("prestige");
       if (!prestigeExt?.exports?.addPrestige) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Prestige extension not loaded");
@@ -946,7 +947,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // Edit schedule (form POSTs to /node/:nodeId/:version/editSchedule)
-  router.post("/node/:nodeId/:version/editSchedule", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/node/:nodeId/:version/editSchedule", authenticate, htmlOnly, async (req, res) => {
     try {
       const node = await Node.findById(req.params.nodeId);
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
@@ -963,7 +964,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // PUT root config -> redirect
-  router.put("/root/:rootId/config", urlAuth, htmlOnly, async (req, res) => {
+  router.put("/root/:rootId/config", authenticate, htmlOnly, async (req, res) => {
     try {
       const node = await Node.findById(req.params.rootId);
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Tree not found");
@@ -987,7 +988,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // POST create tree -> redirect
-  router.post("/user/:userId/trees", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/user/:userId/trees", authenticate, htmlOnly, async (req, res) => {
     try {
       const { createRoot } = await import("../../seed/tree/treeManagement.js");
       const rootNode = await createRoot({
@@ -1002,7 +1003,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // -- COMMAND CENTER: extension block/allow (HTML form POST) --
-  router.post("/node/:nodeId/extensions", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/node/:nodeId/extensions", authenticate, htmlOnly, async (req, res) => {
     try {
       const { nodeId } = req.params;
       const node = await Node.findById(nodeId);
@@ -1032,7 +1033,7 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // -- COMMAND CENTER: tool block/allow (HTML form POST) --
-  router.post("/node/:nodeId/tools", urlAuth, htmlOnly, async (req, res) => {
+  router.post("/node/:nodeId/tools", authenticate, htmlOnly, async (req, res) => {
     try {
       const { nodeId } = req.params;
       const node = await Node.findById(nodeId);
@@ -1053,7 +1054,6 @@ export function buildTreeosHtmlRoutes() {
 
       const hasConfig = (toolConfig.allowed?.length || 0) + (toolConfig.blocked?.length || 0) > 0;
       await setExtMeta(node, "tools", hasConfig ? toolConfig : undefined);
-      await node.save();
 
       const qs = req.query.token ? `?token=${req.query.token}&html` : "?html";
       return res.redirect(`/api/v1/node/${nodeId}/command-center${qs}`);

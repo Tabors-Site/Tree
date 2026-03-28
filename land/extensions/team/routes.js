@@ -1,5 +1,6 @@
 import express from "express";
-import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
+import urlAuth from "../html-rendering/urlAuth.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { createInvite, respondToInvite, getPendingInvitesForUser } from "./invites.js";
 import { sendRemoteInvite } from "./remoteInvites.js";
@@ -193,7 +194,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
   // ── Invite list + respond (moved from routes/api/user.js) ─────────
 
-  router.get("/user/:userId/invites", authenticateOptional, async (req, res) => {
+  router.get("/user/:userId/invites", urlAuth, async (req, res) => {
     try {
       const { userId } = req.params;
 
@@ -256,7 +257,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
   // ── Tags (moved from extensions/user-queries) ─────────────────────
 
-  router.get("/user/:userId/tags", authenticateOptional, async (req, res) => {
+  router.get("/user/:userId/tags", urlAuth, async (req, res) => {
     try {
       const userId = req.params.userId;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");

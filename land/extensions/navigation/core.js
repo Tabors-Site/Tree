@@ -32,7 +32,7 @@ export async function getUserRootsWithNames(userId) {
   const rootIds = await getUserRoots(userId);
   if (rootIds.length === 0) return [];
 
-  const nodes = await Node.find({ _id: { $in: rootIds } })
+  const nodes = await Node.find({ _id: { $in: rootIds }, parent: { $ne: "deleted" } })
     .select("_id name visibility")
     .lean();
 

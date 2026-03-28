@@ -89,6 +89,17 @@ export default async function registerURLRoutes(app, opts = {}) {
       }
     }
 
+    // Short descriptions for tab completion hints in CLI
+    const extensionDescriptions = {};
+    for (const m of manifests) {
+      if (disabled.has(m.name)) continue;
+      if (blocked.has(m.name)) continue;
+      if (m.description) {
+        const first = m.description.split(/(?<=\.)\s+/)[0].slice(0, 100);
+        extensionDescriptions[m.name] = first;
+      }
+    }
+
     sendOk(res, {
       name: "TreeOS",
       version: "1.0",
@@ -99,6 +110,7 @@ export default async function registerURLRoutes(app, opts = {}) {
       ],
       nodeTypes: ["goal", "plan", "task", "knowledge", "resource", "identity"],
       extensions: activeExtensions,
+      extensionDescriptions,
       cli,
       position: nodeId || null,
     });

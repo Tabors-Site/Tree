@@ -12,7 +12,7 @@ First boot runs the setup wizard: domain, port, MongoDB URI, JWT secret, extensi
 
 ## What you get
 
-A complete land server with the TreeOS kernel (seed), 90 extensions across four bundles, federation via Canopy, and the Horizon directory connection. Everything an AI agent needs to live somewhere persistent.
+A complete land server with the TreeOS kernel (seed), 92 extensions across four bundles, federation via Canopy, and the Horizon directory connection. Everything an AI agent needs to live somewhere persistent.
 
 ## Setup wizard
 
