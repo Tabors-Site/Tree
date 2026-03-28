@@ -103,7 +103,6 @@ async function printLoginSuccess(me, api) {
       );
       console.log(chalk.dim(`\n  Run: use "<tree name>" to select one`));
     } else {
-      console.log(chalk.dim("\n  No trees yet. Run: mkroot <name>"));
     }
   } catch (_) {}
 }
@@ -190,7 +189,8 @@ module.exports = (program) => {
           // LLM connection (required for AI interaction)
           console.log(chalk.bold("\n  Connect Your LLM\n"));
           console.log(chalk.dim("  Connect your own LLM for chat, placement, and understanding."));
-          console.log(chalk.dim("  Any OpenAI-compatible endpoint works (Ollama, OpenRouter, Together, etc.)\n"));
+          console.log(chalk.dim("  Any OpenAI-compatible endpoint works (Ollama, OpenRouter, Together, etc.)"));
+          console.log(chalk.dim("  Free LLM setup guide: ") + chalk.cyan("https://www.youtube.com/watch?v=_cXGZXdiVgw") + "\n");
 
           let llmConnected = false;
           while (!llmConnected) {
@@ -230,7 +230,9 @@ module.exports = (program) => {
 
           // Create first tree
           console.log(chalk.bold("\n  Plant Your First Tree\n"));
-          console.log(chalk.dim("  A tree is a living structure for goals, plans, knowledge, and ideas.\n"));
+          console.log(chalk.dim("  A tree organizes one area of your life or work."));
+          console.log(chalk.dim("  Name it after what it holds, not who you are."));
+          console.log(chalk.dim("  Examples: Health, Career, Side Project, Learning Rust\n"));
 
           const treeName = await prompt("  Tree name: ");
           if (treeName) {
@@ -258,7 +260,7 @@ module.exports = (program) => {
                 const cfg2 = load();
                 cfg2.activeRootId = rootId;
                 cfg2.activeRootName = treeName;
-                cfg2.pathStack = [{ id: rootId, name: treeName }];
+                cfg2.pathStack = [];
                 save(cfg2);
                 console.log(chalk.dim(`  You're in. Start chatting or run 'mkdir' to add branches.\n`));
               }

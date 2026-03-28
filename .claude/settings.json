@@ -502,7 +502,12 @@
       "Bash(echo \"$f\")",
       "Bash(grep -rn \"completer\\\\|completion\\\\|tab\" /home/tabor/github/Tree/cli/*.js)",
       "Bash(grep -r \"apple\\\\|kernel\\\\|constrain\" /home/tabor/github/Tree --include=*.js --include=*.jsx --include=*.ts --include=*.tsx --include=*.md --exclude-dir=node_modules)",
-      "Bash(grep -r \"blog\\\\|essay\\\\|post\" /home/tabor/github/Tree/land/seed --include=*.js)"
+      "Bash(grep -r \"blog\\\\|essay\\\\|post\" /home/tabor/github/Tree/land/seed --include=*.js)",
+      "Bash(find /home/tabor/github/Tree/create-treeos/template/seed -name *assign* -o -name *llm*)",
+      "Bash(grep -n \"resolveTreeAccess\" /home/tabor/github/Tree/create-treeos/template/seed/ws/*.js)",
+      "Bash(grep -rn resolveTreeAccess /home/tabor/github/Tree/create-treeos/template/seed/ --include=*.js)",
+      "Bash(npm info:*)",
+      "WebSearch"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

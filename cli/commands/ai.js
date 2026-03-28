@@ -327,9 +327,10 @@ module.exports = (program) => {
           cfg.activeRootName = data.rootName || data.rootId;
           if (data.targetNodePath && data.targetNodePath.length) {
             cfg.pathStack = data.targetNodePath.map(n => ({ id: n._id, name: n.name }));
-          } else if (data.targetNodeName) {
+          } else if (data.targetNodeName && data.targetNodeId !== data.rootId) {
             cfg.pathStack = [{ id: data.targetNodeId, name: data.targetNodeName }];
           } else {
+            cfg.pathStack = [];
             save(cfg);
             console.log(chalk.green(`✓ Placed in tree: ${data.rootName || data.rootId}`));
             return;
