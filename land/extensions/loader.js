@@ -1794,11 +1794,11 @@ export async function runExtensionMigrations() {
 /**
  * Start all extension jobs. Called from startup.js after DB connect.
  */
-export function startExtensionJobs() {
+export async function startExtensionJobs() {
   for (const job of registeredJobs) {
     try {
       if (typeof job.start === "function") {
-        job.start();
+        await job.start();
         log.verbose("Extensions", `Job started: ${job.name} (${job.extensionName})`);
       }
     } catch (err) {

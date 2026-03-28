@@ -825,9 +825,10 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
   // Trim if over max. Preserve conversation integrity: tool results must
   // follow their corresponding assistant tool_call message. Trim to a clean
   // boundary (user or assistant without tool_calls) to avoid orphaned tool results.
-  if (session.messages.length > MAX_MESSAGES) {
+  const maxMsgs = session._nodeLlmConfig?.maxConversationMessages ?? MAX_MESSAGES;
+  if (session.messages.length > maxMsgs) {
     const systemMsg = session.messages[0];
-    let recent = session.messages.slice(-(MAX_MESSAGES - 1));
+    let recent = session.messages.slice(-(maxMsgs - 1));
     // Walk forward from the trim point to find a clean boundary.
     // If the first message is a tool result, drop it (and any consecutive
     // tool results) because their assistant message was trimmed away.
@@ -852,6 +853,35 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     ? message.slice(0, maxMsgBytes) + "\n... (message truncated)"
     : message;
   session.messages.push({ role: "user", content: safeUserMsg });
+}
+
+/**
+ * Resolve per-node LLM config from the ancestor snapshot.
+ * Walks from current node to root. First value found for each key wins
+ * (closest to current node takes priority). Returns an object with
+ * overrides only for keys that were set. Callers fall back to globals.
+ *
+ * Supported keys in metadata.llm.config:
+ *   maxToolIterations, toolCallTimeout (ms), toolResultMaxBytes,
+ *   maxConversationMessages
+ */
+function resolveNodeLlmConfig(ancestors) {
+  if (!ancestors || ancestors.length === 0) return {};
+  const config = {};
+  const ALLOWED_KEYS = new Set(["maxToolIterations", "toolCallTimeout", "toolResultMaxBytes", "maxConversationMessages"]);
+  for (const node of ancestors) {
+    if (node.systemRole) break;
+    const llmConfig = node.metadata?.llm?.config;
+    if (!llmConfig || typeof llmConfig !== "object") continue;
+    for (const key of ALLOWED_KEYS) {
+      if (config[key] !== undefined) continue; // already set by closer node
+      const val = llmConfig[key];
+      if (typeof val === "number" && isFinite(val) && val > 0) {
+        config[key] = val;
+      }
+    }
+  }
+  return config;
 }
 
 /**
@@ -1263,10 +1293,11 @@ async function executeTool(toolCall, session, ctx, client) {
       name: resolvedToolName,
       arguments: args,
     });
+    const nodeToolTimeout = session._nodeLlmConfig?.toolCallTimeout ?? TOOL_CALL_TIMEOUT_MS;
     const result = await Promise.race([
       toolPromise,
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Tool "${resolvedToolName}" timed out after ${TOOL_CALL_TIMEOUT_MS / 1000}s`)), TOOL_CALL_TIMEOUT_MS)
+        setTimeout(() => reject(new Error(`Tool "${resolvedToolName}" timed out after ${nodeToolTimeout / 1000}s`)), nodeToolTimeout)
       ),
     ]);
     let resultText =
@@ -1274,8 +1305,9 @@ async function executeTool(toolCall, session, ctx, client) {
       result?.content?.[0]?.text ||
       JSON.stringify(result);
     // Cap tool result size to prevent huge payloads from consuming context window
-    if (resultText && resultText.length > TOOL_RESULT_MAX_BYTES) {
-      resultText = resultText.slice(0, TOOL_RESULT_MAX_BYTES) + `\n... (truncated, result exceeded ${Math.round(TOOL_RESULT_MAX_BYTES / 1024)}KB)`;
+    const nodeResultMax = session._nodeLlmConfig?.toolResultMaxBytes ?? TOOL_RESULT_MAX_BYTES;
+    if (resultText && resultText.length > nodeResultMax) {
+      resultText = resultText.slice(0, nodeResultMax) + `\n... (truncated, result exceeded ${Math.round(nodeResultMax / 1024)}KB)`;
     }
 
     session.messages.push({
@@ -1414,11 +1446,18 @@ export async function processMessage(visitorId, message, ctx) {
     });
   }
 
+  // Phase 5b: Resolve per-node LLM config from ancestor chain.
+  // Walks metadata.llm.config on each ancestor. First value found wins (closest to current node).
+  // Falls back to land-level config (the global defaults).
+  // Stored on session so callLLM and executeTool can read overrides.
+  session._nodeLlmConfig = resolveNodeLlmConfig(session._ancestorSnapshot);
+
   // Phase 6: Tool calling loop
   let response;
   let iterations = 0;
+  const maxIterations = session._nodeLlmConfig.maxToolIterations ?? MAX_TOOL_ITERATIONS;
 
-  while (iterations < MAX_TOOL_ITERATIONS) {
+  while (iterations < maxIterations) {
     if (ctx.signal?.aborted) throw new Error("Request cancelled");
     iterations++;
 

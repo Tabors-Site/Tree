@@ -155,7 +155,7 @@ export function onListen() {
       return blocked;
     });
 
-    startExtensionJobs();
+    await startExtensionJobs();
     startUploadCleanup();
     startRetentionJob();
 
