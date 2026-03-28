@@ -84,4 +84,8 @@ This works because:
 - Extensions read their namespace on boot. If the data is there, they resume. If not, they initialize.
 
 Build a full OS distribution. Test it. Strip it to the kernel. Build a different one on the same database. Switch back. The data layer is permanent. The capability layer is swappable. That is the architecture.
+
+Extensions with custom models (their own MongoDB collections) survive too. The collections stay in the database whether the extension is loaded or not. Reload the extension and the data is there.
+
+**Trust model:** Extensions run in the same Node.js process as the kernel. The kernel enforces metadata namespace isolation, spatial scoping, and circuit breakers. This protects against bugs, not against deliberately malicious code. Review extension code before installing. Same trust model as npm packages and Linux kernel modules.
 - https://treeos.ai for documentation
