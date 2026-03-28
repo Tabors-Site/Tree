@@ -375,9 +375,10 @@ export async function buildPromptForMode(modeKey, ctx) {
   }
   // Guard against oversized prompts consuming the entire context window.
   // 32KB is generous for a system prompt. Anything larger is a bug.
-  if (typeof modePrompt === "string" && modePrompt.length > 32000) {
-    log.warn("Modes", `System prompt for "${modeKey}" is ${modePrompt.length} chars. Truncating to 32KB.`);
-    modePrompt = modePrompt.slice(0, 32000) + "\n... (system prompt truncated)";
+  const maxPromptChars = Number(getLandConfigValue("maxSystemPromptChars")) || 32000;
+  if (typeof modePrompt === "string" && modePrompt.length > maxPromptChars) {
+    log.warn("Modes", `System prompt for "${modeKey}" is ${modePrompt.length} chars. Truncating to ${maxPromptChars}.`);
+    modePrompt = modePrompt.slice(0, maxPromptChars) + "\n... (system prompt truncated)";
   }
   if (typeof modePrompt !== "string") {
     log.error("Modes", `buildSystemPrompt for "${modeKey}" returned ${typeof modePrompt}, expected string`);

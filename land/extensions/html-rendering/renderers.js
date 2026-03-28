@@ -6,7 +6,6 @@
 
 // User pages (split from the former 8,612-line user.js)
 export { renderUserProfile } from "./html/pages/profile.js";
-export { renderUserNotes } from "./html/pages/userNotes.js";
 export { renderUserTags } from "./html/pages/userTags.js";
 export { renderUserContributions } from "./html/pages/userContributions.js";
 export {
@@ -29,7 +28,6 @@ export { renderNotifications } from "./html/pages/notifications.js";
 export { renderNodeDetail } from "./html/pages/nodeDetail.js";
 export { renderVersionDetail } from "./html/pages/versionDetail.js";
 export { renderNodeChats, renderRootChats } from "./html/pages/nodeChats.js";
-export { renderScriptDetail, renderScriptHelp } from "./html/pages/scripts.js";
 
 // Note pages
 export { renderEditorPage } from "./html/pages/editor.js";

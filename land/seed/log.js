@@ -15,6 +15,19 @@
 
 let currentLevel = parseInt(process.env.LOG_LEVEL, 10) || 2;
 let formatter = null; // Set by console extension if loaded
+const jsonMode = process.env.LOG_FORMAT === "json";
+
+/**
+ * Structured JSON log line. Used when LOG_FORMAT=json.
+ * Outputs one JSON object per line for log aggregation (ELK, Datadog, etc.).
+ */
+function jsonLog(stream, level, tag, message, args) {
+  const entry = { ts: new Date().toISOString(), level, tag, msg: message };
+  if (args.length > 0) {
+    entry.data = args.length === 1 ? args[0] : args;
+  }
+  stream.call(console, JSON.stringify(entry));
+}
 
 /**
  * Set the log level at runtime. 1 = quiet, 2 = normal, 3 = everything.
@@ -43,6 +56,7 @@ export function setFormatter(fn) {
 export function info(tag, message, ...args) {
   if (currentLevel < 1) return;
   if (formatter && formatter(1, tag, message, ...args)) return;
+  if (jsonMode) return jsonLog(console.log, "info", tag, message, args);
   console.log(`[${tag}] ${message}`, ...args);
 }
 
@@ -53,6 +67,7 @@ export function info(tag, message, ...args) {
 export function verbose(tag, message, ...args) {
   if (currentLevel < 2) return;
   if (formatter && formatter(2, tag, message, ...args)) return;
+  if (jsonMode) return jsonLog(console.log, "verbose", tag, message, args);
   console.log(`[${tag}] ${message}`, ...args);
 }
 
@@ -63,6 +78,7 @@ export function verbose(tag, message, ...args) {
 export function debug(tag, message, ...args) {
   if (currentLevel < 3) return;
   if (formatter && formatter(3, tag, message, ...args)) return;
+  if (jsonMode) return jsonLog(console.log, "debug", tag, message, args);
   console.log(`[${tag}] ${message}`, ...args);
 }
 
@@ -71,6 +87,7 @@ export function debug(tag, message, ...args) {
  */
 export function warn(tag, message, ...args) {
   if (formatter && formatter("warn", tag, message, ...args)) return;
+  if (jsonMode) return jsonLog(console.warn, "warn", tag, message, args);
   console.warn(`[${tag}] ${message}`, ...args);
 }
 
@@ -79,6 +96,7 @@ export function warn(tag, message, ...args) {
  */
 export function error(tag, message, ...args) {
   if (formatter && formatter("error", tag, message, ...args)) return;
+  if (jsonMode) return jsonLog(console.error, "error", tag, message, args);
   console.error(`[${tag}] ${message}`, ...args);
 }
 

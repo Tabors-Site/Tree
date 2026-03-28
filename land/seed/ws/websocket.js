@@ -541,8 +541,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       if (!message || typeof message !== "string" || !username) {
         return socket.emit(WS.CHAT_ERROR, { error: "Missing or invalid message", generation });
       }
-      if (message.length > 5000) {
-        return socket.emit(WS.CHAT_ERROR, { error: "Message must be under 5000 characters.", generation });
+      const maxChatChars = Number(getLandConfigValue("maxChatMessageChars")) || 5000;
+      if (message.length > maxChatChars) {
+        return socket.emit(WS.CHAT_ERROR, { error: `Message must be under ${maxChatChars} characters.`, generation });
       }
 
       // Rate limit: sliding window per socket

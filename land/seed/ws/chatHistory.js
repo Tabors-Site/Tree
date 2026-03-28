@@ -3,15 +3,16 @@ import log from "../log.js";
 import Chat from "../models/chat.js";
 import Contribution from "../models/contribution.js";
 import { getDescendantIds } from "../tree/treeFetch.js";
+import { getLandConfigValue } from "../landConfig.js";
 
 // ─────────────────────────────────────────────────────────────────────────
-// LIMITS
+// LIMITS (configurable via land config, read at use time)
 // ─────────────────────────────────────────────────────────────────────────
 
-const MAX_SESSION_LIMIT = 50;         // max sessions per query
-const MAX_CHATS_PER_SESSION = 200;    // max chain steps loaded per session
-const MAX_DESCENDANT_IDS = 500;       // cap on includeChildren node expansion
-const MAX_CONTRIBUTIONS_PER_QUERY = 5000; // cap on contribution documents loaded
+function MAX_SESSION_LIMIT() { return Math.max(1, Math.min(Number(getLandConfigValue("chatHistoryMaxSessions")) || 50, 500)); }
+function MAX_CHATS_PER_SESSION() { return Math.max(1, Math.min(Number(getLandConfigValue("chatHistoryMaxChatsPerSession")) || 200, 2000)); }
+function MAX_DESCENDANT_IDS() { return Math.max(10, Math.min(Number(getLandConfigValue("chatHistoryMaxDescendantIds")) || 500, 10000)); }
+function MAX_CONTRIBUTIONS_PER_QUERY() { return Math.max(100, Math.min(Number(getLandConfigValue("chatHistoryMaxContributions")) || 5000, 50000)); }
 
 // ─────────────────────────────────────────────────────────────────────────
 // SHARED HELPERS
@@ -23,7 +24,7 @@ const MAX_CONTRIBUTIONS_PER_QUERY = 5000; // cap on contribution documents loade
 function clampSessionLimit(sessionLimit) {
   const n = Number(sessionLimit);
   if (!n || n <= 0) return 10;
-  return Math.min(n, MAX_SESSION_LIMIT);
+  return Math.min(n, MAX_SESSION_LIMIT());
 }
 
 /**
@@ -86,8 +87,8 @@ async function fetchChatsForSessions(sessionIds, extraMatch = {}, populateUser =
   q.populate({ path: "llmProvider.connectionId", select: "name model", model: "LlmConnection" });
   q.sort({ "startMessage.time": -1 });
 
-  // Hard ceiling: MAX_CHATS_PER_SESSION * number of sessions
-  q.limit(MAX_CHATS_PER_SESSION * sessionIds.length);
+  // Hard ceiling: MAX_CHATS_PER_SESSION() * number of sessions
+  q.limit(MAX_CHATS_PER_SESSION() * sessionIds.length);
 
   return q.lean();
 }
@@ -104,7 +105,7 @@ async function attachContributions(chats) {
   const contribs = await Contribution.find({ chatId: { $in: chatIds } })
     .select("_id action nodeId wasAi date extensionData chatId")
     .populate({ path: "nodeId", select: "name" })
-    .limit(MAX_CONTRIBUTIONS_PER_QUERY)
+    .limit(MAX_CONTRIBUTIONS_PER_QUERY())
     .lean();
 
   if (contribs.length === 0) return;
@@ -144,7 +145,7 @@ function groupIntoSessions(sessionIds, chats) {
         return (a.chainIndex || 0) - (b.chainIndex || 0);
       });
       // Cap per-session to prevent one massive orchestrator chain from dominating
-      const capped = sessionChats.slice(0, MAX_CHATS_PER_SESSION);
+      const capped = sessionChats.slice(0, MAX_CHATS_PER_SESSION());
       return {
         sessionId: sid,
         chats: capped,
@@ -214,9 +215,10 @@ async function getNodeChats({ nodeId, sessionLimit = 10, sessionId, startDate, e
     let nodeIds;
     if (includeChildren) {
       const all = await getDescendantIds(nodeId);
-      nodeIds = all.slice(0, MAX_DESCENDANT_IDS);
-      if (all.length > MAX_DESCENDANT_IDS) {
-        log.warn("AI", `getNodeChats: descendant expansion capped at ${MAX_DESCENDANT_IDS} (tree has ${all.length})`);
+      const maxDesc = MAX_DESCENDANT_IDS();
+      nodeIds = all.slice(0, maxDesc);
+      if (all.length > maxDesc) {
+        log.warn("AI", `getNodeChats: descendant expansion capped at ${maxDesc} (tree has ${all.length})`);
       }
     } else {
       nodeIds = [nodeId];

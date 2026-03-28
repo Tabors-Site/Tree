@@ -345,11 +345,16 @@ These keys are configurable via `treeos config set` but most lands never need to
 
 | Key | Default | What it tunes |
 |-----|---------|---------------|
+| requestQueueMaxDepth | 100 | Max waiting tasks per queue key. Prevents request pileup under load. |
 | llmMaxConcurrent | 20 | Max in-flight LLM API calls across all users. Prevents thundering herd. |
 | failoverTimeout | 15 | Seconds before giving up walking the LLM failover stack |
 | chatRateLimit | 10 | Max chat messages per rate window per user |
 | chatRateWindowMs | 60000 | Chat rate limit window (ms) |
+| maxChatMessageChars | 5000 | Max characters per WebSocket chat message |
+| maxMessageContentBytes | 32768 | Max bytes per message in conversation history (32KB). Truncates oversized messages. |
 | maxConversationSessions | 50000 | Hard cap on in-memory conversation sessions. Evicts oldest on overflow. |
+| maxScopedSessions | 20000 | Hard cap on scoped sessions (zone-specific). Evicts oldest on overflow. |
+| maxAiContextEntries | 10000 | Hard cap on AI chat context tracking map. |
 | staleConversationTimeout | 1800 | Idle conversation session sweep (seconds) |
 | maxConnectionsPerIp | 20 | Per-IP WS connection cap |
 
@@ -363,6 +368,8 @@ These keys are configurable via `treeos config set` but most lands never need to
 | maxRegisteredTools | 500 | Max tool definitions in the registry |
 | maxRegisteredModes | 200 | Max mode definitions in the registry |
 | maxOrchestrators | 10 | Max registered orchestrators |
+| maxSystemPromptChars | 32000 | Max system prompt length before truncation (chars) |
+| maxExtensionIndexes | 20 | Max MongoDB indexes per extension |
 
 **Hooks:**
 
@@ -397,6 +404,17 @@ These keys are configurable via `treeos config set` but most lands never need to
 | treeNotesPerNode | 100 | Max notes loaded per node |
 | treeMaxChildrenResolve | 200 | Max children name-resolved per node |
 | treeAllDataDepth | 20 | Max recursion depth in full tree export |
+| treeSearchResultLimit | 10 | Max search results returned in tree context |
+| treeSummaryRecentNotes | 3 | Recent notes shown per node in tree summary |
+| treeSummaryPreviewChars | 200 | Characters of note content shown in preview |
+| chatContributionQueryLimit | 2000 | Max contributions linked per chat finalization |
+| chatHistoryMaxSessions | 50 | Max sessions returned per chat history query |
+| chatHistoryMaxChatsPerSession | 200 | Max chain steps loaded per session |
+| chatHistoryMaxDescendantIds | 500 | Cap on includeChildren node expansion |
+| chatHistoryMaxContributions | 5000 | Cap on contribution documents per chat history query |
+| maxChatContentBytes | 100000 | Max bytes stored per chat message (100KB) |
+| maxChainStepContentBytes | 2000 | Max bytes per orchestrator chain step log |
+| maxInheritedStatusNodes | 10000 | Max nodes affected by one inherited status change |
 
 **Ancestor cache:**
 
@@ -412,6 +430,7 @@ These keys are configurable via `treeos config set` but most lands never need to
 | mcpConnectRetries | 2 | Connection retry count for background pipelines |
 | mcpConnectTimeout | 10000 | Client connection timeout (ms) |
 | mcpStaleTimeout | 3600000 | Client idle timeout before sweep (ms) |
+| maxMcpClients | 5000 | Hard cap on MCP client pool. Evicts oldest on overflow. |
 
 **WebSocket transport:**
 
@@ -450,6 +469,9 @@ These keys are configurable via `treeos config set` but most lands never need to
 | orchestratorLockTtlMs | 1800000 | Lock TTL before auto-expire (ms) |
 | lockSweepInterval | 300000 | Lock cleanup sweep (ms) |
 | orchestratorInitTimeout | 30000 | Background pipeline init timeout (ms) |
+| maxChainSteps | 500 | Max steps per pipeline. Circuit breaker for runaway loops. |
+| maxOrchestratorLocks | 10000 | Hard cap on concurrent orchestrator locks across all namespaces. |
+| maxParseInputBytes | 200000 | Max input size for JSON extraction from LLM responses (200KB). |
 
 **Cleanup intervals:**
 

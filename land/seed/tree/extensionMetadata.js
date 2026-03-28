@@ -303,8 +303,12 @@ export async function pushExtMeta(node, extName, key, item, maxLength = 100) {
   if (DANGEROUS_KEYS.has(key)) return false;
   // Cap maxLength to prevent unbounded arrays
   const safeCap = Math.min(Math.max(1, maxLength), 1000);
-  // Validate item is serializable
-  try { JSON.stringify(item); } catch { return false; }
+  // Validate item is serializable and within size budget
+  let itemSize;
+  try { itemSize = Buffer.byteLength(JSON.stringify(item), "utf8"); } catch { return false; }
+  // Per-item cap: namespace max / safeCap ensures the array can't exceed the namespace limit
+  const perItemCap = Math.max(1024, Math.floor(MAX_METADATA_VALUE_BYTES() / safeCap));
+  if (itemSize > perItemCap) return false;
   const nodeId = String(node._id || node);
   await Node.updateOne(
     { _id: nodeId },
@@ -325,14 +329,19 @@ export async function pushExtMeta(node, extName, key, item, maxLength = 100) {
 export async function batchSetExtMeta(node, extName, fields) {
   if (!node || !extName || !fields || typeof fields !== "object") return false;
   validateAtomicExtName(extName);
-  // Validate fields: check for dangerous keys, serializable values
+  // Validate fields: check for dangerous keys, serializable values, total size
   const entries = Object.entries(fields);
   if (entries.length === 0) return false;
   if (entries.length > 100) return false; // cap field count
   const updates = {};
+  let totalSize = 0;
+  const maxBytes = MAX_METADATA_VALUE_BYTES();
   for (const [key, value] of entries) {
     if (DANGEROUS_KEYS.has(key)) continue; // skip dangerous keys silently
-    try { JSON.stringify(value); } catch { continue; } // skip non-serializable
+    let serialized;
+    try { serialized = JSON.stringify(value); } catch { continue; } // skip non-serializable
+    totalSize += Buffer.byteLength(serialized, "utf8");
+    if (totalSize > maxBytes) return false; // batch exceeds namespace cap
     updates[`metadata.${extName}.${key}`] = value;
   }
   if (Object.keys(updates).length === 0) return false;

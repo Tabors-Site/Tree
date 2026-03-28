@@ -20,7 +20,7 @@ import { getLandConfigValue } from "../landConfig.js";
 
 let LOCK_TTL_MS = 30 * 60 * 1000; // 30 minutes
 let LOCK_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const MAX_LOCKS = 10000; // hard cap across all namespaces
+function MAX_LOCKS() { return Math.max(100, Math.min(Number(getLandConfigValue("maxOrchestratorLocks")) || 10000, 100000)); }
 
 /**
  * Read lock config from land config. Called from startup after config loads.
@@ -69,8 +69,9 @@ export function acquireLock(namespace, key, opts = {}) {
   }
 
   // Hard cap
-  if (!existing && _totalLocks >= MAX_LOCKS) {
-    log.warn("Locks", `Lock cap reached (${MAX_LOCKS}). Rejecting ${namespace}:${key}`);
+  const maxLocks = MAX_LOCKS();
+  if (!existing && _totalLocks >= maxLocks) {
+    log.warn("Locks", `Lock cap reached (${maxLocks}). Rejecting ${namespace}:${key}`);
     return false;
   }
 

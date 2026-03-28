@@ -15,7 +15,7 @@ import { NODE_STATUS, ERR, ProtocolError } from "../protocol.js";
 import { getLandConfigValue } from "../landConfig.js";
 
 const VALID_STATUSES = new Set(Object.values(NODE_STATUS));
-const MAX_INHERITED_NODES = 10000; // total nodes affected by one inherited status change
+function MAX_INHERITED_NODES() { return Math.max(100, Math.min(Number(getLandConfigValue("maxInheritedStatusNodes")) || 10000, 100000)); }
 
 async function editStatus({
   nodeId, status, isInherited,
@@ -59,7 +59,7 @@ async function editStatus({
   if (isInherited && node.children?.length > 0) {
     const maxDepth = Number(getLandConfigValue("cascadeMaxDepth")) || 50;
     let totalAffected = 0;
-    await inheritStatus(node.children, status, userId, wasAi, chatId, sessionId, 0, maxDepth, { count: totalAffected, max: MAX_INHERITED_NODES });
+    await inheritStatus(node.children, status, userId, wasAi, chatId, sessionId, 0, maxDepth, { count: totalAffected, max: MAX_INHERITED_NODES() });
   }
 
   return {

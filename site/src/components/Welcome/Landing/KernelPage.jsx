@@ -907,6 +907,133 @@ const KernelPage = () => {
         </div>
       </section>
 
+      {/* ── MCP: THE TOOL BUS ── */}
+      <section className="lp-section">
+        <div className="lp-container">
+          <h2 className="lp-section-title">MCP: The Tool Bus</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Every tool call goes through MCP. The AI and external clients share the same interface,
+            the same security boundary, the same spatial scoping. Two entry points. Same destination.
+          </p>
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
+            <div className="lp-card">
+              <h3>Internal (AI)</h3>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                The conversation loop calls tools through MCP. The AI says "create a node."
+                Auth checks the session. Tree access validates the nodeId. Spatial scoping filters
+                blocked extensions. The tool handler executes. The result flows back. The AI decides
+                what to do next. Every tool call the AI makes goes through this path.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3>External (Clients)</h3>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                Claude Desktop, Cursor, VS Code, any MCP client connects to <code>/mcp</code>.
+                Gets a session. Sends tool calls with auth headers. Same security checks.
+                Same tool handlers. Same results. The external client brings its own intelligence.
+                The kernel provides the tools and the security.
+              </p>
+            </div>
+          </div>
+          <p className="lp-section-sub" style={{marginTop: 20}}>
+            An extension registers tools once. Available to both paths. Per-session server isolation.
+            Each client gets its own MCP session with its own auth context. Tool registration replay
+            ensures every session sees every tool. Extension disable invalidates all sessions cleanly.
+          </p>
+        </div>
+      </section>
+
+      {/* ── THREE COMMANDS ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container">
+          <h2 className="lp-section-title">Three Commands</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            The three commands are constraints on the router, not paths through it.
+            Routing determines WHERE the message goes. The command determines WHAT the mode can do.
+          </p>
+          <div className="lp-cards-3">
+            <div className="lp-card">
+              <h3>chat</h3>
+              <div style={{fontFamily: "monospace", fontSize: "0.85rem", color: "#4ade80", marginBottom: 8}}>
+                tools: all | response: full | writes: allowed
+              </div>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                Full interaction. The AI reads, writes, and responds naturally.
+                "bench 135x10" at a fitness node: parses, logs, tells you about your progression.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3>place</h3>
+              <div style={{fontFamily: "monospace", fontSize: "0.85rem", color: "#fbbf24", marginBottom: 8}}>
+                tools: all | response: minimal | writes: allowed
+              </div>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                Write and confirm. No commentary. "Logged. Bench 135x10/10/8."
+                For speed. The user knows what they want. The tree does it.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3>query</h3>
+              <div style={{fontFamily: "monospace", fontSize: "0.85rem", color: "#60a5fa", marginBottom: 8}}>
+                tools: read-only | response: full | writes: blocked
+              </div>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                Read-only safety. The AI can look but not touch.
+                "How's my bench?" reads history without risking a stray write.
+                Enforced in the kernel. Every orchestrator gets it for free.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FOR BUILDERS ── */}
+      <section className="lp-section">
+        <div className="lp-container">
+          <h2 className="lp-section-title">For Builders</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Your data survives configuration changes. The capability layer is swappable.
+            The data layer is permanent.
+          </p>
+          <div style={{maxWidth: 700, margin: "0 auto"}}>
+            <div style={{
+              padding: "28px 32px",
+              background: "rgba(255,255,255,0.02)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              borderRadius: 12,
+              marginBottom: 24,
+            }}>
+              <p style={{fontSize: "0.9rem", color: "rgba(255,255,255,0.7)", lineHeight: 1.8, margin: 0}}>
+                Run the full stack for six months. Fitness tracking, food logging, cascade signals,
+                intelligence extensions analyzing patterns, dreams running at 3am. Switch to minimal.
+                Eight extensions load. The rest go silent. Your LLM bill drops to zero.
+              </p>
+              <p style={{fontSize: "0.9rem", color: "rgba(255,255,255,0.7)", lineHeight: 1.8, margin: "16px 0 0"}}>
+                Three months later, switch back. Every extension finds its data exactly where it left it.
+                The fitness history is there. The food log is there. The codebook compressions are there.
+                The tree remembers everything. It was sleeping, not dead.
+              </p>
+            </div>
+            <p style={{fontSize: "0.85rem", color: "#666", lineHeight: 1.7}}>
+              Extension data lives in the metadata Map. Mongoose does not drop unknown Map keys.
+              The <code>.treeos-profile</code> controls what LOADS, not what EXISTS. MongoDB keeps
+              every key whether the extension is loaded or not. Load it later. The data is there.
+              Build a full OS distribution. Test it. Strip it to the kernel. Build a different one
+              on the same database. The data layer is permanent. The capability layer is swappable.
+            </p>
+            <p style={{fontSize: "0.85rem", color: "#555", lineHeight: 1.7, marginTop: 16}}>
+              <strong style={{color: "#e5e5e5"}}>Trust model:</strong> Extensions run in the same
+              Node.js process. The kernel enforces metadata namespace isolation, spatial scoping,
+              and circuit breakers. This protects against bugs, not malicious code. Review what you install.
+              Same trust model as npm packages and Linux kernel modules.
+            </p>
+          </div>
+          <div style={{textAlign: "center", marginTop: 24}}>
+            <a className="lp-btn lp-btn-secondary" href="/build">Start Building</a>
+          </div>
+        </div>
+      </section>
+
       {/* ── FOOTER ── */}
       <footer className="lp-footer">
         <div className="lp-container">

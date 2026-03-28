@@ -19,8 +19,9 @@
 
 import log from "../log.js";
 import mongoose from "mongoose";
+import { getLandConfigValue } from "../landConfig.js";
 
-const MAX_EXTENSION_INDEXES = 20; // per extension
+function MAX_EXTENSION_INDEXES() { return Math.max(5, Math.min(Number(getLandConfigValue("maxExtensionIndexes")) || 20, 100)); }
 
 /**
  * Required kernel indexes. Each entry specifies:
@@ -161,9 +162,10 @@ export async function ensureExtensionIndexes(indexes, extName) {
   const db = mongoose.connection.db;
   if (!db) return;
 
-  if (indexes.length > MAX_EXTENSION_INDEXES) {
-    log.warn("Indexes", `Extension ${extName} declares ${indexes.length} indexes (max ${MAX_EXTENSION_INDEXES}). Excess skipped.`);
-    indexes = indexes.slice(0, MAX_EXTENSION_INDEXES);
+  const maxIdx = MAX_EXTENSION_INDEXES();
+  if (indexes.length > maxIdx) {
+    log.warn("Indexes", `Extension ${extName} declares ${indexes.length} indexes (max ${maxIdx}). Excess skipped.`);
+    indexes = indexes.slice(0, maxIdx);
   }
 
   for (const idx of indexes) {

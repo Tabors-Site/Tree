@@ -15,6 +15,7 @@ import canopy from "./canopy.js";
 
 import { handleMcpRequest, mcpServerInstance, connectMcpTransport } from "../mcp/server.js";
 import authenticateMCP from "../seed/middleware/authenticateMCP.js";
+import dbHealth from "../seed/middleware/dbHealth.js";
 
 import express from "express";
 import path from "path";
@@ -107,6 +108,10 @@ export default async function registerURLRoutes(app, opts = {}) {
 
   // Rate limiter (after health and protocol so load balancer pings don't count)
   app.use(apiLimiter);
+
+  // DB health gate: 503 when MongoDB is disconnected.
+  // Mounted after rate limiter so health pings still get rate-limited.
+  app.use("/api/v1", dbHealth);
 
   // Auth page routes (login, register, etc.)
   app.use("/", authPageRouter);

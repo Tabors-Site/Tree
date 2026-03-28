@@ -3,9 +3,11 @@
 // Per-key promise-chain queue. Supports serial (default) or bounded-concurrency modes.
 // Different keys run in parallel.
 
+import { getLandConfigValue } from "../landConfig.js";
+
 const queues = new Map();          // key -> Promise (serial chain)
 const concurrentQueues = new Map(); // key -> { active: number, waiting: [] }
-const MAX_QUEUE_DEPTH = 100;       // max waiting tasks per key
+function MAX_QUEUE_DEPTH() { return Math.max(10, Math.min(Number(getLandConfigValue("requestQueueMaxDepth")) || 100, 1000)); }
 
 // Original serial queue. Backward compatible.
 export function enqueue(key, fn, opts) {
@@ -31,8 +33,9 @@ function enqueueConcurrent(key, fn, maxConcurrent) {
 
   // Queue depth cap: reject if too many tasks are already waiting.
   // Prevents unbounded memory growth when all active slots are held by hung tasks.
-  if (q.waiting.length >= MAX_QUEUE_DEPTH) {
-    return Promise.reject(new Error(`Queue depth exceeded for key "${key}" (${MAX_QUEUE_DEPTH} waiting). Try again later.`));
+  const maxDepth = MAX_QUEUE_DEPTH();
+  if (q.waiting.length >= maxDepth) {
+    return Promise.reject(new Error(`Queue depth exceeded for key "${key}" (${maxDepth} waiting). Try again later.`));
   }
 
   return new Promise((resolve, reject) => {

@@ -4,6 +4,7 @@ import Note from "../models/note.js";
 import { hooks } from "../hooks.js";
 import { NODE_STATUS, DELETED, CONTENT_TYPE, SYSTEM_OWNER } from "../protocol.js";
 import { getAncestorChain } from "./ancestorCache.js";
+import { getLandConfigValue } from "../landConfig.js";
 
 
 export async function buildPathString(nodeId) {
@@ -333,7 +334,7 @@ export async function getNavigationContext(nodeId, { search } = {}) {
       name: { $regex: regex },
     })
       .select("_id name parent")
-      .limit(10)
+      .limit(Number(getLandConfigValue("treeSearchResultLimit")) || 10)
       .lean()
       .exec();
 
@@ -564,12 +565,12 @@ export async function getContextForAi(nodeId, options = {}) {
         contentType: CONTENT_TYPE.TEXT,
       })
         .sort({ _id: -1 })
-        .limit(3)
+        .limit(Number(getLandConfigValue("treeSummaryRecentNotes")) || 3)
         .populate("userId", "username -_id")
         .lean()
         .exec();
 
-      const MAX_PREVIEW = 200;
+      const MAX_PREVIEW = Number(getLandConfigValue("treeSummaryPreviewChars")) || 200;
       context.notes = recentNotes.map((n) => {
         const content = n.content || "";
         return {

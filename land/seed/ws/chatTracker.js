@@ -1,5 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "../log.js";
+import { getLandConfigValue } from "../landConfig.js";
 // ws/chatTracker.js
 // Tracks AI chat sessions. Each LLM call = one Chat document.
 // All calls in a chain share the same sessionId and are ordered by chainIndex.
@@ -17,11 +18,11 @@ import { createSession, SESSION_TYPES } from "./sessionRegistry.js";
 // ─────────────────────────────────────────────────────────────────────────
 
 const activeAiContext = new Map();
-const MAX_AI_CONTEXT_ENTRIES = 10000;
+function MAX_AI_CONTEXT_ENTRIES() { return Math.max(100, Math.min(Number(getLandConfigValue("maxAiContextEntries")) || 10000, 100000)); }
 
 export function setChatContext(visitorId, sessionId, chatId) {
   // Cap to prevent unbounded growth if clearChatContext is never called
-  if (activeAiContext.size >= MAX_AI_CONTEXT_ENTRIES && !activeAiContext.has(String(visitorId))) {
+  if (activeAiContext.size >= MAX_AI_CONTEXT_ENTRIES() && !activeAiContext.has(String(visitorId))) {
     const first = activeAiContext.keys().next().value;
     activeAiContext.delete(first);
   }
@@ -40,8 +41,9 @@ export function clearChatContext(visitorId) {
 setInterval(() => {
   // activeAiContext doesn't track timestamps, so just cap the size.
   // If it's over the limit, evict the oldest half.
-  if (activeAiContext.size > MAX_AI_CONTEXT_ENTRIES / 2) {
-    let toDelete = activeAiContext.size - Math.floor(MAX_AI_CONTEXT_ENTRIES / 2);
+  const maxEntries = MAX_AI_CONTEXT_ENTRIES();
+  if (activeAiContext.size > maxEntries / 2) {
+    let toDelete = activeAiContext.size - Math.floor(maxEntries / 2);
     for (const key of activeAiContext.keys()) {
       if (toDelete <= 0) break;
       activeAiContext.delete(key);
@@ -150,7 +152,7 @@ export async function finalizeOpenChat(socket) {
 
 // Max message content stored in Chat documents. Prevents oversized user messages
 // from exceeding the 16MB BSON limit when combined with other Chat fields.
-const MAX_CHAT_CONTENT_BYTES = 100000; // 100KB
+function MAX_CHAT_CONTENT_BYTES() { return Math.max(10000, Math.min(Number(getLandConfigValue("maxChatContentBytes")) || 100000, 1000000)); }
 
 /**
  * Phase 1: Create a Chat record at the start of processing.
@@ -171,8 +173,9 @@ export async function startChat({
   const mode = colonIdx > 0 ? safeModeKey.slice(colonIdx + 1) : "default";
 
   // Cap stored message content
-  const safeMessage = typeof message === "string" && message.length > MAX_CHAT_CONTENT_BYTES
-    ? message.slice(0, MAX_CHAT_CONTENT_BYTES) + "... (truncated)"
+  const maxContent = MAX_CHAT_CONTENT_BYTES();
+  const safeMessage = typeof message === "string" && message.length > maxContent
+    ? message.slice(0, maxContent) + "... (truncated)"
     : message;
 
   const chatId = uuidv4();
@@ -213,14 +216,15 @@ export async function finalizeChat({
   const endTime = new Date();
 
   // Cap stored content
-  const safeContent = typeof content === "string" && content.length > MAX_CHAT_CONTENT_BYTES
-    ? content.slice(0, MAX_CHAT_CONTENT_BYTES) + "... (truncated)"
+  const maxEndContent = MAX_CHAT_CONTENT_BYTES();
+  const safeContent = typeof content === "string" && content.length > maxEndContent
+    ? content.slice(0, maxEndContent) + "... (truncated)"
     : (content || null);
 
   // Collect AI contributions linked to this chat by chatId (capped)
   const contributions = await Contribution.find({ chatId })
     .select("_id")
-    .limit(2000)
+    .limit(Number(getLandConfigValue("chatContributionQueryLimit")) || 2000)
     .lean();
 
   const contributionIds = contributions.map((c) => c._id);
@@ -257,7 +261,7 @@ export async function finalizeChat({
 // CHAIN STEP TRACKING (orchestrator internal calls)
 // ─────────────────────────────────────────────────────────────────────────
 
-const MAX_CHAIN_STEP_CONTENT = 2000;
+function MAX_CHAIN_STEP_CONTENT() { return Math.max(500, Math.min(Number(getLandConfigValue("maxChainStepContentBytes")) || 2000, 50000)); }
 
 /**
  * Record an orchestrator chain step as its own Chat document.
@@ -289,20 +293,21 @@ export function trackChainStep({
   const end = output ? endTime || new Date() : null;
 
   // Truncate both input and output consistently
+  const maxStep = MAX_CHAIN_STEP_CONTENT();
   let inputStr;
   if (typeof input === "string") {
-    inputStr = input.slice(0, MAX_CHAIN_STEP_CONTENT);
+    inputStr = input.slice(0, maxStep);
   } else {
-    inputStr = JSON.stringify(input).slice(0, MAX_CHAIN_STEP_CONTENT);
+    inputStr = JSON.stringify(input).slice(0, maxStep);
   }
 
   let outputStr = null;
   if (output) {
     if (typeof output === "string") {
-      outputStr = output.slice(0, MAX_CHAIN_STEP_CONTENT);
+      outputStr = output.slice(0, maxStep);
     } else {
       const { _llmProvider, _raw, ...clean } = output;
-      outputStr = JSON.stringify(clean).slice(0, MAX_CHAIN_STEP_CONTENT);
+      outputStr = JSON.stringify(clean).slice(0, maxStep);
     }
   }
 

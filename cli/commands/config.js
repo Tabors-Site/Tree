@@ -75,7 +75,10 @@ module.exports = (program) => {
       try {
         const cfg = load();
         cfg.landUrl = url.replace(/\/+$/, "");
-        if (!/^https?:\/\//i.test(cfg.landUrl)) cfg.landUrl = `https://${cfg.landUrl}`;
+        if (!/^https?:\/\//i.test(cfg.landUrl)) {
+          const isLocal = cfg.landUrl.startsWith("localhost") || cfg.landUrl.startsWith("127.") || cfg.landUrl.startsWith("192.168.") || cfg.landUrl.startsWith("10.");
+          cfg.landUrl = `${isLocal ? "http" : "https"}://${cfg.landUrl}`;
+        }
 
         // Fetch land protocol info
         try {

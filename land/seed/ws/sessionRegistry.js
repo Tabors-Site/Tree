@@ -1,6 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "../log.js";
 import { hooks } from "../hooks.js";
+import { getLandConfigValue } from "../landConfig.js";
 // ws/sessionRegistry.js
 // Tracks all active sessions per user and gates iframe navigation so only
 // the designated "active navigator" session can redirect the user's view.
@@ -58,7 +59,7 @@ const sessionAbortControllers = new Map();
 
 // scopeKey -> { sessionId, lastActivity }  (for idle-TTL reuse of scoped sessions)
 const scopedSessions = new Map();
-const MAX_SCOPED_SESSIONS = 20000;
+function MAX_SCOPED_SESSIONS() { return Math.max(100, Math.min(Number(getLandConfigValue("maxScopedSessions")) || 20000, 100000)); }
 let DEFAULT_SCOPE_TTL = 15 * 60 * 1000; // 15 minutes
 export function setSessionTTL(ms) {
   DEFAULT_SCOPE_TTL = Math.max(5000, Math.min(ms, 86400000));
@@ -107,7 +108,7 @@ export function createSession({ userId, type, scopeKey, description = "", meta =
 
   // Store in scoped map if scopeKey provided (with cap)
   if (scopeKey) {
-    if (scopedSessions.size >= MAX_SCOPED_SESSIONS) {
+    if (scopedSessions.size >= MAX_SCOPED_SESSIONS()) {
       // Evict oldest scoped entry
       let oldestKey = null, oldestTime = Infinity;
       for (const [k, v] of scopedSessions) {

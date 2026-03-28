@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 import crypto from "crypto";
 import User from "../models/user.js";
 import Node from "../models/node.js";
-import { snapshotAncestors } from "../tree/ancestorCache.js";
+import { snapshotAncestors, resolveExtensionScopeFromChain } from "../tree/ancestorCache.js";
 import { isDbHealthy } from "../dbConfig.js";
 import LlmConnection from "../models/llmConnection.js";
 import {
@@ -40,7 +40,7 @@ let MAX_TOOL_ITERATIONS = 15;
 let LLM_TIMEOUT_MS = 15 * 60 * 1000;
 let LLM_MAX_RETRIES = 3;
 const MODE_TIMEOUTS = {};
-const MAX_MESSAGE_CONTENT_BYTES = 32768; // 32KB per message in conversation history
+function MAX_MESSAGE_CONTENT_BYTES() { return Math.max(4096, Math.min(Number(getLandConfigValue("maxMessageContentBytes")) || 32768, 131072)); }
 
 // ── Kernel config setters (called from startup.js after land config loads) ──
 export function setKernelConfig(key, value) {
@@ -837,23 +837,26 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     // Cap any oversized messages retained after trim. Tool results and
     // injected context are capped on insertion, but LLM responses can be
     // arbitrarily large. Truncating here bounds total session memory.
+    const maxBytes = MAX_MESSAGE_CONTENT_BYTES();
     for (const msg of recent) {
-      if (typeof msg.content === "string" && msg.content.length > MAX_MESSAGE_CONTENT_BYTES) {
-        msg.content = msg.content.slice(0, MAX_MESSAGE_CONTENT_BYTES) + "\n... (truncated)";
+      if (typeof msg.content === "string" && msg.content.length > maxBytes) {
+        msg.content = msg.content.slice(0, maxBytes) + "\n... (truncated)";
       }
     }
     session.messages = [systemMsg, ...recent];
   }
 
   // Add user message (capped to prevent oversized entries in conversation history)
-  const safeUserMsg = message.length > MAX_MESSAGE_CONTENT_BYTES
-    ? message.slice(0, MAX_MESSAGE_CONTENT_BYTES) + "\n... (message truncated)"
+  const maxMsgBytes = MAX_MESSAGE_CONTENT_BYTES();
+  const safeUserMsg = message.length > maxMsgBytes
+    ? message.slice(0, maxMsgBytes) + "\n... (message truncated)"
     : message;
   session.messages.push({ role: "user", content: safeUserMsg });
 }
 
 /**
- * Walk parent chain for tool config and spatial extension scoping.
+ * Resolve tool config and spatial extension scoping from the ancestor snapshot.
+ * Uses the per-message snapshot (zero DB queries). Falls back to ancestor cache on miss.
  * Returns { tools, blockedExtensions, restrictedExtensions }.
  */
 async function resolveToolsForPosition(session) {
@@ -863,37 +866,34 @@ async function resolveToolsForPosition(session) {
   const currentNodeId = session.currentNodeId || session.rootId;
   if (currentNodeId) {
     try {
-      // Walk from current node up to root, merging tool configs + extension scoping
-      const allowed = new Set();
-      const blocked = new Set();
-      const blockedExts = new Set();
-      const restrictedExts = new Map(); // extName -> access mode ("read")
-      let cursor = currentNodeId;
-      const visited = new Set();
-      while (cursor && !visited.has(cursor)) {
-        visited.add(cursor);
-        const n = await Node.findById(cursor).select("metadata parent systemRole").lean();
-        if (!n || n.systemRole) break;
-        const meta = n.metadata instanceof Map ? Object.fromEntries(n.metadata) : (n.metadata || {});
-        if (meta.tools?.allowed) for (const t of meta.tools.allowed) allowed.add(t);
-        if (meta.tools?.blocked) for (const t of meta.tools.blocked) blocked.add(t);
-        // Spatial extension scoping
-        if (meta.extensions?.blocked) for (const e of meta.extensions.blocked) blockedExts.add(e);
-        if (meta.extensions?.restricted) {
-          for (const [e, access] of Object.entries(meta.extensions.restricted)) {
-            if (!blockedExts.has(e) && !restrictedExts.has(e)) restrictedExts.set(e, access);
-          }
+      // Use the per-message snapshot. Every resolution chain reads from this.
+      // Falls back to ancestor cache (still cached, not raw DB) if no snapshot.
+      const ancestors = session._ancestorSnapshot
+        || await (async () => { const { getAncestorChain } = await import("../tree/ancestorCache.js"); return getAncestorChain(currentNodeId); })();
+
+      if (ancestors && ancestors.length > 0) {
+        // Tool config: walk ancestor chain in memory
+        const allowed = new Set();
+        const blocked = new Set();
+        for (const node of ancestors) {
+          if (node.systemRole) break;
+          const meta = node.metadata || {};
+          if (meta.tools?.allowed) for (const t of meta.tools.allowed) allowed.add(t);
+          if (meta.tools?.blocked) for (const t of meta.tools.blocked) blocked.add(t);
         }
-        cursor = n.parent;
+        if (allowed.size || blocked.size) {
+          treeToolConfig = {
+            allowed: allowed.size ? [...allowed] : undefined,
+            blocked: blocked.size ? [...blocked] : undefined,
+          };
+        }
+
+        // Extension scoping: reuse the same resolution helper that extensionScope.js uses
+        const { getConfinedExtensions } = await import("../tree/extensionScope.js");
+        const scope = resolveExtensionScopeFromChain(ancestors, getConfinedExtensions());
+        if (scope.blocked.size) blockedExtensions = scope.blocked;
+        if (scope.restricted.size) restrictedExtensions = scope.restricted;
       }
-      if (allowed.size || blocked.size) {
-        treeToolConfig = {
-          allowed: allowed.size ? [...allowed] : undefined,
-          blocked: blocked.size ? [...blocked] : undefined,
-        };
-      }
-      if (blockedExts.size) blockedExtensions = blockedExts;
-      if (restrictedExts.size) restrictedExtensions = restrictedExts;
     } catch (scopeErr) {
       log.warn("LLM", `Tool scope resolution failed for node ${currentNodeId}: ${scopeErr.message}`);
     }
@@ -901,7 +901,7 @@ async function resolveToolsForPosition(session) {
   let tools = getToolsForMode(session.modeKey, treeToolConfig);
   // Filter tools by spatial extension scope (blocked + restricted)
   if (blockedExtensions || restrictedExtensions) {
-    const { filterToolsByScope } = await import("../seed/tree/extensionScope.js");
+    const { filterToolsByScope } = await import("../tree/extensionScope.js");
     tools = filterToolsByScope(tools, blockedExtensions, restrictedExtensions);
   }
   return { tools, blockedExtensions, restrictedExtensions };

@@ -11,6 +11,7 @@ import {
 } from "../../seed/tree/notes.js";
 import { getContributionsByUser } from "../../seed/tree/contributions.js";
 import getNodeName from "../../routes/api/helpers/getNameById.js";
+import { renderUserNotes } from "./pages/userNotes.js";
 function html() { return getExtension("html-rendering")?.exports || {}; }
 
 function escapeHtml(str) {
@@ -102,7 +103,7 @@ export default function createRouter(core) {
         }),
       );
 
-      return res.send(html().renderUserNotes({ userId, user, notes, processedNotes, query, token }));
+      return res.send(renderUserNotes({ userId, user, notes, processedNotes, query, token }));
     } catch (err) {
  log.error("User Queries", "Error in /user/:userId/notes:", err);
       sendError(res, 400, ERR.INVALID_INPUT, err.message);

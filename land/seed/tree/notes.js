@@ -241,15 +241,17 @@ async function editNote({
 // READ
 // ─────────────────────────────────────────────────────────────────────────
 
-async function getNotes({ nodeId, limit, startDate, endDate }) {
+async function getNotes({ nodeId, limit, offset, startDate, endDate }) {
   if (!nodeId) throw new Error("Missing required parameter: nodeId");
 
   const query = { nodeId, ...validateDateRange(startDate, endDate) };
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), noteQueryLimit());
+  const safeOffset = Math.max(0, Number(offset) || 0);
 
   const notes = await Note.find(query)
     .sort({ createdAt: -1 })
     .populate("userId", "username")
+    .skip(safeOffset)
     .limit(safeLimit)
     .lean();
 
@@ -493,8 +495,11 @@ async function transferNote({
   return { message: "Note transferred successfully", noteId: noteId.toString(), from: { nodeId: sourceNodeId }, to: { nodeId: targetNodeId } };
 }
 
-async function getNoteEditHistory(noteId) {
+async function getNoteEditHistory(noteId, limit = 100, offset = 0) {
   if (!noteId) throw new Error("Missing required parameter: noteId");
+
+  const safeLimit = Math.min(Math.max(1, Number(limit) || 100), 1000);
+  const safeOffset = Math.max(0, Number(offset) || 0);
 
   const contributions = await Contribution.find({
     action: "note",
@@ -503,7 +508,8 @@ async function getNoteEditHistory(noteId) {
   })
     .populate("userId", "username")
     .sort({ date: 1 })
-    .limit(1000)
+    .skip(safeOffset)
+    .limit(safeLimit)
     .lean();
 
   return contributions.map(c => ({

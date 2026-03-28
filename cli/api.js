@@ -11,7 +11,10 @@ function getBase() {
   if (_baseCache) return _baseCache;
   const cfg = load();
   let site = cfg.landUrl || "https://treeOS.ai";
-  if (!/^https?:\/\//i.test(site)) site = "https://" + site;
+  if (!/^https?:\/\//i.test(site)) {
+    const isLocal = site.startsWith("localhost") || site.startsWith("127.") || site.startsWith("192.168.") || site.startsWith("10.");
+    site = (isLocal ? "http://" : "https://") + site;
+  }
   _baseCache = site.replace(/\/+$/, "") + "/api/v1";
   return _baseCache;
 }
