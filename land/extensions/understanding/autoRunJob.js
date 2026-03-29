@@ -7,7 +7,7 @@ import Node from "../../seed/models/node.js";
 import User from "../../seed/models/user.js";
 import { findOrCreateUnderstandingRun } from "./core.js";
 import { orchestrateUnderstanding } from "./pipeline.js";
-import { userHasLlm } from "../../seed/ws/conversation.js";
+import { userHasLlm } from "../../seed/llm/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG

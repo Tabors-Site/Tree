@@ -196,6 +196,7 @@ export async function runCompression(nodeId, userId, username) {
       mode: "tree:respond",
       rootId,
       nodeId,
+      slot: "codebook",
     });
 
     if (!answer) {

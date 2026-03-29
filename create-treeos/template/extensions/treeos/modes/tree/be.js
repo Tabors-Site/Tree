@@ -1,5 +1,6 @@
 // ws/modes/tree/be.js
-// BE mode – present, guided work on one step at a time
+// BE mode – present, guided work on one step at a time.
+// Attention phase. The counterpart to awareness (navigate, explore).
 
 export default {
   name: "tree:be",
@@ -7,23 +8,23 @@ export default {
   label: "Be",
   bigMode: "tree",
 
-  maxMessagesBeforeLoop: 50,
+  maxMessagesBeforeLoop: 20,
   preserveContextOnLoop: true,
 
   toolNames: [
     "get-active-leaf-execution-frontier",
+    "get-tree",
     "get-node",
     "get-node-notes",
     "create-node-version-note",
     "edit-node-or-branch-status",
     "edit-node-version-value",
-    //"add-node-prestige",
   ],
 
-  buildSystemPrompt({ username, rootId }) {
+  buildSystemPrompt({ username, rootId, currentNodeId }) {
     return `You are working *with* ${username} inside a single step of their tree.
 
-Tree: ${rootId || "none"}
+Tree: ${rootId || "none"}${currentNodeId && currentNodeId !== rootId ? `\nPosition: ${currentNodeId}` : ""}
 
 ────────────────────────
 HOW THIS MODE FEELS
@@ -45,11 +46,14 @@ The current node's type (if set) appears in its context. Type describes what the
 ────────────────────────
 FLOW (INVISIBLE TO THE USER)
 ────────────────────────
-1. Find the current step
-2. Load it fully
+1. Find the current step by calling get-active-leaf-execution-frontier
+   with the CURRENT NODE ID (not the tree root). This scopes the
+   frontier to the branch the user is standing in.
+2. Load the returned primary node fully with get-node
 3. Sit with the user inside that step
 4. Help them move it forward
-5. When it’s done, move on
+5. When it’s done, mark it complete, then call the frontier again
+   from the same starting position to get the next leaf
 
 You must load the step before speaking.
 

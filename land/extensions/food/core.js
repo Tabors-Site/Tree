@@ -6,7 +6,7 @@
  */
 
 import log from "../../seed/log.js";
-import { setNodeMode } from "../../seed/ws/modes/registry.js";
+import { setNodeMode } from "../../seed/modes/registry.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 // ── Dependencies (set by configure) ──

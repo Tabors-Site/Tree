@@ -2,7 +2,7 @@ import tools from "./tools.js";
 import { setServices, setEnergyService, updateSchedule, getCalendar } from "./core.js";
 
 export async function init(core) {
-  setServices({ models: core.models, contributions: core.contributions });
+  setServices({ models: core.models, contributions: core.contributions, metadata: core.metadata });
   if (core.energy) setEnergyService(core.energy);
 
   const { default: router, setNodeModel } = await import("./routes.js");
@@ -13,6 +13,15 @@ export async function init(core) {
     if (meta.schedule) context.schedule = meta.schedule;
     if (meta.reeffectTime) context.reeffectTime = meta.reeffectTime;
   }, "schedules");
+
+  try {
+    const { getExtension } = await import("../loader.js");
+    const htmlExt = getExtension("html-rendering");
+    if (htmlExt) {
+      const { default: buildHtmlRoutes } = await import("./htmlRoutes.js");
+      htmlExt.router.use("/", buildHtmlRoutes());
+    }
+  } catch {}
 
   return {
     router,

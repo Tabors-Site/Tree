@@ -5,7 +5,6 @@
 // Execution moves the branch into a new root tree with all metadata intact.
 
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 import { updateParentRelationship } from "../../seed/tree/treeManagement.js";
 import { invalidateAll } from "../../seed/tree/ancestorCache.js";
@@ -17,13 +16,15 @@ let Note = null;
 let logContribution = async () => {};
 let runChat = null;
 let useEnergy = async () => ({ energyUsed: 0 });
+let _metadata = null;
 
-export function setServices({ models, contributions, llm, energy }) {
+export function setServices({ models, contributions, llm, energy, metadata }) {
   Node = models.Node;
   Note = models.Note;
   logContribution = contributions.logContribution;
   runChat = llm.runChat;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
+  if (metadata) _metadata = metadata;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -101,7 +102,7 @@ async function scoreCoherence(branchId, rootId) {
     // Check if the branch has its own purpose that diverges from root
     const branchNode = await Node.findById(branchId).select("metadata").lean();
     if (!branchNode) return { available: false };
-    const branchPurpose = getExtMeta(branchNode, "purpose");
+    const branchPurpose = _metadata.getExtMeta(branchNode, "purpose");
 
     if (branchPurpose?.coherence != null) {
       // Low coherence against root thesis = high split score
@@ -122,8 +123,8 @@ async function scorePersona(branchId, rootId) {
   const rootNode = await Node.findById(rootId).select("metadata").lean();
   if (!branchNode || !rootNode) return { available: false };
 
-  const branchPersona = getExtMeta(branchNode, "persona");
-  const rootPersona = getExtMeta(rootNode, "persona");
+  const branchPersona = _metadata.getExtMeta(branchNode, "persona");
+  const rootPersona = _metadata.getExtMeta(rootNode, "persona");
 
   if (!branchPersona?.name) return { available: false };
 
@@ -181,7 +182,7 @@ async function scoreCascade(branchId, branchNodeIds) {
   for (const nodeId of branchNodeIds.slice(0, 100)) {
     const node = await Node.findById(nodeId).select("metadata").lean();
     if (!node) continue;
-    const cascadeMeta = getExtMeta(node, "cascade");
+    const cascadeMeta = _metadata.getExtMeta(node, "cascade");
     if (cascadeMeta?.enabled) branchSignals++;
     totalSignals++;
   }
@@ -376,7 +377,7 @@ export async function execute(branchId, userId, username) {
     try {
       const oldRoot = await Node.findById(currentRootId);
       if (oldRoot) {
-        const splitMeta = getExtMeta(oldRoot, "split");
+        const splitMeta = _metadata.getExtMeta(oldRoot, "split");
         if (!splitMeta.history) splitMeta.history = [];
         splitMeta.history.push({
           branchId,
@@ -386,7 +387,7 @@ export async function execute(branchId, userId, username) {
           splitBy: userId,
           newRootId: branchId,
         });
-        await setExtMeta(oldRoot, "split", splitMeta);
+        await _metadata.setExtMeta(oldRoot, "split", splitMeta);
       }
     } catch (err) {
       log.debug("Split", `Failed to record split history: ${err.message}`);
@@ -438,6 +439,6 @@ export async function execute(branchId, userId, username) {
 export async function getHistory(rootId) {
   const root = await Node.findById(rootId).select("metadata").lean();
   if (!root) throw new Error("Tree root not found");
-  const meta = getExtMeta(root, "split");
+  const meta = _metadata.getExtMeta(root, "split");
   return { history: meta.history || [] };
 }

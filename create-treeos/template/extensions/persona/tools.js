@@ -1,7 +1,9 @@
 import { z } from "zod";
 import Node from "../../seed/models/node.js";
-import { setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { resolvePersonaFromChain, getAncestorChainFn } from "./index.js";
+
+let _metadata = null;
+export function setMetadata(metadata) { _metadata = metadata; }
 
 export default [
   {
@@ -111,7 +113,7 @@ export default [
         return { content: [{ type: "text", text: `Persona too large (${size} bytes, max 4096).` }] };
       }
 
-      await setExtMeta(node, "persona", persona);
+      await _metadata.setExtMeta(node, "persona", persona);
 
       const display = persona.name ? `Persona "${persona.name}" set at this node.` : "Persona set at this node.";
       return {
@@ -149,7 +151,7 @@ export default [
         return { content: [{ type: "text", text: "No persona defined at this node. Nothing to clear." }] };
       }
 
-      await setExtMeta(node, "persona", null);
+      await _metadata.setExtMeta(node, "persona", null);
 
       return {
         content: [{ type: "text", text: "Persona removed. This node now inherits from its parent." }],

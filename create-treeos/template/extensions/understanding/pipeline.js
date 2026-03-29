@@ -167,7 +167,7 @@ export async function orchestrateUnderstanding({
     description: `Understanding: ${runPerspective}`,
     modeKeyForLlm: "tree:understand",
     source,
-    slot: "understand",
+    slot: "understanding",
     llmPriority: LLM_PRIORITY?.BACKGROUND || 4,
     lockNamespace: "understand",
     lockKey: understandingRunId,
@@ -187,6 +187,9 @@ export async function orchestrateUnderstanding({
       return { success: false, error: "This understanding run is already being processed" };
     }
   }
+
+  // Store runId in session meta so the stop route can find it
+  updateSessionMeta(rt.sessionId, { runId: understandingRunId });
 
   if (isSite) {
     setActiveNavigator(userId, rt.sessionId);
@@ -342,9 +345,14 @@ export async function orchestrateUnderstanding({
       rootEncoding,
     };
   } catch (err) {
-    log.error("Understanding", `Understanding orchestration error for root ${rootId}:`, err.message);
-    rt.setError(err.message, "tree:understand");
-    return { success: false, error: err.message };
+    const isAbort = rt.aborted || err.name === "AbortError" || err.message?.includes("aborted");
+    if (isAbort) {
+      log.info("Understanding", `Run ${understandingRunId} stopped by user (${nodesProcessed} nodes processed)`);
+    } else {
+      log.error("Understanding", `Understanding orchestration error for root ${rootId}:`, err.message);
+      rt.setError(err.message, "tree:understand");
+    }
+    return { success: isAbort, stopped: isAbort, error: isAbort ? null : err.message };
   } finally {
     try {
       const currentRun = await UnderstandingRun.findById(understandingRunId).select("status").lean();

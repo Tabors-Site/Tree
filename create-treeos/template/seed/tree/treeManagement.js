@@ -60,6 +60,12 @@ export async function createNode(
   if (name.startsWith("@")) {
     throw new Error("Node names cannot start with @");
   }
+  if (name === "~" || name.startsWith("~/")) {
+    throw new Error("Node names cannot be ~ (reserved for home)");
+  }
+  if (name.includes("/")) {
+    throw new Error("Node names cannot contain / (reserved for path separator)");
+  }
   const user = validatedUser ?? (await getUserOrThrow(userId));
 
 
@@ -67,8 +73,14 @@ export async function createNode(
   values = values && typeof values === "object" ? values : {};
   goals = goals && typeof goals === "object" ? goals : {};
 
-  // beforeNodeCreate: extensions can modify or cancel
-  const hookData = { name, type, parentNodeID, isRoot, userId, values, goals, schedule, reeffectTime };
+  // beforeNodeCreate: extensions can modify or cancel.
+  // parentType included so extensions can validate parent-child type compatibility.
+  let parentType = null;
+  if (parentNodeID) {
+    const parentDoc = await Node.findById(parentNodeID).select("type").lean();
+    parentType = parentDoc?.type || null;
+  }
+  const hookData = { name, type, parentNodeID, parentType, isRoot, userId, values, goals, schedule, reeffectTime };
   const hookResult = await hooks.run("beforeNodeCreate", hookData);
   if (hookResult.cancelled) {
     const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
@@ -489,16 +501,20 @@ export async function editNodeName({
   if (newName.startsWith("@")) {
     throw new Error("Node names cannot start with @");
   }
+  if (newName === "~" || newName.startsWith("~/")) {
+    throw new Error("Node names cannot be ~ (reserved for home)");
+  }
+  if (newName.includes("/")) {
+    throw new Error("Node names cannot contain / (reserved for path separator)");
+  }
   const node = await Node.findById(nodeId);
   if (!node) {
     throw new Error("Node not found");
   }
   if (node.systemRole) throw new Error("Cannot modify system nodes");
 
-
   const oldName = node.name;
-  node.name = newName;
-  await node.save();
+  await Node.findByIdAndUpdate(nodeId, { $set: { name: newName } });
 
   await logContribution({
     userId,
@@ -688,4 +704,43 @@ export async function editNodeType({
   });
 
   return { node, oldType, newType };
+}
+
+/**
+ * Reorder a node's children array.
+ * Must contain the exact same IDs as the current children, just in a different order.
+ * Atomic $set. Contribution logged.
+ */
+export async function reorderChildren({
+  nodeId,
+  children: newOrder,
+  userId,
+  wasAi = false,
+  chatId = null,
+  sessionId = null,
+}) {
+  if (!Array.isArray(newOrder)) throw new Error("children must be an array");
+
+  const node = await Node.findById(nodeId);
+  if (!node) throw new Error("Node not found");
+  if (node.systemRole) throw new Error("Cannot modify system nodes");
+
+  const currentSet = new Set(node.children.map(String));
+  const newSet = new Set(newOrder.map(String));
+  if (currentSet.size !== newSet.size || ![...currentSet].every(id => newSet.has(id))) {
+    throw new Error("Reorder must contain the same children IDs");
+  }
+
+  await Node.updateOne({ _id: nodeId }, { $set: { children: newOrder } });
+
+  await logContribution({
+    userId,
+    nodeId,
+    action: "reorder",
+    wasAi,
+    chatId,
+    sessionId,
+  });
+
+  return { node };
 }

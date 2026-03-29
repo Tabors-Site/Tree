@@ -18,7 +18,7 @@ export function configure({ metadata }) { _metadata = metadata; }
 
 let LLM_PRIORITY;
 try {
-  ({ LLM_PRIORITY } = await import("../../seed/ws/conversation.js"));
+  ({ LLM_PRIORITY } = await import("../../seed/llm/conversation.js"));
 } catch {
   LLM_PRIORITY = { INTERACTIVE: 2 };
 }

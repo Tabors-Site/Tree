@@ -17,7 +17,7 @@ import {
   getExtensionManifest,
   getExtension,
 } from "../../extensions/loader.js";
-import { listOrchestrators } from "../../seed/orchestratorRegistry.js";
+import { listOrchestrators } from "../../seed/orchestrators/registry.js";
 
 const router = express.Router();
 
@@ -537,7 +537,7 @@ router.get("/land/orchestrators", authenticate, (req, res) => {
  */
 router.get("/land/tools", authenticate, async (req, res) => {
   try {
-    const { getAllToolNamesForBigMode, getSubModes } = await import("../../seed/ws/modes/registry.js");
+    const { getAllToolNamesForBigMode, getSubModes } = await import("../../seed/modes/registry.js");
     const allTools = getAllToolNamesForBigMode("tree");
 
     // Build tool-to-mode mapping
@@ -569,7 +569,7 @@ router.get("/land/tools", authenticate, async (req, res) => {
  */
 router.get("/land/modes", authenticate, async (req, res) => {
   try {
-    const { getSubModes } = await import("../../seed/ws/modes/registry.js");
+    const { getSubModes } = await import("../../seed/modes/registry.js");
     const bigModes = ["tree", "home", "land"];
     const result = {};
 

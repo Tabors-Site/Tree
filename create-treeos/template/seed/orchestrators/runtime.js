@@ -31,7 +31,7 @@ export { parseJsonSafe };
 
 import { getLandConfigValue } from "../landConfig.js";
 
-const MAX_CHAIN_STEPS = 500; // circuit breaker, not configurable (runaway prevention)
+function MAX_CHAIN_STEPS() { return Math.max(10, Math.min(Number(getLandConfigValue("maxChainSteps")) || 500, 5000)); }
 
 // Configurable via land config, read at use time
 function initTimeoutMs() { return Number(getLandConfigValue("orchestratorInitTimeout")) || 30000; }
@@ -195,8 +195,8 @@ export class OrchestratorRuntime {
     if (this.aborted) throw new Error("Pipeline aborted");
 
     // Chain step circuit breaker
-    if (this.chainIndex > MAX_CHAIN_STEPS) {
-      throw new Error(`Pipeline exceeded ${MAX_CHAIN_STEPS} steps. Possible runaway loop.`);
+    if (this.chainIndex > MAX_CHAIN_STEPS()) {
+      throw new Error(`Pipeline exceeded ${MAX_CHAIN_STEPS()} steps. Possible runaway loop.`);
     }
 
     // Renew lock if held (prevents TTL expiry during long pipelines)
@@ -258,7 +258,7 @@ export class OrchestratorRuntime {
    * Track a completed step without running processMessage.
    */
   trackStep(modeKey, { input, output, startTime, endTime, llmProvider: stepLlm, treeContext }) {
-    if (this._cleaned || this.chainIndex > MAX_CHAIN_STEPS) return;
+    if (this._cleaned || this.chainIndex > MAX_CHAIN_STEPS()) return;
     const resolvedTreeContext = typeof treeContext === "function" ? treeContext(output) : treeContext;
     trackChainStep({
       userId: this.userId,

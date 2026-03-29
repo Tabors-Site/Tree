@@ -411,7 +411,7 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
     }
 
     // Resolve LLM connection
-    const { getClientForUser } = await import("../seed/ws/conversation.js");
+    const { getClientForUser } = await import("../seed/llm/conversation.js");
     const clientEntry = await getClientForUser(user._id.toString(), slot || "main");
 
     if (clientEntry.noLlm) {

@@ -7,11 +7,11 @@ import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 import GatewayChannel from "./model.js";
 import Node from "../../seed/models/node.js";
 import User from "../../seed/models/user.js";
-import { getOrchestrator } from "../../seed/orchestratorRegistry.js";
+import { getOrchestrator } from "../../seed/orchestrators/registry.js";
 import {
   userHasLlm,
   LLM_PRIORITY,
-} from "../../seed/ws/conversation.js";
+} from "../../seed/llm/conversation.js";
 import { enqueue, getQueueDepth } from "../../seed/ws/requestQueue.js";
 import {
   setSessionAbort,

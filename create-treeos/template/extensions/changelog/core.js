@@ -226,6 +226,7 @@ Return ONLY JSON:
       message: prompt,
       mode: "tree:respond",
       rootId,
+      slot: "changelog",
     });
 
     if (!answer) return buildRawSummary(contributions, nodeId);

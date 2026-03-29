@@ -9,8 +9,8 @@ import { fileURLToPath, pathToFileURL } from "url";
 import { buildCoreServices } from "../seed/services.js";
 import { setExtensionToolResolver, registerMode, setModeRegistrationHook } from "../seed/ws/modes/registry.js";
 import { hooks } from "../seed/hooks.js";
-import { registerOrchestrator, allowOrchestratorExtension } from "../seed/orchestratorRegistry.js";
-import { registerModeOwner, registerToolOwner, getToolOwner } from "../seed/tree/extensionScope.js";
+import { registerOrchestrator, allowOrchestratorExtension } from "../seed/orchestrators/registry.js";
+import { registerModeOwner, registerToolOwner, getToolOwner, getModeOwner } from "../seed/tree/extensionScope.js";
 import log from "../seed/log.js";
 
 // Wire mode ownership tracking for spatial scoping
@@ -74,6 +74,18 @@ function withExtensionTimeout(router, extName) {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DISABLED_FILE = path.join(__dirname, ".disabled");
+
+// Profile filter: if .treeos-profile exists, only listed extensions load.
+// Written by boot.js when user selects an install profile. One name per line.
+// If absent, all extensions load (backward compatible).
+let _profileFilter = null;
+try {
+  const profilePath = path.join(__dirname, ".treeos-profile");
+  if (fs.existsSync(profilePath)) {
+    const names = fs.readFileSync(profilePath, "utf8").split("\n").map(s => s.trim()).filter(Boolean);
+    if (names.length > 0) _profileFilter = new Set(names);
+  }
+} catch {}
 
 // ---------------------------------------------------------------------------
 // Disabled extensions file (synced to disk so loader can read before DB)
@@ -260,12 +272,13 @@ async function runNpmInstall(extDir, npmDeps, extName, opts = {}) {
     if (configured) timeout = Number(configured);
   } catch {}
 
-  const { execFileSync } = await import("child_process");
+  const { execSync } = await import("child_process");
   try {
-    execFileSync("npm", ["install", "--production", "--no-fund", "--no-audit", "--ignore-scripts"], {
+    execSync("npm install --production --no-fund --no-audit --ignore-scripts", {
       cwd: extDir,
       stdio: "pipe",
       timeout,
+      shell: true,
     });
     log.verbose("Extensions", `${extName}: npm install complete (${npmDeps.length} packages)`);
   } catch (err) {
@@ -492,6 +505,16 @@ function buildScopedCore(manifest, fullCore) {
   // Modes: always available (extensions register their own AI modes)
   if (fullCore.modes) {
     scoped.modes = fullCore.modes;
+  }
+
+  // Metadata: always available (every extension reads/writes metadata)
+  if (fullCore.metadata) {
+    scoped.metadata = fullCore.metadata;
+  }
+
+  // User metadata: always available (extensions store per-user state)
+  if (fullCore.userMetadata) {
+    scoped.userMetadata = fullCore.userMetadata;
   }
 
   // Auth strategy binding: wrap registerStrategy to auto-inject extension name.
@@ -825,8 +848,6 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           try {
             if (tool.handler) {
               // Full tool with handler: register on MCP server
-              // SDK signature: tool(name, description, schema, cb) - max 4 args
-              // Annotations go into the schema object if needed
               mcpServer.tool(
                 tool.name,
                 tool.description,
@@ -1056,6 +1077,9 @@ async function discoverManifests() {
       // Skip template and hidden directories
       if (entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
 
+      // Profile filter: if .treeos-profile exists, only load listed extensions
+      if (_profileFilter && !_profileFilter.has(entry.name)) continue;
+
       if (entry.isDirectory()) {
         const manifestPath = path.join(__dirname, entry.name, "manifest.js");
         const indexPath = path.join(__dirname, entry.name, "index.js");
@@ -1123,6 +1147,20 @@ export function getExtensionManifest(name) {
  */
 export function getLoadedExtensionNames() {
   return [...loaded.keys()];
+}
+
+/**
+ * Get classifier hints for a mode key.
+ * Returns array of RegExp from the owning extension's manifest, or null.
+ * Used by the tree orchestrator for extension routing (Path 2).
+ */
+export function getClassifierHintsForMode(modeKey) {
+  try {
+    const extName = getModeOwner(modeKey);
+    if (!extName) return null;
+    const manifest = loaded.get(extName)?.manifest;
+    return Array.isArray(manifest?.classifierHints) ? manifest.classifierHints : null;
+  } catch { return null; }
 }
 
 export function getBootReport() {
@@ -1206,6 +1244,12 @@ export async function uninstallExtension(name) {
     // Clean up tool definitions and mode registrations so stale entries
     // don't linger in the registry after uninstall.
     try {
+      // Remove from MCP replay array and invalidate active sessions
+      const { mcpServerInstance } = await import("../mcp/server.js");
+      if (mcpServerInstance?.removeToolsByOwner) {
+        mcpServerInstance.removeToolsByOwner(name, getToolOwner);
+      }
+      // Remove from tool definition registry
       const { unregisterToolsForExtension } = await import("../seed/ws/tools.js");
       unregisterToolsForExtension(name, getToolOwner);
     } catch {}
@@ -1751,11 +1795,11 @@ export async function runExtensionMigrations() {
 /**
  * Start all extension jobs. Called from startup.js after DB connect.
  */
-export function startExtensionJobs() {
+export async function startExtensionJobs() {
   for (const job of registeredJobs) {
     try {
       if (typeof job.start === "function") {
-        job.start();
+        await job.start();
         log.verbose("Extensions", `Job started: ${job.name} (${job.extensionName})`);
       }
     } catch (err) {

@@ -8,7 +8,7 @@ import { getExtension } from "../../extensions/loader.js";
 
 import Node from "../../seed/models/node.js";
 import { isValidRootLlmSlot, getAllRootLlmSlots } from "../../seed/llm/connections.js";
-import { getNodeChats } from "../../seed/ws/chatHistory.js";
+import { getNodeChats } from "../../seed/llm/chatHistory.js";
 
 import { registerWithHorizon } from "../../canopy/horizon.js";
 
@@ -173,7 +173,7 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
       });
     }
 
-    const { clearUserClientCache } = await import("../../seed/ws/conversation.js");
+    const { clearUserClientCache } = await import("../../seed/llm/conversation.js");
     clearUserClientCache(req.userId);
 
     return sendOk(res, {

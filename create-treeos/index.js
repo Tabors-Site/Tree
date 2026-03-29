@@ -128,6 +128,7 @@ try {
     cwd: targetDir,
     stdio: "pipe",
     timeout: 120000,
+    shell: true,
   });
   console.log(`${GREEN}Dependencies installed.${RESET}`);
 } catch (err) {
@@ -141,12 +142,13 @@ ${BOLD}${GREEN}Land scaffolded.${RESET}
 ${BOLD}Next steps:${RESET}
 
   ${CYAN}cd ${targetName}${RESET}
-  ${CYAN}node boot.js${RESET}          ${DIM}First boot runs the setup wizard${RESET}
+  ${CYAN}npm start${RESET}              ${DIM}First boot runs the setup wizard${RESET}
 
 ${BOLD}Then install the CLI:${RESET}
 
   ${CYAN}npm install -g treeos${RESET}
   ${CYAN}treeos connect http://localhost:3000${RESET}
+  ${CYAN}treeos register${RESET}
   ${CYAN}treeos start${RESET}
 
 ${DIM}The seed is planted. Let it grow.${RESET}

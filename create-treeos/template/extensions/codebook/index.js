@@ -12,7 +12,13 @@ import {
 export async function init(core) {
   // Wire runChat with BACKGROUND priority (compression runs are background work)
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
-  setRunChat((opts) => core.llm.runChat({ ...opts, llmPriority: BG }));
+
+  core.llm.registerRootLlmSlot("codebook");
+
+  setRunChat(async (opts) => {
+    if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+    return core.llm.runChat({ ...opts, llmPriority: BG });
+  });
 
   const config = await getCodebookConfig();
 

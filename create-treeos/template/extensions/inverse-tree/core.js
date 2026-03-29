@@ -208,6 +208,7 @@ export async function compress(userId) {
       username: user.username,
       message: prompt,
       mode: "home:default",
+      slot: "inverseTree",
     });
 
     if (!answer) return null;

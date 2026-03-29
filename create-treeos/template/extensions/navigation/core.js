@@ -32,7 +32,7 @@ export async function getUserRootsWithNames(userId) {
   const rootIds = await getUserRoots(userId);
   if (rootIds.length === 0) return [];
 
-  const nodes = await Node.find({ _id: { $in: rootIds } })
+  const nodes = await Node.find({ _id: { $in: rootIds }, parent: { $ne: "deleted" } })
     .select("_id name visibility")
     .lean();
 
@@ -155,43 +155,3 @@ export async function getRecentRootsWithNames(userId) {
   );
 }
 
-// ── Boot migration ──
-
-/**
- * One-time migration: copy User.roots (old schema field) to metadata.nav.roots.
- * Uses lean() which returns raw MongoDB fields even if not in Mongoose schema.
- * Runs once at extension init. Idempotent.
- */
-export async function migrateRootsToMetadata() {
-  // Find users that have the old roots[] field populated but no metadata.nav.roots
-  const users = await User.find({}).select("_id metadata").lean();
-  let migrated = 0;
-
-  for (const u of users) {
-    const nav = getUserMeta(u, "nav");
-
-    // If nav.roots already exists, skip (already migrated)
-    if (Array.isArray(nav.roots) && nav.roots.length > 0) continue;
-
-    // Read the raw roots field from MongoDB (may not be in schema anymore)
-    // lean() returns raw document, so old fields are still visible
-    const raw = await User.collection.findOne(
-      { _id: u._id },
-      { projection: { roots: 1 } },
-    );
-
-    if (!raw?.roots || !Array.isArray(raw.roots) || raw.roots.length === 0) continue;
-
-    // Copy to metadata.nav.roots
-    const user = await User.findById(u._id);
-    if (!user) continue;
-
-    const freshNav = getUserMeta(user, "nav");
-    freshNav.roots = raw.roots.map(String);
-    setUserMeta(user, "nav", freshNav);
-    await user.save();
-    migrated++;
-  }
-
-  return migrated;
-}

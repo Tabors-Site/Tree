@@ -23,7 +23,7 @@ export default {
 
     cli: [
       {
-        command: "cc", scope: ["tree"],
+        command: "cc", scope: ["tree", "land"],
         description: "Command center. Tools, modes, extensions at this position.",
         method: "GET",
         endpoint: "/node/:nodeId/command-center",
@@ -37,28 +37,24 @@ export default {
 
     // Documented exports (available via getExtension("html-rendering")?.exports)
     //
-    // Page registration:
-    //   registerPage(method, path, ...handlers)  - Add routes to the page router (mounted at /, not /api/v1).
-    //                                              Other extensions use this to add their own server-rendered pages.
-    //                                              Example: registerPage("get", "/my-dashboard", authenticate, handler)
+    // Infrastructure (no pages, no renderers):
+    //   registerPage(method, path, ...handlers)  - Mount a page route on the page router (at /, not /api/v1)
+    //   urlAuth                                  - Full auth middleware (JWT, share token, public, canopy)
+    //   authenticateLite                         - Lightweight auth for HTML page API calls
+    //   notFoundPage(req, res, message)          - Render a 404 error page
+    //   errorHtml(status, title, message)        - Render a generic error page
+    //   resolveHtmlShareAccess({ userId, nodeId, shareToken })  - Validate share tokens
+    //   resolvePublicRoot(nodeId)                - Resolve public tree access
+    //   isPublic(visibility)                     - Check if a visibility value is public
+    //   hasTreeLlm(root)                         - Check if a tree has an LLM assigned
     //
-    // Share token auth:
-    //   resolveHtmlShareAccess({ userId, nodeId, shareToken })  - Validate a share token for URL-based auth.
-    //                                                              Returns { allowed, matchedUserId, scope, ... }
+    // Direct imports (used by extensions that build their own pages):
+    //   import { page } from "../html-rendering/html/layout.js"       - Page wrapper with shared CSS
+    //   import { esc, escapeHtml } from "../html-rendering/html/utils.js"  - HTML escaping
+    //   import { htmlOnly, buildQS, tokenQS } from "../html-rendering/htmlHelpers.js"  - Route helpers
+    //   import urlAuth from "../html-rendering/urlAuth.js"            - Auth middleware
     //
-    // Render functions (60+):
-    //   All render functions from html/user.js, html/node.js, html/notes.js, html/values.js, html/chat.js, html/notFound.js
-    //   Examples: renderValues(), renderEnergy(), renderChat(), renderUserNotes(), renderScriptDetail(),
-    //             renderBookPage(), renderSolanaWallet(), errorHtml(), parseBool(), normalizeStatusFilters()
-    //
-    // Login/register pages:
-    //   renderLoginPage(), renderRegisterPage(), renderForgotPasswordPage()
-    //
-    // Usage from other extensions:
-    //   import { getExtension } from "../loader.js";
-    //   const html = getExtension("html-rendering")?.exports || {};
-    //   if (html.renderValues) res.send(html.renderValues({ ... }));
-    //
+    // Each extension owns its own pages and routes. html-rendering is infrastructure only.
     // If this extension is not installed, all consuming extensions fall back to JSON responses.
   },
 };

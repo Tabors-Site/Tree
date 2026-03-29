@@ -71,7 +71,12 @@ async function registerWithDirectory(url) {
     if (data.success || data.status === "ok") {
       log.verbose("Canopy", `Registered with directory at ${url}`);
     } else {
-      log.error("Canopy", `Directory registration failed at ${url}: ${(data.error && data.error.message) || data.error}`);
+      const reason = (data.error && data.error.message) || data.error || "unknown";
+      if (/localhost|private/.test(reason)) {
+        log.verbose("Canopy", `Directory registration skipped (localhost/private address). Federation requires a public domain.`);
+      } else {
+        log.error("Canopy", `Directory registration failed at ${url}: ${reason}`);
+      }
     }
   } catch (err) {
     log.error("Canopy", `Could not reach directory at ${url}: ${err.message}`);

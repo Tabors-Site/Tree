@@ -5,7 +5,7 @@ export default {
   description: "AI identity at every position. Name, voice, traits, boundaries. Inherits down the tree. Override at any branch.",
 
   needs: {
-    services: ["hooks"],
+    services: ["hooks", "tree", "metadata"],
     models: ["Node"],
     extensions: [],
   },
@@ -16,7 +16,7 @@ export default {
 
   provides: {
     models: {},
-    routes: true,
+    routes: "./routes.js",
     tools: true,
     jobs: false,
     energyActions: {},

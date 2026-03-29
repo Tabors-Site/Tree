@@ -74,8 +74,11 @@ router.get(
   async (req, res) => {
     try {
       const { noteId } = req.params;
-      const history = await getNoteEditHistory(noteId);
-      return sendOk(res, { history });
+      const rawLimit = Number(req.query.limit) || 100;
+      const limit = Math.min(Math.max(1, rawLimit), 1000);
+      const offset = Math.max(0, Number(req.query.offset) || 0);
+      const history = await getNoteEditHistory(noteId, limit, offset);
+      return sendOk(res, { history, limit, offset });
     } catch (err) {
       log.error("API", "Note history error:", err);
       sendError(res, 500, ERR.INTERNAL, err.message);
@@ -109,9 +112,13 @@ router.get("/node/:nodeId/:version/notes", authenticate, async (req, res) => {
       if (span > 365 * 24 * 60 * 60 * 1000) return sendError(res, 400, ERR.INVALID_INPUT, "Date range cannot exceed 365 days");
     }
 
+    const rawOffset = req.query.offset;
+    const offset = rawOffset !== undefined ? Math.max(0, Number(rawOffset) || 0) : 0;
+
     const result = await coreGetNotes({
       nodeId,
       limit,
+      offset,
       startDate,
       endDate,
     });
@@ -122,7 +129,7 @@ router.get("/node/:nodeId/:version/notes", authenticate, async (req, res) => {
         n.contentType === "file" ? `/api/v1/uploads/${n.content}` : n.content,
     }));
 
-    return sendOk(res, { notes });
+    return sendOk(res, { notes, offset });
   } catch (err) {
     return sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
@@ -199,7 +206,7 @@ router.put(
   },
 );
 
-router.get("/node/:nodeId/:version/notes/:noteId", async (req, res) => {
+router.get("/node/:nodeId/:version/notes/:noteId", authenticate, async (req, res) => {
   try {
     const { nodeId, version, noteId } = req.params;
 
@@ -295,7 +302,7 @@ router.post("/node/:nodeId/notes", authenticate, useLatest, (req, res, next) => 
   router.handle(req, res, next);
 });
 
-router.get("/node/:nodeId/notes/:noteId", useLatest, (req, res, next) => {
+router.get("/node/:nodeId/notes/:noteId", authenticate, useLatest, (req, res, next) => {
   req.url = `/node/${req.params.nodeId}/${req.params.version}/notes/${req.params.noteId}`;
   router.handle(req, res, next);
 });

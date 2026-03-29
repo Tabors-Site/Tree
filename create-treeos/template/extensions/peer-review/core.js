@@ -218,6 +218,7 @@ export async function handleReviewRequest(hookData) {
       mode: "tree:review",
       rootId,
       nodeId,
+      slot: "peerReview",
     });
     answer = result?.answer;
   } catch (err) {
@@ -437,6 +438,7 @@ async function reviseContent(nodeId, config, suggestions, round) {
     mode: "tree:respond",
     rootId,
     nodeId,
+    slot: "peerReview",
   });
 
   return result?.answer || originalContent;

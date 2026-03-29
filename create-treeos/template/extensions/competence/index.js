@@ -1,8 +1,9 @@
 import log from "../../seed/log.js";
 import tools from "./tools.js";
-import { processLLMCall, getCompetence } from "./core.js";
+import { configure, processLLMCall, getCompetence } from "./core.js";
 
 export async function init(core) {
+  configure({ metadata: core.metadata });
   // afterLLMCall: detect whether the AI answered or found silence
   core.hooks.register("afterLLMCall", async ({ userId, rootId, nodeId, message, answer }) => {
     if (!nodeId || !userId || userId === "SYSTEM") return;

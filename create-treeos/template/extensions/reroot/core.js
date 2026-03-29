@@ -6,7 +6,6 @@
 // 3. Apply: execute each move via updateParentRelationship (kernel function)
 
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { updateParentRelationship } from "../../seed/tree/treeManagement.js";
 import { invalidateAll } from "../../seed/tree/ancestorCache.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
@@ -17,13 +16,15 @@ let Note = null;
 let logContribution = null;
 let runChat = null;
 let useEnergy = async () => ({ energyUsed: 0 });
+let _metadata = null;
 
-export function setServices({ models, contributions, llm, energy }) {
+export function setServices({ models, contributions, llm, energy, metadata }) {
   Node = models.Node;
   Note = models.Note;
   logContribution = contributions.logContribution;
   runChat = llm.runChat;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
+  if (metadata) _metadata = metadata;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -84,6 +85,7 @@ export async function analyze(rootId, userId, username) {
     message: prompt,
     mode: "tree:respond",
     rootId,
+    slot: "reroot",
   });
 
   if (!result?.answer) {
@@ -126,14 +128,14 @@ export async function analyze(rootId, userId, username) {
   const root = await Node.findById(rootId);
   if (!root) throw new Error("Tree root not found");
 
-  const rerootMeta = getExtMeta(root, "reroot");
+  const rerootMeta = _metadata.getExtMeta(root, "reroot");
   rerootMeta.proposal = {
     moves: validMoves,
     generatedAt: new Date().toISOString(),
     generatedBy: userId,
     status: "pending",
   };
-  await setExtMeta(root, "reroot", rerootMeta);
+  await _metadata.setExtMeta(root, "reroot", rerootMeta);
 
   log.verbose("Reroot", `Analysis complete for tree ${rootId}: ${validMoves.length} move(s) proposed`);
 
@@ -151,7 +153,7 @@ export async function getProposal(rootId) {
   const root = await Node.findById(rootId).select("metadata").lean();
   if (!root) throw new Error("Tree not found");
 
-  const rerootMeta = getExtMeta(root, "reroot");
+  const rerootMeta = _metadata.getExtMeta(root, "reroot");
   return rerootMeta.proposal || null;
 }
 
@@ -163,7 +165,7 @@ export async function applyProposal(rootId, userId) {
   const root = await Node.findById(rootId);
   if (!root) throw new Error("Tree not found");
 
-  const rerootMeta = getExtMeta(root, "reroot");
+  const rerootMeta = _metadata.getExtMeta(root, "reroot");
   const proposal = rerootMeta.proposal;
   if (!proposal || proposal.status !== "pending") {
     throw new Error("No pending proposal to apply");
@@ -219,7 +221,7 @@ export async function applyProposal(rootId, userId) {
     rerootMeta.history = rerootMeta.history.slice(-20);
   }
 
-  await setExtMeta(root, "reroot", rerootMeta);
+  await _metadata.setExtMeta(root, "reroot", rerootMeta);
 
   // Log contribution
   await logContribution({
@@ -245,7 +247,7 @@ export async function rejectProposal(rootId, userId) {
   const root = await Node.findById(rootId);
   if (!root) throw new Error("Tree not found");
 
-  const rerootMeta = getExtMeta(root, "reroot");
+  const rerootMeta = _metadata.getExtMeta(root, "reroot");
   if (!rerootMeta.proposal || rerootMeta.proposal.status !== "pending") {
     throw new Error("No pending proposal to reject");
   }
@@ -253,7 +255,7 @@ export async function rejectProposal(rootId, userId) {
   rerootMeta.proposal.status = "rejected";
   rerootMeta.proposal.rejectedAt = new Date().toISOString();
   rerootMeta.proposal.rejectedBy = userId;
-  await setExtMeta(root, "reroot", rerootMeta);
+  await _metadata.setExtMeta(root, "reroot", rerootMeta);
 
   log.verbose("Reroot", `Proposal rejected for tree ${rootId}`);
   return { rejected: true };

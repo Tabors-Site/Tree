@@ -12,7 +12,9 @@ import { SYSTEM_ROLE, CONTENT_TYPE } from "../../seed/protocol.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _runChat = null;
+let _metadata = null;
 export function setRunChat(fn) { _runChat = fn; }
+export function setMetadata(m) { _metadata = m; }
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -98,6 +100,7 @@ export async function deriveThesis(rootId, userId) {
       message: prompt,
       mode: "tree:respond",
       rootId,
+      slot: "purpose",
     });
 
     if (!answer) return null;
@@ -161,6 +164,7 @@ export async function checkCoherence(noteContent, rootId, userId) {
       message: prompt,
       mode: "tree:respond",
       rootId,
+      slot: "purpose",
     });
 
     if (!answer) return null;
@@ -212,6 +216,7 @@ export async function checkCoherenceBatch(notes, rootId, userId) {
       message: prompt,
       mode: "tree:respond",
       rootId,
+      slot: "purpose",
     });
 
     if (!answer) return [];
@@ -253,14 +258,10 @@ export async function getThesis(rootId) {
 }
 
 export async function incrementNoteCount(rootId) {
-  const result = await Node.findByIdAndUpdate(
-    rootId,
-    { $inc: { "metadata.purpose.notesSinceDerivation": 1 } },
-    { new: true, select: "metadata" },
-  ).lean();
-  if (!result) return 0;
-  const meta = result.metadata instanceof Map
-    ? result.metadata.get("purpose") || {}
-    : result.metadata?.purpose || {};
+  await _metadata.incExtMeta(rootId, "purpose", "notesSinceDerivation", 1);
+  // Read back the new count
+  const node = await Node.findById(rootId).select("metadata").lean();
+  if (!node) return 0;
+  const meta = _metadata.getExtMeta(node, "purpose");
   return meta.notesSinceDerivation || 0;
 }

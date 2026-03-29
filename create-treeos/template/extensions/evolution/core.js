@@ -13,7 +13,9 @@ import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _runChat = null;
+let _metadata = null;
 export function setRunChat(fn) { _runChat = fn; }
+export function setMetadata(m) { _metadata = m; }
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -43,20 +45,16 @@ export async function getEvolutionConfig() {
  * Bump a metric counter on a node. Atomic $inc.
  */
 export async function bumpMetric(nodeId, metric, amount = 1) {
-  await Node.findByIdAndUpdate(nodeId, {
-    $inc: { [`metadata.evolution.${metric}`]: amount },
-    $set: { "metadata.evolution.lastActivity": new Date().toISOString() },
-  });
+  await _metadata.incExtMeta(nodeId, "evolution", metric, amount);
+  await _metadata.batchSetExtMeta(nodeId, "evolution", { lastActivity: new Date().toISOString() });
 }
 
 /**
  * Record a navigation visit.
  */
 export async function recordVisit(nodeId) {
-  await Node.findByIdAndUpdate(nodeId, {
-    $inc: { "metadata.evolution.visits": 1 },
-    $set: { "metadata.evolution.lastVisited": new Date().toISOString() },
-  });
+  await _metadata.incExtMeta(nodeId, "evolution", "visits", 1);
+  await _metadata.batchSetExtMeta(nodeId, "evolution", { lastVisited: new Date().toISOString() });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -200,6 +198,7 @@ export async function analyzeTree(rootId, userId, username) {
         message: prompt,
         mode: "tree:respond",
         rootId,
+        slot: "evolution",
       });
 
       if (answer) {

@@ -28,6 +28,8 @@ export default {
     "discord.com or discordapp.com domains, and input channels provide both a bot token and " +
     "a Discord channel ID.",
 
+  npm: ["discord.js@^14.25.1"],
+
   needs: {
     models: ["Node", "User"],
     extensions: ["gateway"],

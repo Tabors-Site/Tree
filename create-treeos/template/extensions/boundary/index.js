@@ -11,11 +11,18 @@ import {
 
 export async function init(core) {
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
+
+  core.llm.registerRootLlmSlot("boundary");
+
   setServices({
     models: core.models,
     contributions: core.contributions,
-    llm: { ...core.llm, runChat: (opts) => core.llm.runChat({ ...opts, llmPriority: BG }) },
+    llm: { ...core.llm, runChat: async (opts) => {
+      if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+      return core.llm.runChat({ ...opts, llmPriority: BG });
+    } },
     energy: core.energy || null,
+    metadata: core.metadata,
   });
 
   // ── afterNote: mark boundary analysis as stale ──────────────────────
@@ -75,8 +82,9 @@ export async function init(core) {
   }, "boundary");
 
   // ── Jobs ────────────────────────────────────────────────────────────
-  const { setModels: setJobModels, startBoundaryJob, stopBoundaryJob } = await import("./boundaryJob.js");
+  const { setModels: setJobModels, setMetadata: setJobMetadata, startBoundaryJob, stopBoundaryJob } = await import("./boundaryJob.js");
   setJobModels(core.models);
+  setJobMetadata(core.metadata);
 
   // ── Routes ──────────────────────────────────────────────────────────
   const { default: router } = await import("./routes.js");

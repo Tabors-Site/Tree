@@ -32,7 +32,7 @@ const clientLastUsed = new Map();
 
 import { getLandConfigValue } from "../landConfig.js";
 
-const MAX_MCP_CLIENTS = 5000;
+function MAX_MCP_CLIENTS() { return Math.max(100, Math.min(Number(getLandConfigValue("maxMcpClients")) || 5000, 50000)); }
 const MCP_CLOSE_TIMEOUT_MS = 5000; // safety ceiling, not configurable
 
 // Configurable via land config, read at use time
@@ -57,7 +57,7 @@ export async function connectToMCP(serverUrl, visitorId, jwtToken) {
   }
 
   // Cap: evict oldest client if at limit
-  if (mcpClients.size >= MAX_MCP_CLIENTS) {
+  if (mcpClients.size >= MAX_MCP_CLIENTS()) {
     let oldestId = null, oldestTime = Infinity;
     for (const [id, ts] of clientLastUsed) {
       if (ts < oldestTime) { oldestTime = ts; oldestId = id; }

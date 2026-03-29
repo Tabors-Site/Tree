@@ -4,6 +4,7 @@ import Note from "../models/note.js";
 import { hooks } from "../hooks.js";
 import { NODE_STATUS, DELETED, CONTENT_TYPE, SYSTEM_OWNER } from "../protocol.js";
 import { getAncestorChain } from "./ancestorCache.js";
+import { getLandConfigValue } from "../landConfig.js";
 
 
 export async function buildPathString(nodeId) {
@@ -147,13 +148,20 @@ export async function getActiveLeafExecutionFrontier(rootId) {
   }
 
   const leaves = [];
+  const maxLeaves = 50; // cap to prevent unbounded traversal on large trees
+  const maxDepth = 30;  // safety depth limit
+  let nodesVisited = 0;
+  const maxNodes = Number(getLandConfigValue("subtreeNodeCap")) || 10000;
 
-  // ---- TRUE DFS (post-order) ----
+  // ---- DFS (post-order) with caps ----
   async function traverse(node, depth, path) {
+    if (leaves.length >= maxLeaves || nodesVisited >= maxNodes) return false;
+    if (depth > maxDepth) return false;
     if ((node.status || NODE_STATUS.ACTIVE) !== NODE_STATUS.ACTIVE) {
       return false;
     }
 
+    nodesVisited++;
     let foundDeeperActive = false;
 
     const childrenIds = Array.isArray(node.children) ? node.children : [];
@@ -171,6 +179,7 @@ export async function getActiveLeafExecutionFrontier(rootId) {
         .filter(Boolean);
 
       for (const child of orderedChildren) {
+        if (leaves.length >= maxLeaves) break;
         const childHasActive = await traverse(child, depth + 1, [
           ...path,
           child.name,
@@ -181,7 +190,7 @@ export async function getActiveLeafExecutionFrontier(rootId) {
       }
     }
 
-    if (!foundDeeperActive) {
+    if (!foundDeeperActive && leaves.length < maxLeaves) {
       leaves.push({
         nodeId: node._id.toString(),
         name: node.name,
@@ -333,7 +342,7 @@ export async function getNavigationContext(nodeId, { search } = {}) {
       name: { $regex: regex },
     })
       .select("_id name parent")
-      .limit(10)
+      .limit(Number(getLandConfigValue("treeSearchResultLimit")) || 10)
       .lean()
       .exec();
 
@@ -564,12 +573,12 @@ export async function getContextForAi(nodeId, options = {}) {
         contentType: CONTENT_TYPE.TEXT,
       })
         .sort({ _id: -1 })
-        .limit(3)
+        .limit(Number(getLandConfigValue("treeSummaryRecentNotes")) || 3)
         .populate("userId", "username -_id")
         .lean()
         .exec();
 
-      const MAX_PREVIEW = 200;
+      const MAX_PREVIEW = Number(getLandConfigValue("treeSummaryPreviewChars")) || 200;
       context.notes = recentNotes.map((n) => {
         const content = n.content || "";
         return {

@@ -37,6 +37,10 @@ import {
   glassHeaderStyles,
   glassCardStyles,
   emptyStateStyles,
+  glassCardPanelStyles,
+  glassFormStyles,
+  statGridStyles,
+  statusBarStyles,
   responsiveBase,
 } from "./baseStyles.js";
 
@@ -46,6 +50,10 @@ const shared = [
   glassHeaderStyles,
   glassCardStyles,
   emptyStateStyles,
+  glassCardPanelStyles,
+  glassFormStyles,
+  statGridStyles,
+  statusBarStyles,
   responsiveBase,
 ].join("\n");
 

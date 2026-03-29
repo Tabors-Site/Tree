@@ -11,8 +11,10 @@ import Node from "../../seed/models/node.js";
 import Note from "../../seed/models/note.js";
 import { CONTENT_TYPE } from "../../seed/protocol.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
+
+let _metadata = null;
+export function configure({ metadata }) { _metadata = metadata; }
 
 let LLM_PRIORITY;
 try {
@@ -312,7 +314,7 @@ Return ONLY JSON:
     try {
       const rootNode = await Node.findById(rootId);
       if (rootNode) {
-        const meta = getExtMeta(rootNode, "trace") || {};
+        const meta = _metadata.getExtMeta(rootNode, "trace") || {};
         const history = meta.history || [];
         history.unshift({
           query,
@@ -323,8 +325,7 @@ Return ONLY JSON:
         });
         meta.history = history.slice(0, 10);
         meta.lastTrace = traceResult;
-        await setExtMeta(rootNode, "trace", meta);
-        await rootNode.save();
+        await _metadata.setExtMeta(rootNode, "trace", meta);
       }
     } catch (err) {
       log.debug("Trace", `Failed to write trace metadata: ${err.message}`);

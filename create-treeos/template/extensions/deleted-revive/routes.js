@@ -1,9 +1,9 @@
 import log from "../../seed/log.js";
 import express from "express";
-import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { getExtension } from "../loader.js";
-function html() { return getExtension("html-rendering")?.exports || {}; }
+import { renderDeletedBranches } from "./pages/deleted.js";
 import {
   getDeletedBranchesForUser,
 } from "../../seed/tree/treeFetch.js";
@@ -14,9 +14,12 @@ import {
 import User from "../../seed/models/user.js";
 
 export default function createRouter(core) {
+  const htmlExt = getExtension("html-rendering");
+  const htmlAuth = htmlExt?.exports?.urlAuth || authenticate;
+
   const router = express.Router();
 
-  router.get("/user/:userId/deleted", authenticateOptional, async (req, res) => {
+  router.get("/user/:userId/deleted", htmlAuth, async (req, res) => {
     try {
       const { userId } = req.params;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -29,7 +32,7 @@ export default function createRouter(core) {
       const user = await User.findById(userId).lean();
       const token = req.query.token ?? "";
 
-      const renderDeletedBranches = html().renderDeletedBranches;
+      // renderDeletedBranches imported directly from pages/deleted.js
       if (!renderDeletedBranches) {
         return sendOk(res, { userId, deleted });
       }

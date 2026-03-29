@@ -2,6 +2,8 @@
 /* HTML renderer for transactions pages              */
 /* ─────────────────────────────────────────────── */
 
+import { page } from "../html-rendering/html/layout.js";
+
 function normalizeValues(values) {
   if (!values) return {};
   if (values instanceof Map) {
@@ -177,35 +179,7 @@ ${sortedTransactions
   <div class="empty-state-subtext">Transactions will appear here</div>
 </div>`;
 
-  return `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#667eea">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Transactions - ${nodeName}</title>
-    <style>
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
-        padding: 20px;
-        color: #1a1a1a;
-      }
-
-      .container {
-        max-width: 900px;
-        margin: 0 auto;
-      }
-
+  const css = `
       /* Header */
       .header {
         background: rgba(255, 255, 255, 0.95);
@@ -214,6 +188,13 @@ ${sortedTransactions
         padding: 28px;
         margin-bottom: 24px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        color: #1a1a1a;
+        animation: none;
+        border: none;
+      }
+
+      .header::before {
+        display: none;
       }
 
       .header h1 {
@@ -221,6 +202,7 @@ ${sortedTransactions
         font-weight: 700;
         color: #1a1a1a;
         margin-bottom: 8px;
+        text-shadow: none;
       }
 
       .header h1::before {
@@ -232,11 +214,13 @@ ${sortedTransactions
         color: #667eea;
         text-decoration: none;
         transition: color 0.2s;
+        border-bottom: none;
       }
 
       .header h1 a:hover {
         color: #764ba2;
         text-decoration: underline;
+        text-shadow: none;
       }
 
       .header-subtitle {
@@ -615,7 +599,7 @@ ${sortedTransactions
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
       }
 
-      /* Empty State */
+      /* Empty State Override */
       .empty-state {
         background: rgba(255, 255, 255, 0.95);
         backdrop-filter: blur(10px);
@@ -624,17 +608,20 @@ ${sortedTransactions
         text-align: center;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         margin-bottom: 32px;
+        color: #1a1a1a;
+        border: none;
+        animation: none;
       }
 
-      .empty-state-icon {
-        font-size: 64px;
-        margin-bottom: 16px;
+      .empty-state::before {
+        display: none;
       }
 
       .empty-state-text {
         font-size: 18px;
         color: #666;
         margin-bottom: 8px;
+        text-shadow: none;
       }
 
       .empty-state-subtext {
@@ -653,19 +640,31 @@ ${sortedTransactions
         font-weight: 600;
       }
 
+      /* Back Link Override */
+      .back-link {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        color: #667eea;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        border: none;
+      }
+
+      .back-link::before {
+        display: none;
+      }
+
+      .back-link:hover {
+        background: white;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+      }
+
       /* Responsive */
       @media (max-width: 640px) {
-        body {
-          padding: 16px;
-        }
-
         .header,
         .create-form-container {
           padding: 20px;
-        }
-
-        .header h1 {
-          font-size: 24px;
         }
 
         .transaction-card {
@@ -699,49 +698,10 @@ ${sortedTransactions
           width: 100%;
           justify-content: center;
         }
-
-        .empty-state {
-          padding: 40px 24px;
-        }
       }
+`;
 
-      @media (min-width: 641px) and (max-width: 1024px) {
-        .container {
-          max-width: 700px;
-        }
-      }
-         /* Back Navigation */
-    .back-nav {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 16px;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      color: #667eea;
-      text-decoration: none;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-
-    .back-link:hover {
-      background: white;
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
-    </style>
-  </head>
-  <body>
+  const body = `
     <div class="container">
       <!-- Header -->
       <div class="back-nav">
@@ -819,8 +779,9 @@ ${sortedTransactions
 
 
     </div>
+`;
 
-    <script>
+  const js = `
       const kind = document.getElementById("sideBKind");
       const node = document.getElementById("nodeFields");
       const out = document.getElementById("outsideFields");
@@ -845,10 +806,9 @@ ${sortedTransactions
           return;
         }
       });
-    </script>
-  </body>
-  </html>
-  `;
+`;
+
+  return page({ title: `Transactions - ${nodeName}`, css, body, js });
 }
 
 /**
@@ -1006,63 +966,28 @@ export function renderTransactionDetail({
     return events || '<div class="empty-timeline">No events yet</div>';
   };
 
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#667eea">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Transaction ${transactionId.substring(0, 8)}</title>
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-      color: #1a1a1a;
-    }
-.approver-item.denied {
-  border-left: 3px solid #ef4444;
-  background: rgba(239, 68, 68, 0.05);
-}
-
-
-
+  const css = `
     .container {
       max-width: 1000px;
-      margin: 0 auto;
     }
 
-    /* Back Navigation */
-    .back-nav {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
+    .approver-item.denied {
+      border-left: 3px solid #ef4444;
+      background: rgba(239, 68, 68, 0.05);
     }
 
+    /* Back Link Override */
     .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 16px;
       background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(10px);
       color: #667eea;
-      text-decoration: none;
       border-radius: 10px;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.2s;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      border: none;
+    }
+
+    .back-link::before {
+      display: none;
     }
 
     .back-link:hover {
@@ -1081,6 +1006,9 @@ export function renderTransactionDetail({
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
       position: relative;
       overflow: hidden;
+      color: #1a1a1a;
+      animation: none;
+      border: none;
     }
 
     .header::before {
@@ -1091,6 +1019,9 @@ export function renderTransactionDetail({
       width: 100%;
       height: 4px;
       background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      inset: unset;
+      border-radius: 0;
+      opacity: 1;
     }
 
     .header-top {
@@ -1106,9 +1037,8 @@ export function renderTransactionDetail({
       font-size: 28px;
       font-weight: 700;
       color: #1a1a1a;
+      text-shadow: none;
     }
-
-
 
     .status-badge {
       padding: 8px 16px;
@@ -1499,10 +1429,6 @@ export function renderTransactionDetail({
 
     /* Responsive */
     @media (max-width: 768px) {
-      body {
-        padding: 16px;
-      }
-
       .header,
       .section {
         padding: 20px;
@@ -1519,14 +1445,6 @@ export function renderTransactionDetail({
 
       .trade-arrow {
         transform: rotate(90deg);
-      }
-
-      .back-nav {
-        flex-direction: column;
-      }
-
-      .back-link {
-        justify-content: center;
       }
 
       .approval-group-header {
@@ -1546,9 +1464,9 @@ export function renderTransactionDetail({
         max-width: 800px;
       }
     }
-  </style>
-</head>
-<body>
+`;
+
+  const body = `
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
@@ -1621,7 +1539,7 @@ export function renderTransactionDetail({
       </div>
     </div>
   </div>
-</body>
-</html>
 `;
+
+  return page({ title: `Transaction ${transactionId.substring(0, 8)}`, css, body });
 }

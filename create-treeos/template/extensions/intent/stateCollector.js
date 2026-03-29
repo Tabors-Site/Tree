@@ -5,8 +5,10 @@
 // If not, that section is empty. Intent generates from whatever is available.
 
 import log from "../../seed/log.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getExtension } from "../loader.js";
+
+let _metadata = null;
+export function setMetadata(metadata) { _metadata = metadata; }
 
 /**
  * Collect the full observable state of a tree for intent generation.
@@ -95,7 +97,7 @@ export async function collectTreeState(rootId, rootNode, models) {
 
   // Cascade flow: stuck nodes, flow rates
   try {
-    const flowMeta = getExtMeta(rootNode, "flow");
+    const flowMeta = _metadata.getExtMeta(rootNode, "flow");
     if (flowMeta && Object.keys(flowMeta).length > 0) {
       state.cascade = flowMeta;
     }
@@ -105,7 +107,7 @@ export async function collectTreeState(rootId, rootNode, models) {
 
   // Circuit breaker: approaching thresholds
   try {
-    const circuitMeta = getExtMeta(rootNode, "circuit");
+    const circuitMeta = _metadata.getExtMeta(rootNode, "circuit");
     if (circuitMeta) {
       state.circuit = circuitMeta;
     }
@@ -115,7 +117,7 @@ export async function collectTreeState(rootId, rootNode, models) {
 
   // Load rejections (intents the user said "don't do that again")
   try {
-    const intentMeta = getExtMeta(rootNode, "intent");
+    const intentMeta = _metadata.getExtMeta(rootNode, "intent");
     if (intentMeta?.rejections) {
       state.rejections = intentMeta.rejections;
     }

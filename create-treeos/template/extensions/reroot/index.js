@@ -2,11 +2,19 @@ import log from "../../seed/log.js";
 import { setServices } from "./core.js";
 
 export async function init(core) {
+  const BG = core.llm.LLM_PRIORITY.BACKGROUND;
+
+  core.llm.registerRootLlmSlot("reroot");
+
   setServices({
     models: core.models,
     contributions: core.contributions,
-    llm: core.llm,
+    llm: { ...core.llm, runChat: async (opts) => {
+      if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+      return core.llm.runChat({ ...opts, llmPriority: BG });
+    } },
     energy: core.energy || null,
+    metadata: core.metadata,
   });
 
   const { default: router } = await import("./routes.js");

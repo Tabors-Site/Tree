@@ -11,11 +11,18 @@ import {
 
 export async function init(core) {
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
+
+  core.llm.registerRootLlmSlot("teach");
+
   setServices({
     models: core.models,
     contributions: core.contributions,
-    llm: { ...core.llm, runChat: (opts) => core.llm.runChat({ ...opts, llmPriority: BG }) },
+    llm: { ...core.llm, runChat: async (opts) => {
+      if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+      return core.llm.runChat({ ...opts, llmPriority: BG });
+    } },
     energy: core.energy || null,
+    metadata: core.metadata,
   });
 
   // ── enrichContext: surface active lessons to the AI ──────────────────

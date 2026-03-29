@@ -5,9 +5,9 @@ import log from "../../seed/log.js";
 import { DELETED } from "../../seed/protocol.js";
 import { OrchestratorRuntime, parseJsonSafe } from "../../seed/orchestrators/runtime.js";
 import { SESSION_TYPES, updateSessionMeta } from "../../seed/ws/sessionRegistry.js";
-import { setRootId, getClientForUser, LLM_PRIORITY } from "../../seed/ws/conversation.js";
+import { setRootId, getClientForUser, LLM_PRIORITY } from "../../seed/llm/conversation.js";
 
-import { getOrchestrator } from "../../seed/orchestratorRegistry.js";
+import { getOrchestrator } from "../../seed/orchestrators/registry.js";
 import {
   buildDeepTreeSummary,
 } from "../../seed/tree/treeFetch.js";

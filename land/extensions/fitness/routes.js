@@ -52,7 +52,7 @@ router.post("/root/:rootId/fitness", authenticate, async (req, res) => {
 
     const user = await UserModel.findById(userId).select("username").lean();
     const username = user?.username || "user";
-    const { runChat } = await import("../../seed/ws/conversation.js");
+    const { runChat } = await import("../../seed/llm/conversation.js");
 
     // ── PATH 1: First use. Ask preferences, then scaffold. ──
     const initialized = await isInitialized(rootId);

@@ -23,7 +23,7 @@ import {
 import { getExtension } from "../loader.js";
 
 export async function init(core) {
-  const { runChat } = await import("../../seed/ws/conversation.js");
+  const { runChat } = await import("../../seed/llm/conversation.js");
 
   configure({
     Node: core.models.Node,

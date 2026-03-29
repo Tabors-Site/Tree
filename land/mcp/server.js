@@ -14,7 +14,7 @@ import crypto from "crypto";
 import log from "../seed/log.js";
 import { resolveTreeAccess } from "../seed/tree/treeAccess.js";
 import { getToolOwner, isExtensionBlockedAtNode } from "../seed/tree/extensionScope.js";
-import { getChatContext } from "../seed/ws/chatTracker.js";
+import { getChatContext } from "../seed/llm/chatTracker.js";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";

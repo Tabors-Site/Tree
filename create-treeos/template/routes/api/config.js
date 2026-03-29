@@ -17,7 +17,7 @@ import {
   getExtensionManifest,
   getExtension,
 } from "../../extensions/loader.js";
-import { listOrchestrators } from "../../seed/orchestratorRegistry.js";
+import { listOrchestrators } from "../../seed/orchestrators/registry.js";
 
 const router = express.Router();
 
@@ -341,6 +341,7 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
         readme: req.body.readme || "",
         repoUrl: req.body.repoUrl || null,
         maintainers: req.body.maintainers || [],
+        releaseNotes: req.body.releaseNotes || "",
       }),
     });
 
@@ -357,6 +358,103 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
     });
   } catch (err) {
     log.error("API", "Extension publish error:", err);
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * POST /api/v1/land/extensions/:name/comment
+ * Proxy a comment to Horizon. Signs a CanopyToken so the user's land
+ * identity is verified. The land is the proxy. The browser never talks
+ * to Horizon directly for writes.
+ */
+router.post("/land/extensions/:name/comment", authenticate, async (req, res) => {
+  try {
+    const { name } = req.params;
+    const { text, version } = req.body;
+
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "Comment text is required");
+    }
+    if (text.length > 2000) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "Comment must be 2000 characters or fewer");
+    }
+
+    const horizonUrl = getLandConfigValue("HORIZON_URL");
+    if (!horizonUrl) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "No HORIZON_URL configured");
+    }
+
+    const { signCanopyToken } = await import("../../canopy/identity.js");
+    const token = await signCanopyToken("extension-comment", "horizon");
+
+    const user = await User.findById(req.userId).select("username").lean();
+
+    const dirRes = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}/comments`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `CanopyToken ${token}`,
+      },
+      body: JSON.stringify({
+        text: text.trim(),
+        version: version || null,
+        username: user?.username || "",
+      }),
+    });
+
+    const dirData = await dirRes.json();
+    if (!dirRes.ok) {
+      return sendError(res, dirRes.status, ERR.INTERNAL, dirData.error || "Comment failed");
+    }
+
+    sendOk(res, { commented: true, name });
+  } catch (err) {
+    log.error("API", "Extension comment error:", err);
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * POST /api/v1/land/extensions/:name/react
+ * Proxy a star/flag reaction to Horizon.
+ */
+router.post("/land/extensions/:name/react", authenticate, async (req, res) => {
+  try {
+    const { name } = req.params;
+    const { type } = req.body;
+
+    if (!["star", "flag"].includes(type)) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "type must be 'star' or 'flag'");
+    }
+
+    const horizonUrl = getLandConfigValue("HORIZON_URL");
+    if (!horizonUrl) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "No HORIZON_URL configured");
+    }
+
+    const { signCanopyToken } = await import("../../canopy/identity.js");
+    const token = await signCanopyToken("extension-react", "horizon");
+
+    const user = await User.findById(req.userId).select("username").lean();
+
+    const dirRes = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}/react`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `CanopyToken ${token}`,
+      },
+      body: JSON.stringify({ type, username: user?.username || "" }),
+    });
+
+    const dirData = await dirRes.json();
+    if (!dirRes.ok) {
+      return sendError(res, dirRes.status, ERR.INTERNAL, dirData.error || "Reaction failed");
+    }
+
+    sendOk(res, dirData);
+  } catch (err) {
+    log.error("API", "Extension react error:", err);
     sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
@@ -424,7 +522,7 @@ router.get("/land/root", authenticateOptional, async (req, res) => {
  * GET /api/v1/land/orchestrators
  * Shows which extension owns each conversation zone.
  */
-router.get("/land/orchestrators", (req, res) => {
+router.get("/land/orchestrators", authenticate, (req, res) => {
   const active = listOrchestrators();
   sendOk(res, {
     tree: active.tree || null,
@@ -437,7 +535,7 @@ router.get("/land/orchestrators", (req, res) => {
  * GET /api/v1/land/tools
  * Lists all MCP tools available in tree mode, with source info.
  */
-router.get("/land/tools", async (req, res) => {
+router.get("/land/tools", authenticate, async (req, res) => {
   try {
     const { getAllToolNamesForBigMode, getSubModes } = await import("../../seed/ws/modes/registry.js");
     const allTools = getAllToolNamesForBigMode("tree");
@@ -469,7 +567,7 @@ router.get("/land/tools", async (req, res) => {
  * GET /api/v1/land/modes
  * Lists all registered AI modes with their tools and metadata.
  */
-router.get("/land/modes", async (req, res) => {
+router.get("/land/modes", authenticate, async (req, res) => {
   try {
     const { getSubModes } = await import("../../seed/ws/modes/registry.js");
     const bigModes = ["tree", "home", "land"];

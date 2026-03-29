@@ -10,6 +10,13 @@ import {
   getChannelWithSecrets,
 } from "./core.js";
 import { dispatchTestNotification } from "./dispatch.js";
+import { getExtension } from "../loader.js";
+
+let htmlAuth = authenticate;
+export function resolveHtmlAuth() {
+  const htmlExt = getExtension("html-rendering");
+  if (htmlExt?.exports?.urlAuth) htmlAuth = htmlExt.exports.urlAuth;
+}
 
 const router = express.Router();
 
@@ -18,19 +25,16 @@ const router = express.Router();
 // ─────────────────────────────────────────────────────────────────────────
 
 // List channels for a tree
-router.get("/root/:rootId/gateway", authenticate, async (req, res) => {
+router.get("/root/:rootId/gateway", htmlAuth, async (req, res) => {
   try {
     const channels = await getChannelsForRoot(req.params.rootId);
     if ("html" in req.query) {
       try {
-        const { getExtension } = await import("../loader.js");
-        const renderGateway = getExtension("html-rendering")?.exports?.renderGateway;
-        if (renderGateway) {
-          const Node = (await import("../../seed/models/node.js")).default;
-          const root = await Node.findById(req.params.rootId).select("name").lean();
-          return res.send(renderGateway({ rootId: req.params.rootId, rootName: root?.name || "", queryString: `?token=${req.query.token || ""}&html`, channels }));
-        }
-      } catch (err) { log.debug("Gateway", "HTML rendering fallback failed:", err.message); }
+        const { renderGateway } = await import("./pages/gateway.js");
+        const Node = (await import("../../seed/models/node.js")).default;
+        const root = await Node.findById(req.params.rootId).select("name").lean();
+        return res.send(renderGateway({ rootId: req.params.rootId, rootName: root?.name || "", queryString: `?token=${req.query.token || ""}&html`, channels }));
+      } catch (err) { log.debug("Gateway", "HTML rendering failed:", err.message); }
     }
     sendOk(res, { channels });
   } catch (err) {

@@ -1,5 +1,5 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
-import log from "./log.js";
+import log from "../log.js";
 
 /**
  * Orchestrator Registry
@@ -24,7 +24,7 @@ const owners = new Map();
 // Extensions must be pre-approved by the loader (manifest declares provides.orchestrator)
 const _allowedExtensions = new Set();
 
-import { getLandConfigValue } from "./landConfig.js";
+import { getLandConfigValue } from "../landConfig.js";
 
 const VALID_BIG_MODES = new Set(["land", "home", "tree"]);
 function maxOrchestrators() { return Number(getLandConfigValue("maxOrchestrators")) || 10; }

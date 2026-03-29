@@ -7,7 +7,7 @@
  */
 
 import log from "../../seed/log.js";
-import { setNodeMode } from "../../seed/ws/modes/registry.js";
+import { setNodeMode } from "../../seed/modes/registry.js";
 
 let _metadata = null;
 

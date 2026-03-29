@@ -15,11 +15,17 @@ export async function init(core) {
   //   if (Object.keys(data).length > 0) context.myExtension = data;
   // }, "my-extension");
 
-  // Store per-node data in metadata (not on the Node schema):
-  // import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
-  // const data = getExtMeta(node, "my-extension");
-  // setExtMeta(node, "my-extension", { key: "value" });
-  // await node.save();
+  // Store per-node data in metadata (use core.metadata, never import directly):
+  // const data = core.metadata.getExtMeta(node, "my-extension");
+  // await core.metadata.setExtMeta(node, "my-extension", { key: "value" });
+  // await core.metadata.incExtMeta(nodeId, "my-extension", "counter", 1);
+  // await core.metadata.pushExtMeta(nodeId, "my-extension", "history", item, 50);
+  // await core.metadata.batchSetExtMeta(nodeId, "my-extension", { a: 1, b: 2 });
+  // await core.metadata.unsetExtMeta(nodeId, "my-extension");
+  //
+  // User metadata (same pattern):
+  // const prefs = core.userMetadata.getUserMeta(user, "my-extension");
+  // await core.userMetadata.incUserMeta(userId, "my-extension", "visits", 1);
 
   // Register custom AI modes (see manifest.js for declaration)
   // core.modes.registerMode("tree:my-mode", {

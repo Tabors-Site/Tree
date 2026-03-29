@@ -7,6 +7,11 @@ import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
 
 const MAX_API_KEYS_PER_USER = 10;
 
+function getKeys(user) {
+  const raw = getUserMeta(user, "apiKeys");
+  return Array.isArray(raw) ? raw : [];
+}
+
 function containsHtml(str) {
   return /<[a-zA-Z\/][^>]*>/.test(str);
 }
@@ -42,7 +47,8 @@ export const createApiKey = async (req, res) => {
       return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     }
 
-    let keys = getUserMeta(user, "apiKeys") || [];
+    let keys = getUserMeta(user, "apiKeys");
+    if (!Array.isArray(keys)) keys = [];
 
     if (revokeOld) {
       keys = keys.map((k) => ({ ...k, revoked: true }));
@@ -75,7 +81,7 @@ export const listApiKeys = async (req, res) => {
     }
 
     return sendOk(res,
-      (getUserMeta(user, "apiKeys") || []).map((k) => ({
+      getKeys(user).map((k) => ({
         id: k._id,
         name: k.name,
         createdAt: k.createdAt,
@@ -99,7 +105,7 @@ export const deleteApiKey = async (req, res) => {
 
     const user = await User.findById(req.userId);
     if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
-    const keys = getUserMeta(user, "apiKeys") || [];
+    const keys = getKeys(user);
     const key = keys.find((k) => k._id === keyId);
     if (!key) return sendError(res, 404, ERR.NODE_NOT_FOUND, "API key not found");
     key.revoked = true;
@@ -146,12 +152,13 @@ export async function apiKeyAuthStrategy(req) {
 
   const prefix = apiKey.slice(0, 8);
   const candidates = await User.find({
-    "metadata.apiKeys.keyPrefix": prefix,
-    "metadata.apiKeys.revoked": { $ne: true },
+    "metadata.apiKeys": {
+      $elemMatch: { keyPrefix: prefix, revoked: { $ne: true } },
+    },
   });
 
   for (const user of candidates) {
-    const keys = getUserMeta(user, "apiKeys") || [];
+    const keys = getKeys(user);
     for (const key of keys) {
       if (key.revoked) continue;
       if (key.keyPrefix && key.keyPrefix !== prefix) continue;

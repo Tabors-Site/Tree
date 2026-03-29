@@ -1,15 +1,20 @@
 import log from "../../seed/log.js";
 import tools from "./tools.js";
 import {
-  setRunChat, recordSignal, detectAndStorePatterns, generateProposals,
+  configure, setRunChat, recordSignal, detectAndStorePatterns, generateProposals,
   getPatterns, getProposals,
 } from "./core.js";
 
 let _jobTimer = null;
 
 export async function init(core) {
+  configure({ metadata: core.metadata });
+  core.llm.registerRootLlmSlot("evolve");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
-  setRunChat((opts) => core.llm.runChat({ ...opts, llmPriority: BG }));
+  setRunChat(async (opts) => {
+    if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+    return core.llm.runChat({ ...opts, llmPriority: BG });
+  });
 
   // afterNote: record note content patterns
   core.hooks.register("afterNote", async ({ note, nodeId, userId, contentType, action }) => {

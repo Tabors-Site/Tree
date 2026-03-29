@@ -5,8 +5,6 @@ import log from "../log.js";
 import { hooks } from "../hooks.js";
 
 import OpenAI from "openai";
-import path from "path";
-import { fileURLToPath } from "url";
 import crypto from "crypto";
 import User from "../models/user.js";
 import Node from "../models/node.js";
@@ -19,15 +17,13 @@ import {
   getToolsForMode,
   buildPromptForMode,
   CARRY_MESSAGES,
-} from "./modes/registry.js";
-import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcp.js";
+} from "../modes/registry.js";
+import { mcpClients, connectToMCP, MCP_SERVER_URL } from "../ws/mcp.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { SYSTEM_OWNER } from "../protocol.js";
 
-import { resolveAndValidateHost, getEncryptionKey } from "../llm/connections.js";
+import { resolveAndValidateHost, getEncryptionKey } from "./connections.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1772,100 +1768,4 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   };
 }
 
-/**
- * High-level multi-step pipeline for extensions.
- * Handles: lock, session, MCP, Chat chain, step execution, cleanup.
- *
- * Usage:
- *   const result = await runPipeline({
- *     userId, username, rootId,
- *     description: "Dream cycle for MyTree",
- *     sessionType: "dream-orchestrate",
- *     modeKeyForLlm: "tree:respond",
- *     lockNamespace: "dream",        // optional, prevents concurrent runs
- *     steps: async (pipeline) => {
- *       const { parsed } = await pipeline.step("tree:cleanup-analyze", {
- *         prompt: "Analyze this tree for cleanup opportunities",
- *       });
- *       await pipeline.step("tree:structure", {
- *         prompt: `Execute: ${JSON.stringify(parsed)}`,
- *       });
- *       return { summary: "Cleaned 3 branches" };
- *     },
- *   });
- */
-export async function runPipeline({
-  userId, username, rootId, description,
-  sessionType = "orchestration",
-  modeKeyForLlm = "tree:respond",
-  source = "orchestrator",
-  lockNamespace = null,
-  lockKey = null,
-  steps,
-}) {
-  if (!userId || !steps) throw new Error("runPipeline requires userId and steps function");
-
-  const { OrchestratorRuntime } = await import("../orchestrators/runtime.js");
-  const { parseJsonSafe } = await import("../orchestrators/helpers.js");
-
-  const visitorId = `pipeline-${lockNamespace || "run"}-${rootId || userId}-${Date.now()}`;
-
-  const rt = new OrchestratorRuntime({
-    rootId,
-    userId,
-    username: username || "system",
-    visitorId,
-    sessionType,
-    description: description || "Pipeline run",
-    modeKeyForLlm,
-    source,
-    lockNamespace,
-    lockKey: lockKey || rootId,
-  });
-
-  const initialized = await rt.init(description);
-  if (!initialized) {
-    return { success: false, reason: "Could not acquire lock", locked: true };
-  }
-
-  // Build a clean step interface for the caller
-  const pipeline = {
-    /** Run a single LLM step in a mode. Returns { parsed, raw }. */
-    async step(modeKey, { prompt, modeCtx, input, treeContext } = {}) {
-      if (rt.aborted) throw new Error("Pipeline aborted");
-      return rt.runStep(modeKey, { prompt, modeCtx, input, treeContext });
-    },
-
-    /** Check if pipeline was aborted. */
-    get aborted() { return rt.aborted; },
-
-    /** The abort signal (pass to fetch, child processes, etc.) */
-    get signal() { return rt.signal; },
-
-    /** The session ID for this pipeline run. */
-    get sessionId() { return rt.sessionId; },
-
-    /** The root chat ID for chain tracking. */
-    get chatId() { return rt.mainChatId; },
-
-    /** The current chain index. */
-    get chainIndex() { return rt.chainIndex; },
-
-    /** The resolved LLM provider info. */
-    get llmProvider() { return rt.llmProvider; },
-  };
-
-  try {
-    const result = await steps(pipeline);
-    rt.setResult(
-      typeof result === "string" ? result : JSON.stringify(result),
-      `${lockNamespace || "pipeline"}:complete`
-    );
-    return { success: true, ...result };
-  } catch (err) {
-    rt.setError(err.message, `${lockNamespace || "pipeline"}:error`);
-    return { success: false, error: err.message };
-  } finally {
-    await rt.cleanup();
-  }
-}
+// runPipeline moved to seed/orchestrators/pipeline.js

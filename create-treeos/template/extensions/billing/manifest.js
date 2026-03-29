@@ -29,6 +29,8 @@ export default {
     "the user ever sees a payment form. The webhook handler is lazy-loaded on first " +
     "request to avoid blocking boot with Stripe SDK initialization.",
 
+  npm: ["stripe@^20.3.1"],
+
   needs: {
     models: ["User"],
   },

@@ -1,7 +1,9 @@
 import { z } from "zod";
 import Node from "../../seed/models/node.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getReviewConfig, getReviewHistory } from "./core.js";
+
+let _metadata = null;
+export function setMetadata(metadata) { _metadata = metadata; }
 
 export default [
   {
@@ -40,7 +42,7 @@ export default [
       if (autoApply !== undefined) config.autoApply = autoApply;
       if (reviewPrompt !== undefined) config.reviewPrompt = reviewPrompt;
 
-      await setExtMeta(node, "peer-review", config);
+      await _metadata.setExtMeta(node, "peer-review", config);
 
       return {
         content: [{
@@ -128,7 +130,7 @@ export default [
       const node = await Node.findById(nodeId);
       if (!node) return { content: [{ type: "text", text: "Node not found." }] };
 
-      await setExtMeta(node, "peer-review", null);
+      await _metadata.setExtMeta(node, "peer-review", null);
       return { content: [{ type: "text", text: "Review configuration removed." }] };
     },
   },
@@ -148,7 +150,7 @@ export default [
       const config = getReviewConfig(node);
       if (!config.partner) return { content: [{ type: "text", text: "No review partner configured." }] };
 
-      await setExtMeta(node, "peer-review", { ...config, status: "paused" });
+      await _metadata.setExtMeta(node, "peer-review", { ...config, status: "paused" });
       return { content: [{ type: "text", text: "Reviews paused. Notes will not trigger review until resumed." }] };
     },
   },
@@ -168,7 +170,7 @@ export default [
       const config = getReviewConfig(node);
       if (!config.partner) return { content: [{ type: "text", text: "No review partner configured." }] };
 
-      await setExtMeta(node, "peer-review", { ...config, status: "idle" });
+      await _metadata.setExtMeta(node, "peer-review", { ...config, status: "idle" });
       return { content: [{ type: "text", text: "Reviews resumed. Next note write will trigger review." }] };
     },
   },

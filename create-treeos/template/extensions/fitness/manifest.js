@@ -1,59 +1,59 @@
 export default {
   name: "fitness",
-  version: "1.0.0",
+  version: "2.0.0",
   builtFor: "TreeOS",
   description:
-    "A tree is a natural structure for a training program. A push/pull/legs split is three " +
-    "branches. Each branch holds workout days. Each day holds exercises. Each exercise is a " +
-    "leaf node with numeric values: weight, reps per set, duration, distance, RPE. The fitness " +
-    "extension turns this structure into a living training log with an AI coach who reads the " +
-    "tree, builds programs, tracks progress, and spots plateaus." +
-    "\n\n" +
-    "Two AI modes power the interaction, selected automatically by intent detection on the " +
-    "incoming message. The fitness-coach mode is a knowledgeable training partner. It reads " +
-    "the current tree structure, asks about goals and constraints, and builds full workout " +
-    "programs as properly typed node branches: program nodes at the top, workout-day nodes " +
-    "in the middle, exercise leaf nodes at the bottom. It understands progressive overload, " +
-    "periodization, and recovery. It references specific numbers from prior sessions and " +
-    "recommends weight increases, deloads, or exercise swaps based on the data. The " +
-    "fitness-log mode is a fast data recorder. When the user reports workout results in " +
-    "natural language (\"bench 135x10, 10, 8\" or \"squat 225 5x5\"), the log mode parses " +
-    "the input into structured values on the correct exercise node, archives the session " +
-    "via prestige (which snapshots values and resets for next time), and reports what comes " +
-    "next. Prestige history becomes the workout log: each version is one completed session." +
-    "\n\n" +
-    "The enrichContext hook injects fitness-relevant data into the AI context when the user " +
-    "is positioned on exercise, workout-day, program, or muscle-group nodes. Recent prestige " +
-    "history surfaces as prior session data so the AI can compare across sessions without " +
-    "extra lookups. Both modes support independent LLM slot assignments, so a land operator " +
-    "can route coaching to a reasoning model and logging to a fast model. The extension " +
-    "integrates optionally with values (numeric tracking), prestige (session archival), and " +
-    "schedules (training day planning). Spatial scoping is respected: fitness can be blocked " +
-    "on branches where it is not relevant.",
+    "The tree is the workout. Muscle groups are nodes. Exercises are children. " +
+    "Values track sets, reps, and weight. Channels connect exercise nodes to the " +
+    "log receiver. One LLM call parses natural language workout input into structured " +
+    "data. Cascade routes each exercise to its node. No additional LLM calls. " +
+    "Progressive overload tracked through value goals. When all sets hit their rep " +
+    "target, the AI suggests increasing weight. History builds reliability patterns. " +
+    "Guided workout mode walks you through today's session set by set.",
+
+  classifierHints: [
+    /\b\d+\s*x\s*\d+/i,
+    /\b(bench|squat|deadlift|press|curl|row|pull-?up|ohp|rdl|lat pulldown)\b/i,
+    /\b(workout|exercise|training|sets|reps|weight|pr|personal record)\b/i,
+    /\b(chest|back|legs|shoulders|core|calves|bicep|tricep)\b/i,
+    /\b(record|log|track|session|complete|finished)\b/i,
+  ],
 
   needs: {
     models: ["Node"],
+    services: ["hooks", "metadata"],
   },
 
   optional: {
     services: ["llm"],
-    extensions: ["values", "prestige", "schedules"],
+    extensions: [
+      "values",          // sets, reps, weight tracking
+      "channels",        // signal paths from log to exercise nodes
+      "breath",          // session timing
+      "schedules",       // workout schedule
+      "scheduler",       // missed workout detection
+      "food",            // nutrition integration via channels
+      "notifications",   // missed workout alerts
+      "phase",           // suppress during focus
+    ],
   },
 
   provides: {
+    models: {},
     routes: "./routes.js",
     tools: false,
-    jobs: false,
+    jobs: true,
 
     hooks: {
       fires: [],
-      listens: ["enrichContext"],
+      listens: ["enrichContext", "onCascade", "afterStatusChange"],
     },
 
     cli: [
       {
-        command: "fitness [message...]", scope: ["tree"],
-        description: "Talk to your fitness coach. Plans workouts, logs exercises, tracks progress.",
+        command: "fitness [message...]",
+        scope: ["tree"],
+        description: "Log a workout, start a guided session, or ask about progress.",
         method: "POST",
         endpoint: "/root/:rootId/fitness",
         body: ["message"],

@@ -1,9 +1,10 @@
 import log from "../../seed/log.js";
 import tools from "./tools.js";
 import traceMode from "./modes/trace.js";
-import { runTrace, getTraceMap } from "./core.js";
+import { configure, runTrace, getTraceMap } from "./core.js";
 
 export async function init(core) {
+  configure({ metadata: core.metadata });
   core.modes.registerMode("tree:trace", traceMode, "trace");
 
   // enrichContext: inject last trace summary if fresh

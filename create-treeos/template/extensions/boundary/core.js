@@ -13,7 +13,6 @@
 // - No embed, branch > 20 nodes: skipped, report notes the gap
 
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta, mergeExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 import { getExtension } from "../loader.js";
 
@@ -22,13 +21,15 @@ let Note = null;
 let logContribution = null;
 let runChat = null;
 let useEnergy = async () => ({ energyUsed: 0 });
+let _metadata = null;
 
-export function setServices({ models, contributions, llm, energy }) {
+export function setServices({ models, contributions, llm, energy, metadata }) {
   Node = models.Node;
   Note = models.Note;
   logContribution = contributions.logContribution;
   runChat = llm.runChat;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
+  if (metadata) _metadata = metadata;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -176,6 +177,7 @@ async function buildBranchProfiles(rootId, userId, username) {
         message: prompt,
         mode: "tree:respond",
         rootId,
+        slot: "boundary",
       });
 
       const parsed = parseJsonSafe(result?.answer);
@@ -337,6 +339,7 @@ async function buildSimilarityMatrix(profiles, userId, username, rootId) {
         message: prompt,
         mode: "tree:respond",
         rootId,
+        slot: "boundary",
       });
 
       const parsed = parseJsonSafe(result?.answer);
@@ -538,6 +541,7 @@ async function detectPatterns(profiles, matrix, branchIds, allNodes, userId, use
           message: prompt,
           mode: "tree:respond",
           rootId,
+          slot: "boundary",
         });
 
         const parsed = parseJsonSafe(result?.answer);
@@ -670,7 +674,7 @@ export async function analyze(rootId, userId, username) {
   // Write to root metadata
   const rootDoc = await Node.findById(rootId);
   if (rootDoc) {
-    await setExtMeta(rootDoc, "boundary", report);
+    await _metadata.setExtMeta(rootDoc, "boundary", report);
   }
 
   // Log contribution
@@ -778,7 +782,7 @@ export async function analyzeBranch(nodeId, userId, username) {
   // Write to this node's metadata (not the tree root)
   const nodeDoc = await Node.findById(nodeId);
   if (nodeDoc) {
-    await setExtMeta(nodeDoc, "boundary", report);
+    await _metadata.setExtMeta(nodeDoc, "boundary", report);
   }
 
   await logContribution({
@@ -814,7 +818,7 @@ export async function analyzeBranch(nodeId, userId, username) {
 export async function getBoundaryReport(rootId) {
   const root = await Node.findById(rootId).select("metadata").lean();
   if (!root) return null;
-  return getExtMeta(root, "boundary") || null;
+  return _metadata.getExtMeta(root, "boundary") || null;
 }
 
 /**
@@ -825,11 +829,11 @@ export async function markStale(rootId) {
   const root = await Node.findById(rootId);
   if (!root) return;
 
-  const meta = getExtMeta(root, "boundary");
+  const meta = _metadata.getExtMeta(root, "boundary");
   if (!meta || !meta.lastAnalysis) return; // nothing to mark stale
   if (meta.stale) return; // already stale
 
-  await mergeExtMeta(root, "boundary", { stale: true });
+  await _metadata.mergeExtMeta(root, "boundary", { stale: true });
 }
 
 /**

@@ -2,16 +2,17 @@ import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import authenticate from "../../seed/middleware/authenticate.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 let Node = null;
 let Note = null;
 let Contribution = null;
+let _metadata = null;
 export function setModels(models) {
   Node = models.Node;
   Note = models.Note;
   Contribution = models.Contribution;
 }
+export function setMetadata(metadata) { _metadata = metadata; }
 
 function validateRootId(req, res) {
   const rootId = req.params.rootId;
@@ -32,7 +33,7 @@ router.get("/root/:rootId/intent", authenticate, async (req, res) => {
     const root = await Node.findById(rootId).select("metadata name").lean();
     if (!root) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Tree not found");
 
-    const intentMeta = getExtMeta(root, "intent");
+    const intentMeta = _metadata.getExtMeta(root, "intent");
 
     // Find .intent node and its recent notes
     const intentNode = await Node.findOne({ parent: rootId, name: ".intent" }).select("_id").lean();
@@ -68,9 +69,9 @@ router.post("/root/:rootId/intent/pause", authenticate, async (req, res) => {
     const root = await Node.findById(rootId);
     if (!root) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Tree not found");
 
-    const meta = getExtMeta(root, "intent");
+    const meta = _metadata.getExtMeta(root, "intent");
     meta.paused = true;
-    await setExtMeta(root, "intent", meta);
+    await _metadata.setExtMeta(root, "intent", meta);
 
     log.verbose("Intent", `Autonomous intent paused for tree ${root.name}`);
     sendOk(res, { paused: true });
@@ -87,9 +88,9 @@ router.post("/root/:rootId/intent/resume", authenticate, async (req, res) => {
     const root = await Node.findById(rootId);
     if (!root) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Tree not found");
 
-    const meta = getExtMeta(root, "intent");
+    const meta = _metadata.getExtMeta(root, "intent");
     meta.paused = false;
-    await setExtMeta(root, "intent", meta);
+    await _metadata.setExtMeta(root, "intent", meta);
 
     log.verbose("Intent", `Autonomous intent resumed for tree ${root.name}`);
     sendOk(res, { paused: false });
@@ -146,7 +147,7 @@ router.post("/root/:rootId/intent/reject", authenticate, async (req, res) => {
     const root = await Node.findById(rootId);
     if (!root) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Tree not found");
 
-    const meta = getExtMeta(root, "intent");
+    const meta = _metadata.getExtMeta(root, "intent");
     if (!meta.rejections) meta.rejections = [];
 
     // Cap rejections list to prevent unbounded growth
@@ -160,7 +161,7 @@ router.post("/root/:rootId/intent/reject", authenticate, async (req, res) => {
       rejectedBy: req.userId,
     });
 
-    await setExtMeta(root, "intent", meta);
+    await _metadata.setExtMeta(root, "intent", meta);
 
     log.verbose("Intent", `Intent rejected for tree ${root.name}: ${description || id}`);
     sendOk(res, { rejected: true, totalRejections: meta.rejections.length });

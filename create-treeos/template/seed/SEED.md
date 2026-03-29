@@ -9,7 +9,7 @@
 
 The kernel is called the seed. You plant it on a land. It grows trees.
 
-Two schemas, a conversation loop, a hook system, a cascade engine, an extension loader, and a response protocol. Remove every extension and the seed still boots. It defines the data contract that extensions build on, the resolution chains that determine what happens at every position, and the communication primitive that makes signals visible.
+Six models (Node, User, Note, Contribution, Chat, LlmConnection), a conversation loop, a hook system, a cascade engine, an extension loader, and a response protocol. Remove every extension and the seed still boots. It defines the data contract that extensions build on, the resolution chains that determine what happens at every position, and the communication primitive that makes signals visible. Two models carry extensible metadata Maps (Node and User). The other four have fixed schemas.
 
 
 ## Four Primitives
@@ -18,7 +18,7 @@ Everything in the seed serves one of four primitives. Everything else is emergen
 
 | Primitive | What it is | Key files |
 |-----------|-----------|-----------|
-| **Structure** | Two schemas (Node, User), nodes in hierarchies, metadata Maps | models/node.js, models/user.js |
+| **Structure** | Six models. Node and User carry extensible metadata Maps. Note, Contribution, Chat, LlmConnection are fixed. | models/*.js |
 | **Intelligence** | Conversation loop, LLM/tool/mode/position resolution, time and position injection | ws/conversation.js, ws/modes/registry.js, ws/mcp.js |
 | **Extensibility** | Extension loader, open hook system, pub/sub, spatial scoping, five registries | hooks.js, extensions/loader.js, tree/extensionScope.js |
 | **Communication** | Cascade signals, .flow system node, visible results, response protocol | tree/cascade.js, protocol.js |
@@ -110,16 +110,92 @@ Same pattern. Extensions register. The kernel resolves. Failure falls back to th
 
 **MCP transport ordering.** The MCP SDK locks tool registration after `server.connect(transport)`. Extensions register tools during the wire phase. Transport connects after wire completes. Reordering breaks silently: the AI has no tools and nothing errors.
 
+**Query constraint.** When `readOnly` is set in the processMessage context, only tools registered with `readOnlyHint: true` are available. Write tools are filtered before the mode fires. The AI cannot mutate the tree during a query interaction. Orchestrators pass `readOnly: true` when the command is `query`. The mode never knows. The tools just aren't there.
+
 **Auth fallthrough.** `authenticateOptional` tries every registered auth strategy. If none match, request continues anonymously. Extensions register share token, public access, API key strategies. The kernel pipeline handles them all.
+
+## Extension APIs (core services bundle)
+
+Extensions receive `core` in `init(core)`. The full metadata toolkit, tree/note CRUD, scope checking, and mode management are all available through the services bundle. Extensions should never call MongoDB directly for metadata operations.
+
+### Metadata (core.metadata)
+
+Seven functions. No extension needs direct MongoDB for node metadata.
+
+| Function | Operation | Use Case |
+|----------|-----------|----------|
+| `getExtMeta(node, extName)` | Read namespace | Read your extension's data from a node |
+| `setExtMeta(node, extName, data)` | Full replace | Write entire namespace (needs document) |
+| `mergeExtMeta(node, extName, partial)` | Shallow merge | Update specific keys (needs document) |
+| `incExtMeta(node, extName, key, amount)` | Atomic $inc | Counters, accumulators. By ID or document. |
+| `pushExtMeta(node, extName, key, item, maxLength)` | Atomic $push + $slice | Capped arrays, rolling history. By ID or document. |
+| `batchSetExtMeta(node, extName, fields)` | Atomic multi-field $set | Set multiple keys at once. By ID or document. |
+| `unsetExtMeta(node, extName)` | Atomic $unset | Remove namespace entirely. Document shrinks. |
+
+`incExtMeta`, `pushExtMeta`, `batchSetExtMeta`, and `unsetExtMeta` accept a node document OR a nodeId string. No read-modify-write. No race conditions. MongoDB atomic operators handle concurrency.
+
+```js
+// Atomic increment (food macro tracking)
+await core.metadata.incExtMeta(nodeId, "values", "today", 42);
+
+// Atomic capped array push (scheduler completion history)
+await core.metadata.pushExtMeta(nodeId, "scheduler", "completions", { date, delta }, 50);
+
+// Atomic multi-field set (fitness exercise values)
+await core.metadata.batchSetExtMeta(nodeId, "values", {
+  weight: 135, set1: 10, set2: 10, set3: 8, totalVolume: 3780
+});
+
+// Remove namespace entirely on extension uninstall
+await core.metadata.unsetExtMeta(nodeId, "old-extension");
+```
+
+### Tree CRUD (core.tree)
+
+`core.tree.createNode`, `core.tree.createNodeBranch`, `core.tree.deleteNodeBranch`, `core.tree.updateParentRelationship`, `core.tree.editNodeName`, `core.tree.editNodeType`. Stable API through the services bundle. Path changes don't break extensions.
+
+### Notes CRUD (core.notes)
+
+`core.notes.createNote`, `core.notes.editNote`, `core.notes.deleteNoteAndFile`, `core.notes.transferNote`, `core.notes.getNotes`. Programmatic note creation without direct seed imports.
+
+### User Metadata (core.userMetadata)
+
+Same pattern as node metadata, applied to users. Six functions.
+
+| Function | Operation | Use Case |
+|----------|-----------|----------|
+| `getUserMeta(user, key)` | Read namespace | Read extension data from a user |
+| `setUserMeta(user, key, data)` | Full replace (sync) | Write namespace. Caller must `await user.save()`. |
+| `incUserMeta(user, key, field, amount)` | Atomic $inc | Storage counters, energy tracking. By ID or document. |
+| `pushUserMeta(user, key, field, item, maxLength)` | Atomic $push + $slice | Phase history, activity logs. By ID or document. |
+| `batchSetUserMeta(user, key, fields)` | Atomic multi-field $set | Preference updates, config resets. By ID or document. |
+| `unsetUserMeta(user, key)` | Atomic $unset | Remove namespace entirely. Document shrinks. |
+
+`incUserMeta`, `pushUserMeta`, `batchSetUserMeta`, and `unsetUserMeta` accept a user document OR a userId string. Atomic. No read-modify-write.
+
+### Extension Scope (core.scope)
+
+`core.scope.isExtensionBlockedAtNode(extName, nodeId)` lets extensions check their own blocked status. `core.scope.getBlockedExtensionsAtNode(nodeId)` returns the full blocked/restricted/allowed sets. `core.scope.isToolReadOnly(toolName)` checks the readOnlyHint flag. `core.scope.getToolOwner(toolName)` and `core.scope.getModeOwner(modeKey)` find which extension owns a tool or mode.
+
+### Mode Management (core.modes)
+
+`core.modes.registerMode(key, config, extName)` registers a custom mode. `core.modes.setDefaultMode(bigMode, key)` sets the default for a zone. `core.modes.setNodeMode(nodeId, intent, modeKey)` sets a per-node mode override atomically. Extensions use this to assign custom modes to specific nodes without direct MongoDB calls.
+
+### New Hooks
+
+**beforeNodeCreate** now includes `parentType` field in hook data. Extensions can validate parent-child type compatibility without re-querying.
+
+**onNodeNavigate** fires when the user navigates between nodes within a tree (cd Chest, cd Back). Distinct from `afterNavigate` which fires on tree root load only. Extensions use this for breadcrumb tracking, activity heatmaps, focus detection.
 
 ## Resolution Chains
 
-Every operation at a node goes through four resolution chains. Position determines capability.
+Every operation at a node goes through five resolution chains. Position determines capability.
 
 1. **Extension scope**: Walk parent chain, accumulate `metadata.extensions.blocked[]` and `restricted`. Blocked = no tools, hooks, modes, metadata writes. Restricted = read-only tools only.
 2. **Tool scope**: Mode base tools + extension tools + per-node `metadata.tools.allowed/blocked`. Filtered by extension scope.
 3. **Mode resolution**: `metadata.modes[intent]` per-node override, then default mapping, then bigMode fallback.
 4. **LLM resolution**: Extension slot on tree, tree default, extension slot on user, user default.
+5. **LLM config**: Per-node `metadata.llm.config` overrides for maxToolIterations, toolCallTimeout, toolResultMaxBytes, maxConversationMessages. Walk parent chain, closest value wins. Falls back to land-level config.
 
 ### Confined Extensions
 
@@ -235,6 +311,7 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | contributionRetentionDays | 365 | Auto-delete contributions |
 | timezone | auto | Land timezone for AI prompts |
 | disabledExtensions | [] | Extensions to skip on boot |
+| allowedLlmDomains | [] | Whitelist of allowed LLM endpoint domains for non-admin users. Empty means any external domain. Admins bypass. Example: `["api.openai.com", "openrouter.ai"]` |
 | cascadeEnabled | false | Enable cascade signals |
 | resultTTL | 604800 | Cascade result TTL (seconds) |
 | awaitingTimeout | 300 | Awaiting to failed timeout (seconds) |
@@ -269,11 +346,16 @@ These keys are configurable via `treeos config set` but most lands never need to
 
 | Key | Default | What it tunes |
 |-----|---------|---------------|
+| requestQueueMaxDepth | 100 | Max waiting tasks per queue key. Prevents request pileup under load. |
 | llmMaxConcurrent | 20 | Max in-flight LLM API calls across all users. Prevents thundering herd. |
 | failoverTimeout | 15 | Seconds before giving up walking the LLM failover stack |
 | chatRateLimit | 10 | Max chat messages per rate window per user |
 | chatRateWindowMs | 60000 | Chat rate limit window (ms) |
+| maxChatMessageChars | 5000 | Max characters per WebSocket chat message |
+| maxMessageContentBytes | 32768 | Max bytes per message in conversation history (32KB). Truncates oversized messages. |
 | maxConversationSessions | 50000 | Hard cap on in-memory conversation sessions. Evicts oldest on overflow. |
+| maxScopedSessions | 20000 | Hard cap on scoped sessions (zone-specific). Evicts oldest on overflow. |
+| maxAiContextEntries | 10000 | Hard cap on AI chat context tracking map. |
 | staleConversationTimeout | 1800 | Idle conversation session sweep (seconds) |
 | maxConnectionsPerIp | 20 | Per-IP WS connection cap |
 
@@ -287,6 +369,8 @@ These keys are configurable via `treeos config set` but most lands never need to
 | maxRegisteredTools | 500 | Max tool definitions in the registry |
 | maxRegisteredModes | 200 | Max mode definitions in the registry |
 | maxOrchestrators | 10 | Max registered orchestrators |
+| maxSystemPromptChars | 32000 | Max system prompt length before truncation (chars) |
+| maxExtensionIndexes | 20 | Max MongoDB indexes per extension |
 
 **Hooks:**
 
@@ -321,6 +405,17 @@ These keys are configurable via `treeos config set` but most lands never need to
 | treeNotesPerNode | 100 | Max notes loaded per node |
 | treeMaxChildrenResolve | 200 | Max children name-resolved per node |
 | treeAllDataDepth | 20 | Max recursion depth in full tree export |
+| treeSearchResultLimit | 10 | Max search results returned in tree context |
+| treeSummaryRecentNotes | 3 | Recent notes shown per node in tree summary |
+| treeSummaryPreviewChars | 200 | Characters of note content shown in preview |
+| chatContributionQueryLimit | 2000 | Max contributions linked per chat finalization |
+| chatHistoryMaxSessions | 50 | Max sessions returned per chat history query |
+| chatHistoryMaxChatsPerSession | 200 | Max chain steps loaded per session |
+| chatHistoryMaxDescendantIds | 500 | Cap on includeChildren node expansion |
+| chatHistoryMaxContributions | 5000 | Cap on contribution documents per chat history query |
+| maxChatContentBytes | 100000 | Max bytes stored per chat message (100KB) |
+| maxChainStepContentBytes | 2000 | Max bytes per orchestrator chain step log |
+| maxInheritedStatusNodes | 10000 | Max nodes affected by one inherited status change |
 
 **Ancestor cache:**
 
@@ -336,6 +431,7 @@ These keys are configurable via `treeos config set` but most lands never need to
 | mcpConnectRetries | 2 | Connection retry count for background pipelines |
 | mcpConnectTimeout | 10000 | Client connection timeout (ms) |
 | mcpStaleTimeout | 3600000 | Client idle timeout before sweep (ms) |
+| maxMcpClients | 5000 | Hard cap on MCP client pool. Evicts oldest on overflow. |
 
 **WebSocket transport:**
 
@@ -374,6 +470,9 @@ These keys are configurable via `treeos config set` but most lands never need to
 | orchestratorLockTtlMs | 1800000 | Lock TTL before auto-expire (ms) |
 | lockSweepInterval | 300000 | Lock cleanup sweep (ms) |
 | orchestratorInitTimeout | 30000 | Background pipeline init timeout (ms) |
+| maxChainSteps | 500 | Max steps per pipeline. Circuit breaker for runaway loops. |
+| maxOrchestratorLocks | 10000 | Hard cap on concurrent orchestrator locks across all namespaces. |
+| maxParseInputBytes | 200000 | Max input size for JSON extraction from LLM responses (200KB). |
 
 **Cleanup intervals:**
 
@@ -427,7 +526,7 @@ Defaults to OFF (`treeCircuitEnabled: false`).
 | enrichContext chain timeout | 15s cumulative cap for the entire enrichContext/onCascade handler chain. Per-handler timeout reduced to remaining budget. |
 | MCP spatial scoping | MCP tool calls check isExtensionBlockedAtNode before dispatch. Same spatial scoping guarantee as WebSocket conversations. |
 | Extension install rollback | Files written to staging directory. Atomic rename on success. Cleanup on failure. No partial installs. |
-| Metadata guard | Blocked extensions can't write to nodes. Four core namespaces (cascade, extensions, tools, modes) bypass blocking. |
+| Metadata guard | Blocked extensions can't write to nodes. Five core namespaces (tools, modes, extensions, cascade, llm) bypass blocking. |
 | Document size guard | Every metadata write checks total document size against maxDocumentSizeBytes (14MB default). Writes exceeding the limit rejected with DOCUMENT_SIZE_EXCEEDED. onDocumentPressure fires at 80% capacity. |
 | Per-namespace cap | metadataNamespaceMaxBytes (default 512KB) per extension namespace on nodes, users, and contribution extensionData. Configurable. 20 extensions at 512KB = 10MB, under the 14MB ceiling. |
 | Namespace key length | Max 50 chars for metadata namespace keys in setExtMeta. Same cap as node type. |
@@ -438,7 +537,7 @@ Defaults to OFF (`treeCircuitEnabled: false`).
 | Ownership chain | rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify. System nodes always rejected. transferOwnership uses bulkWrite for atomic two-op transfer. |
 | Node locks | Structural mutations (move, delete, transfer ownership) acquire short-lived in-memory locks. Reads and scoped writes proceed without locking. Sorted acquisition prevents deadlocks. 30s TTL expiry prevents permanent locks on crash. |
 | Tree circuit breaker | Health equation monitors node count, metadata density, error rate. Score > 1.0 trips the tree. No AI, no writes, no cascade. Read access stays. Extensions revive. Defaults to off. |
-| Ancestor cache | Shared cache for parent chain walks. One walk serves all six resolution chains. Snapshot per message for consistency. moveNode clears entire cache. deleteNode clears entries containing the deleted node. Metadata/ownership changes clear the affected node and descendants. |
+| Ancestor cache | Shared cache for parent chain walks. One walk serves all five resolution chains. Snapshot per message for consistency. moveNode clears entire cache. deleteNode clears entries containing the deleted node. Metadata/ownership changes clear the affected node and descendants. |
 | Session cap | 10K max (configurable) with oldest-first eviction. |
 | Core session types immutable | Extensions can register custom session types but cannot overwrite core types (websocket-chat, api-tree-chat, etc.). Prevents extension from breaking the stale sweep or navigator promotion. |
 | Scoped session cap | 20K max scoped session entries. Oldest evicted on overflow. Prevents unbounded growth from unique tree:root:user scope keys. |

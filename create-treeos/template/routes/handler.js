@@ -15,6 +15,7 @@ import canopy from "./canopy.js";
 
 import { handleMcpRequest, mcpServerInstance, connectMcpTransport } from "../mcp/server.js";
 import authenticateMCP from "../seed/middleware/authenticateMCP.js";
+import dbHealth from "../seed/middleware/dbHealth.js";
 
 import express from "express";
 import path from "path";
@@ -88,6 +89,17 @@ export default async function registerURLRoutes(app, opts = {}) {
       }
     }
 
+    // Short descriptions for tab completion hints in CLI
+    const extensionDescriptions = {};
+    for (const m of manifests) {
+      if (disabled.has(m.name)) continue;
+      if (blocked.has(m.name)) continue;
+      if (m.description) {
+        const first = m.description.split(/(?<=\.)\s+/)[0].slice(0, 100);
+        extensionDescriptions[m.name] = first;
+      }
+    }
+
     sendOk(res, {
       name: "TreeOS",
       version: "1.0",
@@ -98,6 +110,7 @@ export default async function registerURLRoutes(app, opts = {}) {
       ],
       nodeTypes: ["goal", "plan", "task", "knowledge", "resource", "identity"],
       extensions: activeExtensions,
+      extensionDescriptions,
       cli,
       position: nodeId || null,
     });
@@ -108,8 +121,20 @@ export default async function registerURLRoutes(app, opts = {}) {
   // Rate limiter (after health and protocol so load balancer pings don't count)
   app.use(apiLimiter);
 
+  // DB health gate: 503 when MongoDB is disconnected.
+  // Mounted after rate limiter so health pings still get rate-limited.
+  app.use("/api/v1", dbHealth);
+
   // Auth page routes (login, register, etc.)
   app.use("/", authPageRouter);
+
+  // Ensure land root and config exist before extensions load.
+  // On first boot, extensions that read .config or create system child nodes
+  // would fail if the land root hasn't been created yet.
+  const { ensureLandRoot } = await import("../seed/landRoot.js");
+  const { initLandConfig } = await import("../seed/landConfig.js");
+  await ensureLandRoot();
+  await initLandConfig();
 
   // Load extensions (manifests discovered, deps validated, routes wired)
   await loadExtensions(app, mcpServerInstance, {
@@ -121,6 +146,8 @@ export default async function registerURLRoutes(app, opts = {}) {
   await connectMcpTransport();
 
   app.post("/mcp", authenticateMCP, handleMcpRequest);
+  app.get("/mcp", authenticateMCP, handleMcpRequest);
+  app.delete("/mcp", authenticateMCP, handleMcpRequest);
 
   // Serve uploaded files (path matches seed/tree/notes.js and uploadCleanup.js)
   const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, "../uploads");

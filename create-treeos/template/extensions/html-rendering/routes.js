@@ -76,35 +76,46 @@ router.post("/verify-token", authenticate, async (req, res) => {
   }
 });
 
-// Share token management page
-router.get("/user/:userId/shareToken", urlAuth, async (req, res) => {
+// Server-side auth redirect. Checks httpOnly cookie, redirects to app or login.
+// No client-side JavaScript needed. Whitelist prevents open redirect.
+router.get("/auth-redirect", async (req, res) => {
+  const { to } = req.query;
+  const allowed = { chat: "/chat", dashboard: "/dashboard", setup: "/setup" };
+  const destination = allowed[to] || "/";
+
   try {
+    const jwt = (await import("jsonwebtoken")).default;
+    const token = req.cookies?.token;
+    if (!token) return res.redirect(`/login?redirect=${encodeURIComponent(destination)}`);
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded?.userId) return res.redirect(`/login?redirect=${encodeURIComponent(destination)}`);
+
+    return res.redirect(destination);
+  } catch {
+    return res.redirect(`/login?redirect=${encodeURIComponent(destination)}`);
+  }
+});
+
+// Share token management (JSON API). HTML rendering handled by treeos htmlRoutes.
+router.get("/user/:userId/shareToken", authenticate, async (req, res, next) => {
+  try {
+    if ("html" in req.query) return next("route"); // treeos htmlRoutes handles HTML
+
     const { userId } = req.params;
     const user = await User.findById(userId).select("username metadata").lean();
     if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
-    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-    const token = req.query.token ?? "";
-    const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
-
-    if (!wantHtml || !isHtmlEnabled()) {
-      const htmlMeta = getUserMeta(user, "html");
-      return sendOk(res, { userId, shareToken: htmlMeta?.shareToken || null });
-    }
-
-    const { getExtension } = await import("../loader.js");
-    const render = getExtension("html-rendering")?.exports?.renderShareToken;
-    if (!render) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "HTML rendering not available");
-
-    return res.send(render({ userId, user, token, tokenQS }));
+    const htmlMeta = getUserMeta(user, "html");
+    return sendOk(res, { userId, shareToken: htmlMeta?.shareToken || null });
   } catch (err) {
-    log.error("HTML", "Share token page error:", err.message);
+    log.error("HTML", "Share token error:", err.message);
     sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
-// POST share token update
-router.post("/user/:userId/shareToken", urlAuth, async (req, res) => {
+// POST share token update (JWT only, never share token auth)
+router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
   try {
     if (req.userId.toString() !== req.params.userId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
@@ -129,7 +140,7 @@ router.post("/user/:userId/shareToken", urlAuth, async (req, res) => {
 
     const token = req.query.token ?? "";
     if ("html" in req.query) {
-      return res.redirect(`/api/v1/user/${req.params.userId}/sharetoken?token=${encodeURIComponent(token)}&html`);
+      return res.redirect(`/api/v1/user/${req.params.userId}/shareToken?token=${encodeURIComponent(token)}&html`);
     }
     return sendOk(res, { htmlShareToken });
   } catch (err) {

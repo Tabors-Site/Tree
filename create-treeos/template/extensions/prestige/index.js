@@ -1,9 +1,8 @@
 import tools from "./tools.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { setServices, setEnergyService, addPrestige, resolveVersion } from "./core.js";
 
 export async function init(core) {
-  setServices({ models: core.models, contributions: core.contributions });
+  setServices({ models: core.models, contributions: core.contributions, metadata: core.metadata });
   if (core.energy) setEnergyService(core.energy);
 
   const { default: router, setNodeModel } = await import("./routes.js");
@@ -14,7 +13,7 @@ export async function init(core) {
   core.hooks.register("beforeNote", async (data) => {
     const node = await Node.findById(data.nodeId).select("metadata").lean();
     if (!node) return;
-    const prestige = getExtMeta(node, "prestige");
+    const prestige = core.metadata.getExtMeta(node, "prestige");
     if (!data.metadata) data.metadata = {};
     data.metadata.version = prestige?.current || 0;
   }, "prestige");
@@ -22,7 +21,7 @@ export async function init(core) {
   core.hooks.register("beforeContribution", async (data) => {
     const node = await Node.findById(data.nodeId).select("metadata").lean();
     if (!node) return;
-    const prestige = getExtMeta(node, "prestige");
+    const prestige = core.metadata.getExtMeta(node, "prestige");
     if (prestige?.current) {
       data.nodeVersion = String(prestige.current);
     }

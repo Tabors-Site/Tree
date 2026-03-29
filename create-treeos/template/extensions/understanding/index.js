@@ -51,8 +51,9 @@ export async function init(core) {
   understanding.setServices({ models: core.models, contributions: core.contributions });
   if (core.energy) understanding.setEnergyService(core.energy);
 
-  const { default: router, setModels } = await import("./routes.js");
+  const { default: router, setModels, resolveHtmlAuth } = await import("./routes.js");
   setModels(core.models);
+  resolveHtmlAuth();
 
   const orchestrator = await import("./pipeline.js");
 

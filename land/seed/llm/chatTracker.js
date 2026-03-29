@@ -9,7 +9,7 @@ import { getLandConfigValue } from "../landConfig.js";
 import { v4 as uuidv4 } from "uuid";
 import Chat from "../models/chat.js";
 import Contribution from "../models/contribution.js";
-import { createSession, SESSION_TYPES } from "./sessionRegistry.js";
+import { createSession, SESSION_TYPES } from "../ws/sessionRegistry.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CHAT CONTRIBUTION CONTEXT (in-memory visitorId -> { sessionId, chatId })

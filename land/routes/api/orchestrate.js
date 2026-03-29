@@ -14,20 +14,20 @@ import authenticate, { authenticateOptional } from "../../seed/middleware/authen
 import { getExtension } from "../../extensions/loader.js";
 import { createCanopyLlmProxyClient } from "../../canopy/llmProxy.js";
 // orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
-import { getOrchestrator } from "../../seed/orchestratorRegistry.js";
+import { getOrchestrator } from "../../seed/orchestrators/registry.js";
 import {
   setRootId,
   getClientForUser,
   clearSession,
   userHasLlm,
-} from "../../seed/ws/conversation.js";
+} from "../../seed/llm/conversation.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../../seed/ws/mcp.js";
 import {
   startChat,
   finalizeChat,
   setChatContext,
   clearChatContext,
-} from "../../seed/ws/chatTracker.js";
+} from "../../seed/llm/chatTracker.js";
 import { enqueue } from "../../seed/ws/requestQueue.js";
 import {
   createSession,
@@ -316,7 +316,7 @@ router.post("/home/chat", authenticate, async (req, res) => {
   if (!validateMessage(message, res)) return;
 
   try {
-    const { runChat } = await import("../../seed/ws/conversation.js");
+    const { runChat } = await import("../../seed/llm/conversation.js");
     const { answer, chatId } = await runChat({
       userId: req.userId,
       username: req.username,

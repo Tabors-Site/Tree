@@ -1,5 +1,5 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
-import log from "../log.js";
+import log from "./log.js";
 
 // Tool definition registry. Extensions register tool schemas via registerToolDef().
 // The kernel resolves tool names to schemas via resolveTools().

@@ -19,7 +19,6 @@
 // 7. Write results to .intent node as notes
 
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { collectTreeState, formatStateForPrompt } from "./stateCollector.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
@@ -36,12 +35,14 @@ let Node = null;
 let User = null;
 let logContribution = null;
 let useEnergy = async () => ({ energyUsed: 0 });
+let _metadata = null;
 
-export function setServices({ models, contributions, energy }) {
+export function setServices({ models, contributions, energy, metadata }) {
   Node = models.Node;
   User = models.User;
   logContribution = contributions.logContribution;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
+  if (metadata) _metadata = metadata;
 }
 
 let _timer = null;
@@ -125,7 +126,7 @@ async function runCycle() {
     for (const root of roots) {
       try {
         // Check if paused
-        const intentMeta = getExtMeta(root, "intent");
+        const intentMeta = _metadata.getExtMeta(root, "intent");
         if (intentMeta.paused) continue;
 
         await processTree(root);
@@ -157,6 +158,7 @@ async function processTree(root) {
     sessionType: "INTENT",
     description: `Intent cycle for tree ${root.name}`,
     modeKeyForLlm: "tree:respond",
+    slot: "intent",
     lockNamespace: "intent",
     lockKey: `intent:${rootId}`,
     llmPriority: LLM_PRIORITY?.BACKGROUND || 4,
@@ -266,13 +268,12 @@ async function processTree(root) {
     try {
       const rootNode = await Node.findById(rootId);
       if (rootNode) {
-        const meta = getExtMeta(rootNode, "intent") || {};
+        const meta = _metadata.getExtMeta(rootNode, "intent") || {};
         meta.recentExecutions = [
           ...recentExecutions,
           ...(meta.recentExecutions || []),
         ].slice(0, 20);
-        await setExtMeta(rootNode, "intent", meta);
-        await rootNode.save();
+        await _metadata.setExtMeta(rootNode, "intent", meta);
       }
     } catch (err) {
       log.debug("Intent", `Failed to write recent executions to metadata: ${err.message}`);

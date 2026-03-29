@@ -2,8 +2,10 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import Node from "../../seed/models/node.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getReviewConfig, getReviewHistory } from "./core.js";
+
+let _metadata = null;
+export function setMetadata(metadata) { _metadata = metadata; }
 
 const router = express.Router();
 
@@ -66,7 +68,7 @@ router.post("/node/:nodeId/review/partner", authenticate, async (req, res) => {
     if (autoApply !== undefined) config.autoApply = !!autoApply;
     if (reviewPrompt !== undefined) config.reviewPrompt = reviewPrompt || null;
 
-    await setExtMeta(node, "peer-review", config);
+    await _metadata.setExtMeta(node, "peer-review", config);
     sendOk(res, { partner: { nodeId: partnerId, name: partner.name }, config });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
@@ -82,7 +84,7 @@ router.delete("/node/:nodeId/review", authenticate, async (req, res) => {
     const config = getReviewConfig(node);
     if (!config.partner) return sendOk(res, { message: "No review configuration to remove" });
 
-    await setExtMeta(node, "peer-review", null);
+    await _metadata.setExtMeta(node, "peer-review", null);
     sendOk(res, { message: "Review configuration removed" });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
@@ -112,7 +114,7 @@ router.post("/node/:nodeId/review/pause", authenticate, async (req, res) => {
     const config = getReviewConfig(node);
     if (!config.partner) return sendError(res, 400, ERR.INVALID_INPUT, "No review partner configured");
 
-    await setExtMeta(node, "peer-review", { ...config, status: "paused" });
+    await _metadata.setExtMeta(node, "peer-review", { ...config, status: "paused" });
     sendOk(res, { status: "paused" });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
@@ -128,7 +130,7 @@ router.post("/node/:nodeId/review/resume", authenticate, async (req, res) => {
     const config = getReviewConfig(node);
     if (!config.partner) return sendError(res, 400, ERR.INVALID_INPUT, "No review partner configured");
 
-    await setExtMeta(node, "peer-review", { ...config, status: "idle" });
+    await _metadata.setExtMeta(node, "peer-review", { ...config, status: "idle" });
     sendOk(res, { status: "idle" });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);

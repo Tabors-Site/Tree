@@ -13,7 +13,7 @@ import {
 import { editStatus } from "../../seed/tree/statuses.js";
 
 import Node from "../../seed/models/node.js";
-import { getNodeChats } from "../../seed/ws/chatHistory.js";
+import { getNodeChats } from "../../seed/llm/chatHistory.js";
 import { getExtension } from "../../extensions/loader.js";
 
 const router = express.Router();
@@ -171,7 +171,7 @@ router.get("/node/:nodeId/modes", authenticate, async (req, res) => {
     // List available modes from registry
     let availableModes = [];
     try {
-      const { getSubModes } = await import("../../seed/ws/modes/registry.js");
+      const { getSubModes } = await import("../../seed/modes/registry.js");
       availableModes = getSubModes("tree").map(m => m.key);
     } catch {}
 
@@ -204,7 +204,7 @@ router.post("/node/:nodeId/modes", authenticate, async (req, res) => {
 
       // Validate mode exists
       try {
-        const { getMode } = await import("../../seed/ws/modes/registry.js");
+        const { getMode } = await import("../../seed/modes/registry.js");
         if (!getMode(modeKey)) return sendError(res, 400, ERR.INVALID_INPUT, `Mode "${modeKey}" not registered`);
       } catch {}
 
@@ -248,7 +248,7 @@ router.get("/node/:nodeId/tools", authenticate, async (req, res) => {
 
     let baseTools = [];
     try {
-      const { getAllToolNamesForBigMode } = await import("../../seed/ws/modes/registry.js");
+      const { getAllToolNamesForBigMode } = await import("../../seed/modes/registry.js");
       baseTools = getAllToolNamesForBigMode("tree");
     } catch {}
 

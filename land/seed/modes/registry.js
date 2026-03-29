@@ -2,12 +2,12 @@
 // ws/modes/registry.js
 // Central mode registry: defines all modes, their tools, and switching logic
 
-import log from "../../log.js";
-import { getLandConfigValue } from "../../landConfig.js";
+import log from "../log.js";
+import { getLandConfigValue } from "../landConfig.js";
 import { resolveTools } from "../tools.js";
-import { getNodeName } from "../../tree/treeData.js";
+import { getNodeName } from "../tree/treeData.js";
 import { treeFallback, homeFallback } from "./fallback.js";
-import Node from "../../models/node.js";
+import Node from "../models/node.js";
 
 
 // ─────────────────────────────────────────────────────────────────────────

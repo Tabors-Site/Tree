@@ -7,6 +7,7 @@ import { getLandConfigValue } from "../../landConfig.js";
 import { resolveTools } from "../tools.js";
 import { getNodeName } from "../../tree/treeData.js";
 import { treeFallback, homeFallback } from "./fallback.js";
+import Node from "../../models/node.js";
 
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -53,13 +54,21 @@ export function getMode(modeKey) {
  * Returns [{ key, emoji, label }]
  */
 export function getSubModes(bigMode) {
-  return Object.entries(ALL_MODES)
-    .filter(([key]) => key.startsWith(bigMode + ":"))
+  const all = Object.entries(ALL_MODES)
+    .filter(([key, mode]) => {
+      if (!key.startsWith(bigMode + ":")) return false;
+      // In home/land, hide internal modes. In tree, show everything.
+      if (bigMode !== "tree" && mode.hidden) return false;
+      return true;
+    })
     .map(([key, mode]) => ({
       key,
       emoji: mode.emoji,
       label: mode.label,
     }));
+  // Hide kernel fallbacks when real modes are registered
+  if (all.length > 1) return all.filter(m => !m.key.endsWith(":fallback"));
+  return all;
 }
 
 /**
@@ -132,6 +141,27 @@ export function resolveMode(intent, bigMode, nodeMetadata = null, blockedExtensi
 
   // Layer 3: bigMode default
   return DEFAULT_MODES[bigMode] || defaultKey;
+}
+
+/**
+ * Set a per-node mode override. Extensions use this to assign custom modes
+ * to specific nodes (e.g., fitness-log on the Fitness root).
+ *
+ *   await setNodeMode(nodeId, "respond", "tree:fitness-log");
+ *   // Node's metadata.modes.respond = "tree:fitness-log"
+ */
+export async function setNodeMode(nodeId, intent, modeKey) {
+  if (!nodeId || !intent || !modeKey) return false;
+  // Validate intent: safe key name, no dots/dollars/proto injection
+  if (typeof intent !== "string" || intent.length === 0 || intent.length > 50) return false;
+  if (/[.$]/.test(intent) || intent === "__proto__" || intent === "constructor" || intent === "prototype") return false;
+  // Validate modeKey: must be a registered mode
+  if (typeof modeKey !== "string" || !ALL_MODES[modeKey]) return false;
+  await Node.updateOne(
+    { _id: String(nodeId) },
+    { $set: { [`metadata.modes.${intent}`]: modeKey } }
+  );
+  return true;
 }
 
 /**
@@ -345,9 +375,10 @@ export async function buildPromptForMode(modeKey, ctx) {
   }
   // Guard against oversized prompts consuming the entire context window.
   // 32KB is generous for a system prompt. Anything larger is a bug.
-  if (typeof modePrompt === "string" && modePrompt.length > 32000) {
-    log.warn("Modes", `System prompt for "${modeKey}" is ${modePrompt.length} chars. Truncating to 32KB.`);
-    modePrompt = modePrompt.slice(0, 32000) + "\n... (system prompt truncated)";
+  const maxPromptChars = Number(getLandConfigValue("maxSystemPromptChars")) || 32000;
+  if (typeof modePrompt === "string" && modePrompt.length > maxPromptChars) {
+    log.warn("Modes", `System prompt for "${modeKey}" is ${modePrompt.length} chars. Truncating to ${maxPromptChars}.`);
+    modePrompt = modePrompt.slice(0, maxPromptChars) + "\n... (system prompt truncated)";
   }
   if (typeof modePrompt !== "string") {
     log.error("Modes", `buildSystemPrompt for "${modeKey}" returned ${typeof modePrompt}, expected string`);

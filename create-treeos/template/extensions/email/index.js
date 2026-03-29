@@ -17,7 +17,8 @@ export async function init(core) {
   const User = core.models.User;
 
   core.hooks.register("beforeRegister", async (data) => {
-    const { username, password, email, req, res } = data;
+    const { username, password, req, res } = data;
+    const email = req.body?.email;
 
     const requireEmail = getLandConfigValue("REQUIRE_EMAIL") !== "false";
 
@@ -92,6 +93,15 @@ export async function init(core) {
     if (freshUser.markModified) freshUser.markModified("metadata");
     await freshUser.save();
   }, "email");
+
+  try {
+    const { getExtension } = await import("../loader.js");
+    const htmlExt = getExtension("html-rendering");
+    if (htmlExt) {
+      const { default: buildHtmlRoutes } = await import("./htmlRoutes.js");
+      htmlExt.router.use("/", buildHtmlRoutes());
+    }
+  } catch {}
 
   return { router };
 }

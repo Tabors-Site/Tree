@@ -137,7 +137,7 @@ function buildDateFilter(startDate, endDate) {
  * If actorId is provided, verifies the caller has access to the node's tree.
  * Kernel-internal callers (hooks, migrations) can omit actorId.
  */
-export async function getContributions({ nodeId, limit, startDate, endDate, actorId }) {
+export async function getContributions({ nodeId, limit, offset, startDate, endDate, actorId }) {
   if (!nodeId) throw new Error("Missing required parameter: nodeId");
 
   if (actorId) {
@@ -147,15 +147,17 @@ export async function getContributions({ nodeId, limit, startDate, endDate, acto
 
   const query = { nodeId, ...buildDateFilter(startDate, endDate) };
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), MAX_QUERY_LIMIT());
+  const safeOffset = Math.max(0, Number(offset) || 0);
 
   const contributions = await Contribution.find(query)
     .populate("userId", "username")
     .populate("nodeId", "name")
     .sort({ date: -1 })
+    .skip(safeOffset)
     .limit(safeLimit)
     .lean();
 
-  return { contributions };
+  return { contributions, limit: safeLimit };
 }
 
 /**

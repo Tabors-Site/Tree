@@ -6,6 +6,15 @@ import Notification from "./model.js";
 export async function init(core) {
   log.verbose("Notifications", "Extension initialized");
 
+  try {
+    const { getExtension } = await import("../loader.js");
+    const htmlExt = getExtension("html-rendering");
+    if (htmlExt) {
+      const { default: buildHtmlRoutes } = await import("./htmlRoutes.js");
+      htmlExt.router.use("/", buildHtmlRoutes());
+    }
+  } catch {}
+
   return {
     router,
     exports: {

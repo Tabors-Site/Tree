@@ -102,3 +102,4 @@ export function resolveTools(toolNames) {
 export function getToolCount() {
   return Object.keys(toolDefs).length;
 }
+

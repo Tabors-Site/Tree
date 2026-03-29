@@ -10,6 +10,9 @@
 import Node from "../../seed/models/node.js";
 import { SYSTEM_ROLE } from "../../seed/protocol.js";
 
+let _metadata = null;
+export function setMetadata(m) { _metadata = m; }
+
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG (stored on .config metadata["long-memory"])
 // ─────────────────────────────────────────────────────────────────────────
@@ -88,7 +91,5 @@ export async function getMemory(nodeId) {
  * Clear the memory trace for a node.
  */
 export async function clearMemory(nodeId) {
-  await Node.findByIdAndUpdate(nodeId, {
-    $unset: { "metadata.memory": 1 },
-  });
+  await _metadata.unsetExtMeta(nodeId, "memory");
 }

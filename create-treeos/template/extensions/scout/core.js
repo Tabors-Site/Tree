@@ -12,7 +12,6 @@ import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
 import Note from "../../seed/models/note.js";
 import { CONTENT_TYPE } from "../../seed/protocol.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 
 let LLM_PRIORITY;
@@ -23,10 +22,12 @@ try {
 }
 
 let _getExtension = null;
+let _metadata = null;
 
 export function setServices(core) {
   // Lazy import of extension loader to avoid circular deps at load time
   import("../loader.js").then(m => { _getExtension = m.getExtension; }).catch(() => {});
+  _metadata = core.metadata;
 }
 
 function getExtension(name) {
@@ -470,7 +471,7 @@ Synthesize an answer. Cite specific nodes. Name gaps where the tree lacks inform
     try {
       const node = await Node.findById(nodeId);
       if (node) {
-        const meta = getExtMeta(node, "scout") || {};
+        const meta = _metadata.getExtMeta(node, "scout") || {};
         const history = meta.history || [];
         history.unshift({
           query,
@@ -485,8 +486,7 @@ Synthesize an answer. Cite specific nodes. Name gaps where the tree lacks inform
         const existingGaps = new Set(meta.gaps || []);
         for (const g of result.gaps) existingGaps.add(g);
         meta.gaps = [...existingGaps].slice(0, 50);
-        await setExtMeta(node, "scout", meta);
-        await node.save();
+        await _metadata.setExtMeta(node, "scout", meta);
       }
     } catch (err) {
       log.debug("Scout", `Failed to write scout metadata: ${err.message}`);

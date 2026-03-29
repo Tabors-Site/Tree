@@ -1,6 +1,6 @@
 import log from "../../seed/log.js";
 import express from "express";
-import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import User from "../../seed/models/user.js";
 import { getChats } from "../../seed/ws/chatHistory.js";
@@ -11,8 +11,9 @@ import {
 } from "../../seed/tree/notes.js";
 import { getContributionsByUser } from "../../seed/tree/contributions.js";
 import getNodeName from "../../routes/api/helpers/getNameById.js";
-function html() { return getExtension("html-rendering")?.exports || {}; }
-
+import { renderUserNotes } from "./pages/userNotes.js";
+import { renderChats } from "./pages/userChats.js";
+import { renderUserContributions } from "./pages/userContributions.js";
 function escapeHtml(str) {
   return String(str || "")
     .replace(/&/g, "&amp;")
@@ -23,9 +24,12 @@ function escapeHtml(str) {
 }
 
 export default function createRouter(core) {
+  const htmlExt = getExtension("html-rendering");
+  const htmlAuth = htmlExt?.exports?.urlAuth || authenticate;
+
   const router = express.Router();
 
-  router.get("/user/:userId/notes", authenticateOptional, async (req, res) => {
+  router.get("/user/:userId/notes", htmlAuth, async (req, res) => {
     try {
       const userId = req.params.userId;
       const startDate = req.query.startDate;
@@ -102,7 +106,7 @@ export default function createRouter(core) {
         }),
       );
 
-      return res.send(html().renderUserNotes({ userId, user, notes, processedNotes, query, token }));
+      return res.send(renderUserNotes({ userId, user, notes, processedNotes, query, token }));
     } catch (err) {
  log.error("User Queries", "Error in /user/:userId/notes:", err);
       sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -111,7 +115,7 @@ export default function createRouter(core) {
 
   // Tags route moved to extensions/team
 
-  router.get("/user/:userId/contributions", authenticateOptional, async (req, res) => {
+  router.get("/user/:userId/contributions", htmlAuth, async (req, res) => {
     try {
       const { userId } = req.params;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -131,14 +135,14 @@ export default function createRouter(core) {
       }
 
       const user = await User.findById(userId).lean();
-      return res.send(await html().renderUserContributions({ userId, user, contributions, username: user?.username, getNodeName, token }));
+      return res.send(await renderUserContributions({ userId, user, contributions, username: user?.username, getNodeName, token }));
     } catch (err) {
  log.error("User Queries", "Error in /user/:userId/contributions:", err);
       sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   });
 
-  router.get("/user/:userId/chats", authenticateOptional, async (req, res) => {
+  router.get("/user/:userId/chats", htmlAuth, async (req, res) => {
     try {
       const { userId } = req.params;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -173,7 +177,7 @@ export default function createRouter(core) {
       const user = await User.findById(userId).lean();
       const username = user?.username || "Unknown user";
 
-      return res.send(html().renderChats({ userId, chats: allChats, sessions, username, token, sessionId }));
+      return res.send(renderChats({ userId, chats: allChats, sessions, username, token, sessionId }));
     } catch (err) {
  log.error("User Queries", err);
       sendError(res, 500, ERR.INTERNAL, err.message);

@@ -31,13 +31,18 @@ function normalizeBookSettings(raw = {}) {
   };
 }
 
+function getNoteVersion(n) {
+  const meta = n.metadata instanceof Map ? n.metadata.get("version") : n.metadata?.version;
+  return Number(meta) || 0;
+}
+
 function applyNoteFilters(notes, node, flags) {
   let result = notes;
   if (flags.latestVersionOnly && result.length > 0) {
     const maxVersion = Math.max(
-      ...result.map((n) => Number(n.version)).filter((v) => !Number.isNaN(v)),
+      ...result.map((n) => getNoteVersion(n)).filter((v) => !Number.isNaN(v)),
     );
-    result = result.filter((n) => Number(n.version) === maxVersion);
+    result = result.filter((n) => getNoteVersion(n) === maxVersion);
   }
   if (flags.filesOnly) result = result.filter((n) => n.contentType === "file");
   if (flags.textOnly) result = result.filter((n) => n.contentType === "text");
@@ -62,7 +67,7 @@ function buildBookTree(node, nodeMap, notesByNode, flags = {}) {
   const rawNotes = notesByNode.get(nodeId) || [];
   const filteredNotes = applyNoteFilters(rawNotes, node, flags).map((n) => ({
     noteId: n._id.toString(),
-    version: n.version,
+    version: getNoteVersion(n),
     userId: n.userId?.toString(),
     content: n.content,
     type: n.contentType,

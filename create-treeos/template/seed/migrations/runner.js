@@ -26,7 +26,7 @@ import { SEED_VERSION } from "../version.js";
 import { getLandConfigValue, setLandConfigValue } from "../landConfig.js";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATION_TIMEOUT_MS = 60000; // 60s per migration
@@ -101,7 +101,7 @@ function discoverMigrations() {
  * Run a single migration with a timeout.
  */
 async function runMigration(version, filePath) {
-  const mod = await import(filePath);
+  const mod = await import(pathToFileURL(filePath).href);
 
   if (typeof mod.default !== "function") {
     log.warn("Seed", `Migration ${version} does not export a default function. Skipping.`);

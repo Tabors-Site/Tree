@@ -1,7 +1,5 @@
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
-
 const MAX_DEPARTED = 50;
 
 export async function init(core) {
@@ -17,7 +15,7 @@ export async function init(core) {
       const parentDoc = await Node.findById(doc.parent);
       if (!parentDoc) return;
 
-      const meta = getExtMeta(parentDoc, "remember") || {};
+      const meta = core.metadata.getExtMeta(parentDoc, "remember") || {};
       if (!meta.departed) meta.departed = [];
 
       // Check if prune absorbed essence
@@ -48,8 +46,7 @@ export async function init(core) {
         meta.departed = meta.departed.slice(-MAX_DEPARTED);
       }
 
-      await setExtMeta(parentDoc, "remember", meta);
-      await parentDoc.save();
+      await core.metadata.setExtMeta(parentDoc, "remember", meta);
     } catch (err) {
       log.debug("Remember", `beforeNodeDelete memorial failed: ${err.message}`);
     }
@@ -68,7 +65,7 @@ export async function init(core) {
       const node = await Node.findById(nodeId);
       if (!node) return;
 
-      const meta = getExtMeta(node, "remember") || {};
+      const meta = core.metadata.getExtMeta(node, "remember") || {};
       if (!meta.departed) meta.departed = [];
 
       // Don't duplicate if already memorialized
@@ -88,8 +85,7 @@ export async function init(core) {
         meta.departed = meta.departed.slice(-MAX_DEPARTED);
       }
 
-      await setExtMeta(node, "remember", meta);
-      await node.save();
+      await core.metadata.setExtMeta(node, "remember", meta);
     } catch (err) {
       log.debug("Remember", `afterMetadataWrite split memorial failed: ${err.message}`);
     }

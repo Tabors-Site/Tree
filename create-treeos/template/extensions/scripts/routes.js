@@ -1,6 +1,6 @@
 import log from "../../seed/log.js";
 import express from "express";
-import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 
 // Node model wired from init via setNodeModel
 let _Node = null;
@@ -12,7 +12,12 @@ import {
   getScript,
 } from "./core.js";
 import { getExtension } from "../loader.js";
-function html() { return getExtension("html-rendering")?.exports || {}; }
+import { renderScriptDetail, renderScriptHelp } from "./pages/scripts.js";
+let htmlAuth = authenticate;
+export function resolveHtmlAuth() {
+  const htmlExt = getExtension("html-rendering");
+  if (htmlExt?.exports?.urlAuth) htmlAuth = htmlExt.exports.urlAuth;
+}
 
 const router = express.Router();
 
@@ -26,7 +31,7 @@ function filterQuery(req) {
 }
 
 // GET script detail
-router.get("/node/:nodeId/script/:scriptId", authenticateOptional, async (req, res) => {
+router.get("/node/:nodeId/script/:scriptId", htmlAuth, async (req, res) => {
   try {
     const { nodeId, scriptId } = req.params;
 
@@ -46,7 +51,7 @@ router.get("/node/:nodeId/script/:scriptId", authenticateOptional, async (req, r
     }
 
     return res.send(
-      html().renderScriptDetail({ nodeId, script, contributions, qsWithQ }),
+      renderScriptDetail({ nodeId, script, contributions, qsWithQ }),
     );
   } catch (err) {
     log.error("Scripts", "Error fetching script:", err);
@@ -123,7 +128,7 @@ router.post(
 );
 
 // Script help/reference page
-router.get("/node/:nodeId/scripts/help", authenticateOptional, async (req, res) => {
+router.get("/node/:nodeId/scripts/help", htmlAuth, async (req, res) => {
   try {
     const { nodeId } = req.params;
 
@@ -235,7 +240,7 @@ setValueForNode(node._id, "waitTime", newWaitTime, 0 + 1);`,
     const qsWithQ = qs ? `?${qs}` : "";
 
     return res.send(
-      html().renderScriptHelp({ nodeId, nodeName: node.name, data, qsWithQ }),
+      renderScriptHelp({ nodeId, nodeName: node.name, data, qsWithQ }),
     );
   } catch (err) {
     log.error("Scripts", "Error loading script help:", err);

@@ -5,10 +5,15 @@ import { setServices, compressToBudget, compressTree, getCompressConfig, getComp
 export async function init(core) {
   // Wire services
   const { editStatus } = await import("../../seed/tree/statuses.js");
+  core.llm.registerRootLlmSlot("compress");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setServices({
-    runChat: (opts) => core.llm.runChat({ ...opts, llmPriority: BG }),
+    runChat: async (opts) => {
+      if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+      return core.llm.runChat({ ...opts, llmPriority: BG });
+    },
     editStatus,
+    metadata: core.metadata,
   });
 
   // ── onTreeTripped: auto-compress as revival strategy ───────────────

@@ -14,7 +14,7 @@ import authenticate, { authenticateOptional } from "../../seed/middleware/authen
 import { getExtension } from "../../extensions/loader.js";
 import { createCanopyLlmProxyClient } from "../../canopy/llmProxy.js";
 // orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
-import { getOrchestrator } from "../../seed/orchestratorRegistry.js";
+import { getOrchestrator } from "../../seed/orchestrators/registry.js";
 import {
   setRootId,
   getClientForUser,

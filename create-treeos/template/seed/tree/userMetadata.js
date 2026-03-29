@@ -12,6 +12,7 @@
 
 import { guardMetadataWrite } from "./documentGuard.js";
 import { getLandConfigValue } from "../landConfig.js";
+import User from "../models/user.js";
 
 const MAX_KEY_LENGTH = 50;
 function MAX_VALUE_BYTES() { return Math.max(1024, Math.min(Number(getLandConfigValue("metadataNamespaceMaxBytes")) || 524288, 2 * 1024 * 1024)); }
@@ -98,4 +99,84 @@ export function setUserMeta(user, key, data) {
     user.metadata[key] = data;
   }
   if (user.markModified) user.markModified("metadata");
+}
+
+/**
+ * Atomic increment on a single key within a user's metadata namespace.
+ * Uses MongoDB $inc. No read-modify-write. No race conditions.
+ * Accepts user document or userId string.
+ *
+ *   await incUserMeta(userId, "storage", "usageKB", 42);
+ */
+export async function incUserMeta(user, key, field, amount = 1) {
+  if (!user || !key || !field) return false;
+  if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
+  if (DANGEROUS_KEYS.has(field)) return false;
+  if (typeof amount !== "number" || !isFinite(amount)) return false;
+  const userId = String(user._id || user);
+  await User.updateOne(
+    { _id: userId },
+    { $inc: { [`metadata.${key}.${field}`]: amount } }
+  );
+  return true;
+}
+
+/**
+ * Atomic push to an array within a user's metadata namespace.
+ * Uses MongoDB $push with $slice for a capped circular buffer.
+ *
+ *   await pushUserMeta(userId, "phase", "history", { phase, ts }, 50);
+ */
+export async function pushUserMeta(user, key, field, item, maxLength = 100) {
+  if (!user || !key || !field) return false;
+  if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
+  if (DANGEROUS_KEYS.has(field)) return false;
+  const safeCap = Math.min(Math.max(1, maxLength), 1000);
+  try { JSON.stringify(item); } catch { return false; }
+  const userId = String(user._id || user);
+  await User.updateOne(
+    { _id: userId },
+    { $push: { [`metadata.${key}.${field}`]: { $each: [item], $slice: -safeCap } } }
+  );
+  return true;
+}
+
+/**
+ * Atomic multi-field set within a user's metadata namespace.
+ * Uses MongoDB $set on individual keys. No read-modify-write.
+ *
+ *   await batchSetUserMeta(userId, "energy", { available: 100, lastReset: now });
+ */
+export async function batchSetUserMeta(user, key, fields) {
+  if (!user || !key || !fields || typeof fields !== "object") return false;
+  if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
+  const entries = Object.entries(fields);
+  if (entries.length === 0 || entries.length > 100) return false;
+  const userId = String(user._id || user);
+  const updates = {};
+  for (const [field, value] of entries) {
+    if (DANGEROUS_KEYS.has(field)) continue;
+    try { JSON.stringify(value); } catch { continue; }
+    updates[`metadata.${key}.${field}`] = value;
+  }
+  if (Object.keys(updates).length === 0) return false;
+  await User.updateOne({ _id: userId }, { $set: updates });
+  return true;
+}
+
+/**
+ * Atomic namespace removal from a user's metadata.
+ * Uses MongoDB $unset. The key is removed entirely, not set to null.
+ *
+ *   await unsetUserMeta(userId, "old-extension");
+ */
+export async function unsetUserMeta(user, key) {
+  if (!user || !key) return false;
+  if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
+  const userId = String(user._id || user);
+  await User.updateOne(
+    { _id: userId },
+    { $unset: { [`metadata.${key}`]: "" } }
+  );
+  return true;
 }

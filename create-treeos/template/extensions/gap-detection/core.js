@@ -8,6 +8,9 @@
 import Node from "../../seed/models/node.js";
 import { getLoadedExtensionNames } from "../loader.js";
 
+let _metadata = null;
+export function setMetadata(m) { _metadata = m; }
+
 // Namespaces that are kernel or core, not extensions. Never flagged as gaps.
 const KERNEL_NAMESPACES = new Set([
   "cascade", "circuit", "extensions", "nav", "tools", "modes",
@@ -96,9 +99,7 @@ export async function writeGaps(nodeId, gapNamespaces) {
     }
   }
 
-  await Node.findByIdAndUpdate(nodeId, {
-    $set: { "metadata.gaps": [...gapMap.values()] },
-  });
+  await _metadata.setExtMeta(await Node.findById(nodeId), "gaps", [...gapMap.values()]);
 }
 
 /**
@@ -119,5 +120,5 @@ export async function getGaps(nodeId) {
  * Clear gap records for a node (e.g. after installing the missing extension).
  */
 export async function clearGaps(nodeId) {
-  await Node.findByIdAndUpdate(nodeId, { $unset: { "metadata.gaps": 1 } });
+  await _metadata.unsetExtMeta(nodeId, "gaps");
 }

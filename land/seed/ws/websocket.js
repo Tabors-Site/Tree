@@ -8,7 +8,7 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import path from "path";
 import { fileURLToPath } from "url";
-import { getClientForUser, userHasLlm } from "../ws/conversation.js";
+import { getClientForUser, userHasLlm } from "../llm/conversation.js";
 import { hooks } from "../hooks.js";
 import {
   connectToMCP,
@@ -22,7 +22,7 @@ import { getModeOwner, getBlockedExtensionsAtNode } from "../tree/extensionScope
 import Node from "../models/node.js";
 import { resolveTreeAccess } from "../tree/treeAccess.js";
 // orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
-import { getOrchestrator } from "../orchestratorRegistry.js";
+import { getOrchestrator } from "../orchestrators/registry.js";
 import { enqueue } from "./requestQueue.js";
 import {
   switchMode,
@@ -37,13 +37,13 @@ import {
   sessionCount,
   setCurrentNodeId,
   getCurrentNodeId,
-} from "./conversation.js";
+} from "../llm/conversation.js";
 import {
   getSubModes,
   bigModeFromUrl,
   getDefaultMode,
   BIG_MODES,
-} from "./modes/registry.js";
+} from "../modes/registry.js";
 import {
   ensureSession,
   rotateSession,
@@ -54,7 +54,7 @@ import {
   finalizeOpenChat,
   setChatContext,
   clearChatContext,
-} from "./chatTracker.js";
+} from "../llm/chatTracker.js";
 // Provided by tree-orchestrator extension if installed. No-op without it.
 let clearMemory = () => {};
 export function setClearMemoryFn(fn) { if (typeof fn === "function") clearMemory = fn; }

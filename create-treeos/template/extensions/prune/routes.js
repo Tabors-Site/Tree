@@ -2,11 +2,12 @@ import log from "../../seed/log.js";
 import express from "express";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import authenticate from "../../seed/middleware/authenticate.js";
-import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { scanForCandidates, confirmPrune, undoPrune, purge } from "./core.js";
 
 let Node = null;
+let _metadata = null;
 export function setModels(models) { Node = models.Node; }
+export function setMetadata(metadata) { _metadata = metadata; }
 
 function validateRootId(req, res) {
   const rootId = req.params.rootId;
@@ -27,7 +28,7 @@ router.get("/root/:rootId/prune", authenticate, async (req, res) => {
     const root = await Node.findById(rootId).select("metadata name").lean();
     if (!root) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Tree not found");
 
-    const pruneMeta = getExtMeta(root, "prune");
+    const pruneMeta = _metadata.getExtMeta(root, "prune");
 
     sendOk(res, {
       rootId,
@@ -85,7 +86,7 @@ router.get("/root/:rootId/prune/history", authenticate, async (req, res) => {
     const root = await Node.findById(rootId).select("metadata").lean();
     if (!root) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Tree not found");
 
-    const pruneMeta = getExtMeta(root, "prune");
+    const pruneMeta = _metadata.getExtMeta(root, "prune");
 
     sendOk(res, {
       history: pruneMeta.history || [],

@@ -300,6 +300,7 @@ export async function aiRoute(signals, profiles, userId) {
       username: "mycelium",
       message: prompt,
       mode: "home:default",
+      slot: "mycelium",
     });
     if (!answer) return [];
     return parseJsonSafe(answer) || [];

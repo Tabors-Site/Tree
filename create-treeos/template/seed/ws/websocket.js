@@ -18,9 +18,11 @@ import {
 } from "./mcp.js";
 import { getNodeName } from "../tree/treeData.js";
 import { getLandConfigValue } from "../landConfig.js";
+import { getModeOwner, getBlockedExtensionsAtNode } from "../tree/extensionScope.js";
 import Node from "../models/node.js";
+import { resolveTreeAccess } from "../tree/treeAccess.js";
 // orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
-import { getOrchestrator } from "../orchestratorRegistry.js";
+import { getOrchestrator } from "../orchestrators/registry.js";
 import { enqueue } from "./requestQueue.js";
 import {
   switchMode,
@@ -302,6 +304,23 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       const currentMode = getCurrentMode(visitorId);
       const currentBig = currentMode?.split(":")[0] || null;
 
+      // Validate tree access before accepting rootId/nodeId from the client.
+      // Without this, a crafted WebSocket message could point the AI at another user's tree.
+      const targetId = rootId || nodeId;
+      if (targetId && socket.userId) {
+        try {
+          const access = await resolveTreeAccess(targetId, socket.userId);
+          if (!access.ok || !access.canWrite) {
+            log.warn("WS", `Access denied: ${socket.userId} tried to navigate to ${targetId}`);
+            rootId = null;
+            nodeId = null;
+          }
+        } catch {
+          rootId = null;
+          nodeId = null;
+        }
+      }
+
       // Update rootId when viewing a root URL
       if (rootId) {
         setRootId(visitorId, rootId);
@@ -315,6 +334,10 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         // Only set rootId if we don't have one yet (first load via /node/ URL)
         if (!getRootId(visitorId)) {
           setRootId(visitorId, nodeId);
+        }
+        // In-tree navigation hook (distinct from afterNavigate which fires on root load)
+        if (socket.userId) {
+          hooks.run("onNodeNavigate", { userId: socket.userId, rootId: getRootId(visitorId), nodeId, socket }).catch(() => {});
         }
       }
 
@@ -385,13 +408,25 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       // Always send available modes so frontend stays in sync
       const activeMode = getCurrentMode(visitorId);
       const bigMode = activeMode?.split(":")[0] || newBigMode;
-      const subModes = getSubModes(bigMode);
+      let subModes = getSubModes(bigMode);
+
+      // Filter modes by extension scope at current position
+      if (activeRootId) {
+        try {
+          const scope = await getBlockedExtensionsAtNode(activeRootId);
+          subModes = subModes.filter(m => {
+            const owner = getModeOwner(m.key);
+            return !owner || !scope.blocked.has(owner);
+          });
+        } catch {}
+      }
+
       socket.emit(WS.AVAILABLE_MODES, {
         bigMode,
         modes: subModes,
         currentMode: activeMode,
         rootName,
-        rootId: activeRootId, // <-- add this
+        rootId: activeRootId,
       });
     });
 
@@ -461,7 +496,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       }
 
       const bigMode = currentMode?.split(":")[0] || BIG_MODES.HOME;
-      const subModes = getSubModes(bigMode);
+      let subModes = getSubModes(bigMode);
 
       const activeRootId = getRootId(visitorId);
       let rootName = null;
@@ -471,12 +506,23 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         } catch {}
       }
 
+      // Filter modes by extension scope at current position
+      if (activeRootId) {
+        try {
+          const scope = await getBlockedExtensionsAtNode(activeRootId);
+          subModes = subModes.filter(m => {
+            const owner = getModeOwner(m.key);
+            return !owner || !scope.blocked.has(owner);
+          });
+        } catch {}
+      }
+
       socket.emit(WS.AVAILABLE_MODES, {
         bigMode,
         modes: subModes,
         currentMode,
         rootName,
-        rootId: activeRootId, // <-- add this
+        rootId: activeRootId,
       });
     });
 
@@ -513,8 +559,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       if (!message || typeof message !== "string" || !username) {
         return socket.emit(WS.CHAT_ERROR, { error: "Missing or invalid message", generation });
       }
-      if (message.length > 5000) {
-        return socket.emit(WS.CHAT_ERROR, { error: "Message must be under 5000 characters.", generation });
+      const maxChatChars = Number(getLandConfigValue("maxChatMessageChars")) || 5000;
+      if (message.length > maxChatChars) {
+        return socket.emit(WS.CHAT_ERROR, { error: `Message must be under ${maxChatChars} characters.`, generation });
       }
 
       // Rate limit: sliding window per socket

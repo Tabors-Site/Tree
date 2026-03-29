@@ -7,7 +7,7 @@ import { OrchestratorRuntime, parseJsonSafe } from "../../seed/orchestrators/run
 import { SESSION_TYPES, updateSessionMeta } from "../../seed/ws/sessionRegistry.js";
 import { setRootId, getClientForUser, LLM_PRIORITY } from "../../seed/ws/conversation.js";
 
-import { getOrchestrator } from "../../seed/orchestratorRegistry.js";
+import { getOrchestrator } from "../../seed/orchestrators/registry.js";
 import {
   buildDeepTreeSummary,
 } from "../../seed/tree/treeFetch.js";

@@ -2,13 +2,31 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import log from "../../seed/log.js";
+import { createNote } from "../../seed/tree/notes.js";
+import NodeModel from "../../seed/models/node.js";
+import UserModel from "../../seed/models/user.js";
+import {
+  scaffold,
+  isInitialized,
+  findFoodNodes,
+  parseFood,
+  deliverMacros,
+  getDailyPicture,
+} from "./core.js";
 
-let Node = null;
-let User = null;
-export function setModels(models) { Node = models.Node; User = models.User; }
+let Node = NodeModel;
+export function setServices({ Node: N }) { if (N) Node = N; }
 
 const router = express.Router();
 
+/**
+ * POST /root/:rootId/food
+ *
+ * Three paths:
+ * 1. First use (not initialized): scaffold tree, run coach mode for setup conversation
+ * 2. Food input (has food words): parse, cascade, respond with totals
+ * 3. Questions/advice: route to coach mode at the Daily node
+ */
 router.post("/root/:rootId/food", authenticate, async (req, res) => {
   try {
     const { rootId } = req.params;
@@ -16,7 +34,7 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
     const message = Array.isArray(rawMessage) ? rawMessage.join(" ") : rawMessage;
     if (!message) return sendError(res, 400, ERR.INVALID_INPUT, "message required");
 
-    const root = await Node.findById(rootId).select("rootOwner contributors").lean();
+    const root = await Node.findById(rootId).select("rootOwner contributors name").lean();
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
 
     const userId = req.userId;
@@ -26,31 +44,118 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
       return sendError(res, 403, ERR.FORBIDDEN, "No access to this tree");
     }
 
-    // Check spatial scope: is food blocked at this position?
+    // Check spatial scope
     const { isExtensionBlockedAtNode } = await import("../../seed/tree/extensionScope.js");
     if (await isExtensionBlockedAtNode("food", rootId)) {
-      return sendError(res, 403, ERR.EXTENSION_BLOCKED, "Food tracking is blocked on this branch. Navigate to a branch where food is active.");
+      return sendError(res, 403, ERR.EXTENSION_BLOCKED, "Food tracking is blocked on this branch.");
     }
 
-    const user = await User.findById(userId).select("username").lean();
+    const user = await UserModel.findById(userId).select("username").lean();
+    const username = user?.username || "user";
     const { runChat } = await import("../../seed/ws/conversation.js");
 
-    // Detect intent: logging food intake vs coaching/planning
-    const isLogging = /\b(ate|had|eaten|drank|i ate|i had|logged|breakfast|lunch|dinner|snack|\d+\s*cal|\d+\s*g\b)/i.test(message);
-    const mode = isLogging ? "tree:food-log" : "tree:food-coach";
+    // ── PATH 1: First use. Scaffold and run setup conversation. ──
+    const initialized = await isInitialized(rootId);
+    if (!initialized) {
+      await scaffold(rootId, userId);
 
-    const { answer, chatId } = await runChat({
-      userId,
-      username: user.username,
-      message,
-      mode,
-      rootId,
-      res,
-    });
+      // Run the coach mode for the setup conversation
+      const { answer, chatId } = await runChat({
+        userId,
+        username,
+        message: `First time setup. The user said: "${message}". Ask them about their calorie target, macro goals, and dietary restrictions. If they already provided info in their message, use it.`,
+        mode: "tree:food-coach",
+        rootId,
+        res,
+        slot: "food",
+      });
 
-    if (!res.headersSent) sendOk(res, { answer, chatId, mode });
+      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-coach", setup: true });
+      return;
+    }
+
+    const foodNodes = await findFoodNodes(rootId);
+    if (!foodNodes?.log) {
+      return sendError(res, 500, ERR.INTERNAL, "Food tree structure not found.");
+    }
+
+    // ── PATH 3: Questions, advice, planning. Route to coach/daily mode. ──
+    const isQuestion = /\b(what should|how am i|how's my|suggest|recommend|plan|advice|help|adjust|change.*goal|set.*goal|update.*goal)\b/i.test(message);
+    if (isQuestion) {
+      const { answer, chatId } = await runChat({
+        userId,
+        username,
+        message,
+        mode: "tree:food-daily",
+        rootId,
+        res,
+        slot: "food",
+      });
+
+      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-daily" });
+      return;
+    }
+
+    // ── PATH 2: Food input. Parse, cascade, respond. ──
+
+    // One LLM call: parse food into structured macros
+    const parsed = await parseFood(message, userId, username, rootId);
+    if (!parsed) {
+      return sendOk(res, {
+        answer: "Could not parse that as food. Try something like: 'chicken breast and rice for lunch'.",
+        mode: "tree:food-log",
+      });
+    }
+
+    // Write note to Log node with raw input
+    try {
+      await createNote({
+        nodeId: foodNodes.log.id,
+        content: `${parsed.when || "meal"}: ${parsed.meal} (P:${parsed.totals.protein}g C:${parsed.totals.carbs}g F:${parsed.totals.fats}g ${parsed.totals.calories}cal)`,
+        contentType: "text",
+        userId,
+      });
+    } catch (err) {
+      log.warn("Food", `Note creation failed: ${err.message}`);
+    }
+
+    // Fire cascade signals to macro nodes
+    await deliverMacros(foodNodes.log.id, foodNodes, parsed);
+
+    // Small delay for $inc to settle, then read fresh totals
+    await new Promise(r => setTimeout(r, 50));
+    const picture = await getDailyPicture(rootId);
+
+    // Build natural language response
+    const itemList = parsed.items.map(i =>
+      `${i.name} (${i.calories}cal, ${i.protein}p/${i.carbs}c/${i.fats}f)`
+    ).join(", ");
+    let response = `Logged: ${itemList}`;
+
+    if (picture) {
+      const lines = [];
+      for (const macro of ["protein", "carbs", "fats"]) {
+        const m = picture[macro];
+        if (m) {
+          const pct = m.goal > 0 ? Math.round((m.today / m.goal) * 100) : 0;
+          const goalStr = m.goal > 0 ? `/${m.goal}g (${pct}%)` : "g";
+          lines.push(`${macro}: ${m.today}${goalStr}`);
+        }
+      }
+      if (picture.calories) {
+        const c = picture.calories;
+        const pct = c.goal > 0 ? Math.round((c.today / c.goal) * 100) : 0;
+        const goalStr = c.goal > 0 ? `/${c.goal} (${pct}%)` : "";
+        lines.push(`calories: ${c.today}${goalStr}`);
+      }
+      if (lines.length > 0) {
+        response += `\nToday: ${lines.join(", ")}`;
+      }
+    }
+
+    sendOk(res, { answer: response, parsed, mode: "tree:food-log" });
   } catch (err) {
-    log.error("Food", "Chat error:", err.message);
+    log.error("Food", "Route error:", err.message);
     if (!res.headersSent) sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });

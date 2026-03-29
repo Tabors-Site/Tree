@@ -32,7 +32,7 @@ export default {
 
   provides: {
     models: {},
-    routes: true,
+    routes: false,
     tools: false,
     jobs: false,
     env: [

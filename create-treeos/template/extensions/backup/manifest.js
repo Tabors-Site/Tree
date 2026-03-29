@@ -26,7 +26,7 @@ export default {
     models: ["Chat"],
   },
   provides: {
-    routes: true,
+    routes: false,
     hooks: { fires: ["afterRestore"], listens: ["afterBoot"] },
     cli: [
       { command: "backup", scope: ["home"], description: "Full backup (all data)", method: "POST", endpoint: "/backup/full", bodyMap: { output: 0 } },

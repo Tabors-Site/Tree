@@ -1,14 +1,16 @@
 import express from "express";
-import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { createInvite, respondToInvite, getPendingInvitesForUser } from "./invites.js";
 import { sendRemoteInvite } from "./remoteInvites.js";
 import { getAllTagsForUser } from "./tags.js";
 import { getExtension } from "../loader.js";
-
-function html() { return getExtension("html-rendering")?.exports || {}; }
+import { renderInvites } from "./pages/invites.js";
+import { renderUserTags } from "./pages/userTags.js";
 
 export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
+  const htmlExt = getExtension("html-rendering");
+  const htmlAuth = htmlExt?.exports?.urlAuth || authenticate;
   const router = express.Router();
   const { User, Node, Note } = core.models;
   const { logContribution } = core.contributions;
@@ -191,7 +193,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
   // ── Invite list + respond (moved from routes/api/user.js) ─────────
 
-  router.get("/user/:userId/invites", authenticateOptional, async (req, res) => {
+  router.get("/user/:userId/invites", htmlAuth, async (req, res) => {
     try {
       const { userId } = req.params;
 
@@ -207,7 +209,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
       }
 
       const token = req.query.token ?? "";
-      return res.send(html().renderInvites({ userId, invites, token }));
+      return res.send(renderInvites({ userId, invites, token }));
     } catch (err) {
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
@@ -254,7 +256,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
   // ── Tags (moved from extensions/user-queries) ─────────────────────
 
-  router.get("/user/:userId/tags", authenticateOptional, async (req, res) => {
+  router.get("/user/:userId/tags", htmlAuth, async (req, res) => {
     try {
       const userId = req.params.userId;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -282,7 +284,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
       const user = await User.findById(userId).lean();
       const getNodeName = (await import("../../routes/api/helpers/getNameById.js")).default;
-      return res.send(await html().renderUserTags({ userId, user, notes, getNodeName, token }));
+      return res.send(await renderUserTags({ userId, user, notes, getNodeName, token }));
     } catch (err) {
       sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }

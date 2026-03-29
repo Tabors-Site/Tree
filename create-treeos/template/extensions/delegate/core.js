@@ -9,9 +9,11 @@
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
 import User from "../../seed/models/user.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 import { v4 as uuidv4 } from "uuid";
+
+let _metadata = null;
+export function configure({ metadata }) { _metadata = metadata; }
 
 const DEFAULTS = {
   stalledDays: 14,            // days of inactivity before a node is considered stalled
@@ -252,7 +254,7 @@ export async function generateSuggestions(rootId) {
   // Write to root metadata
   const rootDoc = await Node.findById(rootId);
   if (rootDoc) {
-    const meta = getExtMeta(rootDoc, "delegate") || {};
+    const meta = _metadata.getExtMeta(rootDoc, "delegate") || {};
     const all = [...(meta.suggestions || []), ...suggestions];
 
     // Expire old suggestions
@@ -261,8 +263,7 @@ export async function generateSuggestions(rootId) {
       .filter(s => new Date(s.createdAt).getTime() > ttlCutoff)
       .slice(0, 50); // hard cap
 
-    await setExtMeta(rootDoc, "delegate", meta);
-    await rootDoc.save();
+    await _metadata.setExtMeta(rootDoc, "delegate", meta);
   }
 
   return suggestions;
@@ -299,7 +300,7 @@ export async function dismissSuggestion(rootId, suggestionId, userId) {
   const root = await Node.findById(rootId);
   if (!root) return null;
 
-  const meta = getExtMeta(root, "delegate") || {};
+  const meta = _metadata.getExtMeta(root, "delegate") || {};
   const suggestions = meta.suggestions || [];
   const suggestion = suggestions.find(s => s.id === suggestionId);
   if (!suggestion) return null;
@@ -308,8 +309,7 @@ export async function dismissSuggestion(rootId, suggestionId, userId) {
   suggestion.dismissedBy = userId;
   suggestion.dismissedAt = new Date().toISOString();
 
-  await setExtMeta(root, "delegate", meta);
-  await root.save();
+  await _metadata.setExtMeta(root, "delegate", meta);
   return suggestion;
 }
 
@@ -320,7 +320,7 @@ export async function acceptSuggestion(rootId, suggestionId, userId) {
   const root = await Node.findById(rootId);
   if (!root) return null;
 
-  const meta = getExtMeta(root, "delegate") || {};
+  const meta = _metadata.getExtMeta(root, "delegate") || {};
   const suggestions = meta.suggestions || [];
   const suggestion = suggestions.find(s => s.id === suggestionId);
   if (!suggestion) return null;
@@ -329,8 +329,7 @@ export async function acceptSuggestion(rootId, suggestionId, userId) {
   suggestion.acceptedBy = userId;
   suggestion.acceptedAt = new Date().toISOString();
 
-  await setExtMeta(root, "delegate", meta);
-  await root.save();
+  await _metadata.setExtMeta(root, "delegate", meta);
   return suggestion;
 }
 

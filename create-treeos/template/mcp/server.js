@@ -1,35 +1,98 @@
+/**
+ * MCP Server
+ *
+ * Per-session server architecture. Each MCP client gets its own
+ * McpServer + StreamableHTTPServerTransport pair. Tool registrations
+ * are stored in a replay array and applied to every new session.
+ *
+ * The security boundary (auth, tree access, spatial scoping) runs
+ * in handleMcpRequest before the transport processes the request.
+ * Every tool call goes through MCP. No bypass.
+ */
+
+import crypto from "crypto";
 import log from "../seed/log.js";
-import User from "../seed/models/user.js";
-import { getUserMeta } from "../seed/tree/userMetadata.js";
 import { resolveTreeAccess } from "../seed/tree/treeAccess.js";
 import { getToolOwner, isExtensionBlockedAtNode } from "../seed/tree/extensionScope.js";
 import { getChatContext } from "../seed/ws/chatTracker.js";
 
-import {
-  McpServer,
-} from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
-// Stable JSON stringification: sorts object keys so {a:1,b:2} and {b:2,a:1}
-// produce the same string. Used for tool call dedup keys.
-function stableStringify(obj, seen) {
-  if (obj === null || obj === undefined) return "null";
-  if (typeof obj !== "object") return JSON.stringify(obj);
-  if (!seen) seen = new WeakSet();
-  if (seen.has(obj)) return '"[circular]"';
-  seen.add(obj);
-  if (Array.isArray(obj)) return `[${obj.map(v => stableStringify(v, seen)).join(",")}]`;
-  return `{${Object.keys(obj).sort().map(k => `${JSON.stringify(k)}:${stableStringify(obj[k], seen)}`).join(",")}}`;
+// ============================================================================
+// TOOL REGISTRATION REPLAY
+// ============================================================================
+// The loader calls mcpServerInstance.tool() at boot for each extension tool.
+// We intercept those calls and store them. When a new session starts, we
+// create a fresh McpServer and replay all registrations in order.
+
+const _toolRegistrations = []; // [{ name, description, schema, handler }]
+
+/**
+ * Proxy McpServer that captures tool registrations for replay.
+ * Extensions register tools on this during boot. The registrations
+ * are stored and replayed on every new per-session server.
+ */
+class ToolRegistryProxy {
+  constructor() {
+    // Create a real server for the initial connect (SDK requires it)
+    this._templateServer = new McpServer({
+      name: "treeos-mcp",
+      version: "1.0.0",
+    });
+  }
+
+  /**
+   * Capture tool registration for replay on per-session servers.
+   * Also registers on the template server so connectMcpTransport works.
+   */
+  tool(name, description, schema, handler) {
+    _toolRegistrations.push({ name, description, schema, handler });
+    // Register on template too (needed for initial connect)
+    this._templateServer.tool(name, description, schema, handler);
+  }
+
+  /**
+   * Remove a tool from the replay array and all active sessions.
+   * Called when an extension is disabled/uninstalled at runtime.
+   */
+  /**
+   * Remove all tools owned by an extension from the replay array.
+   * Invalidates all active sessions so they reinitialize with updated tools.
+   */
+  removeToolsByOwner(extName, getToolOwnerFn) {
+    for (let i = _toolRegistrations.length - 1; i >= 0; i--) {
+      if (getToolOwnerFn(_toolRegistrations[i].name) === extName) {
+        _toolRegistrations.splice(i, 1);
+      }
+    }
+    // Close all sessions. Next request creates fresh ones with updated tool set.
+    for (const [, session] of _sessions) {
+      try { session.transport.close?.(); } catch {}
+    }
+    _sessions.clear();
+  }
+
+  /**
+   * Proxy connect() to the template server (for the initial boot connect).
+   * Per-session servers connect their own transports.
+   */
+  async connect(_transport) {
+    // No-op. Per-session servers handle their own connections.
+  }
 }
 
+const mcpServerInstance = new ToolRegistryProxy();
+
 // ============================================================================
-// MCP SERVER (empty pipe, extensions register tools via loader)
+// PER-SESSION SERVER FACTORY
 // ============================================================================
 
-function getMcpServer() {
-  return new McpServer({
+const _sessions = new Map(); // sessionId -> { server, transport }
+
+function createSessionServer() {
+  const server = new McpServer({
     name: "treeos-mcp",
-    protocolVersion: "2025-11-25",
     version: "1.0.0",
     capabilities: {
       resources: { listChanged: true },
@@ -37,217 +100,184 @@ function getMcpServer() {
       prompts: {},
     },
   });
+
+  // Replay all tool registrations in order
+  for (const reg of _toolRegistrations) {
+    server.tool(reg.name, reg.description, reg.schema, reg.handler);
+  }
+
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => crypto.randomUUID(),
+    onsessioninitialized: (sessionId) => {
+      log.debug("MCP", `Session initialized: ${sessionId.slice(0, 8)}...`);
+      _sessions.set(sessionId, { server, transport });
+    },
+  });
+
+  server.connect(transport);
+
+  return { server, transport };
 }
 
-const server = getMcpServer();
-const transport = new StreamableHTTPServerTransport({});
-// NOTE: server.connect(transport) is called AFTER extensions register tools.
-// The MCP SDK locks capabilities after connect. Extensions must register first.
-// Call connectMcpTransport() after loadExtensions() completes.
+// Cap sessions to prevent unbounded growth
+const MAX_MCP_SESSIONS = 1000;
 
-// ============================================================================
-// REQUEST HANDLER (pipe: auth, tree access, context injection, dispatch)
-// ============================================================================
+function evictOldestSession() {
+  if (_sessions.size < MAX_MCP_SESSIONS) return;
+  const first = _sessions.keys().next().value;
+  if (first) {
+    try { _sessions.get(first)?.transport?.close?.(); } catch {}
+    _sessions.delete(first);
+  }
+}
 
-const pendingCalls = new Map();
-const completedCalls = new Map();
-
-function parseSseResponse(rawBody) {
-  const lines = rawBody.split("\n");
-  for (const line of lines) {
-    if (line.startsWith("data: ")) {
-      return JSON.parse(line.substring(6));
+// Periodic cleanup of dead sessions
+setInterval(() => {
+  // Sessions are cleaned up by DELETE requests from clients.
+  // This sweep is a safety net for orphaned sessions.
+  if (_sessions.size > MAX_MCP_SESSIONS / 2) {
+    const cutoff = _sessions.size - MAX_MCP_SESSIONS / 2;
+    let removed = 0;
+    for (const [id] of _sessions) {
+      if (removed >= cutoff) break;
+      try { _sessions.get(id)?.transport?.close?.(); } catch {}
+      _sessions.delete(id);
+      removed++;
     }
   }
-  throw new Error("No data found in SSE response");
-}
+}, 600000).unref(); // every 10 min
 
-function formatSseResponse(jsonData) {
-  return `event: message\ndata: ${JSON.stringify(jsonData)}\n\n`;
-}
+// ============================================================================
+// REQUEST HANDLER
+// ============================================================================
 
 async function handleMcpRequest(req, res) {
   try {
+    // Route to existing session or create new one
+    const sessionId = req.headers["mcp-session-id"];
+    let session = sessionId ? _sessions.get(sessionId) : null;
+
+    // DELETE: session cleanup
+    if (req.method === "DELETE") {
+      if (session) {
+        try { session.transport.close?.(); } catch {}
+        _sessions.delete(sessionId);
+      }
+      res.status(200).end();
+      return;
+    }
+
+    // GET: SSE stream for server-initiated messages
+    if (req.method === "GET") {
+      if (!session) {
+        res.status(404).json({ jsonrpc: "2.0", error: { code: -32000, message: "Session not found" }, id: null });
+        return;
+      }
+      await session.transport.handleRequest(req, res);
+      return;
+    }
+
+    // POST: initialize or tool call
     const method = req.body?.method;
+    const isInit = method === "initialize";
+
+    // Session expired: client sent a non-init request without a valid session.
+    // Return error so the MCP client reconnects and re-initializes.
+    if (!session && !isInit) {
+      return res.status(404).json({
+        jsonrpc: "2.0", id: req.body?.id,
+        error: { code: -32000, message: "Session expired. Send initialize to start a new session." },
+      });
+    }
+
+    // New session for initialize requests
+    if (isInit) {
+      evictOldestSession();
+      session = createSessionServer();
+    }
+
     const toolName = req.body?.params?.name;
-    const args = req.body?.params?.arguments;
 
     if (method === "tools/call") {
       const requestArgs = req.body?.params?.arguments ?? {};
+
       if (!req.userId) {
-        res.setHeader("Content-Type", "text/event-stream");
-        res.end(
-          formatSseResponse({
-            jsonrpc: "2.0",
-            id: req.body.id,
-            error: {
-              code: -32602,
-              message: "You are not authorized as this user",
-            },
-          }),
-        );
-        return;
+        return res.status(401).json({
+          jsonrpc: "2.0", id: req.body.id,
+          error: { code: -32602, message: "You are not authorized as this user" },
+        });
       }
       requestArgs.userId = req.userId;
 
-      // Inject AI chat context so contributions are tracked per-chat
+      // Inject AI chat context
       const contextKey = req.visitorId || req.userId;
       const aiCtx = getChatContext(contextKey);
       requestArgs.chatId = aiCtx.chatId;
       requestArgs.sessionId = aiCtx.sessionId;
 
-      const user = await User.findById(req.userId).select("metadata");
-      const htmlShareToken = getUserMeta(user, "html")?.shareToken ?? null;
-      if (args && htmlShareToken) {
-        args.htmlShareToken = htmlShareToken;
-      }
-
       const nodeId = requestArgs.nodeId ?? requestArgs.rootId ?? requestArgs.parentNodeID ?? requestArgs.parentId ?? requestArgs.rootNodeId;
 
+      // Tree access check
       if (nodeId && req.userId) {
         const access = await resolveTreeAccess(nodeId, req.userId);
         if (!access.canWrite) {
-          res.setHeader("Content-Type", "text/event-stream");
-          res.end(
-            formatSseResponse({
-              jsonrpc: "2.0",
-              id: req.body.id,
-              error: {
-                code: -32602,
-                message: "Invalid nodeId, or you are not in this tree.",
-              },
-            }),
-          );
-          return;
+          return res.status(403).json({
+            jsonrpc: "2.0", id: req.body.id,
+            error: { code: -32602, message: "Invalid nodeId, or you are not in this tree." },
+          });
         }
       }
 
-      // Spatial scoping: check if the tool's owning extension is blocked at this node.
-      // Without this, an MCP client can call shell tools at a node where shell is blocked.
+      // Spatial scoping check
       if (nodeId && toolName) {
         const ownerExt = getToolOwner(toolName);
         if (ownerExt) {
           const blocked = await isExtensionBlockedAtNode(ownerExt, nodeId);
           if (blocked) {
-            res.setHeader("Content-Type", "text/event-stream");
-            res.end(
-              formatSseResponse({
-                jsonrpc: "2.0",
-                id: req.body.id,
-                error: {
-                  code: -32602,
-                  message: `Tool "${toolName}" is blocked at this position (extension "${ownerExt}" is scoped out).`,
-                },
-              }),
-            );
-            return;
+            return res.status(403).json({
+              jsonrpc: "2.0", id: req.body.id,
+              error: { code: -32602, message: `Tool "${toolName}" is blocked at this position (extension "${ownerExt}" is scoped out).` },
+            });
           }
         }
       }
-
-      const callKey = `${toolName}:${stableStringify(args)}`;
-
-      // Check pending requests (dedup concurrent identical calls)
-      res.setHeader("Content-Type", "text/event-stream");
-
-      const pending = pendingCalls.get(callKey);
-      if (pending) {
-        log.debug("MCP", `Waiting for in-flight request: ${toolName}`);
-        try {
-          const response = await pending;
-          res.end(formatSseResponse(response));
-        } catch (err) {
-          res.end(
-            formatSseResponse({
-              jsonrpc: "2.0",
-              id: req.body.id,
-              error: err,
-            }),
-          );
-        }
-        return;
-      }
-
-      log.debug("MCP", `Tool: ${toolName}`);
-
-      // Create promise for this request
-      const requestPromise = new Promise((resolve, reject) => {
-        const chunks = [];
-        const originalWrite = res.write.bind(res);
-        const originalEnd = res.end.bind(res);
-
-        res.write = (chunk, ...writeArgs) => {
-          if (chunk) chunks.push(Buffer.from(chunk));
-          return originalWrite(chunk, ...writeArgs);
-        };
-
-        res.end = (chunk, ...endArgs) => {
-          if (chunk) chunks.push(Buffer.from(chunk));
-
-          const rawBody = Buffer.concat(chunks).toString("utf8");
-          if (rawBody) {
-            try {
-              const parsed = parseSseResponse(rawBody);
-              completedCalls.set(callKey, { timestamp: Date.now(), response: parsed });
-              pendingCalls.delete(callKey);
-
-              if (completedCalls.size > 100) {
-                const entries = [...completedCalls.entries()];
-                entries.slice(0, 50).forEach(([key]) => completedCalls.delete(key));
-              }
-
-              resolve(parsed);
-            } catch (err) {
-              reject(err);
-            }
-          }
-
-          return originalEnd(chunk, ...endArgs);
-        };
-      });
-
-      pendingCalls.set(callKey, requestPromise);
-      await transport.handleRequest(req, res, req.body);
-    } else {
-      // Non-tool methods (tools/list, etc.)
-      const requestArgs = req.body?.params?.arguments ?? {};
+    } else if (method !== "initialize" && method !== "notifications/initialized") {
+      // Non-tool, non-init methods: auth check
       if (!req.userId) {
-        res.setHeader("Content-Type", "text/event-stream");
-        res.end(
-          formatSseResponse({
-            jsonrpc: "2.0",
-            id: req.body.id,
-            error: {
-              code: -32602,
-              message: "You are not authorized as this user",
-            },
-          }),
-        );
-        return;
+        return res.status(401).json({
+          jsonrpc: "2.0", id: req.body.id,
+          error: { code: -32602, message: "You are not authorized as this user" },
+        });
       }
-      requestArgs.userId = req.userId;
-
-      const contextKey = req.visitorId || req.userId;
-      const aiCtx = getChatContext(contextKey);
-      requestArgs.chatId = aiCtx.chatId;
-      requestArgs.sessionId = aiCtx.sessionId;
-
-      await transport.handleRequest(req, res, req.body);
     }
+
+    // Delegate to the session's transport
+    await session.transport.handleRequest(req, res, req.body);
   } catch (err) {
-    log.error("MCP", "[MCP] Error:", err);
+    log.error("MCP", "[MCP] Error:", err.message);
     if (!res.headersSent) {
       res.status(500).json({
         jsonrpc: "2.0",
-        error: { code: -32603 },
-        id: req.body.id || null,
+        error: { code: -32603, message: err.message },
+        id: req.body?.id || null,
       });
     }
   }
 }
 
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
 async function connectMcpTransport() {
-  await server.connect(transport);
+  // No-op. Per-session servers connect their own transports.
+  // This function exists for backward compatibility with the boot sequence.
+  log.verbose("MCP", `Tool registry: ${_toolRegistrations.length} tools registered`);
 }
 
-export { server as mcpServerInstance, getMcpServer, handleMcpRequest, connectMcpTransport };
+function getMcpServer() {
+  // Return the proxy so the loader can register tools
+  return mcpServerInstance;
+}
+
+export { mcpServerInstance, getMcpServer, handleMcpRequest, connectMcpTransport };

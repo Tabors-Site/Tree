@@ -41,4 +41,4 @@ authPageRouter.post("/register", registerLimiter, register);
 authPageRouter.post("/login", loginLimiter, login);
 authPageRouter.post("/logout", authenticate, logout);
 
-// GET /login, GET /register, GET /forgot-password pages served by html-rendering extension
+// GET /login, GET /register, GET /forgot-password, GET /auth-redirect served by html-rendering extension

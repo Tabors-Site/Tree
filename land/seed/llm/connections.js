@@ -18,7 +18,7 @@ import log from "../log.js";
 import User from "../models/user.js";
 import LlmConnection from "../models/llmConnection.js";
 import Node from "../models/node.js";
-import { clearUserClientCache } from "../ws/conversation.js";
+import { clearUserClientCache } from "./conversation.js";
 import crypto from "crypto";
 import { getLandConfigValue } from "../landConfig.js";
 import dns from "dns/promises";

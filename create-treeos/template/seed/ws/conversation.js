@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 import crypto from "crypto";
 import User from "../models/user.js";
 import Node from "../models/node.js";
-import { snapshotAncestors } from "../tree/ancestorCache.js";
+import { snapshotAncestors, resolveExtensionScopeFromChain } from "../tree/ancestorCache.js";
 import { isDbHealthy } from "../dbConfig.js";
 import LlmConnection from "../models/llmConnection.js";
 import {
@@ -40,7 +40,7 @@ let MAX_TOOL_ITERATIONS = 15;
 let LLM_TIMEOUT_MS = 15 * 60 * 1000;
 let LLM_MAX_RETRIES = 3;
 const MODE_TIMEOUTS = {};
-const MAX_MESSAGE_CONTENT_BYTES = 32768; // 32KB per message in conversation history
+function MAX_MESSAGE_CONTENT_BYTES() { return Math.max(4096, Math.min(Number(getLandConfigValue("maxMessageContentBytes")) || 32768, 131072)); }
 
 // ── Kernel config setters (called from startup.js after land config loads) ──
 export function setKernelConfig(key, value) {
@@ -456,18 +456,10 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
 // Groups related modes under a single assignment key.
 // Resolution: mode-specific → placement fallback → user default
 // Extensions can register additional mappings via registerModeAssignment().
-const MODE_TO_ASSIGNMENT = {
-  // Core tree orchestration modes (kernel)
-  "tree:librarian": "placement",
-  "tree:navigate": "placement",
-  "tree:structure": "placement",
-  "tree:edit": "placement",
-  "tree:be": "placement",
-  "tree:get-context": "placement",
-  "tree:respond": "respond",
-  "tree:notes": "notes",
-  // Extension modes are registered via registerModeAssignment() during init
-};
+// Mode → LLM slot mapping. Starts empty. Extensions register their mappings
+// during init via registerModeAssignment(). The kernel provides the registry.
+// The kernel does not know what modes exist. That's extension territory.
+const MODE_TO_ASSIGNMENT = {};
 
 /**
  * Register a mode-to-LLM-slot mapping. Extensions call this during init
@@ -493,7 +485,7 @@ export async function resolveRootLlmForMode(rootId, modeKey) {
       .lean();
     if (!rootNode) return null;
 
-    const { getLlmAssignments } = await import("../seed/llm/assignments.js");
+    const { getLlmAssignments } = await import("../llm/assignments.js");
     const assignments = getLlmAssignments(rootNode);
 
     // "none" means LLM is explicitly off for this tree
@@ -547,6 +539,10 @@ export async function userHasLlm(userId) {
 // Each session holds: { modeKey, bigMode, messages[], rootId, _lastActive }
 const sessions = new Map();
 let MAX_CONVERSATION_SESSIONS = 50000; // hard cap to prevent OOM from leaked sessions
+
+// Persistent sessionId map for runChat (zone+rootId+userId -> sessionId).
+// Chains Chat documents together. Capped at 10K entries.
+const _runChatSessions = new Map();
 
 /**
  * Get or create session for a visitor.
@@ -691,6 +687,28 @@ export async function switchBigMode(visitorId, bigMode, ctx) {
 async function ensureSession(visitorId, ctx) {
   const session = getSession(visitorId);
 
+  // Self-healing: detect rootId mismatch. If the caller says we're in a different
+  // tree than the session thinks, clear messages and re-init. This catches race
+  // conditions where setRootId and switchMode happen out of order, and protects
+  // against stale context when callers forget to clear on tree transitions.
+  const incomingRootId = ctx.rootId || null;
+  if (session.rootId && incomingRootId && session.rootId !== incomingRootId) {
+    log.debug("LLM", `Root mismatch for ${visitorId}: session=${session.rootId}, ctx=${incomingRootId}. Clearing.`);
+    session.messages = [];
+    session.modeKey = null;
+    session.rootId = incomingRootId;
+  }
+
+  // Sync rootId from context if session doesn't have one yet
+  if (!session.rootId && incomingRootId) {
+    session.rootId = incomingRootId;
+  }
+
+  // Sync currentNodeId from context
+  if (ctx.currentNodeId) {
+    session.currentNodeId = ctx.currentNodeId;
+  }
+
   // Ensure we have a mode - default to home:default
   if (!session.modeKey) {
     await switchMode(visitorId, "home:default", ctx);
@@ -699,7 +717,7 @@ async function ensureSession(visitorId, ctx) {
   const mode = getMode(session.modeKey);
 
   // Snapshot ancestor chain for consistent resolution within this message.
-  // All resolution chains (scope, tools, mode, LLM, auth) read from this snapshot.
+  // All resolution chains (scope, tools, mode, LLM, config) read from this snapshot.
   const snapshotNodeId = session.currentNodeId || session.rootId || ctx.rootId;
   if (snapshotNodeId) {
     session._ancestorSnapshot = await snapshotAncestors(snapshotNodeId);
@@ -825,9 +843,10 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
   // Trim if over max. Preserve conversation integrity: tool results must
   // follow their corresponding assistant tool_call message. Trim to a clean
   // boundary (user or assistant without tool_calls) to avoid orphaned tool results.
-  if (session.messages.length > MAX_MESSAGES) {
+  const maxMsgs = session._nodeLlmConfig?.maxConversationMessages ?? MAX_MESSAGES;
+  if (session.messages.length > maxMsgs) {
     const systemMsg = session.messages[0];
-    let recent = session.messages.slice(-(MAX_MESSAGES - 1));
+    let recent = session.messages.slice(-(maxMsgs - 1));
     // Walk forward from the trim point to find a clean boundary.
     // If the first message is a tool result, drop it (and any consecutive
     // tool results) because their assistant message was trimmed away.
@@ -837,23 +856,85 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     // Cap any oversized messages retained after trim. Tool results and
     // injected context are capped on insertion, but LLM responses can be
     // arbitrarily large. Truncating here bounds total session memory.
+    const maxBytes = MAX_MESSAGE_CONTENT_BYTES();
     for (const msg of recent) {
-      if (typeof msg.content === "string" && msg.content.length > MAX_MESSAGE_CONTENT_BYTES) {
-        msg.content = msg.content.slice(0, MAX_MESSAGE_CONTENT_BYTES) + "\n... (truncated)";
+      if (typeof msg.content === "string" && msg.content.length > maxBytes) {
+        msg.content = msg.content.slice(0, maxBytes) + "\n... (truncated)";
       }
     }
     session.messages = [systemMsg, ...recent];
   }
 
   // Add user message (capped to prevent oversized entries in conversation history)
-  const safeUserMsg = message.length > MAX_MESSAGE_CONTENT_BYTES
-    ? message.slice(0, MAX_MESSAGE_CONTENT_BYTES) + "\n... (message truncated)"
+  const maxMsgBytes = MAX_MESSAGE_CONTENT_BYTES();
+  const safeUserMsg = message.length > maxMsgBytes
+    ? message.slice(0, maxMsgBytes) + "\n... (message truncated)"
     : message;
   session.messages.push({ role: "user", content: safeUserMsg });
 }
 
 /**
- * Walk parent chain for tool config and spatial extension scoping.
+ * Resolve per-node LLM config from the ancestor snapshot.
+ * Walks from current node to root. First value found for each key wins
+ * (closest to current node takes priority). Returns an object with
+ * overrides only for keys that were set. Callers fall back to globals.
+ *
+ * Supported keys in metadata.llm.config:
+ *   maxToolIterations, toolCallTimeout (ms), toolResultMaxBytes,
+ *   maxConversationMessages
+ */
+/**
+ * Resolve per-position LLM config. Three-layer resolution:
+ *   1. Node config (metadata.llm.config) - operator override at position
+ *   2. Mode config (mode object fields) - mode knows its own needs
+ *   3. Land globals (the defaults) - safety ceiling
+ *
+ * Node wins over mode. Mode wins over land. All clamped to safe maximums.
+ */
+const LLM_CONFIG_KEYS = {
+  maxToolIterations: 100,
+  toolCallTimeout: 600000,       // 10 minutes max
+  toolResultMaxBytes: 1000000,   // 1MB max
+  maxConversationMessages: 200,
+};
+
+function resolveLlmConfig(ancestors, mode) {
+  const config = {};
+
+  // Layer 1: node config (walk ancestor chain, closest wins)
+  if (ancestors && ancestors.length > 0) {
+    for (const node of ancestors) {
+      if (node.systemRole) break;
+      const llmConfig = node.metadata?.llm?.config;
+      if (!llmConfig || typeof llmConfig !== "object") continue;
+      for (const [key, maxVal] of Object.entries(LLM_CONFIG_KEYS)) {
+        if (config[key] !== undefined) continue;
+        const val = llmConfig[key];
+        if (typeof val === "number" && isFinite(val) && val > 0) {
+          config[key] = Math.min(val, maxVal);
+        }
+      }
+    }
+  }
+
+  // Layer 2: mode config (fills gaps not set by node)
+  if (mode) {
+    for (const [key, maxVal] of Object.entries(LLM_CONFIG_KEYS)) {
+      if (config[key] !== undefined) continue;
+      const val = mode[key];
+      if (typeof val === "number" && isFinite(val) && val > 0) {
+        config[key] = Math.min(val, maxVal);
+      }
+    }
+  }
+
+  // Layer 3: land globals (applied at usage site via ?? fallback)
+  return config;
+}
+
+/**
+ * Resolve tool config and spatial extension scoping from the ancestor snapshot.
+ * Uses the per-message snapshot (zero DB queries). Falls back to ancestor cache on miss.
  * Returns { tools, blockedExtensions, restrictedExtensions }.
  */
 async function resolveToolsForPosition(session) {
@@ -863,37 +944,34 @@ async function resolveToolsForPosition(session) {
   const currentNodeId = session.currentNodeId || session.rootId;
   if (currentNodeId) {
     try {
-      // Walk from current node up to root, merging tool configs + extension scoping
-      const allowed = new Set();
-      const blocked = new Set();
-      const blockedExts = new Set();
-      const restrictedExts = new Map(); // extName -> access mode ("read")
-      let cursor = currentNodeId;
-      const visited = new Set();
-      while (cursor && !visited.has(cursor)) {
-        visited.add(cursor);
-        const n = await Node.findById(cursor).select("metadata parent systemRole").lean();
-        if (!n || n.systemRole) break;
-        const meta = n.metadata instanceof Map ? Object.fromEntries(n.metadata) : (n.metadata || {});
-        if (meta.tools?.allowed) for (const t of meta.tools.allowed) allowed.add(t);
-        if (meta.tools?.blocked) for (const t of meta.tools.blocked) blocked.add(t);
-        // Spatial extension scoping
-        if (meta.extensions?.blocked) for (const e of meta.extensions.blocked) blockedExts.add(e);
-        if (meta.extensions?.restricted) {
-          for (const [e, access] of Object.entries(meta.extensions.restricted)) {
-            if (!blockedExts.has(e) && !restrictedExts.has(e)) restrictedExts.set(e, access);
-          }
+      // Use the per-message snapshot. Every resolution chain reads from this.
+      // Falls back to ancestor cache (still cached, not raw DB) if no snapshot.
+      const ancestors = session._ancestorSnapshot
+        || await (async () => { const { getAncestorChain } = await import("../tree/ancestorCache.js"); return getAncestorChain(currentNodeId); })();
+
+      if (ancestors && ancestors.length > 0) {
+        // Tool config: walk ancestor chain in memory
+        const allowed = new Set();
+        const blocked = new Set();
+        for (const node of ancestors) {
+          if (node.systemRole) break;
+          const meta = node.metadata || {};
+          if (meta.tools?.allowed) for (const t of meta.tools.allowed) allowed.add(t);
+          if (meta.tools?.blocked) for (const t of meta.tools.blocked) blocked.add(t);
         }
-        cursor = n.parent;
+        if (allowed.size || blocked.size) {
+          treeToolConfig = {
+            allowed: allowed.size ? [...allowed] : undefined,
+            blocked: blocked.size ? [...blocked] : undefined,
+          };
+        }
+
+        // Extension scoping: reuse the same resolution helper that extensionScope.js uses
+        const { getConfinedExtensions } = await import("../tree/extensionScope.js");
+        const scope = resolveExtensionScopeFromChain(ancestors, getConfinedExtensions());
+        if (scope.blocked.size) blockedExtensions = scope.blocked;
+        if (scope.restricted.size) restrictedExtensions = scope.restricted;
       }
-      if (allowed.size || blocked.size) {
-        treeToolConfig = {
-          allowed: allowed.size ? [...allowed] : undefined,
-          blocked: blocked.size ? [...blocked] : undefined,
-        };
-      }
-      if (blockedExts.size) blockedExtensions = blockedExts;
-      if (restrictedExts.size) restrictedExtensions = restrictedExts;
     } catch (scopeErr) {
       log.warn("LLM", `Tool scope resolution failed for node ${currentNodeId}: ${scopeErr.message}`);
     }
@@ -901,7 +979,7 @@ async function resolveToolsForPosition(session) {
   let tools = getToolsForMode(session.modeKey, treeToolConfig);
   // Filter tools by spatial extension scope (blocked + restricted)
   if (blockedExtensions || restrictedExtensions) {
-    const { filterToolsByScope } = await import("../seed/tree/extensionScope.js");
+    const { filterToolsByScope } = await import("../tree/extensionScope.js");
     tools = filterToolsByScope(tools, blockedExtensions, restrictedExtensions);
   }
   return { tools, blockedExtensions, restrictedExtensions };
@@ -1263,10 +1341,11 @@ async function executeTool(toolCall, session, ctx, client) {
       name: resolvedToolName,
       arguments: args,
     });
+    const nodeToolTimeout = session._nodeLlmConfig?.toolCallTimeout ?? TOOL_CALL_TIMEOUT_MS;
     const result = await Promise.race([
       toolPromise,
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Tool "${resolvedToolName}" timed out after ${TOOL_CALL_TIMEOUT_MS / 1000}s`)), TOOL_CALL_TIMEOUT_MS)
+        setTimeout(() => reject(new Error(`Tool "${resolvedToolName}" timed out after ${nodeToolTimeout / 1000}s`)), nodeToolTimeout)
       ),
     ]);
     let resultText =
@@ -1274,8 +1353,9 @@ async function executeTool(toolCall, session, ctx, client) {
       result?.content?.[0]?.text ||
       JSON.stringify(result);
     // Cap tool result size to prevent huge payloads from consuming context window
-    if (resultText && resultText.length > TOOL_RESULT_MAX_BYTES) {
-      resultText = resultText.slice(0, TOOL_RESULT_MAX_BYTES) + `\n... (truncated, result exceeded ${Math.round(TOOL_RESULT_MAX_BYTES / 1024)}KB)`;
+    const nodeResultMax = session._nodeLlmConfig?.toolResultMaxBytes ?? TOOL_RESULT_MAX_BYTES;
+    if (resultText && resultText.length > nodeResultMax) {
+      resultText = resultText.slice(0, nodeResultMax) + `\n... (truncated, result exceeded ${Math.round(nodeResultMax / 1024)}KB)`;
     }
 
     session.messages.push({
@@ -1401,13 +1481,30 @@ export async function processMessage(visitorId, message, ctx) {
   await prepareConversation(session, ctx, message, mode, visitorId);
 
   // Phase 5: Resolve tools for current position
-  const { tools } = await resolveToolsForPosition(session);
+  let { tools } = await resolveToolsForPosition(session);
+
+  // Query constraint: when readOnly is set, only tools registered with readOnlyHint
+  // are available. Write tools are filtered before the mode fires. The AI cannot
+  // mutate the tree during a query interaction.
+  if (ctx.readOnly) {
+    const { isToolReadOnly } = await import("../tree/extensionScope.js");
+    tools = tools.filter(t => {
+      const name = t.function?.name || t.name;
+      return name && isToolReadOnly(name);
+    });
+  }
+
+  // Phase 5b: Resolve LLM config. Three layers: node > mode > land globals.
+  // Node config walks metadata.llm.config on ancestors. Mode declares its own needs.
+  // Stored on session so callLLM and executeTool can read overrides.
+  session._nodeLlmConfig = resolveLlmConfig(session._ancestorSnapshot, mode);
 
   // Phase 6: Tool calling loop
   let response;
   let iterations = 0;
+  const maxIterations = session._nodeLlmConfig.maxToolIterations ?? MAX_TOOL_ITERATIONS;
 
-  while (iterations < MAX_TOOL_ITERATIONS) {
+  while (iterations < maxIterations) {
     if (ctx.signal?.aborted) throw new Error("Request cancelled");
     iterations++;
 
@@ -1537,7 +1634,7 @@ export function sessionCount() {
  *     nodeId: null,  // optional, for per-node context
  *   });
  */
-export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null, llmPriority = null }) {
+export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null, llmPriority = null, onToolResults = null }) {
   if (!userId || !message || !mode) {
     throw new Error("runChat requires userId, message, and mode");
   }
@@ -1567,17 +1664,14 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   const visitorId = `${contextKey}:${userId}`;
 
   // Persistent sessionId per zone (chains Chats together)
-  // Uses crypto.randomUUID() (sync) to avoid race condition between check and set
-  if (!runChat._sessions) runChat._sessions = new Map();
-  if (!runChat._sessions.has(visitorId)) {
-    // Cap static sessions map to prevent unbounded growth
-    if (runChat._sessions.size >= 10000) {
-      const first = runChat._sessions.keys().next().value;
-      runChat._sessions.delete(first);
+  if (!_runChatSessions.has(visitorId)) {
+    if (_runChatSessions.size >= MAX_CONVERSATION_SESSIONS) {
+      const first = _runChatSessions.keys().next().value;
+      _runChatSessions.delete(first);
     }
-    runChat._sessions.set(visitorId, crypto.randomUUID());
+    _runChatSessions.set(visitorId, crypto.randomUUID());
   }
-  const sessionId = runChat._sessions.get(visitorId);
+  const sessionId = _runChatSessions.get(visitorId);
 
   // Abort controller for cancellation (Ctrl+C, timeout, etc.)
   const abort = signal ? { signal } : new AbortController();
@@ -1645,6 +1739,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
       rootId,
       signal: abortSignal,
       llmPriority,
+      onToolResults,
     });
   } catch (err) {
     if (chat) {

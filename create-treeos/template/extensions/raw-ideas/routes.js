@@ -8,7 +8,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 const __riDir = path.dirname(fileURLToPath(import.meta.url));
 import multer from "multer";
-import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
+import authenticate from "../../seed/middleware/authenticate.js";
 import preUploadCheck from "../../seed/middleware/preUploadCheck.js";
 import { getLandUrl } from "../../canopy/identity.js";
 import { userHasLlm } from "../../seed/ws/conversation.js";
@@ -25,7 +25,13 @@ import {
   AUTO_PLACE_ELIGIBLE,
 } from "./core.js";
 import { getExtension } from "../loader.js";
-function html() { return getExtension("html-rendering")?.exports || {}; }
+let htmlAuth = authenticate;
+export function resolveHtmlAuth() {
+  const htmlExt = getExtension("html-rendering");
+  if (htmlExt?.exports?.urlAuth) htmlAuth = htmlExt.exports.urlAuth;
+}
+
+import { renderRawIdeasList, renderRawIdeaText, renderRawIdeaFile } from "./pages/rawIdeas.js";
 
 function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
   const fn = getExtension("html-rendering")?.exports?.notFoundPage;
@@ -94,8 +100,8 @@ router.post(
   },
 );
 
-// GET list raw ideas
-router.get("/user/:userId/raw-ideas", authenticateOptional, async (req, res) => {
+// GET list raw ideas (requires auth: JWT or share token)
+router.get("/user/:userId/raw-ideas", htmlAuth, async (req, res) => {
   try {
     const userId = req.params.userId;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
@@ -153,7 +159,7 @@ router.get("/user/:userId/raw-ideas", authenticateOptional, async (req, res) => 
     ];
 
     return res.send(
-      html().renderRawIdeasList({
+      renderRawIdeasList({
         userId, user, rawIdeas, query, statusFilter, tabs, tabUrl, token, AUTO_PLACE_ELIGIBLE,
       }),
     );
@@ -281,11 +287,11 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
     if (req.query.html !== undefined && getExtension("html-rendering")) {
       if (rawIdea.contentType === "text") {
         return res.send(
-          html().renderRawIdeaText({ userId, rawIdea, back, backText, userLink, hasToken, token }),
+          renderRawIdeaText({ userId, rawIdea, back, backText, userLink, hasToken, token }),
         );
       }
       return res.send(
-        html().renderRawIdeaFile({ userId, rawIdea, back, backText, userLink, hasToken, token }),
+        renderRawIdeaFile({ userId, rawIdea, back, backText, userLink, hasToken, token }),
       );
     }
 

@@ -23,7 +23,7 @@ import { getLandConfigValue } from "../landConfig.js";
  * maxDocumentSizeBytes (default 14MB). Writes exceeding the limit rejected.
  */
 
-const CORE_NAMESPACES = new Set(["tools", "modes", "extensions", "cascade"]);
+const CORE_NAMESPACES = new Set(["tools", "modes", "extensions", "cascade", "llm"]);
 function MAX_METADATA_VALUE_BYTES() { return Math.max(1024, Math.min(Number(getLandConfigValue("metadataNamespaceMaxBytes")) || 524288, 2 * 1024 * 1024)); }
 const MAX_NAMESPACE_KEY_LENGTH = 50;
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -257,5 +257,116 @@ export async function mergeExtMeta(node, extName, partial, opts) {
 
   invalidateNode(nodeId);
   hooks.run("afterMetadataWrite", { nodeId, extName, data: safePartial }).catch(() => {});
+  return true;
+}
+
+/**
+ * Validate extName for atomic operations.
+ * Same checks as setExtMeta: key length, dangerous keys, type.
+ * Throws on failure so bad inputs never reach MongoDB.
+ */
+function validateAtomicExtName(extName) {
+  validateExtName(extName);
+}
+
+/**
+ * Atomic increment on a single key within an extension's metadata namespace.
+ * Uses MongoDB $inc. No read-modify-write. No race conditions.
+ *
+ *   await incExtMeta(node, "food", "values.today", 42);
+ *   // Atomically adds 42 to metadata.food.values.today
+ */
+export async function incExtMeta(node, extName, key, amount = 1) {
+  if (!node || !extName || !key) return false;
+  validateAtomicExtName(extName);
+  if (typeof amount !== "number" || !isFinite(amount)) return false;
+  if (DANGEROUS_KEYS.has(key)) return false;
+  const nodeId = String(node._id || node);
+  await Node.updateOne(
+    { _id: nodeId },
+    { $inc: { [`metadata.${extName}.${key}`]: amount } }
+  );
+  invalidateNode(nodeId);
+  return true;
+}
+
+/**
+ * Atomic push to an array within an extension's metadata namespace.
+ * Uses MongoDB $push with $slice for a capped circular buffer.
+ *
+ *   await pushExtMeta(node, "scheduler", "completions", { date, delta }, 50);
+ *   // Atomically appends to metadata.scheduler.completions, keeps last 50
+ */
+export async function pushExtMeta(node, extName, key, item, maxLength = 100) {
+  if (!node || !extName || !key) return false;
+  validateAtomicExtName(extName);
+  if (DANGEROUS_KEYS.has(key)) return false;
+  // Cap maxLength to prevent unbounded arrays
+  const safeCap = Math.min(Math.max(1, maxLength), 1000);
+  // Validate item is serializable and within size budget
+  let itemSize;
+  try { itemSize = Buffer.byteLength(JSON.stringify(item), "utf8"); } catch { return false; }
+  // Per-item cap: namespace max / safeCap ensures the array can't exceed the namespace limit
+  const perItemCap = Math.max(1024, Math.floor(MAX_METADATA_VALUE_BYTES() / safeCap));
+  if (itemSize > perItemCap) return false;
+  const nodeId = String(node._id || node);
+  await Node.updateOne(
+    { _id: nodeId },
+    { $push: { [`metadata.${extName}.${key}`]: { $each: [item], $slice: -safeCap } } }
+  );
+  invalidateNode(nodeId);
+  return true;
+}
+
+/**
+ * Atomic multi-field set within an extension's metadata namespace.
+ * Uses MongoDB $set on individual keys. No read-modify-write.
+ * Accepts node document or nodeId string.
+ *
+ *   await batchSetExtMeta(nodeId, "values", { weight: 135, set1: 10, set2: 10, set3: 8 });
+ *   // Atomically sets metadata.values.weight, metadata.values.set1, etc.
+ */
+export async function batchSetExtMeta(node, extName, fields) {
+  if (!node || !extName || !fields || typeof fields !== "object") return false;
+  validateAtomicExtName(extName);
+  // Validate fields: check for dangerous keys, serializable values, total size
+  const entries = Object.entries(fields);
+  if (entries.length === 0) return false;
+  if (entries.length > 100) return false; // cap field count
+  const updates = {};
+  let totalSize = 0;
+  const maxBytes = MAX_METADATA_VALUE_BYTES();
+  for (const [key, value] of entries) {
+    if (DANGEROUS_KEYS.has(key)) continue; // skip dangerous keys silently
+    let serialized;
+    try { serialized = JSON.stringify(value); } catch { continue; } // skip non-serializable
+    totalSize += Buffer.byteLength(serialized, "utf8");
+    if (totalSize > maxBytes) return false; // batch exceeds namespace cap
+    updates[`metadata.${extName}.${key}`] = value;
+  }
+  if (Object.keys(updates).length === 0) return false;
+  const nodeId = String(node._id || node);
+  await Node.updateOne({ _id: nodeId }, { $set: updates });
+  invalidateNode(nodeId);
+  return true;
+}
+
+/**
+ * Atomic namespace removal from a node's metadata.
+ * Uses MongoDB $unset. The key is removed entirely, not set to null.
+ * Document shrinks. Namespace is clean.
+ *
+ *   await unsetExtMeta(nodeId, "gaps");
+ *   // metadata.gaps is gone. getExtMeta returns {}.
+ */
+export async function unsetExtMeta(node, extName) {
+  if (!node || !extName) return false;
+  validateAtomicExtName(extName);
+  const nodeId = String(node._id || node);
+  await Node.updateOne(
+    { _id: nodeId },
+    { $unset: { [`metadata.${extName}`]: "" } }
+  );
+  invalidateNode(nodeId);
   return true;
 }

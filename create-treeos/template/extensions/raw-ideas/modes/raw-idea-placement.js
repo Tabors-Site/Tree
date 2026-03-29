@@ -6,6 +6,7 @@ export default {
   emoji: "💡",
   label: "Raw Ideas",
   bigMode: "home",
+  hidden: true,
 
   toolNames: [
     "get-raw-ideas-by-user",

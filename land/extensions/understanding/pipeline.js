@@ -25,7 +25,7 @@ import UnderstandingNode from "./understandingNode.js";
 // but the pipeline constructs its own runtime so we import directly.
 let LLM_PRIORITY;
 try {
-  ({ LLM_PRIORITY } = await import("../../seed/ws/conversation.js"));
+  ({ LLM_PRIORITY } = await import("../../seed/llm/conversation.js"));
 } catch {
   LLM_PRIORITY = { BACKGROUND: 4 };
 }

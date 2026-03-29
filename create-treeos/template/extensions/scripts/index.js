@@ -4,11 +4,12 @@ import { setExtensions } from "./scriptsFunctions/safeFunctions.js";
 import { getExtension } from "../loader.js";
 
 export async function init(core) {
-  setServices({ models: core.models, contributions: core.contributions });
+  setServices({ models: core.models, contributions: core.contributions, metadata: core.metadata });
   if (core.energy) setEnergyService(core.energy);
 
-  const { default: router, setNodeModel } = await import("./routes.js");
+  const { default: router, setNodeModel, resolveHtmlAuth } = await import("./routes.js");
   setNodeModel(core.models.Node);
+  resolveHtmlAuth();
 
   // Wire optional extension functions for sandboxed scripts
   setExtensions({

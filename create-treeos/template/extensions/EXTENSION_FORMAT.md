@@ -79,7 +79,8 @@ export default {
 | `ownership` | Tree ownership | `addContributor`, `removeContributor`, `transferOwnership` |
 | `tree` | Tree infrastructure | `getAncestorChain`, `checkIntegrity`, `isTreeAlive` |
 | `cascade` | Signal propagation | `deliverCascade` |
-| `metadata` | Node metadata | `getExtMeta`, `setExtMeta`, `mergeExtMeta` |
+| `metadata` | Node metadata | `getExtMeta`, `setExtMeta`, `mergeExtMeta`, `incExtMeta`, `pushExtMeta`, `batchSetExtMeta`, `unsetExtMeta` |
+| `userMetadata` | User metadata | `getUserMeta`, `setUserMeta`, `incUserMeta`, `pushUserMeta`, `batchSetUserMeta`, `unsetUserMeta` |
 | `protocol` | Error codes, constants | `sendOk`, `sendError`, `ERR`, `WS`, `CASCADE` |
 | `websocket` | Real-time events | `emitToUser`, `registerSocketHandler` |
 | `mcp` | MCP connections | `connectToMCP`, `closeMCPClient` |
@@ -98,7 +99,7 @@ Extensions load in topological order. If extension A depends on extension B (`ne
 
 ### hooks and modes are always available
 
-`core.hooks` and `core.modes` are injected into every scoped core regardless of declaration. You don't need to declare them. But declaring `services: ["hooks"]` documents intent and triggers the init diagnostic if something else is wrong.
+`core.hooks`, `core.modes`, `core.metadata`, and `core.userMetadata` are injected into every scoped core regardless of declaration. You never need to declare them. They are core infrastructure available to all extensions.
 
 ### Extension-provided services
 
@@ -416,7 +417,9 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 | Ownership | `core.ownership.*` | Yes |
 | Tree | `core.tree.*` | Yes |
 | Node Locks | `core.nodeLocks.*` | Yes |
-| Metadata | `core.metadata.*` (namespace-enforced) | Yes |
+| Metadata | `core.metadata.*` (namespace-enforced, 7 functions) | Yes (always injected) |
+| User Metadata | `core.userMetadata.*` (6 functions) | Yes (always injected) |
+| Scope | `core.scope.*` | Yes |
 | Cascade | `core.cascade.*` | Yes |
 | Protocol | `core.protocol.*` | Yes |
 | Energy | `core.energy.*` | No-op stub if extension not loaded |
@@ -767,37 +770,57 @@ Jobs are auto-started after DB connect via `startExtensionJobs()`.
 ## Per-Node Data Storage (metadata)
 
 Extensions MUST store per-node data in `node.metadata` under their extension name.
-Do NOT add fields to the core Node schema. Use the metadata helpers:
+Do NOT add fields to the core Node schema. Use `core.metadata` from the services bundle:
 
 ```js
-import { getExtMeta, setExtMeta, mergeExtMeta } from "../../seed/tree/extensionMetadata.js";
+// In init(core) or any function with core in scope:
 
 // Read
-const data = getExtMeta(node, "my-extension");  // returns {} if empty
+const data = core.metadata.getExtMeta(node, "my-extension");  // returns {} if empty
 
-// Write (full replace)
-setExtMeta(node, "my-extension", { wallets: {}, config: {} });
+// Write (full replace, needs document)
+await core.metadata.setExtMeta(node, "my-extension", { wallets: {}, config: {} });
 
-// Partial update (shallow merge)
-mergeExtMeta(node, "my-extension", { lastSync: new Date() });
+// Partial update (shallow merge, needs document)
+await core.metadata.mergeExtMeta(node, "my-extension", { lastSync: new Date() });
+
+// Atomic increment (by ID or document, no read-modify-write)
+await core.metadata.incExtMeta(nodeId, "my-extension", "counter", 1);
+
+// Atomic capped array push (by ID or document)
+await core.metadata.pushExtMeta(nodeId, "my-extension", "history", { ts: Date.now() }, 50);
+
+// Atomic multi-field set (by ID or document)
+await core.metadata.batchSetExtMeta(nodeId, "my-extension", { a: 1, b: 2, c: 3 });
+
+// Remove namespace entirely (on uninstall or cleanup)
+await core.metadata.unsetExtMeta(nodeId, "my-extension");
 ```
 
-### Namespace enforcement through the scoped core
-
-Extensions can also use `core.metadata.setExtMeta(node, data)` through the scoped core. When called this way, the namespace is automatically bound to the calling extension's name. The extension cannot write to another extension's namespace. A `Namespace violation` error is thrown if the namespace doesn't match the caller.
+For files outside `init()` (core.js, tools.js, routes.js), receive metadata through a configure pattern:
 
 ```js
-// Through scoped core (namespace enforced, recommended):
-await core.metadata.setExtMeta(node, "my-extension", { key: "value" });
+// In core.js:
+let _metadata = null;
+export function configure({ metadata }) { _metadata = metadata; }
+// Then use _metadata.getExtMeta, _metadata.setExtMeta, etc.
 
-// Direct import from seed (no enforcement, still works for kernel code and utilities):
-import { setExtMeta } from "../../seed/tree/extensionMetadata.js";
-setExtMeta(node, "my-extension", { key: "value" });
+// In index.js init(core):
+import { configure } from "./core.js";
+configure({ metadata: core.metadata });
+```
+
+User metadata follows the same pattern via `core.userMetadata`:
+
+```js
+const prefs = core.userMetadata.getUserMeta(user, "my-extension");
+await core.userMetadata.incUserMeta(userId, "my-extension", "visits", 1);
+await core.userMetadata.batchSetUserMeta(userId, "my-extension", { theme: "dark" });
 ```
 
 Both paths are valid. The scoped core path prevents accidental cross-namespace writes. The direct import path is for kernel code, migrations, and utilities that need to write to arbitrary namespaces.
 
-Four core namespaces (`tools`, `modes`, `extensions`, `cascade`) are always writable regardless of caller. These are kernel-owned shared configuration.
+Five core namespaces (`tools`, `modes`, `extensions`, `cascade`, `llm`) are always writable regardless of caller. These are kernel-owned shared configuration.
 
 Convention:
 - Namespace key MUST match your manifest `name`
@@ -806,18 +829,20 @@ Convention:
 - Reading metadata from core code (e.g. treeData) should use:
   `(node.metadata instanceof Map ? node.metadata.get("name") : node.metadata?.name)`
 
-### Core code fallback pattern
+### Reaching other extensions
 
-If core code optionally calls extension functionality, use a try/catch import with stubs:
+Use `getExtension()` to access another extension's exports. Never import extension files directly:
 
 ```js
-let mod;
-try { mod = await import("../../extensions/my-ext/core.js"); }
-catch { mod = { myFn: async () => { throw new Error("Extension not installed"); } }; }
-export const { myFn } = mod;
+import { getExtension } from "../loader.js";
+
+const gateway = getExtension("gateway");
+if (gateway?.exports?.dispatchNotifications) {
+  await gateway.exports.dispatchNotifications(rootId, notifications);
+}
 ```
 
-This lets core gracefully degrade when an extension is disabled.
+This returns null if the extension isn't installed. Safe. Decoupled.
 
 ## Custom AI Modes
 
@@ -899,13 +924,10 @@ tools-clear                      Remove all local config (inherit from parent)
 
 **From extension code:**
 ```js
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
-
-// Allow a tool programmatically
-const tools = getExtMeta(node, "tools") || {};
+// Allow a tool programmatically (use core.metadata, never import directly)
+const tools = core.metadata.getExtMeta(node, "tools") || {};
 tools.allowed = [...(tools.allowed || []), "my-custom-tool"];
-setExtMeta(node, "tools", tools);
-await node.save();
+await core.metadata.setExtMeta(node, "tools", tools);
 ```
 
 ## Per-Node Mode Overrides
@@ -975,10 +997,8 @@ ext-restrict food read            Restrict to read-only tools
 Extensions should check spatial scope before running AI conversations:
 
 ```js
-import { isExtensionBlockedAtNode } from "../../seed/tree/extensionScope.js";
-
-// In your route handler:
-if (await isExtensionBlockedAtNode("my-extension", rootId)) {
+// In your route handler (core.scope is always available):
+if (await core.scope.isExtensionBlockedAtNode("my-extension", rootId)) {
   return res.status(403).json({ error: "This extension is blocked on this branch." });
 }
 ```
@@ -1049,17 +1069,21 @@ No action = default GET. Unknown action shows available subcommands. Missing req
 
 ## Per-User Data Storage (metadata)
 
-Same pattern as per-node metadata. Extensions store user-scoped data in `user.metadata`:
+Same pattern as per-node metadata. Use `core.userMetadata` (always available, no declaration needed):
 
 ```js
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
-
 // Read
-const energy = getUserMeta(user, "energy");  // returns {} if empty
+const energy = core.userMetadata.getUserMeta(user, "energy");  // returns {} if empty
 
-// Write
-setUserMeta(user, "energy", { available: { amount: 100 } });
+// Write (sync, caller must save)
+core.userMetadata.setUserMeta(user, "energy", { available: { amount: 100 } });
 await user.save();
+
+// Atomic operations (by ID or document, no need to save)
+await core.userMetadata.incUserMeta(userId, "energy", "used", 5);
+await core.userMetadata.pushUserMeta(userId, "energy", "history", { ts: Date.now() }, 50);
+await core.userMetadata.batchSetUserMeta(userId, "energy", { available: 95, lastUsed: Date.now() });
+await core.userMetadata.unsetUserMeta(userId, "old-extension");
 ```
 
 Convention: namespace key matches your manifest name. Same rules as node metadata.
@@ -1151,6 +1175,28 @@ optional: {
   extensions: ["html-rendering"],     // used if available, skipped if not
 },
 ```
+
+## Common Mistakes
+
+**Calling runChat without checking LLM availability.** If no LLM is configured (no user connection, no land default), `runChat` fails and leaves an empty chat record in the database. Always check before calling:
+
+```js
+// In your index.js setRunChat wrapper:
+setRunChat(async (opts) => {
+  if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) {
+    return { answer: null };
+  }
+  return core.llm.runChat({ ...opts, llmPriority: BG });
+});
+```
+
+`userHasLlm` checks the full resolution chain: user connections, user assignments, and land default. Returns false only when there is truly no LLM anywhere. The check does not bypass the land fallback.
+
+**Injecting into enrichContext without guarding.** Every enrichContext handler should check if relevant data exists before injecting. If your extension has no data for this node, return early. Do not inject empty objects. Do not run database queries on every context build unless you have data to contribute.
+
+**Writing to metadata without the kernel API.** Direct `node.metadata.set()` or `Node.updateOne({ $set: ... })` bypasses namespace ownership, document size guards, and the afterMetadataWrite hook. Always use `core.metadata.*` functions. The kernel provides atomic operations for every pattern: `incExtMeta` for counters, `pushExtMeta` for capped arrays, `batchSetExtMeta` for multi-field writes, `unsetExtMeta` for cleanup. There is no reason to use direct MongoDB for metadata.
+
+**Missing LLM_PRIORITY on background calls.** Every LLM call needs a priority. BACKGROUND for hooks and jobs. INTERACTIVE for user-triggered tools. GATEWAY for external channels. Without priority, background extensions compete with human chat.
 
 ## Security Model
 

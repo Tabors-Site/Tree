@@ -4,8 +4,9 @@ import log from "../../seed/log.js";
 export async function init(core) {
   setServices({ models: core.models });
 
-  const { default: router, setModels } = await import("./routes.js");
+  const { default: router, setModels, resolveHtmlAuth } = await import("./routes.js");
   setModels(core.models);
+  resolveHtmlAuth();
   // Register lifecycle hooks for energy metering
   core.hooks.register("beforeNote", async (data) => {
     try { await useEnergy({ userId: data.userId, action: "note" }); } catch (err) { log.debug("Energy", "note metering failed:", err.message); }

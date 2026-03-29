@@ -7,7 +7,8 @@
  * pathological input without hanging.
  */
 
-const MAX_PARSE_INPUT = 200000; // 200KB. Anything larger is not JSON from an LLM.
+import { getLandConfigValue } from "../landConfig.js";
+function MAX_PARSE_INPUT() { return Math.max(10000, Math.min(Number(getLandConfigValue("maxParseInputBytes")) || 200000, 2000000)); }
 
 /**
  * Safely extract and parse JSON from LLM text output.
@@ -30,7 +31,8 @@ export function parseJsonSafe(text) {
     if (typeof text !== "string") return null;
 
     // Size cap: prevent regex from running on multi-MB strings
-    let cleaned = text.length > MAX_PARSE_INPUT ? text.slice(0, MAX_PARSE_INPUT) : text;
+    const maxInput = MAX_PARSE_INPUT();
+    let cleaned = text.length > maxInput ? text.slice(0, maxInput) : text;
 
     // Strip <think>...</think> blocks. Non-backtracking: match opening tag,
     // then consume everything up to closing tag (or end of string if unclosed).

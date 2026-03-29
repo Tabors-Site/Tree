@@ -1,23 +1,24 @@
 import Transaction from "./model.js";
 import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 // Services wired from init() via setServices()
 let Node = null;
 let Contribution = null;
 let logContribution = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
+let _metadata = null;
 
-export function setServices({ models, contributions }) {
+export function setServices({ models, contributions, metadata }) {
   Node = models.Node;
   Contribution = models.Contribution;
   logContribution = contributions.logContribution;
+  if (metadata) _metadata = metadata;
 }
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
 function getPolicy(node) {
   // Read from metadata first, fall back to schema field for migration period
-  const meta = getExtMeta(node, "transactions");
+  const meta = _metadata.getExtMeta(node, "transactions");
   return meta.policy || node.transactionPolicy || "OWNER_ONLY";
 }
 
@@ -61,13 +62,12 @@ function assertNonNegativeTradeMap(input, label) {
 
 // Read node values from metadata (flat schema)
 function getNodeValues(node) {
-  return { ...getExtMeta(node, "values") };
+  return { ..._metadata.getExtMeta(node, "values") };
 }
 
 // Write node values to metadata and save
 async function setNodeValues(node, values) {
-  await setExtMeta(node, "values", values);
-  await node.save();
+  await _metadata.setExtMeta(node, "values", values);
 }
 
 function hasTradeValues(input) {
@@ -123,8 +123,7 @@ export async function setTransactionPolicy({ rootNodeId, policy, userId }) {
     throw new Error("This transaction policy is already set");
   }
 
-  await setExtMeta(root, "transactions", { ...getExtMeta(root, "transactions"), policy });
-  await root.save();
+  await _metadata.setExtMeta(root, "transactions", { ..._metadata.getExtMeta(root, "transactions"), policy });
 
   return {
     rootId: rootNodeId,

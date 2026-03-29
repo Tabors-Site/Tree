@@ -2,6 +2,8 @@
 // MCP tool handlers for the treeos extension.
 // Extracted from the monolithic MCP server and adapted for the extension system.
 
+import log from "../../seed/log.js";
+import { getExtension } from "../loader.js";
 import { z } from "zod";
 import { getTreeForAi, getNodeForAi } from "../../seed/tree/treeData.js";
 import {
@@ -36,7 +38,9 @@ import { DELETED } from "../../seed/protocol.js";
 // Models wired from init via setModels
 let Node = null;
 let User = null;
+let _getAvailableCommands = null;
 export function setModels(models) { Node = models.Node; User = models.User; }
+export function setCommandResolver(fn) { _getAvailableCommands = fn; }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -192,6 +196,23 @@ export function buildTools() {
             JSON.stringify({ error: "Tree not found", nodeId }, null, 2),
           );
         }
+
+        // Append active extension CLI commands for this tree so the AI
+        // can give specific directions ("fitness 'pushups 20'" not "note ...")
+        if (_getAvailableCommands) {
+          try {
+            const cmds = await _getAvailableCommands(nodeId);
+            if (cmds?.length > 0) {
+              // treeData is a JSON string from getTreeForAi. Parse, add commands, pass object to json().
+              const parsed = JSON.parse(treeData);
+              parsed.availableCommands = cmds;
+              return json(parsed);
+            }
+          } catch (cmdErr) {
+            log.warn("TreeOS", `get-tree commands failed: ${cmdErr.message}`);
+          }
+        }
+
         return json(treeData);
       },
     },
@@ -522,14 +543,15 @@ export function buildTools() {
       },
       handler: async ({ userId }) => {
         try {
-          // getRootNodesForUser was removed from kernel.
-          // Look up user's roots directly from the User model.
-          const user = await User.findById(userId).select("roots").lean();
-          if (!user) return error("User not found");
-          const rootIds = user.roots || [];
-          if (rootIds.length === 0) return json([]);
-          const roots = await Node.find({ _id: { $in: rootIds } })
-            .select("_id name status type dateCreated")
+          // Roots live in metadata.nav.roots, managed by the navigation extension.
+          const nav = getExtension("navigation");
+          if (nav?.exports?.getUserRootsWithNames) {
+            const roots = await nav.exports.getUserRootsWithNames(userId);
+            return json(roots);
+          }
+          // Fallback: query nodes directly by rootOwner (works without navigation extension)
+          const roots = await Node.find({ rootOwner: userId })
+            .select("_id name status type dateCreated visibility")
             .lean();
           return json(roots);
         } catch (err) {
@@ -542,11 +564,11 @@ export function buildTools() {
 
     {
       name: "get-active-leaf-execution-frontier",
-      description: "Get the next executable leaf node for BE mode.",
+      description: "Get the next executable leaf node for focused work. Starts from the given node, not necessarily the tree root. Pass the current position to find leaves within that branch.",
       schema: {
         rootNodeId: z
           .string()
-          .describe("Root node of the active tree"),
+          .describe("Node to start from. Use current position for branch-scoped work, or tree root for whole-tree scan."),
       },
       annotations: {
         readOnlyHint: true,

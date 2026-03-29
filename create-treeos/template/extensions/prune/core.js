@@ -16,7 +16,6 @@
 // Confirmation trims each one after an optional AI absorption pass.
 
 import log from "../../seed/log.js";
-import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getExtension } from "../loader.js";
 
 let Node = null;
@@ -25,19 +24,21 @@ let Note = null;
 let logContribution = null;
 let runChat = null;
 let useEnergy = async () => ({ energyUsed: 0 });
+let _metadata = null;
 
-export function setServices({ models, contributions, llm, energy }) {
+export function setServices({ models, contributions, llm, energy, metadata }) {
   Node = models.Node;
   Contribution = models.Contribution;
   Note = models.Note;
   logContribution = contributions.logContribution;
   runChat = llm.runChat;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
+  if (metadata) _metadata = metadata;
 }
 
-function getDormancyDays() {
+async function getDormancyDays() {
   try {
-    const { getLandConfigValue } = require("../../seed/landConfig.js");
+    const { getLandConfigValue } = await import("../../seed/landConfig.js");
     return Number(getLandConfigValue("pruneDormancyDays")) || 90;
   } catch {
     return 90;
@@ -55,7 +56,7 @@ function getDormancyDays() {
 export async function scanForCandidates(rootId, userId) {
   await useEnergy({ userId, action: "pruneScan" });
 
-  const dormancyMs = getDormancyDays() * 24 * 60 * 60 * 1000;
+  const dormancyMs = (await getDormancyDays()) * 24 * 60 * 60 * 1000;
   const cutoff = new Date(Date.now() - dormancyMs);
 
   // Get all nodes in this tree
@@ -127,11 +128,11 @@ export async function scanForCandidates(rootId, userId) {
   // Write candidates to root metadata
   const root = await Node.findById(rootId);
   if (root) {
-    const pruneMeta = getExtMeta(root, "prune");
+    const pruneMeta = _metadata.getExtMeta(root, "prune");
     pruneMeta.candidates = candidates;
     pruneMeta.lastScanAt = new Date().toISOString();
-    pruneMeta.dormancyDays = getDormancyDays();
-    await setExtMeta(root, "prune", pruneMeta);
+    pruneMeta.dormancyDays = (await getDormancyDays());
+    await _metadata.setExtMeta(root, "prune", pruneMeta);
   }
 
   log.verbose("Prune", `Scanned tree ${rootId}: ${candidates.length} candidate(s) from ${nodes.length} nodes`);
@@ -153,7 +154,7 @@ export async function confirmPrune(rootId, userId, username) {
   const root = await Node.findById(rootId);
   if (!root) throw new Error("Tree not found");
 
-  const pruneMeta = getExtMeta(root, "prune");
+  const pruneMeta = _metadata.getExtMeta(root, "prune");
   const candidates = pruneMeta.candidates || [];
   if (candidates.length === 0) return { pruned: 0, absorbed: 0 };
 
@@ -184,7 +185,7 @@ export async function confirmPrune(rootId, userId, username) {
   if (pruneMeta.history.length > 50) {
     pruneMeta.history = pruneMeta.history.slice(-50);
   }
-  await setExtMeta(root, "prune", pruneMeta);
+  await _metadata.setExtMeta(root, "prune", pruneMeta);
 
   log.info("Prune", `Pruned ${pruned} node(s) from tree ${rootId} (${absorbed} absorbed)`);
   return { pruned, absorbed };
@@ -223,12 +224,13 @@ async function pruneNode(candidate, rootId, userId, username) {
         userId,
         username,
         message:
-          `This node "${node.name}" is being pruned (no activity in ${getDormancyDays()} days). ` +
+          `This node "${node.name}" is being pruned (no activity in ${(await getDormancyDays())} days). ` +
           `Here is its content:\n\n${contentSummary.slice(0, 2000)}\n\n` +
           `Is there one essential fact or insight worth preserving? ` +
           `If yes, respond with just that fact in one sentence. If no, respond with "nothing".`,
         mode: "tree:respond",
         rootId,
+        slot: "prune",
       });
 
       const answer = result?.answer?.trim();
@@ -236,14 +238,14 @@ async function pruneNode(candidate, rootId, userId, username) {
         // Absorb into parent
         const parent = await Node.findById(node.parent);
         if (parent) {
-          const parentPrune = getExtMeta(parent, "prune");
+          const parentPrune = _metadata.getExtMeta(parent, "prune");
           if (!parentPrune.absorbed) parentPrune.absorbed = {};
           parentPrune.absorbed[node.name || candidate.nodeId] = {
             fact: answer,
             absorbedAt: new Date().toISOString(),
             originalNodeId: candidate.nodeId,
           };
-          await setExtMeta(parent, "prune", parentPrune);
+          await _metadata.setExtMeta(parent, "prune", parentPrune);
           didAbsorb = true;
         }
       }
@@ -265,7 +267,7 @@ async function pruneNode(candidate, rootId, userId, username) {
       prune: {
         nodeName: node.name,
         absorbed: didAbsorb,
-        dormancyDays: getDormancyDays(),
+        dormancyDays: (await getDormancyDays()),
       },
     },
   });

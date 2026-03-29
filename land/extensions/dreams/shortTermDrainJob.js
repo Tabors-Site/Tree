@@ -6,7 +6,7 @@ import log from "../../seed/log.js";
 import ShortMemory from "./model.js";
 import Node from "../../seed/models/node.js";
 import { drainTree } from "./shortTermDrain.js";
-import { userHasLlm } from "../../seed/ws/conversation.js";
+import { userHasLlm } from "../../seed/llm/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // STATE
