@@ -9,9 +9,9 @@ export async function init(core) {
   setNodeModel(core.models.Node);
 
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
-    // Legacy top-level metadata keys (see core.js comment)
-    if (meta.schedule) context.schedule = meta.schedule;
-    if (meta.reeffectTime) context.reeffectTime = meta.reeffectTime;
+    const sched = meta.schedules;
+    if (sched?.date) context.schedule = sched.date;
+    if (sched?.reeffectTime) context.reeffectTime = sched.reeffectTime;
   }, "schedules");
 
   try {
@@ -20,6 +20,16 @@ export async function init(core) {
     if (htmlExt) {
       const { default: buildHtmlRoutes } = await import("./htmlRoutes.js");
       htmlExt.router.use("/", buildHtmlRoutes());
+    }
+  } catch {}
+
+  // Register navigation for schedule tool (if treeos-base installed)
+  try {
+    const { getExtension } = await import("../loader.js");
+    const base = getExtension("treeos-base");
+    if (base?.exports?.registerToolNavigation) {
+      base.exports.registerToolNavigation("edit-node-version-schedule", ({ args, withToken: t }) =>
+        t(`/api/v1/node/${args.nodeId}/${args.prestige || 0}?html`));
     }
   } catch {}
 

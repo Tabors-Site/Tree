@@ -35,6 +35,16 @@ export async function init(core) {
     }
   }, "prestige");
 
+  // Register navigation for prestige tool (if treeos-base installed)
+  try {
+    const { getExtension } = await import("../loader.js");
+    const base = getExtension("treeos-base");
+    if (base?.exports?.registerToolNavigation) {
+      base.exports.registerToolNavigation("add-node-prestige", ({ args, withToken: t }) =>
+        t(`/api/v1/node/${args.nodeId}/${args.prestige || 0}?html`));
+    }
+  } catch {}
+
   return {
     router,
     tools,

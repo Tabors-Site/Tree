@@ -16,6 +16,25 @@ export function renderBundlePage({ pkg, memberDocs, dependentOsDocs, stats }) {
     ? dependentOsDocs.map((os, i) => packageCard(os, i)).join("")
     : "";
 
+  // Build member tree
+  const memberDocMap = new Map((memberDocs || []).map(m => [m.name, m]));
+  const memberTree = includes.map(ref => {
+    const cleanName = ref.split("@")[0];
+    const doc = memberDocMap.get(cleanName);
+    const published = !!doc;
+    const realVersion = doc ? doc.version : null;
+    const dot = published
+      ? '<span style="color:#10b981;margin-right:6px;">&#9679;</span>'
+      : '<span style="color:var(--text-muted);margin-right:6px;">&#9675;</span>';
+    const link = published
+      ? `<a href="/extensions/${encodeURIComponent(cleanName)}/page" style="color:var(--text-primary);text-decoration:none;font-weight:600;">${escapeHtml(cleanName)}</a>`
+      : `<span style="color:var(--text-muted);">${escapeHtml(cleanName)}</span>`;
+    const ver = realVersion
+      ? `<span style="color:var(--text-muted);font-size:11px;margin-left:6px;">v${escapeHtml(realVersion)}</span>`
+      : "";
+    return `<div style="padding:3px 0;font-size:13px;font-family:'JetBrains Mono',monospace;">${dot}${link}${ver}</div>`;
+  }).join("");
+
   const body = `
     <div style="margin-bottom:24px;animation:fadeInUp 0.5s ease-out both;">
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
@@ -40,7 +59,22 @@ export function renderBundlePage({ pkg, memberDocs, dependentOsDocs, stats }) {
       ${ecosystemStats(stats)}
     </div>` : ""}
 
-    <!-- Member Extensions -->
+    <!-- Dependency Tree -->
+    <div class="glass-card" style="animation-delay: 0.08s;">
+      <h2>Member Extensions</h2>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
+        <span style="color:#10b981;">&#9679;</span> published
+        <span style="margin-left:12px;color:var(--text-muted);">&#9675;</span> not yet published
+      </p>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;margin-bottom:8px;color:var(--accent);">
+        ${escapeHtml(pkg.name)}
+      </div>
+      <div style="margin-left:20px;border-left:1px solid rgba(255,255,255,0.08);padding-left:12px;">
+        ${memberTree}
+      </div>
+    </div>
+
+    <!-- Member Cards -->
     <div class="glass-card" style="animation-delay: 0.1s;">
       <h2>Included Extensions</h2>
       <div class="card-grid">

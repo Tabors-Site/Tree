@@ -61,7 +61,7 @@ land/
 │   ├── loader.js      # Scans manifests, validates deps, wires routes/tools/modes/hooks/jobs
 │   ├── EXTENSION_FORMAT.md  # Full extension developer documentation
 │   │
-│   │  # Base TreeOS (20 extensions, ship with every land)
+│   │  # Base TreeOS (21 extensions, ship with every land)
 │   ├── treeos/             # Home zone orchestrator
 │   ├── tree-orchestrator/  # Tree zone chat/place/query orchestrator (REPLACEABLE)
 │   ├── land-manager/       # Land zone management, extension install/config
@@ -83,11 +83,11 @@ land/
 │   │
 │   │  # Four bundles (35 extensions)
 │   ├── treeos-cascade/     # Bundle: nervous system (8)
-│   ├── treeos-connect/     # Bundle: rain layer (8)
+│   ├── treeos-connect/     # Bundle: rain layer (11)
 │   ├── treeos-intelligence/ # Bundle: self-awareness (14)
 │   ├── treeos-maintenance/ # Bundle: hygiene (5)
 │   │
-│   │  # Standalone (9)
+│   │  # Standalone (8)
 │   ├── persona/            # AI identity per node
 │   ├── mycelium/           # Intelligent inter-land routing
 │   ├── peer-review/        # AI revision loop on notes
@@ -346,14 +346,14 @@ INVALID_INPUT means garbage the kernel can't parse. Not "I understood your reque
 
 ## Extension Ecosystem (95 extensions, 4 bundles)
 
-**Base TreeOS (20):** treeos-base, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, breath, instructions.
+**Base TreeOS (21):** treeos-base, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, breath, instructions, channels.
 
 **treeos-cascade (8):** propagation, perspective-filter, sealed-transport, codebook, gap-detection, long-memory, pulse, flow.
 
 **treeos-intelligence (14):** tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, competence, reflect, evolve, rings.
 
-**treeos-connect (8):** gateway, gateway-telegram, gateway-discord, gateway-webhook, gateway-email, gateway-sms, gateway-slack, gateway-matrix.
+**treeos-connect (11):** gateway, gateway-telegram, gateway-discord, gateway-webhook, gateway-email, gateway-sms, gateway-slack, gateway-matrix, gateway-reddit, gateway-x, gateway-tree.
 
 **treeos-maintenance (5):** prune, reroot, changelog, digest, delegate.
 
-**Standalone (9):** persona, mycelium, peer-review, seed-export, channels, governance, teach, split, approve.
+**Standalone (8):** persona, mycelium, peer-review, seed-export, governance, teach, split, approve.

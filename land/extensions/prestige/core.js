@@ -79,8 +79,8 @@ async function addPrestigeToNode(node) {
     status: node.status,
     values: { ...(meta.values || {}) },
     goals: { ...(meta.goals || {}) },
-    schedule: meta.schedule || null,
-    reeffectTime: meta.reeffectTime || 0,
+    schedule: meta.schedules?.date || null,
+    reeffectTime: meta.schedules?.reeffectTime || 0,
     archivedAt: new Date().toISOString(),
   };
 
@@ -115,8 +115,8 @@ async function addPrestigeToNode(node) {
 
   // Advance schedule via the schedules extension's export (not direct namespace write)
   const schedulesExt = getExtension("schedules");
-  if (schedulesExt?.exports?.updateSchedule && meta.schedule) {
-    const scheduleData = { schedule: new Date(meta.schedule), reeffectTime: meta.reeffectTime || 0 };
+  if (schedulesExt?.exports?.updateSchedule && meta.schedules?.date) {
+    const scheduleData = { schedule: new Date(meta.schedules.date), reeffectTime: meta.schedules?.reeffectTime || 0 };
     const newSchedule = calculateNextSchedule(scheduleData);
     if (newSchedule) {
       try {

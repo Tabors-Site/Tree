@@ -439,8 +439,8 @@ router.get("/node/:nodeId/:version", authenticate, async (req, res) => {
           status: node.status || NODE_STATUS.ACTIVE,
           values: meta.values || {},
           goals: meta.goals || {},
-          schedule: meta.schedule || null,
-          reeffectTime: meta.reeffectTime || 0,
+          schedule: meta.schedules?.date || null,
+          reeffectTime: meta.schedules?.reeffectTime || 0,
           dateCreated: node.dateCreated,
         }
       : (prestigeData.history?.find(h => h.version === v) || { status: NODE_STATUS.COMPLETED });
@@ -472,23 +472,26 @@ router.post("/node/:nodeId/createChild", authenticate, async (req, res) => {
       return sendError(res, 404, ERR.NODE_NOT_FOUND, "Parent node not found");
     }
 
+    // Build extension metadata from request body
+    const metadata = new Map();
+    if (values && typeof values === "object" && Object.keys(values).length > 0) metadata.set("values", values);
+    if (goals && typeof goals === "object" && Object.keys(goals).length > 0) metadata.set("goals", goals);
+    if (schedule || reeffectTime) {
+      const schedData = {};
+      if (schedule) schedData.date = new Date(schedule);
+      if (reeffectTime) schedData.reeffectTime = reeffectTime;
+      metadata.set("schedules", schedData);
+    }
+
     // Create child
-    const childNode = await createNode(
+    const childNode = await createNode({
       name,
-      schedule || null,
-      reeffectTime || null,
-      parentNode._id, // parentNodeID
-      false, // isRoot
+      parentId: parentNode._id,
       userId,
-      values || {},
-      goals || {},
-      note || null,
-      null, // validatedUser
-      false, // wasAi
-      null, // chatId
-      null, // sessionId
-      type || null,
-    );
+      type: type || null,
+      note: note || null,
+      metadata: metadata.size > 0 ? metadata : null,
+    });
 
     sendOk(res, {
       childId: childNode._id,

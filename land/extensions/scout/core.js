@@ -13,6 +13,7 @@ import Node from "../../seed/models/node.js";
 import Note from "../../seed/models/note.js";
 import { CONTENT_TYPE } from "../../seed/protocol.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
+import { getDescendantIds, resolveRootNode } from "../../seed/tree/treeFetch.js";
 
 let LLM_PRIORITY;
 try {
@@ -80,16 +81,14 @@ async function searchSemantic(query, rootId, userId, opts) {
 
 async function searchStructural(query, nodeId, rootId, opts) {
   try {
-    // Search the ENTIRE tree, not just local neighborhood
-    const allNodes = await Node.find({
-      $or: [{ rootOwner: rootId }, { _id: rootId }],
-    }).select("_id name").lean();
+    // Walk the full tree from the root to get every descendant
+    const allIds = await getDescendantIds(rootId, { maxResults: 500 });
+    if (!allIds.length) return { strategy: "structural", findings: [] };
 
-    if (!allNodes.length) return { strategy: "structural", findings: [] };
-
-    const nodeIds = allNodes.map(n => n._id);
+    // Build node name lookup
     const nodeNames = new Map();
-    for (const n of allNodes) nodeNames.set(n._id.toString(), n.name);
+    const nodeDocs = await Node.find({ _id: { $in: allIds } }).select("_id name").lean();
+    for (const n of nodeDocs) nodeNames.set(n._id.toString(), n.name);
 
     const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
     if (queryWords.length === 0) return { strategy: "structural", findings: [] };
@@ -99,7 +98,7 @@ async function searchStructural(query, nodeId, rootId, opts) {
     const regexPattern = escaped.join("|");
 
     const notes = await Note.find({
-      nodeId: { $in: nodeIds },
+      nodeId: { $in: allIds },
       contentType: CONTENT_TYPE.TEXT,
       content: { $regex: regexPattern, $options: "i" },
     }).sort({ createdAt: -1 }).limit(50).select("_id content nodeId createdAt").lean();
@@ -330,7 +329,13 @@ Return ONLY JSON:
     }
 
     // Step 2: Run all five strategies in parallel
-    const rootId = opts.rootId || nodeId;
+    let rootId = opts.rootId;
+    if (!rootId) {
+      try {
+        const rootNode = await resolveRootNode(nodeId);
+        rootId = String(rootNode._id);
+      } catch { rootId = nodeId; }
+    }
     const strategyOpts = {
       similarityThreshold: opts.similarityThreshold || 0.7,
       maxFindingsPerStrategy: opts.maxFindingsPerAngle || 10,

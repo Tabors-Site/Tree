@@ -1,7 +1,7 @@
 export default {
   name: "teach",
   version: "1.0.0",
-  builtFor: "kernel",
+  builtFor: "seed",
   description:
     "When a tree has been alive long enough, it accumulates wisdom that is not " +
     "structure and is not content. It is meta-knowledge. Evolution discovered that " +

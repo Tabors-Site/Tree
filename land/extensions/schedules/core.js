@@ -55,11 +55,7 @@ async function updateSchedule({
     action: "editSchedule",
   });
 
-  // Legacy top-level metadata keys (pre-extension namespace convention).
-  // These keys are read by kernel (treeManagement), prestige, html-rendering, scripts.
-  // Do not consolidate without a full data migration.
-  await _metadata.setExtMeta(node, "schedule", formattedDate);
-  await _metadata.setExtMeta(node, "reeffectTime", reeffectTime);
+  await _metadata.setExtMeta(node, "schedules", { date: formattedDate, reeffectTime });
 
   const scheduleEdited = { date: formattedDate, reeffectTime };
 
@@ -116,7 +112,8 @@ async function getCalendar({ rootNodeId, startDate, endDate }) {
     if (!node) return;
 
     const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
-    const schedule = meta.schedule;
+    const sched = meta.schedules || {};
+    const schedule = sched.date;
 
     if (schedule) {
       const scheduleDate = new Date(schedule);
@@ -129,7 +126,7 @@ async function getCalendar({ rootNodeId, startDate, endDate }) {
           nodeId: node._id.toString(),
           name: node.name ?? "(Untitled)",
           schedule: scheduleDate,
-          reeffectTime: meta.reeffectTime ?? null,
+          reeffectTime: sched.reeffectTime ?? null,
         });
       }
     }

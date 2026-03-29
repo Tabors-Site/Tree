@@ -517,7 +517,7 @@ export async function userHasLlm(userId) {
   if (!userId) return false;
   const user = await User.findById(userId).select("metadata").lean();
   const userMeta = user?.metadata || {};
-  const userLlm = userMeta?.userLlm?.assignments || {};
+  const userLlm = userMeta?.userLlm?.slots || {};
   if (userLlm.main) return true;
   const count = await LlmConnection.countDocuments({ userId });
   if (count > 0) return true;
@@ -572,6 +572,7 @@ setInterval(
     for (const [id, s] of sessions) {
       if (now - (s._lastActive || 0) > STALE_SESSION_MS) {
         sessions.delete(id);
+        _runChatSessions.delete(id);
         swept++;
       }
     }
@@ -841,10 +842,18 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     const systemMsg = session.messages[0];
     let recent = session.messages.slice(-(maxMsgs - 1));
     // Walk forward from the trim point to find a clean boundary.
-    // If the first message is a tool result, drop it (and any consecutive
-    // tool results) because their assistant message was trimmed away.
+    // Drop orphaned tool results (their assistant message was trimmed away).
     while (recent.length > 0 && recent[0].role === "tool") {
       recent.shift();
+    }
+    // Drop orphaned assistant tool_calls (their tool results were trimmed away).
+    // An assistant message with tool_calls but no subsequent tool results confuses the LLM.
+    while (recent.length > 0 && recent[0].role === "assistant" && recent[0].tool_calls?.length > 0) {
+      recent.shift();
+      // Drop any trailing tool results that belonged to the dropped assistant
+      while (recent.length > 0 && recent[0].role === "tool") {
+        recent.shift();
+      }
     }
     // Cap any oversized messages retained after trim. Tool results and
     // injected context are capped on insertion, but LLM responses can be
@@ -904,6 +913,7 @@ function resolveLlmConfig(ancestors, mode) {
         if (config[key] !== undefined) continue;
         const val = llmConfig[key];
         if (typeof val === "number" && isFinite(val) && val > 0) {
+          if (val > maxVal) log.verbose("LLM", `Node LLM config ${key}=${val} clamped to max ${maxVal}`);
           config[key] = Math.min(val, maxVal);
         }
       }
@@ -916,6 +926,7 @@ function resolveLlmConfig(ancestors, mode) {
       if (config[key] !== undefined) continue;
       const val = mode[key];
       if (typeof val === "number" && isFinite(val) && val > 0) {
+        if (val > maxVal) log.verbose("LLM", `Mode LLM config ${key}=${val} clamped to max ${maxVal}`);
         config[key] = Math.min(val, maxVal);
       }
     }
@@ -1264,10 +1275,20 @@ async function executeTool(toolCall, session, ctx, client) {
   const toolName = toolCall.function.name;
   let args;
 
+  if (!toolCall.function.arguments || typeof toolCall.function.arguments !== "string") {
+    log.error("LLM", `Missing or non-string tool arguments for ${toolName}`);
+    session.messages.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify({ error: "Missing tool arguments" }),
+    });
+    return { tool: toolName, success: false, error: "Missing tool arguments" };
+  }
+
   try {
     args = JSON.parse(toolCall.function.arguments);
   } catch (e) {
-    log.error("LLM", `❌ Invalid tool arguments for ${toolName}:`, e.message);
+    log.error("LLM", `Invalid tool arguments for ${toolName}:`, e.message);
     session.messages.push({
       role: "tool",
       tool_call_id: toolCall.id,
@@ -1347,8 +1368,10 @@ async function executeTool(toolCall, session, ctx, client) {
       JSON.stringify(result);
     // Cap tool result size to prevent huge payloads from consuming context window
     const nodeResultMax = session._nodeLlmConfig?.toolResultMaxBytes ?? TOOL_RESULT_MAX_BYTES;
-    if (resultText && resultText.length > nodeResultMax) {
-      resultText = resultText.slice(0, nodeResultMax) + `\n... (truncated, result exceeded ${Math.round(nodeResultMax / 1024)}KB)`;
+    if (resultText && Buffer.byteLength(resultText, "utf8") > nodeResultMax) {
+      // Slice by characters (conservative, may be slightly under byte limit for multi-byte)
+      const charEstimate = Math.floor(nodeResultMax * 0.9);
+      resultText = resultText.slice(0, charEstimate) + `\n... (truncated, result exceeded ${Math.round(nodeResultMax / 1024)}KB)`;
     }
 
     session.messages.push({

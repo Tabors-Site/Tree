@@ -41,24 +41,15 @@ export async function ensurePulseNode() {
   }
 
   // Create .pulse under land root
-  const id = uuidv4();
-  const pulseNode = new Node({
-    _id: id,
+  const { createSystemNode } = await import("../../seed/tree/treeManagement.js");
+  const pulseNode = await createSystemNode({
     name: ".pulse",
-    parent: landRoot._id,
-    children: [],
-    contributors: [],
+    parentId: landRoot._id,
     metadata: new Map([["pulse", { installedAt: new Date().toISOString() }]]),
   });
-  await pulseNode.save();
 
-  // Add to land root children
-  await Node.findByIdAndUpdate(landRoot._id, {
-    $addToSet: { children: id },
-  });
-
-  pulseNodeId = id;
-  log.info("Pulse", `Created .pulse node: ${id}`);
+  pulseNodeId = String(pulseNode._id);
+  log.info("Pulse", `Created .pulse node: ${pulseNodeId}`);
   return pulseNodeId;
 }
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import Node from "../../seed/models/node.js";
+import { resolveRootNode } from "../../seed/tree/treeFetch.js";
 import { runScout, getScoutHistory, getScoutGaps } from "./core.js";
 
 export default [
@@ -20,9 +20,9 @@ export default [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     handler: async ({ nodeId, query, userId, username }) => {
       try {
-        // Resolve tree root so strategies search the whole tree
-        const node = await Node.findById(nodeId).select("rootOwner").lean();
-        const rootId = node?.rootOwner ? String(node.rootOwner) : nodeId;
+        // Walk up to tree root so strategies search the whole tree
+        const rootNode = await resolveRootNode(nodeId);
+        const rootId = String(rootNode._id);
 
         const result = await runScout(nodeId, query, userId, username || "system", { rootId });
         if (result.error) {

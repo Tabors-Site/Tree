@@ -93,8 +93,8 @@ async function getRingsNode(rootId, userId) {
   const children = await _Node.find({ parent: rootId }).select("_id name systemRole").lean();
   let ringsNode = children.find(c => c.name === RINGS_NODE_NAME);
   if (!ringsNode) {
-    const { createNode } = await import("../../seed/tree/treeManagement.js");
-    ringsNode = await createNode(RINGS_NODE_NAME, null, null, rootId, false, userId);
+    const { createSystemNode } = await import("../../seed/tree/treeManagement.js");
+    ringsNode = await createSystemNode({ name: RINGS_NODE_NAME, parentId: rootId });
     log.verbose("Rings", `Created ${RINGS_NODE_NAME} node under ${String(rootId).slice(0, 8)}`);
   }
   return ringsNode;

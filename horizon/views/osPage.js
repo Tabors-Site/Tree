@@ -28,6 +28,57 @@ export function renderOsPage({ pkg, bundleDocs, standaloneDocs, allMembers, stat
     ? allMembers.map((m, i) => packageCard(m, i)).join("")
     : "";
 
+  // Build dependency tree
+  // Map all published docs by name for version lookup
+  const allDocMap = new Map();
+  for (const d of [...(bundleDocs || []), ...(standaloneDocs || []), ...(allMembers || [])]) {
+    if (!allDocMap.has(d.name)) allDocMap.set(d.name, d);
+  }
+
+  function treeNode(ref, type, children) {
+    const cleanName = ref.split("@")[0];
+    const doc = allDocMap.get(cleanName);
+    const published = !!doc;
+    const realVersion = doc ? doc.version : null;
+    const dot = published
+      ? '<span style="color:#10b981;margin-right:6px;">&#9679;</span>'
+      : '<span style="color:var(--text-muted);margin-right:6px;">&#9675;</span>';
+    const link = published
+      ? `<a href="/extensions/${encodeURIComponent(cleanName)}/page" style="color:var(--text-primary);text-decoration:none;font-weight:600;">${escapeHtml(cleanName)}</a>`
+      : `<span style="color:var(--text-muted);">${escapeHtml(cleanName)}</span>`;
+    const ver = realVersion
+      ? `<span style="color:var(--text-muted);font-size:11px;margin-left:6px;">v${escapeHtml(realVersion)}</span>`
+      : "";
+    const badge = type === "bundle" ? '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.15);color:rgba(251,191,36,0.95);margin-left:8px;font-weight:600;">bundle</span>' : "";
+
+    let html = `<div style="padding:4px 0;font-size:13px;font-family:'JetBrains Mono',monospace;">${dot}${link}${ver}${badge}</div>`;
+    if (children && children.length > 0) {
+      html += `<div style="margin-left:20px;border-left:1px solid rgba(255,255,255,0.08);padding-left:12px;">`;
+      html += children.join("");
+      html += `</div>`;
+    }
+    return html;
+  }
+
+  const treeHtml = (() => {
+    const sections = [];
+
+    // Bundles with their member extensions
+    for (const bundleRef of osBundles) {
+      const bundleName = bundleRef.split("@")[0];
+      const doc = allDocMap.get(bundleName);
+      const members = (doc?.includes || []).map(m => treeNode(m, "extension", null));
+      sections.push(treeNode(bundleRef, "bundle", members));
+    }
+
+    // Standalone extensions
+    for (const extRef of osStandalone) {
+      sections.push(treeNode(extRef, "extension", null));
+    }
+
+    return sections.join("");
+  })();
+
   const body = `
     <div style="margin-bottom:24px;animation:fadeInUp 0.5s ease-out both;">
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
@@ -50,6 +101,21 @@ export function renderOsPage({ pkg, bundleDocs, standaloneDocs, allMembers, stat
       <h2>Ecosystem</h2>
       ${ecosystemStats(stats)}
     </div>` : ""}
+
+    <!-- Dependency Tree -->
+    <div class="glass-card" style="animation-delay: 0.08s;">
+      <h2>Dependency Tree</h2>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
+        <span style="color:#10b981;">&#9679;</span> published
+        <span style="margin-left:12px;color:var(--text-muted);">&#9675;</span> not yet published
+      </p>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;margin-bottom:8px;color:var(--accent);">
+        ${escapeHtml(pkg.name)}
+      </div>
+      <div style="margin-left:20px;border-left:1px solid rgba(255,255,255,0.08);padding-left:12px;">
+        ${treeHtml}
+      </div>
+    </div>
 
     <!-- Bundles -->
     ${osBundles.length ? `

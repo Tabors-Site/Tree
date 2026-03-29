@@ -39,11 +39,11 @@ export async function scaffold(foodRootId, userId) {
   const { createNode } = await import("../../seed/tree/treeManagement.js");
 
   // Create the five child nodes
-  const logNode = await createNode("Log", null, null, foodRootId, false, userId);
-  const proteinNode = await createNode("Protein", null, null, foodRootId, false, userId);
-  const carbsNode = await createNode("Carbs", null, null, foodRootId, false, userId);
-  const fatsNode = await createNode("Fats", null, null, foodRootId, false, userId);
-  const dailyNode = await createNode("Daily", null, null, foodRootId, false, userId);
+  const logNode = await createNode({ name: "Log", parentId: foodRootId, userId });
+  const proteinNode = await createNode({ name: "Protein", parentId: foodRootId, userId });
+  const carbsNode = await createNode({ name: "Carbs", parentId: foodRootId, userId });
+  const fatsNode = await createNode({ name: "Fats", parentId: foodRootId, userId });
+  const dailyNode = await createNode({ name: "Daily", parentId: foodRootId, userId });
 
   // Tag each node with its food role
   const nodes = [

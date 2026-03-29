@@ -2,7 +2,7 @@
  * Scheduler Core
  *
  * Timeline builder, completion tracker, reliability calculator.
- * Reads metadata.schedule (ISO date) and metadata.reeffectTime (hours)
+ * Reads metadata.schedules.date (ISO date) and metadata.schedules.reeffectTime (hours)
  * from nodes. Never writes to schedules data. Writes completions to
  * metadata.scheduler on each node.
  */
@@ -79,7 +79,7 @@ export async function scanTree(rootId) {
 
   const scheduledNodes = await _Node.find({
     _id: { $in: allIds },
-    "metadata.schedule": { $exists: true, $ne: null },
+    "metadata.schedules.date": { $exists: true, $ne: null },
   }).select("_id name status metadata").lean();
 
   const due = [];
@@ -91,7 +91,7 @@ export async function scanTree(rootId) {
       ? Object.fromEntries(node.metadata)
       : (node.metadata || {});
 
-    const rawSchedule = meta.schedule;
+    const rawSchedule = meta.schedules?.date;
     if (!rawSchedule) continue;
 
     const scheduledFor = new Date(rawSchedule).getTime();
@@ -296,7 +296,7 @@ export async function getWeekTimeline(rootId) {
 
   const scheduledNodes = await _Node.find({
     _id: { $in: allIds },
-    "metadata.schedule": { $exists: true, $ne: null },
+    "metadata.schedules.date": { $exists: true, $ne: null },
   }).select("_id name status metadata").lean();
 
   const items = [];
@@ -305,7 +305,7 @@ export async function getWeekTimeline(rootId) {
       ? Object.fromEntries(node.metadata)
       : (node.metadata || {});
 
-    const rawSchedule = meta.schedule;
+    const rawSchedule = meta.schedules?.date;
     if (!rawSchedule) continue;
 
     const scheduledFor = new Date(rawSchedule).getTime();

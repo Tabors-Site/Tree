@@ -1,7 +1,7 @@
 export default {
   name: "persona",
   version: "1.0.0",
-  builtFor: "kernel",
+  builtFor: "seed",
   description: "AI identity at every position. Name, voice, traits, boundaries. Inherits down the tree. Override at any branch.",
 
   needs: {

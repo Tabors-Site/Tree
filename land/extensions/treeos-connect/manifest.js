@@ -2,9 +2,9 @@ export default {
   name: "treeos-connect",
   version: "1.0.0",
   type: "bundle",
-  builtFor: "kernel",
+  builtFor: "seed",
   description:
-    "The rain. Eight extensions that open the clouds. " +
+    "The rain. Eleven extensions that open the clouds. " +
     "\n\n" +
     "Without this bundle, the only way data enters your land is through the CLI, " +
     "the web interface, or the API. Your trees grow from what you manually plant. " +
@@ -26,6 +26,9 @@ export default {
     "Gateway-sms: Twilio. Trees in your pocket without an app. Text your tree. " +
     "Gateway-slack: bot token plus channel ID. The tree lives where teams already work. " +
     "Gateway-matrix: open protocol. Self-hosted. Your land, your server, your data. " +
+    "Gateway-reddit: post notifications as Reddit threads. " +
+    "Gateway-x: post to X (Twitter). Output generation, thread management, webhook input. " +
+    "Gateway-tree: tree-to-tree channels across lands. Native cascade bridging. " +
     "\n\n" +
     "Operators install the bundle for the full registry, then enable individual " +
     "channels as needed. Each channel type extension also works standalone. " +
@@ -44,6 +47,9 @@ export default {
       "gateway-sms",
       "gateway-slack",
       "gateway-matrix",
+      "gateway-reddit",
+      "gateway-x",
+      "gateway-tree",
     ],
   },
 

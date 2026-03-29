@@ -1,18 +1,84 @@
-// treeos/navigation.js
+// treeos-base/navigation.js
 // afterToolCall hook handler: navigates the frontend when the AI calls a tool.
-// Moved from the kernel MCP server into extension territory.
+// Extensions register their own tool-to-URL mappings via registerToolNavigation().
 
 import { getUserMeta } from "../../seed/tree/userMetadata.js";
 import { getLandUrl } from "../../canopy/identity.js";
 
-/**
- * Build the afterToolCall hook handler.
- * @param {object} core - core services bundle
- */
+// ── Navigation Registry ────────────────────────────────────────────────
+// Extensions call registerToolNavigation(toolName, urlBuilder) during init().
+// urlBuilder receives ({ args, userId, shareToken, withToken }) and returns a URL path or null.
+
+const _navRegistry = new Map();
+
+export function registerToolNavigation(toolName, urlBuilder) {
+  if (typeof toolName !== "string" || typeof urlBuilder !== "function") return;
+  _navRegistry.set(toolName, urlBuilder);
+}
+
+// Batch registration for convenience
+export function registerToolNavigations(mappings) {
+  for (const [toolName, urlBuilder] of Object.entries(mappings)) {
+    registerToolNavigation(toolName, urlBuilder);
+  }
+}
+
+// ── Core Tool Navigations (kernel tools) ───────────────────────────────
+
+function nodeUrl(args, t) { return t(`/api/v1/node/${args.nodeId}?html`); }
+function nodeVersionUrl(args, t) { return t(`/api/v1/node/${args.nodeId}/${args.prestige || 0}?html`); }
+function rootUrl(args, t) { return t(`/api/v1/root/${args.rootId || args.rootNodeId || args.nodeId}?html`); }
+function notesUrl(args, t) { return t(`/api/v1/node/${args.nodeId}/${args.prestige || 0}/notes?html`); }
+
+// Register core (kernel-level) tool navigations
+registerToolNavigations({
+  // Tree / Root
+  "tree-start": ({ args, withToken: t }) => rootUrl(args, t),
+  "get-tree": ({ args, withToken: t }) => rootUrl(args, t),
+
+  // Node
+  "get-node": ({ args, withToken: t }) => nodeUrl(args, t),
+  "create-new-node": ({ args, withToken: t }) => nodeUrl(args, t),
+  "edit-node-name": ({ args, withToken: t }) => nodeUrl(args, t),
+  "edit-node-type": ({ args, withToken: t }) => nodeUrl(args, t),
+  "navigate-tree": ({ args, withToken: t }) => nodeUrl(args, t),
+
+  // Node version
+  "edit-node-or-branch-status": ({ args, withToken: t }) => nodeVersionUrl(args, t),
+  "get-active-leaf-execution-frontier": ({ args, withToken: t }) => nodeVersionUrl(args, t),
+
+  // Node branch
+  "create-new-node-branch": ({ args, withToken: t }) => args.parentId ? t(`/api/v1/node/${args.parentId}?html`) : null,
+
+  // Notes
+  "get-node-notes": ({ args, withToken: t }) => notesUrl(args, t),
+  "create-node-version-note": ({ args, withToken: t }) => notesUrl(args, t),
+  "create-node-version-image-note": ({ args, withToken: t }) => notesUrl(args, t),
+  "delete-node-note": ({ args, withToken: t }) => notesUrl(args, t),
+  "transfer-node-note": ({ args, withToken: t }) => notesUrl(args, t),
+  "edit-node-note": ({ args, withToken: t }) => t(`/api/v1/node/${args.nodeId}/${args.prestige || 0}/notes/${args.noteId}/editor?html`),
+
+  // Contributions
+  "get-node-contributions": ({ args, withToken: t }) => t(`/api/v1/node/${args.nodeId}/${args.version || 0}/contributions?html`),
+  "get-contributions-by-user": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}/contributions?html`),
+
+  // User
+  "get-root-nodes-by-user": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}?html`),
+  "get-unsearched-notes-by-user": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}/notes?html`),
+  "get-searched-notes-by-user": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}/notes?html`),
+  "get-all-tags-for-user": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}/tags?html`),
+
+  // Branch lifecycle
+  "delete-node-branch": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}?html`),
+  "update-node-branch-parent-relationship": ({ args, withToken: t }) => nodeUrl(args, t),
+  "batch-operations": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}/contributions?html`),
+});
+
+// ── Hook Handler ───────────────────────────────────────────────────────
+
 export function buildNavigationHandler(core) {
   const User = core.models.User;
 
-  // Cache share tokens per userId for the duration of a conversation turn
   const tokenCache = new Map();
   setInterval(() => tokenCache.clear(), 60000);
 
@@ -34,140 +100,19 @@ export function buildNavigationHandler(core) {
   return async function onAfterToolCall({ toolName, args, userId, success }) {
     if (!success || !userId) return;
 
+    const urlBuilder = _navRegistry.get(toolName);
+    if (!urlBuilder) return;
+
     const shareToken = await getShareToken(userId);
-    const {
-      nodeId, rootId, rootNodeId, noteId,
-      prestige, version, userId: argUserId,
-      understandingRunId, understandingNodeId, parentId,
-    } = args || {};
+    const t = (path) => withToken(path, shareToken);
 
-    const resolvedRootId = rootId || rootNodeId || nodeId;
-    let url = null;
-
-    switch (toolName) {
-      // Tree / Root
-      case "tree-start":
-      case "get-tree":
-      case "tree-actions-menu":
-      case "tree-structure-orchestrator":
-        url = withToken(`/api/v1/root/${resolvedRootId}?html`, shareToken);
-        break;
-
-      // Node
-      case "get-node":
-      case "be-mode-orchestrator":
-      case "scripting-orchestrator":
-      case "node-script-runtime-environment":
-      case "create-new-node":
-      case "edit-node-name":
-      case "edit-node-type":
-      case "navigate-tree":
-        url = withToken(`/api/v1/node/${nodeId}?html`, shareToken);
-        break;
-
-      // Node version
-      case "edit-node-version-value":
-      case "edit-node-version-goal":
-      case "edit-node-or-branch-status":
-      case "edit-node-version-schedule":
-      case "add-node-prestige":
-      case "get-active-leaf-execution-frontier":
-        url = withToken(`/api/v1/node/${nodeId}/${prestige}?html`, shareToken);
-        break;
-
-      // Node branch
-      case "create-new-node-branch":
-        if (parentId) url = withToken(`/api/v1/node/${parentId}?html`, shareToken);
-        break;
-
-      // Notes
-      case "get-node-notes":
-      case "create-node-version-note":
-      case "create-node-version-image-note":
-      case "delete-node-note":
-      case "transfer-node-note":
-        url = withToken(`/api/v1/node/${nodeId}/${prestige}/notes?html`, shareToken);
-        break;
-      case "edit-node-note":
-        url = withToken(`/api/v1/node/${nodeId}/${prestige}/notes/${noteId}/editor?html`, shareToken);
-        break;
-
-      // Contributions
-      case "get-node-contributions":
-        url = withToken(`/api/v1/node/${nodeId}/${version}/contributions?html`, shareToken);
-        break;
-      case "get-contributions-by-user":
-        url = withToken(`/api/v1/user/${argUserId || userId}/contributions?html`, shareToken);
-        break;
-
-      // User
-      case "get-root-nodes-by-user":
-        url = withToken(`/api/v1/user/${argUserId || userId}?html`, shareToken);
-        break;
-      case "get-unsearched-notes-by-user":
-      case "get-searched-notes-by-user":
-        url = withToken(`/api/v1/user/${argUserId || userId}/notes?html`, shareToken);
-        break;
-      case "get-all-tags-for-user":
-        url = withToken(`/api/v1/user/${argUserId || userId}/tags?html`, shareToken);
-        break;
-
-      // Raw ideas
-      case "get-raw-ideas-by-user":
-      case "raw-idea-filter-orchestrator":
-        url = withToken(`/api/v1/user/${argUserId || userId}/raw-ideas?html`, shareToken);
-        break;
-
-      // Understanding
-      case "understanding-create":
-        if (resolvedRootId) url = withToken(`/api/v1/root/${resolvedRootId}/understandings?html`, shareToken);
-        break;
-      case "understanding-list":
-        if (rootNodeId) url = withToken(`/api/v1/root/${rootNodeId}/understandings?html`, shareToken);
-        break;
-      case "understanding-process": {
-        if (!rootNodeId || !understandingRunId) break;
-        const uNodeId = understandingNodeId || args?.previousResult?.understandingNodeId;
-        if (uNodeId) {
-          url = withToken(`/api/v1/root/${rootNodeId}/understandings/run/${understandingRunId}/${uNodeId}?html`, shareToken);
-        } else {
-          url = withToken(`/api/v1/root/${rootNodeId}/understandings/run/${understandingRunId}?html`, shareToken);
-        }
-        break;
+    try {
+      const url = urlBuilder({ args: args || {}, userId, shareToken, withToken: t });
+      if (url) {
+        core.websocket.emitNavigate({ userId, url: `${getLandUrl()}${url}` });
       }
-
-      // Scripts
-      case "update-node-script":
-      case "execute-node-script":
-        url = withToken(`/api/v1/node/${nodeId}?html`, shareToken);
-        break;
-
-      // Batch
-      case "batch-operations":
-        url = withToken(`/api/v1/user/${argUserId || userId}/contributions?html`, shareToken);
-        break;
-
-      // Branch delete
-      case "delete-node-branch":
-        url = withToken(`/api/v1/user/${argUserId || userId}?html`, shareToken);
-        break;
-
-      // Update parent
-      case "update-node-branch-parent-relationship":
-        url = withToken(`/api/v1/node/${nodeId}?html`, shareToken);
-        break;
-
-      // Transfer raw idea
-      case "transfer-raw-idea-to-note":
-        url = withToken(`/api/v1/node/${nodeId}?html`, shareToken);
-        break;
-
-      default:
-        return;
-    }
-
-    if (url) {
-      core.websocket.emitNavigate({ userId, url: `${getLandUrl()}${url}` });
+    } catch {
+      // Extension-registered builder failed. Silent. Navigation is non-critical.
     }
   };
 }

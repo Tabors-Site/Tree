@@ -93,9 +93,9 @@ export async function scaffoldFitness(rootId, userId, options = {}) {
   const program = PROGRAMS[goal] || PROGRAMS.hypertrophy;
 
   // Create utility nodes
-  const logNode = await createNode("Log", null, null, rootId, false, userId);
-  const programNode = await createNode("Program", null, null, rootId, false, userId);
-  const historyNode = await createNode("History", null, null, rootId, false, userId);
+  const logNode = await createNode({ name: "Log", parentId: rootId, userId });
+  const programNode = await createNode({ name: "Program", parentId: rootId, userId });
+  const historyNode = await createNode({ name: "History", parentId: rootId, userId });
 
   await _metadata.setExtMeta(logNode, "fitness", { role: "log" });
   await _metadata.setExtMeta(programNode, "fitness", { role: "program" });
@@ -110,11 +110,11 @@ export async function scaffoldFitness(rootId, userId, options = {}) {
   // Create muscle group nodes and exercises
   const channelPairs = [];
   for (const [groupName, exercises] of Object.entries(program.groups)) {
-    const groupNode = await createNode(groupName, null, null, rootId, false, userId);
+    const groupNode = await createNode({ name: groupName, parentId: rootId, userId });
     await _metadata.setExtMeta(groupNode, "fitness", { role: "muscle-group" });
 
     for (const exercise of exercises) {
-      const exNode = await createNode(exercise.name, null, null, groupNode._id, false, userId);
+      const exNode = await createNode({ name: exercise.name, parentId: groupNode._id, userId });
       await _metadata.setExtMeta(exNode, "fitness", { role: "exercise", history: [] });
 
       // Set initial values and goals

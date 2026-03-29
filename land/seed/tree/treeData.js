@@ -64,10 +64,6 @@ export async function getNodeForAi(nodeId) {
       )
     : [];
 
-  const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
-  const values = meta.values || {};
-  const goals = meta.goals || {};
-
   const result = {
     id: node._id.toString(),
     name: node.name,
@@ -82,8 +78,6 @@ export async function getNodeForAi(nodeId) {
   };
 
   if (node.type) result.type = node.type;
-  if (Object.keys(values).length > 0) result.values = values;
-  if (Object.keys(goals).length > 0) result.goals = goals;
 
   return result;
 }

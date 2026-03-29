@@ -4,6 +4,7 @@ import TempUser from "./model.js";
 import { sendVerificationEmail } from "./core.js";
 import { getLandUrl } from "../../canopy/identity.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
+import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
 
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -78,19 +79,11 @@ export async function init(core) {
     if (!freshUser) return;
 
     // Don't overwrite if email metadata already exists (verify route sets verified: true first)
-    const existing = freshUser.metadata instanceof Map
-      ? freshUser.metadata.get("email")
-      : freshUser.metadata?.email;
+    const existing = getUserMeta(freshUser, "email");
     if (existing?.address) return;
 
     const normalizedEmail = email.trim().toLowerCase();
-    if (freshUser.metadata instanceof Map) {
-      freshUser.metadata.set("email", { address: normalizedEmail, verified: false });
-    } else {
-      if (!freshUser.metadata) freshUser.metadata = {};
-      freshUser.metadata.email = { address: normalizedEmail, verified: false };
-    }
-    if (freshUser.markModified) freshUser.markModified("metadata");
+    setUserMeta(freshUser, "email", { address: normalizedEmail, verified: false });
     await freshUser.save();
   }, "email");
 

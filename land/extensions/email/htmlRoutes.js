@@ -7,6 +7,7 @@ import urlAuth from "../html-rendering/urlAuth.js";
 import { htmlOnly, buildQS, tokenQS } from "../html-rendering/htmlHelpers.js";
 import { getExtension } from "../loader.js";
 import { isHtmlEnabled } from "../html-rendering/config.js";
+import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
 import {
   renderResetPasswordExpired,
   renderResetPasswordForm,
@@ -52,13 +53,11 @@ export default function buildEmailHtmlRoutes() {
       if (!user) return res.send(renderResetPasswordInvalid());
 
       user.password = password;
-      const emailMeta = (user.metadata instanceof Map ? user.metadata.get("email") : user.metadata?.email) || {};
+      const emailMeta = getUserMeta(user, "email");
       delete emailMeta.resetToken;
       delete emailMeta.resetExpiry;
       emailMeta.tokensInvalidBefore = new Date();
-      if (user.metadata instanceof Map) user.metadata.set("email", emailMeta);
-      else user.metadata.email = emailMeta;
-      if (user.markModified) user.markModified("metadata");
+      setUserMeta(user, "email", emailMeta);
       await user.save();
 
       return res.send(renderResetPasswordSuccess());

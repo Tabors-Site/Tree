@@ -112,6 +112,9 @@ export function renderExtensionPage({ ext, versions, dependents, ecosystem }) {
       </div>
       ${tags ? `<div style="margin-top:10px;">${tags}</div>` : ""}
       <div class="install-cmd">${installCmd}</div>
+      <div style="margin-top:10px;">
+        <a href="/extensions/${encodeURIComponent(ext.name)}/changelog" style="color:var(--accent);font-size:13px;text-decoration:none;">View changelog</a>
+      </div>
     </div>
 
     ${ecosystem ? `

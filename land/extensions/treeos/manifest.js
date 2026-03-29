@@ -2,7 +2,7 @@ export default {
   name: "treeos",
   type: "os",
   version: "1.0.0",
-  builtFor: "kernel",
+  builtFor: "seed",
   description:
     "The first operating system built on the seed. " +
     "Four bundles, twenty base extensions, nine standalone. " +
@@ -39,11 +39,11 @@ export default {
     "remember@^1.0.0",
     "breath@^1.0.0",
     "instructions@^1.0.0",
+    "channels@^1.0.0",
     "persona@^1.0.0",
     "mycelium@^1.0.0",
     "peer-review@^1.0.0",
     "seed-export@^1.0.0",
-    "channels@^1.0.0",
     "governance@^1.0.0",
     "teach@^1.0.0",
     "split@^1.0.0",

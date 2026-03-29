@@ -17,7 +17,8 @@ export async function init(core) {
 
   // beforeToolCall: intercept watched tools
   core.hooks.register("beforeToolCall", async (hookData) => {
-    const { toolName, args, nodeId, userId, rootId } = hookData;
+    const { toolName, args, userId, rootId } = hookData;
+    const nodeId = args?.nodeId || rootId;
     if (!nodeId || !toolName) return;
 
     // Check if this tool is on the effective watchlist

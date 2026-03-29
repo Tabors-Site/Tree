@@ -4,12 +4,12 @@ import { configure, processLLMCall, getCompetence } from "./core.js";
 
 export async function init(core) {
   configure({ metadata: core.metadata });
-  // afterLLMCall: detect whether the AI answered or found silence
-  core.hooks.register("afterLLMCall", async ({ userId, rootId, nodeId, message, answer }) => {
-    if (!nodeId || !userId || userId === "SYSTEM") return;
+  // afterLLMCall: track which modes produced tool calls (proxy for finding answers)
+  core.hooks.register("afterLLMCall", async ({ userId, rootId, mode, hasToolCalls }) => {
+    if (!rootId || !userId || userId === "SYSTEM") return;
 
     try {
-      processLLMCall({ nodeId, userId, message, answer });
+      processLLMCall({ rootId, userId, mode, hasToolCalls });
     } catch (err) {
       log.debug("Competence", `afterLLMCall processing failed: ${err.message}`);
     }

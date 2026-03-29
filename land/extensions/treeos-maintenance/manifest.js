@@ -2,7 +2,7 @@ export default {
   name: "treeos-maintenance",
   version: "1.0.0",
   type: "bundle",
-  builtFor: "kernel",
+  builtFor: "seed",
   description:
     "Hygiene. Five extensions that keep the tree clean and organized. " +
     "\n\n" +

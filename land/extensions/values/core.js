@@ -46,6 +46,10 @@ function getNodeValues(node) {
   return { ..._metadata.getExtMeta(node, "values") };
 }
 
+async function setNodeValues(node, values) {
+  await _metadata.setExtMeta(node, "values", values);
+}
+
 function getNodeGoals(node) {
   return { ..._metadata.getExtMeta(node, "goals") };
 }
@@ -215,6 +219,7 @@ export {
   setGoalForNode,
   getGlobalValuesTreeAndFlat,
   getNodeValues,
+  setNodeValues,
   getNodeGoals,
   stripAutoPrefixFromObject,
   collectNodeValues,

@@ -59,8 +59,10 @@ export async function scanForCandidates(rootId, userId) {
   const dormancyMs = (await getDormancyDays()) * 24 * 60 * 60 * 1000;
   const cutoff = new Date(Date.now() - dormancyMs);
 
-  // Get all nodes in this tree
-  const nodes = await Node.find({ rootOwner: rootId, status: "active" })
+  // Get all nodes in this tree (walk from root, not rootOwner which is a userId)
+  const { getDescendantIds } = await import("../../seed/tree/treeFetch.js");
+  const allIds = await getDescendantIds(rootId, { maxResults: 10000 });
+  const nodes = await Node.find({ _id: { $in: allIds }, status: "active" })
     .select("_id name parent children systemRole metadata dateCreated")
     .lean();
 

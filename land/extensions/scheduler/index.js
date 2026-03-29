@@ -94,7 +94,7 @@ export async function init(core) {
       ? Object.fromEntries(node.metadata)
       : (node.metadata || {});
 
-    const schedule = meta.schedule;
+    const schedule = meta.schedules?.date;
     if (!schedule) return;
 
     await recordCompletion(node, schedule);

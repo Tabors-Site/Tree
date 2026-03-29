@@ -184,7 +184,7 @@ export async function runTrace(rootId, query, userId, username, opts = {}) {
     llmPriority: LLM_PRIORITY?.INTERACTIVE || 2,
   });
 
-  const ok = await rt.init("Starting trace");
+  const ok = await rt.init(query);
   if (!ok) {
     return { error: "Trace already running on this tree" };
   }
@@ -297,13 +297,15 @@ Return ONLY JSON:
     }
 
     // Step 5: Build result
+    const currentState = parsed?.currentState || "See touchpoints for chronological thread.";
     const traceResult = {
       query,
+      answer: currentState,
       matches: matches.length,
       nodesVisited: nodeIds.length,
       origin: parsed?.origin || { nodeId: matches[0]?.nodeId, nodeName: matches[0]?.nodeName, date: matches[0]?.date, summary: "First occurrence" },
       touchpoints: parsed?.touchpoints || matches.slice(0, 20).map(m => ({ nodeId: m.nodeId, nodeName: m.nodeName, date: m.date, what: m.content.slice(0, 100) })),
-      currentState: parsed?.currentState || "See touchpoints for chronological thread.",
+      currentState,
       unresolved: parsed?.unresolved || [],
       threadLength: parsed?.threadLength || null,
       crossBranch,
@@ -331,7 +333,7 @@ Return ONLY JSON:
       log.debug("Trace", `Failed to write trace metadata: ${err.message}`);
     }
 
-    rt.setResult("Trace complete", "tree:trace");
+    rt.setResult(traceResult.currentState || `Traced ${matches.length} mentions across ${nodeIds.length} nodes`, "tree:trace");
     return traceResult;
 
   } catch (err) {

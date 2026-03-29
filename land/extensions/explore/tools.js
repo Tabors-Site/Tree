@@ -24,19 +24,23 @@ export default [
         if (map.error) {
           return { content: [{ type: "text", text: map.error }] };
         }
+
+        // Human-readable output for AI to relay
+        const parts = [`Explored ${map.nodesExplored} nodes, read ${map.notesRead}/${map.totalNotesInBranch} notes (${map.coverage} coverage).`];
+        if (map.map?.length > 0) {
+          parts.push(`\nFindings:`);
+          for (const f of map.map.slice(0, 10)) {
+            parts.push(`  ${f.nodeName || f.nodeId}: ${f.summary || f.content?.slice(0, 100) || "found"} (relevance: ${f.relevance || "?"})`);
+          }
+          if (map.map.length > 10) parts.push(`  ...and ${map.map.length - 10} more`);
+        }
+        if (map.gaps?.length > 0) parts.push(`\nGaps: ${map.gaps.join("; ")}`);
+        if (map.unexplored?.length > 0) {
+          parts.push(`\nUnexplored: ${map.unexplored.slice(0, 5).map(u => u.name || u.nodeId).join(", ")}`);
+        }
+
         return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              coverage: map.coverage,
-              nodesExplored: map.nodesExplored,
-              notesRead: map.notesRead,
-              confidence: map.confidence,
-              findings: map.map,
-              gaps: map.gaps,
-              unexplored: map.unexplored.slice(0, 5),
-            }, null, 2),
-          }],
+          content: [{ type: "text", text: parts.join("\n") }],
         };
       } catch (err) {
         return { content: [{ type: "text", text: `Exploration failed: ${err.message}` }] };
@@ -81,18 +85,18 @@ export default [
         if (map.error) {
           return { content: [{ type: "text", text: map.error }] };
         }
+
+        const parts = [`Drilled into ${map.rootNode}. Explored ${map.nodesExplored} nodes, read ${map.notesRead} notes (${map.coverage} coverage).`];
+        if (map.map?.length > 0) {
+          parts.push(`\nFindings:`);
+          for (const f of map.map.slice(0, 10)) {
+            parts.push(`  ${f.nodeName || f.nodeId}: ${f.summary || f.content?.slice(0, 100) || "found"} (relevance: ${f.relevance || "?"})`);
+          }
+        }
+        if (map.gaps?.length > 0) parts.push(`\nGaps: ${map.gaps.join("; ")}`);
+
         return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              coverage: map.coverage,
-              nodesExplored: map.nodesExplored,
-              notesRead: map.notesRead,
-              confidence: map.confidence,
-              findings: map.map,
-              gaps: map.gaps,
-            }, null, 2),
-          }],
+          content: [{ type: "text", text: parts.join("\n") }],
         };
       } catch (err) {
         return { content: [{ type: "text", text: `Drill failed: ${err.message}` }] };

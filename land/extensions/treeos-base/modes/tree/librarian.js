@@ -24,7 +24,6 @@ export default {
       // Write tools for placement (filtered out by query constraint if active)
       "create-new-node-branch",
       "create-node-version-note",
-      "edit-node-version-value",
       "edit-node-name",
       "edit-node-type",
     ];
@@ -77,10 +76,9 @@ You do everything in one conversation. Navigate, read context, then act.
 
 TOOLS:
 - navigate-tree: search by keyword, jump to a node, see children. Fast. Call multiple times.
-- get-tree-context: read a node's notes, values, children, type. Use includeNotes=true.
+- get-tree-context: read a node's notes, children, type. Use includeNotes=true.
 - create-new-node-branch: create a node (or nested children). Use for things with their own state.
 - create-node-version-note: add a note to a node. Use for thoughts, observations, records.
-- edit-node-version-value: set a numeric value on a node. Use for tracking numbers.
 - edit-node-name: rename a node.
 - edit-node-type: set a node's semantic type.
 

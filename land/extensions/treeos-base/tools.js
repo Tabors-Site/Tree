@@ -213,43 +213,9 @@ const TOOL_DEFS = {
   },
 
   // ── WRITE ─────────────────────────────────────────────────────────────
-  "edit-node-version-value": {
-    type: "function",
-    function: {
-      name: "edit-node-version-value",
-      description: "Set or update a numeric value on a node version.",
-      parameters: {
-        type: "object",
-        properties: {
-          nodeId: { type: "string" },
-          key: { type: "string", description: "Value key name" },
-          value: { type: "number", description: "Numeric value" },
-          prestige: { type: "number", description: "Version index" },
-          userId: { type: "string" },
-        },
-        required: ["nodeId", "key", "value", "userId"],
-      },
-    },
-  },
-
-  "edit-node-version-goal": {
-    type: "function",
-    function: {
-      name: "edit-node-version-goal",
-      description: "Set a goal for an existing value key.",
-      parameters: {
-        type: "object",
-        properties: {
-          nodeId: { type: "string" },
-          key: { type: "string", description: "Must match existing value key" },
-          goal: { type: "number" },
-          prestige: { type: "number" },
-          userId: { type: "string" },
-        },
-        required: ["nodeId", "key", "goal", "userId"],
-      },
-    },
-  },
+  // edit-node-version-value and edit-node-version-goal live in the values extension.
+  // edit-node-version-schedule lives in the schedules extension.
+  // add-node-prestige lives in the prestige extension.
 
   "edit-node-or-branch-status": {
     type: "function",
@@ -270,49 +236,6 @@ const TOOL_DEFS = {
           userId: { type: "string" },
         },
         required: ["nodeId", "status", "isInherited", "userId"],
-      },
-    },
-  },
-
-  "edit-node-version-schedule": {
-    type: "function",
-    function: {
-      name: "edit-node-version-schedule",
-      description: "Update schedule and reeffect time.",
-      parameters: {
-        type: "object",
-        properties: {
-          nodeId: { type: "string" },
-          prestige: { type: "number" },
-          newSchedule: { type: "string", description: "ISO 8601 date/time" },
-          reeffectTime: {
-            type: "number",
-            description: "Hours until reschedule on prestige",
-          },
-          userId: { type: "string" },
-        },
-        required: [
-          "nodeId",
-          "newSchedule",
-          "reeffectTime",
-          "userId",
-        ],
-      },
-    },
-  },
-
-  "add-node-prestige": {
-    type: "function",
-    function: {
-      name: "add-node-prestige",
-      description: "Increment prestige, creating a new version.",
-      parameters: {
-        type: "object",
-        properties: {
-          nodeId: { type: "string" },
-          userId: { type: "string" },
-        },
-        required: ["nodeId", "userId"],
       },
     },
   },
@@ -413,23 +336,16 @@ const TOOL_DEFS = {
         type: "object",
         properties: {
           name: { type: "string" },
-          parentNodeID: { type: "string" },
+          parentId: { type: "string", description: "ID of the parent node." },
           userId: { type: "string" },
-          schedule: { type: "string", description: "Optional ISO date" },
-          reeffectTime: { type: "number" },
-          values: {
-            type: "object",
-            description: "Key-value pairs for numbers",
-          },
-          goals: { type: "object", description: "Key-value pairs for goals" },
-          note: { type: "string", description: "Optional initial note" },
+          note: { type: "string", description: "Optional initial note." },
           type: {
             type: "string",
             description:
               "Optional semantic type. Core types: goal, plan, task, knowledge, resource, identity. Custom types valid.",
           },
         },
-        required: ["name", "parentNodeID", "userId"],
+        required: ["name", "parentId", "userId"],
       },
     },
   },
@@ -475,13 +391,9 @@ const TOOL_DEFS = {
         properties: {
           nodeData: {
             type: "object",
-            description: "Node with optional children array",
+            description: "Node with optional children array. Each node has name, optional type, note, and children.",
             properties: {
               name: { type: "string" },
-              schedule: { type: "string" },
-              reeffectTime: { type: "number" },
-              values: { type: "object" },
-              goals: { type: "object" },
               note: { type: "string" },
               type: {
                 type: "string",
@@ -660,80 +572,7 @@ const TOOL_DEFS = {
     },
   },
 
-  // ── UNDERSTANDING ─────────────────────────────────────────────────────
-  // ── UNDERSTANDING ─────────────────────────────────────────────────────
-  "understanding-list": {
-    type: "function",
-    function: {
-      name: "understanding-list",
-      description:
-        "List existing understanding runs (perspectives) for a tree root.",
-      parameters: {
-        type: "object",
-        properties: {
-          rootNodeId: {
-            type: "string",
-            description: "Root node ID to list understandings for.",
-          },
-        },
-        required: ["rootNodeId"],
-      },
-    },
-  },
-
-  "understanding-create": {
-    type: "function",
-    function: {
-      name: "understanding-create",
-      description: "Create an understanding run for a tree.",
-      parameters: {
-        type: "object",
-        properties: {
-          rootNodeId: { type: "string" },
-          perspective: {
-            type: "string",
-            description: "Perspective/focus for understanding",
-          },
-        },
-        required: ["rootNodeId"],
-      },
-    },
-  },
-
-  "understanding-process": {
-    type: "function",
-    function: {
-      name: "understanding-process",
-      description:
-        "Commits previous summary (if any) and returns next summarization task. Loop until done.",
-      parameters: {
-        type: "object",
-        properties: {
-          understandingRunId: { type: "string" },
-          rootNodeId: { type: "string" },
-          previousResult: {
-            type: "object",
-            description:
-              "Omit on first call. Include your summary from previous task on subsequent calls.",
-            properties: {
-              mode: { type: "string", enum: ["leaf", "merge"] },
-              encoding: { type: "string", description: "Your summary text" },
-              understandingNodeId: {
-                type: "string",
-                description: "From target.understandingNodeId",
-              },
-              currentLayer: {
-                type: "number",
-                description: "Required for merge mode — from target.nextLayer",
-              },
-            },
-            required: ["mode", "encoding"],
-          },
-        },
-        required: ["understandingRunId", "rootNodeId"],
-      },
-    },
-  },
+    // understanding-list, understanding-create, understanding-process live in the understanding extension.
 };
 
 export default TOOL_DEFS;

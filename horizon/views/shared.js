@@ -18,6 +18,11 @@ export function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
+export function truncate(str, max) {
+  if (!str || str.length <= max) return str;
+  return str.slice(0, max).replace(/\s+\S*$/, "") + "...";
+}
+
 export function timeAgo(date) {
   if (!date) return "never";
   const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
@@ -564,6 +569,7 @@ export function navBar(activePage, breadcrumb) {
     { key: "home", label: "Horizon", href: "/" },
     { key: "explore", label: "Explore", href: "/extensions/browse" },
     { key: "lands", label: "Lands", href: "/lands" },
+    { key: "about", label: "About", href: "/about" },
   ];
 
   const html = links.map(l =>
@@ -644,8 +650,8 @@ export function typeBadge(type) {
  * builtFor badge HTML.
  */
 export function builtForBadge(builtFor) {
-  if (!builtFor || builtFor === "kernel") {
-    return `<span class="built-for-badge">kernel</span>`;
+  if (!builtFor || builtFor === "seed" || builtFor === "kernel") {
+    return `<span class="built-for-badge">seed</span>`;
   }
   return `<span class="built-for-badge">for ${escapeHtml(builtFor)}</span>`;
 }
@@ -673,8 +679,21 @@ export function packageCard(pkg, idx) {
 
   const npmCount = (pkg.npmDependencies || []).length;
 
+  // Each card gets a unique hue within its type's range
+  // Types occupy different bands of the color wheel so they're distinguishable
+  const ranges = {
+    os:        { min: 230, max: 270 },  // blue to purple
+    bundle:    { min: 20,  max: 50  },  // orange to gold
+    extension: { min: 140, max: 200 },  // teal to blue-green
+  };
+  const r = ranges[type] || ranges.extension;
+  const hash = ((idx || 0) * 137 + 47) % 100; // 0-99 deterministic spread
+  const hue = r.min + (hash / 100) * (r.max - r.min);
+  const bg = `hsla(${hue}, 55%, 50%, 0.12)`;
+  const border = `hsla(${hue}, 55%, 50%, 0.22)`;
+
   return `
-    <a href="${href}" class="pkg-card" ${delay}>
+    <a href="${href}" class="pkg-card" ${delay} style="background:${bg};border:1px solid ${border};">
       <div class="pkg-badges">
         ${typeBadge(type)}
         ${builtForBadge(pkg.builtFor)}
@@ -683,7 +702,7 @@ export function packageCard(pkg, idx) {
         <div class="pkg-name">${escapeHtml(pkg.name)}</div>
         <div class="pkg-version">v${escapeHtml(pkg.version)}</div>
       </div>
-      <div class="pkg-desc">${escapeHtml(pkg.description || "No description")}</div>
+      <div class="pkg-desc">${escapeHtml(truncate(pkg.description || "No description", 300))}</div>
       <div class="pkg-meta">
         <span><strong>${escapeHtml(pkg.authorName || pkg.authorDomain || "unknown")}</strong></span>
         <span class="separator"></span>
@@ -701,10 +720,14 @@ export function packageCard(pkg, idx) {
  */
 export function landCard(land, idx) {
   const color = statusColor(land.status);
-  const delay = idx != null ? `style="animation-delay: ${0.1 + (idx || 0) * 0.04}s;"` : "";
+  const delay = idx != null ? `animation-delay: ${0.1 + (idx || 0) * 0.04}s;` : "";
+  const landHash = ((idx || 0) * 137 + 47) % 100;
+  const landHue = 260 + (landHash / 100) * 40; // 260-300, purple to magenta
+  const bg = `hsla(${landHue}, 50%, 50%, 0.12)`;
+  const border = `hsla(${landHue}, 50%, 50%, 0.22)`;
   return `
-    <a href="/lands/${encodeURIComponent(land.domain)}" class="land-card-link" ${delay}>
-      <div class="land-card">
+    <a href="/lands/${encodeURIComponent(land.domain)}" class="land-card-link" style="${delay}">
+      <div class="land-card" style="background:${bg};border:1px solid ${border};">
         <div class="land-card-header">
           <div class="land-name">${escapeHtml(land.name || "Unnamed Land")}</div>
           <div class="land-status">

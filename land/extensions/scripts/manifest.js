@@ -36,7 +36,7 @@ export default {
 
   optional: {
     services: ["energy"],
-    extensions: ["values", "prestige", "schedules", "html-rendering"],
+    extensions: ["values", "prestige", "schedules", "html-rendering", "treeos-base"],
   },
 
   provides: {

@@ -350,8 +350,8 @@ export function buildTreeosHtmlRoutes() {
       const status = (Array.isArray(meta.prestige?.history) ? meta.prestige.history.find(h => h.version === v)?.status : null) || node.status || "active";
       const values = meta.values || {};
       const goals = meta.goals || {};
-      const schedule = meta.schedule || null;
-      const reeffectTime = meta.reeffectTime || null;
+      const schedule = meta.schedules?.date || null;
+      const reeffectTime = meta.schedules?.reeffectTime || null;
       const showPrestige = v === (prestigeData.current || 0);
 
       const qs = buildQS(req);
@@ -958,7 +958,7 @@ export function buildTreeosHtmlRoutes() {
       if (req.body.startDate) schedule.startDate = req.body.startDate;
       if (req.body.endDate) schedule.endDate = req.body.endDate;
       if (req.body.recurrence) schedule.recurrence = req.body.recurrence;
-      await setExtMeta(node, "schedule", Object.keys(schedule).length > 0 ? schedule : null);
+      await setExtMeta(node, "schedules", Object.keys(schedule).length > 0 ? schedule : null);
       return res.redirect(`/api/v1/node/${req.params.nodeId}/${req.params.version}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Edit schedule error:", err.message);

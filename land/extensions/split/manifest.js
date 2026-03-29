@@ -1,7 +1,7 @@
 export default {
   name: "split",
   version: "1.0.0",
-  builtFor: "kernel",
+  builtFor: "seed",
   description:
     "The tree detects when a branch has outgrown its parent. Evolution metrics show " +
     "the branch has more activity than the rest of the tree combined. Boundary analysis " +

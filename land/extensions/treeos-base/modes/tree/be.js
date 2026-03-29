@@ -18,7 +18,6 @@ export default {
     "get-node-notes",
     "create-node-version-note",
     "edit-node-or-branch-status",
-    "edit-node-version-value",
   ],
 
   buildSystemPrompt({ username, rootId, currentNodeId }) {

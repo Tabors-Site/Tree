@@ -334,9 +334,7 @@ async function deleteNoteAndFile({
   await note.save();
 
   if (fileDeleted && fileSizeKB > 0 && fileOwnerId && fileOwnerId !== DELETED) {
-    User.findByIdAndUpdate(fileOwnerId, [
-      { $set: { "metadata.storage.usageKB": { $max: [{ $subtract: [{ $ifNull: ["$metadata.storage.usageKB", 0] }, fileSizeKB] }, 0] } } },
-    ]).catch(() => {});
+    incUserMeta(fileOwnerId, "storage", "usageKB", -fileSizeKB).catch(() => {});
   }
 
   if (fileOwnerId && fileOwnerId !== DELETED) {

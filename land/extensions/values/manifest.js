@@ -32,7 +32,7 @@ export default {
   },
 
   optional: {
-    extensions: ["energy", "html-rendering"],
+    extensions: ["energy", "html-rendering", "treeos-base"],
   },
 
   provides: {

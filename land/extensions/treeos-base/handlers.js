@@ -1070,7 +1070,7 @@ export function buildTools() {
       description: "Create a single new node under an existing parent.",
       schema: {
         name: z.string().describe("Name of the new node."),
-        parentNodeID: z
+        parentId: z
           .string()
           .describe("ID of the parent node."),
         userId: z.string().describe("Injected by server. Ignore."),
@@ -1084,26 +1084,6 @@ export function buildTools() {
           .nullable()
           .optional()
           .describe("Injected by server. Ignore."),
-        schedule: z
-          .string()
-          .nullable()
-          .optional()
-          .describe("Optional ISO date"),
-        reeffectTime: z
-          .number()
-          .nullable()
-          .optional()
-          .describe("Hours until reschedule on prestige"),
-        values: z
-          .record(z.number())
-          .nullable()
-          .optional()
-          .describe("Key-value pairs for numbers"),
-        goals: z
-          .record(z.number())
-          .nullable()
-          .optional()
-          .describe("Key-value pairs for goals"),
         note: z
           .string()
           .nullable()
@@ -1125,34 +1105,24 @@ export function buildTools() {
       },
       handler: async ({
         name,
-        parentNodeID,
+        parentId,
         userId,
-        schedule,
-        reeffectTime,
-        values,
-        goals,
         note,
         type,
         chatId,
         sessionId,
       }) => {
         try {
-          const newNode = await createNode(
+          const newNode = await createNode({
             name,
-            schedule ?? null,
-            reeffectTime ?? 0,
-            parentNodeID,
-            false, // isRoot
+            parentId,
             userId,
-            values ?? {},
-            goals ?? {},
-            note ?? null,
-            null, // validatedUser
-            true, // wasAi
-            chatId ?? null,
-            sessionId ?? null,
-            type ?? null,
-          );
+            type: type ?? null,
+            note: note ?? null,
+            wasAi: true,
+            chatId: chatId ?? null,
+            sessionId: sessionId ?? null,
+          });
           return json(newNode);
         } catch (err) {
           return error(
@@ -1208,22 +1178,16 @@ export function buildTools() {
         sessionId,
       }) => {
         try {
-          const rootNode = await createNode(
+          const rootNode = await createNode({
             name,
-            null, // schedule
-            0, // reeffectTime
-            null, // parentNodeID
-            true, // isRoot
+            isRoot: true,
             userId,
-            {}, // values
-            {}, // goals
-            note ?? null,
-            null, // validatedUser
-            true, // wasAi
-            chatId ?? null,
-            sessionId ?? null,
-            type ?? null,
-          );
+            type: type ?? null,
+            note: note ?? null,
+            wasAi: true,
+            chatId: chatId ?? null,
+            sessionId: sessionId ?? null,
+          });
           return json(rootNode);
         } catch (err) {
           return error(

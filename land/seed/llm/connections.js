@@ -343,7 +343,7 @@ export async function updateLlmConnection(userId, connectionId, { name, baseUrl,
 
   // Bust cache if this connection is currently assigned
   const userLlmMeta = user.metadata instanceof Map ? user.metadata.get("userLlm") : user.metadata?.userLlm;
-  const userSlots = userLlmMeta?.assignments || {};
+  const userSlots = userLlmMeta?.slots || {};
   if (user.llmDefault === connectionId || Object.values(userSlots).includes(connectionId)) {
     clearUserClientCache(userId);
   }
@@ -369,7 +369,7 @@ export async function deleteLlmConnection(userId, connectionId) {
       updates.llmDefault = null;
     }
     const userLlmMeta = user.metadata instanceof Map ? user.metadata.get("userLlm") : user.metadata?.userLlm;
-  const userSlots = userLlmMeta?.assignments || {};
+    const userSlots = userLlmMeta?.slots || {};
     for (const [s, val] of Object.entries(userSlots)) {
       if (val === connectionId) {
         updates[`metadata.userLlm.slots.${s}`] = null;

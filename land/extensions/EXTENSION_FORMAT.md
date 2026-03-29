@@ -555,7 +555,7 @@ If your hook handler creates, moves, or deletes nodes, acquire a node lock via `
 core.hooks.register("afterNote", async ({ nodeId }) => {
   const lock = await core.nodeLocks.acquireNodeLock(parentId, sessionId);
   try {
-    await createNode("Child", null, null, parentId, false, userId);
+    await createNode({ name: "Child", parentId, userId });
   } finally {
     core.nodeLocks.releaseNodeLock(parentId, sessionId);
   }
@@ -1222,7 +1222,7 @@ export default {
   name: "crop-tracker",
   type: "extension",             // default if omitted
   version: "1.0.0",
-  builtFor: "FarmOS",            // "kernel" (universal), bundle name, or OS name
+  builtFor: "FarmOS",            // "seed" (universal), bundle name, or OS name
   description: "Track crop yields per node",
   needs: { extensions: ["farm-core@>=1.0.0"] },
   provides: { routes: true, tools: true },
@@ -1230,7 +1230,7 @@ export default {
 ```
 
 **`builtFor`** declares where this extension is designed to work:
-- `"kernel"` (default): works on any land with no special extensions. Universal.
+- `"seed"` (default): works on any land with no special extensions. Universal.
 - `"treeos-cascade"`: needs that bundle's extensions to be present.
 - `"FarmOS"`: built specifically for that OS distribution.
 
@@ -1245,7 +1245,7 @@ export default {
   name: "treeos-cascade",
   type: "bundle",
   version: "1.0.0",
-  builtFor: "kernel",
+  builtFor: "seed",
   description: "The cascade nervous system",
   includes: [
     "propagation@^1.0.0",
@@ -1276,7 +1276,7 @@ export default {
   name: "TreeOS",
   type: "os",
   version: "1.0.0",
-  builtFor: "kernel",
+  builtFor: "seed",
   description: "The first operating system built on the seed",
   bundles: [
     "treeos-cascade@^1.0.0",

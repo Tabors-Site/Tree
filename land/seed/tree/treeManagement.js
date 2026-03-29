@@ -28,22 +28,19 @@ async function getUserOrThrow(userId) {
   return user;
 }
 
-export async function createNode(
+export async function createNode({
   name,
-  schedule,
-  reeffectTime,
-  parentNodeID,
+  parentId = null,
   isRoot = false,
   userId,
-  values = {},
-  goals = {},
+  type = null,
   note = null,
+  metadata = null,
   validatedUser = null,
   wasAi = false,
   chatId = null,
   sessionId = null,
-  type = null,
-) {
+} = {}) {
   if (!name || typeof name !== "string" || !name.trim()) {
     throw new Error("Node name is required");
   }
@@ -68,19 +65,14 @@ export async function createNode(
   }
   const user = validatedUser ?? (await getUserOrThrow(userId));
 
-
-
-  values = values && typeof values === "object" ? values : {};
-  goals = goals && typeof goals === "object" ? goals : {};
-
   // beforeNodeCreate: extensions can modify or cancel.
   // parentType included so extensions can validate parent-child type compatibility.
   let parentType = null;
-  if (parentNodeID) {
-    const parentDoc = await Node.findById(parentNodeID).select("type").lean();
+  if (parentId) {
+    const parentDoc = await Node.findById(parentId).select("type").lean();
     parentType = parentDoc?.type || null;
   }
-  const hookData = { name, type, parentNodeID, parentType, isRoot, userId, values, goals, schedule, reeffectTime };
+  const hookData = { name, type, parentId, parentType, isRoot, userId, metadata: metadata || new Map() };
   const hookResult = await hooks.run("beforeNodeCreate", hookData);
   if (hookResult.cancelled) {
     const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
@@ -89,34 +81,22 @@ export async function createNode(
   // Apply any modifications from hooks
   name = hookData.name;
   type = hookData.type;
-  values = hookData.values;
-  goals = hookData.goals;
-  schedule = hookData.schedule;
-  reeffectTime = hookData.reeffectTime;
-
-  // Build metadata from extension-specific params
-  // Extensions own their metadata keys. Core just passes them through.
-  const metadata = new Map();
-  if (Object.keys(values).length > 0) metadata.set("values", values);
-  if (Object.keys(goals).length > 0) metadata.set("goals", goals);
-  if (schedule) metadata.set("schedule", new Date(schedule));
-  if (reeffectTime) metadata.set("reeffectTime", reeffectTime);
 
   const newNode = new Node({
     name,
     type,
     status: NODE_STATUS.ACTIVE,
     children: [],
-    parent: isRoot ? getLandRootId() : (parentNodeID || null),
+    parent: isRoot ? getLandRootId() : (parentId || null),
     rootOwner: isRoot ? user._id : null,
     contributors: [],
-    metadata,
+    metadata: hookData.metadata instanceof Map ? hookData.metadata : new Map(),
   });
 
   await newNode.save();
 
   // Structural mutation: lock the parent while adding to its children[]
-  const lockTarget = isRoot ? getLandRootId() : parentNodeID;
+  const lockTarget = isRoot ? getLandRootId() : parentId;
   if (lockTarget) {
     const locked = await acquireNodeLock(lockTarget, sessionId);
     if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Parent node is being modified");
@@ -136,19 +116,19 @@ export async function createNode(
         }
         await Node.findByIdAndUpdate(landRootId, { $addToSet: { children: newNode._id } });
       }
-    } else if (parentNodeID) {
-      const parentNode = await Node.findById(parentNodeID).select("systemRole children").lean();
+    } else if (parentId) {
+      const parentNode = await Node.findById(parentId).select("systemRole children").lean();
       if (!parentNode) throw new Error("Parent node not found");
       if (parentNode.systemRole) throw new Error("Cannot create nodes under system nodes");
       if (parentNode.children?.length >= maxChildren) {
         throw new ProtocolError(400, ERR.INVALID_INPUT, `Parent node has reached the maximum of ${maxChildren} children`);
       }
 
-      await Node.findByIdAndUpdate(parentNodeID, { $addToSet: { children: newNode._id } });
+      await Node.findByIdAndUpdate(parentId, { $addToSet: { children: newNode._id } });
 
       await logContribution({
         userId: user._id,
-        nodeId: parentNodeID,
+        nodeId: parentId,
         wasAi,
         chatId,
         sessionId,
@@ -197,6 +177,40 @@ export async function createNode(
   return newNode;
 }
 
+/**
+ * Create a system node (dot-prefixed, no hooks, no contributions).
+ * Used by extensions for infrastructure nodes like .intent, .pulse, .rings.
+ * These are not user-created content. They are extension infrastructure.
+ *
+ * Returns the created node. Handles parent linking atomically.
+ */
+export async function createSystemNode({ name, parentId, metadata = null }) {
+  if (!name || typeof name !== "string") {
+    throw new Error("System node name is required");
+  }
+  if (!parentId) {
+    throw new Error("System node requires a parent");
+  }
+
+  const { v4: uuidv4 } = await import("uuid");
+  const id = uuidv4();
+
+  const newNode = new Node({
+    _id: id,
+    name,
+    parent: parentId,
+    children: [],
+    contributors: [],
+    status: NODE_STATUS.ACTIVE,
+    metadata: metadata instanceof Map ? metadata : new Map(),
+  });
+  await newNode.save();
+
+  await Node.findByIdAndUpdate(parentId, { $addToSet: { children: id } });
+
+  return newNode;
+}
+
 export async function createNodeBranch(
   nodeData,
   parentId,
@@ -225,29 +239,29 @@ async function createNodeBranchInternal(
   chatId = null,
   sessionId = null,
 ) {
-  const { name, schedule, values, goals, reeffectTime, effectTime, note, type } =
-    nodeData;
-
+  const { name, note, type, metadata } = nodeData;
   const children = Array.isArray(nodeData.children) ? nodeData.children : [];
 
-  const timeToUse = reeffectTime ?? effectTime;
+  // Callers build metadata. The kernel just passes it through.
+  let metadataMap = null;
+  if (metadata instanceof Map) {
+    metadataMap = metadata;
+  } else if (metadata && typeof metadata === "object" && Object.keys(metadata).length > 0) {
+    metadataMap = new Map(Object.entries(metadata));
+  }
 
-  const newNode = await createNode(
+  const newNode = await createNode({
     name,
-    schedule,
-    timeToUse,
     parentId,
-    false,
-    user._id,
-    values || {},
-    goals || {},
-    note || null,
-    user, // 👈 avoids re-query
+    userId: user._id,
+    type: type || null,
+    note: note || null,
+    metadata: metadataMap,
+    validatedUser: user,
     wasAi,
     chatId,
     sessionId,
-    type || null,
-  );
+  });
 
   let totalCreated = 1;
 

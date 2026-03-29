@@ -13,6 +13,7 @@ import { getExtension } from "../loader.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import authenticate from "../../seed/middleware/authenticate.js";
 import rateLimit from "express-rate-limit";
+import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -49,16 +50,10 @@ router.post("/forgot-password", emailLimiter, async (req, res) => {
 
   const token = crypto.randomBytes(32).toString("hex");
 
-  const emailMeta = (user.metadata instanceof Map ? user.metadata.get("email") : user.metadata?.email) || {};
+  const emailMeta = getUserMeta(user, "email");
   emailMeta.resetToken = token;
   emailMeta.resetExpiry = Date.now() + 1000 * 60 * 15;
-  if (user.metadata instanceof Map) {
-    user.metadata.set("email", emailMeta);
-  } else {
-    if (!user.metadata) user.metadata = {};
-    user.metadata.email = emailMeta;
-  }
-  if (user.markModified) user.markModified("metadata");
+  setUserMeta(user, "email", emailMeta);
   await user.save();
 
   const resetURL = `${getLandUrl()}/api/v1/user/reset-password/${token}`;
@@ -85,26 +80,16 @@ router.post("/user/reset-password", async (req, res) => {
   user.password = password;
 
   // Clear reset token
-  const emailMeta = (user.metadata instanceof Map ? user.metadata.get("email") : user.metadata?.email) || {};
+  const emailMeta = getUserMeta(user, "email");
   delete emailMeta.resetToken;
   delete emailMeta.resetExpiry;
-  if (user.metadata instanceof Map) {
-    user.metadata.set("email", emailMeta);
-  } else {
-    user.metadata.email = emailMeta;
-  }
+  setUserMeta(user, "email", emailMeta);
 
   // Invalidate all existing JWT tokens
-  const authMeta = (user.metadata instanceof Map ? user.metadata.get("auth") : user.metadata?.auth) || {};
+  const authMeta = getUserMeta(user, "auth");
   authMeta.tokensInvalidBefore = new Date().toISOString();
-  if (user.metadata instanceof Map) {
-    user.metadata.set("auth", authMeta);
-  } else {
-    if (!user.metadata) user.metadata = {};
-    user.metadata.auth = authMeta;
-  }
+  setUserMeta(user, "auth", authMeta);
 
-  if (user.markModified) user.markModified("metadata");
   await user.save();
 
   sendOk(res, { message: "Password has been reset successfully" });
@@ -143,13 +128,7 @@ router.get("/user/verify/:token", async (req, res) => {
       // Tier set via user-tiers extension if installed
     });
 
-    if (user.metadata instanceof Map) {
-      user.metadata.set("email", { address: tempUser.email, verified: true });
-    } else {
-      if (!user.metadata) user.metadata = {};
-      user.metadata.email = { address: tempUser.email, verified: true };
-    }
-    if (user.markModified) user.markModified("metadata");
+    setUserMeta(user, "email", { address: tempUser.email, verified: true });
     await user.save();
 
     const { hooks } = await import("../../seed/hooks.js");
@@ -201,16 +180,10 @@ router.post("/user/change-password", authenticate, async (req, res) => {
     user.password = newPassword;
 
     // Invalidate all existing tokens
-    const authMeta = (user.metadata instanceof Map ? user.metadata.get("auth") : user.metadata?.auth) || {};
+    const authMeta = getUserMeta(user, "auth");
     authMeta.tokensInvalidBefore = new Date().toISOString();
-    if (user.metadata instanceof Map) {
-      user.metadata.set("auth", authMeta);
-    } else {
-      if (!user.metadata) user.metadata = {};
-      user.metadata.auth = authMeta;
-    }
+    setUserMeta(user, "auth", authMeta);
 
-    if (user.markModified) user.markModified("metadata");
     await user.save();
 
     // Issue new token so user stays logged in

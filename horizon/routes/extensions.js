@@ -132,10 +132,8 @@ function validateVersion(version) {
 // ---------------------------------------------------------------------------
 
 const RESERVED_NAMES = new Set([
-  // Kernel / core terms
-  "seed", "kernel", "treeos", "treeos-base", "canopy", "horizon", "core", "land", "tree",
-  // Built-in extensions that ship with the reference implementation
-  "tree-orchestrator", "land-manager",
+  // Kernel / core terms (not extension names, never publishable)
+  "seed", "kernel", "canopy", "horizon", "core", "land", "tree",
   // Loader internals
   "loader", "_template",
 ]);
@@ -873,7 +871,7 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
       version: manifest.version,
       description: manifest.description || "",
       type: pkgType,
-      builtFor: manifest.builtFor || "kernel",
+      builtFor: manifest.builtFor || "seed",
       includes: pkgType === "bundle" ? (manifest.includes || []) : [],
       bundles: pkgType === "os" ? (manifest.bundles || []) : [],
       standalone: pkgType === "os" ? (manifest.standalone || []) : [],

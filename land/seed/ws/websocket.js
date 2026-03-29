@@ -90,7 +90,21 @@ const authSessions = new Map(); // userId → socket.id
 // ── Socket handler registry (extensions register event handlers) ──────
 const _socketHandlers = new Map();
 
+const RESERVED_SOCKET_EVENTS = new Set(["connect", "disconnect", "error", "connecting", "reconnect", "chat", "navigate", "switchMode"]);
+
 export function registerSocketHandler(event, handler) {
+  if (typeof event !== "string" || event.length === 0 || event.length > 100) {
+    log.warn("WS", `Invalid socket handler event name rejected`);
+    return;
+  }
+  if (RESERVED_SOCKET_EVENTS.has(event)) {
+    log.warn("WS", `Cannot register handler for reserved event "${event}"`);
+    return;
+  }
+  if (typeof handler !== "function") {
+    log.warn("WS", `Socket handler for "${event}" must be a function`);
+    return;
+  }
   if (_socketHandlers.has(event)) {
     log.warn("WS", `Socket handler "${event}" already registered, overwriting`);
   }
@@ -557,7 +571,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     const _chatTimestamps = [];
 
     socket.on("chat", async ({ message, username, generation, mode: chatMode }) => {
-      if (!message || typeof message !== "string" || !username) {
+      if (!message || typeof message !== "string" || !username || typeof username !== "string" || username.length > 200) {
         return socket.emit(WS.CHAT_ERROR, { error: "Missing or invalid message", generation });
       }
       const maxChatChars = Number(getLandConfigValue("maxChatMessageChars")) || 5000;

@@ -1,7 +1,7 @@
 export default {
   name: "seed-export",
   version: "1.0.0",
-  builtFor: "kernel",
+  builtFor: "seed",
   description:
     "Export a tree's form without its content. The skeleton: node hierarchy, cascade " +
     "configuration, extension scoping, persona definitions, perspective filters, mode " +

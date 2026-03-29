@@ -11,7 +11,7 @@ import { getLandConfigValue } from "./landConfig.js";
  *   beforeNote         - Before note save. Modify { nodeId, content, userId, contentType, metadata }
  *   afterNote          - After note saved. React to { note, nodeId, userId, sizeKB, action }
  *   beforeContribution - Before contribution log. Modify { nodeId, action, userId, ...extensionData }
- *   beforeNodeCreate   - Before node creation. Modify/cancel { name, type, parentNodeID, isRoot, userId }
+ *   beforeNodeCreate   - Before node creation. Modify/cancel { name, type, parentId, parentType, isRoot, userId, metadata }
  *   afterNodeCreate    - After node saved. React to { node, userId }
  *   beforeStatusChange - Before status write. Modify/validate { node, status, userId }
  *   afterStatusChange  - After status saved. React to { node, status, userId }

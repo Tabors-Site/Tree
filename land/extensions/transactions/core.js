@@ -60,13 +60,27 @@ function assertNonNegativeTradeMap(input, label) {
   throw new Error(`${label} values must be an object or Map`);
 }
 
-// Read node values from metadata (flat schema)
+// Read/write node values via the values extension API (not direct namespace access)
+let _valuesExt = null;
+async function getValuesExt() {
+  if (!_valuesExt) {
+    try {
+      const { getExtension } = await import("../loader.js");
+      _valuesExt = getExtension("values");
+    } catch {}
+  }
+  return _valuesExt;
+}
+
 function getNodeValues(node) {
+  // Sync read: use values export if cached, fallback to direct read
+  if (_valuesExt?.exports?.getNodeValues) return _valuesExt.exports.getNodeValues(node);
   return { ..._metadata.getExtMeta(node, "values") };
 }
 
-// Write node values to metadata and save
 async function setNodeValues(node, values) {
+  const ext = await getValuesExt();
+  if (ext?.exports?.setNodeValues) return ext.exports.setNodeValues(node, values);
   await _metadata.setExtMeta(node, "values", values);
 }
 

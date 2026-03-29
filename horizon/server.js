@@ -62,7 +62,7 @@ app.get("/humans.txt", (req, res) => res.type("text/plain").sendFile(join(__dirn
 // Dashboard: ecosystem-first landing page
 app.get("/", async (req, res) => {
   try {
-    const [lands, extensions, landCount, activeLands, extensionCount] = await Promise.all([
+    const [lands, extensions, landCount, activeLands, extensionCount, totalDownloads, totalStars] = await Promise.all([
       Land.find({ status: { $ne: "dead" } })
         .sort({ lastSeenAt: -1 })
         .limit(6)
@@ -72,19 +72,21 @@ app.get("/", async (req, res) => {
         { $group: { _id: "$name", latest: { $first: "$$ROOT" } } },
         { $replaceRoot: { newRoot: "$latest" } },
         { $sort: { downloads: -1, name: 1 } },
-        { $limit: 50 },
+        { $limit: 200 },
         { $project: { name: 1, version: 1, description: 1, type: 1, builtFor: 1, authorDomain: 1, authorName: 1, tags: 1, downloads: 1, publishedAt: 1, npmDependencies: 1 } },
       ]),
       Land.countDocuments({ status: { $ne: "dead" } }),
       Land.countDocuments({ status: "active" }),
       Extension.distinct("name").then((r) => r.length),
+      Extension.aggregate([{ $group: { _id: null, total: { $sum: "$downloads" } } }]).then((r) => r[0]?.total || 0),
+      Reaction.countDocuments({ type: "star" }),
     ]);
 
     const html = renderDashboard({
       lands,
       trees: [],
       extensions,
-      stats: { landCount, treeCount: 0, activeLands, extensionCount },
+      stats: { landCount, treeCount: 0, activeLands, extensionCount, totalDownloads, totalStars },
     });
 
     res.setHeader("Content-Type", "text/html");
@@ -92,6 +94,13 @@ app.get("/", async (req, res) => {
   } catch (err) {
     res.status(500).send("Horizon error: " + err.message);
   }
+});
+
+// About page
+app.get("/about", (req, res) => {
+  import("./views/aboutPage.js").then(({ renderAboutPage }) => {
+    res.send(renderAboutPage());
+  }).catch(err => res.status(500).send("Error: " + err.message));
 });
 
 // Lands browse page
@@ -323,6 +332,23 @@ app.get("/os/:name", async (req, res) => {
       standaloneDocs.push(...raw);
     }
 
+    // Fetch bundle member extensions (the leaf nodes in the tree)
+    const memberNames = [];
+    for (const b of bundleDocs) {
+      for (const inc of (b.includes || [])) memberNames.push(inc.split("@")[0]);
+    }
+    const memberDocs = [];
+    if (memberNames.length > 0) {
+      const raw = await Extension.aggregate([
+        { $match: { name: { $in: memberNames } } },
+        { $sort: { name: 1, publishedAt: -1 } },
+        { $group: { _id: "$name", latest: { $first: "$$ROOT" } } },
+        { $replaceRoot: { newRoot: "$latest" } },
+        { $project: { name: 1, version: 1, description: 1, type: 1, builtFor: 1, authorDomain: 1, authorName: 1, downloads: 1, tags: 1, publishedAt: 1, npmDependencies: 1 } },
+      ]);
+      memberDocs.push(...raw);
+    }
+
     // Fetch all extensions builtFor this OS (the ecosystem)
     const allMembers = await Extension.aggregate([
       { $match: { builtFor: name, name: { $ne: name } } },
@@ -333,6 +359,12 @@ app.get("/os/:name", async (req, res) => {
       { $limit: 50 },
       { $project: { name: 1, version: 1, description: 1, type: 1, builtFor: 1, authorDomain: 1, authorName: 1, downloads: 1, tags: 1, publishedAt: 1, npmDependencies: 1 } },
     ]);
+
+    // Merge member docs into allMembers so the tree view can find them
+    const seenNames = new Set(allMembers.map(m => m.name));
+    for (const m of memberDocs) {
+      if (!seenNames.has(m.name)) { allMembers.push(m); seenNames.add(m.name); }
+    }
 
     // Compute ecosystem stats
     const allEcoDocs = [...bundleDocs, ...standaloneDocs, ...allMembers];
@@ -408,6 +440,65 @@ app.get("/bundle/:name", async (req, res) => {
     const html = renderBundlePage({ pkg, memberDocs, dependentOsDocs, stats });
     res.setHeader("Content-Type", "text/html");
     res.send(html);
+  } catch (err) {
+    res.status(500).send("Error: " + err.message);
+  }
+});
+
+// Extension changelog page (release notes by version)
+app.get("/extensions/:name/changelog", async (req, res) => {
+  try {
+    const { name } = req.params;
+
+    // Get all versions
+    const versions = await Extension.find({ name })
+      .sort({ publishedAt: -1 })
+      .select("name version publishedAt downloads")
+      .lean();
+
+    if (!versions.length) return res.status(404).send("Extension not found");
+
+    // Get release comments
+    const releases = await Comment.find({ extensionName: name, type: "release" })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const releaseMap = new Map();
+    for (const r of releases) {
+      if (r.extensionVersion) releaseMap.set(r.extensionVersion, r);
+    }
+
+    const { pageShell, escapeHtml, timeAgo } = await import("./views/shared.js");
+
+    const rows = versions.map((v, i) => {
+      const release = releaseMap.get(v.version);
+      const notes = release ? escapeHtml(release.text) : '<span style="color:var(--text-muted);">No release notes.</span>';
+      return `
+        <div style="padding:16px 0;${i < versions.length - 1 ? "border-bottom:1px solid rgba(255,255,255,0.06);" : ""}">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap;">
+            <strong style="font-family:'JetBrains Mono',monospace;font-size:15px;">v${escapeHtml(v.version)}</strong>
+            <span style="font-size:12px;color:var(--text-muted);">${timeAgo(v.publishedAt)}</span>
+            ${v.downloads ? `<span style="font-size:12px;color:var(--text-muted);">${v.downloads} downloads</span>` : ""}
+          </div>
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.7;white-space:pre-wrap;">${notes}</div>
+        </div>`;
+    }).join("");
+
+    const body = `
+      <div style="animation:fadeInUp 0.5s ease-out both;margin-bottom:24px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+          <a href="/extensions/${encodeURIComponent(name)}/page" style="color:var(--accent);text-decoration:none;font-size:14px;">${escapeHtml(name)}</a>
+          <span style="color:var(--text-muted);font-size:13px;">/</span>
+          <span style="font-size:14px;color:var(--text-secondary);">changelog</span>
+        </div>
+        <h1 style="font-size:24px;font-weight:800;letter-spacing:-0.5px;">Changelog</h1>
+      </div>
+      <div class="glass-card" style="animation-delay:0.05s;">
+        ${rows || '<p style="color:var(--text-muted);">No versions published yet.</p>'}
+      </div>
+    `;
+
+    res.send(pageShell({ title: `${name} changelog | Canopy Horizon`, activePage: "explore", breadcrumb: name }, body));
   } catch (err) {
     res.status(500).send("Error: " + err.message);
   }

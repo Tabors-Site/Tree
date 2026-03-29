@@ -6,8 +6,8 @@ import {
 export function renderDashboard({ lands, trees, extensions, stats }) {
   // Separate extensions by type
   const osItems = (extensions || []).filter(e => e.type === "os");
-  const kernelExts = (extensions || []).filter(e => (e.type || "extension") === "extension" && (!e.builtFor || e.builtFor === "kernel"));
-  const otherExts = (extensions || []).filter(e => !osItems.includes(e) && !kernelExts.includes(e));
+  const seedExts = (extensions || []).filter(e => (e.type || "extension") === "extension" && (!e.builtFor || e.builtFor === "seed" || e.builtFor === "kernel"));
+  const otherExts = (extensions || []).filter(e => !osItems.includes(e) && !seedExts.includes(e));
 
   // OS section: show all OS distributions as primary cards
   const osCards = osItems.length > 0
@@ -15,10 +15,10 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
     : '<div class="empty-state">No operating systems published yet. Be the first.</div>';
 
   // Recent extensions (kernel-only, max 6)
-  const recentKernel = kernelExts.slice(0, 6);
-  const kernelCards = recentKernel.length > 0
-    ? recentKernel.map((pkg, i) => packageCard(pkg, i)).join("")
-    : '<div class="empty-state">No kernel extensions published yet.</div>';
+  const recentSeed = seedExts.slice(0, 6);
+  const seedCards = recentSeed.length > 0
+    ? recentSeed.map((pkg, i) => packageCard(pkg, i)).join("")
+    : '<div class="empty-state">No seed extensions published yet.</div>';
 
   // Recent lands (max 6)
   const recentLands = (lands || []).slice(0, 6);
@@ -43,6 +43,8 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
         <div class="stat-chip"><span class="num">${stats.extensionCount || 0}</span> packages</div>
         <div class="stat-chip"><span class="num">${osItems.length}</span> OS</div>
         ${bundleCount > 0 ? `<div class="stat-chip"><span class="num">${bundleCount}</span> bundles</div>` : ""}
+        ${stats.totalDownloads > 0 ? `<div class="stat-chip"><span class="num">${stats.totalDownloads}</span> downloads</div>` : ""}
+        ${stats.totalStars > 0 ? `<div class="stat-chip"><span class="num">${stats.totalStars}</span> stars</div>` : ""}
       </div>
     </div>
 
@@ -56,11 +58,11 @@ export function renderDashboard({ lands, trees, extensions, stats }) {
 
     <!-- Kernel Extensions -->
     <div class="glass-card" style="animation-delay: 0.15s;">
-      <h2>Kernel Extensions</h2>
+      <h2>Seed Extensions</h2>
       <div class="card-grid">
-        ${kernelCards}
+        ${seedCards}
       </div>
-      ${kernelExts.length > 6 ? '<a href="/extensions/browse?builtFor=kernel" class="section-link">Browse all kernel extensions</a>' : ""}
+      ${seedExts.length > 6 ? '<a href="/extensions/browse?builtFor=seed" class="section-link">Browse all seed extensions</a>' : ""}
     </div>
 
     <!-- Recent Lands -->

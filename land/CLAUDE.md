@@ -86,17 +86,17 @@ Everything in the kernel serves one of four primitives:
 
 ## Extension ecosystem (95 extensions, 4 bundles)
 
-**Base TreeOS (20):** treeos-base, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, breath, instructions.
+**Base TreeOS (21):** treeos-base, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, breath, instructions, channels.
 
 **treeos-cascade (8):** The nervous system. Signals propagate, get filtered, compressed, monitored.
 
 **treeos-intelligence (14):** Self-awareness. Compression, contradiction detection, user profiling, autonomous intent, semantic search, exploration, tracing, boundary mapping, competence tracking, conversational awareness, extension proposal, temporal memory.
 
-**treeos-connect (8):** External channels. Telegram, Discord, Slack, email, SMS, webhooks, Matrix.
+**treeos-connect (11):** External channels. Telegram, Discord, Slack, email, SMS, webhooks, Matrix, Reddit, X, tree-to-tree.
 
 **treeos-maintenance (5):** Hygiene. Prune, reroot, changelog, daily digest, delegation.
 
-**Standalone (9):** persona, mycelium, peer-review, seed-export, channels, governance, teach, split, approve.
+**Standalone (8):** persona, mycelium, peer-review, seed-export, governance, teach, split, approve.
 
 ## Security
 

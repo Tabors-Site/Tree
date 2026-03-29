@@ -1,5 +1,5 @@
 import log from "../../seed/log.js";
-import { buildNavigationHandler } from "./navigation.js";
+import { buildNavigationHandler, registerToolNavigation, registerToolNavigations } from "./navigation.js";
 import { buildTools } from "./handlers.js";
 
 // Tree modes
@@ -164,6 +164,6 @@ export async function init(core) {
 
   return {
     tools,
-    exports: { TOOL_DEFS },
+    exports: { TOOL_DEFS, registerToolNavigation, registerToolNavigations },
   };
 }

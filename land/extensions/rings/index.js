@@ -55,10 +55,10 @@ export async function init(core) {
 
   // ── Accumulate activity via hooks ──
 
-  core.hooks.register("afterNote", async ({ node }) => {
-    if (!node) return;
+  core.hooks.register("afterNote", async ({ nodeId }) => {
+    if (!nodeId) return;
     // Walk to root
-    let cursor = node;
+    let cursor = await core.models.Node.findById(nodeId).select("_id rootOwner parent").lean();
     while (cursor && !cursor.rootOwner) {
       cursor = await core.models.Node.findById(cursor.parent).select("_id rootOwner parent").lean();
     }

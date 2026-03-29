@@ -14,16 +14,16 @@ const ALIVE_THRESHOLD = 5 * 60 * 1000;    // 5 min
 const QUIET_THRESHOLD = 30 * 60 * 1000;   // 30 min
 
 export async function init(core) {
-  core.hooks.register("afterLLMCall", async ({ userId, sessionId }) => {
+  core.hooks.register("afterLLMCall", async ({ userId, rootId }) => {
     if (!userId || userId === "SYSTEM") return;
     lastInteraction = Date.now();
-    if (sessionId) activeSessions.add(sessionId);
+    if (rootId) activeSessions.add(rootId);
   }, "heartbeat");
 
-  core.hooks.register("afterNavigate", async ({ userId, sessionId }) => {
+  core.hooks.register("afterNavigate", async ({ userId, rootId }) => {
     if (!userId) return;
     lastInteraction = Date.now();
-    if (sessionId) activeSessions.add(sessionId);
+    if (rootId) activeSessions.add(rootId);
   }, "heartbeat");
 
   // Prune stale sessions every 5 min

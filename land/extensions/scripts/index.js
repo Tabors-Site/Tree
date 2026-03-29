@@ -26,5 +26,18 @@ export async function init(core) {
     }
   }, "scripts");
 
+  // Register navigation for script tools (if treeos-base installed)
+  try {
+    const { getExtension } = await import("../loader.js");
+    const base = getExtension("treeos-base");
+    if (base?.exports?.registerToolNavigations) {
+      const scriptNav = ({ args, withToken: t }) => t(`/api/v1/node/${args.nodeId}?html`);
+      base.exports.registerToolNavigations({
+        "update-node-script": scriptNav,
+        "execute-node-script": scriptNav,
+      });
+    }
+  } catch {}
+
   return { router, tools };
 }

@@ -316,22 +316,13 @@ export async function plantTreeSeed(seedData, userId, username) {
     }
 
     // Create the node
-    const newNode = await createNode(
-      nodeData.name,
-      null,         // schedule
-      null,         // reeffectTime
+    const newNode = await createNode({
+      name: nodeData.name,
       parentId,
       isRoot,
       userId,
-      {},           // values
-      {},           // goals
-      null,         // note
-      null,         // validatedUser
-      false,        // wasAi
-      null,         // chatId
-      null,         // sessionId
-      nodeData.type || null,
-    );
+      type: nodeData.type || null,
+    });
 
     nodeCount++;
 
