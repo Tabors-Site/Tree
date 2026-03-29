@@ -1,6 +1,6 @@
 const chalk = require("chalk");
 const readline = require("readline");
-const { load, requireAuth, hasExtension } = require("../config");
+const { requireAuth } = require("../config");
 const { getApi } = require("../helpers");
 
 function ask(rl, question) {
@@ -8,8 +8,6 @@ function ask(rl, question) {
 }
 
 module.exports = (program) => {
-  const cfg = load();
-  if (!hasExtension(cfg, "user-llm")) return;
 
   program
     .command("llms")

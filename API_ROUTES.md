@@ -250,16 +250,22 @@
 - post("/root/:nodeId/understandings/run/:runId/orchestrate"
 - post("/root/:nodeId/understandings/run/:runId/stop"
 
-### user-llm
+### Core LLM Routes (routes/api/llm.js)
 - get("/user/:userId/custom-llm"
 - post("/user/:userId/llm-assign"
 - post("/user/:userId/custom-llm"
-- put(
-- delete(
+- put("/user/:userId/custom-llm/:connectionId"
+- delete("/user/:userId/custom-llm/:connectionId"
+
+### llm-failover
 - get("/user/:userId/llm-failover"
 - post("/user/:userId/llm-failover"
 - delete("/user/:userId/llm-failover/:connectionId"
 - delete("/user/:userId/llm-failover"
+- get("/root/:rootId/llm-failover"
+- post("/root/:rootId/llm-failover"
+- delete("/root/:rootId/llm-failover/:connectionId"
+- delete("/root/:rootId/llm-failover"
 
 ### user-queries
 - get("/user/:userId/notes"
@@ -333,5 +339,5 @@
 - **solana**: wallet [action] [args...]
 - **transactions**: transactions
 - **understanding**: understand,understandings
-- **user-llm**: llm failover,llm failover-push <connectionId>,llm failover-pop
+- **llm-failover**: llm failover,llm failover-push <connectionId>,llm failover-pop,llm tree-failover,llm tree-failover-push <connectionId>,llm tree-failover-pop
 - **values**: values,value <key> <value>,goal <key> <goal>

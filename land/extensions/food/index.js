@@ -9,7 +9,7 @@
 
 import log from "../../seed/log.js";
 import logMode from "./modes/log.js";
-import dailyMode from "./modes/daily.js";
+import reviewMode from "./modes/review.js";
 import coachMode from "./modes/coach.js";
 import {
   configure,
@@ -40,18 +40,18 @@ export async function init(core) {
           });
         }
       : null,
-    hooks: core.hooks,
+    Note: core.models.Note,
     metadata: core.metadata,
   });
 
   // Register modes
   core.modes.registerMode("tree:food-log", logMode, "food");
-  core.modes.registerMode("tree:food-daily", dailyMode, "food");
+  core.modes.registerMode("tree:food-review", reviewMode, "food");
   core.modes.registerMode("tree:food-coach", coachMode, "food");
 
   if (core.llm?.registerModeAssignment) {
     core.llm.registerModeAssignment("tree:food-log", "foodLog");
-    core.llm.registerModeAssignment("tree:food-daily", "foodDaily");
+    core.llm.registerModeAssignment("tree:food-review", "foodReview");
     core.llm.registerModeAssignment("tree:food-coach", "foodCoach");
   }
 
@@ -160,7 +160,8 @@ export async function init(core) {
           const m = picture[macro];
           if (m) {
             const pct = m.goal > 0 ? Math.round((m.today / m.goal) * 100) : 0;
-            lines.push(`${macro}: ${m.today}/${m.goal}g (${pct}%)`);
+            const weekPart = m.weeklyAvg > 0 ? `, weekly avg ${m.weeklyAvg}g (${Math.round(m.weeklyHitRate * 100)}% hit rate)` : "";
+            lines.push(`${macro}: ${m.today}/${m.goal}g (${pct}%)${weekPart}`);
           }
         }
         if (picture.calories) {

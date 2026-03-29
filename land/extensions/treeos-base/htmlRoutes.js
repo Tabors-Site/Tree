@@ -40,6 +40,7 @@ import { renderQueryPage } from "./pages/query.js";
 import { renderContributions } from "./pages/contributions.js";
 import { renderCommandCenter } from "./pages/commandCenter.js";
 import { renderShareToken } from "./pages/shareToken.js";
+import { renderLlmPage } from "./pages/llmPage.js";
 import { escapeHtml, renderMedia } from "../html-rendering/html/utils.js";
 import { notFoundPage } from "../html-rendering/notFoundPage.js";
 
@@ -118,6 +119,41 @@ export function buildTreeosHtmlRoutes() {
   // ===================================================================
 
   // Share token management page
+  router.get("/user/:userId/llm", urlAuth, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+      const connections = await getConnectionsForUser(userId);
+      const user = await User.findById(userId).select("username llmDefault metadata").lean();
+
+      if (!wantHtml || !isHtmlEnabled()) {
+        return sendOk(res, { connections, mainAssignment: user?.llmDefault || null });
+      }
+
+      const userSlots = getUserMeta(user, "userLlm")?.slots || {};
+      const { getAllUserLlmSlots } = await import("../../seed/llm/connections.js");
+      const allUserSlots = getAllUserLlmSlots();
+      const token = req.query.token ?? "";
+      const qs = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
+
+      return res.send(renderLlmPage({
+        userId,
+        username: user?.username || "",
+        connections,
+        mainAssignment: user?.llmDefault || null,
+        allUserSlots,
+        userSlots,
+        treeSlots: {},
+        rootId: null,
+        rootName: null,
+        qs,
+      }));
+    } catch (err) {
+      log.error("HTML", "LLM page error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
   router.get("/user/:userId/shareToken", urlAuth, htmlOnly, async (req, res) => {
     try {
       const { userId } = req.params;

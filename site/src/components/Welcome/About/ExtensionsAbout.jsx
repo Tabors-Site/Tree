@@ -228,7 +228,7 @@ if (other?.exports?.myFunction) {
               { name: "shell", desc: "Execute shell commands from AI (admin only)" },
               { name: "land-manager", desc: "Autonomous land management agent for system operations" },
               { name: "api-keys", desc: "User-generated API keys for programmatic access" },
-              { name: "user-llm", desc: "Custom LLM connections and per-user model routing" },
+              { name: "llm-failover", desc: "Failover stacks for user and tree LLM connections" },
               { name: "user-queries", desc: "Notes, tags, contributions, chats, notifications" },
               { name: "deleted-revive", desc: "Soft delete with branch recovery" },
               { name: "email", desc: "Email verification for registration and password reset" },

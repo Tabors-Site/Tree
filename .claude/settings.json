@@ -584,7 +584,8 @@
       "/home/tabor/github/Tree/land/extensions",
       "/home/tabor/github/Tree/land/extensions/peer-review",
       "/home/tabor/github/Tree/land/extensions/explore",
-      "/home/tabor/github/Tree/land/seed"
+      "/home/tabor/github/Tree/land/seed",
+      "/home/tabor/github/Tree/land/extensions/recovery"
     ]
   }
 }

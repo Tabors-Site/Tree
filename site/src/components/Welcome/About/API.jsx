@@ -348,7 +348,7 @@ const ApiAccessSection = () => {
             invites, chat history, and custom LLM configuration.
           </div>
 
-          <p className="api-note">Additional user endpoints are added by extensions: energy, raw-ideas, api-keys, deleted-revive, user-llm, user-queries.</p>
+          <p className="api-note">Additional user endpoints are added by extensions: energy, raw-ideas, api-keys, deleted-revive, llm-failover, user-queries.</p>
 
           {/* ── Profile ──────────── */}
           <div className="sub-title">Profile</div>

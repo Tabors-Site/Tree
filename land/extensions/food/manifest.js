@@ -1,17 +1,15 @@
 export default {
   name: "food",
-  version: "2.0.0",
+  version: "2.1.0",
   builtFor: "TreeOS",
   description:
-    "Nutrition tracking through tree structure. One node to talk to, three nodes that " +
-    "count, one node that sees the picture. You say 'chicken breast and rice for lunch' " +
-    "at the Log node. One LLM call parses it into macros. Cascade signals route protein " +
-    "to the Protein node, carbs to the Carbs node, fats to the Fats node. Each macro " +
-    "node increments its running total. Zero additional LLM calls. The Daily node reads " +
-    "all siblings and shows the assembled picture. Navigate there, ask 'how am I doing' " +
-    "or 'what should I eat for dinner', and the AI has everything it needs. The tree IS " +
-    "the app. Nine kernel primitives and five extension systems working together through " +
-    "the tree's own structure.",
+    "Nutrition tracking through tree structure. Log node receives food input. One LLM " +
+    "call parses macros. Cascade routes to Protein, Carbs, Fats nodes. Meals subtree " +
+    "tracks patterns by slot (Breakfast, Lunch, Dinner, Snacks). Profile node holds goals " +
+    "and restrictions. History node archives daily summaries with weekly averages and hit " +
+    "rates. Three modes: food-log (parser), food-review (advisor with weekly patterns), " +
+    "food-coach (setup and goal setting). Fitness channel carries workout data both ways. " +
+    "The tree IS the app.",
 
   classifierHints: [
     /\b(ate|had|eaten|drank|breakfast|lunch|dinner|snack|calories|protein|carbs|fats|macro)\b/i,
@@ -51,10 +49,31 @@ export default {
       {
         command: "food [message...]",
         scope: ["tree"],
-        description: "Log food intake. Parses macros and routes to tracking nodes.",
+        description: "Log food or ask about nutrition.",
         method: "POST",
         endpoint: "/root/:rootId/food",
         body: ["message"],
+      },
+      {
+        command: "food-daily",
+        scope: ["tree"],
+        description: "Today's nutrition dashboard.",
+        method: "GET",
+        endpoint: "/root/:rootId/food/daily",
+      },
+      {
+        command: "food-week",
+        scope: ["tree"],
+        description: "Weekly nutrition review.",
+        method: "GET",
+        endpoint: "/root/:rootId/food/week",
+      },
+      {
+        command: "food-profile",
+        scope: ["tree"],
+        description: "Dietary profile and goals.",
+        method: "GET",
+        endpoint: "/root/:rootId/food/profile",
       },
     ],
   },

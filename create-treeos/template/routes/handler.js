@@ -11,6 +11,7 @@ import cascade from "./api/cascade.js";
 import orchestrate from "./api/orchestrate.js";
 // gateway webhooks loaded via extension system
 import landConfig from "./api/config.js";
+import llm from "./api/llm.js";
 import canopy from "./canopy.js";
 
 import { handleMcpRequest, mcpServerInstance, connectMcpTransport } from "../mcp/server.js";
@@ -167,6 +168,7 @@ export default async function registerURLRoutes(app, opts = {}) {
   app.use("/api/v1", orchestrate);
   // gateway webhooks loaded via extension system
   app.use("/api/v1", landConfig);
+  app.use("/api/v1", llm);
 
   // Canopy protocol stays at /canopy (not versioned with API)
   app.use("/", canopy);

@@ -38,7 +38,7 @@ import {
   setCurrentNodeId, getCurrentNodeId, getCurrentMode,
   clearSession as clearConversationSession,
   resetConversation, injectContext, registerModeAssignment, registerModeTimeout, registerModeRetries,
-  LLM_PRIORITY,
+  registerFailoverResolver, LLM_PRIORITY,
 } from "./llm/conversation.js";
 import { runPipeline } from "./orchestrators/pipeline.js";
 
@@ -146,7 +146,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       setCurrentNodeId, getCurrentNodeId, getCurrentMode,
       clearSession: clearConversationSession,
       resetConversation, injectContext, registerModeAssignment, registerModeTimeout, registerModeRetries,
-      registerRootLlmSlot, registerUserLlmSlot,
+      registerRootLlmSlot, registerUserLlmSlot, registerFailoverResolver,
       LLM_PRIORITY,
     },
 

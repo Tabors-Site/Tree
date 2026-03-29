@@ -141,27 +141,33 @@ function releaseLlmSlot() {
   }
 }
 
-// ── LLM Failover Stack ──────────────────────────────────────────────────
-// When the primary LLM connection fails (429, 500, timeout), try the next
-// connection in the user's failover stack. Kernel-level reliability.
+// ── LLM Failover ────────────────────────────────────────────────────────
+// The kernel provides the retry mechanism. Extensions register a resolver
+// that returns fallback connection IDs for a given userId/rootId context.
 
 const RETRYABLE_CODES = new Set([429, 500, 502, 503, 504]);
 
-async function getFailoverStack(userId) {
-  const user = await User.findById(userId).select("metadata").lean();
-  const meta = user?.metadata instanceof Map ? Object.fromEntries(user.metadata) : (user?.metadata || {});
-  return meta.llm?.failoverStack || [];
+let _failoverResolver = null;
+
+/**
+ * Register a failover resolver. Extensions call this to supply fallback
+ * connection IDs when the primary LLM connection fails.
+ * @param {Function} resolver - async (userId, rootId) => string[] of connectionIds
+ */
+export function registerFailoverResolver(resolver) {
+  _failoverResolver = resolver;
 }
 
 /**
- * Try an LLM call with the primary client. On retryable failure, walk the
- * failover stack and try each connection until one succeeds.
+ * Try an LLM call with the primary client. On retryable failure, ask the
+ * registered failover resolver for fallback connections and try each one.
  * @param {Function} callFn - async (openaiClient, model) => response
  * @param {object} primaryClient - { client, model, connectionId, ... }
- * @param {string} userId - for failover stack lookup
+ * @param {string} userId
+ * @param {string|null} rootId
  * @returns {object} { response, usedClient }
  */
-async function callWithFailover(callFn, primaryClient, userId) {
+async function callWithFailover(callFn, primaryClient, userId, rootId) {
   // Try primary
   try {
     const response = await callFn(primaryClient.client, primaryClient.model);
@@ -171,21 +177,28 @@ async function callWithFailover(callFn, primaryClient, userId) {
     if (!RETRYABLE_CODES.has(status) && !err.message?.includes("timed out")) {
       throw err; // not retryable
     }
-    // Jittered backoff on rate limit before trying failover stack
+    // Jittered backoff on rate limit before trying failover
     if (status === 429) {
       const retryAfter = Number(err.headers?.["retry-after"]) || 0;
       const baseMs = retryAfter > 0 ? retryAfter * 1000 : 1000;
       const jitter = Math.random() * baseMs;
       await new Promise(r => setTimeout(r, baseMs + jitter));
     }
-    log.warn("LLM", `Primary failed (${status}): ${primaryClient.model}. Trying failover stack.`);
+
+    // No failover resolver registered, nothing to try
+    if (!_failoverResolver) throw err;
+
+    log.warn("LLM", `Primary failed (${status}): ${primaryClient.model}. Trying failover.`);
   }
 
-  // Walk failover stack with cumulative timeout. If all connections are
-  // rate-limited, the jittered backoff per entry can compound. Cap the total
-  // failover walk to 15 seconds so the user doesn't wait forever.
+  // Ask the extension for fallback connection IDs
+  const stack = await _failoverResolver(userId, rootId);
+  if (!stack || stack.length === 0) {
+    throw new Error("Primary LLM connection failed and no failover connections configured.");
+  }
+
+  // Walk the stack with cumulative timeout
   const failoverStart = Date.now();
-  const stack = await getFailoverStack(userId);
   for (const connId of stack) {
     if (Date.now() - failoverStart > FAILOVER_TIMEOUT_MS) {
       log.warn("LLM", `Failover walk timed out after ${FAILOVER_TIMEOUT_MS}ms. Giving up.`);
@@ -1029,6 +1042,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
       (client, model) => client.chat.completions.create({ ...requestParams, model }, requestOpts),
       clientEntry,
       ctx.userId,
+      ctx.rootId || null,
     );
     response = failoverResult.response;
     // If a failover client was used, update tracking

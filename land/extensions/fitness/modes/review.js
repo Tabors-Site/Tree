@@ -1,43 +1,78 @@
-// fitness/modes/review.js
-// Progress analysis. Reads history, progression, patterns.
-// Read-only with navigation tools.
+/**
+ * Fitness Review Mode
+ *
+ * Cross-modality analysis. Weekly summary, progression tracking,
+ * PR detection, consistency patterns, overdue exercises, nutrition correlation.
+ */
+
+import { getExerciseState, getProfile, getWeeklyStats } from "../core.js";
 
 export default {
-  name: "tree:fitness-review",
   emoji: "📊",
-  label: "Progress Review",
+  label: "Fitness Review",
   bigMode: "tree",
   hidden: true,
-
-  maxMessagesBeforeLoop: 6,
+  maxMessagesBeforeLoop: 30,
   preserveContextOnLoop: true,
 
-  toolNames: ["navigate-tree", "get-tree-context", "get-node-notes"],
+  toolNames: [
+    "navigate-tree",
+    "get-tree-context",
+    "get-node-notes",
+  ],
 
-  buildSystemPrompt({ username }) {
-    return `You are ${username}'s fitness progress analyst.
+  async buildSystemPrompt({ username, rootId }) {
+    const state = await getExerciseState(rootId);
+    const profile = await getProfile(rootId);
+    const weekly = await getWeeklyStats(rootId);
 
-You read the tree's exercise data and history to answer questions about progress, consistency, and patterns.
+    const exerciseSummary = state ? Object.entries(state.groups).map(([group, data]) => {
+      const exs = data.exercises.map(e => {
+        const vals = e.values || {};
+        const goals = e.goals || {};
+        if (data.modality === "gym") {
+          const sets = Object.keys(vals).filter(k => k.startsWith("set")).map(k => vals[k]).filter(v => v != null);
+          const goalVals = Object.keys(goals).filter(k => k.startsWith("set")).map(k => goals[k]).filter(v => v != null);
+          return `${e.name}: ${vals.weight || "?"}lb ${sets.join("/")} (goals: ${goalVals.join("/")}) last: ${vals.lastWorked || "never"} [${e.historyCount} sessions]`;
+        }
+        if (data.modality === "running") {
+          return `${e.name}: ${JSON.stringify(vals)}`;
+        }
+        return `${e.name}: ${JSON.stringify(vals)} goals: ${JSON.stringify(goals)}`;
+      }).join("\n    ");
+      return `  ${group} [${data.modality}]:\n    ${exs}`;
+    }).join("\n") : "No data.";
 
-YOUR CONTEXT (injected via enrichContext):
-- Current exercise values (sets, reps, weight) on each exercise node
-- Exercise history (metadata.fitness.history[] on each exercise)
-- Workout history (notes on the History node)
-- Program details (notes on the Program node)
+    const weeklyStr = weekly
+      ? `Sessions: ${weekly.sessions}, Gym: ${weekly.gymSessions}, Runs: ${weekly.runs} (${weekly.runMiles}mi), Home: ${weekly.homeSessions}, Volume: ${weekly.totalVolume}lb`
+      : "No data this week.";
 
-WHAT YOU ANALYZE
-- Progressive overload: "Bench went from 95 to 135 in 12 weeks"
-- Consistency: "You've trained 3.5x per week on average. Legs get skipped most."
-- Volume trends: "Total weekly volume up 12% over the last month"
-- Weak points: "Shoulders are lagging. OHP hasn't moved in 3 weeks."
-- PR detection: "New PR on squats: 225x8. That's up from 205x8 last month."
-- Recovery patterns: "You always perform worse after back-to-back days"
+    return `You are ${username}'s fitness analyst. Analyze their training data across all modalities.
 
-COMMUNICATION
-- Lead with the data. "Bench: 95lb week 1, 135lb week 12. +42% in 3 months."
-- Be honest about stalls: "OHP has been stuck at 95 for 3 weeks. Try microplates or add volume."
-- Celebrate milestones naturally: "You hit 2 plates on squat. That's a real milestone."
-- Compare to their own history, never to other people
-- Never mention node IDs, metadata keys, or tool names`.trim();
+CURRENT STATE:
+${exerciseSummary}
+
+THIS WEEK: ${weeklyStr}
+Profile: ${profile?.sessionsPerWeek || "?"} days/week target
+
+ANALYZE:
+1. Progressive overload: Which exercises are progressing? Which are stalled?
+2. Consistency: Sessions this week vs target. Missed modalities.
+3. Volume trends: Is total volume trending up, flat, or down?
+4. PRs: Any new personal records (gym lifts, run times)?
+5. Overdue: Exercises not worked in 7+ days.
+6. Balance: Are they neglecting any modality or muscle group?
+7. Recovery: Training too many consecutive days? Enough rest?
+8. Cross-modality: Running affecting leg day recovery? Bodyweight complementing gym?
+
+Use navigate-tree and get-node-notes to read History notes for trends over time.
+Read exercise node notes for detailed session history.
+
+STYLE:
+- Lead with what's working. Then what needs attention.
+- Use actual numbers and percentages. "Bench: 130->140 (+7.7%) in 4 weeks."
+- Compare to their goals. "15.5/20 weekly miles (78%)."
+- Be direct. If something is stalling, say so and suggest a fix.
+- Never mention node IDs, metadata, or tools.`.trim();
   },
 };

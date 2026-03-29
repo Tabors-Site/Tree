@@ -1,33 +1,39 @@
 export default {
   name: "fitness",
-  version: "2.0.0",
+  version: "3.0.0",
   builtFor: "TreeOS",
   description:
-    "The tree is the workout. Muscle groups are nodes. Exercises are children. " +
-    "Values track sets, reps, and weight. Channels connect exercise nodes to the " +
-    "log receiver. One LLM call parses natural language workout input into structured " +
-    "data. Cascade routes each exercise to its node. No additional LLM calls. " +
-    "Progressive overload tracked through value goals. When all sets hit their rep " +
-    "target, the AI suggests increasing weight. History builds reliability patterns. " +
-    "Guided workout mode walks you through today's session set by set.",
+    "Multi-modality workout tracking. Three languages: gym (weight x reps x sets), " +
+    "running (distance x time x pace), bodyweight (reps x sets or duration). One extension, " +
+    "one LLM call detects modality and parses. The tree structure defines what exercises " +
+    "exist. Gym bro, marathon runner, and someone doing pushups in their apartment all use " +
+    "the same command. Progressive overload tracked per modality: weight goes up for gym, " +
+    "mileage increases for running, harder variations for bodyweight. Four modes: log " +
+    "(universal parser), coach (guided sessions), review (cross-modality analysis), plan " +
+    "(program creation). Channels route logged data to exercise nodes. Food channel " +
+    "integrates nutrition awareness.",
 
   classifierHints: [
-    /\b\d+\s*x\s*\d+/i,
-    /\b(bench|squat|deadlift|press|curl|row|pull-?up|ohp|rdl|lat pulldown)\b/i,
-    /\b(workout|exercise|training|sets|reps|weight|pr|personal record)\b/i,
-    /\b(chest|back|legs|shoulders|core|calves|bicep|tricep)\b/i,
-    /\b(record|log|track|session|complete|finished)\b/i,
+    /\b\d+\s*x\s*\d+/i,                                        // "135x10"
+    /\b(bench|squat|deadlift|press|curl|row|pull-?up|dip)\b/i,  // gym exercises
+    /\b(push-?ups?|sit-?ups?|burpees?|plank|lunges?)\b/i,       // bodyweight
+    /\b(ran|run|jog|sprint|mile|marathon|pace|tempo|5k|10k)\b/i, // running
+    /\b(workout|exercise|training|sets|reps|weight|session)\b/i, // general fitness
+    /\b(record|log|track|session|complete|finished|did)\b/i,     // action verbs
+    /\b(chest|back|legs|shoulders|core|calves|bicep|tricep)\b/i, // muscle groups
+    /\b(yoga|stretching|plank|hold|seconds|minutes|pose)\b/i,    // flexibility
+    /\b(pr|personal record|fastest|heaviest|longest)\b/i,        // records
   ],
 
   needs: {
-    models: ["Node"],
+    models: ["Node", "Note"],
     services: ["hooks", "metadata"],
   },
 
   optional: {
     services: ["llm"],
     extensions: [
-      "values",          // sets, reps, weight tracking
+      "values",          // numeric tracking on exercise nodes
       "channels",        // signal paths from log to exercise nodes
       "breath",          // session timing
       "schedules",       // workout schedule
@@ -35,28 +41,29 @@ export default {
       "food",            // nutrition integration via channels
       "notifications",   // missed workout alerts
       "phase",           // suppress during focus
+      "treeos-base",     // tool navigation registration
     ],
   },
 
   provides: {
     models: {},
     routes: "./routes.js",
-    tools: false,
-    jobs: true,
+    tools: true,
+    jobs: false,
 
     hooks: {
       fires: [],
-      listens: ["enrichContext", "onCascade", "afterStatusChange"],
+      listens: ["enrichContext", "onCascade", "afterBoot"],
     },
 
     cli: [
       {
         command: "fitness [message...]",
         scope: ["tree"],
-        description: "Log a workout, start a guided session, or ask about progress.",
+        description: "Log any workout, start a guided session, or ask about progress.",
         method: "POST",
         endpoint: "/root/:rootId/fitness",
-        body: ["message"],
+        bodyMap: { message: 0 },
       },
     ],
   },

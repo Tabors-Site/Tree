@@ -334,9 +334,12 @@ Control what the AI can do and how it thinks at every node. Inherits parent to c
 | `llm remove <id>`                   | Remove a connection                            |
 | `llm assign <slot> <id>`            | Assign to user slot (main)                     |
 | `llm tree-assign <slot> <id>`       | Assign to tree slot (default, respond, etc.)   |
-| `llm failover`                      | Show failover stack                            |
+| `llm failover`                      | Show your failover stack                       |
 | `llm failover-push <id>`            | Add backup connection                          |
 | `llm failover-pop`                  | Remove last backup                             |
+| `llm tree-failover`                 | Show tree failover stack                       |
+| `llm tree-failover-push <id>`       | Add backup to tree                             |
+| `llm tree-failover-pop`             | Remove last tree backup                        |
 
 ### Land Config
 

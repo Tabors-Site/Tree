@@ -327,7 +327,7 @@ const LandingPage = () => {
               </div>
             ))}
             <p style={{color: "rgba(255,255,255,0.3)", marginTop: 12, fontSize: "0.8rem"}}>
-              And 50+ more: blog, book, schedules, transactions, user-llm, user-queries, api-keys, email,
+              And 50+ more: blog, book, schedules, transactions, llm-failover, user-queries, api-keys, email,
               deleted-revive, dashboard, navigation, team, notifications, console, monitor, persona, channels,
               governance, peer-review, seed-export, teach, split, and every gateway channel (reddit, slack,
               sms, matrix, x, tree).

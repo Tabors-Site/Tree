@@ -1,19 +1,26 @@
 /**
  * Fitness Core
  *
- * Parse workout input, route to exercise nodes, track progression,
- * record history. The tree does the orchestration.
+ * Multi-modality workout tracking. Three languages:
+ *   gym:  weight x reps x sets (progressive overload = weight up)
+ *   running: distance x time x pace (progressive overload = mileage up, pace down)
+ *   home: reps x sets or duration (progressive overload = reps up, harder variation)
+ *
+ * One LLM call detects modality and parses. Routing sends to the right branch.
+ * The tree structure defines what exercises exist. The code is generic.
  */
 
 import log from "../../seed/log.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _Node = null;
+let _Note = null;
 let _runChat = null;
 let _metadata = null;
 
-export function configure({ Node, runChat, metadata }) {
+export function configure({ Node, Note, runChat, metadata }) {
   _Node = Node;
+  _Note = Note;
   _runChat = runChat;
   _metadata = metadata;
 }
@@ -21,14 +28,14 @@ export function configure({ Node, runChat, metadata }) {
 // ── Constants ──
 
 const MAX_HISTORY = 50;
+const MAX_SESSION_HISTORY = 90; // days of session records on History node
 
-const DEFAULT_CONFIG = {
-  defaultSets: 3,
-  repRangeMin: 8,
-  repRangeMax: 12,
-  weightIncrementLb: 5,
-  restTimerSeconds: 90,
-  maxHistoryPerExercise: 50,
+// ── Modalities ──
+
+const MODALITIES = {
+  GYM: "gym",
+  RUNNING: "running",
+  HOME: "home",
 };
 
 // ── Initialization check ──
@@ -43,12 +50,32 @@ export async function isInitialized(rootId) {
   return !!meta?.initialized;
 }
 
+export async function getSetupPhase(rootId) {
+  if (!_Node) return null;
+  const root = await _Node.findById(rootId).select("metadata").lean();
+  if (!root) return null;
+  const meta = root.metadata instanceof Map
+    ? root.metadata.get("fitness")
+    : root.metadata?.fitness;
+  return meta?.setupPhase || (meta?.initialized ? "complete" : null);
+}
+
+export async function getProfile(rootId) {
+  if (!_Node) return {};
+  const root = await _Node.findById(rootId).select("metadata").lean();
+  if (!root) return {};
+  const meta = root.metadata instanceof Map
+    ? root.metadata.get("fitness")
+    : root.metadata?.fitness;
+  return meta?.profile || {};
+}
+
 // ── Find fitness nodes by role ──
 
 export async function findFitnessNodes(rootId) {
   if (!_Node) return null;
   const children = await _Node.find({ parent: rootId }).select("_id name metadata").lean();
-  const result = { muscleGroups: [], exercises: {} };
+  const result = { groups: [], exercises: {}, modalities: [] };
 
   for (const child of children) {
     const meta = child.metadata instanceof Map
@@ -59,13 +86,41 @@ export async function findFitnessNodes(rootId) {
     if (meta.role === "log") result.log = { id: String(child._id), name: child.name };
     else if (meta.role === "program") result.program = { id: String(child._id), name: child.name };
     else if (meta.role === "history") result.history = { id: String(child._id), name: child.name };
-    else if (meta.role === "muscle-group") {
-      result.muscleGroups.push({ id: String(child._id), name: child.name });
-      // Load exercises under this group
+    else if (meta.role === "modality") {
+      result.modalities.push({ id: String(child._id), name: child.name, modality: meta.modality });
+      // Load groups under modality (gym has muscle groups, running/home have categories)
+      const subChildren = await _Node.find({ parent: child._id }).select("_id name metadata").lean();
+      for (const sub of subChildren) {
+        const subMeta = sub.metadata instanceof Map ? sub.metadata.get("fitness") : sub.metadata?.fitness;
+        if (subMeta?.role === "group" || subMeta?.role === "muscle-group") {
+          result.groups.push({ id: String(sub._id), name: sub.name, modality: meta.modality, parentModality: child.name });
+          const exercises = await _Node.find({ parent: sub._id }).select("_id name metadata").lean();
+          result.exercises[sub.name] = exercises.map(e => ({
+            id: String(e._id),
+            name: e.name,
+            modality: meta.modality,
+            meta: e.metadata instanceof Map ? Object.fromEntries(e.metadata) : (e.metadata || {}),
+          }));
+        } else if (subMeta?.role === "exercise") {
+          // Direct exercises under modality (running/Runs, running/PRs)
+          if (!result.exercises[child.name]) result.exercises[child.name] = [];
+          result.exercises[child.name].push({
+            id: String(sub._id),
+            name: sub.name,
+            modality: meta.modality,
+            meta: sub.metadata instanceof Map ? Object.fromEntries(sub.metadata) : (sub.metadata || {}),
+          });
+        }
+      }
+    }
+    // Backward compat: old trees have muscle-group directly under root
+    else if (meta.role === "muscle-group" || meta.role === "group") {
+      result.groups.push({ id: String(child._id), name: child.name, modality: "gym" });
       const exercises = await _Node.find({ parent: child._id }).select("_id name metadata").lean();
       result.exercises[child.name] = exercises.map(e => ({
         id: String(e._id),
         name: e.name,
+        modality: "gym",
         meta: e.metadata instanceof Map ? Object.fromEntries(e.metadata) : (e.metadata || {}),
       }));
     }
@@ -74,34 +129,28 @@ export async function findFitnessNodes(rootId) {
   return result;
 }
 
-// ── Workout parsing ──
+// ── Build exercise list for AI prompt ──
 
-const PARSE_PROMPT = `You are a workout log parser. Parse the user's exercise input into structured data.
+export function buildExerciseListForPrompt(fitnessNodes) {
+  if (!fitnessNodes) return "";
+  const lines = [];
 
-Return ONLY JSON:
-{
-  "exercises": [
-    {
-      "name": "exercise name (match common names: Bench Press, Squats, Pull-ups, etc)",
-      "group": "muscle group (Chest, Back, Legs, Shoulders, Core, Additional)",
-      "sets": [
-        { "weight": number_or_0, "reps": number, "unit": "lb" | "kg" | "bodyweight" }
-      ]
-    }
-  ],
-  "date": "YYYY-MM-DD"
+  for (const [groupName, exercises] of Object.entries(fitnessNodes.exercises)) {
+    if (!exercises.length) continue;
+    const modality = exercises[0]?.modality || "gym";
+    const exList = exercises.map(e => {
+      const schema = e.meta?.fitness?.valueSchema;
+      const type = schema?.type || (modality === "running" ? "distance-time" : modality === "home" ? "reps" : "weight-reps");
+      const unit = schema?.unit || "lb";
+      return `    ${e.name} (${type}, ${unit})`;
+    }).join("\n");
+    lines.push(`  ${groupName} [${modality}]:\n${exList}`);
+  }
+
+  return lines.join("\n");
 }
 
-Parsing rules:
-- "bench 135x10,10,8" = Bench Press, 3 sets at 135lb: 10 reps, 10 reps, 8 reps
-- "squat 225 5x5" = Squats, 5 sets of 5 reps at 225lb
-- "pull-ups 10,8,6" = Pull-ups, bodyweight, 3 sets
-- "ran 3 miles in 25 min" = Running, { distance: 3, duration: 25, unit: "miles" }
-- "plank 3x60s" = Plank, 3 sets of 60 seconds
-- Default unit is lb unless the user says kg
-- Keep exercise names standard and recognizable
-- "date" is today if not specified
-- Return ONLY the JSON. No explanation.`;
+// ── Workout parsing (one LLM call, all modalities) ──
 
 export async function parseWorkout(message, userId, username, rootId) {
   if (!_runChat) return null;
@@ -117,104 +166,251 @@ export async function parseWorkout(message, userId, username, rootId) {
 
   if (!answer) return null;
   const parsed = parseJsonSafe(answer);
-  if (!parsed?.exercises?.length) return null;
+  if (!parsed) return null;
+
+  // Normalize: ensure we have either exercises array or running data
+  if (!parsed.exercises?.length && !parsed.distance && !parsed.modality) return null;
 
   // Default date to today
   if (!parsed.date) parsed.date = new Date().toISOString().slice(0, 10);
 
+  // If running data returned as top-level (not in exercises array), wrap it
+  if (parsed.modality === "running" && !parsed.exercises) {
+    parsed.exercises = [{
+      modality: "running",
+      name: "Run",
+      distance: parsed.distance,
+      distanceUnit: parsed.distanceUnit || "miles",
+      duration: parsed.duration,
+      pace: parsed.pace,
+      type: parsed.type || "easy",
+    }];
+  }
+
   return parsed;
 }
 
-// ── Route exercise data to nodes ──
+// ── Route parsed data to exercise nodes ──
 
 export async function deliverToExerciseNodes(fitnessNodes, parsed) {
-  if (!_Node || !fitnessNodes) return;
+  if (!_Node || !fitnessNodes) return [];
 
-  for (const exercise of parsed.exercises) {
-    // Find the exercise node by matching name against known exercises
-    const groupExercises = fitnessNodes.exercises[exercise.group] || [];
-    const match = groupExercises.find(e =>
-      e.name.toLowerCase() === exercise.name.toLowerCase() ||
-      e.name.toLowerCase().includes(exercise.name.toLowerCase()) ||
-      exercise.name.toLowerCase().includes(e.name.toLowerCase())
-    );
+  const delivered = [];
 
-    if (!match) {
-      log.verbose("Fitness", `No node found for "${exercise.name}" in ${exercise.group}. Skipping cascade.`);
+  for (const exercise of (parsed.exercises || [])) {
+    const modality = exercise.modality || detectModality(exercise);
+
+    if (modality === "running") {
+      // Running data goes to the Runs node
+      const runExercises = fitnessNodes.exercises["Running"] || [];
+      const runsNode = runExercises.find(e => e.name === "Runs");
+      if (runsNode) {
+        await deliverRunData(runsNode, exercise, parsed.date);
+        // Update PRs
+        const prsNode = runExercises.find(e => e.name === "PRs");
+        if (prsNode) await updateRunPRs(prsNode, exercise);
+        delivered.push({ exercise, nodeId: runsNode.id, modality });
+      }
       continue;
     }
 
-    // Build value updates
-    const fields = {};
-    const weight = exercise.sets[0]?.weight || 0;
-    fields.weight = weight;
-
-    for (let i = 0; i < exercise.sets.length; i++) {
-      fields[`set${i + 1}`] = exercise.sets[i].reps;
+    // Gym and home: match exercise name to node
+    let match = null;
+    const groupName = exercise.group;
+    if (groupName && fitnessNodes.exercises[groupName]) {
+      match = fuzzyMatchExercise(fitnessNodes.exercises[groupName], exercise.name);
+    }
+    // Search all groups if no direct match
+    if (!match) {
+      for (const [gn, exs] of Object.entries(fitnessNodes.exercises)) {
+        match = fuzzyMatchExercise(exs, exercise.name);
+        if (match) break;
+      }
     }
 
-    // Calculate total volume
-    const totalVolume = exercise.sets.reduce((sum, s) => sum + (s.weight || 0) * (s.reps || 0), 0);
-    fields.totalVolume = totalVolume;
+    if (!match) {
+      log.verbose("Fitness", `No node for "${exercise.name}". Skipping.`);
+      continue;
+    }
+
+    const schema = match.meta?.fitness?.valueSchema;
+    const fields = buildValueFields(exercise, schema);
     fields.lastWorked = parsed.date;
 
-    // Atomic update on the exercise node
     await _metadata.batchSetExtMeta(match.id, "values", fields);
 
     // Record to exercise history
     const node = await _Node.findById(match.id);
     if (node) {
-      const existing = _metadata.getExtMeta(node, "fitness");
+      const existing = _metadata.getExtMeta(node, "fitness") || {};
       const history = Array.isArray(existing.history) ? existing.history : [];
-      const bestSet = Math.max(...exercise.sets.map(s => s.reps));
-
-      history.push({
-        date: parsed.date,
-        weight,
-        bestSet,
-        totalVolume,
-        sets: exercise.sets,
-      });
-
+      history.push({ date: parsed.date, ...fields, sets: exercise.sets });
       while (history.length > MAX_HISTORY) history.shift();
-      await _metadata.setExtMeta(node, "fitness", { ...existing, history, role: existing.role });
+      await _metadata.setExtMeta(node, "fitness", { ...existing, history });
     }
 
-    log.verbose("Fitness", `Updated ${exercise.name}: ${exercise.sets.map(s => `${s.weight}x${s.reps}`).join("/")}`);
+    delivered.push({ exercise, nodeId: match.id, modality });
+    log.verbose("Fitness", `Updated ${exercise.name} (${modality})`);
+  }
+
+  return delivered;
+}
+
+function fuzzyMatchExercise(exercises, name) {
+  if (!exercises || !name) return null;
+  const lower = name.toLowerCase();
+  return exercises.find(e =>
+    e.name.toLowerCase() === lower ||
+    e.name.toLowerCase().includes(lower) ||
+    lower.includes(e.name.toLowerCase())
+  ) || null;
+}
+
+function detectModality(exercise) {
+  if (exercise.distance || exercise.pace || exercise.distanceUnit) return "running";
+  if (exercise.sets?.[0]?.weight > 0) return "gym";
+  if (exercise.duration && !exercise.sets?.length) return "home";
+  return exercise.modality || "gym";
+}
+
+function buildValueFields(exercise, schema) {
+  const fields = {};
+  const type = schema?.type || detectModality(exercise);
+
+  if (type === "weight-reps" || type === "gym") {
+    const weight = exercise.sets?.[0]?.weight || 0;
+    fields.weight = weight;
+    for (let i = 0; i < (exercise.sets?.length || 0); i++) {
+      fields[`set${i + 1}`] = exercise.sets[i].reps || 0;
+    }
+    fields.totalVolume = (exercise.sets || []).reduce((sum, s) => sum + (s.weight || 0) * (s.reps || 0), 0);
+  } else if (type === "duration" || type === "home") {
+    if (exercise.duration != null) {
+      fields.duration = exercise.duration;
+    }
+    if (exercise.sets?.length) {
+      for (let i = 0; i < exercise.sets.length; i++) {
+        fields[`set${i + 1}`] = exercise.sets[i].reps || exercise.sets[i].duration || 0;
+      }
+      fields.totalReps = exercise.sets.reduce((sum, s) => sum + (s.reps || 0), 0);
+    }
+    if (exercise.variation) fields.variation = exercise.variation;
+  } else if (type === "distance-time" || type === "running") {
+    if (exercise.distance) fields.distance = exercise.distance;
+    if (exercise.duration) fields.time = exercise.duration;
+    if (exercise.pace) fields.pace = exercise.pace;
+  }
+
+  return fields;
+}
+
+async function deliverRunData(runsNode, exercise, date) {
+  const fields = {
+    lastRun: date,
+  };
+  if (exercise.distance) fields.lastDistance = exercise.distance;
+  if (exercise.duration) fields.lastDuration = exercise.duration;
+  if (exercise.pace) fields.lastPace = exercise.pace;
+
+  // Increment weekly stats
+  const node = await _Node.findById(runsNode.id);
+  if (node) {
+    const vals = _metadata.getExtMeta(node, "values") || {};
+    fields.weeklyMiles = (vals.weeklyMiles || 0) + (exercise.distance || 0);
+    fields.runsThisWeek = (vals.runsThisWeek || 0) + 1;
+    await _metadata.batchSetExtMeta(runsNode.id, "values", fields);
+
+    // Record to history
+    const existing = _metadata.getExtMeta(node, "fitness") || {};
+    const history = Array.isArray(existing.history) ? existing.history : [];
+    history.push({
+      date,
+      distance: exercise.distance,
+      distanceUnit: exercise.distanceUnit || "miles",
+      duration: exercise.duration,
+      pace: exercise.pace,
+      type: exercise.type || "easy",
+    });
+    while (history.length > MAX_HISTORY) history.shift();
+    await _metadata.setExtMeta(node, "fitness", { ...existing, history });
   }
 }
 
-// ── Write workout to history node ──
+async function updateRunPRs(prsNode, exercise) {
+  if (!exercise.distance || !exercise.duration) return;
+  const node = await _Node.findById(prsNode.id);
+  if (!node) return;
+  const prs = _metadata.getExtMeta(node, "values") || {};
+  const pace = exercise.duration / exercise.distance; // seconds per unit
 
-export async function recordWorkoutHistory(historyNodeId, parsed, userId) {
-  if (!historyNodeId) return;
+  // Check common race distances
+  const dist = exercise.distance;
+  const dur = exercise.duration;
+  if (dist >= 1 && (!prs.mile || dur / dist < prs.mile)) prs.mile = Math.round(dur / dist);
+  if (dist >= 3.1 && (!prs.fiveK || dur < prs.fiveK)) prs.fiveK = Math.round(dur);
+  if (dist >= 6.2 && (!prs.tenK || dur < prs.tenK)) prs.tenK = Math.round(dur);
+  if (dist >= 13.1 && (!prs.half || dur < prs.half)) prs.half = Math.round(dur);
+  if (dist >= 26.2 && (!prs.marathon || dur < prs.marathon)) prs.marathon = Math.round(dur);
 
-  const totalVolume = parsed.exercises.reduce((sum, ex) =>
-    sum + ex.sets.reduce((s, set) => s + (set.weight || 0) * (set.reps || 0), 0), 0
-  );
+  await _metadata.setExtMeta(node, "values", prs);
+}
 
-  const muscleGroups = [...new Set(parsed.exercises.map(e => e.group))];
+// ── Write session to History node ──
+
+export async function recordSessionHistory(historyNodeId, parsed, delivered, userId) {
+  if (!historyNodeId) return null;
+
+  const modalities = [...new Set(delivered.map(d => d.modality))];
 
   const record = {
     date: parsed.date,
-    exercises: parsed.exercises.map(ex => ({
-      name: ex.name,
-      group: ex.group,
-      sets: ex.sets,
-      totalVolume: ex.sets.reduce((s, set) => s + (set.weight || 0) * (set.reps || 0), 0),
-    })),
-    totalVolume,
-    muscleGroups,
+    modalities,
   };
+
+  // Gym data
+  const gymExercises = delivered.filter(d => d.modality === "gym");
+  if (gymExercises.length > 0) {
+    record.gym = {
+      muscleGroups: [...new Set(gymExercises.map(d => d.exercise.group))],
+      exercises: gymExercises.map(d => ({
+        name: d.exercise.name,
+        group: d.exercise.group,
+        sets: d.exercise.sets,
+        totalVolume: (d.exercise.sets || []).reduce((s, set) => s + (set.weight || 0) * (set.reps || 0), 0),
+      })),
+      totalVolume: gymExercises.reduce((sum, d) =>
+        sum + (d.exercise.sets || []).reduce((s, set) => s + (set.weight || 0) * (set.reps || 0), 0), 0),
+    };
+  }
+
+  // Running data
+  const runs = delivered.filter(d => d.modality === "running");
+  if (runs.length > 0) {
+    const run = runs[0].exercise;
+    record.running = {
+      distance: run.distance,
+      distanceUnit: run.distanceUnit || "miles",
+      duration: run.duration,
+      pace: run.pace,
+      type: run.type || "easy",
+    };
+  }
+
+  // Home/bodyweight data
+  const homeExercises = delivered.filter(d => d.modality === "home");
+  if (homeExercises.length > 0) {
+    record.home = {
+      exercises: homeExercises.map(d => ({
+        name: d.exercise.name,
+        sets: d.exercise.sets,
+        totalReps: (d.exercise.sets || []).reduce((s, set) => s + (set.reps || 0), 0),
+      })),
+    };
+  }
 
   try {
     const { createNote } = await import("../../seed/tree/notes.js");
-    await createNote({
-      nodeId: historyNodeId,
-      content: JSON.stringify(record),
-      contentType: "text",
-      userId,
-    });
+    await createNote({ nodeId: historyNodeId, content: JSON.stringify(record), contentType: "text", userId });
   } catch (err) {
     log.warn("Fitness", `History note failed: ${err.message}`);
   }
@@ -222,11 +418,8 @@ export async function recordWorkoutHistory(historyNodeId, parsed, userId) {
   return record;
 }
 
-// ── Progression check ──
+// ── Progressive overload check (generic, all modalities) ──
 
-/**
- * Check if an exercise has met all set goals (progressive overload trigger).
- */
 export function checkProgression(exerciseNode) {
   const values = exerciseNode.metadata instanceof Map
     ? exerciseNode.metadata.get("values")
@@ -234,80 +427,190 @@ export function checkProgression(exerciseNode) {
   const goals = exerciseNode.metadata instanceof Map
     ? exerciseNode.metadata.get("goals")
     : exerciseNode.metadata?.goals;
+  const fitMeta = exerciseNode.metadata instanceof Map
+    ? exerciseNode.metadata.get("fitness")
+    : exerciseNode.metadata?.fitness;
 
   if (!values || !goals) return null;
 
+  const schema = fitMeta?.valueSchema;
+  const increment = fitMeta?.progressionIncrement;
+
+  // Check if all goal keys are met
   let allMet = true;
-  let totalSets = 0;
-  for (let i = 1; i <= 5; i++) {
-    const setVal = values[`set${i}`];
-    const setGoal = goals[`set${i}`];
-    if (setGoal == null) continue;
-    totalSets++;
-    if (setVal == null || setVal < setGoal) {
+  let goalCount = 0;
+  for (const [key, goalVal] of Object.entries(goals)) {
+    if (goalVal == null) continue;
+    goalCount++;
+    const currentVal = values[key];
+    if (currentVal == null || currentVal < goalVal) {
       allMet = false;
       break;
     }
   }
 
-  if (totalSets === 0) return null;
+  if (goalCount === 0) return null;
 
-  return {
-    allGoalsMet: allMet,
-    currentWeight: values.weight || 0,
-    suggestedWeight: allMet ? (values.weight || 0) + DEFAULT_CONFIG.weightIncrementLb : null,
-  };
-}
+  const result = { allGoalsMet: allMet, modality: schema?.type || "gym" };
 
-// ── Build summary for response ──
-
-export function buildWorkoutSummary(parsed, fitnessNodes) {
-  const lines = [];
-  for (const ex of parsed.exercises) {
-    const setsStr = ex.sets.map(s =>
-      s.weight > 0 ? `${s.weight}x${s.reps}` : `${s.reps}`
-    ).join("/");
-    const volume = ex.sets.reduce((sum, s) => sum + (s.weight || 0) * (s.reps || 0), 0);
-    lines.push(`${ex.name}: ${setsStr}${volume > 0 ? ` (vol: ${volume.toLocaleString()})` : ""}`);
+  if (allMet && increment) {
+    result.suggestedIncrements = increment;
+    // Build human-readable suggestion
+    const parts = [];
+    for (const [key, val] of Object.entries(increment)) {
+      parts.push(`${key}: +${val}`);
+    }
+    result.suggestion = parts.join(", ");
   }
 
-  const totalVolume = parsed.exercises.reduce((sum, ex) =>
-    sum + ex.sets.reduce((s, set) => s + (set.weight || 0) * (set.reps || 0), 0), 0
-  );
-  const groups = [...new Set(parsed.exercises.map(e => e.group))].join(" + ");
+  // Bodyweight variation progression
+  if (allMet && fitMeta?.progressionPath && values.variation) {
+    const path = fitMeta.progressionPath;
+    const idx = path.indexOf(values.variation);
+    if (idx >= 0 && idx < path.length - 1) {
+      result.nextVariation = path[idx + 1];
+      result.suggestion = (result.suggestion ? result.suggestion + ". " : "") +
+        `Ready for ${path[idx + 1]} variation`;
+    }
+  }
 
+  return result;
+}
+
+// ── Build workout summary for response ──
+
+export function buildWorkoutSummary(parsed, delivered) {
+  const lines = [];
+
+  for (const d of delivered) {
+    const ex = d.exercise;
+    if (d.modality === "running") {
+      const pace = ex.pace ? formatPace(ex.pace) : null;
+      lines.push(`Run: ${ex.distance}${ex.distanceUnit || "mi"} in ${formatDuration(ex.duration)}${pace ? ` (${pace}/mi)` : ""}`);
+    } else if (d.modality === "home" && ex.duration && !ex.sets?.length) {
+      lines.push(`${ex.name}: ${ex.duration}s`);
+    } else {
+      const setsStr = (ex.sets || []).map(s =>
+        s.weight > 0 ? `${s.weight}x${s.reps}` : `${s.reps}`
+      ).join("/");
+      const volume = (ex.sets || []).reduce((sum, s) => sum + (s.weight || 0) * (s.reps || 0), 0);
+      lines.push(`${ex.name}: ${setsStr}${volume > 0 ? ` (vol: ${volume.toLocaleString()})` : ""}`);
+    }
+  }
+
+  const modalities = [...new Set(delivered.map(d => d.modality))];
   return {
     lines,
-    totalVolume,
-    groups,
-    summary: `Logged: ${groups}\n${lines.join("\n")}${totalVolume > 0 ? `\nTotal volume: ${totalVolume.toLocaleString()}lb` : ""}`,
+    modalities,
+    summary: lines.join("\n"),
   };
 }
 
-// ── Read exercise state for enrichContext ──
+function formatPace(secondsPerUnit) {
+  const min = Math.floor(secondsPerUnit / 60);
+  const sec = Math.round(secondsPerUnit % 60);
+  return `${min}:${String(sec).padStart(2, "0")}`;
+}
+
+function formatDuration(totalSeconds) {
+  if (!totalSeconds) return "?";
+  const min = Math.floor(totalSeconds / 60);
+  const sec = Math.round(totalSeconds % 60);
+  return sec > 0 ? `${min}:${String(sec).padStart(2, "0")}` : `${min}min`;
+}
+
+// ── Read exercise state for enrichContext / AI prompt ──
 
 export async function getExerciseState(rootId) {
   if (!_Node) return null;
 
   const nodes = await findFitnessNodes(rootId);
-  if (!nodes?.muscleGroups?.length) return null;
+  if (!nodes) return null;
 
-  const state = {};
-  for (const group of nodes.muscleGroups) {
-    const exercises = nodes.exercises[group.name] || [];
-    state[group.name] = exercises.map(ex => {
-      const values = ex.meta.values || {};
-      const goals = ex.meta.goals || {};
-      const fitMeta = ex.meta.fitness || {};
-      return {
-        name: ex.name,
-        weight: values.weight || 0,
-        sets: [values.set1, values.set2, values.set3].filter(v => v != null),
-        goals: [goals.set1, goals.set2, goals.set3].filter(v => v != null),
-        lastWorked: values.lastWorked || null,
-        historyCount: fitMeta.history?.length || 0,
-      };
-    });
+  const state = { modalities: [], groups: {} };
+
+  for (const mod of nodes.modalities) {
+    state.modalities.push(mod.modality);
   }
+  // Backward compat: if no modalities but has groups, it's gym-only
+  if (state.modalities.length === 0 && nodes.groups.length > 0) {
+    state.modalities.push("gym");
+  }
+
+  for (const group of nodes.groups) {
+    const exercises = nodes.exercises[group.name] || [];
+    state.groups[group.name] = {
+      modality: group.modality || "gym",
+      exercises: exercises.map(ex => {
+        const values = ex.meta.values || {};
+        const goals = ex.meta.goals || {};
+        const fitMeta = ex.meta.fitness || {};
+        return {
+          name: ex.name,
+          id: ex.id,
+          modality: ex.modality || group.modality || "gym",
+          schema: fitMeta.valueSchema || null,
+          values,
+          goals,
+          lastWorked: values.lastWorked || null,
+          historyCount: fitMeta.history?.length || 0,
+        };
+      }),
+    };
+  }
+
+  // Include direct modality exercises (Running/Runs, Running/PRs)
+  for (const mod of nodes.modalities) {
+    const directExercises = nodes.exercises[mod.name] || [];
+    if (directExercises.length > 0 && !state.groups[mod.name]) {
+      state.groups[mod.name] = {
+        modality: mod.modality,
+        exercises: directExercises.map(ex => ({
+          name: ex.name,
+          id: ex.id,
+          modality: mod.modality,
+          schema: ex.meta?.fitness?.valueSchema || null,
+          values: ex.meta.values || {},
+          goals: ex.meta.goals || {},
+          lastWorked: (ex.meta.values || {}).lastWorked || null,
+          historyCount: (ex.meta.fitness || {}).history?.length || 0,
+        })),
+      };
+    }
+  }
+
   return state;
+}
+
+// ── Weekly stats ──
+
+export async function getWeeklyStats(rootId) {
+  if (!_Node) return null;
+  const nodes = await findFitnessNodes(rootId);
+  if (!nodes?.history) return null;
+
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  try {
+    const { getNotes } = await import("../../seed/tree/notes.js");
+    const notes = await _Note.find({
+      nodeId: nodes.history.id,
+      createdAt: { $gte: weekAgo },
+    }).select("content").lean();
+
+    const stats = { sessions: 0, gymSessions: 0, runs: 0, runMiles: 0, homeSessions: 0, totalVolume: 0 };
+    for (const note of notes) {
+      try {
+        const record = JSON.parse(note.content);
+        stats.sessions++;
+        if (record.gym) { stats.gymSessions++; stats.totalVolume += record.gym.totalVolume || 0; }
+        if (record.running) { stats.runs++; stats.runMiles += record.running.distance || 0; }
+        if (record.home) stats.homeSessions++;
+      } catch {}
+    }
+    return stats;
+  } catch {
+    return null;
+  }
 }

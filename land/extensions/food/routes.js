@@ -12,6 +12,8 @@ import {
   parseFood,
   deliverMacros,
   getDailyPicture,
+  detectMealSlot,
+  writeMealNote,
 } from "./core.js";
 
 let Node = NodeModel;
@@ -59,11 +61,28 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
     if (!initialized) {
       await scaffold(rootId, userId);
 
-      // Run the coach mode for the setup conversation
       const { answer, chatId } = await runChat({
         userId,
         username,
         message: `First time setup. The user said: "${message}". Ask them about their calorie target, macro goals, and dietary restrictions. If they already provided info in their message, use it.`,
+        mode: "tree:food-coach",
+        rootId,
+        res,
+        slot: "food",
+      });
+
+      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-coach", setup: true });
+      return;
+    }
+
+    // ── PATH 1b: Setup incomplete (scaffold done, profile not yet saved). ──
+    const { getSetupPhase } = await import("./core.js");
+    const phase = await getSetupPhase(rootId);
+    if (phase === "base") {
+      const { answer, chatId } = await runChat({
+        userId,
+        username,
+        message,
         mode: "tree:food-coach",
         rootId,
         res,
@@ -86,13 +105,13 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
         userId,
         username,
         message,
-        mode: "tree:food-daily",
+        mode: "tree:food-review",
         rootId,
         res,
         slot: "food",
       });
 
-      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-daily" });
+      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-review" });
       return;
     }
 
@@ -118,6 +137,10 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
     } catch (err) {
       log.warn("Food", `Note creation failed: ${err.message}`);
     }
+
+    // Write to appropriate Meals slot (Breakfast/Lunch/Dinner/Snacks)
+    const mealSlot = detectMealSlot(message, parsed.when);
+    writeMealNote(foodNodes, mealSlot, `${parsed.meal} (${parsed.totals.calories}cal)`, userId).catch(() => {});
 
     // Fire cascade signals to macro nodes
     await deliverMacros(foodNodes.log.id, foodNodes, parsed);
@@ -157,6 +180,60 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
   } catch (err) {
     log.error("Food", "Route error:", err.message);
     if (!res.headersSent) sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * GET /root/:rootId/food/daily
+ * Today's nutrition dashboard.
+ */
+router.get("/root/:rootId/food/daily", authenticate, async (req, res) => {
+  try {
+    const picture = await getDailyPicture(req.params.rootId);
+    if (!picture) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Food tree not found or not initialized");
+    sendOk(res, picture);
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * GET /root/:rootId/food/week
+ * Weekly nutrition review (last 7 days from History node).
+ */
+router.get("/root/:rootId/food/week", authenticate, async (req, res) => {
+  try {
+    const foodNodes = await findFoodNodes(req.params.rootId);
+    if (!foodNodes?.history) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Food tree not found");
+
+    const Note = (await import("../../seed/models/note.js")).default;
+    const notes = await Note.find({ nodeId: foodNodes.history.id })
+      .sort({ createdAt: -1 })
+      .limit(7)
+      .select("content createdAt")
+      .lean();
+
+    const days = notes
+      .map(n => { try { return JSON.parse(n.content); } catch { return null; } })
+      .filter(Boolean);
+
+    sendOk(res, { days, count: days.length });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * GET /root/:rootId/food/profile
+ * Dietary profile and goals.
+ */
+router.get("/root/:rootId/food/profile", authenticate, async (req, res) => {
+  try {
+    const picture = await getDailyPicture(req.params.rootId);
+    if (!picture) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Food tree not found");
+    sendOk(res, { profile: picture.profile || null, macros: { protein: picture.protein, carbs: picture.carbs, fats: picture.fats } });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
