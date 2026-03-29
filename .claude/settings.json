@@ -556,7 +556,10 @@
       "Bash(find /home/tabor/github/Tree -type d -name *ring*)",
       "Bash(/tmp/check_config.txt:*)",
       "Bash(grep -r rings /home/tabor/github/Tree/land/seed --include=*.js)",
-      "Bash(echo \"Found violation in $ext\" done)"
+      "Bash(echo \"Found violation in $ext\" done)",
+      "Bash(grep -l \"extension\" /home/tabor/github/Tree/land/canopy/*.js)",
+      "Bash(grep -rn \"EXTENSION\\\\|extension.*name\" /home/tabor/github/Tree/land/canopy/*.js)",
+      "Bash(grep -r \"tree-assign\\\\|llm tree\" /home/tabor/github/Tree/land/cli --include=*.js -B 2 -A 5)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

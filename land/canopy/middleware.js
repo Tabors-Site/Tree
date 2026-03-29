@@ -136,9 +136,9 @@ export async function authenticateCanopy(req, res, next) {
       return sendError(res, 401, ERR.UNAUTHORIZED, `Invalid CanopyToken: ${error}`);
     }
 
-    // Verify token was intended for this land
+    // Verify token was intended for this land (aud is required)
     const myDomain = getLandIdentity().domain;
-    if (payload.aud && payload.aud !== myDomain) {
+    if (!payload.aud || payload.aud !== myDomain) {
       return sendError(res, 401, ERR.UNAUTHORIZED, "CanopyToken audience mismatch");
     }
 

@@ -11,6 +11,8 @@ const MIN_COMPATIBLE_VERSION = 1;
 export function isCompatibleVersion(remoteVersion) {
   return (
     typeof remoteVersion === "number" &&
+    Number.isFinite(remoteVersion) &&
+    Number.isInteger(remoteVersion) &&
     remoteVersion >= MIN_COMPATIBLE_VERSION &&
     remoteVersion <= CURRENT_PROTOCOL_VERSION
   );
@@ -48,6 +50,7 @@ export function validateCanopyRequest(type, body) {
     case "llm_proxy":
       if (!Array.isArray(body.messages)) errors.push("missing or invalid messages array");
       if (Array.isArray(body.messages) && body.messages.length > 100) errors.push("messages array too large (max 100)");
+      if (body.slot && (typeof body.slot !== "string" || !/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(body.slot))) errors.push("invalid slot name");
       break;
 
     default:

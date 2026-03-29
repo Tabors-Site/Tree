@@ -139,10 +139,11 @@ export async function processOutbox() {
   const destCounts = new Map(); // Per-destination rate limit
 
   for (const event of events) {
-    // Exponential backoff: wait 1min, 2min, 4min, 8min, 16min between retries
+    // Exponential backoff with jitter: prevents thundering herd on peer recovery
     if (event.retryCount > 0 && event.lastAttemptAt) {
-      const backoffMs = Math.min(60000 * Math.pow(2, event.retryCount - 1), 16 * 60000);
-      if (Date.now() - event.lastAttemptAt.getTime() < backoffMs) continue;
+      const baseMs = Math.min(60000 * Math.pow(2, event.retryCount - 1), 16 * 60000);
+      const jitter = Math.random() * baseMs * 0.3; // +/- 30% jitter
+      if (Date.now() - event.lastAttemptAt.getTime() < baseMs + jitter) continue;
     }
 
     // Per-destination rate limit to prevent flooding any single land

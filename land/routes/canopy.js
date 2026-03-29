@@ -225,7 +225,11 @@ router.post("/canopy/peer/register", async (req, res) => {
     const { getLandConfigValue } = await import("../seed/landConfig.js");
     const minPeerSeed = getLandConfigValue("minPeerSeedVersion");
     const remoteSeedVersion = req.body.seedVersion;
-    if (minPeerSeed && remoteSeedVersion && compareSemver(remoteSeedVersion, minPeerSeed) < 0) {
+    const seedCmp = minPeerSeed && remoteSeedVersion ? compareSemver(remoteSeedVersion, minPeerSeed) : null;
+    if (seedCmp === null && minPeerSeed && remoteSeedVersion) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "Invalid seed version format");
+    }
+    if (seedCmp !== null && seedCmp < 0) {
       return sendError(res, 400, ERR.INVALID_INPUT,
         `Seed version ${remoteSeedVersion} is below this land's minimum peer requirement (${minPeerSeed})`
       );
@@ -418,13 +422,13 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
       return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection configured on home land");
     }
 
-    // Deduct energy before running the LLM call (skip if energy extension not installed)
+    // Check energy before LLM call (reject if insufficient, but don't deduct yet)
     const energySvc = getExtension("energy")?.exports;
-    if (energySvc?.useEnergy) {
+    if (energySvc?.checkEnergy) {
       try {
-        await energySvc.useEnergy({ userId: user._id.toString(), action: "proxyLlm" });
+        await energySvc.checkEnergy({ userId: user._id.toString(), action: "proxyLlm" });
       } catch (energyErr) {
-        return sendError(res, 429, ERR.RATE_LIMITED, energyErr.message);
+        return sendError(res, 429, ERR.RATE_LIMITED, "Insufficient energy for proxy LLM call");
       }
     }
 
@@ -436,13 +440,18 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
       tool_choice: tools ? (tool_choice || "auto") : undefined,
     });
 
+    // Deduct energy after successful LLM response
+    if (energySvc?.useEnergy) {
+      energySvc.useEnergy({ userId: user._id.toString(), action: "proxyLlm" }).catch(() => {});
+    }
+
     sendOk(res, {
       completion,
       model: clientEntry.model,
     });
   } catch (err) {
     log.error("API", "[Canopy] LLM proxy error:", err.message);
-    sendError(res, 503, ERR.LLM_FAILED, err.message);
+    sendError(res, 503, ERR.LLM_FAILED, "LLM proxy request failed");
   }
 });
 
@@ -493,7 +502,7 @@ router.post("/canopy/admin/peer/add", authenticate, requireAdmin, async (req, re
     const peer = await registerPeer(url);
     sendOk(res, { peer });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", err.message); sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -507,10 +516,11 @@ router.delete(
   requireAdmin,
   async (req, res) => {
     try {
-      await removePeer(req.params.domain);
+      await removePeer(req.params.domain?.toLowerCase().trim());
       sendOk(res, { message: "Peer removed" });
     } catch (err) {
-      sendError(res, 500, ERR.INTERNAL, err.message);
+      log.error("Canopy", `Remove peer failed: ${err.message}`);
+      sendError(res, 500, ERR.INTERNAL, "Failed to remove peer");
     }
   }
 );
@@ -525,13 +535,14 @@ router.post(
   requireAdmin,
   async (req, res) => {
     try {
-      const peer = await blockPeer(req.params.domain);
+      const peer = await blockPeer(req.params.domain?.toLowerCase().trim());
       if (!peer) {
         return sendError(res, 404, ERR.PEER_NOT_FOUND, "Peer not found");
       }
       sendOk(res, { peer });
     } catch (err) {
-      sendError(res, 500, ERR.INTERNAL, err.message);
+      log.error("Canopy", `Block peer failed: ${err.message}`);
+      sendError(res, 500, ERR.INTERNAL, "Failed to block peer");
     }
   }
 );
@@ -546,13 +557,14 @@ router.post(
   requireAdmin,
   async (req, res) => {
     try {
-      const peer = await unblockPeer(req.params.domain);
+      const peer = await unblockPeer(req.params.domain?.toLowerCase().trim());
       if (!peer) {
         return sendError(res, 404, ERR.PEER_NOT_FOUND, "Peer not found");
       }
       sendOk(res, { peer });
     } catch (err) {
-      sendError(res, 500, ERR.INTERNAL, err.message);
+      log.error("Canopy", `Unblock peer failed: ${err.message}`);
+      sendError(res, 500, ERR.INTERNAL, "Failed to unblock peer");
     }
   }
 );
@@ -572,7 +584,7 @@ router.get("/canopy/admin/peers", authenticate, requireAdmin, async (req, res) =
       land: getLandInfoPayload(),
     });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", err.message); sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -585,7 +597,7 @@ router.post("/canopy/admin/heartbeat", authenticate, requireAdmin, async (req, r
     const results = await runHeartbeat();
     sendOk(res, { results });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", err.message); sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -598,7 +610,7 @@ router.get("/canopy/admin/events/failed", authenticate, requireAdmin, async (req
     const events = await getFailedEvents();
     sendOk(res, { events });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", err.message); sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -618,7 +630,7 @@ router.post(
       }
       sendOk(res, { sent: result });
     } catch (err) {
-      sendError(res, 500, ERR.INTERNAL, err.message);
+      log.error("Canopy", err.message); sendError(res, 500, ERR.INTERNAL, "Internal error");
     }
   }
 );
@@ -634,7 +646,7 @@ router.post("/canopy/invite-remote", authenticate, async (req, res) => {
       lookupLandByDomain, queueCanopyEvent,
     });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", err.message); sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -647,7 +659,7 @@ router.get("/canopy/admin/horizon/lands", authenticate, requireAdmin, async (req
     const lands = await searchLands(req.query.q || "");
     sendOk(res, { lands });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", err.message); sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -660,7 +672,7 @@ router.get("/canopy/admin/horizon/trees", authenticate, requireAdmin, async (req
     const trees = await searchPublicTrees(req.query.q || "");
     sendOk(res, { trees });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", err.message); sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -683,7 +695,7 @@ router.post("/canopy/admin/peer/discover", authenticate, requireAdmin, async (re
     const peer = await registerPeer(horizonLand.baseUrl);
     sendOk(res, { peer });
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", err.message); sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 
@@ -707,7 +719,8 @@ router.all("/canopy/proxy/:domain/*", authenticate, async (req, res) => {
   }
 
   try {
-    const { domain } = req.params;
+    const domain = req.params.domain?.toLowerCase().trim();
+    if (!domain) return sendError(res, 400, ERR.INVALID_INPUT, "Domain is required");
     // Extract the path after /canopy/proxy/:domain/
     const forwardPath = "/" + req.params[0];
 
@@ -723,7 +736,7 @@ router.all("/canopy/proxy/:domain/*", authenticate, async (req, res) => {
     // Proxy passthrough: forward the remote land's response as-is
     res.status(result.status).json(result.data);
   } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
+    log.error("Canopy", err.message); sendError(res, 500, ERR.INTERNAL, "Internal error");
   }
 });
 

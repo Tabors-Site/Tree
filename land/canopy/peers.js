@@ -53,7 +53,8 @@ export async function registerPeer(peerUrl) {
 
   // Per-land peer seed version policy (canopy config, not kernel config)
   const minPeerSeed = getLandConfigValue("minPeerSeedVersion");
-  if (minPeerSeed && info.seedVersion && compareSemver(info.seedVersion, minPeerSeed) < 0) {
+  const seedCmp = minPeerSeed && info.seedVersion ? compareSemver(info.seedVersion, minPeerSeed) : null;
+  if (seedCmp !== null && seedCmp < 0) {
     throw new Error(
       `Peer seed version ${info.seedVersion} is below this land's minimum (${minPeerSeed})`
     );
@@ -187,6 +188,12 @@ export async function pingPeer(peer) {
   today.setHours(0, 0, 0, 0);
 
   try {
+    // Re-check SSRF on every heartbeat (DNS rebinding defense)
+    const peerHost = new URL(url).hostname;
+    if (isPrivateHost(peerHost)) {
+      throw new Error("Peer resolved to private address");
+    }
+
     const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -227,9 +234,11 @@ export async function pingPeer(peer) {
     peer.consecutiveFailures = 0;
     peer.firstFailureAt = null;
     peer.status = "active";
-    peer.protocolVersion = info.protocolVersion || peer.protocolVersion;
-    peer.seedVersion = info.seedVersion || peer.seedVersion;
-    peer.extensions = info.extensions || peer.extensions;
+    peer.protocolVersion = (typeof info.protocolVersion === "number" && info.protocolVersion > 0)
+      ? info.protocolVersion : peer.protocolVersion;
+    peer.seedVersion = (typeof info.seedVersion === "string" && info.seedVersion.length <= 20)
+      ? info.seedVersion : peer.seedVersion;
+    peer.extensions = Array.isArray(info.extensions) ? info.extensions.slice(0, 500) : peer.extensions;
     // SECURITY: Never update publicKey from heartbeat. Keys are only set during
     // initial peering. To rotate keys, the peer must re-peer.
     if (info.publicKey && info.publicKey !== peer.publicKey) {
