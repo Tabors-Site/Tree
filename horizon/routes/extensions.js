@@ -251,6 +251,7 @@ const MAX_TAGS = 20;
 const MAX_FILES = 200;
 const MAX_MANIFEST_BYTES = 50000; // 50KB serialized manifest
 const MAX_VERSIONS_PER_NAME = 100; // Prevent version flooding
+const MAX_PACKAGES_PER_LAND = 200; // Prevent spam publishing
 
 function validateContentLimits(manifest, files, readme, tags) {
   const errors = [];
@@ -806,6 +807,14 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
       });
     }
 
+    // Per-land package cap: prevent one land from flooding the directory
+    const landPackageCount = await Extension.distinct("name", { authorLandId: req.landId });
+    if (!existingAny && landPackageCount.length >= MAX_PACKAGES_PER_LAND) {
+      return res.status(429).json({
+        error: `Your land has reached the maximum of ${MAX_PACKAGES_PER_LAND} unique packages. Unpublish unused packages before publishing new ones.`,
+      });
+    }
+
     // -----------------------------------------------------------------------
     // 4. Persist (versions are immutable once published)
     // -----------------------------------------------------------------------
@@ -875,6 +884,22 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
     });
 
     await ext.save();
+
+    // Auto-create release note comment if releaseNotes provided
+    const releaseNotes = req.body.releaseNotes;
+    if (releaseNotes && typeof releaseNotes === "string" && releaseNotes.trim()) {
+      try {
+        await Comment.create({
+          extensionName: manifest.name,
+          extensionVersion: manifest.version,
+          authorLandId: req.landId,
+          authorDomain: req.landDomain || "",
+          authorUsername: "",
+          text: releaseNotes.trim().slice(0, 2000),
+          type: "release",
+        });
+      } catch {}
+    }
 
     res.status(201).json({
       published: true,
@@ -966,6 +991,207 @@ router.delete("/:name/:version", verifyHorizonAuth(), attachLandIdentity(), asyn
     await ext.deleteOne();
     res.json({ unpublished: true, name, version });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =========================================================================
+// COMMENTS & REACTIONS (land-verified via CanopyToken)
+// =========================================================================
+
+import Comment, { Reaction } from "../db/models/comment.js";
+
+const MAX_COMMENTS_PER_LAND_PER_EXT = 3;  // per version. Prevents spam.
+const MAX_COMMENTS_PER_LAND_PER_DAY = 20; // across all extensions. Global rate limit.
+
+/**
+ * GET /extensions/:name/comments
+ * List comments and reaction counts. Public. No auth required.
+ */
+router.get("/:name/comments", async (req, res) => {
+  try {
+    const { name } = req.params;
+    const version = req.query.version || null;
+
+    const query = { extensionName: name };
+    if (version) query.extensionVersion = version;
+
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+    const [comments, total, stars, flags] = await Promise.all([
+      Comment.find(query).sort({ createdAt: -1 }).skip(offset).limit(limit).lean(),
+      Comment.countDocuments(query),
+      Reaction.countDocuments({ extensionName: name, type: "star" }),
+      Reaction.countDocuments({ extensionName: name, type: "flag" }),
+    ]);
+
+    res.json({ comments, total, limit, offset, stars, flags });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /extensions/:name/comments
+ * Add a comment. Requires CanopyToken.
+ * Rate limited: max 3 comments per land per extension version.
+ * Max 20 comments per land per day across all extensions.
+ */
+router.post("/:name/comments", verifyHorizonAuth(), async (req, res) => {
+  try {
+    const { name } = req.params;
+    const { text, version, username } = req.body;
+    const { payload } = req.canopyAuth;
+
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return res.status(400).json({ error: "Comment text is required" });
+    }
+    if (text.length > 2000) {
+      return res.status(400).json({ error: "Comment must be 2000 characters or fewer" });
+    }
+
+    // Verify extension exists
+    const ext = await Extension.findOne({ name }).lean();
+    if (!ext) return res.status(404).json({ error: `Extension "${name}" not found` });
+
+    // Verify land is registered
+    const land = await Land.findOne({ landId: payload.landId });
+    if (!land) return res.status(403).json({ error: "Your land must be registered on Horizon to comment" });
+
+    // Rate limit: per extension version
+    const perExtCount = await Comment.countDocuments({
+      extensionName: name,
+      extensionVersion: version || null,
+      authorLandId: payload.landId,
+      type: "comment",
+    });
+    if (perExtCount >= MAX_COMMENTS_PER_LAND_PER_EXT) {
+      return res.status(429).json({ error: `Maximum ${MAX_COMMENTS_PER_LAND_PER_EXT} comments per land per extension version` });
+    }
+
+    // Rate limit: per day globally
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const dailyCount = await Comment.countDocuments({
+      authorLandId: payload.landId,
+      type: "comment",
+      createdAt: { $gte: dayAgo },
+    });
+    if (dailyCount >= MAX_COMMENTS_PER_LAND_PER_DAY) {
+      return res.status(429).json({ error: `Maximum ${MAX_COMMENTS_PER_LAND_PER_DAY} comments per land per day` });
+    }
+
+    const comment = await Comment.create({
+      extensionName: name,
+      extensionVersion: version || null,
+      authorLandId: payload.landId,
+      authorDomain: payload.iss || land.domain,
+      authorUsername: username || "",
+      text: text.trim(),
+      type: "comment",
+    });
+
+    res.status(201).json({ created: true, comment });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /extensions/:name/comments/:commentId
+ * Remove your own comment. Requires CanopyToken from the same land.
+ */
+router.delete("/:name/comments/:commentId", verifyHorizonAuth(), async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const { payload } = req.canopyAuth;
+
+    const comment = await Comment.findById(commentId);
+    if (!comment) return res.status(404).json({ error: "Comment not found" });
+
+    if (comment.authorLandId !== payload.landId) {
+      return res.status(403).json({ error: "You can only delete your own comments" });
+    }
+
+    await comment.deleteOne();
+    res.json({ deleted: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =========================================================================
+// REACTIONS (star / flag, one per user per land per extension)
+// =========================================================================
+
+/**
+ * GET /extensions/:name/reactions
+ * Get reaction counts and whether the requesting land has reacted.
+ * Public counts. Land-specific status requires CanopyToken.
+ */
+router.get("/:name/reactions", async (req, res) => {
+  try {
+    const { name } = req.params;
+    const [stars, flags] = await Promise.all([
+      Reaction.countDocuments({ extensionName: name, type: "star" }),
+      Reaction.countDocuments({ extensionName: name, type: "flag" }),
+    ]);
+    res.json({ stars, flags });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /extensions/:name/react
+ * Star or flag an extension. One per type per user per land.
+ * Toggle: if already reacted, removes it.
+ * Body: { type: "star"|"flag", username: "optional" }
+ */
+router.post("/:name/react", verifyHorizonAuth(), async (req, res) => {
+  try {
+    const { name } = req.params;
+    const { type, username } = req.body;
+    const { payload } = req.canopyAuth;
+
+    if (!["star", "flag"].includes(type)) {
+      return res.status(400).json({ error: "type must be 'star' or 'flag'" });
+    }
+
+    // Verify extension exists
+    const ext = await Extension.findOne({ name }).lean();
+    if (!ext) return res.status(404).json({ error: `Extension "${name}" not found` });
+
+    // Verify land is registered
+    const land = await Land.findOne({ landId: payload.landId });
+    if (!land) return res.status(403).json({ error: "Your land must be registered on Horizon" });
+
+    // Toggle: check if reaction exists
+    const existing = await Reaction.findOne({
+      extensionName: name,
+      authorLandId: payload.landId,
+      authorUsername: username || "",
+      type,
+    });
+
+    if (existing) {
+      await existing.deleteOne();
+      return res.json({ toggled: "removed", type });
+    }
+
+    await Reaction.create({
+      extensionName: name,
+      authorLandId: payload.landId,
+      authorDomain: payload.iss || land.domain,
+      authorUsername: username || "",
+      type,
+    });
+
+    res.status(201).json({ toggled: "added", type });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ error: "Already reacted" });
+    }
     res.status(500).json({ error: err.message });
   }
 });

@@ -65,7 +65,7 @@ export function baseStyles() {
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html { height: 100%; }
+    html { height: 100%; background: #764ba2; }
 
     body {
       font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -301,6 +301,11 @@ export function baseStyles() {
     }
 
     /* Land cards */
+    .land-card-link {
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
     .land-card {
       padding: 16px;
       border-radius: 14px;
@@ -698,22 +703,24 @@ export function landCard(land, idx) {
   const color = statusColor(land.status);
   const delay = idx != null ? `style="animation-delay: ${0.1 + (idx || 0) * 0.04}s;"` : "";
   return `
-    <div class="land-card" ${delay}>
-      <div class="land-card-header">
-        <div class="land-name">${escapeHtml(land.name || "Unnamed Land")}</div>
-        <div class="land-status">
-          <span class="status-dot" style="background: ${color};"></span>
-          ${escapeHtml(land.status || "unknown")}
+    <a href="/lands/${encodeURIComponent(land.domain)}" class="land-card-link" ${delay}>
+      <div class="land-card">
+        <div class="land-card-header">
+          <div class="land-name">${escapeHtml(land.name || "Unnamed Land")}</div>
+          <div class="land-status">
+            <span class="status-dot" style="background: ${color};"></span>
+            ${escapeHtml(land.status || "unknown")}
+          </div>
+        </div>
+        <div class="land-domain"><code>${escapeHtml(land.domain)}</code></div>
+        <div class="land-meta">
+          Protocol v${land.protocolVersion || "?"}
+          <span class="separator"></span>
+          Last seen ${timeAgo(land.lastSeenAt)}
+          ${land.siteUrl ? `<span class="separator"></span><span class="land-site-link">Visit Site</span>` : ""}
         </div>
       </div>
-      <div class="land-domain"><code>${escapeHtml(land.domain)}</code></div>
-      <div class="land-meta">
-        Protocol v${land.protocolVersion || "?"}
-        <span class="separator"></span>
-        Last seen ${timeAgo(land.lastSeenAt)}
-        ${land.siteUrl ? `<span class="separator"></span><a href="${escapeHtml(land.siteUrl)}" class="land-site-link" target="_blank" rel="noopener">Visit Site</a>` : ""}
-      </div>
-    </div>
+    </a>
   `;
 }
 

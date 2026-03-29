@@ -36,7 +36,10 @@ export function renderExtensionsBrowsePage({ extensions, total, page, sort, type
       ${sortControls(
         [
           { key: "downloaded", label: "Most Downloaded" },
+          { key: "starred", label: "Most Starred" },
           { key: "recent", label: "Most Recent" },
+          { key: "discussed", label: "Most Discussed" },
+          { key: "flagged", label: "Most Flagged" },
         ],
         sort || "downloaded",
         sortBase,

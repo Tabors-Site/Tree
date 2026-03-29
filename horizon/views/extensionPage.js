@@ -102,7 +102,7 @@ export function renderExtensionPage({ ext, versions, dependents, ecosystem }) {
       <div class="ext-subtitle">${escapeHtml(ext.description || "")}</div>
       <div class="ext-meta-row">
         <span>v<strong>${escapeHtml(ext.version)}</strong></span>
-        <span>by <strong>${escapeHtml(ext.authorName || ext.authorDomain || "unknown")}</strong></span>
+        <span>by <a href="/lands/${encodeURIComponent(ext.authorDomain || "")}" style="color:var(--text-dim);text-decoration:none;"><strong>${escapeHtml(ext.authorName || ext.authorDomain || "unknown")}</strong></a></span>
         <span><strong>${ext.downloads || 0}</strong> downloads</span>
         ${ext.fileCount ? `<span><strong>${ext.fileCount}</strong> files</span>` : ""}
         ${ext.totalLines ? `<span><strong>${ext.totalLines.toLocaleString()}</strong> lines</span>` : ""}
@@ -330,6 +330,37 @@ export function renderExtensionPage({ ext, versions, dependents, ecosystem }) {
         </tbody>
       </table>
     </div>` : ""}
+
+    <!-- Reactions -->
+    <div class="glass-card" style="animation-delay: 0.21s;">
+      <div style="display:flex;align-items:center;gap:20px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:18px;">&#11088;</span>
+          <span id="star-count" style="font-size:14px;color:var(--text-dim);">0</span>
+          <span style="font-size:12px;color:var(--text-muted);">stars</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:18px;">&#9873;</span>
+          <span id="flag-count" style="font-size:14px;color:var(--text-dim);">0</span>
+          <span style="font-size:12px;color:var(--text-muted);">flags</span>
+        </div>
+        <div style="margin-left:auto;font-size:12px;color:var(--text-muted);">
+          React from the CLI: <code>treeos ext star ${escapeHtml(ext.name)}</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comments -->
+    <div class="glass-card" style="animation-delay: 0.22s;">
+      <h2>Comments</h2>
+      <div id="comments-list" style="min-height:40px;">
+        <p style="color:var(--text-muted);font-size:13px;">Loading comments...</p>
+      </div>
+      <p style="margin-top:16px;font-size:12px;color:var(--text-muted);">
+        Post comments from the CLI: <code>treeos ext comment ${escapeHtml(ext.name)} "your comment"</code>
+        <br/>Max 3 comments per extension. One star and one flag per user.
+      </p>
+    </div>
   `;
 
   const extraStyles = `
@@ -449,6 +480,52 @@ export function renderExtensionPage({ ext, versions, dependents, ecosystem }) {
       white-space: pre-wrap;
       word-break: break-word;
     }
+    .comment {
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .comment:last-child { border-bottom: none; }
+    .comment-release {
+      border-left: 2px solid rgba(74,222,128,0.4);
+      padding-left: 12px;
+    }
+    .comment-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .comment-meta strong { color: var(--text-dim); }
+    .comment-badge {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .comment-badge.release {
+      background: rgba(74,222,128,0.15);
+      color: rgba(74,222,128,0.8);
+    }
+    .comment-version {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+    .comment-time {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .comment-text {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
     @media (max-width: 640px) {
       .ext-title { font-size: 22px; }
       .manifest-grid { grid-template-columns: 1fr; }
@@ -467,6 +544,60 @@ export function renderExtensionPage({ ext, versions, dependents, ecosystem }) {
       }
       tabs[idx].classList.add("active");
       panels[idx].classList.add("active");
+    }
+
+    (async function loadComments() {
+      try {
+        var res = await fetch("/extensions/${encodeURIComponent(ext.name)}/comments?limit=50");
+        var data = await res.json();
+
+        // Update reaction counts
+        if (data.stars !== undefined) document.getElementById("star-count").textContent = data.stars;
+        if (data.flags !== undefined) document.getElementById("flag-count").textContent = data.flags;
+
+        var list = document.getElementById("comments-list");
+        if (!data.comments || data.comments.length === 0) {
+          list.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No comments yet.</p>';
+          return;
+        }
+        var html = "";
+        for (var c of data.comments) {
+          var isRelease = c.type === "release";
+          var badge = isRelease ? '<span class="comment-badge release">release</span>' : '';
+          var version = c.extensionVersion ? '<span class="comment-version">v' + c.extensionVersion + '</span>' : '';
+          var author = c.authorDomain || "unknown land";
+          var user = c.authorUsername ? c.authorUsername + " @ " + author : author;
+          var ago = timeAgoJs(c.createdAt);
+          html += '<div class="comment' + (isRelease ? ' comment-release' : '') + '">'
+            + '<div class="comment-meta">'
+            + '<strong>' + escapeJs(user) + '</strong> ' + badge + version
+            + '<span class="comment-time">' + ago + '</span>'
+            + '</div>'
+            + '<div class="comment-text">' + escapeJs(c.text) + '</div>'
+            + '</div>';
+        }
+        if (data.total > data.comments.length) {
+          html += '<p style="color:var(--text-muted);font-size:12px;margin-top:8px;">' + (data.total - data.comments.length) + ' more comments</p>';
+        }
+        list.innerHTML = html;
+      } catch (e) {
+        document.getElementById("comments-list").innerHTML = '<p style="color:var(--text-muted);font-size:13px;">Could not load comments.</p>';
+      }
+    })();
+
+    function escapeJs(s) {
+      if (!s) return "";
+      return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+    function timeAgoJs(d) {
+      if (!d) return "";
+      var ms = Date.now() - new Date(d).getTime();
+      var s = Math.floor(ms/1000), m = Math.floor(s/60), h = Math.floor(m/60), dy = Math.floor(h/24);
+      if (dy > 30) return new Date(d).toLocaleDateString();
+      if (dy > 0) return dy + "d ago";
+      if (h > 0) return h + "h ago";
+      if (m > 0) return m + "m ago";
+      return "just now";
     }
   `;
 

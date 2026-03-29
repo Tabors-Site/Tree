@@ -128,6 +128,14 @@ export default async function registerURLRoutes(app, opts = {}) {
   // Auth page routes (login, register, etc.)
   app.use("/", authPageRouter);
 
+  // Ensure land root and config exist before extensions load.
+  // On first boot, extensions that read .config or create system child nodes
+  // would fail if the land root hasn't been created yet.
+  const { ensureLandRoot } = await import("../seed/landRoot.js");
+  const { initLandConfig } = await import("../seed/landConfig.js");
+  await ensureLandRoot();
+  await initLandConfig();
+
   // Load extensions (manifests discovered, deps validated, routes wired)
   await loadExtensions(app, mcpServerInstance, {
     getConfigValue: getLandConfigValue,

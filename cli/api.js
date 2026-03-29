@@ -174,7 +174,7 @@ class TreeAPI {
   disableExtension(name) { return this.post(`/land/extensions/${encodeURIComponent(name)}/disable`); }
   enableExtension(name) { return this.post(`/land/extensions/${encodeURIComponent(name)}/enable`); }
   uninstallExtension(name) { return this.post(`/land/extensions/${encodeURIComponent(name)}/uninstall`); }
-  publishExtension(name) { return this.post(`/land/extensions/${encodeURIComponent(name)}/publish`); }
+  publishExtension(name, opts = {}) { return this.post(`/land/extensions/${encodeURIComponent(name)}/publish`, opts); }
 
   async installExtension(name, version) {
     const horizonUrl = await this._getHorizonUrl();

@@ -366,15 +366,83 @@ Examples:
 
   ext
     .command("publish [name...]")
-    .description("Publish a local extension to the registry")
-    .action(async (parts) => {
-      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext publish <name>. Run 'ext list' to see local extensions."));
+    .description("Publish a local extension to the registry. --notes 'what changed'")
+    .option("--notes <text>", "Release notes for this version")
+    .action(async (parts, opts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext publish <name> [--notes 'what changed']"));
       const name = parts.join("-");
       try {
         const api = getApi(requireAuth());
         console.log(chalk.dim(`Publishing ${name} to registry...`));
-        const data = await api.publishExtension(name);
+        const data = await api.publishExtension(name, { releaseNotes: opts.notes || "" });
         console.log(chalk.green(`Published: ${data.name} v${data.version}`));
+        if (opts.notes) console.log(chalk.dim(`Release notes: ${opts.notes}`));
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  ext
+    .command("comment [args...]")
+    .description('Comment on an extension: ext comment <name> "your comment"')
+    .action(async (args) => {
+      if (!args || args.length < 2) return console.log(chalk.yellow('Usage: ext comment <name> "your comment"'));
+      const name = args[0];
+      const text = args.slice(1).join(" ");
+      try {
+        const api = getApi(requireAuth());
+        console.log(chalk.dim(`Commenting on ${name}...`));
+        const data = await api.post(`/land/extensions/${encodeURIComponent(name)}/comment`, { text });
+        console.log(chalk.green(`Comment posted on ${name}`));
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  ext
+    .command("comment-land [args...]")
+    .description('Comment on a land: ext comment-land <domain> "your comment"')
+    .action(async (args) => {
+      if (!args || args.length < 2) return console.log(chalk.yellow('Usage: ext comment-land <domain> "your comment"'));
+      const domain = args[0];
+      const text = args.slice(1).join(" ");
+      try {
+        const api = getApi(requireAuth());
+        console.log(chalk.dim(`Commenting on ${domain}...`));
+        const data = await api.post(`/land/extensions/land:${encodeURIComponent(domain)}/comment`, { text });
+        console.log(chalk.green(`Comment posted on ${domain}`));
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  ext
+    .command("star [name...]")
+    .description("Star an extension (toggle)")
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext star <name>"));
+      const name = parts.join("-");
+      try {
+        const api = getApi(requireAuth());
+        const data = await api.post(`/land/extensions/${encodeURIComponent(name)}/react`, { type: "star" });
+        if (data.toggled === "added") console.log(chalk.yellow(`Starred: ${name}`));
+        else console.log(chalk.dim(`Unstarred: ${name}`));
+      } catch (err) {
+        console.error(chalk.red("Error:"), err.message);
+      }
+    });
+
+  ext
+    .command("flag [name...]")
+    .description("Flag an extension for review (toggle)")
+    .action(async (parts) => {
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext flag <name>"));
+      const name = parts.join("-");
+      try {
+        const api = getApi(requireAuth());
+        const data = await api.post(`/land/extensions/${encodeURIComponent(name)}/react`, { type: "flag" });
+        if (data.toggled === "added") console.log(chalk.red(`Flagged: ${name}`));
+        else console.log(chalk.dim(`Unflagged: ${name}`));
       } catch (err) {
         console.error(chalk.red("Error:"), err.message);
       }

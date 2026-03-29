@@ -12,6 +12,9 @@ import { renderExtensionsBrowsePage } from "./views/extensionsBrowsePage.js";
 import { renderOsPage } from "./views/osPage.js";
 import { renderBundlePage } from "./views/bundlePage.js";
 import { renderExtensionPage } from "./views/extensionPage.js";
+import { renderLandDetailPage } from "./views/landDetailPage.js";
+import Comment, { Reaction } from "./db/models/comment.js";
+import { verifyHorizonAuth } from "./auth.js";
 import Land from "./db/models/land.js";
 import PublicTree from "./db/models/publicTree.js";
 import Extension from "./db/models/extension.js";
@@ -124,6 +127,94 @@ app.get("/lands", async (req, res) => {
   }
 });
 
+// Land detail page
+app.get("/lands/:domain", async (req, res) => {
+  try {
+    const land = await Land.findOne({ domain: req.params.domain }).lean();
+    if (!land) return res.status(404).send("Land not found");
+
+    // Get all extensions published by this land
+    const extensions = await Extension.aggregate([
+      { $match: { authorLandId: land._id } },
+      { $sort: { name: 1, publishedAt: -1 } },
+      { $group: { _id: "$name", doc: { $first: "$$ROOT" } } },
+      { $replaceRoot: { newRoot: "$doc" } },
+      { $sort: { downloads: -1 } },
+    ]);
+
+    // Aggregate stars and flags across all this land's extensions
+    const extNames = extensions.map(e => e.name);
+    const [stars, flags] = await Promise.all([
+      Reaction.countDocuments({ extensionName: { $in: extNames }, type: "star" }),
+      Reaction.countDocuments({ extensionName: { $in: extNames }, type: "flag" }),
+    ]);
+
+    const html = renderLandDetailPage({ land, extensions, stars, flags });
+    res.setHeader("Content-Type", "text/html");
+    res.send(html);
+  } catch (err) {
+    res.status(500).send("Error: " + err.message);
+  }
+});
+
+// Land comments API (stored with extensionName = "land:<domain>")
+app.get("/lands/:domain/comments", async (req, res) => {
+  try {
+    const key = "land:" + req.params.domain;
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const [comments, total] = await Promise.all([
+      Comment.find({ extensionName: key }).sort({ createdAt: -1 }).skip(offset).limit(limit).lean(),
+      Comment.countDocuments({ extensionName: key }),
+    ]);
+    res.json({ comments, total, limit, offset });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/lands/:domain/comments", verifyHorizonAuth(), async (req, res) => {
+  try {
+    const key = "land:" + req.params.domain;
+    const { text, username } = req.body;
+    const { payload } = req.canopyAuth;
+
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return res.status(400).json({ error: "Comment text is required" });
+    }
+    if (text.length > 2000) {
+      return res.status(400).json({ error: "Comment must be 2000 characters or fewer" });
+    }
+
+    // Verify land exists
+    const target = await Land.findOne({ domain: req.params.domain });
+    if (!target) return res.status(404).json({ error: "Land not found" });
+
+    // Verify commenter is registered
+    const commenter = await Land.findOne({ landId: payload.landId });
+    if (!commenter) return res.status(403).json({ error: "Your land must be registered on Horizon" });
+
+    // Rate limit: max 3 comments per commenter per land
+    const count = await Comment.countDocuments({ extensionName: key, authorLandId: payload.landId, type: "comment" });
+    if (count >= 3) {
+      return res.status(429).json({ error: "Maximum 3 comments per land" });
+    }
+
+    const comment = await Comment.create({
+      extensionName: key,
+      authorLandId: payload.landId,
+      authorDomain: payload.iss || commenter.domain,
+      authorUsername: username || "",
+      text: text.trim(),
+      type: "comment",
+    });
+
+    res.status(201).json({ created: true, comment });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Extensions browse page (MUST be before extensionRoutes mount to avoid :name collision)
 app.get("/extensions/browse", async (req, res) => {
   try {
@@ -140,25 +231,54 @@ app.get("/extensions/browse", async (req, res) => {
     if (type && ["extension", "bundle", "os"].includes(type)) query.type = type;
     if (builtFor) query.builtFor = builtFor;
 
-    const sortStage = sort === "recent"
-      ? { publishedAt: -1, name: 1 }
-      : { downloads: -1, name: 1 };
+    let sortStage;
+    const needsCommunitySort = ["starred", "flagged", "discussed"].includes(sort);
+
+    if (sort === "recent") sortStage = { publishedAt: -1, name: 1 };
+    else if (!needsCommunitySort) sortStage = { downloads: -1, name: 1 };
+    else sortStage = { name: 1 }; // temp, re-sorted after community data
 
     const pipeline = [
       { $match: query },
       { $sort: { name: 1, publishedAt: -1 } },
       { $group: { _id: "$name", latest: { $first: "$$ROOT" } } },
       { $replaceRoot: { newRoot: "$latest" } },
-      { $sort: sortStage },
-      { $skip: offset },
-      { $limit: perPage },
+      ...(!needsCommunitySort ? [{ $sort: sortStage }, { $skip: offset }, { $limit: perPage }] : []),
       { $project: { name: 1, version: 1, description: 1, type: 1, builtFor: 1, authorDomain: 1, authorName: 1, tags: 1, downloads: 1, publishedAt: 1, npmDependencies: 1, includes: 1, bundles: 1, standalone: 1 } },
     ];
 
-    const [extensions, total] = await Promise.all([
+    let [extensions, total] = await Promise.all([
       Extension.aggregate(pipeline),
       Extension.distinct("name", query).then((r) => r.length),
     ]);
+
+    // Community-based sorting: look up reaction/comment counts
+    if (needsCommunitySort && extensions.length > 0) {
+      const names = extensions.map(e => e.name);
+      if (sort === "starred") {
+        const starCounts = await Reaction.aggregate([
+          { $match: { extensionName: { $in: names }, type: "star" } },
+          { $group: { _id: "$extensionName", count: { $sum: 1 } } },
+        ]);
+        const map = new Map(starCounts.map(s => [s._id, s.count]));
+        extensions.sort((a, b) => (map.get(b.name) || 0) - (map.get(a.name) || 0));
+      } else if (sort === "flagged") {
+        const flagCounts = await Reaction.aggregate([
+          { $match: { extensionName: { $in: names }, type: "flag" } },
+          { $group: { _id: "$extensionName", count: { $sum: 1 } } },
+        ]);
+        const map = new Map(flagCounts.map(f => [f._id, f.count]));
+        extensions.sort((a, b) => (map.get(b.name) || 0) - (map.get(a.name) || 0));
+      } else if (sort === "discussed") {
+        const commentCounts = await Comment.aggregate([
+          { $match: { extensionName: { $in: names } } },
+          { $group: { _id: "$extensionName", count: { $sum: 1 } } },
+        ]);
+        const map = new Map(commentCounts.map(c => [c._id, c.count]));
+        extensions.sort((a, b) => (map.get(b.name) || 0) - (map.get(a.name) || 0));
+      }
+      extensions = extensions.slice(offset, offset + perPage);
+    }
 
     const html = renderExtensionsBrowsePage({ extensions, total, page, sort, type, builtFor, query: q });
     res.setHeader("Content-Type", "text/html");
