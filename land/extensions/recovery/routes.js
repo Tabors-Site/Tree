@@ -35,12 +35,14 @@ router.get("/root/:rootId/recovery", async (req, res, next) => {
       const { rootId } = req.params;
       const root = await NodeModel.findById(rootId).select("name metadata").lean();
       if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Not found");
-      let status = null, milestones = null;
+      let status = null, milestones = null, patterns = null, history = null;
       if (await isInitialized(rootId)) {
-        [status, milestones] = await Promise.all([getStatus(rootId), getMilestones(rootId)]);
+        [status, milestones, patterns, history] = await Promise.all([
+          getStatus(rootId), getMilestones(rootId), getPatterns(rootId), getHistory(rootId),
+        ]);
       }
       const { renderRecoveryDashboard } = await import("./pages/dashboard.js");
-      res.send(renderRecoveryDashboard({ rootId, rootName: root.name, status, milestones, token: req.query.token || null, userId: req.userId }));
+      res.send(renderRecoveryDashboard({ rootId, rootName: root.name, status, milestones, patterns, history, token: req.query.token || null, userId: req.userId }));
     });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, "Dashboard failed");

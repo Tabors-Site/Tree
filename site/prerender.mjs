@@ -46,6 +46,7 @@ const STATIC_ROUTES = [
   "/fitness",
   "/food",
   "/recovery",
+  "/kb",
   "/app",
 ];
 
@@ -128,6 +129,10 @@ const PAGE_META = {
   "/recovery": {
     title: "Recovery . The Tree That Grows Toward Health",
     description: "Track substances, feelings, cravings, and patterns. Taper schedules that bend around you. Pattern detection that finds what you can't see. A mirror, not a judge.",
+  },
+  "/kb": {
+    title: "KB . The Tree That Remembers Everything",
+    description: "Tell it things. Ask it things. One person maintains, everyone benefits. Knowledge base with citations, staleness detection, and guided review. The coworker who never forgets.",
   },
   "/app": {
     title: "TreeOS . The First OS Built on the Seed",

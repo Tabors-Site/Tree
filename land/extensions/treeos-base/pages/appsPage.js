@@ -46,6 +46,15 @@ const APPS = [
     placeholder: "What do you want to learn? (e.g. React hooks, Rust, Kubernetes)",
     dashboardPath: "study",
   },
+  {
+    key: "kb",
+    emoji: "📖",
+    name: "KB",
+    treeName: "KB",
+    description: "Knowledge base. Tell it things. Ask it things. One person maintains. Everyone benefits. The tree organizes. The AI answers from what it knows.",
+    placeholder: "What is this knowledge base about? (e.g. Datacenter Ops, Company Policies)",
+    dashboardPath: "kb",
+  },
 ];
 
 export { APPS };
@@ -137,40 +146,16 @@ export function renderAppsPage({ userId, username, rootMap, qs }) {
   `;
 
   const cards = APPS.map(app => {
-    const entry = rootMap.get(app.treeName);
-    const rootId = entry?.id;
-    const ready = entry?.ready;
+    const entries = rootMap.get(app.treeName) || [];
 
-    // Fully set up: show Open button
-    if (rootId && ready) {
-      return `
-        <div class="app-card">
-          <div class="app-header">
-            <span class="app-emoji">${app.emoji}</span>
-            <span class="app-name">${app.name}</span>
-          </div>
-          <div class="app-desc">${app.description}</div>
-          <a class="app-active" href="/api/v1/root/${rootId}/${app.dashboardPath}?html${tokenParam}">Open</a>
-        </div>
-      `;
-    }
+    // List existing trees for this app type
+    const existingHtml = entries.map(entry => {
+      if (entry.ready) {
+        return `<a class="app-active" href="/api/v1/root/${entry.id}/${app.dashboardPath}?html${tokenParam}" style="margin-right:8px;margin-bottom:6px;">${esc(entry.name)}</a>`;
+      }
+      return `<a class="app-active" style="background:rgba(236,201,75,0.12);border-color:rgba(236,201,75,0.3);color:#ecc94b;margin-right:8px;margin-bottom:6px;" href="/api/v1/root/${entry.id}/${app.dashboardPath}?html${tokenParam}">${esc(entry.name)} (setup)</a>`;
+    }).join("");
 
-    // Tree exists but setup incomplete: show input to continue, link to dashboard
-    if (rootId && !ready) {
-      return `
-        <div class="app-card">
-          <div class="app-header">
-            <span class="app-emoji">${app.emoji}</span>
-            <span class="app-name">${app.name}</span>
-            <span style="font-size:0.75rem;color:rgba(236,201,75,0.7);margin-left:auto;">setting up</span>
-          </div>
-          <div class="app-desc">${app.description}</div>
-          <a class="app-active" style="background:rgba(236,201,75,0.12);border-color:rgba(236,201,75,0.3);color:#ecc94b;" href="/api/v1/root/${rootId}/${app.dashboardPath}?html${tokenParam}">Continue Setup</a>
-        </div>
-      `;
-    }
-
-    // No tree: show input to create
     return `
       <div class="app-card">
         <div class="app-header">
@@ -178,17 +163,22 @@ export function renderAppsPage({ userId, username, rootMap, qs }) {
           <span class="app-name">${app.name}</span>
         </div>
         <div class="app-desc">${app.description}</div>
+        ${existingHtml ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existingHtml}</div>` : ""}
         <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
           ${tokenField}
           <input type="hidden" name="app" value="${app.key}" />
           <input class="app-input" name="message" placeholder="${app.placeholder}" required />
-          <button class="app-start" type="submit">Start ${app.name}</button>
+          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} ${app.name}</button>
         </form>
       </div>
     `;
   }).join("");
 
   const body = `
+    <div style="max-width: 960px; margin: 0 auto; padding: 12px 20px 0; display: flex; justify-content: space-between; align-items: center;">
+      <a href="/chat" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">← Chat</a>
+      <a href="/api/v1/user/${userId}/llm?html${tokenParam}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM Connections</a>
+    </div>
     <div class="page-header">
       <div class="page-title">Apps</div>
       <div class="page-subtitle">${esc(username || "")}'s proficiency stack</div>

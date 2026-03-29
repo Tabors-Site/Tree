@@ -10,15 +10,44 @@ const TreeOSPage = () => {
           <h1 className="lp-title">TreeOS</h1>
           <p className="lp-subtitle">The first operating system built on the seed.</p>
           <p className="lp-tagline">
-            The seed is the kernel. TreeOS is what we built on it to show what's possible.
-            Four bundles, ninety-five extensions, and a handful of apps that turn trees into tools
-            people actually use. The seed doesn't know about fitness or food or recovery.
-            TreeOS does.
+            The seed is the kernel. TreeOS is the extensions we built on it. Free. Open source.
+            Published to Horizon for anyone to install. The seed doesn't know about fitness or food
+            or recovery. TreeOS does.
           </p>
           <div className="lp-hero-ctas">
             <a className="lp-btn lp-btn-primary" href="/seed">The Seed</a>
             <a className="lp-btn lp-btn-secondary" href="/guide">Guide</a>
             <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── THREE THINGS ── */}
+      <section className="lp-section" style={{paddingTop: 60, paddingBottom: 40}}>
+        <div className="lp-container" style={{maxWidth: 760}}>
+          <div style={{display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20}}>
+            <div style={{padding: "20px", borderRadius: 12, background: "rgba(72,187,120,0.08)", border: "1px solid rgba(72,187,120,0.15)"}}>
+              <h3 style={{color: "#4ade80", fontSize: "1rem", margin: "0 0 8px"}}>The Seed</h3>
+              <p style={{color: "rgba(255,255,255,0.5)", fontSize: "0.85rem", lineHeight: 1.7, margin: 0}}>
+                The kernel. AGPL-3.0. Two schemas, conversation loop, hooks, cascade, extension loader.
+                Never changes. You can build anything on it. The license protects the kernel.
+              </p>
+            </div>
+            <div style={{padding: "20px", borderRadius: 12, background: "rgba(102,126,234,0.08)", border: "1px solid rgba(102,126,234,0.15)"}}>
+              <h3 style={{color: "#667eea", fontSize: "1rem", margin: "0 0 8px"}}>TreeOS</h3>
+              <p style={{color: "rgba(255,255,255,0.5)", fontSize: "0.85rem", lineHeight: 1.7, margin: 0}}>
+                The extensions. Free. Published on Horizon. Four bundles, twenty-one base, eight standalone, five apps.
+                Install what you want. Remove what you don't. Fork and build your own OS.
+              </p>
+            </div>
+            <div style={{padding: "20px", borderRadius: 12, background: "rgba(159,122,234,0.08)", border: "1px solid rgba(159,122,234,0.15)"}}>
+              <h3 style={{color: "#9f7aea", fontSize: "1rem", margin: "0 0 8px"}}>treeos.ai</h3>
+              <p style={{color: "rgba(255,255,255,0.5)", fontSize: "0.85rem", lineHeight: 1.7, margin: 0}}>
+                Our land. One running server. Where we experiment, build, and test.
+                The <a href="/app" style={{color: "rgba(159,122,234,0.8)"}}>site</a> is our land's frontend.
+                TreeOS the package is what we publish from it for everyone.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -54,6 +83,11 @@ const TreeOSPage = () => {
                 emoji: "📚", name: "Study", href: "/study",
                 color: "rgba(159, 122, 234, 0.12)", border: "rgba(159, 122, 234, 0.25)", accent: "#9f7aea",
                 desc: "Queue what you want to learn. The AI breaks it into a curriculum, teaches through conversation, tracks mastery per concept, and detects gaps you can't see. Paste a URL and it reads the content for you. Type be and it picks the next lesson.",
+              },
+              {
+                emoji: "📖", name: "KB", href: "/kb",
+                color: "rgba(96, 165, 250, 0.12)", border: "rgba(96, 165, 250, 0.25)", accent: "#60a5fa",
+                desc: "Tell it things. Ask it things. One person maintains, everyone benefits. The tree organizes knowledge into a hierarchy. The AI answers from stored notes with citations. Staleness detection flags what's getting old. The coworker who never forgets.",
               },
             ].map(app => (
               <a key={app.name} href={app.href} style={{

@@ -241,7 +241,6 @@ export function detectMealSlot(message, when) {
  */
 export async function writeMealNote(foodNodes, mealSlot, summary, userId) {
   if (!foodNodes?.mealSlots?.[mealSlot]) return;
-  if (!_Note) return;
   try {
     const { createNote } = await import("../../seed/tree/notes.js");
     await createNote({
@@ -325,8 +324,8 @@ export async function deliverMacros(logNodeId, foodNodes, parsed) {
     log.warn("Food", `Channel delivery failed: ${err.message}`);
   }
 
-  // Fallback: atomic increment on macro nodes
-  if (!usedChannels && foodNodes) {
+  // Always do direct increment as well (channels may not have routes set up yet)
+  if (foodNodes) {
     if (foodNodes.protein && totals.protein > 0) {
       await _metadata.incExtMeta(foodNodes.protein.id, "values", "today", totals.protein);
     }
@@ -381,6 +380,16 @@ export async function checkDailyReset(rootId) {
 
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   if (lastReset.get(rootId) === today) return;
+
+  // Check persisted reset date (survives server restarts)
+  const root = await _Node.findById(rootId).select("metadata").lean();
+  const foodMeta = root?.metadata instanceof Map ? root.metadata.get("food") : root?.metadata?.food;
+  if (foodMeta?.lastResetDate === today) {
+    lastReset.set(rootId, today);
+    log.debug("Food", `Daily reset skipped (already reset today) for ${String(rootId).slice(0, 8)}`);
+    return;
+  }
+  log.verbose("Food", `Daily reset firing for ${String(rootId).slice(0, 8)} (lastResetDate=${foodMeta?.lastResetDate}, today=${today})`);
 
   const foodNodes = await findFoodNodes(rootId);
   if (!foodNodes?.protein) return; // not scaffolded
@@ -468,6 +477,19 @@ export async function checkDailyReset(rootId) {
   }
 
   lastReset.set(rootId, today);
+
+  // Persist reset date so server restarts don't re-zero today's data
+  try {
+    const rootNode = await _Node.findById(rootId);
+    if (rootNode) {
+      const existing = _metadata.getExtMeta(rootNode, "food") || {};
+      await _metadata.setExtMeta(rootNode, "food", { ...existing, lastResetDate: today });
+      log.verbose("Food", `Persisted lastResetDate=${today} for ${String(rootId).slice(0, 8)}`);
+    }
+  } catch (err) {
+    log.warn("Food", `Failed to persist reset date: ${err.message}`);
+  }
+
   if (hadData) {
     log.verbose("Food", `Daily reset for ${rootId.slice(0, 8)}... (P:${macros.protein} C:${macros.carbs} F:${macros.fats})`);
   }
@@ -533,9 +555,10 @@ export async function getDailyPicture(foodRootId) {
   }
 
   // Get history from History node notes
-  if (foodNodes.history && _Note) {
+  if (foodNodes.history) {
     try {
-      const historyNotes = await _Note.find({ nodeId: foodNodes.history.id })
+      const Note = _Note || (await import("../../seed/models/note.js")).default;
+      const historyNotes = await Note.find({ nodeId: foodNodes.history.id })
         .sort({ createdAt: -1 })
         .limit(7)
         .select("content")
@@ -547,9 +570,10 @@ export async function getDailyPicture(foodRootId) {
   }
 
   // Get recent meals from Log node
-  if (foodNodes.log && _Note) {
+  if (foodNodes.log) {
     try {
-      const recentNotes = await _Note.find({ nodeId: foodNodes.log.id })
+      const Note = _Note || (await import("../../seed/models/note.js")).default;
+      const recentNotes = await Note.find({ nodeId: foodNodes.log.id })
         .sort({ createdAt: -1 })
         .limit(10)
         .select("content createdAt")
@@ -558,7 +582,30 @@ export async function getDailyPicture(foodRootId) {
         text: typeof n.content === "string" ? n.content.slice(0, 200) : "",
         date: n.createdAt,
       }));
-    } catch {}
+    } catch (err) {
+      log.warn("Food", `Meal query failed: ${err.message}`);
+    }
+  }
+
+  // Get meals by slot (Breakfast, Lunch, Dinner, Snacks)
+  if (foodNodes.mealSlots) {
+    picture.mealsBySlot = {};
+    const Note = _Note || (await import("../../seed/models/note.js")).default;
+    for (const [slot, node] of Object.entries(foodNodes.mealSlots)) {
+      try {
+        const notes = await Note.find({ nodeId: node.id })
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .select("content createdAt")
+          .lean();
+        if (notes.length > 0) {
+          picture.mealsBySlot[slot] = notes.map(n => ({
+            text: typeof n.content === "string" ? n.content.slice(0, 150) : "",
+            date: n.createdAt,
+          }));
+        }
+      } catch {}
+    }
   }
 
   return picture;

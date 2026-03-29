@@ -60,8 +60,8 @@ export async function createNode({
   if (name === "~" || name.startsWith("~/")) {
     throw new Error("Node names cannot be ~ (reserved for home)");
   }
-  if (name.includes("/")) {
-    throw new Error("Node names cannot contain / (reserved for path separator)");
+  if (name.startsWith("/")) {
+    throw new Error("Node names cannot start with / (reserved for path separator)");
   }
   const user = validatedUser ?? (await getUserOrThrow(userId));
 

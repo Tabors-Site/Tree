@@ -38,7 +38,7 @@ export default {
   provides: {
     models: {},
     routes: "./routes.js",
-    tools: false,
+    tools: true,
     jobs: true,
     guidedMode: "tree:food-log",
 

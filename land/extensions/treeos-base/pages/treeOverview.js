@@ -1194,6 +1194,9 @@ transition:
       <a href="/api/v1/user/${currentUserId}${queryString}" class="back-link">
         <- Back to Profile
       </a>
+        <a href="/api/v1/user/${currentUserId}/apps${queryString}" class="back-link">
+        Apps
+      </a>
         <a href="/api/v1/root/${allData._id}/calendar${queryString}" class="back-link">
         Calendar
       </a>

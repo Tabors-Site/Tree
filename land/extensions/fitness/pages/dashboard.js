@@ -1,8 +1,8 @@
 /**
  * Fitness Dashboard
  *
- * Dynamically generated from the tree. Shows modalities, exercise groups,
- * values/goals per exercise, weekly stats, progression alerts.
+ * Exercises with values/goals, weekly stats, modality breakdown,
+ * progression alerts, last worked dates. Fully dynamic from tree.
  */
 
 import { page } from "../../html-rendering/html/layout.js";
@@ -10,17 +10,18 @@ import { esc, timeAgo } from "../../html-rendering/html/utils.js";
 import { glassCardStyles, glassHeaderStyles, responsiveBase } from "../../html-rendering/html/baseStyles.js";
 import { chatBarCss, chatBarHtml, chatBarJs, commandsRefHtml } from "../../html-rendering/html/chatBar.js";
 
-function progressColor(current, goal) {
-  if (!goal) return "#718096";
-  const pct = (current / goal) * 100;
-  if (pct >= 100) return "#48bb78";
-  if (pct >= 60) return "#ecc94b";
-  return "#718096";
+function goalColor(current, goal) {
+  if (!goal || goal === 0) return "rgba(255,255,255,0.15)";
+  if (current >= goal) return "rgba(72,187,120,0.3)";
+  if (current >= goal * 0.7) return "rgba(236,201,75,0.2)";
+  return "rgba(255,255,255,0.08)";
 }
 
 export function renderFitnessDashboard({ rootId, rootName, state, weekly, profile, token, userId }) {
   const modalities = state?.modalities || [];
   const groups = state?.groups || {};
+  const today = new Date();
+  const dateStr = today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
   const css = `
     ${glassHeaderStyles}
@@ -29,97 +30,69 @@ export function renderFitnessDashboard({ rootId, rootName, state, weekly, profil
 
     .fit-layout { max-width: 900px; margin: 0 auto; padding: 1.5rem; }
 
-    .stat-row { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0 1.5rem; }
-    .stat-pill {
-      background: rgba(255,255,255,0.08);
-      border-radius: 20px;
-      padding: 0.4rem 1rem;
-      font-size: 0.85rem;
-      color: rgba(255,255,255,0.8);
+    .stat-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0 20px; }
+    .stat-chip {
+      background: rgba(255,255,255,0.06);
+      border-radius: 16px; padding: 4px 12px;
+      font-size: 0.8rem; color: rgba(255,255,255,0.5);
     }
-    .stat-pill strong { color: #fff; }
-
-    .section-title {
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: rgba(255,255,255,0.5);
-      margin-bottom: 0.5rem;
-      margin-top: 1.5rem;
-    }
+    .stat-chip strong { color: rgba(255,255,255,0.8); }
 
     .modality-tag {
-      display: inline-block;
-      padding: 3px 10px;
-      border-radius: 12px;
-      font-size: 0.75rem;
-      margin-left: 8px;
+      display: inline-block; padding: 3px 10px;
+      border-radius: 12px; font-size: 0.75rem; margin-left: 6px;
     }
     .mod-gym { background: rgba(102,126,234,0.15); color: rgba(102,126,234,0.8); }
     .mod-running { background: rgba(72,187,120,0.15); color: rgba(72,187,120,0.8); }
     .mod-home { background: rgba(236,201,75,0.15); color: rgba(236,201,75,0.8); }
 
-    .group-card { margin-bottom: 1.2rem; }
-    .group-name { font-size: 1rem; font-weight: 600; color: #fff; margin-bottom: 8px; }
-
-    .exercise-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 6px 0;
-      font-size: 0.9rem;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
+    .section-title {
+      font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.5); margin-bottom: 0.5rem; margin-top: 1.5rem;
     }
-    .exercise-row:last-child { border-bottom: none; }
 
+    .group-card { margin-bottom: 16px; padding: 16px; }
+    .group-name { font-size: 1rem; font-weight: 600; color: #fff; margin-bottom: 10px; }
+
+    .ex-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.9rem;
+    }
+    .ex-row:last-child { border-bottom: none; }
     .ex-name { flex: 1; color: rgba(255,255,255,0.8); }
-    .ex-values { color: rgba(255,255,255,0.5); font-size: 0.85rem; }
-    .ex-last { color: rgba(255,255,255,0.3); font-size: 0.8rem; width: 70px; text-align: right; }
-
-    .ex-sets {
-      display: flex;
-      gap: 4px;
-    }
+    .ex-weight { color: rgba(255,255,255,0.6); font-size: 0.85rem; min-width: 50px; }
+    .ex-sets { display: flex; gap: 4px; }
     .ex-set {
-      width: 28px;
-      height: 18px;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.7rem;
-      color: rgba(255,255,255,0.7);
+      min-width: 26px; height: 20px; border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; color: rgba(255,255,255,0.7);
+    }
+    .ex-meta { display: flex; flex-direction: column; align-items: flex-end; min-width: 65px; }
+    .ex-last { font-size: 0.75rem; color: rgba(255,255,255,0.3); }
+    .ex-sessions { font-size: 0.7rem; color: rgba(255,255,255,0.2); }
+
+    .ex-progression {
+      font-size: 0.75rem; color: #48bb78; padding: 2px 8px;
+      background: rgba(72,187,120,0.1); border-radius: 10px;
     }
 
-    .progression-alert {
-      background: rgba(72,187,120,0.08);
-      border: 1px solid rgba(72,187,120,0.2);
-      border-radius: 8px;
-      padding: 8px 12px;
-      font-size: 0.85rem;
-      color: rgba(72,187,120,0.8);
-      margin-top: 4px;
-    }
+    .running-stat { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.85rem; }
+    .running-label { color: rgba(255,255,255,0.5); }
+    .running-val { color: rgba(255,255,255,0.8); }
 
-    .empty-state {
-      color: rgba(255,255,255,0.35);
-      font-size: 0.9rem;
-      padding: 1rem 0;
-      font-style: italic;
-    }
+    .empty-state { color: rgba(255,255,255,0.35); font-size: 0.9rem; padding: 1rem 0; font-style: italic; }
   `;
 
   // Weekly stats
-  const weekHtml = weekly ? `
-    <div class="stat-row">
-      <span class="stat-pill"><strong>${weekly.sessions}</strong> sessions this week</span>
-      ${weekly.gymSessions ? `<span class="stat-pill"><strong>${weekly.gymSessions}</strong> gym</span>` : ""}
-      ${weekly.runs ? `<span class="stat-pill"><strong>${weekly.runs}</strong> run${weekly.runs > 1 ? "s" : ""} (${weekly.runMiles.toFixed(1)} mi)</span>` : ""}
-      ${weekly.homeSessions ? `<span class="stat-pill"><strong>${weekly.homeSessions}</strong> home</span>` : ""}
-      ${weekly.totalVolume ? `<span class="stat-pill"><strong>${weekly.totalVolume.toLocaleString()}</strong> lb volume</span>` : ""}
-      ${profile?.sessionsPerWeek ? `<span class="stat-pill">${weekly.sessions}/<strong>${profile.sessionsPerWeek}</strong> goal</span>` : ""}
-    </div>
-  ` : "";
+  const weekChips = [];
+  if (weekly) {
+    if (weekly.sessions) weekChips.push(`<span class="stat-chip"><strong>${weekly.sessions}</strong> sessions</span>`);
+    if (weekly.gymSessions) weekChips.push(`<span class="stat-chip"><strong>${weekly.gymSessions}</strong> gym</span>`);
+    if (weekly.runs) weekChips.push(`<span class="stat-chip"><strong>${weekly.runs}</strong> run${weekly.runs > 1 ? "s" : ""} (${weekly.runMiles?.toFixed(1) || 0} mi)</span>`);
+    if (weekly.homeSessions) weekChips.push(`<span class="stat-chip"><strong>${weekly.homeSessions}</strong> home</span>`);
+    if (weekly.totalVolume) weekChips.push(`<span class="stat-chip"><strong>${weekly.totalVolume.toLocaleString()}</strong> lb vol</span>`);
+    if (profile?.sessionsPerWeek) weekChips.push(`<span class="stat-chip">${weekly.sessions || 0}/<strong>${profile.sessionsPerWeek}</strong> goal</span>`);
+  }
 
   // Modality tags
   const modTags = modalities.map(m => {
@@ -137,46 +110,66 @@ export function renderFitnessDashboard({ rootId, rootName, state, weekly, profil
       const vals = ex.values || {};
       const goals = ex.goals || {};
 
-      // Build display based on modality
-      let valDisplay = "";
-      if (mod === "gym" || mod === "weight-reps") {
-        const weight = vals.weight || 0;
-        const sets = Object.keys(vals).filter(k => k.startsWith("set")).sort().map(k => vals[k]).filter(v => v != null);
-        const goalSets = Object.keys(goals).filter(k => k.startsWith("set")).sort().map(k => goals[k]).filter(v => v != null);
-        valDisplay = `${weight}${profile?.weightUnit || "lb"} ${sets.join("/")}`;
-
-        const setsHtml = sets.map((s, i) => {
-          const g = goalSets[i] || 0;
-          const color = g && s >= g ? "rgba(72,187,120,0.3)" : "rgba(255,255,255,0.08)";
-          return `<span class="ex-set" style="background:${color}">${s}</span>`;
-        }).join("");
-
-        return `
-          <div class="exercise-row">
-            <span class="ex-name">${esc(ex.name)}</span>
-            <span class="ex-values">${weight}${profile?.weightUnit || "lb"}</span>
-            <div class="ex-sets">${setsHtml}</div>
-            <span class="ex-last">${vals.lastWorked ? timeAgo(new Date(vals.lastWorked)) : ""}</span>
-          </div>
-        `;
-      } else if (mod === "running") {
-        return `
-          <div class="exercise-row">
-            <span class="ex-name">${esc(ex.name)}</span>
-            <span class="ex-values">${JSON.stringify(vals).slice(0, 60)}</span>
-            <span class="ex-last">${vals.lastRun ? timeAgo(new Date(vals.lastRun)) : ""}</span>
-          </div>
-        `;
-      } else {
-        const sets = Object.keys(vals).filter(k => k.startsWith("set")).sort().map(k => vals[k]).filter(v => v != null);
-        return `
-          <div class="exercise-row">
-            <span class="ex-name">${esc(ex.name)}</span>
-            <span class="ex-values">${sets.length > 0 ? sets.join("/") : (vals.duration ? vals.duration + "s" : "")}</span>
-            <span class="ex-last">${vals.lastWorked ? timeAgo(new Date(vals.lastWorked)) : ""}</span>
-          </div>
-        `;
+      if (mod === "running") {
+        // Running exercises: show key stats as rows
+        const stats = [];
+        if (vals.weeklyMiles != null) stats.push(["Weekly miles", `${vals.weeklyMiles || 0}${goals.weeklyMilesGoal ? "/" + goals.weeklyMilesGoal : ""}`]);
+        if (vals.lastDistance) stats.push(["Last run", `${vals.lastDistance} mi`]);
+        if (vals.lastPace) {
+          const min = Math.floor(vals.lastPace / 60);
+          const sec = Math.round(vals.lastPace % 60);
+          stats.push(["Last pace", `${min}:${String(sec).padStart(2, "0")}/mi`]);
+        }
+        if (vals.runsThisWeek != null) stats.push(["Runs this week", vals.runsThisWeek]);
+        // PRs
+        if (ex.name === "PRs") {
+          for (const [k, v] of Object.entries(vals)) {
+            if (v && k !== "lastWorked") {
+              const min = Math.floor(v / 60);
+              const sec = Math.round(v % 60);
+              stats.push([k.toUpperCase(), `${min}:${String(sec).padStart(2, "0")}`]);
+            }
+          }
+        }
+        if (stats.length === 0) return `<div class="ex-row"><span class="ex-name">${esc(ex.name)}</span><span class="ex-last">no data</span></div>`;
+        return stats.map(([label, val]) =>
+          `<div class="running-stat"><span class="running-label">${label}</span><span class="running-val">${val}</span></div>`
+        ).join("");
       }
+
+      // Gym and home: sets with goal coloring
+      const weight = vals.weight || 0;
+      const setKeys = Object.keys(vals).filter(k => /^set\d+$/.test(k)).sort();
+      const goalKeys = Object.keys(goals).filter(k => /^set\d+$/.test(k)).sort();
+
+      const setsHtml = setKeys.map((k, i) => {
+        const v = vals[k];
+        const g = goalKeys[i] ? goals[goalKeys[i]] : null;
+        const bg = goalColor(v, g);
+        return `<span class="ex-set" style="background:${bg}">${v != null ? v : "-"}</span>`;
+      }).join("");
+
+      // Check progression
+      let allMet = setKeys.length > 0;
+      for (let i = 0; i < setKeys.length; i++) {
+        const g = goalKeys[i] ? goals[goalKeys[i]] : null;
+        if (g && (vals[setKeys[i]] == null || vals[setKeys[i]] < g)) { allMet = false; break; }
+      }
+
+      const lastStr = vals.lastWorked ? timeAgo(new Date(vals.lastWorked)) : "";
+
+      return `
+        <div class="ex-row">
+          <span class="ex-name">${esc(ex.name)}</span>
+          ${weight ? `<span class="ex-weight">${weight}${profile?.weightUnit || "lb"}</span>` : ""}
+          <div class="ex-sets">${setsHtml || '<span style="color:rgba(255,255,255,0.2);font-size:0.8rem">no sets</span>'}</div>
+          ${allMet && setKeys.length > 0 ? '<span class="ex-progression">ready</span>' : ""}
+          <div class="ex-meta">
+            <span class="ex-last">${lastStr}</span>
+            ${ex.historyCount ? `<span class="ex-sessions">${ex.historyCount} sessions</span>` : ""}
+          </div>
+        </div>
+      `;
     }).join("");
 
     groupsHtml += `
@@ -193,13 +186,17 @@ export function renderFitnessDashboard({ rootId, rootName, state, weekly, profil
 
   const body = `
     <div class="fit-layout">
-      ${userId ? `<a href="/api/v1/user/${userId}/apps?html${token ? "&token=" + esc(token) : ""}" style="display:inline-block;margin-bottom:12px;font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">← Apps</a>` : ""}
+      ${userId ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><a href="/api/v1/user/${userId}/apps?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">← Apps</a><a href="/api/v1/user/${userId}/llm?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM</a></div>` : ""}
       <h1 style="font-size: 1.5rem; color: #fff; margin-bottom: 0.2rem;">
         ${esc(rootName || "Fitness")} ${modTags}
       </h1>
-      ${weekHtml}
+      <div style="color: rgba(255,255,255,0.35); font-size: 0.85rem; margin-top: 4px;">${dateStr}</div>
+
+      ${weekChips.length > 0 ? `<div class="stat-row">${weekChips.join("")}</div>` : ""}
+
       <div class="section-title">Exercises</div>
       ${groupsHtml}
+
       ${commandsRefHtml([
         { cmd: "fitness <message>", desc: "Log any workout" },
         { cmd: "fitness workout", desc: "Start guided session" },
@@ -211,7 +208,7 @@ export function renderFitnessDashboard({ rootId, rootName, state, weekly, profil
   `;
 
   return page({
-    title: `${rootName || "Fitness"} Dashboard`,
+    title: `${rootName || "Fitness"} . ${dateStr}`,
     css: css + chatBarCss(),
     body: body + chatBarHtml({ placeholder: "Log a workout, say 'workout' to start, or ask about progress..." }),
     js: chatBarJs({ endpoint: `/api/v1/root/${rootId}/fitness`, token }),

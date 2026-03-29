@@ -316,6 +316,7 @@ const FitnessPage = () => {
               {emoji: "💪", name: "Fitness", desc: "Builds the body", href: null, color: "rgba(102,126,234,0.25)"},
               {emoji: "🌿", name: "Recovery", desc: "Heals the body", href: "/recovery", color: "rgba(236,201,75,0.15)"},
               {emoji: "📚", name: "Study", desc: "Builds the mind", href: "/study", color: "rgba(159,122,234,0.15)"},
+              {emoji: "📖", name: "KB", desc: "Builds the team", href: "/kb", color: "rgba(96,165,250,0.15)"},
             ].map(item => (
               <a key={item.name} href={item.href || "#"} style={{
                 background: item.color, borderRadius: 10, padding: "16px 20px", textAlign: "center",

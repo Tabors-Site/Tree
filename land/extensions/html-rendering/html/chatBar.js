@@ -191,9 +191,12 @@ export function commandsRefHtml(commands) {
 export function chatBarHtml({ placeholder = "Type a message..." } = {}) {
   return `
     <div class="chat-bar minimized" id="chatBar">
-      <div class="chat-bar-toggle" onclick="toggleChatBar()">
-        <span class="chat-bar-toggle-label">Chat</span>
-        <span class="chat-bar-toggle-icon">▲</span>
+      <div class="chat-bar-toggle">
+        <span class="chat-bar-toggle-label" onclick="toggleChatBar()">Chat</span>
+        <span style="display:flex;align-items:center;gap:10px;">
+          <span class="chat-bar-toggle-icon" onclick="clearChatBar()" title="Clear chat" style="cursor:pointer;font-size:0.75rem;color:rgba(255,255,255,0.3);">clear</span>
+          <span class="chat-bar-toggle-icon" onclick="toggleChatBar()" style="cursor:pointer;">▲</span>
+        </span>
       </div>
       <div class="chat-bar-messages" id="chatMessages"></div>
       <div class="chat-bar-input-row">
@@ -208,6 +211,11 @@ export function chatBarHtml({ placeholder = "Type a message..." } = {}) {
 export function chatBarJs({ endpoint, token }) {
   const tokenParam = token ? `&token=${encodeURIComponent(token)}` : "";
   return `
+    function clearChatBar() {
+      document.getElementById('chatMessages').innerHTML = '';
+      try { sessionStorage.removeItem('chatbar:' + window.location.pathname); } catch {}
+    }
+
     var _chatStorageKey = 'chatbar:' + window.location.pathname;
 
     function saveChatHistory() {
@@ -289,6 +297,13 @@ export function chatBarJs({ endpoint, token }) {
         if (data.status === 'ok' && data.data) {
           var answer = data.data.answer || data.data.synthesis || JSON.stringify(data.data);
           appendMessage('ai', answer);
+          saveChatHistory();
+          // Reload after delay to show updated dashboard data. Fade out to avoid CSS flash.
+          setTimeout(function() {
+            document.body.style.transition = 'opacity 0.2s';
+            document.body.style.opacity = '0';
+            setTimeout(function() { window.location.reload(); }, 200);
+          }, 1200);
         } else if (data.error) {
           appendMessage('error', data.error.message || 'Something went wrong.');
         } else {

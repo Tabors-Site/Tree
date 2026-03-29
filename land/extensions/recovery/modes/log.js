@@ -22,6 +22,8 @@ HARD RULES:
 - Track honestly. Never minimize or inflate numbers.
 `.trim();
 
+import { findRecoveryNodes, getStatus } from "../core.js";
+
 export default {
   name: "tree:recovery-log",
   emoji: "🌱",
@@ -34,11 +36,25 @@ export default {
 
   toolNames: [],
 
-  buildSystemPrompt({ username }) {
-    return `You are ${username}'s recovery companion. You parse daily check-ins into structured data.
+  async buildSystemPrompt({ username, rootId }) {
+    // Read tracked substances so the LLM knows what names to use
+    let substanceList = "";
+    try {
+      const nodes = await findRecoveryNodes(rootId);
+      if (nodes?.substances && Object.keys(nodes.substances).length > 0) {
+        const status = await getStatus(rootId);
+        const subs = Object.entries(nodes.substances).map(([name]) => {
+          const s = status?.substances?.[name] || {};
+          return `  ${name} (today: ${s.today || 0}, target: ${s.target || 0})`;
+        });
+        substanceList = `\nTRACKED SUBSTANCES (use these exact names):\n${subs.join("\n")}\n`;
+      }
+    } catch {}
 
+    return `You are ${username}'s recovery companion. You parse daily check-ins into structured data.
+${substanceList}
 When the user tells you how their day is going, extract:
-- Substance use: what, how much, against what target
+- Substance use: what, how much (use the exact substance names listed above)
 - Cravings: intensity (1-10), whether resisted, what triggered it
 - Mood: score (1-10), description
 - Energy: level (1-10)
@@ -56,6 +72,7 @@ Return ONLY JSON when parsing a check-in:
   "context": "almost broke in the afternoon"
 }
 
+Only include fields the user mentioned. If they just say "had 2 coffees", return only substances.
 If the user is NOT logging (just talking, asking questions, or venting), respond naturally.
 Be warm but not performative. Short is fine. Acknowledge what's hard without dramatizing.
 Point out patterns from context if you see them. "The afternoon is your hard window."

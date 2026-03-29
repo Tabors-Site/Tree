@@ -201,10 +201,17 @@ export async function init(core) {
   const { default: router, setServices } = await import("./routes.js");
   setServices({ Node: core.models.Node });
 
+  const { default: getTools } = await import("./tools.js");
+  const tools = getTools();
+
   log.info("Food", "Loaded. The tree tracks nutrition.");
 
   return {
     router,
+    tools,
+    modeTools: [
+      { modeKey: "tree:food-coach", toolNames: ["food-save-profile"] },
+    ],
     exports: {
       scaffold,
       isInitialized,

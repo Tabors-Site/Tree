@@ -26,6 +26,7 @@ import StudyPage from "./Landing/StudyPage.jsx";
 import FitnessPage from "./Landing/FitnessPage.jsx";
 import FoodPage from "./Landing/FoodPage.jsx";
 import RecoveryPage from "./Landing/RecoveryPage.jsx";
+import KbPage from "./Landing/KbPage.jsx";
 
 import ApiAccessSection from "./About/API.jsx";
 
@@ -69,6 +70,7 @@ const WelcomeRoutes = () => {
       <Route path="/fitness" element={<FitnessPage />} />
       <Route path="/food" element={<FoodPage />} />
       <Route path="/recovery" element={<RecoveryPage />} />
+      <Route path="/kb" element={<KbPage />} />
       <Route path="/horizon" element={<HorizonRedirect />} />
 
       {/* Original app welcome (treeos.ai example) */}

@@ -130,23 +130,21 @@ export function buildTreeosHtmlRoutes() {
       }).select("_id name metadata").lean();
       // Match by checking the extension metadata (fitness.initialized, food.initialized, etc.)
       // not just the tree name, to avoid false matches with user-created trees
-      // rootMap: name -> { id, ready } where ready means setup is complete
+      // rootMap: appKey -> [{ id, name, ready }] (array, supports multiple per type)
       const rootMap = new Map();
+      function addToMap(key, id, name, ready) {
+        if (!rootMap.has(key)) rootMap.set(key, []);
+        rootMap.get(key).push({ id, name, ready });
+      }
       for (const r of roots) {
         const meta = r.metadata instanceof Map ? Object.fromEntries(r.metadata) : (r.metadata || {});
         const id = String(r._id);
-        if (meta.fitness?.initialized && meta.fitness?.setupPhase === "complete") rootMap.set("Fitness", { id, ready: true });
-        else if (meta.fitness?.initialized) rootMap.set("Fitness", { id, ready: false });
-        else if (meta.food?.initialized && meta.food?.setupPhase === "complete") rootMap.set("Food", { id, ready: true });
-        else if (meta.food?.initialized) rootMap.set("Food", { id, ready: false });
-        else if (meta.recovery?.initialized && meta.recovery?.setupPhase === "complete") rootMap.set("Recovery", { id, ready: true });
-        else if (meta.recovery?.initialized) rootMap.set("Recovery", { id, ready: false });
-        else if (meta.study?.initialized && meta.study?.setupPhase === "complete") rootMap.set("Study", { id, ready: true });
-        else if (meta.study?.initialized) rootMap.set("Study", { id, ready: false });
-        // Bare tree with matching name but no extension metadata: show as incomplete
-        else if (["Fitness", "Food", "Recovery", "Study"].includes(r.name) && !rootMap.has(r.name)) {
-          rootMap.set(r.name, { id, ready: false });
-        }
+        const name = r.name;
+        if (meta.fitness?.initialized) addToMap("Fitness", id, name, meta.fitness.setupPhase === "complete");
+        else if (meta.food?.initialized) addToMap("Food", id, name, meta.food.setupPhase === "complete");
+        else if (meta.recovery?.initialized) addToMap("Recovery", id, name, meta.recovery.setupPhase === "complete");
+        else if (meta.study?.initialized) addToMap("Study", id, name, meta.study.setupPhase === "complete");
+        else if (meta.kb?.initialized) addToMap("KB", id, name, meta.kb.setupPhase === "complete");
       }
 
       const { renderAppsPage } = await import("./pages/appsPage.js");
@@ -174,21 +172,28 @@ export function buildTreeosHtmlRoutes() {
       const appDef = APPS.find(a => a.key === appKey);
       if (!appDef) return sendError(res, 400, ERR.INVALID_INPUT, "Unknown app");
 
-      // Check if tree already exists (exclude deleted)
-      const existing = await Node.findOne({
-        rootOwner: userId, name: appDef.treeName, parent: { $ne: DELETED },
-      }).select("_id").lean();
-      if (existing) {
-        // Tree exists (maybe from a failed setup). Redirect with startMsg so chat bar picks up.
-        const qs = req.body.token ? `?html&token=${req.body.token}` : "?html";
-        const msgParam = `&startMsg=${encodeURIComponent(message)}`;
-        return res.redirect(`/api/v1/root/${existing._id}/${appDef.dashboardPath}${qs}${msgParam}`);
+      // For single-instance apps, reuse existing tree if setup incomplete
+      // For multi-instance apps (KB), always create new
+      const multiInstance = appDef.key === "kb";
+      if (!multiInstance) {
+        const existing = await Node.findOne({
+          rootOwner: userId, parent: { $ne: DELETED },
+          [`metadata.${appDef.key}.initialized`]: true,
+          [`metadata.${appDef.key}.setupPhase`]: "base",
+        }).select("_id").lean();
+        if (existing) {
+          const qs = req.body.token ? `?html&token=${req.body.token}` : "?html";
+          const msgParam = `&startMsg=${encodeURIComponent(message)}`;
+          return res.redirect(`/api/v1/root/${existing._id}/${appDef.dashboardPath}${qs}${msgParam}`);
+        }
       }
 
-      // Create the tree root
+      // Use message as tree name for multi-instance apps, default name for single
+      const treeName = multiInstance ? (message.slice(0, 80) || appDef.treeName) : appDef.treeName;
+
       const { createNode } = await import("../../seed/tree/treeManagement.js");
       const rootNode = await createNode({
-        name: appDef.treeName,
+        name: treeName,
         isRoot: true,
         userId,
       });
