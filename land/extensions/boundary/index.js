@@ -48,6 +48,21 @@ export async function init(core) {
     }
   }, "boundary");
 
+  // ── afterNodeMove: branch membership changed, both trees stale ────────
+  core.hooks.register("afterNodeMove", async ({ nodeId, oldParentId }) => {
+    try {
+      const { resolveRootNode } = await import("../../seed/tree/treeFetch.js");
+      // New tree (resolves from the moved node's current position)
+      const newRoot = await resolveRootNode(nodeId);
+      if (newRoot?._id) markStale(newRoot._id.toString()).catch(() => {});
+      // Old tree (resolves from the old parent, which still lives there)
+      const oldRoot = await resolveRootNode(oldParentId);
+      if (oldRoot?._id && oldRoot._id.toString() !== newRoot?._id?.toString()) {
+        markStale(oldRoot._id.toString()).catch(() => {});
+      }
+    } catch {}
+  }, "boundary");
+
   // ── enrichContext: inject boundary findings ──────────────────────────
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
     const boundary = meta.boundary;

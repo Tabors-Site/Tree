@@ -472,6 +472,9 @@ export async function updateParentRelationship(
     invalidateAll();
   }
   releaseMultiple(lockIds, sessionId);
+
+  hooks.run("afterNodeMove", { nodeId: nodeChildId.toString(), oldParentId: oldParentId.toString(), newParentId: nodeNewParentId.toString(), userId }).catch(() => {});
+
   return { nodeChild, nodeNewParent };
 }
 export async function editNodeName({

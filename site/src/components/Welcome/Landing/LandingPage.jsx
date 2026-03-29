@@ -269,7 +269,7 @@ const LandingPage = () => {
               <p style={{fontSize: "0.85rem", color: "#888", marginBottom: 8}}>
                 Self-awareness. 14 extensions. The tree compresses knowledge, detects contradictions, profiles users,
                 tracks structural fitness, acts autonomously, searches semantically, explores branches, traces threads,
-                maps boundaries, tracks competence edges, notices conversational shifts, proposes new extensions, maps relationships.
+                maps boundaries, tracks competence edges, notices conversational shifts, proposes new extensions, remembers every age.
               </p>
               <code style={{fontSize: "0.75rem", color: "rgba(255,255,255,0.3)"}}>treeos ext install treeos-intelligence</code>
             </div>

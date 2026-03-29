@@ -99,7 +99,7 @@ Heartbeats exchange extension lists and health. Not user data. Cascade signals f
 
 ## Safety
 
-77 documented config keys + 28 internal tuning keys (advanced, safe defaults). 27 hooks. Six system nodes. And these protections:
+77 documented config keys + 28 internal tuning keys (advanced, safe defaults). 29 hooks. Six system nodes. And these protections:
 
 - Hook circuit breaker (5 failures disables handler)
 - Tool circuit breaker (5 failures disables tool per session)

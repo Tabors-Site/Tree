@@ -102,6 +102,24 @@ export async function init(core) {
       .catch(err => log.debug("Purpose", `Batch coherence check failed: ${err.message}`));
   }, "purpose");
 
+  // ── afterNodeMove: coherence scores are against the old tree's thesis ─
+  core.hooks.register("afterNodeMove", async ({ nodeId, oldParentId, newParentId }) => {
+    try {
+      const { resolveRootNode } = await import("../../seed/tree/treeFetch.js");
+      const oldRoot = await resolveRootNode(oldParentId);
+      const newRoot = await resolveRootNode(newParentId);
+      // Same tree move: no thesis change
+      if (oldRoot?._id?.toString() === newRoot?._id?.toString()) return;
+
+      // Cross-tree move: clear stale coherence scores on moved node's notes
+      const Note = core.models.Note;
+      await Note.updateMany(
+        { nodeId, "metadata.purpose.coherence": { $exists: true } },
+        { $unset: { "metadata.purpose.coherence": "", "metadata.purpose.reason": "" } },
+      );
+    } catch {}
+  }, "purpose");
+
   // ── enrichContext: surface coherence signals ────────────────────────
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
     // At tree root: show the thesis

@@ -185,7 +185,7 @@ const ExtensionsPage = () => {
                 where the tree's knowledge ends. Competence tracks which queries found answers and which found
                 silence. Reflect notices how the conversation is going and adjusts the AI's approach.
                 Evolve watches what users do that no extension handles and proposes new ones.
-                Rings maps relationships between nodes across the tree, surfacing hidden connections.
+                Rings takes temporal cross-sections and compresses them into character portraits. The tree remembers every age.
                 Intent is the capstone. It reads from every other intelligence extension and synthesizes
                 autonomous actions the tree takes on its own.
               </p>

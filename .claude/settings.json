@@ -519,7 +519,9 @@
       "Bash(echo \"✓ $bundle: HAS bridge field\")",
       "Bash(echo \"✗ $bundle: MISSING bridge field\")",
       "Bash(__NEW_LINE_ea0879761ecaa335__ echo:*)",
-      "Bash(ls -1d /home/tabor/github/Tree/land/extensions/*/)"
+      "Bash(ls -1d /home/tabor/github/Tree/land/extensions/*/)",
+      "Bash(/tmp/count_extensions.sh:*)",
+      "Bash(bash /tmp/count_extensions.sh)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

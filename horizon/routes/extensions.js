@@ -244,7 +244,7 @@ async function checkNameOwnership(name, landId, landDomain) {
 // Content limits
 // ---------------------------------------------------------------------------
 
-const MAX_DESCRIPTION_LENGTH = 500;
+const MAX_DESCRIPTION_LENGTH = 10000;
 const MAX_README_LENGTH = 100000; // 100KB
 const MAX_TAG_LENGTH = 30;
 const MAX_TAGS = 20;

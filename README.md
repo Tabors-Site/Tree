@@ -86,7 +86,7 @@ Example: a Health tree with fitness and food extensions. Each branch restricts t
 | Bundle | Count | What it is |
 |--------|-------|-----------|
 | **treeos-cascade** | 8 | The nervous system. Signals propagate, get filtered, compressed, monitored. |
-| **treeos-intelligence** | 14 | Self-awareness. The tree compresses, detects contradictions, profiles users, acts autonomously, searches, explores, traces, maps boundaries, tracks competence, notices conversational shifts, proposes new extensions, maps relationships. |
+| **treeos-intelligence** | 14 | Self-awareness. The tree compresses, detects contradictions, profiles users, acts autonomously, searches, explores, traces, maps boundaries, tracks competence, notices conversational shifts, proposes new extensions, remembers every age. |
 | **treeos-connect** | 8 | External channels. Telegram, Discord, Slack, email, SMS, webhooks, Matrix. |
 | **treeos-maintenance** | 5 | Hygiene. Prune dead branches, reorganize, changelog, daily digest, delegate stuck work. |
 

@@ -81,12 +81,12 @@ Everything in the kernel serves one of four primitives:
 |-----------|-----------|
 | **Structure** | Two schemas (Node, User). Nodes in hierarchies. Metadata Maps hold everything else. |
 | **Intelligence** | Conversation loop. LLM, tool, mode, position resolution. The AI thinks at every position. |
-| **Extensibility** | Loader, 27 hooks, five registries. Spatial scoping. Extensions add all capabilities. |
+| **Extensibility** | Loader, 29 hooks, five registries. Spatial scoping. Extensions add all capabilities. |
 | **Communication** | Cascade signals, .flow system node, visible results. Signals propagate and get recorded. |
 
 ## Extension ecosystem (95 extensions, 4 bundles)
 
-**Base TreeOS (20):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, approve, instructions.
+**Base TreeOS (20):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, breath, instructions.
 
 **treeos-cascade (8):** The nervous system. Signals propagate, get filtered, compressed, monitored.
 
@@ -96,7 +96,7 @@ Everything in the kernel serves one of four primitives:
 
 **treeos-maintenance (5):** Hygiene. Prune, reroot, changelog, daily digest, delegation.
 
-**Standalone (8):** persona, mycelium, peer-review, seed-export, channels, governance, teach, split.
+**Standalone (9):** persona, mycelium, peer-review, seed-export, channels, governance, teach, split, approve.
 
 ## Security
 

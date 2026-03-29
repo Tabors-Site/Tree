@@ -178,8 +178,8 @@ function register(hookName, handler, extName = "unknown") {
       "enrichContext", "onCascade", "onDocumentPressure",
       "beforeLLMCall", "afterLLMCall", "beforeToolCall", "afterToolCall",
       "beforeResponse", "beforeRegister", "afterRegister",
-      "afterSessionCreate", "afterSessionEnd", "afterNavigate",
-      "afterMetadataWrite", "afterScopeChange", "afterOwnershipChange", "afterBoot",
+      "afterSessionCreate", "afterSessionEnd", "afterNavigate", "onNodeNavigate",
+      "afterNodeMove", "afterMetadataWrite", "afterScopeChange", "afterOwnershipChange", "afterBoot",
       "onTreeTripped", "onTreeRevived",
     ];
     if (!hookName.includes(":")) {

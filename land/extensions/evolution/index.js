@@ -66,6 +66,17 @@ export async function init(core) {
     }
   }, "evolution");
 
+  // ── afterNodeMove: structural reorganization is an evolution signal ───
+  core.hooks.register("afterNodeMove", async ({ nodeId, oldParentId, newParentId }) => {
+    try {
+      await bumpMetric(nodeId, "timesMoved");
+      await bumpMetric(oldParentId, "childrenLost");
+      await bumpMetric(newParentId, "childrenGained");
+    } catch (err) {
+      log.debug("Evolution", "afterNodeMove metric bump failed:", err.message);
+    }
+  }, "evolution");
+
   // ── enrichContext: inject relevant patterns ─────────────────────────
   // When the user is at a node, inject patterns from the tree root
   // so the AI can recommend structure based on what actually works.

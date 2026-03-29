@@ -32,7 +32,7 @@ Everything else. Values, schedules, prestige, scripts, dreams, understanding, en
 land/
 ├── seed/              # Kernel: business logic, hooks, registries. ZERO extension imports.
 │   ├── protocol.js    # Response shapes, ERR codes, WS event types, CASCADE statuses
-│   ├── hooks.js       # 23 lifecycle hooks (see SEED.md for full list)
+│   ├── hooks.js       # 29 lifecycle hooks (see SEED.md for full list)
 │   ├── orchestratorRegistry.js  # Extensions register conversation orchestrators
 │   ├── services.js    # Core services bundle passed to extensions via init(core)
 │   ├── auth.js        # User creation, verification, JWT generation
@@ -87,7 +87,7 @@ land/
 │   ├── treeos-intelligence/ # Bundle: self-awareness (14)
 │   ├── treeos-maintenance/ # Bundle: hygiene (5)
 │   │
-│   │  # Standalone (8)
+│   │  # Standalone (9)
 │   ├── persona/            # AI identity per node
 │   ├── mycelium/           # Intelligent inter-land routing
 │   ├── peer-review/        # AI revision loop on notes
@@ -273,6 +273,8 @@ Two rules, no exceptions. Before hooks run sequential because they can cancel. A
 | afterBoot | after | Once after all extensions loaded, config initialized, server listening. |
 | onCascade | sequential | Fires on content write at cascade-enabled node. Results written to .flow. |
 | onDocumentPressure | after | Any document exceeds 80% of maxDocumentSizeBytes. { documentType, documentId, currentSize, projectedSize, maxSize, percent } |
+| onNodeNavigate | after | User navigates between nodes within a tree. { userId, rootId, nodeId, socket } |
+| afterNodeMove | after | Node reparented. All five resolution chains shift. { nodeId, oldParentId, newParentId, userId } |
 | onTreeTripped | after | Tree circuit breaker tripped. { rootId, reason, scores, timestamp } |
 | onTreeRevived | after | Tripped tree revived. { rootId, timestamp } |
 
@@ -344,7 +346,7 @@ INVALID_INPUT means garbage the kernel can't parse. Not "I understood your reque
 
 ## Extension Ecosystem (95 extensions, 4 bundles)
 
-**Base TreeOS (20):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, approve, instructions.
+**Base TreeOS (20):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, breath, instructions.
 
 **treeos-cascade (8):** propagation, perspective-filter, sealed-transport, codebook, gap-detection, long-memory, pulse, flow.
 
@@ -354,4 +356,4 @@ INVALID_INPUT means garbage the kernel can't parse. Not "I understood your reque
 
 **treeos-maintenance (5):** prune, reroot, changelog, digest, delegate.
 
-**Standalone (8):** persona, mycelium, peer-review, seed-export, channels, governance, teach, split.
+**Standalone (9):** persona, mycelium, peer-review, seed-export, channels, governance, teach, split, approve.

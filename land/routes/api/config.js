@@ -352,7 +352,8 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
 
     const dirData = await dirRes.json();
     if (!dirRes.ok) {
-      return sendError(res, dirRes.status, ERR.INTERNAL, dirData.error || "Registry publish failed");
+      const detail = dirData.details ? dirData.details.join("; ") : undefined;
+      return sendError(res, dirRes.status, ERR.INTERNAL, dirData.error || "Registry publish failed", detail);
     }
 
     sendOk(res, {

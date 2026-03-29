@@ -81,7 +81,7 @@ Everything in the kernel serves one of four primitives:
 |-----------|-----------|
 | **Structure** | Two schemas (Node, User). Nodes in hierarchies. Metadata Maps hold everything else. |
 | **Intelligence** | Conversation loop. LLM, tool, mode, position resolution. The AI thinks at every position. |
-| **Extensibility** | Loader, 27 hooks, five registries. Spatial scoping. Extensions add all capabilities. |
+| **Extensibility** | Loader, 29 hooks, five registries. Spatial scoping. Extensions add all capabilities. |
 | **Communication** | Cascade signals, .flow system node, visible results. Signals propagate and get recorded. |
 
 ## Extension ecosystem (95 extensions, 4 bundles)
@@ -90,7 +90,7 @@ Everything in the kernel serves one of four primitives:
 
 **treeos-cascade (8):** The nervous system. Signals propagate, get filtered, compressed, monitored.
 
-**treeos-intelligence (14):** Self-awareness. Compression, contradiction detection, user profiling, autonomous intent, semantic search, exploration, tracing, boundary mapping, competence tracking, conversational awareness, extension proposal, relationship mapping.
+**treeos-intelligence (14):** Self-awareness. Compression, contradiction detection, user profiling, autonomous intent, semantic search, exploration, tracing, boundary mapping, competence tracking, conversational awareness, extension proposal, temporal memory.
 
 **treeos-connect (8):** External channels. Telegram, Discord, Slack, email, SMS, webhooks, Matrix.
 
