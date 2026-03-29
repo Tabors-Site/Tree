@@ -7,9 +7,9 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { esc } from "../../html-rendering/html/utils.js";
 import { glassCardStyles, glassHeaderStyles, responsiveBase } from "../../html-rendering/html/baseStyles.js";
-import { chatBarCss, chatBarHtml, chatBarJs } from "../../html-rendering/html/chatBar.js";
+import { chatBarCss, chatBarHtml, chatBarJs, commandsRefHtml } from "../../html-rendering/html/chatBar.js";
 
-export function renderRecoveryDashboard({ rootId, rootName, status, milestones, token }) {
+export function renderRecoveryDashboard({ rootId, rootName, status, milestones, token, userId }) {
   const substances = status?.substances || {};
   const feelings = status?.feelings || {};
   const streaks = status?.streaks || {};
@@ -92,6 +92,7 @@ export function renderRecoveryDashboard({ rootId, rootName, status, milestones, 
 
   const body = `
     <div class="rec-layout">
+      ${userId ? `<a href="/api/v1/user/${userId}/apps?html${token ? "&token=" + esc(token) : ""}" style="display:inline-block;margin-bottom:12px;font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">← Apps</a>` : ""}
       <h1 style="font-size:1.5rem;color:#fff;margin-bottom:0.5rem">${esc(rootName || "Recovery")}</h1>
       ${streaksHtml ? `<div style="margin-bottom:1rem">${streaksHtml}</div>` : ""}
       <div class="rec-grid">
@@ -110,6 +111,12 @@ export function renderRecoveryDashboard({ rootId, rootName, status, milestones, 
           </div>
         </div>
       </div>
+      ${commandsRefHtml([
+        { cmd: "recovery <message>", desc: "Daily check-in" },
+        { cmd: "recovery reflect", desc: "Pattern analysis" },
+        { cmd: "recovery plan", desc: "Taper schedule" },
+        { cmd: "be", desc: "Check in now" },
+      ])}
     </div>`;
 
   return page({

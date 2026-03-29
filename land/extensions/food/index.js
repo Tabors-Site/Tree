@@ -195,18 +195,7 @@ export async function init(core) {
     }
   }, "food");
 
-  // ── Register HTML dashboard (if html-rendering installed) ──
-  try {
-    const { getExtension: getExt } = await import("../loader.js");
-    const htmlExt = getExt("html-rendering");
-    if (htmlExt) {
-      const { default: htmlRoutes } = await import("./htmlRoutes.js");
-      htmlExt.router.use("/", htmlRoutes);
-      log.verbose("Food", "HTML dashboard registered");
-    }
-  } catch (err) {
-    log.warn("Food", `HTML dashboard registration failed: ${err.message}`);
-  }
+  // HTML dashboard is now inline in routes.js (GET with ?html check)
 
   // ── Import router ──
   const { default: router, setServices } = await import("./routes.js");

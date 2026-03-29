@@ -829,6 +829,205 @@ export async function init(core) {
         </div>
       </section>
 
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 20. FOUR COMMANDS */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Four Commands</h2>
+          <P>
+            Commands are behavioral constraints applied above whatever mode fires. The orchestrator
+            (an extension) routes them. The kernel enforces one: query's read-only tool filtering.
+            The rest are orchestrator decisions.
+          </P>
+          <div style={{fontSize: "0.85rem"}}>
+            {[
+              ["chat", "tools: all, response: full, writes: allowed", "You steer. The AI responds to what you say."],
+              ["place", "tools: all, response: minimal, writes: allowed", "You steer. The AI stores and confirms. No commentary."],
+              ["query", "tools: read-only, response: full, writes: blocked", "You ask. The AI looks but can't touch. Kernel-enforced."],
+              ["be", "tools: all, response: guided, writes: allowed", "The tree steers. The AI reads the structure, finds what needs doing, guides you through."],
+            ].map(([cmd, constraint, desc]) => (
+              <div key={cmd} style={{padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.04)"}}>
+                <div style={{display: "flex", gap: 12, alignItems: "baseline", marginBottom: 4}}>
+                  <code style={{color: "#4ade80", fontWeight: 700}}>{cmd}</code>
+                  <span style={{color: "rgba(255,255,255,0.3)", fontSize: "0.8rem", fontFamily: "monospace"}}>{constraint}</span>
+                </div>
+                <span style={{color: "rgba(255,255,255,0.5)"}}>{desc}</span>
+              </div>
+            ))}
+          </div>
+          <P style={{marginTop: 16}}>
+            Extensions declare a <code>guidedMode</code> in their manifest. When <code>be</code> activates
+            at a position owned by that extension, the orchestrator switches to the extension's guided mode
+            instead of the default tree walker. The kernel doesn't know <code>be</code> exists. The
+            orchestrator routes it.
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 21. THE TREE-AS-APP PATTERN */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">The Tree-as-App Pattern</h2>
+          <P>
+            The tree structure IS the application. Not the database for the application. The application
+            itself. The seed provides structure, intelligence, extensibility, and communication. Extensions
+            use these four primitives to build applications where the data model is the node hierarchy,
+            the AI reads the hierarchy to know what to do, and cascade signals route data between nodes
+            without the extension touching another extension's code.
+          </P>
+          <P>
+            A food tree has a Log node where you talk, macro nodes that count protein, carbs, and fats,
+            a Meals subtree that tracks patterns by slot, and a History node that archives daily summaries.
+            A fitness tree has muscle group nodes, exercise nodes with values tracking sets and weight,
+            a program node holding the schedule. You say what you ate. One LLM call parses it. Cascade
+            routes the macros. The values update atomically. You say what you lifted. Same pattern.
+          </P>
+          <P>
+            Neither extension knows the other exists. But a channel between them carries data both ways.
+            The fitness AI sees today's calories. The food AI sees today's workout. The tree connected
+            them. Not the code. The structure.
+          </P>
+          <P>
+            Every domain-specific application becomes a tree topology with signals flowing through it.
+            The tree is not storing data for an app. The tree IS the app. The seed makes this possible
+            because it provides the four primitives without knowing what they'll be used for.
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 22. THREE TEMPORAL LAYERS */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Three Temporal Layers</h2>
+          <P>
+            The tree exists in time. Three extensions operate at different frequencies. Stack all three
+            and you get the tree's complete waveform. Each is built entirely on the seed's primitives.
+            The kernel has no concept of time beyond injection into prompts. These extensions add temporal
+            awareness through hooks, metadata, and jobs.
+          </P>
+          <div style={{fontSize: "0.9rem"}}>
+            {[
+              ["Phase", "seconds to minutes", "#4ade80",
+                "Detects awareness vs attention in conversation. The AI adjusts its approach. Uses afterLLMCall and afterToolCall hooks to detect patterns in real time. In-memory only. Resets on restart. The highest frequency."],
+              ["Breath", "minutes to hours", "#60a5fa",
+                "Activity-driven metabolism. afterNote, afterNodeCreate, afterToolCall increment counters. When the cycle completes, breath:exhale fires. Extensions listen to exhale instead of running their own timers. Fast when active. Slow when quiet. Stops when dormant. The middle frequency."],
+              ["Rings", "months to years", "#c084fc",
+                "Activity-cycle driven, not calendar-driven. Growth when activity rises. Peak when it stabilizes. Hardening when it slows and the AI synthesizes a character portrait. Dormancy when the ring solidifies. Each ring records who the tree was during that period. Annual compression absorbs completed rings. The lowest frequency. The tree remembers every age."],
+            ].map(([name, scale, color, desc]) => (
+              <div key={name} style={{padding: "16px 0", borderBottom: "1px solid rgba(255,255,255,0.05)"}}>
+                <div style={{display: "flex", gap: 12, alignItems: "baseline", marginBottom: 6}}>
+                  <span style={{color, fontWeight: 700, fontSize: "1rem"}}>{name}</span>
+                  <span style={{color: "rgba(255,255,255,0.3)", fontSize: "0.8rem"}}>{scale}</span>
+                </div>
+                <p style={{color: "rgba(255,255,255,0.5)", margin: 0, lineHeight: 1.7}}>{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 23. THREE COMMUNICATION LAYERS */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Three Communication Layers</h2>
+          <P>
+            The seed provides one communication primitive: onCascade. These three layers emerge from
+            extensions using that primitive at different scales. The kernel fires the hook. Extensions
+            build the network.
+          </P>
+          <div style={{fontSize: "0.9rem"}}>
+            {[
+              [".flow", "The water table", "#4ade80",
+                "Local to one land. Ambient. Cascade results pool in daily partition nodes. Trees pull what they need through perspective filters. No intelligence. No routing. The kernel writes results here. Extensions read them. The land's groundwater."],
+              ["Canopy", "Trees reaching out", "#60a5fa",
+                "Direct land-to-land peering. Ed25519 signed requests. Heartbeat every 5 minutes. Intentional. You choose who to peer with. deliverCascade sends signals across lands. The remote kernel accepts them (never block inbound), fires onCascade, writes to .flow. The metadata Map preserves all extension data across transit."],
+              ["Mycelium", "The intelligent underground", "#c084fc",
+                "An extension any land installs to become a routing node. Reads signal metadata, evaluates what each connected land needs, delivers where the signal would be useful. Confined scope. Opt-in. The most connected node knows the most about the network. Loop prevention via land ID array. Hop limit at 3. The forest's nervous system between roots."],
+            ].map(([name, label, color, desc]) => (
+              <div key={name} style={{padding: "16px 0", borderBottom: "1px solid rgba(255,255,255,0.05)"}}>
+                <div style={{display: "flex", gap: 12, alignItems: "baseline", marginBottom: 6}}>
+                  <span style={{color, fontWeight: 700, fontSize: "1rem"}}>{name}</span>
+                  <span style={{color: "rgba(255,255,255,0.35)", fontSize: "0.85rem"}}>{label}</span>
+                </div>
+                <p style={{color: "rgba(255,255,255,0.5)", margin: 0, lineHeight: 1.7}}>{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 24. THE PACKAGE HIERARCHY */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">The Package Hierarchy</h2>
+          <P>
+            Three package types on Horizon. All use the same publishing pipeline, versioning,
+            and ownership system. A <code>type</code> field in the manifest distinguishes them.
+          </P>
+          <div style={{fontSize: "0.9rem"}}>
+            {[
+              ["Extension", "One folder. One manifest. One init. Does one thing. The atom."],
+              ["Bundle", "A curated set of extensions that form a coherent stack. Declares includes[]. No code of its own. The molecule."],
+              ["OS", "A full distribution. Bundles + standalone extensions + config defaults + orchestrator assignments. The organism."],
+            ].map(([name, desc]) => (
+              <div key={name} style={{
+                display: "flex", gap: 12, padding: "10px 0",
+                borderBottom: "1px solid rgba(255,255,255,0.04)",
+              }}>
+                <span style={{color: "#4ade80", minWidth: 90, fontWeight: 600, fontSize: "0.85rem"}}>{name}</span>
+                <span style={{color: "rgba(255,255,255,0.5)"}}>{desc}</span>
+              </div>
+            ))}
+          </div>
+          <P style={{marginTop: 16}}>
+            <code>treeos ext publish my-ext -r</code> resolves the full dependency graph from manifests
+            on disk, checks Horizon for what's already published, and publishes bottom-up.
+            <code> treeos os install TreeOS</code> installs the entire distribution. The operator
+            decides what to keep. Code lives on your land. Publish to Horizon when ready. Collaboration
+            happens on GitHub or wherever your repo lives.
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 25. WHAT THE SEED ENABLES */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">What the Seed Enables</h2>
+          <P>
+            The kernel does not know about fitness, food, wallets, blogs, scripts, energy budgets,
+            dream cycles, or gateway channels. It does not render HTML pages. It does not meter usage.
+            It does not schedule recurring tasks. It does not propagate signals between nodes.
+            It does not filter content. It does not compress context.
+          </P>
+          <P>
+            It provides structure, intelligence, extensibility, and communication.
+            Extensions provide meaning. The kernel is 12 fields on a node, 7 fields on a user,
+            a conversation loop, 29 hooks, 5 registries, a cascade engine, and a response protocol.
+            Everything else is an extension someone built.
+          </P>
+          <P>
+            An operating system is just extensions that agree on conventions. A bundle is just extensions
+            that depend on each other. The seed doesn't know what an OS is. It grows whatever you plant.
+            The same seed that runs a fitness tracker runs a research community. The same seed that runs
+            a personal journal runs a federated network of lands sharing cascade signals through mycelium.
+          </P>
+          <P>
+            This is the architecture. The seed is small so the tree can be anything.
+          </P>
+        </div>
+      </section>
+
       {/* ── LINKS ── */}
       <section className="lp-section lp-section-alt" style={{paddingTop: 40, paddingBottom: 40}}>
         <div className="lp-container" style={{textAlign: "center"}}>
@@ -840,6 +1039,7 @@ export async function init(core) {
             <a className="lp-btn lp-btn-secondary" href="/flow">The Flow</a>
             <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
             <a className="lp-btn lp-btn-secondary" href="/network">The Network</a>
+            <a className="lp-btn lp-btn-secondary" href="/treeos">TreeOS</a>
             <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>
             <a className="lp-btn lp-btn-secondary" href="https://github.com/taborgreat/TreeOS">GitHub</a>
           </div>

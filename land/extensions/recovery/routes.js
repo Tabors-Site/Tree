@@ -40,7 +40,7 @@ router.get("/root/:rootId/recovery", async (req, res, next) => {
         [status, milestones] = await Promise.all([getStatus(rootId), getMilestones(rootId)]);
       }
       const { renderRecoveryDashboard } = await import("./pages/dashboard.js");
-      res.send(renderRecoveryDashboard({ rootId, rootName: root.name, status, milestones, token: req.query.token || null }));
+      res.send(renderRecoveryDashboard({ rootId, rootName: root.name, status, milestones, token: req.query.token || null, userId: req.userId }));
     });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, "Dashboard failed");

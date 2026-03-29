@@ -8,7 +8,7 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { esc, timeAgo } from "../../html-rendering/html/utils.js";
 import { baseStyles, glassCardStyles, glassHeaderStyles, responsiveBase } from "../../html-rendering/html/baseStyles.js";
-import { chatBarCss, chatBarHtml, chatBarJs } from "../../html-rendering/html/chatBar.js";
+import { chatBarCss, chatBarHtml, chatBarJs, commandsRefHtml } from "../../html-rendering/html/chatBar.js";
 
 function masteryColor(pct) {
   if (pct >= 80) return "#48bb78";
@@ -24,7 +24,7 @@ function masteryLabel(pct) {
   return "not started";
 }
 
-export function renderStudyDashboard({ rootId, rootName, queue, activeTopics, gaps, progress, profile, qs, token }) {
+export function renderStudyDashboard({ rootId, rootName, queue, activeTopics, gaps, progress, profile, qs, token, userId }) {
   const streakDays = progress?.streak?.days || 0;
   const dailyGoal = profile?.dailyStudyMinutes || 0;
   const completedCount = progress?.completed?.allTime || 0;
@@ -185,6 +185,7 @@ export function renderStudyDashboard({ rootId, rootName, queue, activeTopics, ga
 
   const body = `
     <div class="container" style="max-width: 1200px; margin: 0 auto; padding: 1.5rem;">
+      ${userId ? `<a href="/api/v1/user/${userId}/apps?html${token ? "&token=" + esc(token) : ""}" style="display:inline-block;margin-bottom:12px;font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">← Apps</a>` : ""}
       <h1 style="font-size: 1.5rem; color: #fff; margin-bottom: 0.2rem;">${esc(rootName || "Study")}</h1>
 
       <div class="stat-row">
@@ -224,6 +225,13 @@ export function renderStudyDashboard({ rootId, rootName, queue, activeTopics, ga
           </div>
         </div>
       </div>
+      ${commandsRefHtml([
+        { cmd: "needlearn <topic>", desc: "Add to study queue" },
+        { cmd: "study", desc: "Start or continue studying" },
+        { cmd: "study progress", desc: "Review mastery and gaps" },
+        { cmd: "study plan", desc: "Build or modify curriculum" },
+        { cmd: "be", desc: "AI picks next lesson and teaches" },
+      ])}
     </div>
   `;
 

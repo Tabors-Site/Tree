@@ -698,20 +698,22 @@ router.get("/chat", authenticateLite, async (req, res) => {
     </div>
 
     <div class="tree-picker" id="treePicker">
+
+      <!-- Apps: the recommended way to start -->
+      <div style="text-align:center;margin-bottom:24px;">
+        <a href="#" onclick="window.location='/api/v1/user/'+CONFIG.userId+'/apps?html';return false;"
+           style="display:inline-block;padding:14px 32px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);border-radius:12px;color:#10b981;font-size:1rem;font-weight:600;text-decoration:none;transition:all 0.2s;">
+          Start with Apps
+        </a>
+        <p style="color:rgba(255,255,255,0.4);font-size:0.8rem;margin-top:8px;">
+          Fitness, Food, Recovery, Study. Guided setup. Recommended.
+        </p>
+      </div>
+
       ${
-        trees.length === 0
-          ? `<div class="empty-state">
-              <span class="empty-icon">🌱</span>
-              <h2>Plant your first tree</h2>
-              <p>A tree starts with a single root, a broad topic that everything else branches out from. Think big categories like <strong>My Life</strong>, <strong>Career</strong>, or <strong>Health</strong>.</p>
-              <p style="margin-top:8px;">Name it, and you can start chatting with it right away.</p>
-              <form class="create-tree-form" style="margin-top:16px;" onsubmit="createTree(event)">
-                <input type="text" id="newTreeNameEmpty" placeholder="e.g. My Life" autocomplete="off" />
-                <button type="submit" title="Create tree">+</button>
-              </form>
-            </div>`
-          : `<h2 class="tree-picker-title">Your Trees</h2>
-            <p class="tree-picker-sub">Pick a tree to start chatting</p>
+        trees.length > 0
+          ? `<h2 class="tree-picker-title">Your Trees</h2>
+            <p class="tree-picker-sub">Pick a tree to continue</p>
             <div class="tree-list" id="treeList">
               ${trees
                 .map(
@@ -723,16 +725,17 @@ router.get("/chat", authenticateLite, async (req, res) => {
                 )
                 .join("")}
             </div>`
-      }
-      ${
-        trees.length > 0
-          ? `
-      <form class="create-tree-form" id="createTreeForm" onsubmit="createTree(event)">
-        <input type="text" id="newTreeName" placeholder="New tree name..." autocomplete="off" />
-        <button type="submit" title="Create tree">+</button>
-      </form>`
           : ""
       }
+
+      <!-- Custom tree: below the fold -->
+      <div style="margin-top:${trees.length > 0 ? "24px" : "16px"};padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);">
+        <p style="color:rgba(255,255,255,0.3);font-size:0.75rem;margin-bottom:8px;">Custom tree (advanced)</p>
+        <form class="create-tree-form" id="createTreeForm" onsubmit="createTree(event)">
+          <input type="text" id="newTreeName" placeholder="Tree name..." autocomplete="off" />
+          <button type="submit" title="Create tree">+</button>
+        </form>
+      </div>
     </div>
 
     <div class="chat-area empty" id="chatArea">

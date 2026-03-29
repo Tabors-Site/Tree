@@ -158,18 +158,7 @@ export async function init(core) {
     }
   }, "fitness");
 
-  // ── Register HTML dashboard (if html-rendering installed) ──
-  try {
-    const { getExtension } = await import("../loader.js");
-    const htmlExt = getExtension("html-rendering");
-    if (htmlExt) {
-      const { default: htmlRoutes } = await import("./htmlRoutes.js");
-      htmlExt.router.use("/", htmlRoutes);
-      log.verbose("Fitness", "HTML dashboard registered");
-    }
-  } catch (err) {
-    log.warn("Fitness", `HTML dashboard registration failed: ${err.message}`);
-  }
+  // HTML dashboard is now inline in routes.js (GET with ?html check)
 
   // ── Register tool navigation (if treeos-base installed) ──
   try {

@@ -130,16 +130,22 @@ export function buildTreeosHtmlRoutes() {
       }).select("_id name metadata").lean();
       // Match by checking the extension metadata (fitness.initialized, food.initialized, etc.)
       // not just the tree name, to avoid false matches with user-created trees
+      // rootMap: name -> { id, ready } where ready means setup is complete
       const rootMap = new Map();
       for (const r of roots) {
         const meta = r.metadata instanceof Map ? Object.fromEntries(r.metadata) : (r.metadata || {});
-        if (meta.fitness?.initialized) rootMap.set("Fitness", String(r._id));
-        else if (meta.food?.initialized) rootMap.set("Food", String(r._id));
-        else if (meta.recovery?.initialized) rootMap.set("Recovery", String(r._id));
-        else if (meta.study?.initialized) rootMap.set("Study", String(r._id));
-        // Also match by exact name as fallback
+        const id = String(r._id);
+        if (meta.fitness?.initialized && meta.fitness?.setupPhase === "complete") rootMap.set("Fitness", { id, ready: true });
+        else if (meta.fitness?.initialized) rootMap.set("Fitness", { id, ready: false });
+        else if (meta.food?.initialized && meta.food?.setupPhase === "complete") rootMap.set("Food", { id, ready: true });
+        else if (meta.food?.initialized) rootMap.set("Food", { id, ready: false });
+        else if (meta.recovery?.initialized && meta.recovery?.setupPhase === "complete") rootMap.set("Recovery", { id, ready: true });
+        else if (meta.recovery?.initialized) rootMap.set("Recovery", { id, ready: false });
+        else if (meta.study?.initialized && meta.study?.setupPhase === "complete") rootMap.set("Study", { id, ready: true });
+        else if (meta.study?.initialized) rootMap.set("Study", { id, ready: false });
+        // Bare tree with matching name but no extension metadata: show as incomplete
         else if (["Fitness", "Food", "Recovery", "Study"].includes(r.name) && !rootMap.has(r.name)) {
-          rootMap.set(r.name, String(r._id));
+          rootMap.set(r.name, { id, ready: false });
         }
       }
 
@@ -168,11 +174,15 @@ export function buildTreeosHtmlRoutes() {
       const appDef = APPS.find(a => a.key === appKey);
       if (!appDef) return sendError(res, 400, ERR.INVALID_INPUT, "Unknown app");
 
-      // Check if tree already exists
-      const existing = await Node.findOne({ rootOwner: userId, name: appDef.treeName }).select("_id").lean();
+      // Check if tree already exists (exclude deleted)
+      const existing = await Node.findOne({
+        rootOwner: userId, name: appDef.treeName, parent: { $ne: DELETED },
+      }).select("_id").lean();
       if (existing) {
+        // Tree exists (maybe from a failed setup). Redirect with startMsg so chat bar picks up.
         const qs = req.body.token ? `?html&token=${req.body.token}` : "?html";
-        return res.redirect(`/api/v1/root/${existing._id}/${appDef.dashboardPath}${qs}`);
+        const msgParam = `&startMsg=${encodeURIComponent(message)}`;
+        return res.redirect(`/api/v1/root/${existing._id}/${appDef.dashboardPath}${qs}${msgParam}`);
       }
 
       // Create the tree root

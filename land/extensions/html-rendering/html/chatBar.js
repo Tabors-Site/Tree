@@ -126,6 +126,44 @@ export function chatBarCss() {
     .chat-bar-send:hover { background: rgba(102, 126, 234, 0.3); }
     .chat-bar-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    .cmd-ref {
+      margin-top: 24px;
+      margin-bottom: 80px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding-top: 12px;
+    }
+    .cmd-ref summary {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.3);
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+    }
+    .cmd-ref summary::-webkit-details-marker { display: none; }
+    .cmd-ref summary::before { content: "▸ "; }
+    .cmd-ref[open] summary::before { content: "▾ "; }
+    .cmd-ref-list {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .cmd-ref-item {
+      display: flex;
+      gap: 12px;
+      font-size: 0.8rem;
+      padding: 3px 0;
+    }
+    .cmd-ref-cmd {
+      font-family: monospace;
+      color: rgba(255,255,255,0.5);
+      min-width: 140px;
+      flex-shrink: 0;
+    }
+    .cmd-ref-desc { color: rgba(255,255,255,0.3); }
+
     @keyframes dotPulse {
       0%, 80%, 100% { opacity: 0.3; }
       40% { opacity: 1; }
@@ -136,6 +174,18 @@ export function chatBarCss() {
     .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
     .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
   `;
+}
+
+/**
+ * Render a collapsible commands reference section.
+ * @param {Array<{cmd: string, desc: string}>} commands
+ */
+export function commandsRefHtml(commands) {
+  if (!commands || commands.length === 0) return "";
+  const items = commands.map(c =>
+    `<div class="cmd-ref-item"><span class="cmd-ref-cmd">${c.cmd}</span><span class="cmd-ref-desc">${c.desc}</span></div>`
+  ).join("");
+  return `<details class="cmd-ref"><summary>Commands</summary><div class="cmd-ref-list">${items}</div></details>`;
 }
 
 export function chatBarHtml({ placeholder = "Type a message..." } = {}) {

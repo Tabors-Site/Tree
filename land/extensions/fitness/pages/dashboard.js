@@ -8,7 +8,7 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { esc, timeAgo } from "../../html-rendering/html/utils.js";
 import { glassCardStyles, glassHeaderStyles, responsiveBase } from "../../html-rendering/html/baseStyles.js";
-import { chatBarCss, chatBarHtml, chatBarJs } from "../../html-rendering/html/chatBar.js";
+import { chatBarCss, chatBarHtml, chatBarJs, commandsRefHtml } from "../../html-rendering/html/chatBar.js";
 
 function progressColor(current, goal) {
   if (!goal) return "#718096";
@@ -18,7 +18,7 @@ function progressColor(current, goal) {
   return "#718096";
 }
 
-export function renderFitnessDashboard({ rootId, rootName, state, weekly, profile, token }) {
+export function renderFitnessDashboard({ rootId, rootName, state, weekly, profile, token, userId }) {
   const modalities = state?.modalities || [];
   const groups = state?.groups || {};
 
@@ -193,12 +193,20 @@ export function renderFitnessDashboard({ rootId, rootName, state, weekly, profil
 
   const body = `
     <div class="fit-layout">
+      ${userId ? `<a href="/api/v1/user/${userId}/apps?html${token ? "&token=" + esc(token) : ""}" style="display:inline-block;margin-bottom:12px;font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">← Apps</a>` : ""}
       <h1 style="font-size: 1.5rem; color: #fff; margin-bottom: 0.2rem;">
         ${esc(rootName || "Fitness")} ${modTags}
       </h1>
       ${weekHtml}
       <div class="section-title">Exercises</div>
       ${groupsHtml}
+      ${commandsRefHtml([
+        { cmd: "fitness <message>", desc: "Log any workout" },
+        { cmd: "fitness workout", desc: "Start guided session" },
+        { cmd: "fitness progress", desc: "Review your progress" },
+        { cmd: "fitness plan", desc: "Build or modify program" },
+        { cmd: "be", desc: "Coach walks you through today" },
+      ])}
     </div>
   `;
 

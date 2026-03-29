@@ -7,7 +7,7 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { esc, timeAgo } from "../../html-rendering/html/utils.js";
 import { glassCardStyles, glassHeaderStyles, responsiveBase } from "../../html-rendering/html/baseStyles.js";
-import { chatBarCss, chatBarHtml, chatBarJs } from "../../html-rendering/html/chatBar.js";
+import { chatBarCss, chatBarHtml, chatBarJs, commandsRefHtml } from "../../html-rendering/html/chatBar.js";
 
 function pctColor(pct) {
   if (pct >= 90) return "#48bb78";
@@ -30,7 +30,7 @@ function macroBar(label, today, goal, color) {
   `;
 }
 
-export function renderFoodDashboard({ rootId, rootName, picture, token }) {
+export function renderFoodDashboard({ rootId, rootName, picture, token, userId }) {
   const p = picture || {};
   const protein = p.protein || {};
   const carbs = p.carbs || {};
@@ -94,6 +94,7 @@ export function renderFoodDashboard({ rootId, rootName, picture, token }) {
 
   const body = `
     <div class="food-layout">
+      ${userId ? `<a href="/api/v1/user/${userId}/apps?html${token ? "&token=" + esc(token) : ""}" style="display:inline-block;margin-bottom:12px;font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">← Apps</a>` : ""}
       <h1 style="font-size: 1.5rem; color: #fff; margin-bottom: 0;">${esc(rootName || "Food")}</h1>
       ${profile.goal ? `<p style="color: rgba(255,255,255,0.4); font-size: 0.85rem; margin-top: 4px;">${esc(profile.goal)}</p>` : ""}
 
@@ -129,6 +130,12 @@ export function renderFoodDashboard({ rootId, rootName, picture, token }) {
           `).join("") : '<div class="empty-state">No history yet.</div>'}
         </div>
       </div>
+      ${commandsRefHtml([
+        { cmd: "food <message>", desc: "Log what you ate" },
+        { cmd: "food daily", desc: "Today's macro summary" },
+        { cmd: "food week", desc: "Weekly averages" },
+        { cmd: "be", desc: "Start logging meals" },
+      ])}
     </div>
   `;
 
