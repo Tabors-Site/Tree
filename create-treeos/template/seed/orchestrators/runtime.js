@@ -13,13 +13,13 @@ const JWT_SECRET = process.env.JWT_SECRET;
 import {
   switchMode, processMessage, setRootId, getClientForUser,
   resolveRootLlmForMode, clearSession, LLM_PRIORITY,
-} from "../ws/conversation.js";
+} from "../llm/conversation.js";
 
 export { LLM_PRIORITY };
 import {
   trackChainStep, startChat, finalizeChat,
   setChatContext, clearChatContext,
-} from "../ws/chatTracker.js";
+} from "../llm/chatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../ws/mcp.js";
 import {
   createSession, endSession, getSession, setSessionAbort, clearSessionAbort,

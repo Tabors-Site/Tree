@@ -21,6 +21,7 @@ export function renderRootOverview({
   token,
   deferredItems,
   ownerConnections,
+  allRootSlots = [],
 }) {
   const deferredHtml = deferredItems && deferredItems.length > 0
     ? `<ul class="deferred-list">${deferredItems.map((d) => `<li class="deferred-item"><div class="deferred-content">${escapeHtml(d.content || d.text || JSON.stringify(d.data || ""))}</div><div class="deferred-meta" style="font-size:11px;opacity:0.6;margin-top:4px;">${d.status || "pending"}${d.createdAt ? " . " + new Date(d.createdAt).toLocaleDateString() : ""}</div></li>`).join("")}</ul>`
@@ -264,13 +265,9 @@ onsubmit="return confirm('Transfer ownership to ${escapeHtml(u.username)}?')"
     const ownerProfile = rootMeta.rootOwner;
     const llmSlots = [
       { key: "default", label: "Default", isDefault: true },
-      { key: "placement", label: "Placement" },
-      { key: "understanding", label: "Understanding" },
-      { key: "respond", label: "Respond" },
-      { key: "notes", label: "Notes" },
-      { key: "cleanup", label: "Cleanup" },
-      { key: "drain", label: "Drain" },
-      { key: "notification", label: "Notification" },
+      ...allRootSlots
+        .filter(s => s !== "default")
+        .map(s => ({ key: s, label: s.charAt(0).toUpperCase() + s.slice(1) })),
     ];
 
     function buildSlotHtml(slot) {

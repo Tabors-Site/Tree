@@ -35,7 +35,7 @@ treeos start
 
 ```
 seed/           The kernel. Six models, a conversation loop, hooks, cascade, extension loader.
-extensions/     92 extensions. All optional. The kernel boots without any of them.
+extensions/     95 extensions. All optional. The kernel boots without any of them.
 routes/         HTTP API endpoints.
 orchestrators/  Pipeline runtime for multi-step AI operations.
 canopy/         Federation protocol. How lands find and talk to each other.
@@ -50,7 +50,7 @@ startup.js      Boot sequence. Indexes, config, migrations, extensions, jobs.
 |---------|-----------|-----------|-----|
 | Minimal | 8 | Zero when idle | Builders, testing, low-power |
 | Standard | 50+ | Moderate | Personal use, small teams |
-| Full | 91 | Heavy | Production, public lands |
+| Full | 95 | Heavy | Production, public lands |
 
 Change profiles anytime:
 

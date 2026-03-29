@@ -56,7 +56,7 @@ land/
 │   ├── contribution.js # Audit trail
 │   ├── chat.js        # AI conversation sessions
 │   └── llmConnection.js # LLM endpoint storage
-├── extensions/        # 92 extensions. ALL optional functionality lives here.
+├── extensions/        # 95 extensions. ALL optional functionality lives here.
 │   ├── _template/     # Scaffold for new extensions
 │   ├── loader.js      # Scans manifests, validates deps, wires routes/tools/modes/hooks/jobs
 │   ├── EXTENSION_FORMAT.md  # Full extension developer documentation
@@ -81,10 +81,10 @@ land/
 │   ├── phase/              # Cognitive state detection (awareness/attention)
 │   ├── remember/           # Memorial for pruned/split/retired nodes
 │   │
-│   │  # Four bundles (34 extensions)
+│   │  # Four bundles (35 extensions)
 │   ├── treeos-cascade/     # Bundle: nervous system (8)
 │   ├── treeos-connect/     # Bundle: rain layer (8)
-│   ├── treeos-intelligence/ # Bundle: self-awareness (13)
+│   ├── treeos-intelligence/ # Bundle: self-awareness (14)
 │   ├── treeos-maintenance/ # Bundle: hygiene (5)
 │   │
 │   │  # Standalone (8)
@@ -342,13 +342,13 @@ INVALID_INPUT means garbage the kernel can't parse. Not "I understood your reque
 
 **Confined scope for dangerous extensions.** Shell, solana, scripts declare `scope: "confined"`. Inactive everywhere by default. `ext-allow` at specific positions.
 
-## Extension Ecosystem (92 extensions, 4 bundles)
+## Extension Ecosystem (95 extensions, 4 bundles)
 
 **Base TreeOS (20):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, approve, instructions.
 
 **treeos-cascade (8):** propagation, perspective-filter, sealed-transport, codebook, gap-detection, long-memory, pulse, flow.
 
-**treeos-intelligence (13):** tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, competence, reflect, evolve.
+**treeos-intelligence (14):** tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, competence, reflect, evolve, rings.
 
 **treeos-connect (8):** gateway, gateway-telegram, gateway-discord, gateway-webhook, gateway-email, gateway-sms, gateway-slack, gateway-matrix.
 

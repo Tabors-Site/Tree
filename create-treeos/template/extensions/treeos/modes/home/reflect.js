@@ -1,4 +1,4 @@
-// ws/modes/home/reflect.js
+// extensions/treeos/modes/home/reflect.js
 // Read-only review across all trees. See the forest from above.
 
 import { getLandConfigValue } from "../../../../seed/landConfig.js";

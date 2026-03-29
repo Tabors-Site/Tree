@@ -13,7 +13,7 @@ import {
   resetConversation,
   getClientForUser,
   resolveRootLlmForMode,
-} from "../../seed/ws/conversation.js";
+} from "../../seed/llm/conversation.js";
 import { classify, translateDestructive } from "./translator.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
 
@@ -145,7 +145,7 @@ function extractBehavioral(sourceType) {
   if (sourceType === "place") return "place";
   return "chat"; // default
 }
-import { setChatContext } from "../../seed/ws/chatTracker.js";
+import { setChatContext } from "../../seed/llm/chatTracker.js";
 import { isActiveNavigator } from "../../seed/ws/sessionRegistry.js";
 
 import {
@@ -156,7 +156,7 @@ import {
 import mongoose from "mongoose";
 import Node from "../../seed/models/node.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
-import { resolveMode } from "../../seed/ws/modes/registry.js";
+import { resolveMode } from "../../seed/modes/registry.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // INTELLIGENCE BRIEF (cached per tree, 60s TTL)

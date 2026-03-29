@@ -459,11 +459,14 @@ export function buildTreeosHtmlRoutes() {
         ownerConnections = await getConnectionsForUser(rootMeta.rootOwner._id.toString());
       }
 
+      const { getAllRootLlmSlots } = await import("../../seed/llm/connections.js");
+      const allRootSlots = getAllRootLlmSlots();
+
       return res.send(renderRootOverview({
         allData, rootMeta, ancestors: allData.ancestors || [],
         isOwner, isDeleted, isRoot, isPublicAccess, queryAvailable,
         currentUserId, queryString, nodeId, userId: req.userId,
-        token, deferredItems, ownerConnections,
+        token, deferredItems, ownerConnections, allRootSlots,
       }));
     } catch (err) {
       log.error("HTML", "Root overview render error:", err.message);

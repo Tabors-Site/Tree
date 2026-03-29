@@ -366,17 +366,180 @@ Examples:
 
   ext
     .command("publish [name...]")
-    .description("Publish a local extension to the registry. --notes 'what changed'")
+    .description("Publish a local extension to the registry. --recursive publishes all deps first.")
     .option("--notes <text>", "Release notes for this version")
+    .option("-r, --recursive", "Publish all dependencies bottom-up before the target")
+    .option("--dry-run", "Show the publish plan without publishing")
+    .option("-y, --yes", "Skip confirmation prompt for recursive publish")
     .action(async (parts, opts) => {
-      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext publish <name> [--notes 'what changed']"));
+      if (!parts || !parts.length) return console.log(chalk.yellow("Usage: ext publish <name> [--recursive] [--dry-run] [--notes 'what changed']"));
       const name = parts.join("-");
       try {
         const api = getApi(requireAuth());
-        console.log(chalk.dim(`Publishing ${name} to registry...`));
-        const data = await api.publishExtension(name, { releaseNotes: opts.notes || "" });
-        console.log(chalk.green(`Published: ${data.name} v${data.version}`));
-        if (opts.notes) console.log(chalk.dim(`Release notes: ${opts.notes}`));
+
+        if (!opts.recursive) {
+          console.log(chalk.dim(`Publishing ${name} to registry...`));
+          const data = await api.publishExtension(name, { releaseNotes: opts.notes || "" });
+          console.log(chalk.green(`Published: ${data.name} v${data.version}`));
+          if (opts.notes) console.log(chalk.dim(`Release notes: ${opts.notes}`));
+          return;
+        }
+
+        // Recursive publish: resolve graph, check Horizon, publish bottom-up
+        console.log(chalk.dim(`Resolving dependency graph for ${name}...`));
+
+        // Build the full dependency graph from local manifests
+        const graph = new Map(); // name -> { name, version, type, deps[] }
+        const resolving = new Set();
+
+        async function resolveGraph(extName) {
+          const cleanName = extName.split("@")[0];
+          if (graph.has(cleanName)) return;
+          if (resolving.has(cleanName)) {
+            throw new Error(`Circular dependency detected: ${cleanName}`);
+          }
+          resolving.add(cleanName);
+
+          let extData;
+          try {
+            extData = await api.getExtension(cleanName);
+          } catch {
+            throw new Error(`Extension "${cleanName}" not found on this land.`);
+          }
+
+          const m = extData.manifest || {};
+          const type = m.type || "extension";
+          const version = m.version || "0.0.0";
+          const deps = [];
+
+          if (type === "os") {
+            // OS: resolve bundles and standalone
+            for (const b of (m.bundles || [])) deps.push(b.split("@")[0]);
+            for (const s of (m.standalone || [])) deps.push(s.split("@")[0]);
+          } else {
+            // Extension or bundle: needs.extensions
+            for (const d of (m.needs?.extensions || [])) deps.push(d.split("@")[0]);
+          }
+
+          graph.set(cleanName, { name: cleanName, version, type, deps });
+
+          // Recurse into deps
+          for (const dep of deps) {
+            await resolveGraph(dep);
+          }
+          resolving.delete(cleanName);
+        }
+
+        await resolveGraph(name);
+
+        // Topological sort (Kahn's algorithm)
+        const inDegree = new Map();
+        for (const [n] of graph) inDegree.set(n, 0);
+        for (const [, node] of graph) {
+          for (const dep of node.deps) {
+            if (inDegree.has(dep)) inDegree.set(dep, inDegree.get(dep) + 1);
+          }
+        }
+        // Note: inDegree counts how many things depend on this node.
+        // We want to publish things that nothing depends on LAST (the root).
+        // So we want reverse topo order: publish leaves first.
+        // Kahn's: start with nodes that have no deps (in the graph).
+        const depCount = new Map();
+        for (const [n, node] of graph) depCount.set(n, node.deps.filter((d) => graph.has(d)).length);
+        const queue = [];
+        for (const [n, c] of depCount) { if (c === 0) queue.push(n); }
+        const order = [];
+        while (queue.length) {
+          const curr = queue.shift();
+          order.push(curr);
+          for (const [n, node] of graph) {
+            if (node.deps.includes(curr) && graph.has(n)) {
+              depCount.set(n, depCount.get(n) - 1);
+              if (depCount.get(n) === 0) queue.push(n);
+            }
+          }
+        }
+        if (order.length !== graph.size) {
+          throw new Error("Circular dependency detected in graph.");
+        }
+
+        // Check Horizon for already-published versions
+        console.log(chalk.dim(`Checking Horizon for published versions...`));
+        const published = new Map();
+        await Promise.all(order.map(async (n) => {
+          const versions = await api.getHorizonVersions(n);
+          published.set(n, new Set(versions));
+        }));
+
+        // Build the plan
+        const plan = order.map((n) => {
+          const node = graph.get(n);
+          const alreadyPublished = published.get(n)?.has(node.version);
+          return { ...node, alreadyPublished };
+        });
+
+        const toPublish = plan.filter((p) => !p.alreadyPublished);
+        const skipped = plan.filter((p) => p.alreadyPublished);
+
+        // Print plan
+        console.log(chalk.bold(`\nPublish plan for ${name} (recursive):\n`));
+        const maxName = Math.max(...plan.map((p) => p.name.length));
+        for (const p of plan) {
+          const tag = p.type !== "extension" ? ` (${p.type})` : "";
+          const status = p.alreadyPublished
+            ? chalk.dim("SKIP (published)")
+            : chalk.cyan("PUBLISH");
+          console.log(`  ${p.name.padEnd(maxName + 2)} v${p.version}  ${status}${tag}`);
+        }
+        console.log(
+          `\n  ${toPublish.length} to publish, ${skipped.length} already on Horizon\n`,
+        );
+
+        if (opts.dryRun) return;
+
+        if (toPublish.length === 0) {
+          console.log(chalk.green("Everything is already published."));
+          return;
+        }
+
+        // Confirm before publishing
+        if (!opts.yes) {
+          const readline = require("readline");
+          const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+          const answer = await new Promise((resolve) => rl.question(chalk.yellow(`Publish ${toPublish.length} packages? [y/N] `), resolve));
+          rl.close();
+          if (answer.trim().toLowerCase() !== "y") {
+            console.log(chalk.dim("Cancelled."));
+            return;
+          }
+        }
+
+        // Publish bottom-up
+        let succeeded = 0;
+        for (const p of toPublish) {
+          try {
+            console.log(chalk.dim(`Publishing ${p.name} v${p.version}...`));
+            const notes = p.name === name ? (opts.notes || "") : "";
+            const data = await api.publishExtension(p.name, { releaseNotes: notes });
+            console.log(chalk.green(`  Published: ${data.name} v${data.version}`));
+            succeeded++;
+          } catch (err) {
+            // 409 means version already exists, treat as success
+            if (err.message && err.message.includes("already published")) {
+              console.log(chalk.dim(`  ${p.name} v${p.version} already published, skipping.`));
+              succeeded++;
+              continue;
+            }
+            console.error(chalk.red(`  Failed: ${p.name} v${p.version}.`), err.message);
+            const remaining = toPublish.length - succeeded - 1;
+            if (remaining > 0) {
+              console.log(chalk.yellow(`\n  Published ${succeeded}/${toPublish.length}. ${remaining} remaining. Fix the issue and re-run.`));
+            }
+            return;
+          }
+        }
+
+        console.log(chalk.green(`\nPublished ${succeeded}/${toPublish.length} packages.`));
       } catch (err) {
         console.error(chalk.red("Error:"), err.message);
       }

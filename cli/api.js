@@ -176,6 +176,19 @@ class TreeAPI {
   uninstallExtension(name) { return this.post(`/land/extensions/${encodeURIComponent(name)}/uninstall`); }
   publishExtension(name, opts = {}) { return this.post(`/land/extensions/${encodeURIComponent(name)}/publish`, opts); }
 
+  async getHorizonVersions(name) {
+    const horizonUrl = await this._getHorizonUrl();
+    try {
+      const data = await coreFetch(
+        `${horizonUrl}/extensions/${encodeURIComponent(name)}`,
+        { headers: { "Content-Type": "application/json" } },
+      );
+      return (data.versions || []).map((v) => v.version);
+    } catch {
+      return [];
+    }
+  }
+
   async installExtension(name, version) {
     const horizonUrl = await this._getHorizonUrl();
     const data = await coreFetch(

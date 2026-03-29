@@ -507,7 +507,19 @@
       "Bash(grep -n \"resolveTreeAccess\" /home/tabor/github/Tree/create-treeos/template/seed/ws/*.js)",
       "Bash(grep -rn resolveTreeAccess /home/tabor/github/Tree/create-treeos/template/seed/ --include=*.js)",
       "Bash(npm info:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(__NEW_LINE_6dfe0150df4b70a5__ echo:*)",
+      "Bash(test -d /home/tabor/github/Tree/land/extensions/$ext)",
+      "Bash(echo \"✓ $ext\")",
+      "Bash(echo \"✗ MISSING: $ext\")",
+      "Bash(__NEW_LINE_e7ec8e51b69539dc__ echo:*)",
+      "Bash(__NEW_LINE_641cbf4e26fc3311__ echo:*)",
+      "Bash(__NEW_LINE_d24f87a7099ab8d0__ echo:*)",
+      "Bash(if grep:*)",
+      "Bash(echo \"✓ $bundle: HAS bridge field\")",
+      "Bash(echo \"✗ $bundle: MISSING bridge field\")",
+      "Bash(__NEW_LINE_ea0879761ecaa335__ echo:*)",
+      "Bash(ls -1d /home/tabor/github/Tree/land/extensions/*/)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

@@ -11,7 +11,7 @@ import { getOrchestrator } from "../../seed/orchestrators/registry.js";
 import {
   userHasLlm,
   LLM_PRIORITY,
-} from "../../seed/ws/conversation.js";
+} from "../../seed/llm/conversation.js";
 import { enqueue, getQueueDepth } from "../../seed/ws/requestQueue.js";
 import {
   setSessionAbort,

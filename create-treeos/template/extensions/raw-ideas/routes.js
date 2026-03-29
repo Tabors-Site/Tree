@@ -11,7 +11,7 @@ import multer from "multer";
 import authenticate from "../../seed/middleware/authenticate.js";
 import preUploadCheck from "../../seed/middleware/preUploadCheck.js";
 import { getLandUrl } from "../../canopy/identity.js";
-import { userHasLlm } from "../../seed/ws/conversation.js";
+import { userHasLlm } from "../../seed/llm/conversation.js";
 import { orchestrateRawIdeaPlacement } from "./pipeline.js";
 import RawIdea from "./model.js";
 import User from "../../seed/models/user.js";

@@ -1,4 +1,4 @@
-// ws/modes/rawIdea/chooseRoot.js
+// extensions/raw-ideas/modes/chooseRoot.js
 // LLM reasoning mode: given a raw idea and the user's trees, pick the best-fit root.
 // Pure reasoning — no tools. All context is injected into the system prompt.
 

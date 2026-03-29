@@ -9,7 +9,7 @@ import {
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
 import { getNotes } from "../../seed/tree/notes.js";
-import { userHasLlm } from "../../seed/ws/conversation.js";
+import { userHasLlm } from "../../seed/llm/conversation.js";
 import { orchestrateUnderstanding } from "./pipeline.js";
 import { getSessionsForUser, endSession, SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
 import { renderUnderstandingRun, renderUnderstandingNode, renderUnderstandingsList, renderRunNodeView, buildRunCards, buildRunNodeInputsHtml } from "./html.js";

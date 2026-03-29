@@ -8,7 +8,7 @@ import RawIdea from "./model.js";
 import Chat from "../../seed/models/chat.js";
 import { orchestrateRawIdeaPlacement } from "./pipeline.js";
 import { isUserOnline } from "../../seed/ws/websocket.js";
-import { userHasLlm } from "../../seed/ws/conversation.js";
+import { userHasLlm } from "../../seed/llm/conversation.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG

@@ -6,7 +6,7 @@
 
 import log from "./log.js";
 import { hooks as hooksModule } from "./hooks.js";
-import { registerMode, setDefaultMode, setNodeMode } from "./ws/modes/registry.js";
+import { registerMode, setDefaultMode, setNodeMode } from "./modes/registry.js";
 import { registerOrchestrator, getOrchestrator } from "./orchestrators/registry.js";
 import User from "./models/user.js";
 import Node from "./models/node.js";
@@ -30,16 +30,17 @@ import {
   startChat, finalizeChat, trackChainStep,
   ensureSession as ensureChatSession,
   setChatContext, getChatContext, clearChatContext,
-} from "./ws/chatTracker.js";
+} from "./llm/chatTracker.js";
 
 import {
   getClientForUser, resolveRootLlmForMode, userHasLlm,
-  processMessage, switchMode, setRootId, getRootId, runChat, runPipeline,
+  processMessage, switchMode, setRootId, getRootId, runChat,
   setCurrentNodeId, getCurrentNodeId, getCurrentMode,
   clearSession as clearConversationSession,
   resetConversation, injectContext, registerModeAssignment, registerModeTimeout, registerModeRetries,
   LLM_PRIORITY,
-} from "./ws/conversation.js";
+} from "./llm/conversation.js";
+import { runPipeline } from "./orchestrators/pipeline.js";
 
 import { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } from "./ws/mcp.js";
 import { registerRootLlmSlot, registerUserLlmSlot } from "./llm/connections.js";

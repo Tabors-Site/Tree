@@ -18,7 +18,7 @@ import log from "../log.js";
 import User from "../models/user.js";
 import LlmConnection from "../models/llmConnection.js";
 import Node from "../models/node.js";
-import { clearUserClientCache } from "../ws/conversation.js";
+import { clearUserClientCache } from "./conversation.js";
 import crypto from "crypto";
 import { getLandConfigValue } from "../landConfig.js";
 import dns from "dns/promises";
@@ -233,6 +233,8 @@ export function registerUserLlmSlot(slot) {
 function isValidUserSlot(slot) {
   return typeof slot === "string" && (CORE_USER_SLOTS.has(slot) || _extUserSlots.has(slot));
 }
+
+export function getAllUserLlmSlots() { return [...CORE_USER_SLOTS, ..._extUserSlots]; }
 
 // Core tree slots. Extensions register additional via registerRootLlmSlot().
 // Only "default" is kernel. Extensions register their own slots during init.

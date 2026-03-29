@@ -13,8 +13,8 @@ export async function init(core) {
   // Some models generate tool calls with underscores (navigate_tree) instead
   // of hyphens (navigate-tree), or with slight misspellings. This hook finds
   // the closest matching registered tool name before it reaches MCP.
-  const { resolveTools } = await import("../../seed/ws/tools.js");
-  const { getToolsForMode } = await import("../../seed/ws/modes/registry.js");
+  const { resolveTools } = await import("../../seed/tools.js");
+  const { getToolsForMode } = await import("../../seed/modes/registry.js");
 
   core.hooks.register("beforeToolCall", async (data) => {
     if (!data.toolName) return;

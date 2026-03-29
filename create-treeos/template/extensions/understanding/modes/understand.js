@@ -1,4 +1,4 @@
-// ws/modes/tree/understanding.js
+// extensions/understanding/modes/understand.js
 export default {
   name: "tree:understand",
   emoji: "🧠",

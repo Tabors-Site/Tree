@@ -807,6 +807,18 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
       });
     }
 
+    // Maintainer validation: all listed domains must be registered lands
+    if (maintainers && Array.isArray(maintainers) && maintainers.length > 0) {
+      const registeredLands = await Land.find({ domain: { $in: maintainers } }).select("domain").lean();
+      const registeredDomains = new Set(registeredLands.map((l) => l.domain));
+      const unregistered = maintainers.filter((m) => !registeredDomains.has(m));
+      if (unregistered.length > 0) {
+        return res.status(400).json({
+          error: `Maintainer domains not found in directory: ${unregistered.join(", ")}. Only registered lands can be maintainers.`,
+        });
+      }
+    }
+
     // Per-land package cap: prevent one land from flooding the directory
     const landPackageCount = await Extension.distinct("name", { authorLandId: req.landId });
     if (!existingAny && landPackageCount.length >= MAX_PACKAGES_PER_LAND) {

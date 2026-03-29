@@ -1,4 +1,4 @@
-// ws/modes/tree/librarian.js
+// extensions/treeos/modes/tree/librarian.js
 // The Librarian. The glue between the user and the tree.
 //
 // For queries: walks the tree, gathers context, returns JSON with findings.

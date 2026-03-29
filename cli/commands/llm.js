@@ -49,6 +49,7 @@ module.exports = (program) => {
       if (!action) {
         console.log(chalk.bold("LLM Management\n"));
         console.log("  " + chalk.cyan("llms") + chalk.dim("                    List your connections"));
+        console.log("  " + chalk.cyan("llm open") + chalk.dim("                Open LLM page in browser"));
         console.log("  " + chalk.cyan("llm add") + chalk.dim("                 Add (interactive, or use flags)"));
         console.log("  " + chalk.cyan("llm edit <id>") + chalk.dim("           Edit a connection (use flags)"));
         console.log("  " + chalk.cyan("llm remove <id>") + chalk.dim("         Remove a connection"));
@@ -65,6 +66,23 @@ module.exports = (program) => {
 
       const cfg = requireAuth();
       const api = getApi(cfg);
+
+      if (action === "open") {
+        const landUrl = (cfg.landUrl || "http://localhost:3000").replace(/\/+$/, "");
+        const token = cfg.shareToken || "";
+        const qs = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
+        let url;
+        if (cfg.activeRootId) {
+          url = `${landUrl}/api/v1/root/${cfg.activeRootId}${qs}`;
+        } else {
+          url = `${landUrl}/api/v1/user/${cfg.userId}/llm${qs}`;
+        }
+        console.log(chalk.dim(`Opening: ${url}`));
+        const { exec } = require("child_process");
+        const cmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+        exec(`${cmd} "${url}"`);
+        return;
+      }
 
       if (action === "add") {
         // Non-interactive if all flags provided

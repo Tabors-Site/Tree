@@ -51,7 +51,7 @@ Notes are the base content unit. A note can be plain text or any file type (imag
 
 ## Extensions
 
-91 extensions across four bundles. The kernel handles nodes, notes, auth, and AI conversation. Everything else is an extension.
+95 extensions across four bundles. The kernel handles nodes, notes, auth, and AI conversation. Everything else is an extension.
 
 > **WARNING:** Extensions run in the same Node.js process as the kernel. They can access the filesystem, network, and database. Review all third-party extension code before installing. The kernel is safe. Extensions are as safe as the code they contain.
 
@@ -86,11 +86,11 @@ Example: a Health tree with fitness and food extensions. Each branch restricts t
 | Bundle | Count | What it is |
 |--------|-------|-----------|
 | **treeos-cascade** | 8 | The nervous system. Signals propagate, get filtered, compressed, monitored. |
-| **treeos-intelligence** | 13 | Self-awareness. The tree compresses, detects contradictions, profiles users, acts autonomously, searches, explores, traces, maps boundaries, tracks competence, notices conversational shifts, proposes new extensions. |
+| **treeos-intelligence** | 14 | Self-awareness. The tree compresses, detects contradictions, profiles users, acts autonomously, searches, explores, traces, maps boundaries, tracks competence, notices conversational shifts, proposes new extensions, maps relationships. |
 | **treeos-connect** | 8 | External channels. Telegram, Discord, Slack, email, SMS, webhooks, Matrix. |
 | **treeos-maintenance** | 5 | Hygiene. Prune dead branches, reorganize, changelog, daily digest, delegate stuck work. |
 
-Plus 18 base extensions (ship with every land), 8 standalone, and domain-specific extensions for fitness, food, solana, billing, and more.
+Plus 20 base extensions (ship with every land), 8 standalone, and domain-specific extensions for fitness, food, solana, billing, and more.
 
 ### Building an extension
 
@@ -188,7 +188,7 @@ treeos search "fitness"
 ```
 land/
   seed/           The kernel. Two schemas, conversation loop, hooks, cascade.
-  extensions/     91 extensions across four bundles plus standalone.
+  extensions/     95 extensions across four bundles plus standalone.
   canopy/         Federation. Peering, proxy, events, identity.
   routes/         HTTP API endpoints.
   orchestrators/  Pipeline runtime, locks, helpers.

@@ -48,8 +48,8 @@ const LandingPage = () => {
               <h3 style={{color: "#a78bfa"}}>Extensions</h3>
               <p style={{flex: 1}}>
                 Twenty base extensions ship with every land. Four bundles add depth:
-                Cascade (8, the nervous system). Intelligence (13, self-awareness).
-                Connect (8, external channels). Maintenance (5, hygiene). 92 extensions total.
+                Cascade (8, the nervous system). Intelligence (14, self-awareness).
+                Connect (8, external channels). Maintenance (5, hygiene). 95 extensions total.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
                 <a href="/extensions" style={{color: "#a78bfa", fontSize: "0.9rem", fontWeight: 600, textDecoration: "none", borderBottom: "1px solid rgba(167, 139, 250, 0.3)", paddingBottom: 2}}>How extensions work</a>
@@ -267,9 +267,9 @@ const LandingPage = () => {
             <div className="lp-card" style={{borderLeft: "3px solid rgba(56, 189, 248, 0.5)"}}>
               <h3 style={{color: "#38bdf8", fontSize: "1rem"}}>treeos-intelligence</h3>
               <p style={{fontSize: "0.85rem", color: "#888", marginBottom: 8}}>
-                Self-awareness. 13 extensions. The tree compresses knowledge, detects contradictions, profiles users,
+                Self-awareness. 14 extensions. The tree compresses knowledge, detects contradictions, profiles users,
                 tracks structural fitness, acts autonomously, searches semantically, explores branches, traces threads,
-                maps boundaries, tracks competence edges, notices conversational shifts, proposes new extensions.
+                maps boundaries, tracks competence edges, notices conversational shifts, proposes new extensions, maps relationships.
               </p>
               <code style={{fontSize: "0.75rem", color: "rgba(255,255,255,0.3)"}}>treeos ext install treeos-intelligence</code>
             </div>

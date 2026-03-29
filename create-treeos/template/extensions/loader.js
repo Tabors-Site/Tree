@@ -7,7 +7,7 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
 import { buildCoreServices } from "../seed/services.js";
-import { setExtensionToolResolver, registerMode, setModeRegistrationHook } from "../seed/ws/modes/registry.js";
+import { setExtensionToolResolver, registerMode, setModeRegistrationHook } from "../seed/modes/registry.js";
 import { hooks } from "../seed/hooks.js";
 import { registerOrchestrator, allowOrchestratorExtension } from "../seed/orchestrators/registry.js";
 import { registerModeOwner, registerToolOwner, getToolOwner, getModeOwner } from "../seed/tree/extensionScope.js";
@@ -833,7 +833,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Wire MCP tools and register in tool resolver
       if (instance.tools && mcpServer) {
-        const { registerToolDef } = await import("../seed/ws/tools.js");
+        const { registerToolDef } = await import("../seed/tools.js");
         const { zodToJsonSchema } = await import("zod-to-json-schema");
         const { z } = await import("zod");
 
@@ -1250,11 +1250,11 @@ export async function uninstallExtension(name) {
         mcpServerInstance.removeToolsByOwner(name, getToolOwner);
       }
       // Remove from tool definition registry
-      const { unregisterToolsForExtension } = await import("../seed/ws/tools.js");
+      const { unregisterToolsForExtension } = await import("../seed/tools.js");
       unregisterToolsForExtension(name, getToolOwner);
     } catch {}
     try {
-      const { unregisterModes } = await import("../seed/ws/modes/registry.js");
+      const { unregisterModes } = await import("../seed/modes/registry.js");
       unregisterModes(name);
     } catch {}
     try {

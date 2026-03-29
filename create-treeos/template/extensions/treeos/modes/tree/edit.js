@@ -1,4 +1,4 @@
-// ws/modes/tree/edit.js
+// extensions/treeos/modes/tree/edit.js
 export default {
   name: "tree:edit",
   emoji: "✏️",

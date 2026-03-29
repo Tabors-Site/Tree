@@ -13,7 +13,7 @@ export default {
     "Set it and forget it. Inherits down the tree.",
 
   needs: {
-    services: ["hooks"],
+    services: ["hooks", "tree"],
   },
 
   provides: {

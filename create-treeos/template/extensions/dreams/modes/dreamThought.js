@@ -1,4 +1,4 @@
-// ws/modes/tree/dreamThought.js
+// extensions/dreams/modes/dreamThought.js
 // Tool-less mode for generating a personalized thought/reminder from a tree dream.
 // Based on the dream's AI chat log, produces an actionable suggestion for the user.
 

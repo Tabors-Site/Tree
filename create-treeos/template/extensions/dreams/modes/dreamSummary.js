@@ -1,4 +1,4 @@
-// ws/modes/tree/dreamSummary.js
+// extensions/dreams/modes/dreamSummary.js
 // Tool-less mode for generating a plain English summary of a tree dream.
 // Receives the Chat log from cleanup + drain phases and produces a notification.
 

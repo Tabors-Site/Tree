@@ -19,7 +19,7 @@ Everything in the seed serves one of four primitives. Everything else is emergen
 | Primitive | What it is | Key files |
 |-----------|-----------|-----------|
 | **Structure** | Six models. Node and User carry extensible metadata Maps. Note, Contribution, Chat, LlmConnection are fixed. | models/*.js |
-| **Intelligence** | Conversation loop, LLM/tool/mode/position resolution, time and position injection | ws/conversation.js, ws/modes/registry.js, ws/mcp.js |
+| **Intelligence** | Conversation loop, LLM/tool/mode/position resolution, time and position injection | llm/conversation.js, modes/registry.js, ws/mcp.js |
 | **Extensibility** | Extension loader, open hook system, pub/sub, spatial scoping, five registries | hooks.js, extensions/loader.js, tree/extensionScope.js |
 | **Communication** | Cascade signals, .flow system node, visible results, response protocol | tree/cascade.js, protocol.js |
 
@@ -84,8 +84,8 @@ Same pattern. Extensions register. The kernel resolves. Failure falls back to th
 | Registry | What it registers | Infrastructure file |
 |----------|-------------------|---------------------|
 | **Hooks** | Lifecycle event handlers | hooks.js |
-| **Modes** | AI conversation modes | ws/modes/registry.js |
-| **Orchestrators** | Conversation flow replacements | orchestratorRegistry.js |
+| **Modes** | AI conversation modes | modes/registry.js |
+| **Orchestrators** | Conversation flow replacements | orchestrators/registry.js |
 | **Socket handlers** | WebSocket event handlers | ws/websocket.js |
 | **Auth strategies** | Authentication methods | middleware/authenticate.js |
 

@@ -13,7 +13,7 @@ import { orchestrateExpand } from "./cleanupExpand.js";
 import { drainTree } from "./shortTermDrain.js";
 import { getExtension } from "../loader.js";
 import { orchestrateDreamNotify } from "./dreamNotify.js";
-import { userHasLlm } from "../../seed/ws/conversation.js";
+import { userHasLlm } from "../../seed/llm/conversation.js";
 import { acquireLock, releaseLock } from "../../seed/orchestrators/locks.js";
 let _metadata = null;
 export function setMetadata(metadata) { _metadata = metadata; }

@@ -20,7 +20,7 @@ export default {
     "prestige. The tree carries more meaning in less space.",
 
   needs: {
-    services: ["llm", "hooks"],
+    services: ["llm", "hooks", "tree"],
     models: ["Node"],
   },
 

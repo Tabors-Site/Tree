@@ -1,4 +1,4 @@
-// ws/modes/tree/getContext.js
+// extensions/treeos/modes/tree/getContext.js
 export default {
   name: "tree:get-context",
   emoji: "📖",

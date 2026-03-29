@@ -50,7 +50,7 @@ export function onListen() {
     // Apply land config to kernel settings
     try {
       const { getLandConfigValue } = await import("./seed/landConfig.js");
-      const { setKernelConfig } = await import("./seed/ws/conversation.js");
+      const { setKernelConfig } = await import("./seed/llm/conversation.js");
 
       // Kernel config keys: read from land .config node, apply to runtime
       const KERNEL_CONFIG = {
@@ -66,14 +66,14 @@ export function onListen() {
         staleConversationTimeout:{ setter: setKernelConfig },
         treeSummaryMaxDepth:     { load: () => import("./seed/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(v, null)) },
         treeSummaryMaxNodes:     { load: () => import("./seed/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(null, v)) },
-        carryMessages:           { load: () => import("./seed/ws/modes/registry.js").then(m => m.setCarryMessages) },
-        maxRegisteredModes:      { load: () => import("./seed/ws/modes/registry.js").then(m => m.setMaxModes) },
-        maxRegisteredTools:      { load: () => import("./seed/ws/tools.js").then(m => m.setMaxTools) },
+        carryMessages:           { load: () => import("./seed/modes/registry.js").then(m => m.setCarryMessages) },
+        maxRegisteredModes:      { load: () => import("./seed/modes/registry.js").then(m => m.setMaxModes) },
+        maxRegisteredTools:      { load: () => import("./seed/tools.js").then(m => m.setMaxTools) },
         sessionTTL:              { load: () => import("./seed/ws/sessionRegistry.js").then(m => (v) => m.setSessionTTL(v * 1000)) },
         staleSessionTimeout:     { load: () => import("./seed/ws/sessionRegistry.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
         maxSessions:             { load: () => import("./seed/ws/sessionRegistry.js").then(m => m.setMaxSessions) },
-        llmClientCacheTtl:       { load: () => import("./seed/ws/conversation.js").then(m => (v) => m.setClientCacheTtl(v * 1000)) },
-        canopyProxyCacheTtl:     { load: () => import("./seed/ws/conversation.js").then(m => (v) => m.setProxyCacheTtl(v * 1000)) },
+        llmClientCacheTtl:       { load: () => import("./seed/llm/conversation.js").then(m => (v) => m.setClientCacheTtl(v * 1000)) },
+        canopyProxyCacheTtl:     { load: () => import("./seed/llm/conversation.js").then(m => (v) => m.setProxyCacheTtl(v * 1000)) },
         maxConnectionsPerUser:   { load: () => import("./seed/llm/connections.js").then(m => m.setMaxConnectionsPerUser) },
       };
 

@@ -19,7 +19,7 @@ router.post("/land/activity", authenticate, async (req, res) => {
     const query = Array.isArray(rawQuery) ? rawQuery.join(" ") : rawQuery;
     if (!query) return sendError(res, 400, ERR.INVALID_INPUT, "query required");
 
-    const { runChat } = await import("../../seed/ws/conversation.js");
+    const { runChat } = await import("../../seed/llm/conversation.js");
 
     const { answer, chatId } = await runChat({
       userId: req.userId,

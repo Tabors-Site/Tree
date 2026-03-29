@@ -234,6 +234,8 @@ function isValidUserSlot(slot) {
   return typeof slot === "string" && (CORE_USER_SLOTS.has(slot) || _extUserSlots.has(slot));
 }
 
+export function getAllUserLlmSlots() { return [...CORE_USER_SLOTS, ..._extUserSlots]; }
+
 // Core tree slots. Extensions register additional via registerRootLlmSlot().
 // Only "default" is kernel. Extensions register their own slots during init.
 const CORE_ROOT_SLOTS = new Set(["default"]);

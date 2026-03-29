@@ -318,6 +318,11 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
       return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, `Extension "${name}" not found locally`);
     }
 
+    // Bundles on disk use needs.extensions; Horizon validates includes
+    if (manifest.type === "bundle" && !manifest.includes && manifest.needs?.extensions) {
+      manifest.includes = manifest.needs.extensions;
+    }
+
     // Send to Horizon service
     const horizonUrl = getLandConfigValue("HORIZON_URL");
     if (!horizonUrl) {

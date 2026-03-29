@@ -1373,16 +1373,19 @@ export async function readExtensionFiles(name) {
   // Load manifest
   const { default: manifest } = await import(toImportURL(manifestPath));
 
-  // Read all .js files recursively
+  // Read all .js/.json/.md files recursively (skip symlinks, cap depth)
+  const MAX_DEPTH = 10;
   const files = [];
-  function readDir(dir, base = "") {
+  function readDir(dir, base = "", depth = 0) {
+    if (depth > MAX_DEPTH) return;
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.name === "node_modules") continue;
+      if (entry.isSymbolicLink()) continue;
       const relativePath = base ? `${base}/${entry.name}` : entry.name;
 
       if (entry.isDirectory()) {
-        readDir(path.join(dir, entry.name), relativePath);
+        readDir(path.join(dir, entry.name), relativePath, depth + 1);
       } else if (entry.name.endsWith(".js") || entry.name.endsWith(".json") || entry.name.endsWith(".md")) {
         const content = fs.readFileSync(path.join(dir, entry.name), "utf8");
         files.push({ path: relativePath, content });

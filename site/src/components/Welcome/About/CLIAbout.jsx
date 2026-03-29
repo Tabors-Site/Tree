@@ -81,7 +81,7 @@ const CLIAbout = () => {
             </div>
             <div className="lp-term-body">
               <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/</span> <span className="lp-term-caret">› </span>chat "what extensions are loaded"</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">  Land: 92 extensions loaded, all clear...</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Land: 95 extensions loaded, all clear...</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">~</span> <span className="lp-term-caret">› </span>chat "what have I been working on"</div>
               <div className="lp-term-line lp-term-output lp-term-dim">  Home: Most active in Health and Projects this week...</div>

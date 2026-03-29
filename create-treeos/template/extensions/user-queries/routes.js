@@ -3,7 +3,7 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import User from "../../seed/models/user.js";
-import { getChats } from "../../seed/ws/chatHistory.js";
+import { getChats } from "../../seed/llm/chatHistory.js";
 import { getExtension } from "../loader.js";
 import {
   getAllNotesByUser,

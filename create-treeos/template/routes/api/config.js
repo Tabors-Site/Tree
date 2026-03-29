@@ -318,6 +318,11 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
       return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, `Extension "${name}" not found locally`);
     }
 
+    // Bundles on disk use needs.extensions; Horizon validates includes
+    if (manifest.type === "bundle" && !manifest.includes && manifest.needs?.extensions) {
+      manifest.includes = manifest.needs.extensions;
+    }
+
     // Send to Horizon service
     const horizonUrl = getLandConfigValue("HORIZON_URL");
     if (!horizonUrl) {
@@ -537,7 +542,7 @@ router.get("/land/orchestrators", authenticate, (req, res) => {
  */
 router.get("/land/tools", authenticate, async (req, res) => {
   try {
-    const { getAllToolNamesForBigMode, getSubModes } = await import("../../seed/ws/modes/registry.js");
+    const { getAllToolNamesForBigMode, getSubModes } = await import("../../seed/modes/registry.js");
     const allTools = getAllToolNamesForBigMode("tree");
 
     // Build tool-to-mode mapping
@@ -569,7 +574,7 @@ router.get("/land/tools", authenticate, async (req, res) => {
  */
 router.get("/land/modes", authenticate, async (req, res) => {
   try {
-    const { getSubModes } = await import("../../seed/ws/modes/registry.js");
+    const { getSubModes } = await import("../../seed/modes/registry.js");
     const bigModes = ["tree", "home", "land"];
     const result = {};
 

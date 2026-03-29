@@ -174,7 +174,7 @@ const ExtensionsPage = () => {
             </div>
 
             <div style={{marginBottom: 40}}>
-              <h3 style={{color: "#4ade80", fontSize: "1.05rem", marginBottom: 8}}>treeos-intelligence <span style={{color: "rgba(255,255,255,0.3)", fontWeight: 400}}>13 extensions</span></h3>
+              <h3 style={{color: "#4ade80", fontSize: "1.05rem", marginBottom: 8}}>treeos-intelligence <span style={{color: "rgba(255,255,255,0.3)", fontWeight: 400}}>14 extensions</span></h3>
               <p style={{color: "rgba(255,255,255,0.55)", lineHeight: 1.8, fontSize: "0.88rem"}}>
                 Self-awareness and autonomy. Tree-compress carries meaning upward and trims what has been
                 absorbed. Contradiction surfaces conflicting truths across branches. The inverse tree builds
@@ -185,11 +185,12 @@ const ExtensionsPage = () => {
                 where the tree's knowledge ends. Competence tracks which queries found answers and which found
                 silence. Reflect notices how the conversation is going and adjusts the AI's approach.
                 Evolve watches what users do that no extension handles and proposes new ones.
+                Rings maps relationships between nodes across the tree, surfacing hidden connections.
                 Intent is the capstone. It reads from every other intelligence extension and synthesizes
                 autonomous actions the tree takes on its own.
               </p>
               <p style={{color: "rgba(255,255,255,0.3)", fontSize: "0.8rem", marginTop: 8}}>
-                tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, competence, reflect, evolve
+                tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, competence, reflect, evolve, rings
               </p>
             </div>
 
@@ -344,7 +345,7 @@ const ExtensionsPage = () => {
             A coding OS with architect and review modes. A research OS with citation and synthesis modes.
           </p>
           <p className="lp-section-sub" style={{fontStyle: "italic", color: "rgba(255,255,255,0.3)"}}>
-            92 extensions across four bundles plus standalone. All growing from twelve schema
+            95 extensions across four bundles plus standalone. All growing from twelve schema
             fields and a metadata Map. Enough extensions built on a kernel form an operating system.
             Operating systems are good starting grounds for people to build off of.
           </p>

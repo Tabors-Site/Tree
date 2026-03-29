@@ -267,7 +267,27 @@ function shellSplit(input) {
 
 const startShell = module.exports.startShell = async () => {
     const readline = require("readline");
+    const fs = require("fs");
+    const path = require("path");
+    const os = require("os");
     const cfg = load();
+
+    // ── Command history (persists across sessions) ──
+    const HISTORY_FILE = path.join(os.homedir(), ".treeos", "history");
+    const MAX_HISTORY = 500;
+    let _history = [];
+    try {
+      const raw = fs.readFileSync(HISTORY_FILE, "utf8").trim();
+      if (raw) _history = raw.split("\n").reverse(); // readline expects newest-first
+    } catch (_) {}
+
+    function saveHistory() {
+      try {
+        // rl.history is newest-first, file stores oldest-first
+        const lines = (_history || []).slice(0, MAX_HISTORY).slice().reverse();
+        fs.writeFileSync(HISTORY_FILE, lines.join("\n") + "\n");
+      } catch (_) {}
+    }
 
     if (!cfg.apiKey && !cfg.jwtToken) {
       console.log(
@@ -415,6 +435,8 @@ const startShell = module.exports.startShell = async () => {
       input: process.stdin,
       output: process.stdout,
       terminal: true,
+      history: _history,
+      historySize: MAX_HISTORY,
       // No-op completer. We handle tab ourselves via keypress.
       completer(line) { return [[], line]; },
     });
@@ -524,6 +546,8 @@ const startShell = module.exports.startShell = async () => {
     };
 
     function onClose() {
+      _history = rl.history || _history;
+      saveHistory();
       console.log(chalk.dim("\nBye!"));
       process.exit(0);
     }
@@ -575,6 +599,10 @@ const startShell = module.exports.startShell = async () => {
         cleanInput = "chat " + cleanInput;
       }
 
+      // Capture history before closing so it carries over to the new readline
+      _history = rl.history || [];
+      saveHistory();
+
       // Fully detach the shell readline and keypress listener so subcommands
       // that create their own readline (login, register, llm add, passwd)
       // don't fight over stdin with duplicate listeners
@@ -593,6 +621,8 @@ const startShell = module.exports.startShell = async () => {
         input: process.stdin,
         output: process.stdout,
         terminal: true,
+        history: _history,
+        historySize: MAX_HISTORY,
         completer(line) { return [[], line]; },
       });
       rl.on("line", onLine);

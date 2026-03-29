@@ -81,7 +81,7 @@ router.post("/land/chat", authenticate, async (req, res) => {
     const { message } = req.body;
     if (!message) return sendError(res, 400, ERR.INVALID_INPUT, "message required");
 
-    const { runChat } = await import("../../seed/ws/conversation.js");
+    const { runChat } = await import("../../seed/llm/conversation.js");
 
     const { answer, chatId } = await runChat({
       userId: req.userId,

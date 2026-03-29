@@ -1,4 +1,4 @@
-// ws/modes/tree/cleanupAnalyze.js
+// extensions/dreams/modes/cleanupAnalyze.js
 // Tool-less analysis mode for tree reorganization.
 // LLM receives the full tree summary and outputs a JSON plan of moves/deletes.
 

@@ -12,7 +12,52 @@ import {
   assignConnection,
 } from "../../seed/llm/connections.js";
 
+import { getUserMeta } from "../../seed/tree/userMetadata.js";
+import { getExtension } from "../loader.js";
+import { renderLlmPage } from "./pages/llmPage.js";
+
+let htmlAuth = authenticate;
+export function resolveHtmlAuth() {
+  const htmlExt = getExtension("html-rendering");
+  if (htmlExt?.exports?.urlAuth) htmlAuth = htmlExt.exports.urlAuth;
+}
+
 const router = express.Router();
+
+// Standalone LLM management page
+router.get("/user/:userId/llm", htmlAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
+    const connections = await getConnectionsForUser(userId);
+    const user = await User.findById(userId).select("username llmDefault metadata").lean();
+
+    if (!wantHtml || !getExtension("html-rendering")) {
+      return sendOk(res, { connections, mainAssignment: user?.llmDefault || null });
+    }
+
+    const userSlots = getUserMeta(user, "userLlm")?.slots || {};
+    const { getAllUserLlmSlots } = await import("../../seed/llm/connections.js");
+    const allUserSlots = getAllUserLlmSlots();
+    const token = req.query.token ?? "";
+    const qs = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
+
+    return res.send(renderLlmPage({
+      userId,
+      username: user?.username || "",
+      connections,
+      mainAssignment: user?.llmDefault || null,
+      allUserSlots,
+      userSlots,
+      treeSlots: {},
+      rootId: null,
+      rootName: null,
+      qs,
+    }));
+  } catch (err) {
+    return sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
 
 router.get("/user/:userId/custom-llm", authenticate, async (req, res) => {
   try {

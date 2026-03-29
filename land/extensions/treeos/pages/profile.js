@@ -764,7 +764,7 @@ text-decoration: none;
     <div class="glass-card header">
       <a href="/chat" target="_top" class="basic-btn">Back to Basic Chat</a>
       <div class="user-info">
-       <a href="/api/v1/user/${userId}/energy${queryString}">
+       <a href="/api/v1/user/${userId}/llm${queryString}">
         <h1>@${safeUsername}</h1> </a>
 
         <div class="user-meta">

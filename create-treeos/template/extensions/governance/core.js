@@ -67,7 +67,7 @@ export async function refreshGovernance() {
   const results = await Promise.allSettled(
     urls.map(async (url) => {
       const res = await fetch(`${url}/horizon/governance`, {
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(3000),
       });
       if (!res.ok) return { url, status: "unreachable", lastChecked: new Date().toISOString() };
       const data = await res.json();
@@ -146,7 +146,7 @@ export async function checkExtensionUpdates() {
     const horizonUrl = urls[0];
 
     const res = await fetch(`${horizonUrl}/extensions?limit=100`, {
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return { updates: [], checkedAt: new Date().toISOString() };
 

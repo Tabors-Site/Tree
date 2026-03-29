@@ -1,6 +1,6 @@
 import log from "../../seed/log.js";
 import { DELETED, NODE_STATUS } from "../../seed/protocol.js";
-import { getChats } from "../../seed/ws/chatHistory.js";
+import { getChats } from "../../seed/llm/chatHistory.js";
 
 export async function init(core) {
   const Node = core.models.Node;

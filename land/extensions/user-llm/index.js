@@ -1,5 +1,6 @@
-import router from "./routes.js";
+import router, { resolveHtmlAuth } from "./routes.js";
 
 export async function init(core) {
+  resolveHtmlAuth();
   return { router };
 }
