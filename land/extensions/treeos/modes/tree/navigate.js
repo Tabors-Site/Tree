@@ -1,4 +1,4 @@
-// ws/modes/tree/navigate.js
+// extensions/treeos/modes/tree/navigate.js
 export default {
   name: "tree:navigate",
   emoji: "🧭",

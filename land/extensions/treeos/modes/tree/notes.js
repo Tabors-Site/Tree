@@ -1,4 +1,4 @@
-// ws/modes/tree/notes.js
+// extensions/treeos/modes/tree/notes.js
 export default {
   name: "tree:notes",
   emoji: "📝",

@@ -1,4 +1,4 @@
-// ws/modes/tree/respond.js
+// extensions/treeos/modes/tree/respond.js
 // Final response generation. Receives structured context, not raw JSON.
 // Used when: query results need narrative, destructive ops need confirmation,
 // or the librarian/extension didn't produce a user-friendly response.

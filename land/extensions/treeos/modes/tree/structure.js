@@ -1,4 +1,4 @@
-// ws/modes/tree/structure.js
+// extensions/treeos/modes/tree/structure.js
 export default {
   name: "tree:structure",
   emoji: "🏗️",

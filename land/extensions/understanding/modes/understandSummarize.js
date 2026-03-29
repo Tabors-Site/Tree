@@ -1,4 +1,4 @@
-// ws/modes/tree/understandSummarize.js
+// extensions/understanding/modes/understandSummarize.js
 // Tool-less mode used by the understand orchestrator.
 // The LLM receives content to summarize and outputs only the summary text.
 

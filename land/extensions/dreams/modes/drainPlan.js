@@ -1,4 +1,4 @@
-// ws/modes/tree/drainPlan.js
+// extensions/dreams/modes/drainPlan.js
 // Takes cluster items + scouted pins, proposes concrete build + place steps.
 // Pure reasoning — no tools.
 

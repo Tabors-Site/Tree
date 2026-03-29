@@ -1,4 +1,4 @@
-// ws/modes/home/default.js
+// extensions/treeos/modes/home/default.js
 // HOME default mode - landing state, conversational, aware but non-pushy
 
 export default {

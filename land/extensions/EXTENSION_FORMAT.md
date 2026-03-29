@@ -1125,7 +1125,7 @@ if (gateway?.exports?.dispatchNotifications) {
 For the tree orchestrator (or any custom orchestrator), use the core registry:
 
 ```js
-import { getOrchestrator } from "../../seed/orchestratorRegistry.js";
+import { getOrchestrator } from "../../seed/orchestrators/registry.js";
 
 const treeOrch = getOrchestrator("tree");
 if (treeOrch) {

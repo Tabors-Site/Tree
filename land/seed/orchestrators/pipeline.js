@@ -1,3 +1,4 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai
 /**
  * High-level multi-step pipeline for extensions.
  * Handles: lock, session, MCP, Chat chain, step execution, cleanup.

@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
-// ws/conversation.js
-// Mode-aware conversation state management and chat processing
+// llm/conversation.js
+// Conversation state, LLM resolution, tool loop, session management
 import log from "../log.js";
 import { hooks } from "../hooks.js";
 
@@ -8,7 +8,7 @@ import OpenAI from "openai";
 import crypto from "crypto";
 import User from "../models/user.js";
 import Node from "../models/node.js";
-import { snapshotAncestors, resolveExtensionScopeFromChain } from "../tree/ancestorCache.js";
+import { snapshotAncestors, resolveExtensionScopeFromChain, getAncestorChain } from "../tree/ancestorCache.js";
 import { isDbHealthy } from "../dbConfig.js";
 import LlmConnection from "../models/llmConnection.js";
 import {
@@ -24,9 +24,6 @@ import { SYSTEM_OWNER } from "../protocol.js";
 
 import { resolveAndValidateHost, getEncryptionKey } from "./connections.js";
 
-
-
-// ─────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────
 // LLM DEFAULTS
 // ─────────────────────────────────────────────────────────────────────────
@@ -403,7 +400,7 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
   try {
     const remoteCheck = await User.findById(userId).select("isRemote homeLand").lean();
     if (remoteCheck?.isRemote && remoteCheck.homeLand) {
-      const { createCanopyLlmProxyClient } = await import("../canopy/llmProxy.js");
+      const { createCanopyLlmProxyClient } = await import("../../canopy/llmProxy.js");
       const proxyClient = createCanopyLlmProxyClient({ userId, homeLand: remoteCheck.homeLand, slot });
       const proxyEntry = {
         client: proxyClient,
@@ -481,7 +478,7 @@ export async function resolveRootLlmForMode(rootId, modeKey) {
       .lean();
     if (!rootNode) return null;
 
-    const { getLlmAssignments } = await import("../llm/assignments.js");
+    const { getLlmAssignments } = await import("./assignments.js");
     const assignments = getLlmAssignments(rootNode);
 
     // "none" means LLM is explicitly off for this tree
@@ -943,7 +940,7 @@ async function resolveToolsForPosition(session) {
       // Use the per-message snapshot. Every resolution chain reads from this.
       // Falls back to ancestor cache (still cached, not raw DB) if no snapshot.
       const ancestors = session._ancestorSnapshot
-        || await (async () => { const { getAncestorChain } = await import("../tree/ancestorCache.js"); return getAncestorChain(currentNodeId); })();
+        || await getAncestorChain(currentNodeId);
 
       if (ancestors && ancestors.length > 0) {
         // Tool config: walk ancestor chain in memory
@@ -1644,9 +1641,9 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   }
 
   const jwt = (await import("jsonwebtoken")).default;
-  const { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } = await import("./mcp.js");
+  const { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } = await import("../ws/mcp.js");
   const { startChat, finalizeChat, setChatContext } = await import("./chatTracker.js");
-  const { setSessionAbort, clearSessionAbort } = await import("./sessionRegistry.js");
+  const { setSessionAbort, clearSessionAbort } = await import("../ws/sessionRegistry.js");
 
   const JWT_SECRET = process.env.JWT_SECRET;
   if (!JWT_SECRET) throw new Error("JWT_SECRET not configured");

@@ -1,4 +1,4 @@
-// ws/modes/tree/drainScout.js
+// extensions/dreams/modes/drainScout.js
 // Scouts the tree for placement locations using navigate-tree tool.
 // Drops "pins" on candidate nodes for a given cluster.
 

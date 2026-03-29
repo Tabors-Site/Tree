@@ -1,7 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "../log.js";
 import { getLandConfigValue } from "../landConfig.js";
-// ws/chatTracker.js
+// llm/chatTracker.js
 // Tracks AI chat sessions. Each LLM call = one Chat document.
 // All calls in a chain share the same sessionId and are ordered by chainIndex.
 // Query: Chat.find({ sessionId }).sort({ chainIndex: 1 }) -> full chain

@@ -1,4 +1,4 @@
-// ws/modes/home/raw-idea-placement.js
+// extensions/raw-ideas/modes/raw-idea-placement.js
 // Process inbox items - review raw ideas and place them into trees
 
 export default {

@@ -1,5 +1,5 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
-// ws/modes/registry.js
+// modes/registry.js
 // Central mode registry: defines all modes, their tools, and switching logic
 
 import log from "../log.js";

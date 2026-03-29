@@ -1,4 +1,4 @@
-// ws/modes/tree/cleanupExpandScan.js
+// extensions/dreams/modes/cleanupExpandScan.js
 // Tool-less analysis mode for note expansion.
 // LLM receives a node's notes and decides if any should be expanded into subtree structure.
 

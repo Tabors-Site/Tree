@@ -1,4 +1,4 @@
-// ws/modes/tree/drainCluster.js
+// extensions/dreams/modes/drainCluster.js
 // Groups pending ShortMemory items into placement clusters.
 // Pure reasoning — no tools. All items injected into system prompt.
 
