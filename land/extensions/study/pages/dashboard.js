@@ -223,6 +223,9 @@ export function renderStudyDashboard({ rootId, rootName, queue, activeTopics, ga
       ${commandsRefHtml([
         { cmd: "needlearn <topic>", desc: "Add to study queue" },
         { cmd: "study", desc: "Start or continue studying" },
+        { cmd: "study switch <topic>", desc: "Activate a queue item" },
+        { cmd: "study stop <topic>", desc: "Deactivate, back to queue" },
+        { cmd: "study remove <topic>", desc: "Delete from queue" },
         { cmd: "study progress", desc: "Review mastery and gaps" },
         { cmd: "study plan", desc: "Build or modify curriculum" },
         { cmd: "be", desc: "AI picks next lesson and teaches" },

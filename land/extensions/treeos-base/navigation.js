@@ -4,6 +4,7 @@
 
 import { getUserMeta } from "../../seed/tree/userMetadata.js";
 import { getLandUrl } from "../../canopy/identity.js";
+import { getActiveNavigator } from "../../seed/ws/sessionRegistry.js";
 
 // ── Navigation Registry ────────────────────────────────────────────────
 // Extensions call registerToolNavigation(toolName, urlBuilder) during init().
@@ -74,6 +75,22 @@ registerToolNavigations({
   "batch-operations": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}/contributions?html`),
 });
 
+// ── Read-only tools that should NOT trigger iframe navigation ──────────
+const READ_ONLY_TOOLS = new Set([
+  "navigate-tree",
+  "get-node",
+  "get-tree",
+  "get-tree-context",
+  "get-node-notes",
+  "get-node-contributions",
+  "get-contributions-by-user",
+  "get-root-nodes-by-user",
+  "get-unsearched-notes-by-user",
+  "get-searched-notes-by-user",
+  "get-all-tags-for-user",
+  "get-active-leaf-execution-frontier",
+]);
+
 // ── Hook Handler ───────────────────────────────────────────────────────
 
 export function buildNavigationHandler(core) {
@@ -100,6 +117,12 @@ export function buildNavigationHandler(core) {
   return async function onAfterToolCall({ toolName, args, userId, success }) {
     if (!success || !userId) return;
 
+    // Only navigate for write operations. Read-only tool calls (navigate-tree,
+    // get-node, get-tree-context, etc.) should not redirect the iframe.
+    // This prevents extension chat bars (which use read tools internally)
+    // from hijacking the user's view.
+    if (READ_ONLY_TOOLS.has(toolName)) return;
+
     const urlBuilder = _navRegistry.get(toolName);
     if (!urlBuilder) return;
 
@@ -109,7 +132,11 @@ export function buildNavigationHandler(core) {
     try {
       const url = urlBuilder({ args: args || {}, userId, shareToken, withToken: t });
       if (url) {
-        core.websocket.emitNavigate({ userId, url: `${getLandUrl()}${url}` });
+        // Only navigate if there's an active navigator session.
+        // No navigator = user detached or viewing a dashboard with its own chat.
+        const sessionId = getActiveNavigator(userId);
+        if (!sessionId) return;
+        core.websocket.emitNavigate({ userId, url: `${getLandUrl()}${url}`, sessionId });
       }
     } catch {
       // Extension-registered builder failed. Silent. Navigation is non-critical.

@@ -256,6 +256,78 @@ export async function moveToActive(rootId, queueItemId, userId) {
   return { topicId: String(topicNode._id), name: item.name };
 }
 
+export async function deactivateTopic(rootId, topicName, userId) {
+  const nodes = await findStudyNodes(rootId);
+  if (!nodes?.active || !nodes?.queue) throw new Error("Study tree not scaffolded");
+
+  const topics = await _Node.find({ parent: nodes.active.id }).select("_id name").lean();
+  const topic = topics.find(t => t.name.toLowerCase() === topicName.toLowerCase());
+  if (!topic) throw new Error(`No active topic named "${topicName}"`);
+
+  // Move back to queue
+  const { updateParentRelationship } = await import("../../seed/tree/treeManagement.js");
+  await updateParentRelationship(String(topic._id), nodes.queue.id, userId);
+
+  // Update status
+  const node = await _Node.findById(topic._id);
+  if (node) {
+    const existing = _metadata.getExtMeta(node, "study") || {};
+    await _metadata.setExtMeta(node, "study", { ...existing, role: ROLES.QUEUE_ITEM, status: "queued" });
+  }
+
+  log.info("Study", `Deactivated "${topic.name}", moved back to queue`);
+  return { name: topic.name };
+}
+
+export async function removeFromQueue(rootId, topicName, userId) {
+  const nodes = await findStudyNodes(rootId);
+  if (!nodes?.queue && !nodes?.active) throw new Error("Study tree not scaffolded");
+
+  // Search queue first, then active
+  let found = null;
+  if (nodes.queue) {
+    const queueItems = await _Node.find({ parent: nodes.queue.id }).select("_id name").lean();
+    found = queueItems.find(t => t.name.toLowerCase() === topicName.toLowerCase());
+  }
+  if (!found && nodes.active) {
+    const activeItems = await _Node.find({ parent: nodes.active.id }).select("_id name").lean();
+    found = activeItems.find(t => t.name.toLowerCase() === topicName.toLowerCase());
+  }
+  if (!found) throw new Error(`No topic named "${topicName}" in queue or active`);
+
+  const { deleteNodeBranch } = await import("../../seed/tree/treeManagement.js");
+  await deleteNodeBranch(String(found._id), userId);
+
+  log.info("Study", `Removed "${found.name}"`);
+  return { name: found.name };
+}
+
+export async function switchToTopic(rootId, topicName, userId) {
+  const nodes = await findStudyNodes(rootId);
+  if (!nodes?.queue || !nodes?.active) throw new Error("Study tree not scaffolded");
+
+  // Find in queue
+  const queueItems = await _Node.find({ parent: nodes.queue.id }).select("_id name").lean();
+  let item = queueItems.find(t => t.name.toLowerCase() === topicName.toLowerCase());
+
+  // Try by index (1-based)
+  if (!item && /^\d+$/.test(topicName.trim())) {
+    const idx = parseInt(topicName.trim()) - 1;
+    if (idx >= 0 && idx < queueItems.length) item = queueItems[idx];
+  }
+
+  if (!item) {
+    // Check if already active
+    const activeItems = await _Node.find({ parent: nodes.active.id }).select("_id name").lean();
+    const already = activeItems.find(t => t.name.toLowerCase() === topicName.toLowerCase());
+    if (already) return { name: already.name, alreadyActive: true };
+    throw new Error(`No topic named "${topicName}" in queue`);
+  }
+
+  // Move to active
+  return await moveToActive(rootId, String(item._id), userId);
+}
+
 // ── Mastery tracking ──
 
 export async function updateMastery(subtopicId, score, userId) {

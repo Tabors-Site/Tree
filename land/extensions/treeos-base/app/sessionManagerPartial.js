@@ -831,12 +831,6 @@ export function dashboardJS() {
         if (data.selfSessionId) dashSelfSessionId = data.selfSessionId;
         dashActiveNavigatorId = data.activeNavigatorId || null;
 
-        // Sync tracked session with server navigator state
-        if (dashTrackedSessionId !== dashActiveNavigatorId) {
-          dashTrackedSessionId = dashActiveNavigatorId;
-          if (!dashTrackedSessionId) dashTrackedNavRootId = null;
-        }
-
         renderRawIdeas();
         renderDashSessions();
 

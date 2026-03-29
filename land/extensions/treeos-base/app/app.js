@@ -2227,18 +2227,25 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
         const ID = '(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})';
         let rootId = null;
         let nodeId = null;
-        const rootMatch = path.match(new RegExp('(?:/api/v1)?/root/(' + ID + ')', 'i'));
+        const rootMatch = path.match(new RegExp('(?:/api/v1)?/root/(' + ID + ')(?:[?/]|$)', 'i'));
+        const extDashMatch = path.match(new RegExp('(?:/api/v1)?/root/(' + ID + ')/[a-z]', 'i'));
         const bareMatch = path.match(new RegExp('(?:/api/v1)?/(' + ID + ')(?:[?/]|$)', 'i'));
-        if (rootMatch) rootId = rootMatch[1];
-        else if (bareMatch) nodeId = bareMatch[1];
 
-        if (isRegistered) {
-          socket.emit("urlChanged", { url: path, rootId, nodeId });
+        // Extension dashboards (/root/:id/kb, /root/:id/fitness, etc.)
+        // have their own chat bars. Don't switch the main chat session.
+        // Detach navigator so tool calls don't redirect the iframe.
+        if (extDashMatch) {
+          activeRootId = extDashMatch[1];
+          if (isRegistered) socket.emit("detachNavigator");
+        } else {
+          if (rootMatch) rootId = rootMatch[1];
+          else if (bareMatch) nodeId = bareMatch[1];
+
+          if (isRegistered) {
+            socket.emit("urlChanged", { url: path, rootId, nodeId });
+          }
+          if (rootMatch) activeRootId = rootId;
         }
-if (rootMatch) {
-  rootId = rootMatch[1];
-  activeRootId = rootId;  // <-- add this
-}
         // Re-render recent roots to update active state
         renderRecentRoots();
       }

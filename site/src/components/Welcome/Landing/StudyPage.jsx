@@ -27,7 +27,7 @@ const StudyPage = () => {
       <section className="lp-section" style={{paddingTop: 80, paddingBottom: 60}}>
         <div className="lp-container" style={{maxWidth: 760}}>
           <h2 style={{color: "#fff", fontSize: "1.8rem", marginBottom: 48, textAlign: "center"}}>
-            Three commands. That's it.
+            How it works.
           </h2>
 
           <div style={{display: "flex", flexDirection: "column", gap: 48}}>
@@ -301,6 +301,39 @@ const StudyPage = () => {
                 in the fitness extension starts a guided study session here.
               </p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── COMMANDS ── */}
+      <section className="lp-section" style={{paddingTop: 60, paddingBottom: 60}}>
+        <div className="lp-container" style={{maxWidth: 760}}>
+          <h2 style={{color: "#fff", fontSize: "1.5rem", marginBottom: 32, textAlign: "center"}}>
+            Commands
+          </h2>
+          <div style={{
+            background: "rgba(255,255,255,0.03)", borderRadius: 12,
+            border: "1px solid rgba(255,255,255,0.06)", padding: "24px 28px",
+            fontFamily: "monospace", fontSize: "0.85rem", lineHeight: 2.2,
+          }}>
+            {[
+              { cmd: "needlearn <topic>", desc: "Add to study queue" },
+              { cmd: "needlearn <url>", desc: "Fetch and queue web content" },
+              { cmd: "study", desc: "Start or continue a session" },
+              { cmd: "study switch <topic>", desc: "Activate a queue item" },
+              { cmd: "study stop <topic>", desc: "Deactivate, back to queue" },
+              { cmd: "study remove <topic>", desc: "Delete from queue" },
+              { cmd: "study status", desc: "Active topics and mastery" },
+              { cmd: "study gaps", desc: "Detected knowledge gaps" },
+              { cmd: "study progress", desc: "Review your learning" },
+              { cmd: "study plan", desc: "Build or modify curriculum" },
+              { cmd: "be", desc: "AI picks next lesson, starts teaching" },
+            ].map((item, i) => (
+              <div key={i} style={{display: "flex", justifyContent: "space-between", borderBottom: i < 10 ? "1px solid rgba(255,255,255,0.04)" : "none", padding: "2px 0"}}>
+                <span style={{color: "rgba(102,126,234,0.9)"}}>{item.cmd}</span>
+                <span style={{color: "rgba(255,255,255,0.35)"}}>{item.desc}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>

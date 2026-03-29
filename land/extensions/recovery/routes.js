@@ -214,17 +214,29 @@ router.post("/root/:rootId/recovery", authenticate, async (req, res) => {
     // Get fresh status for response
     const status = await getStatus(rootId);
 
-    // Build response via LLM (reflect mode for conversational response, not log mode which returns JSON)
-    const { answer, chatId } = await runChat({
-      userId, username,
-      message: parsed
-        ? `Check-in logged. Data: ${JSON.stringify(parsed)}. Respond naturally. Acknowledge what's hard. Point out patterns if visible. Short.`
-        : message,
-      mode: "tree:recovery-reflect",
-      rootId, res, slot: "recovery",
-    });
+    // Build natural language response (separate from the JSON parse call)
+    let answer = null;
+    let chatId = null;
+    try {
+      const result = await runChat({
+        userId, username,
+        message: parsed
+          ? `The user checked in. Here's what they said: "${message}". Parsed data: ${JSON.stringify(parsed)}. Respond naturally. Acknowledge what's hard. Point out patterns if visible. Keep it short.`
+          : message,
+        mode: "tree:recovery-log",
+        rootId, slot: "recovery",
+      });
+      answer = result.answer;
+      chatId = result.chatId;
+    } catch {}
 
-    if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:recovery-log", parsed, status });
+    // If LLM failed, build a simple confirmation
+    if (!answer && parsed?.substances?.length > 0) {
+      const subs = parsed.substances.map(s => `${s.name}: ${s.doses}`).join(", ");
+      answer = `Logged. ${subs}.`;
+    }
+
+    if (!res.headersSent) sendOk(res, { answer: answer || "Logged.", chatId, mode: "tree:recovery-log", parsed, status });
   } catch (err) {
     log.error("Recovery", "Route error:", err.message);
     if (!res.headersSent) sendError(res, 500, ERR.INTERNAL, err.message);

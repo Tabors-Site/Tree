@@ -173,6 +173,8 @@ async function checkTyposquatting(name) {
   for (const existing of existingNames) {
     // Skip exact match (same name is fine, ownership check handles it)
     if (existing === name) continue;
+    // Skip names in the same family (shared prefix with hyphen separator)
+    if (name.startsWith(existing + "-") || existing.startsWith(name + "-")) continue;
     const dist = levenshtein(name, existing);
     if (dist <= threshold) {
       suspicious.push(existing);

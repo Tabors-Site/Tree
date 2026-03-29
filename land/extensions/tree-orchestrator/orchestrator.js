@@ -758,14 +758,6 @@ async function executePlanSteps({
       if (navResult?.action === "found") {
         targetNodeId = navResult.targetNodeId;
         targetPath = navResult.targetPath;
-
-        // Only navigate if this session controls the iframe
-        if (isActiveNavigator(userId, rt.sessionId)) {
-          socket.emit(WS.NAVIGATE, {
-            url: `/api/v1/node/${targetNodeId}?html`,
-            replace: false,
-          });
-        }
       } else if (navResult?.action === "ambiguous") {
         // For merge/dedup/duplicate operations, ambiguity is EXPECTED.
         const isBatchOp =
@@ -878,6 +870,13 @@ async function executePlanSteps({
 
     if (intent.intent === "navigate" && targetNodeId) {
       if (isOnlyStep) {
+        // Pure navigation: user asked to go somewhere. Move the iframe.
+        if (isActiveNavigator(userId, rt.sessionId)) {
+          socket.emit(WS.NAVIGATE, {
+            url: `/api/v1/node/${targetNodeId}?html`,
+            replace: false,
+          });
+        }
         const navSummary = `Navigated to ${targetPath || targetNodeId}.`;
         emitStatus(socket, "done", "");
         pushMemory(visitorId, message, navSummary);
@@ -1582,6 +1581,7 @@ export async function orchestrateTreeRequest({
   if (behavioral === "be") {
     // Check if an extension at this position declares a guidedMode
     let guidedMode = "tree:be"; // default fallback
+    const currentNodeId = getCurrentNodeId(visitorId) || rootId;
     try {
       const { getExtensionManifest, getLoadedExtensionNames } = await import("../loader.js");
       const nodeDoc = currentNodeId ? await Node.findById(currentNodeId).select("metadata").lean() : null;
@@ -1601,14 +1601,20 @@ export async function orchestrateTreeRequest({
     } catch {}
 
     log.verbose("Tree Orchestrator", `  BE mode: switching to ${guidedMode}`);
-    await switchMode(visitorId, guidedMode, { rootId, nodeId: currentNodeId, userId, socket, signal, sessionId });
-    const result = await processMessage(visitorId, message, username, socket, signal, sessionId);
-    trackStep(rootChatId, guidedMode, result?.content, "be");
+    await switchMode(visitorId, guidedMode, {
+      username, userId, rootId,
+      conversationMemory: formatMemoryContext(visitorId),
+      clearHistory: true,
+    });
+    const result = await processMessage(visitorId, message, {
+      username, userId, rootId, signal,
+      socket, sessionId,
+    });
     modesUsed.push(guidedMode);
 
     return {
       success: true,
-      content: result?.content || "",
+      answer: result?.content || "",
       modeKey: guidedMode,
       modesUsed,
       rootId,
@@ -1621,17 +1627,11 @@ export async function orchestrateTreeRequest({
   // ────────────────────────────────────────────────────────
 
   if (classification.intent === "extension" && classification.mode) {
-    // If the classifier matched a child/sibling node, auto-navigate there.
-    // Query stays put (read-only browsing). Chat and place move the user.
+    // Extension modes handle their own AI conversation. No iframe navigation.
+    // The extension node is used for mode resolution, not for visual navigation.
     const extTargetId = classification.targetNodeId || null;
-    if (extTargetId && behavioral !== "query") {
-      log.verbose("Tree Orchestrator",
-        `  Extension route: ${classification.mode} via ${extTargetId} (behavioral: ${behavioral}, auto-navigate)`);
-      socket.emit(WS.NAVIGATE, { nodeId: extTargetId, rootId });
-    } else {
-      log.verbose("Tree Orchestrator",
-        `  Extension route: ${classification.mode} (behavioral: ${behavioral}${extTargetId ? ", no nav (query)" : ""})`);
-    }
+    log.verbose("Tree Orchestrator",
+      `  Extension route: ${classification.mode}${extTargetId ? ` via ${extTargetId}` : ""} (behavioral: ${behavioral})`);
 
     modesUsed.push(classification.mode);
     emitStatus(socket, "intent", "");

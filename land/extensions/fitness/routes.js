@@ -8,6 +8,7 @@ import UserModel from "../../seed/models/user.js";
 import {
   isInitialized,
   getSetupPhase,
+  getExerciseState,
   findFitnessNodes,
   parseWorkout,
   deliverToExerciseNodes,

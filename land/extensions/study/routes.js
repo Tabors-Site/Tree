@@ -11,7 +11,13 @@ import {
   findStudyNodes,
   getStudyProgress,
   getGaps,
+  getQueue,
+  getActiveTopics,
+  getProfile,
   addToQueue,
+  switchToTopic,
+  deactivateTopic,
+  removeFromQueue,
 } from "./core.js";
 import { scaffold } from "./setup.js";
 
@@ -23,14 +29,17 @@ const router = express.Router();
 // ── Intent detection ──
 
 function detectIntent(message) {
-  const lower = message.toLowerCase();
+  const lower = message.toLowerCase().trim();
   if (lower === "be") return "session";
+  if (/^(switch|activate)\s+/i.test(lower)) return "switch";
+  if (/^(remove|drop|delete)\s+/i.test(lower)) return "remove";
+  if (/^(stop|deactivate|pause)\s+/i.test(lower)) return "deactivate";
   if (/\b(needlearn|need to learn|want to learn|add to queue|queue)\b/.test(lower)) return "queue";
-  if (/\b(study session|continue studying|let's study|teach me|study$)\b/.test(lower)) return "session";
+  if (/^study\s*$/i.test(lower) || /\b(study session|continue studying|let's study|teach me)\b/.test(lower)) return "session";
+  if (/^study\s+\d+$/i.test(lower)) return "switch"; // "study 2" = switch to queue item 2
   if (/\b(progress|mastery|how am i|gaps?|review|status|streak)\b/.test(lower)) return "review";
   if (/\b(curriculum|break.*down|plan|organize|structure|build.*curriculum)\b/.test(lower)) return "plan";
-  // URL detection
-  if (/^https?:\/\//.test(lower.trim())) return "queue";
+  if (/^https?:\/\//.test(lower)) return "queue";
   return "log";
 }
 
@@ -41,8 +50,10 @@ router.post("/root/:rootId/study", authenticate, async (req, res) => {
   try {
     const { rootId } = req.params;
     const rawMessage = req.body.message;
-    const message = Array.isArray(rawMessage) ? rawMessage.join(" ") : rawMessage;
-    if (!message) return sendError(res, 400, ERR.INVALID_INPUT, "message required");
+    let message = Array.isArray(rawMessage) ? rawMessage.join(" ") : (rawMessage || "");
+    // Strip "study" prefix - the route already knows this is study.
+    // Frontend chat bar sends "study switch X", CLI sends "switch X".
+    message = message.replace(/^study\s+/i, "").trim() || "study";
 
     const root = await Node.findById(rootId).select("rootOwner contributors").lean();
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
@@ -124,6 +135,58 @@ router.post("/root/:rootId/study", authenticate, async (req, res) => {
         return;
       }
       // Fall through to log mode if no topic extracted
+    }
+
+    // ── PATH: Switch topic ──
+    if (intent === "switch") {
+      const topic = message.replace(/^(switch|activate|study)\s+/i, "").trim();
+      if (!topic) {
+        if (!res.headersSent) sendOk(res, { answer: "Switch to what? Give a topic name or queue number.", mode: "tree:study-log" });
+        return;
+      }
+      try {
+        const result = await switchToTopic(rootId, topic, userId);
+        if (result.alreadyActive) {
+          if (!res.headersSent) sendOk(res, { answer: `"${result.name}" is already active.`, mode: "tree:study-log" });
+        } else {
+          if (!res.headersSent) sendOk(res, { answer: `Switched to "${result.name}". Type "study" to start a session.`, mode: "tree:study-log" });
+        }
+      } catch (err) {
+        if (!res.headersSent) sendOk(res, { answer: err.message, mode: "tree:study-log" });
+      }
+      return;
+    }
+
+    // ── PATH: Deactivate topic ──
+    if (intent === "deactivate") {
+      const topic = message.replace(/^(stop|deactivate|pause)\s+/i, "").trim();
+      if (!topic) {
+        if (!res.headersSent) sendOk(res, { answer: "Stop what? Give the topic name.", mode: "tree:study-log" });
+        return;
+      }
+      try {
+        const result = await deactivateTopic(rootId, topic, userId);
+        if (!res.headersSent) sendOk(res, { answer: `Deactivated "${result.name}". Moved back to queue.`, mode: "tree:study-log" });
+      } catch (err) {
+        if (!res.headersSent) sendOk(res, { answer: err.message, mode: "tree:study-log" });
+      }
+      return;
+    }
+
+    // ── PATH: Remove topic ──
+    if (intent === "remove") {
+      const topic = message.replace(/^(remove|drop|delete)\s+/i, "").trim();
+      if (!topic) {
+        if (!res.headersSent) sendOk(res, { answer: "Remove what? Give the topic name.", mode: "tree:study-log" });
+        return;
+      }
+      try {
+        const result = await removeFromQueue(rootId, topic, userId);
+        if (!res.headersSent) sendOk(res, { answer: `Removed "${result.name}".`, mode: "tree:study-log" });
+      } catch (err) {
+        if (!res.headersSent) sendOk(res, { answer: err.message, mode: "tree:study-log" });
+      }
+      return;
     }
 
     // ── PATH 3: Study session ──
@@ -218,6 +281,73 @@ router.get("/root/:rootId/study/gaps", authenticate, async (req, res) => {
     sendOk(res, { gaps });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, "Gaps failed");
+  }
+});
+
+/**
+ * POST /root/:rootId/study/switch - activate a queue item
+ */
+router.post("/root/:rootId/study/switch", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    const rawTopic = req.body.topic;
+    const topic = Array.isArray(rawTopic) ? rawTopic.join(" ") : rawTopic;
+    if (!topic) return sendError(res, 400, ERR.INVALID_INPUT, "topic required");
+
+    if (!(await isInitialized(rootId))) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "Study tree not initialized.");
+    }
+
+    const result = await switchToTopic(rootId, topic, req.userId);
+    if (result.alreadyActive) {
+      sendOk(res, { answer: `"${result.name}" is already active.`, name: result.name });
+    } else {
+      sendOk(res, { answer: `Switched to "${result.name}".`, name: result.name });
+    }
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * POST /root/:rootId/study/deactivate - move active topic back to queue
+ */
+router.post("/root/:rootId/study/deactivate", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    const rawTopic = req.body.topic;
+    const topic = Array.isArray(rawTopic) ? rawTopic.join(" ") : rawTopic;
+    if (!topic) return sendError(res, 400, ERR.INVALID_INPUT, "topic required");
+
+    if (!(await isInitialized(rootId))) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "Study tree not initialized.");
+    }
+
+    const result = await deactivateTopic(rootId, topic, req.userId);
+    sendOk(res, { answer: `Deactivated "${result.name}". Moved back to queue.`, name: result.name });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * POST /root/:rootId/study/remove - delete from queue or active
+ */
+router.post("/root/:rootId/study/remove", authenticate, async (req, res) => {
+  try {
+    const { rootId } = req.params;
+    const rawTopic = req.body.topic;
+    const topic = Array.isArray(rawTopic) ? rawTopic.join(" ") : rawTopic;
+    if (!topic) return sendError(res, 400, ERR.INVALID_INPUT, "topic required");
+
+    if (!(await isInitialized(rootId))) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "Study tree not initialized.");
+    }
+
+    const result = await removeFromQueue(rootId, topic, req.userId);
+    sendOk(res, { answer: `Removed "${result.name}".`, name: result.name });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

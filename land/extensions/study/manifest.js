@@ -57,10 +57,40 @@ export default {
       {
         command: "study [message...]",
         scope: ["tree"],
-        description: "Start a study session, add to queue, or ask about progress.",
+        description: "Study session, queue management, progress.",
         method: "POST",
         endpoint: "/root/:rootId/study",
         bodyMap: { message: 0 },
+        subcommands: {
+          switch: {
+            method: "POST",
+            endpoint: "/root/:rootId/study/switch",
+            description: "Activate a queue item by name or number.",
+            body: ["topic"],
+          },
+          stop: {
+            method: "POST",
+            endpoint: "/root/:rootId/study/deactivate",
+            description: "Deactivate topic, move back to queue.",
+            body: ["topic"],
+          },
+          remove: {
+            method: "POST",
+            endpoint: "/root/:rootId/study/remove",
+            description: "Delete from queue or active.",
+            body: ["topic"],
+          },
+          status: {
+            method: "GET",
+            endpoint: "/root/:rootId/study/status",
+            description: "Show active topics and mastery.",
+          },
+          gaps: {
+            method: "GET",
+            endpoint: "/root/:rootId/study/gaps",
+            description: "Show detected knowledge gaps.",
+          },
+        },
       },
       {
         command: "needlearn [topic...]",
@@ -69,20 +99,6 @@ export default {
         method: "POST",
         endpoint: "/root/:rootId/study/queue",
         bodyMap: { topic: 0 },
-      },
-      {
-        command: "study-status",
-        scope: ["tree"],
-        description: "Show active topics and mastery.",
-        method: "GET",
-        endpoint: "/root/:rootId/study/status",
-      },
-      {
-        command: "study-gaps",
-        scope: ["tree"],
-        description: "Show detected knowledge gaps.",
-        method: "GET",
-        endpoint: "/root/:rootId/study/gaps",
       },
     ],
   },

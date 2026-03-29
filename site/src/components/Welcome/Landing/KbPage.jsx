@@ -276,6 +276,35 @@ const KbPage = () => {
         </div>
       </section>
 
+      {/* ── COMMANDS ── */}
+      <section className="lp-section" style={{paddingTop: 60, paddingBottom: 60}}>
+        <div className="lp-container" style={{maxWidth: 760}}>
+          <h2 style={{color: "#fff", fontSize: "1.5rem", marginBottom: 32, textAlign: "center"}}>
+            Commands
+          </h2>
+          <div style={{
+            background: "rgba(255,255,255,0.03)", borderRadius: 12,
+            border: "1px solid rgba(255,255,255,0.06)", padding: "24px 28px",
+            fontFamily: "monospace", fontSize: "0.85rem", lineHeight: 2.2,
+          }}>
+            {[
+              { cmd: 'kb "statement"', desc: "Tell the kb something new" },
+              { cmd: 'kb "question"', desc: "Ask the kb something" },
+              { cmd: "kb status", desc: "Coverage and freshness" },
+              { cmd: "kb stale", desc: "Notes needing review" },
+              { cmd: "kb unplaced", desc: "Uncategorized items" },
+              { cmd: "kb review", desc: "Guided review of stale notes" },
+              { cmd: "be", desc: "Start guided review mode" },
+            ].map((item, i) => (
+              <div key={i} style={{display: "flex", justifyContent: "space-between", borderBottom: i < 6 ? "1px solid rgba(255,255,255,0.04)" : "none", padding: "2px 0"}}>
+                <span style={{color: "rgba(72,187,120,0.9)"}}>{item.cmd}</span>
+                <span style={{color: "rgba(255,255,255,0.35)"}}>{item.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── CTA ── */}
       <section className="lp-section" style={{paddingTop: 80, paddingBottom: 100, textAlign: "center"}}>
         <div className="lp-container">
