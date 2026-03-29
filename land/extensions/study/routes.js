@@ -24,6 +24,7 @@ const router = express.Router();
 
 function detectIntent(message) {
   const lower = message.toLowerCase();
+  if (lower === "be") return "session";
   if (/\b(needlearn|need to learn|want to learn|add to queue|queue)\b/.test(lower)) return "queue";
   if (/\b(study session|continue studying|let's study|teach me|study$)\b/.test(lower)) return "session";
   if (/\b(progress|mastery|how am i|gaps?|review|status|streak)\b/.test(lower)) return "review";
@@ -81,13 +82,26 @@ router.post("/root/:rootId/study", authenticate, async (req, res) => {
     // ── PATH 1b: Setup incomplete ──
     const phase = await getSetupPhase(rootId);
     if (phase === "base") {
-      const { answer, chatId } = await runChat({
-        userId, username, message,
-        mode: "tree:study-plan",
-        rootId, res, slot: "study",
-      });
-      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:study-plan", setup: true });
-      return;
+      // Check if AI already created topics/queue items
+      const [activeTopics, queue] = await Promise.all([getActiveTopics(rootId), getQueue(rootId)]);
+      const hasContent = activeTopics.length > 0 || queue.length > 0;
+
+      if (hasContent) {
+        const { completeSetup } = await import("./setup.js");
+        await completeSetup(rootId);
+      } else {
+        try {
+          const { answer, chatId } = await runChat({
+            userId, username, message,
+            mode: "tree:study-plan",
+            rootId, res, slot: "study",
+          });
+          if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:study-plan", setup: true });
+        } catch (llmErr) {
+          if (!res.headersSent) sendOk(res, { answer: "What do you want to learn?", mode: "tree:study-plan", setup: true });
+        }
+        return;
+      }
     }
 
     const intent = detectIntent(message);

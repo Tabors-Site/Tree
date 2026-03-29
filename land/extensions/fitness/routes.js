@@ -49,7 +49,8 @@ router.get("/root/:rootId/fitness", async (req, res, next) => {
 // ── Intent detection ──
 
 function detectIntent(message) {
-  const lower = message.toLowerCase();
+  const lower = message.toLowerCase().trim();
+  if (lower === "be") return "coach";
   if (/\b(go|workout|start session|let's go|ready|begin|next set)\b/.test(lower)) return "coach";
   if (/\b(how am i|progress|show.*history|review|stats|prs?|personal record|missed)\b/.test(lower)) return "review";
   if (/\b(plan|program|build|create.*plan|restructure|add.*exercise|remove|modify|change.*program)\b/.test(lower)) return "plan";
@@ -110,16 +111,32 @@ router.post("/root/:rootId/fitness", authenticate, async (req, res) => {
       return;
     }
 
-    // ── PATH 2: Setup incomplete. Continue plan mode. ──
+    // ── PATH 2: Setup incomplete. Auto-complete if exercises exist. ──
     const phase = await getSetupPhase(rootId);
     if (phase === "base") {
-      const { answer, chatId } = await runChat({
-        userId, username, message,
-        mode: "tree:fitness-plan",
-        rootId, res, slot: "fitness",
-      });
-      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:fitness-plan", setup: true });
-      return;
+      // Check if AI already created exercises (even if it forgot to call complete)
+      const state = await getExerciseState(rootId);
+      const hasExercises = state && Object.values(state.groups || {}).some(g => g.exercises?.length > 0);
+
+      if (hasExercises) {
+        // AI built the tree but forgot to complete. Auto-complete.
+        const { completeSetup } = await import("./setup.js");
+        await completeSetup(rootId);
+        // Fall through to normal intent routing
+      } else {
+        // No exercises yet. Continue setup conversation.
+        try {
+          const { answer, chatId } = await runChat({
+            userId, username, message,
+            mode: "tree:fitness-plan",
+            rootId, res, slot: "fitness",
+          });
+          if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:fitness-plan", setup: true });
+        } catch (llmErr) {
+          if (!res.headersSent) sendOk(res, { answer: "Setup in progress. Tell me what you train.", mode: "tree:fitness-plan", setup: true });
+        }
+        return;
+      }
     }
 
     // ── PATH 3: Intent-based routing. ──

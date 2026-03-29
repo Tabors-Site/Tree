@@ -30,14 +30,31 @@ router.get("/root/:rootId/kb", async (req, res, next) => {
       const { rootId } = req.params;
       const root = await NodeModel.findById(rootId).select("name metadata").lean();
       if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Not found");
+
       let status = null, stale = null, unplaced = null;
       if (await isInitialized(rootId)) {
         [status, stale, unplaced] = await Promise.all([
           getStatus(rootId), getStaleNotes(rootId), getUnplaced(rootId),
         ]);
       }
+
+      // Check search capabilities
+      const { getExtension } = await import("../loader.js");
+      const hasEmbed = !!getExtension("embed");
+      const hasScout = !!getExtension("scout");
+
       const { renderKbDashboard } = await import("./pages/dashboard.js");
-      res.send(renderKbDashboard({ rootId, rootName: root.name, status, stale, unplaced, token: req.query.token || null, userId: req.userId }));
+      res.send(renderKbDashboard({
+        rootId,
+        rootName: root.name,
+        status,
+        stale,
+        unplaced,
+        token: req.query.token || null,
+        userId: req.userId,
+        hasEmbed,
+        hasScout,
+      }));
     });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, "Dashboard failed");
@@ -78,7 +95,7 @@ router.post("/root/:rootId/kb", authenticate, async (req, res) => {
       try {
         const { answer, chatId } = await runChat({
           userId, username,
-          message: `Knowledge base created. The user said: "${message}". If they're telling you something, organize it into the Topics tree. If they're asking, explain the kb is empty and invite them to start adding knowledge.`,
+          message: `Knowledge base just created. The user said: "${message}".\n\nFirst: infer what domain this knowledge base covers from the user's message. Rename the root node to a clear, short name for this domain (e.g. "Datacenter Ops", "Company Policies", "Product Knowledge") using the rename tool.\n\nThen: if they're telling you something, organize it into the Topics tree. If they're asking, explain the kb is empty and invite them to start adding knowledge.`,
           mode: "tree:kb-tell",
           rootId, res, slot: "kb",
         });
@@ -101,6 +118,26 @@ router.post("/root/:rootId/kb", authenticate, async (req, res) => {
         if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:kb-tell", setup: true });
       } catch (llmErr) {
         if (!res.headersSent) sendOk(res, { answer: "Set up an LLM connection to use the knowledge base.", mode: "tree:kb-tell", setup: true });
+      }
+      return;
+    }
+
+    // ── Review: start guided review mode ──
+    if (message.trim().toLowerCase() === "review") {
+      const maintainer = await isMaintainer(rootId, userId);
+      if (!maintainer) {
+        return sendError(res, 403, ERR.FORBIDDEN, "Only maintainers can review.");
+      }
+      try {
+        const { answer, chatId } = await runChat({
+          userId, username,
+          message: "Start a guided review of stale notes in this knowledge base.",
+          mode: "tree:kb-review",
+          rootId, res, slot: "kb",
+        });
+        if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:kb-review" });
+      } catch (llmErr) {
+        if (!res.headersSent) sendOk(res, { answer: "Failed to start review. Check LLM connection.", mode: "tree:kb-review" });
       }
       return;
     }

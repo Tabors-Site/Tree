@@ -194,7 +194,7 @@ export function chatBarHtml({ placeholder = "Type a message..." } = {}) {
       <div class="chat-bar-toggle">
         <span class="chat-bar-toggle-label" onclick="toggleChatBar()">Chat</span>
         <span style="display:flex;align-items:center;gap:10px;">
-          <span class="chat-bar-toggle-icon" onclick="clearChatBar()" title="Clear chat" style="cursor:pointer;font-size:0.75rem;color:rgba(255,255,255,0.3);">clear</span>
+          <span id="chatClearBtn" class="chat-bar-toggle-icon" onclick="clearChatBar()" title="Clear chat" style="cursor:pointer;font-size:0.75rem;color:rgba(255,255,255,0.3);">clear</span>
           <span class="chat-bar-toggle-icon" onclick="toggleChatBar()" style="cursor:pointer;">▲</span>
         </span>
       </div>
@@ -262,14 +262,27 @@ export function chatBarJs({ endpoint, token }) {
       return el;
     }
 
+    var _activeAbort = null;
+
+    function stopChatMessage() {
+      if (_activeAbort) {
+        _activeAbort.abort();
+        _activeAbort = null;
+      }
+    }
+
     async function sendChatMessage() {
       var input = document.getElementById('chatInput');
       var message = input.value.trim();
       if (!message) return;
 
       input.value = '';
-      document.getElementById('chatSend').disabled = true;
+      var sendBtn = document.getElementById('chatSend');
+      sendBtn.textContent = 'Stop';
+      sendBtn.onclick = stopChatMessage;
       input.disabled = true;
+      document.getElementById('chatClearBtn').style.opacity = '0.15';
+      document.getElementById('chatClearBtn').style.pointerEvents = 'none';
 
       // Open chat bar if minimized
       document.getElementById('chatBar').classList.remove('minimized');
@@ -283,12 +296,15 @@ export function chatBarJs({ endpoint, token }) {
       document.getElementById('chatMessages').appendChild(loadingEl);
       document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
 
+      _activeAbort = new AbortController();
+
       try {
         var res = await fetch('${endpoint}', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({ message: message }),
+          signal: _activeAbort.signal,
         });
 
         var data = await res.json();
@@ -311,11 +327,21 @@ export function chatBarJs({ endpoint, token }) {
         }
       } catch (err) {
         loadingEl.remove();
-        appendMessage('error', 'Connection failed.');
+        if (err.name === 'AbortError') {
+          appendMessage('error', 'Cancelled.');
+        } else {
+          appendMessage('error', 'Connection failed.');
+        }
       }
 
-      document.getElementById('chatSend').disabled = false;
+      _activeAbort = null;
+      var sendBtn = document.getElementById('chatSend');
+      sendBtn.textContent = 'Send';
+      sendBtn.onclick = sendChatMessage;
+      sendBtn.disabled = false;
       input.disabled = false;
+      document.getElementById('chatClearBtn').style.opacity = '';
+      document.getElementById('chatClearBtn').style.pointerEvents = '';
       input.focus();
       saveChatHistory();
     }

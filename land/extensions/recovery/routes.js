@@ -100,16 +100,43 @@ router.post("/root/:rootId/recovery", authenticate, async (req, res) => {
     const { getSetupPhase } = await import("./core.js");
     const phase = await getSetupPhase(rootId);
     if (phase === "base") {
-      const { answer, chatId } = await runChat({
-        userId, username, message,
-        mode: "tree:recovery-log",
-        rootId, res, slot: "recovery",
-      });
-      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:recovery-log", setup: true });
-      return;
+      // Check if substances were already added
+      const nodes = await findRecoveryNodes(rootId);
+      const hasSubstances = nodes?.substances && Object.keys(nodes.substances).length > 0;
+
+      if (hasSubstances) {
+        const { completeSetup } = await import("./core.js");
+        await completeSetup(rootId);
+      } else {
+        try {
+          const { answer, chatId } = await runChat({
+            userId, username, message,
+            mode: "tree:recovery-log",
+            rootId, res, slot: "recovery",
+          });
+          if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:recovery-log", setup: true });
+        } catch (llmErr) {
+          if (!res.headersSent) sendOk(res, { answer: "What substances are you tracking?", mode: "tree:recovery-log", setup: true });
+        }
+        return;
+      }
     }
 
     const nodes = await findRecoveryNodes(rootId);
+
+    // ── PATH: "be" command → guided check-in ──
+    if (message.trim().toLowerCase() === "be") {
+      try {
+        const { answer, chatId } = await runChat({
+          userId, username, message: "The user said 'be'. Start a guided check-in. Ask how they're feeling today, any substance use, cravings, energy level.",
+          mode: "tree:recovery-log", rootId, res, slot: "recovery",
+        });
+        if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:recovery-log" });
+      } catch (llmErr) {
+        if (!res.headersSent) sendOk(res, { answer: "How are you doing today?", mode: "tree:recovery-log" });
+      }
+      return;
+    }
 
     // ── PATH 3: Questions/reflection/planning ──
     const isReflect = /\b(how am i|how's my|pattern|trend|week|month|progress|review|doing)\b/i.test(message);
@@ -187,13 +214,13 @@ router.post("/root/:rootId/recovery", authenticate, async (req, res) => {
     // Get fresh status for response
     const status = await getStatus(rootId);
 
-    // Build response via LLM (the AI has context from enrichContext)
+    // Build response via LLM (reflect mode for conversational response, not log mode which returns JSON)
     const { answer, chatId } = await runChat({
       userId, username,
       message: parsed
         ? `Check-in logged. Data: ${JSON.stringify(parsed)}. Respond naturally. Acknowledge what's hard. Point out patterns if visible. Short.`
         : message,
-      mode: "tree:recovery-log",
+      mode: "tree:recovery-reflect",
       rootId, res, slot: "recovery",
     });
 

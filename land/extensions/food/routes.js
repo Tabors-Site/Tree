@@ -103,23 +103,52 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
     const { getSetupPhase } = await import("./core.js");
     const phase = await getSetupPhase(rootId);
     if (phase === "base") {
-      const { answer, chatId } = await runChat({
-        userId,
-        username,
-        message,
-        mode: "tree:food-coach",
-        rootId,
-        res,
-        slot: "food",
-      });
+      // Check if AI already set goals (even if it forgot to call complete)
+      const foodNodes = await findFoodNodes(rootId);
+      let hasGoals = false;
+      if (foodNodes?.protein) {
+        const pNode = await NodeModel.findById(foodNodes.protein.id).select("metadata").lean();
+        const goals = pNode?.metadata instanceof Map ? pNode.metadata.get("goals") : pNode?.metadata?.goals;
+        hasGoals = goals?.today > 0;
+      }
 
-      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-coach", setup: true });
-      return;
+      if (hasGoals) {
+        // Goals set but complete not called. Auto-complete.
+        const { saveProfile } = await import("./core.js");
+        await saveProfile(rootId, {}, foodNodes);
+      } else {
+        // No goals yet. Continue setup.
+        try {
+          const { answer, chatId } = await runChat({
+            userId, username, message,
+            mode: "tree:food-coach",
+            rootId, res, slot: "food",
+          });
+          if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-coach", setup: true });
+        } catch (llmErr) {
+          if (!res.headersSent) sendOk(res, { answer: "Tell me your calorie target and macro goals.", mode: "tree:food-coach", setup: true });
+        }
+        return;
+      }
     }
 
     const foodNodes = await findFoodNodes(rootId);
     if (!foodNodes?.log) {
       return sendError(res, 500, ERR.INTERNAL, "Food tree structure not found.");
+    }
+
+    // ── PATH: "be" command → guided log mode ──
+    if (message.trim().toLowerCase() === "be") {
+      try {
+        const { answer, chatId } = await runChat({
+          userId, username, message: "The user said 'be'. Guide them through logging their current meal or snack. Ask what they're eating.",
+          mode: "tree:food-log", rootId, res, slot: "food",
+        });
+        if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-log" });
+      } catch (llmErr) {
+        if (!res.headersSent) sendOk(res, { answer: "What did you eat?", mode: "tree:food-log" });
+      }
+      return;
     }
 
     // ── PATH 3: Questions, advice, planning. Route to coach/daily mode. ──

@@ -117,7 +117,8 @@ export async function completeSetup(rootId) {
 // ── Intent routing ──
 
 export function routeKbIntent(message) {
-  const lower = message.toLowerCase();
+  const lower = message.toLowerCase().trim();
+  if (lower === "be") return "review";
   if (/^(what|how|why|when|where|who|is |are |does |do |can |show |tell me|explain)\b/.test(lower))
     return "ask";
   return "tell";
@@ -143,7 +144,7 @@ export async function getStatus(rootId) {
   const nodes = await findKbNodes(rootId);
   if (!nodes) return null;
 
-  const root = await _Node.findById(rootId).select("metadata").lean();
+  const root = await _Node.findById(rootId).select("name metadata").lean();
   const kbMeta = root?.metadata instanceof Map ? root.metadata.get("kb") : root?.metadata?.kb;
 
   // Count topics and notes
@@ -236,7 +237,7 @@ export async function getStatus(rootId) {
     .slice(0, 5);
 
   return {
-    name: kbMeta?.profile?.name || "Knowledge Base",
+    name: root?.name || kbMeta?.profile?.name || "Knowledge Base",
     profile: kbMeta?.profile || null,
     topicCount,
     noteCount,

@@ -561,7 +561,8 @@
       "Bash(grep -rn \"EXTENSION\\\\|extension.*name\" /home/tabor/github/Tree/land/canopy/*.js)",
       "Bash(grep -r \"tree-assign\\\\|llm tree\" /home/tabor/github/Tree/land/cli --include=*.js -B 2 -A 5)",
       "Bash(find /home/tabor/github/Tree/land/extensions/study/pages -type f -name *.js)",
-      "Bash(grep -l \"mcp\" /home/tabor/github/Tree/land/extensions/*/manifest.js)"
+      "Bash(grep -l \"mcp\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
+      "Bash(echo \"FAILED: $f\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

@@ -20,6 +20,7 @@ export default {
     "create-new-node",
     "create-node-version-note",
     "edit-node-note",
+    "edit-node-name",
     "get-searched-notes-by-user",
   ],
 
