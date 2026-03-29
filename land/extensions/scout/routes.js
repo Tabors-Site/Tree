@@ -1,6 +1,7 @@
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
+import Node from "../../seed/models/node.js";
 import { runScout, getScoutHistory, getScoutGaps } from "./core.js";
 
 const router = express.Router();
@@ -12,7 +13,12 @@ router.post("/node/:nodeId/scout", authenticate, async (req, res) => {
     if (!query || typeof query !== "string") {
       return sendError(res, 400, ERR.INVALID_INPUT, "query is required");
     }
-    const result = await runScout(req.params.nodeId, query, req.userId, req.username || "system", {});
+
+    // Resolve tree root so strategies search the whole tree
+    const node = await Node.findById(req.params.nodeId).select("rootOwner").lean();
+    const rootId = node?.rootOwner ? String(node.rootOwner) : req.params.nodeId;
+
+    const result = await runScout(req.params.nodeId, query, req.userId, req.username || "system", { rootId });
     if (result.error) {
       return sendError(res, 409, ERR.RESOURCE_CONFLICT, result.error);
     }

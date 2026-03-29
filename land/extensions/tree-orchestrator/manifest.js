@@ -45,6 +45,11 @@ export default {
   needs: {
     services: ["llm", "session", "chat", "mcp", "websocket", "hooks", "orchestrator"],
     models: ["Node"],
+    extensions: ["treeos-base"],
+  },
+
+  optional: {
+    extensions: ["competence", "explore", "contradiction", "purpose", "evolution", "remember", "understanding"],
   },
 
   provides: {

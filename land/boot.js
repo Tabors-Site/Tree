@@ -263,13 +263,13 @@ async function pickExtensions(horizonUrl) {
 
   const finalize = async (selected) => {
     const names = selected.map(e => e.name);
-    if (isLocal) {
-      // Write profile filter so the loader only loads selected extensions
-      const profilePath = path.join(__dirname, "extensions", ".treeos-profile");
-      fs.writeFileSync(profilePath, names.join("\n") + "\n", "utf8");
-      console.log(`  Profile saved. ${names.length} extensions will load on boot.\n`);
-    } else {
-      // Install from Horizon registry
+    // Write profile filter FIRST. The loader only loads listed extensions.
+    // If remote install fails below, the land boots with only what's on disk
+    // that matches the profile. Missing extensions are skipped, not substituted.
+    const profilePath = path.join(__dirname, "extensions", ".treeos-profile");
+    fs.writeFileSync(profilePath, names.join("\n") + "\n", "utf8");
+    console.log(`  Profile saved. ${names.length} extensions will load on boot.\n`);
+    if (!isLocal) {
       await installSelected(selected, horizonUrl);
     }
   };
