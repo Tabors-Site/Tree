@@ -559,7 +559,8 @@
       "Bash(echo \"Found violation in $ext\" done)",
       "Bash(grep -l \"extension\" /home/tabor/github/Tree/land/canopy/*.js)",
       "Bash(grep -rn \"EXTENSION\\\\|extension.*name\" /home/tabor/github/Tree/land/canopy/*.js)",
-      "Bash(grep -r \"tree-assign\\\\|llm tree\" /home/tabor/github/Tree/land/cli --include=*.js -B 2 -A 5)"
+      "Bash(grep -r \"tree-assign\\\\|llm tree\" /home/tabor/github/Tree/land/cli --include=*.js -B 2 -A 5)",
+      "Bash(find /home/tabor/github/Tree/land/extensions/study/pages -type f -name *.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

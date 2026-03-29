@@ -4,6 +4,7 @@
  * Embeddable chat widget for extension dashboard pages.
  * Floats at the bottom. Input bar, output area, minimize toggle.
  * Uses fetch POST to the extension's route. No WebSocket needed.
+ * Messages persist in sessionStorage across page navigations.
  *
  * Usage in a dashboard page:
  *   import { chatBarCss, chatBarHtml, chatBarJs } from "../../html-rendering/html/chatBar.js";
@@ -124,6 +125,16 @@ export function chatBarCss() {
     }
     .chat-bar-send:hover { background: rgba(102, 126, 234, 0.3); }
     .chat-bar-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    @keyframes dotPulse {
+      0%, 80%, 100% { opacity: 0.3; }
+      40% { opacity: 1; }
+    }
+    .loading-dots span {
+      animation: dotPulse 1.4s infinite;
+    }
+    .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
   `;
 }
 
@@ -147,9 +158,37 @@ export function chatBarHtml({ placeholder = "Type a message..." } = {}) {
 export function chatBarJs({ endpoint, token }) {
   const tokenParam = token ? `&token=${encodeURIComponent(token)}` : "";
   return `
+    var _chatStorageKey = 'chatbar:' + window.location.pathname;
+
+    function saveChatHistory() {
+      var msgs = [];
+      var container = document.getElementById('chatMessages');
+      if (!container) return;
+      for (var el of container.children) {
+        if (el.classList.contains('loading')) continue;
+        var role = el.classList.contains('user') ? 'user' : el.classList.contains('error') ? 'error' : 'ai';
+        msgs.push({ role: role, text: el.textContent });
+      }
+      try { sessionStorage.setItem(_chatStorageKey, JSON.stringify(msgs.slice(-30))); } catch {}
+    }
+
+    function restoreChatHistory() {
+      try {
+        var saved = sessionStorage.getItem(_chatStorageKey);
+        if (!saved) return;
+        var msgs = JSON.parse(saved);
+        if (!Array.isArray(msgs) || msgs.length === 0) return;
+        for (var m of msgs) {
+          appendMessage(m.role, m.text);
+        }
+        // Open chat bar if there's history
+        document.getElementById('chatBar').classList.remove('minimized');
+      } catch {}
+    }
+
     function toggleChatBar() {
       document.getElementById('chatBar').classList.toggle('minimized');
-      const input = document.getElementById('chatInput');
+      var input = document.getElementById('chatInput');
       if (!document.getElementById('chatBar').classList.contains('minimized')) {
         setTimeout(function() { input.focus(); }, 100);
       }
@@ -172,12 +211,19 @@ export function chatBarJs({ endpoint, token }) {
 
       input.value = '';
       document.getElementById('chatSend').disabled = true;
+      input.disabled = true;
 
       // Open chat bar if minimized
       document.getElementById('chatBar').classList.remove('minimized');
 
       appendMessage('user', message);
-      var loadingEl = appendMessage('loading', 'Thinking...');
+      saveChatHistory();
+
+      var loadingEl = document.createElement('div');
+      loadingEl.className = 'chat-msg loading';
+      loadingEl.innerHTML = '<span class="loading-dots">Thinking<span>.</span><span>.</span><span>.</span></span> <span style="font-size:0.8rem;opacity:0.5">may take a moment</span>';
+      document.getElementById('chatMessages').appendChild(loadingEl);
+      document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
 
       try {
         var res = await fetch('${endpoint}', {
@@ -204,7 +250,29 @@ export function chatBarJs({ endpoint, token }) {
       }
 
       document.getElementById('chatSend').disabled = false;
+      input.disabled = false;
       input.focus();
+      saveChatHistory();
     }
+
+    // Restore chat history on page load
+    restoreChatHistory();
+
+    // Auto-send startMsg from URL (used by apps/create redirect)
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      var startMsg = params.get('startMsg');
+      if (startMsg && startMsg.trim()) {
+        // Clean the URL so refresh doesn't re-send
+        var clean = new URL(window.location);
+        clean.searchParams.delete('startMsg');
+        history.replaceState(null, '', clean.toString());
+        // Send after a short delay to let the page render
+        setTimeout(function() {
+          document.getElementById('chatInput').value = startMsg;
+          sendChatMessage();
+        }, 500);
+      }
+    })();
   `;
 }

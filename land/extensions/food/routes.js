@@ -21,6 +21,30 @@ export function setServices({ Node: N }) { if (N) Node = N; }
 
 const router = express.Router();
 
+// ── HTML Dashboard (GET with ?html) ──
+router.get("/root/:rootId/food", async (req, res, next) => {
+  if (!("html" in req.query)) return next();
+  try {
+    const { isHtmlEnabled } = await import("../html-rendering/config.js");
+    if (!isHtmlEnabled()) return next();
+    const urlAuth = (await import("../html-rendering/urlAuth.js")).default;
+    urlAuth(req, res, async () => {
+      const { rootId } = req.params;
+      const root = await Node.findById(rootId).select("name metadata").lean();
+      if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Not found");
+      let picture = null;
+      if (await isInitialized(rootId)) {
+        const { getDailyPicture } = await import("./core.js");
+        picture = await getDailyPicture(rootId);
+      }
+      const { renderFoodDashboard } = await import("./pages/dashboard.js");
+      res.send(renderFoodDashboard({ rootId, rootName: root.name, picture, token: req.query.token || null }));
+    });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, "Dashboard failed");
+  }
+});
+
 /**
  * POST /root/:rootId/food
  *
@@ -61,17 +85,17 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
     if (!initialized) {
       await scaffold(rootId, userId);
 
-      const { answer, chatId } = await runChat({
-        userId,
-        username,
-        message: `First time setup. The user said: "${message}". Ask them about their calorie target, macro goals, and dietary restrictions. If they already provided info in their message, use it.`,
-        mode: "tree:food-coach",
-        rootId,
-        res,
-        slot: "food",
-      });
-
-      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-coach", setup: true });
+      try {
+        const { answer, chatId } = await runChat({
+          userId, username,
+          message: `First time setup. The user said: "${message}". Ask them about their calorie target, macro goals, and dietary restrictions. If they already provided info in their message, use it.`,
+          mode: "tree:food-coach",
+          rootId, res, slot: "food",
+        });
+        if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-coach", setup: true });
+      } catch (llmErr) {
+        if (!res.headersSent) sendOk(res, { answer: "Tree created. Set up an LLM connection to start the conversation.", mode: "tree:food-coach", setup: true });
+      }
       return;
     }
 

@@ -43,6 +43,9 @@ const STATIC_ROUTES = [
   "/land",
   "/treeos",
   "/study",
+  "/fitness",
+  "/food",
+  "/recovery",
   "/app",
 ];
 
@@ -113,6 +116,18 @@ const PAGE_META = {
   "/study": {
     title: "Study . The Tree That Teaches You",
     description: "Queue what you want to learn. The AI breaks it into a curriculum, teaches through conversation, tracks mastery, and detects gaps. Paste a URL and it reads the content. Type be and it picks the next lesson.",
+  },
+  "/fitness": {
+    title: "Fitness . Three Languages, One Command",
+    description: "Gym, running, and bodyweight. Log any workout in natural language. The AI detects what you did, routes it to the right place, and tracks progressive overload automatically. Type be and the coach walks you through today's session.",
+  },
+  "/food": {
+    title: "Food . The Tree That Knows What You Eat",
+    description: "Say what you ate. One LLM call parses macros. Cascade routes to tracking nodes. Meal patterns, weekly averages, fitness channel integration. The tree IS the nutritionist.",
+  },
+  "/recovery": {
+    title: "Recovery . The Tree That Grows Toward Health",
+    description: "Track substances, feelings, cravings, and patterns. Taper schedules that bend around you. Pattern detection that finds what you can't see. A mirror, not a judge.",
   },
   "/app": {
     title: "TreeOS . The First OS Built on the Seed",

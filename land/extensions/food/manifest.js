@@ -31,6 +31,7 @@ export default {
       "notifications",   // overdue meal reminders
       "phase",           // suppress during focus
       "schedules",       // meal timing
+      "html-rendering",  // dashboard page
     ],
   },
 

@@ -709,6 +709,7 @@ export function packageCard(pkg, idx) {
         <span>${pkg.downloads || 0} dl</span>
         ${npmCount > 0 ? `<span class="separator"></span><span>${npmCount} npm deps</span>` : ""}
         ${pkg.dependentCount ? `<span class="separator"></span><span>${pkg.dependentCount} dependents</span>` : ""}
+        ${pkg.repoUrl ? `<span class="separator"></span><span style="color:var(--accent);">source</span>` : ""}
       </div>
       ${tagHtml ? `<div class="pkg-tags">${tagHtml}</div>` : ""}
     </a>

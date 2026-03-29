@@ -1325,3 +1325,29 @@ treeos bundle install <name>    Install all member extensions.
 ```
 
 `os info` shows: bundles, extension count, config defaults, orchestrator assignments, estimated disk footprint, npm dependencies across all members. The operator makes an informed decision before committing.
+
+## Collaboration
+
+Code lives on your land. You build extensions in `extensions/my-extension/`, test them locally, and publish to Horizon when ready. If you want others to contribute, push the code to GitHub (or any git host) and link it with `repoUrl`. If you don't need collaboration, skip the repo. The extension works either way.
+
+### Workflow
+
+1. **Build** locally. Create your extension in `extensions/`. Test it on your land.
+2. **Publish** to Horizon. `treeos ext publish my-extension --notes "what changed"`. Horizon stores the package.
+3. **Others install** from Horizon. `treeos ext install my-extension`. They get the published version.
+4. **Collaborate** (optional). Push to GitHub. Others fork, PR, contribute. You publish the next version.
+
+### Linking code and packages
+
+If your code is on a public repo, include `repoUrl` when publishing so Horizon can link to the source:
+
+```js
+// In your manifest or publish command
+repoUrl: "https://github.com/yourname/my-extension"
+```
+
+Horizon displays this on the extension detail page as a "Source Code" button. Browse cards show a "source" indicator when repoUrl is present.
+
+### If the author is inactive
+
+Fork the repo. Publish under a new name. Horizon tracks name ownership (first publisher owns the name), not code ownership. The ecosystem grows through open contribution. If you improve an abandoned extension, publish your version and let operators choose.

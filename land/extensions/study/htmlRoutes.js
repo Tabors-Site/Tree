@@ -28,17 +28,16 @@ router.get("/root/:rootId/study", urlAuth, htmlOnly, async (req, res) => {
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Study tree not found");
 
     const meta = root.metadata instanceof Map ? root.metadata.get("study") : root.metadata?.study;
-    if (!meta?.initialized) {
-      return sendError(res, 404, ERR.TREE_NOT_FOUND, "Study tree not initialized");
+    let queue = [], activeTopics = [], gaps = [], progress = null, profile = {};
+    if (meta?.initialized) {
+      [queue, activeTopics, gaps, progress, profile] = await Promise.all([
+        getQueue(rootId),
+        getActiveTopics(rootId),
+        getGaps(rootId),
+        getStudyProgress(rootId),
+        getProfile(rootId),
+      ]);
     }
-
-    const [queue, activeTopics, gaps, progress, profile] = await Promise.all([
-      getQueue(rootId),
-      getActiveTopics(rootId),
-      getGaps(rootId),
-      getStudyProgress(rootId),
-      getProfile(rootId),
-    ]);
 
     res.send(renderStudyDashboard({
       rootId,

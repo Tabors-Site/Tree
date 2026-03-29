@@ -34,6 +34,7 @@ export default {
       "scheduler",
       "breath",
       "notifications",
+      "html-rendering",  // dashboard page
     ],
   },
 

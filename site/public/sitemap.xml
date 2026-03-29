@@ -99,6 +99,24 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://treeOS.ai/fitness</loc>
+    <lastmod>2026-03-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://treeOS.ai/food</loc>
+    <lastmod>2026-03-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://treeOS.ai/recovery</loc>
+    <lastmod>2026-03-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://treeOS.ai/app</loc>
     <lastmod>2026-03-26</lastmod>
     <changefreq>monthly</changefreq>

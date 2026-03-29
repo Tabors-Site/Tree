@@ -43,6 +43,7 @@ export default {
       "notifications",   // missed workout alerts
       "phase",           // suppress during focus
       "treeos-base",     // tool navigation registration
+      "html-rendering",  // dashboard page
     ],
   },
 

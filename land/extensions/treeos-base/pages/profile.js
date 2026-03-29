@@ -847,6 +847,7 @@ text-decoration: none;
     <div class="glass-card nav-section">
       <h2>Quick Links</h2>
       <ul class="nav-links">
+        <li><a href="/api/v1/user/${userId}/apps${queryString}" style="color:#48bb78">Apps</a></li>
         <li><a href="/api/v1/user/${userId}/raw-ideas${queryString}">Raw Ideas</a></li>
                 <li><a href="/api/v1/user/${userId}/chats${queryString}">AI Chats</a></li>
 

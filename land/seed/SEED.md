@@ -45,7 +45,7 @@ Node and User are the data contract. The seed also owns models for kernel operat
 
 | Model | Purpose |
 |-------|---------|
-| Note | Content attached to nodes. Six fields: contentType, content, userId, nodeId, metadata (Map), createdAt. Extensions tag notes via metadata (prestige writes version, treeos writes isReflection). beforeNote/afterNote hooks fire. |
+| Note | Content attached to nodes. Six fields: contentType, content, userId, nodeId, metadata (Map), createdAt. Extensions tag notes via metadata. Each extension uses its own namespace. beforeNote/afterNote hooks fire. |
 | Contribution | Audit trail. Core action shapes + extensionData for everything else. |
 | AIChat | Conversation sessions. The conversation loop is kernel. |
 | LLMConnection | LLM endpoint storage. The resolution chain is kernel. |

@@ -21,6 +21,7 @@ const Guide = () => {
             <a className="lp-btn lp-btn-secondary" href="/mycelium">Mycelium</a>
             <a className="lp-btn lp-btn-secondary" href="/land">Start a Land</a>
             <a className="lp-btn lp-btn-secondary" href="/cli">CLI</a>
+            <a className="lp-btn lp-btn-secondary" href="/treeos">TreeOS</a>
           </div>
         </div>
       </section>
@@ -254,13 +255,14 @@ Current node: Push Day (xyz-456-ghi)
 
 You are tabor's personal fitness coach...`}</Code>
           <P>
-            Four resolution chains determine what happens at every position:
+            Five resolution chains determine what happens at every position:
           </P>
           <ol style={{color: "rgba(255,255,255,0.6)", lineHeight: 2, paddingLeft: 20}}>
             <li><strong>Extension scope</strong>: walk parent chain, accumulate blocked/restricted extensions</li>
             <li><strong>Tool scope</strong>: mode base tools + extension tools + per-node allowed/blocked</li>
             <li><strong>Mode resolution</strong>: per-node override, then default, then fallback</li>
             <li><strong>LLM resolution</strong>: extension slot on tree, tree default, user slot, user default</li>
+            <li><strong>LLM config</strong>: per-node overrides for tool iterations, timeouts, context window. Walk parent chain, closest wins.</li>
           </ol>
           <P>
             Two entry points for extensions: <code>runChat()</code> for single messages with persistent sessions,
@@ -292,7 +294,7 @@ You are tabor's personal fitness coach...`}</Code>
             session types, LLM assignment slots, and exported functions for other extensions.
           </P>
           <P>
-            Five registries, same pattern: <strong>Hooks</strong> (27 lifecycle events),
+            Five registries, same pattern: <strong>Hooks</strong> (29 lifecycle events),
             <strong> Modes</strong> (AI behavior per position), <strong>Orchestrators</strong> (conversation flow),
             <strong> Socket Handlers</strong> (real-time events), <strong>Auth Strategies</strong> (authentication methods).
             Extensions register. The kernel resolves.
@@ -320,13 +322,13 @@ treeos ext-scope                   # shows both global and confined status`}</Co
             resolves everything. Four bundles cover the major capabilities:
           </P>
           <P style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", lineHeight: 1.7}}>
-            <strong style={{color: "rgba(255,255,255,0.6)"}}>base TreeOS</strong> (20): treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, approve, instructions.<br/>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>base TreeOS</strong> (21): treeos-base, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, breath, instructions, channels.<br/>
             <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-cascade</strong> (8): propagation, perspective-filter, sealed-transport, codebook, gap-detection, long-memory, pulse, flow.<br/>
             <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-intelligence</strong> (14): tree-compress, contradiction, inverse-tree, evolution, intent, embed, scout, explore, trace, boundary, competence, reflect, evolve, rings.<br/>
-            <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-connect</strong> (8): gateway, gateway-telegram, gateway-discord, gateway-webhook, gateway-email, gateway-sms, gateway-slack, gateway-matrix.<br/>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-connect</strong> (11): gateway, gateway-telegram, gateway-discord, gateway-webhook, gateway-email, gateway-sms, gateway-slack, gateway-matrix, gateway-reddit, gateway-x, gateway-tree.<br/>
             <strong style={{color: "rgba(255,255,255,0.6)"}}>treeos-maintenance</strong> (5): prune, reroot, changelog, digest, delegate.<br/>
-            <strong style={{color: "rgba(255,255,255,0.6)"}}>standalone</strong> (8): persona, mycelium, peer-review, seed-export, channels, governance, teach, split.<br/>
-            <strong style={{color: "rgba(255,255,255,0.6)"}}>95 extensions total</strong>. Twenty base. Thirty-five in bundles. Eight standalone. The rest domain-specific.
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>standalone</strong> (8): persona, mycelium, peer-review, seed-export, governance, teach, split, approve.<br/>
+            <strong style={{color: "rgba(255,255,255,0.6)"}}>95+ extensions total</strong>. Twenty-one base. Thirty-eight in bundles. Eight standalone. The rest domain-specific.
           </P>
           <P>
             Install from the registry: <code>treeos ext install treeos-cascade</code>.
@@ -344,7 +346,7 @@ treeos ext-scope                   # shows both global and confined status`}</Co
       {/* ══════════════════════════════════════════════════════════════ */}
       <section className="lp-section">
         <div className="lp-container" style={{maxWidth: 800}}>
-          <h2 className="lp-section-title">27 Hooks</h2>
+          <h2 className="lp-section-title">29 Hooks</h2>
           <P>
             An open pub/sub bus. Before hooks run sequentially and can cancel. After hooks
             run in parallel and react. Sequential hooks (enrichContext, onCascade) build
@@ -363,7 +365,8 @@ treeos ext-scope                   # shows both global and confined status`}</Co
               ["beforeResponse", "Modify AI response before client"],
               ["beforeRegister / afterRegister", "Before/after user registration"],
               ["afterSessionCreate / afterSessionEnd", "Session lifecycle"],
-              ["afterNavigate", "Tree navigation"],
+              ["afterNavigate / onNodeNavigate", "Tree root load / node-to-node navigation"],
+              ["afterNodeMove", "Node reparented, resolution chains shift"],
               ["afterMetadataWrite", "Metadata changes"],
               ["afterScopeChange", "Extension scope changes"],
               ["afterOwnershipChange", "Ownership or contributors changed"],

@@ -273,7 +273,7 @@ function detectModality(exercise) {
   return exercise.modality || "gym";
 }
 
-function buildValueFields(exercise, schema) {
+export function buildValueFields(exercise, schema) {
   const fields = {};
   const type = schema?.type || detectModality(exercise);
 

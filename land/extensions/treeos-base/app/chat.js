@@ -664,6 +664,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
           <span class="notif-btn-icon">☰</span>
           <span class="notif-btn-label">Menu</span>
         </button>
+        <a href="#" class="advanced-btn" id="appsLink" onclick="window.location='/api/v1/user/'+CONFIG.userId+'/apps?html';return false;">Apps</a>
         <a href="/dashboard" class="advanced-btn" id="advancedLink">Advanced</a>
       </div>
     </div>

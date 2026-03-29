@@ -112,8 +112,17 @@ export function renderExtensionPage({ ext, versions, dependents, ecosystem }) {
       </div>
       ${tags ? `<div style="margin-top:10px;">${tags}</div>` : ""}
       <div class="install-cmd">${installCmd}</div>
-      <div style="margin-top:10px;">
+      <div style="margin-top:12px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
         <a href="/extensions/${encodeURIComponent(ext.name)}/changelog" style="color:var(--accent);font-size:13px;text-decoration:none;">View changelog</a>
+        ${ext.repoUrl ? `
+          <a href="${escapeHtml(ext.repoUrl)}" target="_blank" rel="noopener"
+             style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;
+                    background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
+                    color:var(--text-secondary);font-size:13px;font-weight:600;text-decoration:none;
+                    transition:background 0.2s;">
+            Source Code
+          </a>
+        ` : ""}
       </div>
     </div>
 

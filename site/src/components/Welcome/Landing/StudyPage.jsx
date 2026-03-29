@@ -236,18 +236,19 @@ const StudyPage = () => {
           </p>
           <div style={{display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16, maxWidth: 500, margin: "0 auto"}}>
             {[
-              {emoji: "🍎", name: "Food", desc: "Fuels the body", color: "rgba(72,187,120,0.15)"},
-              {emoji: "💪", name: "Fitness", desc: "Builds the body", color: "rgba(102,126,234,0.15)"},
-              {emoji: "🌿", name: "Recovery", desc: "Heals the body", color: "rgba(236,201,75,0.15)"},
-              {emoji: "📚", name: "Study", desc: "Builds the mind", color: "rgba(159,122,234,0.15)"},
+              {emoji: "🍎", name: "Food", desc: "Fuels the body", color: "rgba(72,187,120,0.15)", href: "/food"},
+              {emoji: "💪", name: "Fitness", desc: "Builds the body", color: "rgba(102,126,234,0.15)", href: "/fitness"},
+              {emoji: "🌿", name: "Recovery", desc: "Heals the body", color: "rgba(236,201,75,0.15)", href: "/recovery"},
+              {emoji: "📚", name: "Study", desc: "Builds the mind", color: "rgba(159,122,234,0.15)", href: "/study"},
             ].map(item => (
-              <div key={item.name} style={{
+              <a key={item.name} href={item.href} style={{
                 background: item.color, borderRadius: 10, padding: "16px 20px", textAlign: "center",
+                textDecoration: "none", display: "block",
               }}>
                 <div style={{fontSize: "1.5rem", marginBottom: 4}}>{item.emoji}</div>
                 <div style={{color: "#fff", fontWeight: 600, fontSize: "0.95rem"}}>{item.name}</div>
                 <div style={{color: "rgba(255,255,255,0.5)", fontSize: "0.8rem"}}>{item.desc}</div>
-              </div>
+              </a>
             ))}
           </div>
         </div>

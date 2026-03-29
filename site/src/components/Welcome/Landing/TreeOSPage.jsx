@@ -33,40 +33,45 @@ const TreeOSPage = () => {
             with TreeOS. Each one is an extension. Each one proves the pattern.
           </p>
 
-          <div className="lp-cards-2">
-            <div className="lp-card">
-              <h3>Fitness</h3>
-              <p style={{fontSize: "0.9rem", color: "rgba(255,255,255,0.6)", lineHeight: 1.8}}>
-                Three languages: gym (weight x reps x sets), running (distance x time x pace),
-                bodyweight (reps x sets or duration). One LLM call detects modality and parses.
-                Progressive overload tracked per modality. Type <code>be</code> at the Fitness tree
-                and the coach walks you through today's program set by set.
-              </p>
-            </div>
-            <div className="lp-card">
-              <h3>Food</h3>
-              <p style={{fontSize: "0.9rem", color: "rgba(255,255,255,0.6)", lineHeight: 1.8}}>
-                Say what you ate. One LLM call parses macros. Cascade routes to Protein, Carbs, Fats nodes.
-                Meals subtree tracks patterns by slot. History archives daily summaries with weekly averages.
-                The food AI sees your workouts through channels. It knows what you need before you ask.
-              </p>
-            </div>
-            <div className="lp-card">
-              <h3>Recovery</h3>
-              <p style={{fontSize: "0.9rem", color: "rgba(255,255,255,0.6)", lineHeight: 1.8}}>
-                Track substances, feelings, cravings, and patterns. Taper schedules that bend around you.
-                Pattern detection that finds correlations you can't see. A journal that holds without
-                analyzing. Safety boundaries for dangerous withdrawals. The tree is a mirror, not a judge.
-              </p>
-            </div>
-            <div className="lp-card">
-              <h3><a href="/study" style={{color: "inherit", textDecoration: "none", borderBottom: "1px solid rgba(255,255,255,0.2)"}}>Study</a></h3>
-              <p style={{fontSize: "0.9rem", color: "rgba(255,255,255,0.6)", lineHeight: 1.8}}>
-                Queue what you want to learn. The AI breaks it into a curriculum, teaches through
-                conversation, tracks mastery per concept, and detects gaps you can't see. Paste a URL
-                and it reads the content for you. Type <code>be</code> and it picks the next lesson.
-              </p>
-            </div>
+          <div style={{display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 20, maxWidth: 700, margin: "0 auto"}}>
+            {[
+              {
+                emoji: "💪", name: "Fitness", href: "/fitness",
+                color: "rgba(102, 126, 234, 0.12)", border: "rgba(102, 126, 234, 0.25)", accent: "#667eea",
+                desc: "Three languages: gym (weight x reps x sets), running (distance x time x pace), bodyweight (reps x sets or duration). One LLM call detects modality and parses. Progressive overload tracked per modality. Type be at the Fitness tree and the coach walks you through today's program set by set.",
+              },
+              {
+                emoji: "🍎", name: "Food", href: "/food",
+                color: "rgba(72, 187, 120, 0.12)", border: "rgba(72, 187, 120, 0.25)", accent: "#48bb78",
+                desc: "Say what you ate. One LLM call parses macros. Cascade routes to Protein, Carbs, Fats nodes. Meals subtree tracks patterns by slot. History archives daily summaries with weekly averages. The food AI sees your workouts through channels. It knows what you need before you ask.",
+              },
+              {
+                emoji: "🌿", name: "Recovery", href: "/recovery",
+                color: "rgba(236, 201, 75, 0.12)", border: "rgba(236, 201, 75, 0.25)", accent: "#ecc94b",
+                desc: "Track substances, feelings, cravings, and patterns. Taper schedules that bend around you. Pattern detection that finds correlations you can't see. A journal that holds without analyzing. Safety boundaries for dangerous withdrawals. The tree is a mirror, not a judge.",
+              },
+              {
+                emoji: "📚", name: "Study", href: "/study",
+                color: "rgba(159, 122, 234, 0.12)", border: "rgba(159, 122, 234, 0.25)", accent: "#9f7aea",
+                desc: "Queue what you want to learn. The AI breaks it into a curriculum, teaches through conversation, tracks mastery per concept, and detects gaps you can't see. Paste a URL and it reads the content for you. Type be and it picks the next lesson.",
+              },
+            ].map(app => (
+              <a key={app.name} href={app.href} style={{
+                display: "block", textDecoration: "none",
+                background: app.color, border: `1px solid ${app.border}`,
+                borderRadius: 16, padding: "24px 24px 20px",
+                transition: "transform 0.2s, background 0.2s",
+              }}
+                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; }}
+              >
+                <div style={{fontSize: "1.8rem", marginBottom: 8}}>{app.emoji}</div>
+                <h3 style={{color: app.accent, fontSize: "1.15rem", margin: "0 0 8px", fontWeight: 700}}>{app.name}</h3>
+                <p style={{fontSize: "0.85rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.75, margin: 0}}>
+                  {app.desc}
+                </p>
+              </a>
+            ))}
           </div>
 
           <div className="lp-card" style={{marginTop: 20, textAlign: "center", padding: "20px 28px"}}>

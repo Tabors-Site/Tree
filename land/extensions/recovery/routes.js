@@ -24,6 +24,29 @@ import {
 
 const router = express.Router();
 
+// ── HTML Dashboard (GET with ?html) ──
+router.get("/root/:rootId/recovery", async (req, res, next) => {
+  if (!("html" in req.query)) return next();
+  try {
+    const { isHtmlEnabled } = await import("../html-rendering/config.js");
+    if (!isHtmlEnabled()) return next();
+    const urlAuth = (await import("../html-rendering/urlAuth.js")).default;
+    urlAuth(req, res, async () => {
+      const { rootId } = req.params;
+      const root = await NodeModel.findById(rootId).select("name metadata").lean();
+      if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Not found");
+      let status = null, milestones = null;
+      if (await isInitialized(rootId)) {
+        [status, milestones] = await Promise.all([getStatus(rootId), getMilestones(rootId)]);
+      }
+      const { renderRecoveryDashboard } = await import("./pages/dashboard.js");
+      res.send(renderRecoveryDashboard({ rootId, rootName: root.name, status, milestones, token: req.query.token || null }));
+    });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, "Dashboard failed");
+  }
+});
+
 /**
  * POST /root/:rootId/recovery
  * Main entry point. Three paths: setup, check-in, questions.
@@ -56,15 +79,18 @@ router.post("/root/:rootId/recovery", authenticate, async (req, res) => {
     if (!(await isInitialized(rootId))) {
       await scaffold(rootId, userId);
 
-      const { answer, chatId } = await runChat({
-        userId, username,
-        message: `First time setup. The user said: "${message}". Ask them what substances they want to track, their current usage, and their goals. Be warm. This is the beginning.`,
-        mode: "tree:recovery-log",
-        rootId, res,
-        slot: "recovery",
-      });
-
-      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:recovery-log", setup: true });
+      try {
+        const { answer, chatId } = await runChat({
+          userId, username,
+          message: `First time setup. The user said: "${message}". Ask them what substances they want to track, their current usage, and their goals. Be warm. This is the beginning.`,
+          mode: "tree:recovery-log",
+          rootId, res,
+          slot: "recovery",
+        });
+        if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:recovery-log", setup: true });
+      } catch (llmErr) {
+        if (!res.headersSent) sendOk(res, { answer: "Tree created. Set up an LLM connection to start the conversation.", mode: "tree:recovery-log", setup: true });
+      }
       return;
     }
 

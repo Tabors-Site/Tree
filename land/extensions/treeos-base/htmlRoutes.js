@@ -115,6 +115,86 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // ===================================================================
+  // APPS
+  // ===================================================================
+
+  router.get("/user/:userId/apps", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const user = await User.findById(userId).select("username").lean();
+      if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
+
+      const roots = await Node.find({
+        rootOwner: userId,
+        parent: { $ne: DELETED },
+      }).select("_id name metadata").lean();
+      // Match by checking the extension metadata (fitness.initialized, food.initialized, etc.)
+      // not just the tree name, to avoid false matches with user-created trees
+      const rootMap = new Map();
+      for (const r of roots) {
+        const meta = r.metadata instanceof Map ? Object.fromEntries(r.metadata) : (r.metadata || {});
+        if (meta.fitness?.initialized) rootMap.set("Fitness", String(r._id));
+        else if (meta.food?.initialized) rootMap.set("Food", String(r._id));
+        else if (meta.recovery?.initialized) rootMap.set("Recovery", String(r._id));
+        else if (meta.study?.initialized) rootMap.set("Study", String(r._id));
+        // Also match by exact name as fallback
+        else if (["Fitness", "Food", "Recovery", "Study"].includes(r.name) && !rootMap.has(r.name)) {
+          rootMap.set(r.name, String(r._id));
+        }
+      }
+
+      const { renderAppsPage } = await import("./pages/appsPage.js");
+      res.send(renderAppsPage({
+        userId,
+        username: user.username,
+        rootMap,
+        qs: req.query,
+      }));
+    } catch (err) {
+      log.error("HTML", "Apps page error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, "Apps page failed");
+    }
+  });
+
+  router.post("/user/:userId/apps/create", authenticate, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      if (req.userId !== userId) return sendError(res, 403, ERR.FORBIDDEN, "Not your account");
+
+      const { app: appKey, message } = req.body;
+      if (!appKey || !message) return sendError(res, 400, ERR.INVALID_INPUT, "app and message required");
+
+      const { APPS } = await import("./pages/appsPage.js");
+      const appDef = APPS.find(a => a.key === appKey);
+      if (!appDef) return sendError(res, 400, ERR.INVALID_INPUT, "Unknown app");
+
+      // Check if tree already exists
+      const existing = await Node.findOne({ rootOwner: userId, name: appDef.treeName }).select("_id").lean();
+      if (existing) {
+        const qs = req.body.token ? `?html&token=${req.body.token}` : "?html";
+        return res.redirect(`/api/v1/root/${existing._id}/${appDef.dashboardPath}${qs}`);
+      }
+
+      // Create the tree root
+      const { createNode } = await import("../../seed/tree/treeManagement.js");
+      const rootNode = await createNode({
+        name: appDef.treeName,
+        isRoot: true,
+        userId,
+      });
+      const rootId = String(rootNode._id);
+
+      // Redirect to dashboard with the initial message as a query param.
+      // The dashboard chat bar will auto-send it on load.
+      const qs = req.body.token ? `?html&token=${req.body.token}` : "?html";
+      const msgParam = `&startMsg=${encodeURIComponent(message)}`;
+      return res.redirect(`/api/v1/root/${rootId}/${appDef.dashboardPath}${qs}${msgParam}`);
+    } catch (err) {
+      log.error("HTML", "App create error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, "App creation failed");
+    }
+  });
+
   // USER PROFILE
   // ===================================================================
 
@@ -1029,9 +1109,10 @@ export function buildTreeosHtmlRoutes() {
   // POST create tree -> redirect
   router.post("/user/:userId/trees", authenticate, htmlOnly, async (req, res) => {
     try {
-      const { createRoot } = await import("../../seed/tree/treeManagement.js");
-      const rootNode = await createRoot({
+      const { createNode } = await import("../../seed/tree/treeManagement.js");
+      const rootNode = await createNode({
         name: req.body.name || "New Tree",
+        isRoot: true,
         userId: req.userId,
       });
       return res.redirect(`/api/v1/root/${rootNode._id}${tokenQS(req)}`);

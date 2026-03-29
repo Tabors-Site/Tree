@@ -21,6 +21,31 @@ export function setServices({ Node: N }) { if (N) Node = N; }
 
 const router = express.Router();
 
+// ── HTML Dashboard (GET with ?html) ──
+router.get("/root/:rootId/fitness", async (req, res, next) => {
+  if (!("html" in req.query)) return next();
+  try {
+    const { isHtmlEnabled } = await import("../html-rendering/config.js");
+    if (!isHtmlEnabled()) return next();
+    const urlAuth = (await import("../html-rendering/urlAuth.js")).default;
+    urlAuth(req, res, async () => {
+      const { rootId } = req.params;
+      const root = await Node.findById(rootId).select("name metadata").lean();
+      if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Not found");
+      const meta = root.metadata instanceof Map ? root.metadata.get("fitness") : root.metadata?.fitness;
+      let state = null, weekly = null, profile = null;
+      if (meta?.initialized) {
+        const core = await import("./core.js");
+        [state, weekly, profile] = await Promise.all([core.getExerciseState(rootId), core.getWeeklyStats(rootId), core.getProfile(rootId)]);
+      }
+      const { renderFitnessDashboard } = await import("./pages/dashboard.js");
+      res.send(renderFitnessDashboard({ rootId, rootName: root.name, state, weekly, profile, token: req.query.token || null }));
+    });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, "Dashboard failed");
+  }
+});
+
 // ── Intent detection ──
 
 function detectIntent(message) {
@@ -71,14 +96,17 @@ router.post("/root/:rootId/fitness", authenticate, async (req, res) => {
     if (!initialized) {
       await scaffoldFitnessBase(rootId, userId);
 
-      const { answer, chatId } = await runChat({
-        userId, username,
-        message: `New fitness tree. The user said: "${message}". Help them set up their training program. Ask what modalities they train (gym, running, bodyweight, or mix) and build the tree with tools.`,
-        mode: "tree:fitness-plan",
-        rootId, res, slot: "fitness",
-      });
-
-      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:fitness-plan", setup: true });
+      try {
+        const { answer, chatId } = await runChat({
+          userId, username,
+          message: `New fitness tree. The user said: "${message}". Help them set up their training program. Ask what modalities they train (gym, running, bodyweight, or mix) and build the tree with tools.`,
+          mode: "tree:fitness-plan",
+          rootId, res, slot: "fitness",
+        });
+        if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:fitness-plan", setup: true });
+      } catch (llmErr) {
+        if (!res.headersSent) sendOk(res, { answer: "Tree created. Set up an LLM connection to start the conversation.", mode: "tree:fitness-plan", setup: true });
+      }
       return;
     }
 

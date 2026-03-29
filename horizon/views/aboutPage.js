@@ -81,6 +81,22 @@ export function renderAboutPage() {
     </div>
 
     <div class="glass-card" style="animation-delay:0.3s;">
+      <h2>Contributing to extensions</h2>
+      <p style="color:var(--text-secondary);line-height:1.8;font-size:14px;">
+        Code lives on your land. You build extensions locally and publish to Horizon.
+        If you want others to contribute, push the code to a git host and include a
+        <code>repoUrl</code> in your manifest. Horizon displays it on the extension page
+        so others can find the source, fork it, and submit pull requests.
+      </p>
+      <p style="color:var(--text-secondary);line-height:1.8;font-size:14px;margin-top:12px;">
+        If you want to improve someone else's extension, clone their repo, make changes,
+        and submit a PR. The author publishes the next version to Horizon. If the author
+        is inactive, fork the repo and publish under a new name. Horizon tracks name
+        ownership, not code ownership. The ecosystem grows through open contribution.
+      </p>
+    </div>
+
+    <div class="glass-card" style="animation-delay:0.35s;">
       <h2>Get involved</h2>
       <p style="color:var(--text-secondary);line-height:1.8;font-size:14px;">
         <a href="https://github.com/taborgreat/TreeOS" style="color:var(--accent);">Source code on GitHub</a>.

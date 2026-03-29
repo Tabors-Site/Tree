@@ -64,14 +64,17 @@ router.post("/root/:rootId/study", authenticate, async (req, res) => {
     if (!(await isInitialized(rootId))) {
       await scaffold(rootId, userId);
 
-      const { answer, chatId } = await runChat({
-        userId, username,
-        message: `New study tree. The user said: "${message}". Help them set up. Ask what they want to learn, their learning style, and daily study goal.`,
-        mode: "tree:study-plan",
-        rootId, res, slot: "study",
-      });
-
-      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:study-plan", setup: true });
+      try {
+        const { answer, chatId } = await runChat({
+          userId, username,
+          message: `New study tree. The user said: "${message}". Help them set up. Ask what they want to learn, their learning style, and daily study goal.`,
+          mode: "tree:study-plan",
+          rootId, res, slot: "study",
+        });
+        if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:study-plan", setup: true });
+      } catch (llmErr) {
+        if (!res.headersSent) sendOk(res, { answer: "Tree created. Set up an LLM connection to start the conversation.", mode: "tree:study-plan", setup: true });
+      }
       return;
     }
 
