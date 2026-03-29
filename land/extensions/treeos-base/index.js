@@ -44,18 +44,18 @@ export async function init(core) {
     } catch { return []; }
   });
   // Register all tree modes
-  core.modes.registerMode("tree:navigate", treeNavigate, "treeos");
-  core.modes.registerMode("tree:structure", treeStructure, "treeos");
-  core.modes.registerMode("tree:edit", treeEdit, "treeos");
-  core.modes.registerMode("tree:respond", treeRespond, "treeos");
-  core.modes.registerMode("tree:librarian", treeLibrarian, "treeos");
-  core.modes.registerMode("tree:get-context", treeGetContext, "treeos");
-  core.modes.registerMode("tree:be", treeBe, "treeos");
-  core.modes.registerMode("tree:notes", treeNotes, "treeos");
+  core.modes.registerMode("tree:navigate", treeNavigate, "treeos-base");
+  core.modes.registerMode("tree:structure", treeStructure, "treeos-base");
+  core.modes.registerMode("tree:edit", treeEdit, "treeos-base");
+  core.modes.registerMode("tree:respond", treeRespond, "treeos-base");
+  core.modes.registerMode("tree:librarian", treeLibrarian, "treeos-base");
+  core.modes.registerMode("tree:get-context", treeGetContext, "treeos-base");
+  core.modes.registerMode("tree:be", treeBe, "treeos-base");
+  core.modes.registerMode("tree:notes", treeNotes, "treeos-base");
 
   // Register home modes
-  core.modes.registerMode("home:default", homeDefault, "treeos");
-  core.modes.registerMode("home:reflect", homeReflect, "treeos");
+  core.modes.registerMode("home:default", homeDefault, "treeos-base");
+  core.modes.registerMode("home:reflect", homeReflect, "treeos-base");
 
   // Upgrade defaults from fallback to real modes
   core.modes.setDefaultMode("home", "home:default");
@@ -89,7 +89,7 @@ export async function init(core) {
 
   // Register afterToolCall hook for frontend navigation
   const onAfterToolCall = buildNavigationHandler(core);
-  core.hooks.register("afterToolCall", onAfterToolCall, "treeos");
+  core.hooks.register("afterToolCall", onAfterToolCall, "treeos-base");
 
   // ── Register TreeOS HTML pages (if html-rendering is installed) ──
   // html-rendering is infrastructure. TreeOS provides the actual pages.

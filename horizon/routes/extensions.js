@@ -133,7 +133,7 @@ function validateVersion(version) {
 
 const RESERVED_NAMES = new Set([
   // Kernel / core terms
-  "seed", "kernel", "treeos", "canopy", "horizon", "core", "land", "tree",
+  "seed", "kernel", "treeos", "treeos-base", "canopy", "horizon", "core", "land", "tree",
   // Built-in extensions that ship with the reference implementation
   "tree-orchestrator", "land-manager",
   // Loader internals
@@ -642,7 +642,7 @@ router.get("/:name/ecosystem", async (req, res) => {
 const downloadSeen = new Map(); // key -> timestamp. Pruned lazily.
 const DOWNLOAD_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
-router.get("/:name/:version", async (req, res) => {
+router.get("/:name/:version(\\d+\\.\\d+\\.\\d+.*)", async (req, res) => {
   try {
     const { name, version } = req.params;
 
@@ -934,7 +934,7 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
  * Blocked if other published extensions have a hard dependency on this
  * extension and no other version would satisfy the constraint.
  */
-router.delete("/:name/:version", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => {
+router.delete("/:name/:version(\\d+\\.\\d+\\.\\d+.*)", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => {
   try {
     const { name, version } = req.params;
 
@@ -1068,7 +1068,7 @@ router.post("/:name/comments", verifyHorizonAuth(), async (req, res) => {
     if (!ext) return res.status(404).json({ error: `Extension "${name}" not found` });
 
     // Verify land is registered
-    const land = await Land.findOne({ landId: payload.landId });
+    const land = await Land.findById(payload.landId);
     if (!land) return res.status(403).json({ error: "Your land must be registered on Horizon to comment" });
 
     // Rate limit: per extension version
@@ -1174,9 +1174,14 @@ router.post("/:name/react", verifyHorizonAuth(), async (req, res) => {
     const ext = await Extension.findOne({ name }).lean();
     if (!ext) return res.status(404).json({ error: `Extension "${name}" not found` });
 
-    // Verify land is registered
-    const land = await Land.findOne({ landId: payload.landId });
+    // Verify land is registered (_id is the landId)
+    const land = await Land.findById(payload.landId);
     if (!land) return res.status(403).json({ error: "Your land must be registered on Horizon" });
+
+    // Can't star or flag your own extensions
+    if (ext.authorLandId === payload.landId) {
+      return res.status(403).json({ error: "Cannot star or flag your own extension" });
+    }
 
     // Toggle: check if reaction exists
     const existing = await Reaction.findOne({
@@ -1190,6 +1195,15 @@ router.post("/:name/react", verifyHorizonAuth(), async (req, res) => {
       await existing.deleteOne();
       return res.json({ toggled: "removed", type });
     }
+
+    // Star and flag are mutually exclusive. Remove the other if it exists.
+    const opposite = type === "star" ? "flag" : "star";
+    await Reaction.deleteOne({
+      extensionName: name,
+      authorLandId: payload.landId,
+      authorUsername: username || "",
+      type: opposite,
+    });
 
     await Reaction.create({
       extensionName: name,

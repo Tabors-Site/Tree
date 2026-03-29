@@ -306,8 +306,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
       // Validate tree access before accepting rootId/nodeId from the client.
       // Without this, a crafted WebSocket message could point the AI at another user's tree.
+      // Only check for tree navigation (not home/land which have no tree context).
       const targetId = rootId || nodeId;
-      if (targetId && socket.userId) {
+      if (targetId && socket.userId && newBigMode === BIG_MODES.TREE) {
         try {
           const access = await resolveTreeAccess(targetId, socket.userId);
           if (!access.ok || !access.canWrite) {

@@ -191,7 +191,7 @@ app.post("/lands/:domain/comments", verifyHorizonAuth(), async (req, res) => {
     if (!target) return res.status(404).json({ error: "Land not found" });
 
     // Verify commenter is registered
-    const commenter = await Land.findOne({ landId: payload.landId });
+    const commenter = await Land.findById(payload.landId);
     if (!commenter) return res.status(403).json({ error: "Your land must be registered on Horizon" });
 
     // Rate limit: max 3 comments per commenter per land

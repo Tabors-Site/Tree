@@ -86,7 +86,7 @@ Everything in the kernel serves one of four primitives:
 
 ## Extension ecosystem (95 extensions, 4 bundles)
 
-**Base TreeOS (20):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, breath, instructions.
+**Base TreeOS (20):** treeos-base, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, breath, instructions.
 
 **treeos-cascade (8):** The nervous system. Signals propagate, get filtered, compressed, monitored.
 

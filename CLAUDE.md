@@ -346,7 +346,7 @@ INVALID_INPUT means garbage the kernel can't parse. Not "I understood your reque
 
 ## Extension Ecosystem (95 extensions, 4 bundles)
 
-**Base TreeOS (20):** treeos, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, breath, instructions.
+**Base TreeOS (20):** treeos-base, tree-orchestrator, land-manager, navigation, starter-types, console, dashboard, notifications, monitor, llm-response-formatting, team, user-tiers, html-rendering, water, heartbeat, purpose, phase, remember, breath, instructions.
 
 **treeos-cascade (8):** propagation, perspective-filter, sealed-transport, codebook, gap-detection, long-memory, pulse, flow.
 

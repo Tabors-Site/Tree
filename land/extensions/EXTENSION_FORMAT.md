@@ -1285,7 +1285,7 @@ export default {
     "treeos-maintenance@^1.0.0",
   ],
   standalone: [
-    "treeos@^1.0.0",
+    "treeos-base@^1.0.0",
     "tree-orchestrator@^1.0.0",
     "fitness@^1.0.0",
     "food@^1.0.0",
@@ -1297,7 +1297,7 @@ export default {
   orchestrators: {
     tree: "tree-orchestrator",
     land: "land-manager",
-    home: "treeos",
+    home: "treeos-base",
   },
 };
 ```

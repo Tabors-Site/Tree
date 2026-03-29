@@ -172,41 +172,49 @@ function registerDynamic(program, cfgOverride) {
                 return;
               }
 
-              const sub = decl.subcommands[action];
+              const sub = decl.subcommands[action] || (Array.isArray(action) ? decl.subcommands[action[0]] : null);
               if (!sub) {
-                console.log(chalk.yellow(`Unknown action: ${action}`));
-                console.log(chalk.dim("Available:"));
-                for (const [name, s] of Object.entries(decl.subcommands)) {
-                  console.log(chalk.dim(`  ${cmdName} ${name}`) + (s.description ? chalk.dim(`  ${s.description}`) : ""));
+                // Not a subcommand. If bodyMap exists, fall through to standard command handling.
+                if (decl.bodyMap) {
+                  // Don't return. Let it fall through to the flat command handler below.
+                } else {
+                  console.log(chalk.yellow(`Unknown action: ${action}`));
+                  console.log(chalk.dim("Available:"));
+                  for (const [name, s] of Object.entries(decl.subcommands)) {
+                    console.log(chalk.dim(`  ${cmdName} ${name}`) + (s.description ? chalk.dim(`  ${s.description}`) : ""));
+                  }
+                  return;
+                }
+              }
+
+              // Execute subcommand if matched
+              if (sub) {
+                if (sub.args && sub.args.length > 0) {
+                  const subArgValues = Array.isArray(subArgs) ? subArgs : subArgs.split(/\s+/);
+                  for (let i = 0; i < sub.args.length; i++) {
+                    if (!subArgValues[i]) {
+                      console.log(chalk.yellow(`Missing: ${sub.args[i]}`));
+                      console.log(chalk.dim(sub.description || `Usage: ${cmdName} ${action} ${sub.args.map(a => `<${a}>`).join(" ")}`));
+                      return;
+                    }
+                  }
+
+                  const endpoint = resolveEndpoint(sub.endpoint, subArgValues, cfg);
+                  const body = {};
+                  for (let i = 0; i < sub.args.length; i++) {
+                    body[sub.args[i]] = subArgValues[i];
+                  }
+                  const data = await api.post(endpoint, body);
+                  printResponse(data);
+                } else {
+                  const endpoint = resolveEndpoint(sub.endpoint, [], cfg);
+                  const method = (sub.method || "POST").toUpperCase();
+                  const data = method === "GET" ? await api.get(endpoint) : await api.post(endpoint, {});
+                  printResponse(data);
                 }
                 return;
               }
-
-              // Check required args for subcommand
-              if (sub.args && sub.args.length > 0) {
-                const subArgValues = Array.isArray(subArgs) ? subArgs : subArgs.split(/\s+/);
-                for (let i = 0; i < sub.args.length; i++) {
-                  if (!subArgValues[i]) {
-                    console.log(chalk.yellow(`Missing: ${sub.args[i]}`));
-                    console.log(chalk.dim(sub.description || `Usage: ${cmdName} ${action} ${sub.args.map(a => `<${a}>`).join(" ")}`));
-                    return;
-                  }
-                }
-
-                const endpoint = resolveEndpoint(sub.endpoint, subArgValues, cfg);
-                const body = {};
-                for (let i = 0; i < sub.args.length; i++) {
-                  body[sub.args[i]] = subArgValues[i];
-                }
-                const data = await api.post(endpoint, body);
-                printResponse(data);
-              } else {
-                const endpoint = resolveEndpoint(sub.endpoint, [], cfg);
-                const method = (sub.method || "POST").toUpperCase();
-                const data = method === "GET" ? await api.get(endpoint) : await api.post(endpoint, {});
-                printResponse(data);
-              }
-              return;
+              // Not a subcommand and bodyMap exists: fall through to flat command handler
             }
 
             // Standard flat command (no subcommands)
@@ -224,9 +232,16 @@ function registerDynamic(program, cfgOverride) {
             const endpoint = resolveEndpoint(decl.endpoint, args, cfg);
             const method = (decl.method || "GET").toUpperCase();
 
-            // Build request body from manifest's body field mapping
+            // Build request body from manifest's bodyMap or body field mapping
             let body = {};
-            if (decl.body && Array.isArray(decl.body)) {
+            if (decl.bodyMap && typeof decl.bodyMap === "object") {
+              for (const [field, argIdx] of Object.entries(decl.bodyMap)) {
+                const val = args[argIdx];
+                if (val !== undefined) {
+                  body[field] = Array.isArray(val) ? val.join(" ") : val;
+                }
+              }
+            } else if (decl.body && Array.isArray(decl.body)) {
               for (let i = 0; i < decl.body.length; i++) {
                 if (args[i] !== undefined) {
                   body[decl.body[i]] = args[i];

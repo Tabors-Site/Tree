@@ -521,7 +521,13 @@
       "Bash(__NEW_LINE_ea0879761ecaa335__ echo:*)",
       "Bash(ls -1d /home/tabor/github/Tree/land/extensions/*/)",
       "Bash(/tmp/count_extensions.sh:*)",
-      "Bash(bash /tmp/count_extensions.sh)"
+      "Bash(bash /tmp/count_extensions.sh)",
+      "Bash(curl -s https://horizon.treeos.ai/extensions/console/comments)",
+      "Bash(grep -rn treeos /home/tabor/github/Tree --include=*.js --include=*.json --include=*.md)",
+      "Bash(grep -rn ''treeos'' /home/tabor/github/Tree --include=*.js)",
+      "Bash(grep -rn 'name: treeos' /home/tabor/github/Tree --include=*.js)",
+      "Bash(/tmp/treeos_search.sh:*)",
+      "Bash(bash /tmp/treeos_search.sh)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

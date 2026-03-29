@@ -228,6 +228,8 @@ Two rules, no exceptions. Before hooks run sequential because they can cancel. A
 | afterSessionCreate | after | Session registered. React to { sessionId, userId, type }. |
 | afterSessionEnd | after | Session ended. React to { sessionId, userId, type }. |
 | afterNavigate | after | Fires when user navigates to a tree root. Extensions track recency. |
+| onNodeNavigate | after | User navigates between nodes within a tree. { userId, rootId, nodeId, socket }. Distinct from afterNavigate which fires on root load only. |
+| afterNodeMove | after | Node reparented. All five resolution chains shift. { nodeId, oldParentId, newParentId, userId }. Fires after cache invalidation and lock release. |
 | afterMetadataWrite | after | After setExtMeta succeeds. { nodeId, extName, data }. Zero overhead if no listeners. |
 | afterScopeChange | after | After extension scope changes. { nodeId, blocked, restricted, allowed, userId } |
 | afterOwnershipChange | after | After rootOwner or contributors changed. { nodeId, action, targetUserId, previousOwnerId? } |

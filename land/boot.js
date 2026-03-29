@@ -149,7 +149,7 @@ const PROFILES = {
     description: "The tree works. No AI background jobs. No LLM cost when idle.",
     extensions: [
       // Kernel extensions (required for basic operation)
-      "treeos", "tree-orchestrator", "navigation", "starter-types", "console",
+      "treeos-base", "tree-orchestrator", "navigation", "starter-types", "console",
       // Basic functionality
       "values", "html-rendering", "dashboard",
     ],
@@ -162,7 +162,7 @@ const PROFILES = {
     description: "Full tree experience. Intelligence, cascade, scheduling. Moderate LLM usage.",
     extensions: [
       // Everything in minimal
-      "treeos", "tree-orchestrator", "navigation", "starter-types", "console",
+      "treeos-base", "tree-orchestrator", "navigation", "starter-types", "console",
       "values", "html-rendering", "dashboard",
       // Core experience
       "notifications", "monitor", "team", "llm-response-formatting",
@@ -300,7 +300,7 @@ async function pickExtensions(horizonUrl) {
   const categories = [
     {
       title: "Core (required for chat/place/query)",
-      names: ["treeos", "tree-orchestrator", "navigation", "starter-types", "console"],
+      names: ["treeos-base", "tree-orchestrator", "navigation", "starter-types", "console"],
       force: true,
     },
     {
