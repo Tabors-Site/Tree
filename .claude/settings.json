@@ -544,7 +544,13 @@
       "Bash(grep -A 2 \"afterLLMCall.*{\" /home/tabor/github/Tree/land/extensions/*/index.js)",
       "Bash(grep -n \"beforeToolCall.*{\" /home/tabor/github/Tree/land/extensions/*/index.js -A 3)",
       "Bash(grep -n \"beforeLLMCall\\\\|afterLLMCall\\\\|beforeToolCall\\\\|afterToolCall\" /home/tabor/github/Tree/land/extensions/*/index.js)",
-      "Bash(grep -l \"core.hooks.register\" /home/tabor/github/Tree/land/extensions/*/index.js)"
+      "Bash(grep -l \"core.hooks.register\" /home/tabor/github/Tree/land/extensions/*/index.js)",
+      "Bash(__NEW_LINE_324dae4130830312__ grep:*)",
+      "Bash(__NEW_LINE_c0830e0140adfeae__ grep:*)",
+      "Bash(__NEW_LINE_9b5683fc175b089a__ grep:*)",
+      "Bash(ls -d /home/tabor/github/Tree/*/seed)",
+      "Bash(__NEW_LINE_7b877ecba95dbea4__ grep:*)",
+      "Bash(__NEW_LINE_d1ea1e9558b23c09__ grep:*)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

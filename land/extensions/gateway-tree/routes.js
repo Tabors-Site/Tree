@@ -42,7 +42,8 @@ router.post("/gateway/tree/:channelId", async (req, res) => {
   // Load and validate channel synchronously (fast DB lookup)
   let channel;
   try {
-    const GatewayChannel = (await import("../gateway/model.js")).default;
+    const { getExtension } = await import("../loader.js");
+    const GatewayChannel = getExtension("gateway")?.exports?.GatewayChannel;
     channel = await GatewayChannel.findById(channelId).lean();
   } catch {
     return sendError(res, 500, ERR.INTERNAL, "Failed to load channel");

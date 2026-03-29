@@ -23,7 +23,8 @@ router.post("/gateway/sms/:channelId", async (req, res) => {
     // Twilio sends: From, To, Body, MessageSid, AccountSid, NumMedia, etc.
     if (!body || !body.Body || !body.From) return;
 
-    const GatewayChannel = (await import("../gateway/model.js")).default;
+    const { getExtension } = await import("../loader.js");
+    const GatewayChannel = getExtension("gateway")?.exports?.GatewayChannel;
     const channel = await GatewayChannel.findById(channelId).lean();
     if (!channel || !channel.enabled) return;
     if (channel.type !== "sms") return;

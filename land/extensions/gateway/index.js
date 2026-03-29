@@ -4,6 +4,7 @@ import { dispatchNotifications, dispatchTestNotification } from "./dispatch.js";
 import { registerChannelType, getChannelType, getRegisteredTypes } from "./registry.js";
 import { processGatewayMessage } from "./input.js";
 import { getChannelWithSecrets, getChannelsForRoot, addGatewayChannel, updateGatewayChannel, deleteGatewayChannel } from "./core.js";
+import GatewayChannel from "./model.js";
 
 export async function init(core) {
   resolveHtmlAuth();
@@ -33,6 +34,7 @@ export async function init(core) {
       addGatewayChannel,
       updateGatewayChannel,
       deleteGatewayChannel,
+      GatewayChannel,
     },
   };
 }
