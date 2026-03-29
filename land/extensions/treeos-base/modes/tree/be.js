@@ -1,4 +1,4 @@
-// extensions/treeos/modes/tree/be.js
+// extensions/treeos-base/modes/tree/be.js
 // BE mode – present, guided work on one step at a time.
 // Attention phase. The counterpart to awareness (navigate, explore).
 

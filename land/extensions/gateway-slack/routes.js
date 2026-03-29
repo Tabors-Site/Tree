@@ -84,7 +84,6 @@ router.post("/gateway/slack/:channelId", express.json({ limit: "256kb" }), async
     );
 
     // Process via gateway core
-    const { getExtension } = await import("../loader.js");
     const gateway = getExtension("gateway");
     if (!gateway?.exports?.processGatewayMessage) {
       log.error("GatewaySlack", "Gateway core not loaded");

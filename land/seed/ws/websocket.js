@@ -589,7 +589,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       }
       _chatTimestamps.push(now);
 
-      const safeChatMode = ["chat", "place", "query"].includes(chatMode) ? chatMode : "chat";
+      const safeChatMode = ["chat", "place", "query", "be"].includes(chatMode) ? chatMode : "chat";
       const visitorId = socket.visitorId || `user:${socket.userId}`;
 
       // LLM access gate
@@ -654,7 +654,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
               skipRespond: safeChatMode === "place",
               forceQueryOnly: safeChatMode === "query",
               rootChatId: chat?._id || null,
-              sourceType: safeChatMode === "place" ? "ws-tree-place" : safeChatMode === "query" ? "ws-tree-query" : "tree-chat",
+              sourceType: safeChatMode === "place" ? "ws-tree-place" : safeChatMode === "query" ? "ws-tree-query" : safeChatMode === "be" ? "ws-tree-be" : "tree-chat",
             });
           } else {
             response = await processMessage(visitorId, message, {

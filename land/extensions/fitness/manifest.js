@@ -11,7 +11,8 @@ export default {
     "mileage increases for running, harder variations for bodyweight. Four modes: log " +
     "(universal parser), coach (guided sessions), review (cross-modality analysis), plan " +
     "(program creation). Channels route logged data to exercise nodes. Food channel " +
-    "integrates nutrition awareness.",
+    "integrates nutrition awareness. Type 'be' at the Fitness tree to start a guided " +
+    "workout: the coach walks you through today's program set by set.",
 
   classifierHints: [
     /\b\d+\s*x\s*\d+/i,                                        // "135x10"
@@ -50,6 +51,7 @@ export default {
     routes: "./routes.js",
     tools: true,
     jobs: false,
+    guidedMode: "tree:fitness-coach",
 
     hooks: {
       fires: [],

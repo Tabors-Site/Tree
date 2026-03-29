@@ -9,7 +9,8 @@ export default {
     "for daily check-ins, recovery-reflect for pattern analysis, recovery-plan " +
     "for taper scheduling. Milestone detection. Journal node for unstructured " +
     "writing the AI doesn't analyze. Safety boundaries for dangerous withdrawals " +
-    "and crisis situations. The person is always the agent.",
+    "and crisis situations. Type 'be' at the Recovery tree to check in: the AI asks " +
+    "how you're doing today. The person is always the agent.",
 
   classifierHints: [
     /\b(craving|crave|urge|tempt|slip|relapse|sober|clean|quit)\b/i,
@@ -42,6 +43,7 @@ export default {
     tools: false,
     jobs: true,
     modes: true,
+    guidedMode: "tree:recovery-log",
 
     hooks: {
       fires: ["recovery:milestone", "recovery:patternDetected"],

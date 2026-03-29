@@ -25,6 +25,7 @@ const LandingPage = () => {
           <div className="lp-hero-ctas">
             <a className="lp-btn lp-btn-primary" href="/land">Start a Land</a>
             <a className="lp-btn lp-btn-secondary" href="/kernel">Inside the Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="/treeos">TreeOS</a>
           </div>
         </div>
       </section>
@@ -590,6 +591,7 @@ const LandingPage = () => {
             </div>
             <div className="lp-footer-col">
               <h4>TreeOS</h4>
+              <a href="/treeos">Overview</a>
               <a href="/app">Site</a>
               <a href="/about/api">API</a>
               <a href="/about/gateway">Gateway</a>

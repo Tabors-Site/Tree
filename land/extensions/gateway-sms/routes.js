@@ -47,7 +47,6 @@ router.post("/gateway/sms/:channelId", async (req, res) => {
     );
 
     // Process via gateway core
-    const { getExtension } = await import("../loader.js");
     const gateway = getExtension("gateway");
     if (!gateway?.exports?.processGatewayMessage) {
       log.error("GatewaySMS", "Gateway core not loaded");

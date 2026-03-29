@@ -21,6 +21,8 @@ import FlowPage from "./Landing/FlowPage.jsx";
 import BuildPage from "./Landing/BuildPage.jsx";
 import MyceliumPage from "./Landing/MyceliumPage.jsx";
 import LandPage from "./Landing/LandPage.jsx";
+import TreeOSPage from "./Landing/TreeOSPage.jsx";
+import StudyPage from "./Landing/StudyPage.jsx";
 
 import ApiAccessSection from "./About/API.jsx";
 
@@ -59,6 +61,8 @@ const WelcomeRoutes = () => {
       <Route path="/cli" element={<CLIAbout />} />
       <Route path="/mycelium" element={<MyceliumPage />} />
       <Route path="/land" element={<LandPage />} />
+      <Route path="/treeos" element={<TreeOSPage />} />
+      <Route path="/study" element={<StudyPage />} />
       <Route path="/horizon" element={<HorizonRedirect />} />
 
       {/* Original app welcome (treeos.ai example) */}

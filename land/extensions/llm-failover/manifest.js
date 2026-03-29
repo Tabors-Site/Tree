@@ -11,6 +11,7 @@ export default {
     "backup connections that apply to everyone in that tree.",
 
   needs: {
+    services: ["llm"],
     models: ["User", "Node"],
   },
 

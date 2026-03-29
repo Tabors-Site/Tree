@@ -134,15 +134,17 @@ async function localClassify(message, currentNodeId) {
 
 /**
  * Extract the behavioral constraint from the source type.
- * The three commands (chat/place/query) are constraints on the router.
+ * Four commands constrain what happens at any position.
  *
  *   query  →  tools: read-only    response: full       writes: blocked
  *   place  →  tools: all          response: minimal    writes: allowed
  *   chat   →  tools: all          response: full       writes: allowed
+ *   be     →  tools: all          response: guided     writes: allowed
  */
 function extractBehavioral(sourceType) {
-  if (sourceType === "query") return "query";
-  if (sourceType === "place") return "place";
+  if (sourceType === "query" || sourceType.endsWith("-query")) return "query";
+  if (sourceType === "place" || sourceType.endsWith("-place")) return "place";
+  if (sourceType === "be" || sourceType.endsWith("-be")) return "be";
   return "chat"; // default
 }
 import { setChatContext } from "../../seed/llm/chatTracker.js";
@@ -1571,6 +1573,47 @@ export async function orchestrateTreeRequest({
   // ────────────────────────────────────────────────────────
 
   const behavioral = extractBehavioral(sourceType);
+
+  // ────────────────────────────────────────────────────────
+  // BE: GUIDED MODE — the tree leads, the user follows
+  // Skip classification. Find the guided mode at this position.
+  // ────────────────────────────────────────────────────────
+
+  if (behavioral === "be") {
+    // Check if an extension at this position declares a guidedMode
+    let guidedMode = "tree:be"; // default fallback
+    try {
+      const { getExtensionManifest, getLoadedExtensionNames } = await import("../loader.js");
+      const nodeDoc = currentNodeId ? await Node.findById(currentNodeId).select("metadata").lean() : null;
+      if (nodeDoc) {
+        // Check node's extension metadata for a matching extension with guidedMode
+        const meta = nodeDoc.metadata instanceof Map ? Object.fromEntries(nodeDoc.metadata) : (nodeDoc.metadata || {});
+        for (const extName of getLoadedExtensionNames()) {
+          if (meta[extName]?.role || meta[extName]?.initialized) {
+            const manifest = getExtensionManifest(extName);
+            if (manifest?.provides?.guidedMode) {
+              guidedMode = manifest.provides.guidedMode;
+              break;
+            }
+          }
+        }
+      }
+    } catch {}
+
+    log.verbose("Tree Orchestrator", `  BE mode: switching to ${guidedMode}`);
+    await switchMode(visitorId, guidedMode, { rootId, nodeId: currentNodeId, userId, socket, signal, sessionId });
+    const result = await processMessage(visitorId, message, username, socket, signal, sessionId);
+    trackStep(rootChatId, guidedMode, result?.content, "be");
+    modesUsed.push(guidedMode);
+
+    return {
+      success: true,
+      content: result?.content || "",
+      modeKey: guidedMode,
+      modesUsed,
+      rootId,
+    };
+  }
 
   // ────────────────────────────────────────────────────────
   // PATH 2: EXTENSION DETECTED — route directly to extension mode

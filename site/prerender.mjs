@@ -41,6 +41,8 @@ const STATIC_ROUTES = [
   "/mycelium",
   "/seed",
   "/land",
+  "/treeos",
+  "/study",
   "/app",
 ];
 
@@ -103,6 +105,14 @@ const PAGE_META = {
   "/land": {
     title: "Your Land . Start a TreeOS Server",
     description: "A land is your server. Node.js, MongoDB, your own LLM. Four commands to start. Your data stays on it. Your AI runs on it. Your extensions live on it.",
+  },
+  "/treeos": {
+    title: "TreeOS . The First OS Built on the Seed",
+    description: "Fitness, food, recovery, study. Four apps that turn trees into tools people use. Four bundles for intelligence, cascade, communication, and maintenance. Three temporal layers. The tree breathes.",
+  },
+  "/study": {
+    title: "Study . The Tree That Teaches You",
+    description: "Queue what you want to learn. The AI breaks it into a curriculum, teaches through conversation, tracks mastery, and detects gaps. Paste a URL and it reads the content. Type be and it picks the next lesson.",
   },
   "/app": {
     title: "TreeOS . The First OS Built on the Seed",

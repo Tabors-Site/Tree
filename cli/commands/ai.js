@@ -195,6 +195,26 @@ module.exports = (program) => {
       }
     });
 
+  program
+    .command("be [message...]")
+    .description("Guided walkthrough. The tree leads. You follow.")
+    .action(async (parts) => {
+      const message = (parts || []).join(" ") || "begin";
+      const cfg = requireAuth();
+      if (!cfg.activeRootId)
+        return console.log(chalk.yellow("Enter a tree first."));
+      console.log(chalk.dim("Starting guided session..."));
+      const api = getApi(cfg);
+      try {
+        const data = await api.be(cfg.activeRootId, message);
+        console.log(
+          chalk.bold("\nTree:") + " " + (data.answer || "No response."),
+        );
+      } catch (e) {
+        console.error(chalk.red(e.message));
+      }
+    });
+
   // ── Raw Ideas (extension: raw-ideas) ──
   if (hasExtension(cfg, "raw-ideas")) {
 

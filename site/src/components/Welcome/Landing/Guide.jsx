@@ -165,7 +165,7 @@ treeos start`}</Code>
             </div>
             <div className="lp-card">
               <h3 style={{color: "#4ade80"}}>Tree <code>/MyTree</code></h3>
-              <p><strong>Chat</strong> reads and writes. <strong>Place</strong> adds content silently. <strong>Query</strong> reads only. The orchestrator classifies intent.</p>
+              <p><strong>Chat</strong> reads and writes. <strong>Place</strong> adds content silently. <strong>Query</strong> reads only. <strong>Be</strong> lets the tree lead you through it. The orchestrator classifies intent.</p>
             </div>
           </div>
         </div>
@@ -184,10 +184,11 @@ treeos start`}</Code>
           </P>
           <Code>{`treeos cd Goals/Fitness
 treeos chat "add a back and biceps routine"
+treeos be                # the tree guides you through your workout
 treeos note "Hit 135 on bench today"
+treeos query "how's my progress this month"
 treeos tree
-treeos ext-scope         # see what's active here
-treeos config set maxToolIterations 25`}</Code>
+treeos ext-scope         # see what's active here`}</Code>
           <P style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem"}}>
             Note: the CLI is built for TreeOS. It is not part of the seed. It is one of the first
             tools built on the kernel to give users and developers direct access to the tree.

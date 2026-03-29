@@ -189,7 +189,6 @@ router.post("/gateway/email/:channelId", async (req, res) => {
     );
 
     // Process the message via gateway core
-    const { getExtension } = await import("../loader.js");
     const gateway = getExtension("gateway");
     if (!gateway?.exports?.processGatewayMessage) {
       log.error("GatewayEmail", "Gateway core not loaded");

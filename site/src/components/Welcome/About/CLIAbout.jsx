@@ -23,21 +23,24 @@ const CLIAbout = () => {
         </div>
       </section>
 
-      {/* ── THREE BASE COMMANDS ── */}
+      {/* ── FOUR BASE COMMANDS ── */}
       <section className="lp-section">
         <div className="lp-container" style={{maxWidth: 780}}>
-          <h2 className="lp-section-title">Three Commands</h2>
+          <h2 className="lp-section-title">Four Commands</h2>
           <p className="lp-section-sub">Everything else builds on them.</p>
 
           <div style={{maxWidth: 500, margin: "0 auto 24px"}}>
-            <Cmd name="chat" desc="the AI thinks and acts" />
+            <Cmd name="chat" desc="you talk, the AI responds" />
             <Cmd name="place" desc="the AI stores what you said" />
             <Cmd name="query" desc="the AI answers without changing anything" />
+            <Cmd name="be" desc="the tree leads, you follow" />
           </div>
 
           <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.9rem", marginBottom: 24}}>
-            But these are just the floor. Extensions add their own AI commands that work the same
-            way but think differently.
+            <code>chat</code>, <code>place</code>, and <code>query</code> are conversations where you steer.{" "}
+            <code>be</code> is different. The AI reads the tree, finds what needs doing, and guides you
+            through it one step at a time. One word. The tree takes over. Extensions add their own
+            commands that think differently.
           </p>
 
           <div style={{maxWidth: 600, margin: "0 auto"}}>

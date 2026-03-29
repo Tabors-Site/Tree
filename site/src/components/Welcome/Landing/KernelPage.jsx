@@ -198,7 +198,7 @@ const KernelPage = () => {
             </div>
             <div className="lp-card">
               <h3>Tree <code>/MyTree</code></h3>
-              <p>Inside a tree. Three behavioral commands: <strong>chat</strong> (full tools, full response), <strong>place</strong> (full tools, minimal response), <strong>query</strong> (read-only tools, full response). The query constraint is enforced in the kernel. Every orchestrator gets it for free.</p>
+              <p>Inside a tree. Four commands: <strong>chat</strong> (full interaction), <strong>place</strong> (store silently), <strong>query</strong> (read-only), <strong>be</strong> (guided). The orchestrator routes them. The kernel enforces the query read-only constraint.</p>
             </div>
           </div>
         </div>
@@ -1013,13 +1013,14 @@ const KernelPage = () => {
         </div>
       </section>
 
-      {/* ── THREE COMMANDS ── */}
+      {/* ── FOUR COMMANDS ── */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">Three Commands</h2>
+          <h2 className="lp-section-title">Four Commands</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            The three commands are constraints on the router, not paths through it.
+            Commands are constraints on the orchestrator, not paths through it.
             Routing determines WHERE the message goes. The command determines WHAT the mode can do.
+            The kernel enforces the query constraint (read-only tool filtering). Everything else is the orchestrator's decision.
           </p>
           <div className="lp-cards-3">
             <div className="lp-card">
@@ -1051,6 +1052,18 @@ const KernelPage = () => {
                 Read-only safety. The AI can look but not touch.
                 "How's my bench?" reads history without risking a stray write.
                 Enforced in the kernel. Every orchestrator gets it for free.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3>be</h3>
+              <div style={{fontFamily: "monospace", fontSize: "0.85rem", color: "#c084fc", marginBottom: 8}}>
+                tools: all | response: guided | writes: allowed
+              </div>
+              <p style={{fontSize: "0.85rem", color: "#888"}}>
+                The tree leads. You follow. The AI reads the structure, finds what needs
+                doing, and walks you through it one step at a time. Extensions declare a
+                guided mode. At a fitness node: workout coaching. At a food node: meal logging.
+                No extension: the tree walks its own children.
               </p>
             </div>
           </div>

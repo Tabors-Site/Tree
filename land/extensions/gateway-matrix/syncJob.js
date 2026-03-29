@@ -59,7 +59,6 @@ export async function startupScan() {
 
     if (channels.length === 0) return;
 
-    const { getExtension } = await import("../loader.js");
     const gateway = getExtension("gateway");
     if (!gateway?.exports?.getChannelWithSecrets) return;
 

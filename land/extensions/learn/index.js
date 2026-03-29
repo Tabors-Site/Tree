@@ -1,5 +1,5 @@
 import tools from "./tools.js";
-import { setRunChat } from "./core.js";
+import { setRunChat, initLearnState, getLearnState, processQueue, pauseLearn, resumeLearn, stopLearn } from "./core.js";
 
 export async function init(core) {
   const INT = core.llm.LLM_PRIORITY.INTERACTIVE;
@@ -16,5 +16,13 @@ export async function init(core) {
   return {
     router,
     tools,
+    exports: {
+      initLearnState,
+      getLearnState,
+      processQueue,
+      pauseLearn,
+      resumeLearn,
+      stopLearn,
+    },
   };
 }

@@ -91,9 +91,9 @@ export async function scaffold(rootId, userId) {
   await setNodeMode(journalNode._id, "respond", "tree:recovery-journal");
   await setNodeMode(patternsNode._id, "respond", "tree:recovery-reflect");
 
-  // Mark initialized
+  // Mark initialized (base phase: scaffold done, substances not yet configured)
   const root = await _Node.findById(rootId);
-  if (root) await _metadata.setExtMeta(root, "recovery", { initialized: true });
+  if (root) await _metadata.setExtMeta(root, "recovery", { initialized: true, setupPhase: "base" });
 
   const ids = {};
   for (const [node, role] of tags) ids[role] = String(node._id);
@@ -131,6 +131,15 @@ export async function addSubstance(rootId, substanceName, userId, config = {}) {
     totalSlips: 0,
     lastSlip: null,
   });
+
+  // First substance added completes setup
+  const root = await _Node.findById(rootId);
+  if (root) {
+    const existing = _metadata.getExtMeta(root, "recovery") || {};
+    if (existing.setupPhase === "base") {
+      await _metadata.setExtMeta(root, "recovery", { ...existing, setupPhase: "complete" });
+    }
+  }
 
   return { substance: String(substNode._id), schedule: String(scheduleNode._id), doses: String(dosesNode._id) };
 }
@@ -186,6 +195,21 @@ export async function isInitialized(rootId) {
   if (!root) return false;
   const meta = root.metadata instanceof Map ? root.metadata.get("recovery") : root.metadata?.recovery;
   return !!meta?.initialized;
+}
+
+export async function getSetupPhase(rootId) {
+  if (!_Node) return null;
+  const root = await _Node.findById(rootId).select("metadata").lean();
+  if (!root) return null;
+  const meta = root.metadata instanceof Map ? root.metadata.get("recovery") : root.metadata?.recovery;
+  return meta?.setupPhase || (meta?.initialized ? "complete" : null);
+}
+
+export async function completeSetup(rootId) {
+  const root = await _Node.findById(rootId);
+  if (!root) return;
+  const existing = _metadata.getExtMeta(root, "recovery") || {};
+  await _metadata.setExtMeta(root, "recovery", { ...existing, setupPhase: "complete" });
 }
 
 // ── Parse check-in ──

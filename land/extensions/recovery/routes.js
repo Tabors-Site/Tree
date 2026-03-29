@@ -68,6 +68,19 @@ router.post("/root/:rootId/recovery", authenticate, async (req, res) => {
       return;
     }
 
+    // ── PATH 1b: Setup incomplete (scaffold done, no substances configured yet) ──
+    const { getSetupPhase } = await import("./core.js");
+    const phase = await getSetupPhase(rootId);
+    if (phase === "base") {
+      const { answer, chatId } = await runChat({
+        userId, username, message,
+        mode: "tree:recovery-log",
+        rootId, res, slot: "recovery",
+      });
+      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:recovery-log", setup: true });
+      return;
+    }
+
     const nodes = await findRecoveryNodes(rootId);
 
     // ── PATH 3: Questions/reflection/planning ──

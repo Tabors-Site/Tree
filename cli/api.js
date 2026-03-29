@@ -398,6 +398,7 @@ class TreeAPI {
   }
   place(rootId, message, opts) { return this.post(`/root/${rootId}/place`, { message }, opts); }
   query(rootId, message, opts) { return this.post(`/root/${rootId}/query`, { message }, opts); }
+  be(rootId, message, opts) { return this.post(`/root/${rootId}/be`, { message }, opts); }
 
   // ── Raw Ideas ─────────────────────────────────────────────────────────
   listRawIdeas(userId, opts = {}) {

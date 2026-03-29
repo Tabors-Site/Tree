@@ -9,7 +9,7 @@ export default {
     "and restrictions. History node archives daily summaries with weekly averages and hit " +
     "rates. Three modes: food-log (parser), food-review (advisor with weekly patterns), " +
     "food-coach (setup and goal setting). Fitness channel carries workout data both ways. " +
-    "The tree IS the app.",
+    "Type 'be' at the Food tree to start logging: just say what you ate. The tree IS the app.",
 
   classifierHints: [
     /\b(ate|had|eaten|drank|breakfast|lunch|dinner|snack|calories|protein|carbs|fats|macro)\b/i,
@@ -39,6 +39,7 @@ export default {
     routes: "./routes.js",
     tools: false,
     jobs: true,
+    guidedMode: "tree:food-log",
 
     hooks: {
       fires: [],

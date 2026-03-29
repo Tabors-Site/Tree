@@ -504,6 +504,29 @@ setInterval(() => {
 router.post("/root/:rootId/query", authenticateOptional, handleQuery);
 router.get("/root/:rootId/query", authenticateOptional, handleQuery);
 
+// ─────────────────────────────────────────────────────────────────────────
+// POST /root/:rootId/be
+// Guided walkthrough. The tree leads. The user follows.
+// ─────────────────────────────────────────────────────────────────────────
+
+router.post("/root/:rootId/be", authenticate, async (req, res) => {
+  const { rootId } = req.params;
+  const { message } = req.body;
+
+  if (!validateMessage(message, res)) return;
+  if (!(await checkTreeAccess(rootId, req.userId, res))) return;
+  if (!(await checkLlmAccess(rootId, req.userId, res))) return;
+
+  await runTreeOrchestration({
+    mode: "be",
+    rootId,
+    message: message.trim(),
+    userId: req.userId,
+    username: req.username,
+    sessionType: SESSION_TYPES.API_TREE_CHAT,
+  }, res);
+});
+
 // Raw idea and understanding orchestration endpoints moved to their extensions.
 
 export default router;
