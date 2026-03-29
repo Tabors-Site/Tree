@@ -4,7 +4,7 @@
  *
  * Notes are content attached to nodes. Two content types: text and file.
  * beforeNote/afterNote hooks fire on every write. Extensions tag notes
- * via hookData.metadata (prestige writes version, treeos writes isReflection).
+ * via hookData.metadata. Extensions use their own namespace.
  *
  * File uploads stored in uploads/ directory. Soft-deleted notes have
  * nodeId and userId set to DELETED sentinel.

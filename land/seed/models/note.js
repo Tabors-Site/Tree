@@ -38,7 +38,7 @@ const NoteSchema = new mongoose.Schema({
   },
 });
 
-// Extensions tag notes via metadata (prestige writes version, treeos writes isReflection).
+// Extensions tag notes via metadata. Each extension uses its own namespace.
 // maxNotesPerNode (config, default 1000) checked in createNote before write.
 // Retention: kernel deletes notes when their nodeId is set to DELETED (soft-delete).
 

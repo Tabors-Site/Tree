@@ -758,7 +758,7 @@ async function resolveLLMClient(ctx, session, visitorId) {
     modeConnectionId,
   );
   if (clientEntry.noLlm) {
-    // Energy metering handled by energy extension hooks if installed
+    // Metering handled by extension hooks (beforeLLMCall/afterLLMCall) if installed
     return {
       noLlmResponse: {
         content:
@@ -1009,7 +1009,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
   const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
 
   // beforeLLMCall: extensions can cancel (quota exhausted) or modify params.
-  // messages exposed so before-hooks can prepend/modify (persona, guardrails, etc.)
+  // messages exposed so before-hooks can prepend/modify system prompts
   const llmHookData = {
     userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
     model: MODEL, messageCount: session.messages.length, hasTools: tools.length > 0,
@@ -1084,7 +1084,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
         log.warn("LLM", `Model invented tool "${inventedTool}". Extracted response from failed_generation (${extracted.length} chars).`);
         response = { choices: [{ message: { role: "assistant", content: extracted }, finish_reason: "stop" }] };
 
-        // Fire afterLLMCall so energy metering still tracks the call
+        // Fire afterLLMCall so extension metering still tracks the call
         hooks.run("afterLLMCall", {
           userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
           model: clientEntry?.model || MODEL,

@@ -145,10 +145,10 @@ export function resolveMode(intent, bigMode, nodeMetadata = null, blockedExtensi
 
 /**
  * Set a per-node mode override. Extensions use this to assign custom modes
- * to specific nodes (e.g., fitness-log on the Fitness root).
+ * to specific nodes.
  *
- *   await setNodeMode(nodeId, "respond", "tree:fitness-log");
- *   // Node's metadata.modes.respond = "tree:fitness-log"
+ *   await setNodeMode(nodeId, "respond", "tree:custom-mode");
+ *   // Node's metadata.modes.respond = "tree:custom-mode"
  */
 export async function setNodeMode(nodeId, intent, modeKey) {
   if (!nodeId || !intent || !modeKey) return false;
@@ -185,7 +185,7 @@ export function getToolsForMode(modeKey, treeToolConfig = null) {
   }
 
   // Layer 3: tree-specific tools from root node metadata
-  // treeToolConfig = { allowed: ["execute-shell", "my-tool"], blocked: ["delete-node-branch"] }
+  // treeToolConfig = { allowed: ["custom-tool"], blocked: ["delete-node-branch"] }
   if (treeToolConfig) {
     if (Array.isArray(treeToolConfig.allowed)) {
       toolNames = [...new Set([...toolNames, ...treeToolConfig.allowed])];

@@ -550,7 +550,13 @@
       "Bash(__NEW_LINE_9b5683fc175b089a__ grep:*)",
       "Bash(ls -d /home/tabor/github/Tree/*/seed)",
       "Bash(__NEW_LINE_7b877ecba95dbea4__ grep:*)",
-      "Bash(__NEW_LINE_d1ea1e9558b23c09__ grep:*)"
+      "Bash(__NEW_LINE_d1ea1e9558b23c09__ grep:*)",
+      "Bash(grep -n \"$\" /home/tabor/github/Tree/land/seed/tree/treeManagement.js)",
+      "Bash(grep -n \"DEFAULT_GRACE_MS\\\\|DEFAULT_INTERVAL_MS\\\\|SIGNAL_DEPTH_TTL_MS\\\\|CIRCUIT_MAX_BACKOFF_MS\" /home/tabor/github/Tree/land/seed/tree/*.js /home/tabor/github/Tree/land/seed/*.js)",
+      "Bash(find /home/tabor/github/Tree -type d -name *ring*)",
+      "Bash(/tmp/check_config.txt:*)",
+      "Bash(grep -r rings /home/tabor/github/Tree/land/seed --include=*.js)",
+      "Bash(echo \"Found violation in $ext\" done)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

@@ -574,22 +574,21 @@ export async function reviveNodeBranch({
     throw new Error("Cannot revive into a system node");
   }
 
-  const deletedAccess = await resolveTreeAccess(deletedNodeId, userId);
-  const targetAccess = await resolveTreeAccess(targetParentId, userId);
-
-  if (!deletedAccess.isOwner || !targetAccess.isOwner) {
-    throw new Error("You must own both branches to revive a node");
-  }
-  //extra safe but unneeded
   if (await isDescendant(deletedNodeId, targetParentId)) {
     throw new Error("Cannot revive a node into its own descendant");
   }
 
-
+  // Lock BEFORE access check to prevent TOCTOU race
   const lockIds = [deletedNodeId.toString(), targetParentId.toString()];
-  const locked = await acquireMultiple(lockIds);
+  const locked = await acquireMultiple(lockIds, userId);
   if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Nodes are being modified");
   try {
+    // Access check inside lock window
+    const deletedAccess = await resolveTreeAccess(deletedNodeId, userId);
+    const targetAccess = await resolveTreeAccess(targetParentId, userId);
+    if (!deletedAccess.isOwner || !targetAccess.isOwner) {
+      throw new Error("You must own both branches to revive a node");
+    }
     deletedNode.parent = targetParentId;
     deletedNode.rootOwner = null;
     await deletedNode.save();
@@ -629,21 +628,21 @@ export async function reviveNodeBranchAsRoot({
     throw new Error("Node is not deleted and cannot be revived");
   }
 
-  const access = await resolveTreeAccess(deletedNodeId, userId);
-  if (!access.isOwner) {
-    throw new Error("Only the owner can revive this branch as a root");
-  }
-
   if (!deletedNode.rootOwner) {
     throw new Error("Deleted node has no root owner and cannot be revived");
   }
 
-
+  // Lock BEFORE access check to prevent TOCTOU race
   const landRootId = getLandRootId();
   const lockIds = [deletedNodeId.toString(), landRootId].filter(Boolean);
-  const locked = await acquireMultiple(lockIds);
+  const locked = await acquireMultiple(lockIds, userId);
   if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Nodes are being modified");
   try {
+    // Access check inside lock window
+    const access = await resolveTreeAccess(deletedNodeId, userId);
+    if (!access.isOwner) {
+      throw new Error("Only the owner can revive this branch as a root");
+    }
     deletedNode.parent = landRootId;
     deletedNode.rootOwner = userId;
     await deletedNode.save();

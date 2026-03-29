@@ -35,10 +35,9 @@ import { getLandConfigValue } from "./landConfig.js";
  *   onTreeTripped      - Tree circuit breaker tripped. { rootId, reason, scores, timestamp }
  *   onTreeRevived      - Tripped tree revived. { rootId, timestamp }
  *
- * Extension hooks (examples, extensions define their own):
- *   gateway:beforeDispatch    - Before notification dispatch
- *   understanding:afterRun    - After understanding run completes
- *   dreams:afterDream         - After dream cycle finishes
+ * Extension hooks (extensions define their own using "extName:hookName"):
+ *   myext:beforeProcess       - Before processing begins
+ *   myext:afterComplete        - After processing completes
  *
  * Naming convention: core hooks are camelCase. Extension hooks use "extName:hookName".
  *

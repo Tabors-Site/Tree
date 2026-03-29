@@ -670,7 +670,7 @@ export async function getContextForAi(nodeId, options = {}) {
     }
   }
 
-  // Scripts injected by scripts extension via enrichContext hook
+  // Extensions inject additional context via enrichContext hook
 
   // ---- Directives (future) ----
   if (includeDirectives && node.directives?.length > 0) {

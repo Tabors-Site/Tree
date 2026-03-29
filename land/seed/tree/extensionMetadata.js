@@ -9,7 +9,7 @@ import { getLandConfigValue } from "../landConfig.js";
  * Helpers for extensions to store per-node data in node.metadata.
  *
  * Convention: each extension gets a namespace key matching its manifest name.
- * e.g. node.metadata.get('solana'), node.metadata.get('scripts')
+ * e.g. node.metadata.get('my-extension')
  *
  * Spatial extension scoping: if an extension is blocked at a node
  * (via metadata.extensions.blocked), writes are silently skipped.
@@ -273,8 +273,8 @@ function validateAtomicExtName(extName) {
  * Atomic increment on a single key within an extension's metadata namespace.
  * Uses MongoDB $inc. No read-modify-write. No race conditions.
  *
- *   await incExtMeta(node, "food", "values.today", 42);
- *   // Atomically adds 42 to metadata.food.values.today
+ *   await incExtMeta(node, "my-extension", "counter.daily", 42);
+ *   // Atomically adds 42 to metadata.my-extension.counter.daily
  */
 export async function incExtMeta(node, extName, key, amount = 1) {
   if (!node || !extName || !key) return false;
