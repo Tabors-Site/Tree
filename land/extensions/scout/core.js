@@ -290,7 +290,7 @@ export async function runScout(nodeId, query, userId, username, opts = {}) {
     llmPriority: LLM_PRIORITY?.INTERACTIVE || 2,
   });
 
-  const ok = await rt.init("Starting scout");
+  const ok = await rt.init(query);
   if (!ok) {
     return { error: "Scout already running at this node" };
   }
@@ -492,7 +492,7 @@ Return JSON:
       log.debug("Scout", `Failed to write scout metadata: ${err.message}`);
     }
 
-    rt.setResult("Scout complete", "tree:scout");
+    rt.setResult(answer, "tree:scout");
     return result;
 
   } catch (err) {
