@@ -27,6 +27,20 @@ export function chatBarCss() {
     }
     .chat-bar.minimized { transform: translateY(calc(100% - 44px)); }
 
+    .chat-bar-drag {
+      width: 40px;
+      height: 4px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 2px;
+      margin: 0 auto;
+      cursor: ns-resize;
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .chat-bar-drag:hover { background: rgba(255,255,255,0.3); }
+
     .chat-bar-toggle {
       display: flex;
       align-items: center;
@@ -51,7 +65,7 @@ export function chatBarCss() {
     .chat-bar.minimized .chat-bar-toggle-icon { transform: rotate(180deg); }
 
     .chat-bar-messages {
-      max-height: 300px;
+      height: 300px;
       overflow-y: auto;
       padding: 16px 20px;
       background: rgba(10, 10, 10, 0.97);
@@ -191,9 +205,10 @@ export function commandsRefHtml(commands) {
 export function chatBarHtml({ placeholder = "Type a message..." } = {}) {
   return `
     <div class="chat-bar minimized" id="chatBar">
-      <div class="chat-bar-toggle">
-        <span class="chat-bar-toggle-label" onclick="toggleChatBar()">Chat</span>
-        <span style="display:flex;align-items:center;gap:10px;">
+      <div class="chat-bar-drag" id="chatDragHandle"></div>
+      <div class="chat-bar-toggle" onclick="toggleChatBar()">
+        <span class="chat-bar-toggle-label">Chat</span>
+        <span style="display:flex;align-items:center;gap:10px;" onclick="event.stopPropagation()">
           <span id="chatClearBtn" class="chat-bar-toggle-icon" onclick="clearChatBar()" title="Clear chat" style="cursor:pointer;font-size:0.75rem;color:rgba(255,255,255,0.3);">clear</span>
           <span class="chat-bar-toggle-icon" onclick="toggleChatBar()" style="cursor:pointer;">▲</span>
         </span>
@@ -208,8 +223,7 @@ export function chatBarHtml({ placeholder = "Type a message..." } = {}) {
   `;
 }
 
-export function chatBarJs({ endpoint, token }) {
-  const tokenParam = token ? `&token=${encodeURIComponent(token)}` : "";
+export function chatBarJs({ endpoint }) {
   return `
     function clearChatBar() {
       document.getElementById('chatMessages').innerHTML = '';
@@ -314,12 +328,8 @@ export function chatBarJs({ endpoint, token }) {
           var answer = data.data.answer || data.data.synthesis || JSON.stringify(data.data);
           appendMessage('ai', answer);
           saveChatHistory();
-          // Reload after delay to show updated dashboard data. Fade out to avoid CSS flash.
-          setTimeout(function() {
-            document.body.style.transition = 'opacity 0.2s';
-            document.body.style.opacity = '0';
-            setTimeout(function() { window.location.reload(); }, 200);
-          }, 1200);
+          // Refresh dashboard data without full page reload
+          refreshDashboardData();
         } else if (data.error) {
           appendMessage('error', data.error.message || 'Something went wrong.');
         } else {
@@ -345,6 +355,88 @@ export function chatBarJs({ endpoint, token }) {
       input.focus();
       saveChatHistory();
     }
+
+    // Refresh dashboard content without full page reload
+    async function refreshDashboardData() {
+      try {
+        // Fetch the same page as HTML, parse it, swap the content
+        var res = await fetch(window.location.href, { credentials: 'include' });
+        if (!res.ok) return;
+        var html = await res.text();
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(html, 'text/html');
+        // Find the main content (everything except chat bar)
+        var newContent = doc.querySelector('.container, .rec-layout, .kb-layout, [class*="-layout"]');
+        var oldContent = document.querySelector('.container, .rec-layout, .kb-layout, [class*="-layout"]');
+        if (newContent && oldContent) {
+          oldContent.innerHTML = newContent.innerHTML;
+        }
+      } catch {}
+    }
+
+    // Drag to resize chat bar
+    (function() {
+      var handle = document.getElementById('chatDragHandle');
+      var chatBar = document.getElementById('chatBar');
+      var messages = document.getElementById('chatMessages');
+      var dragging = false;
+      var startY = 0;
+      var startHeight = 0;
+      var DEFAULT_HEIGHT = 300;
+      var MIN_HEIGHT = 120;
+      var MAX_HEIGHT = window.innerHeight * 0.7;
+
+      handle.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        dragging = true;
+        startY = e.clientY;
+        startHeight = messages.offsetHeight;
+        chatBar.style.transition = 'none';
+        document.body.style.userSelect = 'none';
+      });
+
+      handle.addEventListener('touchstart', function(e) {
+        dragging = true;
+        startY = e.touches[0].clientY;
+        startHeight = messages.offsetHeight;
+        chatBar.style.transition = 'none';
+      }, { passive: true });
+
+      document.addEventListener('mousemove', function(e) {
+        if (!dragging) return;
+        var delta = startY - e.clientY;
+        var newHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeight + delta));
+        messages.style.height = newHeight + 'px';
+      });
+
+      document.addEventListener('touchmove', function(e) {
+        if (!dragging) return;
+        var delta = startY - e.touches[0].clientY;
+        var newHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeight + delta));
+        messages.style.height = newHeight + 'px';
+      }, { passive: true });
+
+      document.addEventListener('mouseup', function() {
+        if (!dragging) return;
+        dragging = false;
+        chatBar.style.transition = '';
+        document.body.style.userSelect = '';
+      });
+
+      document.addEventListener('touchend', function() {
+        if (!dragging) return;
+        dragging = false;
+        chatBar.style.transition = '';
+      });
+    })();
+
+    // Kill entry animations after they play so they don't replay on DOM updates
+    setTimeout(function() {
+      var cards = document.querySelectorAll('.glass-card, [style*="animation"]');
+      for (var i = 0; i < cards.length; i++) {
+        cards[i].style.animation = 'none';
+      }
+    }, 1500);
 
     // Restore chat history on page load
     restoreChatHistory();

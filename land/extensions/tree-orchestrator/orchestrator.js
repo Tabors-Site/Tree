@@ -41,15 +41,13 @@ async function localClassify(message, currentNodeId) {
       const { getClassifierHintsForMode } = await import("../loader.js");
       const currentNode = await Node.findById(currentNodeId).select("metadata children").lean();
 
-      // Level 1: current node
+      // Level 1: current node has a mode override — extension owns all messages here.
+      // No hint matching needed. The user navigated to this node; the extension handles it.
       const modes = currentNode?.metadata instanceof Map
         ? currentNode.metadata.get("modes")
         : currentNode?.metadata?.modes;
       if (modes?.respond) {
-        const hints = getClassifierHintsForMode(modes.respond);
-        if (hints?.some(re => re.test(message))) {
-          return { intent: "extension", mode: modes.respond, confidence: 0.9, ...base };
-        }
+        return { intent: "extension", mode: modes.respond, confidence: 0.95, ...base };
       }
 
       // Level 2: direct children (do any of my children claim this message?)

@@ -19,6 +19,8 @@ export default {
     /\b(mastery|practice|quiz|test me|exercise|drill)\b/i,
     /\b(curriculum|lesson|course|tutorial|concept|topic)\b/i,
     /\b(review|progress|gaps?|streak|studied)\b/i,
+    /\b(what do i have|what's in|show me|status|queue|active|so far)\b/i,
+    /\b(start|begin|continue|next|session|be)\b/i,
   ],
 
   needs: {

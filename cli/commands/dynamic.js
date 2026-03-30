@@ -229,6 +229,31 @@ function registerDynamic(program, cfgOverride) {
               }
             }
 
+            // ── Orchestrator routing for tree-scoped extension commands ──
+            // Extension commands with a message body at tree scope go through
+            // the orchestrator so they share the session with `chat`.
+            // Level 1 routing handles mode detection. Same visitorId, same history.
+            const isTreeMessage = cmd._scope && cmd._scope.includes("tree")
+              && cfg.activeRootId
+              && (decl.method || "GET").toUpperCase() === "POST"
+              && (decl.bodyMap?.message !== undefined || (decl.body && decl.body.includes("message")));
+
+            if (isTreeMessage) {
+              let message = "";
+              if (decl.bodyMap && typeof decl.bodyMap === "object" && decl.bodyMap.message !== undefined) {
+                const val = args[decl.bodyMap.message];
+                message = Array.isArray(val) ? val.join(" ") : (val || "");
+              } else if (decl.body && Array.isArray(decl.body)) {
+                const idx = decl.body.indexOf("message");
+                if (idx >= 0) message = Array.isArray(args[idx]) ? args[idx].join(" ") : (args[idx] || "");
+              }
+              if (message) {
+                const data = await api.chat(cfg.activeRootId, message);
+                printResponse(data);
+                return;
+              }
+            }
+
             const endpoint = resolveEndpoint(decl.endpoint, args, cfg);
             const method = (decl.method || "GET").toUpperCase();
 

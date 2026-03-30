@@ -35,12 +35,14 @@ function detectIntent(message) {
   if (/^(remove|drop|delete)\s+/i.test(lower)) return "remove";
   if (/^(stop|deactivate|pause)\s+/i.test(lower)) return "deactivate";
   if (/\b(needlearn|need to learn|want to learn|add to queue|queue)\b/.test(lower)) return "queue";
-  if (/^study\s*$/i.test(lower) || /\b(study session|continue studying|let's study|teach me)\b/.test(lower)) return "session";
+  if (/^study\s*$/i.test(lower) || /\b(study session|continue studying|let's study)\b/.test(lower)) return "session";
   if (/^study\s+\d+$/i.test(lower)) return "switch"; // "study 2" = switch to queue item 2
   if (/\b(progress|mastery|how am i|gaps?|review|status|streak)\b/.test(lower)) return "review";
-  if (/\b(curriculum|break.*down|plan|organize|structure|build.*curriculum)\b/.test(lower)) return "plan";
+  if (/\b(curriculum|break.*down|plan|organize|structure|build.*curriculum|teach me|learn|add.*topic|create.*topic)\b/.test(lower)) return "plan";
   if (/^https?:\/\//.test(lower)) return "queue";
-  return "log";
+  // Default to plan mode so the AI can create topics for unrecognized input.
+  // Log mode only has queue-add, plan mode has create-topic and add-subtopic.
+  return "plan";
 }
 
 /**

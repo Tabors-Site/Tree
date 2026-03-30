@@ -95,12 +95,12 @@ export async function init(core) {
     }
   });
 
-  // ── Boot: backfill missing roots ──
-  // Finds root nodes owned by users whose nav.roots is missing them.
+  // ── Boot: one-time backfill for roots missed by the ObjectId comparison bug ──
   core.hooks.register("afterBoot", async () => {
     try {
+      const { SYSTEM_OWNER } = await import("../../seed/protocol.js");
       const roots = await core.models.Node.find({
-        rootOwner: { $ne: null },
+        rootOwner: { $nin: [null, SYSTEM_OWNER] },
         parent: { $ne: "deleted" },
       }).select("_id rootOwner").lean();
 

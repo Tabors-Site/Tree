@@ -88,9 +88,11 @@ async function runTreeOrchestration(opts, res) {
   } = opts;
 
   const handle = opts.sessionHandle;
+  // Stable visitorId per user+tree. Matches runChat's pattern (${rootId}:${userId})
+  // so extension commands and orchestrator commands share the same session.
   const visitorId = handle
-    ? `tree-${mode}:${userId}:${handle}`
-    : `tree-${mode}:${userId}:${Date.now()}`;
+    ? `${rootId}:${userId}:${handle}`
+    : `${rootId}:${userId}`;
   const scopeKey = handle
     ? `${userId}:${rootId}:${handle}`
     : `${userId}:${rootId}`;

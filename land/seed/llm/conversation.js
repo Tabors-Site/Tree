@@ -550,6 +550,7 @@ let MAX_CONVERSATION_SESSIONS = 50000; // hard cap to prevent OOM from leaked se
 // Chains Chat documents together. Capped at 10K entries.
 const _runChatSessions = new Map();
 
+
 /**
  * Get or create session for a visitor.
  */
@@ -1710,14 +1711,13 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   // Register abort so external callers can cancel via sessionRegistry
   setSessionAbort(visitorId, abort);
 
-  const internalJwt = jwt.sign(
-    { userId: userId.toString(), username: username || "unknown", visitorId },
-    JWT_SECRET,
-    { expiresIn: "5m" }
-  );
-
   // 1. Connect MCP (reuse if already connected)
   if (!getMCPClient(visitorId)) {
+    const internalJwt = jwt.sign(
+      { userId: userId.toString(), username: username || "unknown", visitorId },
+      JWT_SECRET,
+      { expiresIn: "24h" }
+    );
     try {
       await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
     } catch (err) {
