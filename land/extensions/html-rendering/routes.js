@@ -1,6 +1,7 @@
 import log from "../../seed/log.js";
 import express from "express";
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import authenticate from "../../seed/middleware/authenticate.js";
 import urlAuth from "./urlAuth.js";
 import User from "../../seed/models/user.js";
@@ -151,6 +152,19 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
 
 // Page routes (mounted at / not /api/v1)
 export const pageRouter = express.Router();
+
+pageRouter.get("/", (req, res) => {
+  if (!isHtmlEnabled()) return res.redirect("/api/v1/protocol");
+  // If logged in, go to dashboard. Otherwise login.
+  const token = req.cookies?.token;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      if (decoded?.userId) return res.redirect("/dashboard");
+    } catch {}
+  }
+  return res.redirect("/login");
+});
 
 pageRouter.get("/login", (req, res) => {
   if (!isHtmlEnabled()) {
