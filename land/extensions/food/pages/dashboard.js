@@ -56,6 +56,7 @@ export function renderFoodDashboard({ rootId, rootName, picture, token, userId }
       goal: m.goal || 0,
       color: MACRO_COLORS[role] || "#a78bfa",
       sub: sub.join(" . "),
+      deleteUrl: m.nodeId ? `/api/v1/root/${rootId}/food/metric/${m.nodeId}` : null,
     });
   }
 
@@ -69,21 +70,25 @@ export function renderFoodDashboard({ rootId, rootName, picture, token, userId }
     if (!meals || meals.length === 0) continue;
     cards.push({
       title: slot.charAt(0).toUpperCase() + slot.slice(1),
-      items: meals.map(m => ({
-        text: (m.text || "").slice(0, 120),
-        sub: m.date ? new Date(m.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "",
-      })),
+      items: meals.map(m => {
+        const delId = m.logNoteId || m.id;
+        return {
+          text: (m.text || "").slice(0, 120),
+          sub: m.date ? new Date(m.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "",
+          deleteUrl: delId ? `/api/v1/root/${rootId}/food/entry/${delId}` : null,
+        };
+      }),
     });
   }
 
-  // Recent log + history as a two-column row
-  if (cards.length === 0) {
-    // No slot-based meals, show recent log
+  // Recent log (always shown, even when slots exist)
+  if (recentMeals.length > 0) {
     cards.push({
       title: "Recent Log",
       items: recentMeals.slice(0, 10).map(m => ({
         text: (m.text || "").slice(0, 120),
         sub: m.date ? timeAgo(new Date(m.date)) : "",
+        deleteUrl: m.id ? `/api/v1/root/${rootId}/food/entry/${m.id}` : null,
       })),
       empty: "No meals logged today. Type below to start.",
     });
@@ -104,6 +109,32 @@ export function renderFoodDashboard({ rootId, rootName, picture, token, userId }
     empty: "History builds as you log meals each day.",
   });
 
+  const addMetricHtml = `
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+      <input id="newMetricName" type="text" placeholder="Add metric (sugar, fiber, sodium...)"
+        style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:#fff;font-size:0.85rem;outline:none" />
+      <input id="newMetricGoal" type="number" placeholder="Goal (g)"
+        style="width:80px;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:#fff;font-size:0.85rem;outline:none" />
+      <button onclick="addMetric()" style="padding:8px 14px;border-radius:8px;border:none;background:rgba(72,187,120,0.15);color:#4ade80;font-size:0.85rem;cursor:pointer">+</button>
+    </div>`;
+
+  const addMetricJs = `
+    async function addMetric() {
+      const name = document.getElementById('newMetricName').value.trim();
+      if (!name) return;
+      const goal = document.getElementById('newMetricGoal').value || 0;
+      const url = '/api/v1/root/${rootId}/food/metric${token ? "?token=" + token : ""}';
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name, goal: Number(goal) })
+      });
+      if (res.ok) location.reload();
+    }
+    document.getElementById('newMetricName')?.addEventListener('keydown', e => { if (e.key === 'Enter') addMetric(); });
+  `;
+
   return renderAppDashboard({
     rootId, rootName, token, userId,
     subtitle: profileParts.join(" . ") || null,
@@ -115,6 +146,8 @@ export function renderFoodDashboard({ rootId, rootName, picture, token, userId }
     },
     stats,
     bars,
+    afterBars: addMetricHtml,
+    extraJs: addMetricJs,
     cards,
     commands: [
       { cmd: "food <message>", desc: "Log what you ate" },

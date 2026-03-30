@@ -213,7 +213,8 @@ export async function init(core) {
     router,
     tools,
     modeTools: [
-      { modeKey: "tree:food-coach", toolNames: ["food-save-profile"] },
+      { modeKey: "tree:food-coach", toolNames: ["food-save-profile", "food-adopt-node"] },
+      { modeKey: "tree:edit", toolNames: ["food-adopt-node"] },
     ],
     exports: {
       scaffold,

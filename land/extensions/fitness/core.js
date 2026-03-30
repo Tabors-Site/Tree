@@ -38,6 +38,24 @@ const MODALITIES = {
   HOME: "home",
 };
 
+// ── Adopt an existing node as a tracked exercise ──
+
+export async function adoptExercise(nodeId, { exerciseType, unit, goals }) {
+  if (!_metadata || !_Node) throw new Error("Services not configured");
+  const node = await _Node.findById(nodeId);
+  if (!node) throw new Error("Node not found");
+  await _metadata.setExtMeta(node, "fitness", {
+    role: "exercise",
+    valueSchema: { type: exerciseType || "weight-reps", unit: unit || "lb" },
+  });
+  if (goals && Object.keys(goals).length > 0) {
+    await _metadata.setExtMeta(node, "goals", goals);
+  }
+  // Initialize empty values
+  await _metadata.batchSetExtMeta(nodeId, "values", { today: 0 });
+  log.info("Fitness", `Adopted "${node.name}" as exercise (${exerciseType || "weight-reps"})`);
+}
+
 // ── Initialization check ──
 
 export async function isInitialized(rootId) {
@@ -81,7 +99,12 @@ export async function findFitnessNodes(rootId) {
     const meta = child.metadata instanceof Map
       ? child.metadata.get("fitness")
       : child.metadata?.fitness;
-    if (!meta?.role) continue;
+    if (!meta?.role) {
+      // Unadopted node: child of fitness root with no fitness role
+      if (!result._unadopted) result._unadopted = [];
+      result._unadopted.push({ id: String(child._id), name: child.name });
+      continue;
+    }
 
     if (meta.role === "log") result.log = { id: String(child._id), name: child.name };
     else if (meta.role === "program") result.program = { id: String(child._id), name: child.name };
@@ -147,6 +170,10 @@ export function buildExerciseListForPrompt(fitnessNodes) {
     lines.push(`  ${groupName} [${modality}]:\n${exList}`);
   }
 
+  if (fitnessNodes._unadopted?.length > 0) {
+    lines.push(`\n  UNADOPTED (found but not yet configured):\n${fitnessNodes._unadopted.map(u => `    ${u.name} (id: ${u.id})`).join("\n")}`);
+  }
+
   return lines.join("\n");
 }
 
@@ -201,13 +228,21 @@ export async function deliverToExerciseNodes(fitnessNodes, parsed) {
     const modality = exercise.modality || detectModality(exercise);
 
     if (modality === "running") {
-      // Running data goes to the Runs node
-      const runExercises = fitnessNodes.exercises["Running"] || [];
-      const runsNode = runExercises.find(e => e.name === "Runs");
+      // Find running exercise nodes by schema type, not hardcoded name
+      let runsNode = null;
+      let prsNode = null;
+      for (const [, exs] of Object.entries(fitnessNodes.exercises)) {
+        for (const e of exs) {
+          if (e.modality !== "running") continue;
+          const schema = e.meta?.fitness?.valueSchema;
+          if (schema?.type === "distance-time") {
+            if (e.name.toLowerCase().includes("pr") || e.name.toLowerCase().includes("record")) prsNode = e;
+            else if (!runsNode) runsNode = e;
+          }
+        }
+      }
       if (runsNode) {
         await deliverRunData(runsNode, exercise, parsed.date);
-        // Update PRs
-        const prsNode = runExercises.find(e => e.name === "PRs");
         if (prsNode) await updateRunPRs(prsNode, exercise);
         delivered.push({ exercise, nodeId: runsNode.id, modality });
       }
@@ -577,6 +612,10 @@ export async function getExerciseState(rootId) {
         })),
       };
     }
+  }
+
+  if (nodes._unadopted?.length > 0) {
+    state._unadopted = nodes._unadopted;
   }
 
   return state;

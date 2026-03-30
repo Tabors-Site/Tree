@@ -189,6 +189,125 @@ const FoodPage = () => {
           <p style={{color: "rgba(255,255,255,0.35)", textAlign: "center", fontSize: "0.85rem", marginTop: 16}}>
             The fitness AI sees your calories. The food AI sees your workout. Both give better advice.
           </p>
+
+          {/* Scheduler layer */}
+          <div style={{maxWidth: 500, margin: "32px auto 0", textAlign: "center"}}>
+            <div style={{color: "rgba(255,255,255,0.15)", fontSize: "0.8rem", marginBottom: 8}}>and below both of them...</div>
+            <div style={{background: "rgba(236,201,75,0.08)", borderRadius: 10, padding: "12px 16px", display: "inline-block"}}>
+              <div style={{fontSize: "0.95rem", marginBottom: 2}}>🕐</div>
+              <div style={{color: "rgba(255,255,255,0.6)", fontSize: "0.85rem", fontWeight: 600}}>Scheduler</div>
+              <div style={{color: "rgba(255,255,255,0.3)", fontSize: "0.75rem"}}>meal prep Sunday, weigh-in Friday</div>
+            </div>
+          </div>
+
+          {/* Deeper layers, progressively smaller */}
+          <div style={{maxWidth: 500, margin: "16px auto 0", textAlign: "center"}}>
+            <div style={{color: "rgba(255,255,255,0.1)", fontSize: "0.7rem", marginBottom: 6}}>and below that...</div>
+            <div style={{display: "flex", justifyContent: "center", gap: 12}}>
+              <div style={{background: "rgba(159,122,234,0.06)", borderRadius: 8, padding: "8px 12px"}}>
+                <div style={{color: "rgba(255,255,255,0.4)", fontSize: "0.75rem", fontWeight: 600}}>Breath</div>
+                <div style={{color: "rgba(255,255,255,0.2)", fontSize: "0.65rem"}}>daily reset at midnight</div>
+              </div>
+              <div style={{background: "rgba(96,165,250,0.06)", borderRadius: 8, padding: "8px 12px"}}>
+                <div style={{color: "rgba(255,255,255,0.4)", fontSize: "0.75rem", fontWeight: 600}}>Evolution</div>
+                <div style={{color: "rgba(255,255,255,0.2)", fontSize: "0.65rem"}}>pattern detection</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Intelligence layer */}
+          <div style={{maxWidth: 500, margin: "12px auto 0", textAlign: "center"}}>
+            <div style={{display: "flex", justifyContent: "center", gap: 10}}>
+              <div style={{background: "rgba(255,255,255,0.02)", borderRadius: 6, padding: "6px 10px"}}>
+                <div style={{color: "rgba(255,255,255,0.25)", fontSize: "0.65rem", fontWeight: 600}}>Codebook</div>
+                <div style={{color: "rgba(255,255,255,0.12)", fontSize: "0.55rem"}}>compression</div>
+              </div>
+              <div style={{background: "rgba(255,255,255,0.02)", borderRadius: 6, padding: "6px 10px"}}>
+                <div style={{color: "rgba(255,255,255,0.25)", fontSize: "0.65rem", fontWeight: 600}}>Rings</div>
+                <div style={{color: "rgba(255,255,255,0.12)", fontSize: "0.55rem"}}>growth cycles</div>
+              </div>
+              <div style={{background: "rgba(255,255,255,0.02)", borderRadius: 6, padding: "6px 10px"}}>
+                <div style={{color: "rgba(255,255,255,0.25)", fontSize: "0.65rem", fontWeight: 600}}>Pulse</div>
+                <div style={{color: "rgba(255,255,255,0.12)", fontSize: "0.55rem"}}>health monitoring</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Deeper intelligence */}
+          <div style={{maxWidth: 500, margin: "10px auto 0", textAlign: "center"}}>
+            <div style={{display: "flex", justifyContent: "center", gap: 8}}>
+              <div style={{color: "rgba(255,255,255,0.08)", fontSize: "0.5rem"}}>contradiction</div>
+              <div style={{color: "rgba(255,255,255,0.08)", fontSize: "0.5rem"}}>long-memory</div>
+              <div style={{color: "rgba(255,255,255,0.08)", fontSize: "0.5rem"}}>gap-detection</div>
+              <div style={{color: "rgba(255,255,255,0.08)", fontSize: "0.5rem"}}>intent</div>
+              <div style={{color: "rgba(255,255,255,0.08)", fontSize: "0.5rem"}}>reflect</div>
+            </div>
+          </div>
+
+          {/* Analysis + maintenance */}
+          <div style={{maxWidth: 500, margin: "8px auto 0", textAlign: "center"}}>
+            <div style={{display: "flex", justifyContent: "center", gap: 6}}>
+              <div style={{color: "rgba(255,255,255,0.06)", fontSize: "0.45rem"}}>scout</div>
+              <div style={{color: "rgba(255,255,255,0.06)", fontSize: "0.45rem"}}>explore</div>
+              <div style={{color: "rgba(255,255,255,0.06)", fontSize: "0.45rem"}}>embed</div>
+              <div style={{color: "rgba(255,255,255,0.06)", fontSize: "0.45rem"}}>trace</div>
+              <div style={{color: "rgba(255,255,255,0.06)", fontSize: "0.45rem"}}>inverse-tree</div>
+              <div style={{color: "rgba(255,255,255,0.06)", fontSize: "0.45rem"}}>competence</div>
+              <div style={{color: "rgba(255,255,255,0.06)", fontSize: "0.45rem"}}>boundary</div>
+            </div>
+          </div>
+
+          {/* Maintenance + lifecycle */}
+          <div style={{maxWidth: 500, margin: "6px auto 0", textAlign: "center"}}>
+            <div style={{display: "flex", justifyContent: "center", gap: 5}}>
+              <div style={{color: "rgba(255,255,255,0.05)", fontSize: "0.42rem"}}>prune</div>
+              <div style={{color: "rgba(255,255,255,0.05)", fontSize: "0.42rem"}}>digest</div>
+              <div style={{color: "rgba(255,255,255,0.05)", fontSize: "0.42rem"}}>delegate</div>
+              <div style={{color: "rgba(255,255,255,0.05)", fontSize: "0.42rem"}}>changelog</div>
+              <div style={{color: "rgba(255,255,255,0.05)", fontSize: "0.42rem"}}>peer-review</div>
+              <div style={{color: "rgba(255,255,255,0.05)", fontSize: "0.42rem"}}>approve</div>
+              <div style={{color: "rgba(255,255,255,0.05)", fontSize: "0.42rem"}}>persona</div>
+              <div style={{color: "rgba(255,255,255,0.05)", fontSize: "0.42rem"}}>purpose</div>
+            </div>
+          </div>
+
+          {/* Cascade nervous system */}
+          <div style={{maxWidth: 500, margin: "5px auto 0", textAlign: "center"}}>
+            <div style={{display: "flex", justifyContent: "center", gap: 4}}>
+              <div style={{color: "rgba(255,255,255,0.04)", fontSize: "0.38rem"}}>cascade</div>
+              <div style={{color: "rgba(255,255,255,0.04)", fontSize: "0.38rem"}}>flow</div>
+              <div style={{color: "rgba(255,255,255,0.04)", fontSize: "0.38rem"}}>propagation</div>
+              <div style={{color: "rgba(255,255,255,0.04)", fontSize: "0.38rem"}}>perspective-filter</div>
+              <div style={{color: "rgba(255,255,255,0.04)", fontSize: "0.38rem"}}>sealed-transport</div>
+            </div>
+          </div>
+
+          {/* Federation */}
+          <div style={{maxWidth: 500, margin: "4px auto 0", textAlign: "center"}}>
+            <div style={{display: "flex", justifyContent: "center", gap: 3}}>
+              <div style={{color: "rgba(255,255,255,0.03)", fontSize: "0.33rem"}}>canopy</div>
+              <div style={{color: "rgba(255,255,255,0.03)", fontSize: "0.33rem"}}>mycelium</div>
+              <div style={{color: "rgba(255,255,255,0.03)", fontSize: "0.33rem"}}>horizon</div>
+              <div style={{color: "rgba(255,255,255,0.03)", fontSize: "0.33rem"}}>governance</div>
+            </div>
+          </div>
+
+          {/* The deep */}
+          <div style={{maxWidth: 500, margin: "3px auto 0", textAlign: "center"}}>
+            <div style={{display: "flex", justifyContent: "center", gap: 3}}>
+              <div style={{color: "rgba(255,255,255,0.02)", fontSize: "0.28rem"}}>teach</div>
+              <div style={{color: "rgba(255,255,255,0.02)", fontSize: "0.28rem"}}>split</div>
+              <div style={{color: "rgba(255,255,255,0.02)", fontSize: "0.28rem"}}>evolve</div>
+              <div style={{color: "rgba(255,255,255,0.02)", fontSize: "0.28rem"}}>reroot</div>
+              <div style={{color: "rgba(255,255,255,0.02)", fontSize: "0.28rem"}}>seed-export</div>
+              <div style={{color: "rgba(255,255,255,0.02)", fontSize: "0.28rem"}}>remember</div>
+              <div style={{color: "rgba(255,255,255,0.02)", fontSize: "0.28rem"}}>phase</div>
+            </div>
+          </div>
+
+          <p style={{color: "rgba(255,255,255,0.12)", textAlign: "center", fontSize: "0.7rem", marginTop: 16}}>
+            It goes deeper than you think.
+          </p>
         </div>
       </section>
 

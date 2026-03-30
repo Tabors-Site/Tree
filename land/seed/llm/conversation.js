@@ -838,14 +838,18 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     ];
   }
 
-  // If conversation is empty (fresh mode), initialize
-  if (session.messages.length === 0) {
+  // Build/refresh system prompt every call so it reflects current tree state
+  {
     const systemPrompt = await buildPromptForMode(session.modeKey, {
       username: ctx.username,
       userId: ctx.userId,
       rootId: session.rootId,
     });
-    session.messages = [{ role: "system", content: systemPrompt }];
+    if (session.messages.length === 0) {
+      session.messages = [{ role: "system", content: systemPrompt }];
+    } else if (session.messages[0]?.role === "system") {
+      session.messages[0].content = systemPrompt;
+    }
   }
 
   // Trim if over max. Preserve conversation integrity: tool results must

@@ -45,7 +45,7 @@ export function renderAppDashboard(opts) {
   const {
     rootId, rootName, token, userId, dateStr,
     subtitle, hero, stats, bars, cards, tags,
-    commands, chatBar, emptyState,
+    commands, chatBar, emptyState, afterBars, extraCss, extraJs,
   } = opts;
 
   const today = new Date();
@@ -99,6 +99,12 @@ export function renderAppDashboard(opts) {
     .card-detail { display: flex; gap: 12px; font-size: 0.8rem; color: rgba(255,255,255,0.4); margin-top: 2px; }
 
     .empty-state { color: rgba(255,255,255,0.35); font-size: 0.9rem; padding: 1rem 0; font-style: italic; }
+
+    .card-delete {
+      background: none; border: none; color: rgba(255,255,255,0.15); font-size: 1.1rem;
+      cursor: pointer; padding: 0 4px; line-height: 1; flex-shrink: 0;
+    }
+    .card-delete:hover { color: #ef4444; }
   `;
 
   // Nav
@@ -142,10 +148,13 @@ export function renderAppDashboard(opts) {
     ? `<div class="glass-card" style="padding:20px">${bars.map(b => {
         const pct = b.goal > 0 ? Math.min(Math.round((b.current / b.goal) * 100), 100) : 0;
         const remaining = Math.max(0, (b.goal || 0) - (b.current || 0));
+        const delBtn = b.deleteUrl
+          ? `<button class="card-delete" onclick="deleteEntry(this,'${esc(b.deleteUrl)}')" title="Remove metric" style="margin-left:8px">\u00d7</button>`
+          : "";
         return `
           <div class="bar-wrap">
             <div class="bar-header">
-              <span class="bar-label">${esc(b.label)}</span>
+              <span class="bar-label">${esc(b.label)}${delBtn}</span>
               <span class="bar-value">${Math.round(b.current)}/${b.goal}${b.unit || "g"} <span style="color:${pctColor(pct)}">(${pct}%)</span></span>
             </div>
             <div class="bar-track">
@@ -165,11 +174,19 @@ export function renderAppDashboard(opts) {
         const itemsHtml = card.items?.length > 0
           ? card.items.slice(0, card.limit || 10).map(item => {
               if (typeof item === "string") return `<div class="card-item"><div class="card-text">${esc(item)}</div></div>`;
+              const deleteBtn = item.deleteUrl
+                ? `<button class="card-delete" onclick="deleteEntry(this,'${esc(item.deleteUrl)}')" title="Delete">\u00d7</button>`
+                : "";
               return `
                 <div class="card-item"${item.bg ? ` style="padding:10px 12px;border-radius:8px;margin-bottom:6px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04)"` : ""}>
-                  <div class="card-text">${esc(item.text || "")}</div>
-                  ${item.sub ? `<div class="card-sub">${esc(item.sub)}</div>` : ""}
-                  ${item.detail ? `<div class="card-detail">${item.detail.map(d => `<span>${esc(d)}</span>`).join("")}</div>` : ""}
+                  <div style="display:flex;justify-content:space-between;align-items:start">
+                    <div style="flex:1">
+                      <div class="card-text">${esc(item.text || "")}</div>
+                      ${item.sub ? `<div class="card-sub">${esc(item.sub)}</div>` : ""}
+                      ${item.detail ? `<div class="card-detail">${item.detail.map(d => `<span>${esc(d)}</span>`).join("")}</div>` : ""}
+                    </div>
+                    ${deleteBtn}
+                  </div>
                 </div>`;
             }).join("")
           : `<div class="empty-state">${esc(card.empty || "Nothing here yet.")}</div>`;
@@ -201,6 +218,7 @@ export function renderAppDashboard(opts) {
       ${statsHtml}
       ${tagsHtml}
       ${barsHtml}
+      ${afterBars || ""}
       ${emptyHtml}
       ${cardsHtml}
 
@@ -208,10 +226,35 @@ export function renderAppDashboard(opts) {
     </div>
   `;
 
+  const deleteJs = `
+    async function deleteEntry(btn, url) {
+      const item = btn.closest('.card-item') || btn.closest('.bar-wrap') || btn.parentElement;
+      item.style.opacity = '0.3';
+      try {
+        const sep = url.includes('?') ? '&' : '?';
+        const authUrl = ${token ? `url + sep + 'token=${esc(token)}'` : "url"};
+        const res = await fetch(authUrl, { method: 'DELETE', credentials: 'include' });
+        if (res.ok) {
+          item.style.transition = 'all 0.2s';
+          item.style.maxHeight = item.offsetHeight + 'px';
+          item.style.overflow = 'hidden';
+          requestAnimationFrame(() => {
+            item.style.maxHeight = '0';
+            item.style.padding = '0';
+            item.style.margin = '0';
+          });
+          setTimeout(() => location.reload(), 300);
+        } else {
+          item.style.opacity = '1';
+        }
+      } catch { item.style.opacity = '1'; }
+    }
+  `;
+
   return page({
     title: `${rootName || "App"} . ${date}`,
-    css: css + chatBarCss(),
+    css: css + (extraCss || "") + chatBarCss(),
     body: body + (chatBar ? chatBarHtml({ placeholder: chatBar.placeholder || "Type a message..." }) : ""),
-    js: chatBar ? chatBarJs({ endpoint: chatBar.endpoint, token }) : "",
+    js: deleteJs + (extraJs || "") + (chatBar ? chatBarJs({ endpoint: chatBar.endpoint, token }) : ""),
   });
 }

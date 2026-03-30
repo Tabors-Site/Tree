@@ -1117,6 +1117,80 @@ const KernelPage = () => {
         </div>
       </section>
 
+      {/* ── NOTHING ELSE LIKE IT ── */}
+      <section className="lp-section" style={{paddingTop: 100, paddingBottom: 100}}>
+        <div className="lp-container" style={{maxWidth: 720}}>
+          <h2 className="lp-section-title" style={{fontSize: "1.6rem", marginBottom: 40}}>Nothing else like it.</h2>
+
+          <div style={{display: "flex", flexDirection: "column", gap: 32}}>
+
+            <div>
+              <h3 style={{color: "rgba(255,255,255,0.7)", fontSize: "1rem", marginTop: 0, marginBottom: 8}}>
+                The closest things in tech
+              </h3>
+              <p style={{color: "rgba(255,255,255,0.45)", fontSize: "0.92rem", lineHeight: 1.8, margin: 0}}>
+                Git tracks changes to flat files. Unix gives you hierarchy and permissions. Knowledge graphs give
+                you relationships. But none of them put AI at every node. None of them let the structure itself think.
+              </p>
+            </div>
+
+            <div>
+              <h3 style={{color: "rgba(255,255,255,0.7)", fontSize: "1rem", marginTop: 0, marginBottom: 8}}>
+                Agent frameworks
+              </h3>
+              <p style={{color: "rgba(255,255,255,0.45)", fontSize: "0.92rem", lineHeight: 1.8, margin: 0}}>
+                LangChain, CrewAI, AutoGen. They are pipelines. The agent runs, does a thing, stops. There is no persistent
+                home. No position. No "where am I" changing what the agent can do. No tree that grows and prunes and
+                splits and remembers.
+              </p>
+            </div>
+
+            <div>
+              <h3 style={{color: "rgba(255,255,255,0.7)", fontSize: "1rem", marginTop: 0, marginBottom: 8}}>
+                Note-taking tools
+              </h3>
+              <p style={{color: "rgba(255,255,255,0.45)", fontSize: "0.92rem", lineHeight: 1.8, margin: 0}}>
+                Obsidian, Notion, Roam. Hierarchy and linking. But the structure is inert. You organize it. You maintain it.
+                The tool does not compress its own knowledge, detect its own contradictions, or propose its own reorganization.
+              </p>
+            </div>
+
+            <div>
+              <h3 style={{color: "rgba(255,255,255,0.7)", fontSize: "1rem", marginTop: 0, marginBottom: 8}}>
+                The cascade system
+              </h3>
+              <p style={{color: "rgba(255,255,255,0.45)", fontSize: "0.92rem", lineHeight: 1.8, margin: 0}}>
+                Signals propagating through a tree, filtered by perspective, sealed for transport, flowing through a
+                nervous system that the tree monitors with its own pulse. That is not a feature of something else.
+                That is a new thing.
+              </p>
+            </div>
+
+            <div style={{
+              borderLeft: "2px solid rgba(249, 115, 22, 0.3)",
+              paddingLeft: 24,
+              marginTop: 16,
+            }}>
+              <p style={{color: "rgba(255,255,255,0.6)", fontSize: "0.95rem", lineHeight: 1.9, margin: 0}}>
+                The biological metaphor is not decoration. Seeds, roots, branches, canopy, mycelium, rings, pulse,
+                breath, pruning, dormancy, growth cycles. It maps because the problem actually is biological. A living
+                system that grows, maintains itself, connects to others, and eventually reproduces. Software does not
+                usually work like that. This does.
+              </p>
+            </div>
+
+            <div style={{marginTop: 8}}>
+              <p style={{color: "rgba(255,255,255,0.35)", fontSize: "0.88rem", lineHeight: 1.8, margin: 0}}>
+                Most software starts with "what should the user see" and works backward. The seed started with
+                "what does an AI need to live somewhere permanently" and worked forward. Two schemas. A hook system.
+                An extension loader. That is the seed. Everything else grew from it.
+              </p>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
       {/* ── FOOTER ── */}
       <footer className="lp-footer">
         <div className="lp-container">

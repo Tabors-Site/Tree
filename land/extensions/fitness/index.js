@@ -192,11 +192,12 @@ export async function init(core) {
     modeTools: [
       { modeKey: "tree:fitness-plan", toolNames: [
         "fitness-add-modality", "fitness-add-group", "fitness-add-exercise",
-        "fitness-remove-exercise", "fitness-complete-setup", "fitness-save-profile",
+        "fitness-remove-exercise", "fitness-adopt-exercise", "fitness-complete-setup", "fitness-save-profile",
       ]},
       { modeKey: "tree:fitness-coach", toolNames: [
-        "fitness-add-exercise", "fitness-save-profile",
+        "fitness-add-exercise", "fitness-adopt-exercise", "fitness-save-profile",
       ]},
+      { modeKey: "tree:edit", toolNames: ["fitness-adopt-exercise", "fitness-add-exercise", "fitness-add-group"] },
     ],
     exports: {
       isInitialized,

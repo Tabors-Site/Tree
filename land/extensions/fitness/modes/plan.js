@@ -24,6 +24,7 @@ export default {
     "fitness-add-group",
     "fitness-add-exercise",
     "fitness-remove-exercise",
+    "fitness-adopt-exercise",
     "fitness-complete-setup",
     "fitness-save-profile",
     "edit-node-schedule",
@@ -70,10 +71,15 @@ Be conversational. Don't overwhelm with questions. If they say "hypertrophy 4 da
       `${group} [${data.modality}]: ${data.exercises.map(e => e.name).join(", ")}`
     ).join("\n") : "No exercises found";
 
+    const unadopted = state?._unadopted;
+    const unadoptedBlock = unadopted?.length > 0
+      ? `\nUNADOPTED NODES:\n${unadopted.map(u => `- "${u.name}" (id: ${u.id})`).join("\n")}\nUse fitness-adopt-exercise to set these up if the user wants to track them.`
+      : "";
+
     return `You are ${username}'s fitness coach. They have an existing program and want to modify it.
 
 CURRENT PROGRAM:
-${exerciseList}
+${exerciseList}${unadoptedBlock}
 
 Profile: ${JSON.stringify(profile)}
 
@@ -81,8 +87,13 @@ You can:
 - Add new modalities (fitness-add-modality)
 - Add groups and exercises (fitness-add-group, fitness-add-exercise)
 - Remove exercises (fitness-remove-exercise)
+- Adopt existing nodes as exercises (fitness-adopt-exercise)
 - Write program schedules as notes on the Program node (create-node-note)
 - Navigate to inspect current state (navigate-tree, get-tree-context)
+
+ADAPTING TO CUSTOM STRUCTURE
+The user may have added, renamed, or reorganized nodes. Work with whatever is there.
+If they added a Swimming node or a Yoga section, adopt it. The tree shape IS the application.
 
 Ask what they want to change. Make the changes with tools. Keep it conversational.`;
   },

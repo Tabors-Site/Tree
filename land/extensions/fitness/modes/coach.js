@@ -20,6 +20,7 @@ export default {
     "get-tree-context",
     "create-node-note",
     "edit-node-schedule",
+    "fitness-adopt-exercise",
   ],
 
   async buildSystemPrompt({ username, rootId }) {
@@ -29,17 +30,24 @@ export default {
     const exerciseSummary = state ? Object.entries(state.groups).map(([group, data]) => {
       const exs = data.exercises.map(e => {
         const vals = e.values || {};
-        if (data.modality === "gym") return `${e.name}: ${vals.weight || "?"}${profile?.weightUnit || "lb"}`;
-        if (data.modality === "running") return `${e.name}: ${vals.weeklyMiles || 0} mi/wk`;
-        return `${e.name}: ${vals.totalReps || vals.duration || "?"}`;
+        const schema = e.schema;
+        if (schema?.type === "distance-time") return `${e.name}: ${vals.weeklyMiles || vals.lastDistance || 0} ${schema.unit || "mi"}`;
+        if (schema?.type === "duration") return `${e.name}: ${vals.duration || "?"}s`;
+        if (schema?.type === "reps") return `${e.name}: ${vals.set1 || vals.totalReps || "?"}`;
+        return `${e.name}: ${vals.weight || "?"}${profile?.weightUnit || schema?.unit || "lb"}`;
       }).join(", ");
       return `${group} [${data.modality}]: ${exs}`;
     }).join("\n") : "No exercises configured yet.";
 
+    const unadopted = state?._unadopted;
+    const unadoptedBlock = unadopted?.length > 0
+      ? `\nUNADOPTED NODES (new children without fitness tracking):\n${unadopted.map(u => `- "${u.name}" (id: ${u.id})`).join("\n")}\nIf the user wants to track these, use fitness-adopt-exercise to set them up. Ask what type of exercise and how to track it.`
+      : "";
+
     return `You are ${username}'s training partner. Walk them through today's workout.
 
 CURRENT STATE:
-${exerciseSummary}
+${exerciseSummary}${unadoptedBlock}
 
 Profile: ${profile?.sessionsPerWeek || "?"} days/week, ${profile?.weightUnit || "lb"}, ${profile?.distanceUnit || "miles"}
 

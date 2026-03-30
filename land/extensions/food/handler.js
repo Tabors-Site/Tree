@@ -148,25 +148,34 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
     };
   }
 
-  // Write note to Log node with raw input
+  // Write note to Log node with structured data (enables undo on delete)
+  let logNoteId = null;
   try {
-    const metricParts = Object.entries(parsed.totals)
-      .filter(([k, v]) => typeof v === "number" && k !== "calories")
-      .map(([k, v]) => `${k.charAt(0).toUpperCase()}:${v}g`);
-    if (parsed.totals.calories) metricParts.push(`${parsed.totals.calories}cal`);
-    await createNote({
+    const logEntry = {
+      meal: parsed.meal,
+      when: parsed.when || "snack",
+      totals: parsed.totals,
+      items: parsed.items,
+    };
+    const note = await createNote({
       nodeId: foodNodes.log.id,
-      content: `${parsed.when || "meal"}: ${parsed.meal} (${metricParts.join(" ")})`,
+      content: JSON.stringify(logEntry),
       contentType: "text",
       userId,
     });
+    logNoteId = note?._id || note?.id || null;
   } catch (err) {
     log.warn("Food", `Note creation failed: ${err.message}`);
   }
 
-  // Write to appropriate Meals slot (Breakfast/Lunch/Dinner/Snacks)
+  // Write to appropriate Meals slot with display text + reference to log note
   const mealSlot = detectMealSlot(message, parsed.when);
-  writeMealNote(foodNodes, mealSlot, `${parsed.meal} (${parsed.totals.calories}cal)`, userId).catch(() => {});
+  const mealDisplay = JSON.stringify({
+    text: `${parsed.meal} (${parsed.totals.calories || 0}cal)`,
+    logNoteId: logNoteId ? String(logNoteId) : null,
+    totals: parsed.totals,
+  });
+  writeMealNote(foodNodes, mealSlot, mealDisplay, userId).catch(() => {});
 
   // Fire cascade signals to macro nodes
   await deliverMacros(foodNodes.log.id, foodNodes, parsed);

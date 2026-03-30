@@ -536,6 +536,7 @@ export async function getDailyPicture(foodRootId) {
       weeklyAvg: values?.weeklyAvg || 0,
       weeklyHitRate: values?.weeklyHitRate || 0,
       name: info.name,
+      nodeId: info.id,
       isCoreMacro: CORE_MACROS.includes(role),
     };
     valueRoles.push(role);
@@ -594,10 +595,23 @@ export async function getDailyPicture(foodRootId) {
         .limit(10)
         .select("content createdAt")
         .lean();
-      picture.recentMeals = recentNotes.map(n => ({
-        text: typeof n.content === "string" ? n.content.slice(0, 200) : "",
-        date: n.createdAt,
-      }));
+      picture.recentMeals = recentNotes.map(n => {
+        let text = typeof n.content === "string" ? n.content.slice(0, 200) : "";
+        let totals = null;
+        // Try to parse structured content (new format)
+        try {
+          const parsed = JSON.parse(n.content);
+          if (parsed.meal) {
+            const parts = Object.entries(parsed.totals || {})
+              .filter(([k, v]) => typeof v === "number" && k !== "calories")
+              .map(([k, v]) => `${v}${k.charAt(0)}`);
+            if (parsed.totals?.calories) parts.push(`${parsed.totals.calories}cal`);
+            text = `${parsed.meal} (${parts.join("/")})`;
+            totals = parsed.totals;
+          }
+        } catch {}
+        return { id: String(n._id), text, date: n.createdAt, totals };
+      });
     } catch (err) {
       log.warn("Food", `Meal query failed: ${err.message}`);
     }
@@ -615,10 +629,16 @@ export async function getDailyPicture(foodRootId) {
           .select("content createdAt")
           .lean();
         if (notes.length > 0) {
-          picture.mealsBySlot[slot] = notes.map(n => ({
-            text: typeof n.content === "string" ? n.content.slice(0, 150) : "",
-            date: n.createdAt,
-          }));
+          picture.mealsBySlot[slot] = notes.map(n => {
+            let text = typeof n.content === "string" ? n.content.slice(0, 150) : "";
+            let logNoteId = null;
+            try {
+              const parsed = JSON.parse(n.content);
+              if (parsed.text) text = parsed.text;
+              if (parsed.logNoteId) logNoteId = parsed.logNoteId;
+            } catch {}
+            return { id: String(n._id), text, date: n.createdAt, logNoteId };
+          });
         }
       } catch {}
     }

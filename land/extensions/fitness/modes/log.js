@@ -26,7 +26,7 @@ export default {
 
     return `You are a multi-modality workout parser. Detect the workout type and parse into structured JSON.
 
-${exerciseList ? `KNOWN EXERCISES (match these names when possible):\n${exerciseList}\n` : ""}
+${exerciseList ? `KNOWN EXERCISES (match these names when possible):\n${exerciseList}\n` : ""}${nodes?._unadopted?.length > 0 ? `NOTE: These nodes exist but aren't configured yet. Still parse any matching input: ${nodes._unadopted.map(u => u.name).join(", ")}\n\n` : ""}
 DETECT MODALITY AND PARSE:
 
 GYM (weight x reps): Contains weight amounts or equipment names (bench, squat, deadlift, press, curl, row, cable, dumbbell, barbell, machine).

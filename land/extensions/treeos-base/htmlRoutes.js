@@ -356,6 +356,37 @@ export function buildTreeosHtmlRoutes() {
     }
   });
 
+  // Edit a metadata field: POST /node/:nodeId/metadata/:namespace/:key
+  router.post("/node/:nodeId/metadata/:namespace/:key", authenticate, async (req, res) => {
+    try {
+      const { nodeId, namespace, key } = req.params;
+      const { value } = req.body;
+      const node = await Node.findById(nodeId);
+      if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
+
+      const { batchSetExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+      await batchSetExtMeta(nodeId, namespace, { [key]: value });
+      return sendOk(res, { updated: true, namespace, key, value });
+    } catch (err) {
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // Delete a metadata namespace: DELETE /node/:nodeId/metadata/:namespace
+  router.delete("/node/:nodeId/metadata/:namespace", authenticate, async (req, res) => {
+    try {
+      const { nodeId, namespace } = req.params;
+      const node = await Node.findById(nodeId);
+      if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
+
+      const { unsetExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+      await unsetExtMeta(nodeId, namespace);
+      return sendOk(res, { deleted: true, namespace });
+    } catch (err) {
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
   // -- COMMAND CENTER -------------------------------------------------
   // Must be before /node/:nodeId/:version so "command-center" isn't matched as a version.
 

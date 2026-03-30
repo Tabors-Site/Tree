@@ -10,6 +10,14 @@ import { handleMessage } from "./handler.js";
 let Node = NodeModel;
 export function setServices({ Node: N }) { if (N) Node = N; }
 
+// Auth middleware that accepts both cookie JWT and URL token (for frontend HTML pages)
+async function htmlAuth(req, res, next) {
+  if (req.query.token) {
+    try { const urlAuth = (await import("../html-rendering/urlAuth.js")).default; return urlAuth(req, res, next); } catch {}
+  }
+  return authenticate(req, res, next);
+}
+
 const router = express.Router();
 
 // ── HTML Dashboard (GET with ?html) ──
@@ -127,6 +135,112 @@ router.get("/root/:rootId/food/profile", authenticate, async (req, res) => {
     const picture = await getDailyPicture(req.params.rootId);
     if (!picture) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Food tree not found");
     sendOk(res, { profile: picture.profile || null, macros: { protein: picture.protein, carbs: picture.carbs, fats: picture.fats } });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * DELETE /root/:rootId/food/entry/:noteId
+ * Delete a meal entry and decrement the metric values it added.
+ */
+router.delete("/root/:rootId/food/entry/:noteId", htmlAuth, async (req, res) => {
+  try {
+    const { rootId, noteId } = req.params;
+    const Note = (await import("../../seed/models/note.js")).default;
+    const note = await Note.findById(noteId).lean();
+    if (!note) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Note not found");
+
+    // Parse the note to find totals and any linked log note
+    let totals = null;
+    let logNoteId = null;
+    try {
+      const data = JSON.parse(note.content);
+      totals = data.totals || null;
+      logNoteId = data.logNoteId || null;
+    } catch {}
+
+    // If this is a slot note pointing to a log note, get totals from the log note
+    if (!totals && logNoteId) {
+      try {
+        const logNote = await Note.findById(logNoteId).lean();
+        if (logNote) {
+          const logData = JSON.parse(logNote.content);
+          totals = logData.totals || null;
+        }
+      } catch {}
+    }
+
+    // Decrement metric values
+    if (totals) {
+      const foodNodes = await findFoodNodes(rootId);
+      const STRUCTURAL = ["log", "daily", "meals", "profile", "history", "mealSlots", "_unadopted"];
+      const { incExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+      for (const [role, info] of Object.entries(foodNodes)) {
+        if (STRUCTURAL.includes(role) || !info?.id) continue;
+        const amount = totals[role] || 0;
+        if (amount > 0) {
+          await incExtMeta(info.id, "values", "today", -amount);
+        }
+      }
+    }
+
+    // Delete this note
+    await Note.findByIdAndDelete(noteId);
+
+    // If we deleted a log note, also delete its linked slot note
+    // If we deleted a slot note, also delete its linked log note
+    if (logNoteId) {
+      await Note.findByIdAndDelete(logNoteId).catch(() => {});
+    } else {
+      // This was a log note. Find slot notes that reference it (scoped to this tree's meal slots)
+      const foodNodes = await findFoodNodes(rootId);
+      if (foodNodes.mealSlots) {
+        const slotNodeIds = Object.values(foodNodes.mealSlots).map(s => s.id);
+        const slotNotes = await Note.find({ nodeId: { $in: slotNodeIds } }).select("_id content").lean();
+        for (const sn of slotNotes) {
+          try {
+            const d = JSON.parse(sn.content);
+            if (d.logNoteId === noteId) await Note.findByIdAndDelete(sn._id);
+          } catch {}
+        }
+      }
+    }
+
+    sendOk(res, { deleted: true, decremented: !!totals });
+  } catch (err) {
+    log.error("Food", "Delete entry error:", err.message);
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * POST /root/:rootId/food/metric - Create + adopt a metric node in one call
+ * DELETE /root/:rootId/food/metric/:nodeId - Delete a metric node
+ */
+router.post("/root/:rootId/food/metric", htmlAuth, async (req, res) => {
+  try {
+    const { name, goal } = req.body;
+    if (!name) return sendError(res, 400, ERR.INVALID_INPUT, "name required");
+    const { createNode } = await import("../../seed/tree/treeManagement.js");
+    const { adoptNode } = await import("./core.js");
+    const node = await createNode({ name: name.trim(), parentId: req.params.rootId, userId: req.userId });
+    const role = name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    await adoptNode(String(node._id), role, goal ? Number(goal) : null);
+    sendOk(res, { id: String(node._id), role }, 201);
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+router.delete("/root/:rootId/food/metric/:nodeId", htmlAuth, async (req, res) => {
+  try {
+    // Instead of deleting the node (which the guard would block), unadopt it by clearing metadata
+    const { unsetExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+    await unsetExtMeta(req.params.nodeId, "food");
+    await unsetExtMeta(req.params.nodeId, "values");
+    await unsetExtMeta(req.params.nodeId, "goals");
+    sendOk(res, { removed: true });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
   }

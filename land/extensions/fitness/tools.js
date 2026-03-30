@@ -11,6 +11,7 @@ import {
   completeSetup, scaffoldGym, scaffoldRunning, scaffoldHome,
   saveProfile,
 } from "./setup.js";
+import { adoptExercise } from "./core.js";
 
 export default function getTools() {
   return [
@@ -157,6 +158,32 @@ export default function getTools() {
         try {
           await saveProfile(rootId, profile);
           return { content: [{ type: "text", text: "Profile saved." }] };
+        } catch (err) {
+          return { content: [{ type: "text", text: `Failed: ${err.message}` }] };
+        }
+      },
+    },
+    {
+      name: "fitness-adopt-exercise",
+      description:
+        "Adopt an existing node into the fitness tree as a tracked exercise. " +
+        "Use when you see unadopted child nodes that should be tracked. " +
+        "Sets the exercise type, unit, and optionally goals on the node.",
+      schema: {
+        nodeId: z.string().describe("The node ID to adopt as an exercise."),
+        exerciseType: z.enum(["weight-reps", "reps", "duration", "distance-time"]).default("weight-reps")
+          .describe("How this exercise is tracked."),
+        unit: z.string().optional().describe("Unit: lb, kg, bodyweight, seconds, minutes, miles, km."),
+        goals: z.record(z.number()).optional().describe("Optional goal values."),
+        userId: z.string().describe("Injected by server. Ignore."),
+        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      handler: async ({ nodeId, exerciseType, unit, goals }) => {
+        try {
+          await adoptExercise(nodeId, { exerciseType, unit, goals });
+          return { content: [{ type: "text", text: `Adopted as ${exerciseType} exercise.${unit ? ` Unit: ${unit}.` : ""} It will now appear in workout tracking and the dashboard.` }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Failed: ${err.message}` }] };
         }
