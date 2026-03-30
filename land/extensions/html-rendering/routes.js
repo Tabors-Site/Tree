@@ -12,7 +12,6 @@ import {
   renderRegisterPage,
   renderForgotPasswordPage,
 } from "./pages.js";
-import rateLimit from "express-rate-limit";
 import { isHtmlEnabled } from "./config.js";
 
 const router = express.Router();
@@ -25,14 +24,6 @@ router.use((req, _res, next) => {
     req.query.token = "";
   }
   next();
-});
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  handler: (req, res) => {
-    sendError(res, 429, ERR.RATE_LIMITED, "Too many requests. Try again later.");
-  },
 });
 
 
