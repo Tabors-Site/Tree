@@ -87,9 +87,10 @@ export async function init(core) {
       ? node.metadata.get("food")
       : node.metadata?.food;
     if (!meta?.role) return;
-    if (!["protein", "carbs", "fats"].includes(meta.role)) return;
+    const STRUCTURAL = ["log", "daily", "meals", "profile", "history"];
+    if (STRUCTURAL.includes(meta.role)) return;
 
-    // This is a food macro node receiving a cascade signal
+    // This is a food metric node receiving a cascade signal
     const payload = hookData.writeContext || hookData.payload || {};
     await handleMacroCascade(node, payload);
 
@@ -157,12 +158,14 @@ export async function init(core) {
       const picture = await getDailyPicture(String(parent));
       if (picture) {
         const lines = [];
-        for (const macro of ["protein", "carbs", "fats"]) {
-          const m = picture[macro];
+        // Render all value-tracked nodes (core macros + user-created)
+        for (const role of (picture._valueRoles || ["protein", "carbs", "fats"])) {
+          const m = picture[role];
           if (m) {
+            const label = m.name || role;
             const pct = m.goal > 0 ? Math.round((m.today / m.goal) * 100) : 0;
             const weekPart = m.weeklyAvg > 0 ? `, weekly avg ${m.weeklyAvg}g (${Math.round(m.weeklyHitRate * 100)}% hit rate)` : "";
-            lines.push(`${macro}: ${m.today}/${m.goal}g (${pct}%)${weekPart}`);
+            lines.push(`${label}: ${m.today}/${m.goal}g (${pct}%)${weekPart}`);
           }
         }
         if (picture.calories) {
@@ -182,17 +185,16 @@ export async function init(core) {
           context.foodHistory = picture.recentHistory;
         }
       }
-    } else if (["protein", "carbs", "fats"].includes(role)) {
-      // Show running total for this macro
+    } else if (meta?.values?.today != null) {
+      // Any value-tracked node (core macros or user-created)
       const values = meta?.values;
       const goals = meta?.goals;
-      if (values?.today != null) {
-        context.foodMacro = {
-          type: role,
-          today: values.today,
-          goal: goals?.today || 0,
-        };
-      }
+      context.foodMacro = {
+        type: foodMeta.role,
+        name: node.name,
+        today: values.today,
+        goal: goals?.today || 0,
+      };
     }
   }, "food");
 

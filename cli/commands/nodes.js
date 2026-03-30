@@ -133,8 +133,7 @@ module.exports = (program) => {
     });
 
   program
-    .command("what")
-    .alias("node")
+    .command("node")
     .description("Show details of the current node")
     .action(async () => {
       const cfg = requireAuth();

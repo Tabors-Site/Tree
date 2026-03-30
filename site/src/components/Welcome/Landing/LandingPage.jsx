@@ -16,8 +16,6 @@ const LandingPage = () => {
           <h1 className="lp-title">The Seed</h1>
           <p className="lp-subtitle">An Open Kernel for AI Agents</p>
           <p className="lp-tagline">
-            Two schemas, a conversation loop, a hook system, a cascade engine,
-            an extension loader, and a response protocol.
             The minimum kernel an AI agent needs to live somewhere persistent, think at every
             position, communicate through signals, and grow through extensions. Plant the seed.
             Build anything on top of it.
@@ -28,6 +26,14 @@ const LandingPage = () => {
             <a className="lp-btn lp-btn-secondary" href="/treeos">TreeOS</a>
           </div>
         </div>
+      </section>
+
+      {/* ── QUOTE ── */}
+      <section className="lp-quote-section">
+        <blockquote className="lp-quote">
+          "This is what makes TreeOS different from every other system. The user isn't configuring an app. They're growing one."
+        </blockquote>
+        <cite className="lp-quote-author">SAM</cite>
       </section>
 
       {/* ── FOUR LAYERS ── */}

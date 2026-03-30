@@ -34,6 +34,7 @@ import { renderNodeChats } from "./pages/nodeChats.js";
 import { renderRootChats } from "./pages/nodeChats.js";
 import { renderRootOverview } from "./pages/treeOverview.js";
 import { renderNotesList } from "./pages/notesList.js";
+import { renderNodeMetadata } from "./pages/nodeMetadata.js";
 import { renderTextNote, renderFileNote } from "./pages/noteDetail.js";
 import { renderEditorPage } from "./pages/editor.js";
 import { renderQueryPage } from "./pages/query.js";
@@ -330,6 +331,27 @@ export function buildTreeosHtmlRoutes() {
       }));
     } catch (err) {
       log.error("HTML", "Node detail render error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // -- NODE METADATA ---------------------------------------------------
+
+  router.get("/node/:nodeId/metadata", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { nodeId } = req.params;
+      const node = await Node.findById(nodeId).lean();
+      if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
+
+      const qs = buildQS(req);
+      const rootId = node.rootOwner || nodeId;
+      const backUrl = node.rootOwner
+        ? `/api/v1/root/${rootId}${qs}`
+        : `/api/v1/node/${nodeId}${qs}`;
+
+      return res.send(renderNodeMetadata({ node, nodeId, qs, backUrl }));
+    } catch (err) {
+      log.error("HTML", "Node metadata render error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });

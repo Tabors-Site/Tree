@@ -27,27 +27,55 @@ export default {
   ],
 
   async buildSystemPrompt({ username, rootId }) {
-    const nodes = await findKbNodes(rootId);
-    const topicsId = nodes?.topics?.id || "unknown";
-    const unplacedId = nodes?.unplaced?.id || "unknown";
+    const nodes = rootId ? await findKbNodes(rootId) : null;
+
+    const EXPECTED = ["topics", "unplaced"];
+    const found = [];
+    const missing = [];
+    if (nodes) {
+      for (const role of EXPECTED) {
+        if (nodes[role]) found.push(`${nodes[role].name} (role: ${role}, id: ${nodes[role].id})`);
+        else missing.push(role);
+      }
+      for (const [role, info] of Object.entries(nodes)) {
+        if (!EXPECTED.includes(role) && info?.id) {
+          found.push(`${info.name} (role: ${role}, id: ${info.id}) [user-created]`);
+        }
+      }
+    }
+
+    const topicsId = nodes?.topics?.id;
+    const unplacedId = nodes?.unplaced?.id;
+
+    const structureBlock = found.length > 0
+      ? `CURRENT TREE STRUCTURE\n${found.map(f => `- ${f}`).join("\n")}`
+      : "TREE STRUCTURE: not yet discovered.";
+
+    const missingBlock = missing.length > 0
+      ? `\nMISSING STRUCTURAL NODES: ${missing.join(", ")}\nUse create-new-node to recreate them under root ${rootId} with the correct metadata.kb.role.`
+      : "";
 
     return `You are maintaining a knowledge base for ${username}.
 
-The user tells you things. Your job is to organize that information into the Topics tree.
+${structureBlock}${missingBlock}
 
-IMPORTANT NODE IDS:
-- Topics parent node: ${topicsId} (ALL topic branches go under this node)
-- Unplaced node: ${unplacedId} (for things you can't categorize)
+The user tells you things. Your job is to organize that information into the tree.
 
 WORKFLOW:
-1. Read the input. Understand what information is being shared.
-2. Use navigate-tree on the Topics node (${topicsId}) to see existing branches.
-3. If a matching branch exists: read its notes. Update existing notes or add new ones.
-4. If no matching branch exists: create a new node under Topics (parentId: ${topicsId}). Write the note there.
-5. If you genuinely can't categorize it: write to Unplaced (${unplacedId}). Say so.
+${topicsId ? `1. Use navigate-tree on the Topics node (${topicsId}) to see existing branches.
+2. If a matching branch exists: read its notes. Update existing notes or add new ones.
+3. If no matching branch exists: create a new node under Topics (parentId: ${topicsId}). Write the note there.
+${unplacedId ? `4. If you genuinely can't categorize it: write to Unplaced (${unplacedId}). Say so.` : "4. If you genuinely can't categorize it, create an Unplaced node first, then write there."}`
+: `1. Navigate the tree to understand what structure exists.
+2. Find or create appropriate locations for the information.
+3. Adapt to whatever structure the user has built.`}
+
+ADAPTING TO CUSTOM STRUCTURE
+The user may have reorganized their knowledge base. They might have renamed Topics, added
+new category nodes, or restructured entirely. Work with whatever is there. The tree shape
+IS the application. Read it, don't assume it.
 
 RULES:
-- ALWAYS create topic branches under the Topics node (${topicsId}), never under root.
 - Keep note content factual and clear. Strip conversational filler.
 - Use the user's exact terminology for names, numbers, procedures.
 - When updating existing notes, preserve what's still accurate. Change only what's new.

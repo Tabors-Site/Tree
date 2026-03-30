@@ -1215,6 +1215,9 @@ transition:
         <a href="/api/v1/root/${allData._id}/chats${queryString}" class="back-link">
         AI Chats
       </a>
+        <a href="/api/v1/node/${allData._id}/metadata${queryString}" class="back-link">
+        Metadata
+      </a>
         <a href="/dashboard/flow" class="back-link">
         Flow
       </a>

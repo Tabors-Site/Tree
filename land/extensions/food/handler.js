@@ -56,13 +56,15 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
   // ── PATH 1b: Setup incomplete (scaffold done, profile not yet saved). ──
   const phase = await getSetupPhase(rootId);
   if (phase === "base") {
-    // Check if AI already set goals (even if it forgot to call complete)
+    // Check if AI already set goals on ANY metric node (not just protein)
     const foodNodes = await findFoodNodes(rootId);
     let hasGoals = false;
-    if (foodNodes?.protein) {
-      const pNode = await NodeModel.findById(foodNodes.protein.id).select("metadata").lean();
-      const goals = pNode?.metadata instanceof Map ? pNode.metadata.get("goals") : pNode?.metadata?.goals;
-      hasGoals = goals?.today > 0;
+    const STRUCTURAL = ["log", "daily", "meals", "profile", "history", "mealSlots", "_unadopted"];
+    for (const [role, info] of Object.entries(foodNodes)) {
+      if (STRUCTURAL.includes(role) || !info?.id) continue;
+      const mNode = await NodeModel.findById(info.id).select("metadata").lean();
+      const goals = mNode?.metadata instanceof Map ? mNode.metadata.get("goals") : mNode?.metadata?.goals;
+      if (goals?.today > 0) { hasGoals = true; break; }
     }
 
     if (hasGoals) {
@@ -84,8 +86,27 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
   }
 
   const foodNodes = await findFoodNodes(rootId);
+  // Only log is truly required (where food input gets written as notes)
   if (!foodNodes?.log) {
-    throw new Error("Food tree structure not found.");
+    const { answer, chatId } = await runChat({
+      userId, username,
+      message: `The user said: "${message}". But this food tree is missing its Log node. Create one under root ${rootId} with create-new-node and set metadata.food.role to "log".`,
+      mode: "tree:food-coach",
+      rootId, res: res || undefined, slot: "food",
+    });
+    return { answer, chatId, mode: "tree:food-coach" };
+  }
+
+  // ── Unadopted nodes: new children the user created without food metadata ──
+  if (foodNodes._unadopted?.length > 0) {
+    const nodes = foodNodes._unadopted.map(u => `"${u.name}" (id: ${u.id})`).join(", ");
+    const { answer, chatId } = await runChat({
+      userId, username,
+      message: `New nodes detected that aren't tracked yet: ${nodes}. For each one, call food-adopt-node with the node ID and a role (lowercase name). Ask the user what daily goal they want for each. Do NOT re-run setup or ask about calories/protein/carbs/fats. The profile is already configured. Just adopt these new nodes and confirm. The user's original message was: "${message}"`,
+      mode: "tree:food-coach",
+      rootId, res: res || undefined, slot: "food",
+    });
+    return { answer, chatId, mode: "tree:food-coach" };
   }
 
   // ── PATH: "be" command: guided log mode ──
@@ -129,9 +150,13 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
 
   // Write note to Log node with raw input
   try {
+    const metricParts = Object.entries(parsed.totals)
+      .filter(([k, v]) => typeof v === "number" && k !== "calories")
+      .map(([k, v]) => `${k.charAt(0).toUpperCase()}:${v}g`);
+    if (parsed.totals.calories) metricParts.push(`${parsed.totals.calories}cal`);
     await createNote({
       nodeId: foodNodes.log.id,
-      content: `${parsed.when || "meal"}: ${parsed.meal} (P:${parsed.totals.protein}g C:${parsed.totals.carbs}g F:${parsed.totals.fats}g ${parsed.totals.calories}cal)`,
+      content: `${parsed.when || "meal"}: ${parsed.meal} (${metricParts.join(" ")})`,
       contentType: "text",
       userId,
     });
@@ -151,19 +176,24 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
   const picture = await getDailyPicture(rootId);
 
   // Build natural language response
-  const itemList = parsed.items.map(i =>
-    `${i.name} (${i.calories}cal, ${i.protein}p/${i.carbs}c/${i.fats}f)`
-  ).join(", ");
+  const itemList = parsed.items.map(i => {
+    const parts = Object.entries(i)
+      .filter(([k, v]) => k !== "name" && k !== "calories" && typeof v === "number")
+      .map(([k, v]) => `${v}${k.charAt(0)}`);
+    if (i.calories) parts.push(`${i.calories}cal`);
+    return `${i.name} (${parts.join("/")})`;
+  }).join(", ");
   let response = `Logged: ${itemList}`;
 
   if (picture) {
     const lines = [];
-    for (const macro of ["protein", "carbs", "fats"]) {
-      const m = picture[macro];
+    for (const role of (picture._valueRoles || [])) {
+      const m = picture[role];
       if (m) {
+        const label = m.name || role;
         const pct = m.goal > 0 ? Math.round((m.today / m.goal) * 100) : 0;
         const goalStr = m.goal > 0 ? `/${m.goal}g (${pct}%)` : "g";
-        lines.push(`${macro}: ${m.today}${goalStr}`);
+        lines.push(`${label}: ${m.today}${goalStr}`);
       }
     }
     if (picture.calories) {

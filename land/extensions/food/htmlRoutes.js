@@ -25,6 +25,7 @@ router.get("/root/:rootId/food", urlAuth, htmlOnly, async (req, res) => {
       rootName: root.name,
       picture,
       token: req.query.token || null,
+      userId: req.user?._id?.toString() || req.user?.id || null,
     }));
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, "Dashboard failed");

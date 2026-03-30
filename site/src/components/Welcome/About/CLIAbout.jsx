@@ -9,13 +9,13 @@ const CLIAbout = () => {
       <section className="lp-hero" style={{minHeight: "50vh"}}>
         <div className="lp-hero-inner">
           <h1 className="lp-title">The CLI</h1>
-          <p className="lp-subtitle">Talk to the tree.</p>
+          <p className="lp-subtitle">Just type. It understands.</p>
           <p className="lp-tagline">
-            Navigate like a filesystem. Talk like a conversation. The AI changes
-            based on where you are. Extensions add their own commands. The help menu
-            updates at every position. Your view matches the AI's view.
+            Natural language in the shell. Say what you mean and the tree figures out
+            what to do. Commands exist for when you want precision. But you never need them.
           </p>
           <div className="lp-hero-ctas">
+            <a className="lp-btn lp-btn-secondary" href="/">Home</a>
             <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
             <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
             <a className="lp-btn lp-btn-secondary" href="/build">Build</a>
@@ -23,58 +23,142 @@ const CLIAbout = () => {
         </div>
       </section>
 
-      {/* ── FOUR BASE COMMANDS ── */}
+      {/* ── NATURAL LANGUAGE ── */}
       <section className="lp-section">
         <div className="lp-container" style={{maxWidth: 780}}>
-          <h2 className="lp-section-title">Four Commands</h2>
-          <p className="lp-section-sub">Everything else builds on them.</p>
+          <h2 className="lp-section-title">Talk to It</h2>
+
+          <div className="lp-terminal">
+            <div className="lp-term-header">
+              <span className="lp-term-dot red"></span>
+              <span className="lp-term-dot yellow"></span>
+              <span className="lp-term-dot green"></span>
+              <span className="lp-term-title">treeos</span>
+            </div>
+            <div className="lp-term-body">
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>I had eggs and toast for breakfast</div>
+              <div className="lp-term-line lp-term-output">  Logged. 310 cal, 18g protein, 24g carbs.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>how many calories am I at today</div>
+              <div className="lp-term-line lp-term-output">  620 cal so far. 1,380 remaining for your 2,000 target.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>bench 135x10x10x8, OHP 95x8x8x6</div>
+              <div className="lp-term-line lp-term-output">  Push day logged. Bench up from 130 last week. OHP holding steady.</div>
+            </div>
+          </div>
+
+          <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.9rem", marginTop: 20}}>
+            If the first word isn't a command, the shell sends it straight to the AI. The tree
+            reads your position, picks the right mode, and responds. No prefix. No quoting. Just type.
+          </p>
+        </div>
+      </section>
+
+      {/* ── YOU ALREADY KNOW THIS ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 780}}>
+          <h2 className="lp-section-title">You Already Know This</h2>
+          <p className="lp-section-sub">It works like a filesystem.</p>
+
+          <div className="lp-terminal">
+            <div className="lp-term-header">
+              <span className="lp-term-dot red"></span>
+              <span className="lp-term-dot yellow"></span>
+              <span className="lp-term-dot green"></span>
+              <span className="lp-term-title">treeos</span>
+            </div>
+            <div className="lp-term-body">
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">~</span> <span className="lp-term-caret">› </span>ls</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Health    Projects    Journal</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">~</span> <span className="lp-term-caret">› </span>cd Health</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>ls</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Fitness    Food    Recovery    Study</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>cd Fitness</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>tree</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Fitness</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  {"  "}Push</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  {"    "}Bench Press</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  {"    "}OHP</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  {"  "}Pull</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  {"    "}Pull-ups</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  {"    "}Rows</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  {"  "}Legs</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>mkdir Cardio</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Created Cardio</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>cd ..</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>pwd</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  /Health</div>
+            </div>
+          </div>
+
+          <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.9rem", marginTop: 20}}>
+            <code>cd</code>, <code>ls</code>, <code>tree</code>, <code>mkdir</code>, <code>pwd</code>, <code>mv</code>, <code>rm</code>.
+            If you have used a terminal, you can use TreeOS. The tree is a filesystem where AI lives at every node.
+          </p>
+        </div>
+      </section>
+
+      {/* ── THREE ZONES ── */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 780}}>
+          <h2 className="lp-section-title">Three Zones</h2>
+          <p className="lp-section-sub">Where you are changes what the AI can do.</p>
+
+          <div className="lp-terminal">
+            <div className="lp-term-header">
+              <span className="lp-term-dot red"></span>
+              <span className="lp-term-dot yellow"></span>
+              <span className="lp-term-dot green"></span>
+              <span className="lp-term-title">treeos</span>
+            </div>
+            <div className="lp-term-body">
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/</span> <span className="lp-term-caret">› </span>what extensions are loaded</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Land zone. 95 extensions loaded, all healthy.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/</span> <span className="lp-term-caret">› </span>cd ~</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">~</span> <span className="lp-term-caret">› </span>what have I been working on</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Home zone. Most active in Health and Projects this week.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">~</span> <span className="lp-term-caret">› </span>cd Health</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>add a back routine to my pull days</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Tree zone. Created Back and Biceps under Pull. Pull-ups 4x8, Rows 3x10.</div>
+            </div>
+          </div>
+
+          <div style={{maxWidth: 500, margin: "24px auto 0"}}>
+            <Cmd name="cd /" desc="land zone. manage your server." />
+            <Cmd name="cd ~" desc="home zone. your trees, your ideas." />
+            <Cmd name="cd Health" desc="tree zone. AI works the branch." />
+          </div>
+
+          <p style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", marginTop: 16, textAlign: "center"}}>
+            No mode picker. No settings. Just <code>cd</code>.
+          </p>
+        </div>
+      </section>
+
+      {/* ── FOUR INTENTS ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 780}}>
+          <h2 className="lp-section-title">Four Ways to Talk</h2>
+          <p className="lp-section-sub">Most of the time you just type. But when you want to be specific.</p>
 
           <div style={{maxWidth: 500, margin: "0 auto 24px"}}>
-            <Cmd name="chat" desc="you talk, the AI responds" />
+            <Cmd name="chat" desc="you steer, the AI responds" />
             <Cmd name="place" desc="the AI stores what you said" />
             <Cmd name="query" desc="the AI answers without changing anything" />
             <Cmd name="be" desc="the tree leads, you follow" />
           </div>
 
-          <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.9rem", marginBottom: 24}}>
-            <code>chat</code>, <code>place</code>, and <code>query</code> are conversations where you steer.{" "}
-            <code>be</code> is different. The AI reads the tree, finds what needs doing, and guides you
-            through it one step at a time. One word. The tree takes over. Extensions add their own
-            commands that think differently.
-          </p>
-
-          <div style={{maxWidth: 600, margin: "0 auto"}}>
-            <CmdEx cmd='fitness "bench 135x10x10x8"' label="fitness coach mode" />
-            <CmdEx cmd='food "eggs and toast for breakfast"' label="nutrition coach mode" />
-            <CmdEx cmd='explore "where is the auth refactor"' label="searches your branch" />
-            <CmdEx cmd='scout "what do I know about protein"' label="triangulates the whole tree" />
-            <CmdEx cmd='understand' label="compresses the branch into knowledge" />
-          </div>
-
-          <p style={{color: "rgba(255,255,255,0.4)", lineHeight: 1.8, fontSize: "0.85rem", marginTop: 20}}>
-            Every extension command activates a different AI mode at your position.
-            Same tools. Different mind. <code>chat</code> is general. <code>fitness</code> is
-            a coach. <code>explore</code> is a researcher. <code>scout</code> is a detective.
-            Same node. Different mind.
-          </p>
-        </div>
-      </section>
-
-      {/* ── WHERE YOU ARE ── */}
-      <section className="lp-section lp-section-alt">
-        <div className="lp-container" style={{maxWidth: 780}}>
-          <h2 className="lp-section-title">Where You Are Changes Everything</h2>
-
-          <div style={{maxWidth: 500, margin: "0 auto 24px"}}>
-            <Cmd name="cd /" desc="land zone: AI manages your server" />
-            <Cmd name="cd ~" desc="home zone: AI helps you reflect" />
-            <Cmd name="cd MyTree" desc="tree zone: AI works the branch" />
-          </div>
-
-          <p style={{color: "rgba(255,255,255,0.45)", fontSize: "0.85rem", marginBottom: 20}}>
-            No settings menu. No mode picker. Just <code>cd</code>.
-          </p>
-
           <div className="lp-terminal">
             <div className="lp-term-header">
               <span className="lp-term-dot red"></span>
@@ -83,69 +167,89 @@ const CLIAbout = () => {
               <span className="lp-term-title">treeos</span>
             </div>
             <div className="lp-term-body">
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/</span> <span className="lp-term-caret">› </span>chat "what extensions are loaded"</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">  Land: 95 extensions loaded, all clear...</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>chat what should I work on today</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Pull day. You haven't hit back since Tuesday.</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">~</span> <span className="lp-term-caret">› </span>chat "what have I been working on"</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">  Home: Most active in Health and Projects this week...</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>place deadlift 315x5x5x3</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Stored under Pull/Deadlift. 315x5/5/3. New PR on first set.</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>chat "add a back routine"</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">  Tree: Created Back and Biceps. Pull-ups 4x8, Rows 3x10...</div>
-            </div>
-          </div>
-
-          <p style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", marginTop: 16, textAlign: "center"}}>
-            Same command. Three completely different AIs. Position is everything.
-          </p>
-        </div>
-      </section>
-
-      {/* ── CHAT IS ALL YOU NEED ── */}
-      <section className="lp-section">
-        <div className="lp-container" style={{maxWidth: 780}}>
-          <h2 className="lp-section-title">You Only Need Chat</h2>
-          <p style={{color: "rgba(255,255,255,0.6)", lineHeight: 1.9, fontSize: "0.92rem", marginBottom: 20}}>
-            A user can type <code>chat</code> for everything and never learn a single extension command.
-            The tree routes to the right mode automatically. Extension commands are shortcuts for people
-            who know them. <code>chat</code> is the universal entry point.
-          </p>
-
-          <div className="lp-terminal">
-            <div className="lp-term-header">
-              <span className="lp-term-dot red"></span>
-              <span className="lp-term-dot yellow"></span>
-              <span className="lp-term-dot green"></span>
-              <span className="lp-term-title">treeos</span>
-            </div>
-            <div className="lp-term-body">
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>chat "bench 135x10"</div>
-              <div className="lp-term-line lp-term-output">  Got it. Bench: 135x10/10/8. Up from 130 last session.</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>query what was my deadlift last month</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  295x5x5x5 on March 3.</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Food</span> <span className="lp-term-caret">› </span>chat "chicken and rice for lunch"</div>
-              <div className="lp-term-line lp-term-output">  Logged. 422 cal, 42g protein.</div>
-              <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Projects/Backend</span> <span className="lp-term-caret">› </span>chat "how's the auth refactor going"</div>
-              <div className="lp-term-line lp-term-output">  The auth refactor has 3 open items...</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>be</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Your pull volume is high but you haven't stretched in 6 days.</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Want to add a mobility block?</div>
             </div>
           </div>
 
           <p style={{color: "rgba(255,255,255,0.45)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 20}}>
-            Same command. Three positions. Three different modes fired. The user typed <code>chat</code> every
-            time. The prompt never changes. No "switching to fitness mode." No mode indicators. Position
-            tells you where. The mode is invisible.
-          </p>
-
-          <p style={{color: "rgba(255,255,255,0.45)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 12}}>
-            Extension commands like <code>fitness "bench 135"</code> skip the classifier and go
-            straight to the mode. On a local classifier with zero LLM calls, that saves microseconds.
-            The result is identical. Use them when you want to be explicit, or when the classifier
-            might be confused (at <code>/Health</code> where both fitness and food live).
+            <code>chat</code>, <code>place</code>, and <code>query</code> are conversations where you steer.{" "}
+            <code>be</code> is different. The tree reads everything, finds what needs doing, and guides you one step at a time.
+            One word. The tree takes over.
           </p>
 
           <p style={{color: "rgba(255,255,255,0.35)", lineHeight: 1.8, fontSize: "0.85rem", marginTop: 12}}>
-            Day 1: you only know <code>chat</code>. Week 2: you notice <code>fitness</code> in the help
-            menu. Month 2: you use extension commands for speed and <code>chat</code> for everything else.
-            No tutorial needed. The user learns by doing.
+            These are optional. Typing naturally without a command prefix does the same thing.
+            The tree classifies your intent automatically. Commands are for when you want to tell it
+            exactly how to think.
+          </p>
+        </div>
+      </section>
+
+      {/* ── EXTENSION COMMANDS ── */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 780}}>
+          <h2 className="lp-section-title">Extensions Add Commands</h2>
+          <p className="lp-section-sub">Every extension brings its own verbs. The help menu updates at every position.</p>
+
+          <div className="lp-terminal">
+            <div className="lp-term-header">
+              <span className="lp-term-dot red"></span>
+              <span className="lp-term-dot yellow"></span>
+              <span className="lp-term-dot green"></span>
+              <span className="lp-term-title">treeos</span>
+            </div>
+            <div className="lp-term-body">
+              <div className="lp-term-line lp-term-dim"># proficiency extensions</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>food eggs and coffee for breakfast</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Logged. 224 cal, 15g protein.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>fitness bench 135x10x10x8</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Push day logged. Bench up from 130 last session.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>recovery slept 7 hours, feeling good</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Checked in. Sleep trending up this week.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>study status</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Active: distributed systems (72% mastery)</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Queue: compilers, category theory</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line lp-term-dim"># intelligence extensions</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>explore what do I know about protein</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Found 8 nodes across Food and Fitness. Triangulating...</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>understand</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Compressing /Health into knowledge... 34 nodes processed.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line lp-term-dim"># subcommands</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>food-daily</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Today: 1,640 cal, 112g protein. On track.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>kb status</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  84 entries. 3 stale. 1 unplaced.</div>
+            </div>
+          </div>
+
+          <p style={{color: "rgba(255,255,255,0.45)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 20}}>
+            Each command activates a different AI mode at your position. <code>food</code> is a nutritionist.
+            {" "}<code>fitness</code> is a coach. <code>explore</code> is a researcher. <code>understand</code> compresses
+            the branch into knowledge. Same tree. Different minds.
+          </p>
+
+          <p style={{color: "rgba(255,255,255,0.35)", lineHeight: 1.8, fontSize: "0.85rem", marginTop: 12}}>
+            You can also just type naturally and the tree will route to the right extension.
+            Extension commands are shortcuts for when you want to be explicit or when similar
+            extensions overlap at the same position.
           </p>
         </div>
       </section>
@@ -155,7 +259,7 @@ const CLIAbout = () => {
         <div className="lp-container" style={{maxWidth: 780}}>
           <h2 className="lp-section-title">Sessions</h2>
           <p className="lp-section-sub">
-            A session is a conversation pinned to a position. You are always in one. You can run many.
+            Pin a conversation to a position. Talk to it from anywhere.
           </p>
 
           <div className="lp-terminal">
@@ -166,75 +270,47 @@ const CLIAbout = () => {
               <span className="lp-term-title">treeos</span>
             </div>
             <div className="lp-term-body">
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>chat "hey"</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">  # default session at /Health</div>
-              <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>@fitness "whats my bench PR"</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">  # creates fitness session at /Health/Fitness</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>@fitness whats my bench PR</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  135x10 on March 26.</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret lp-term-green">@fitness › </span>add a back day</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">  # still in fitness session</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Created Back and Biceps. Pull-ups 4x8, Rows 3x12.</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret lp-term-green">@fitness › </span>@work "status on the API refactor"</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">  # creates work session at /Projects/Backend</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret lp-term-green">@fitness › </span>@food how much protein today</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  82g so far. You want 150. Need about 70g more.</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret lp-term-green">@work › </span>looks good, mark auth complete</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret lp-term-green">@food › </span>@fitness</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Back in fitness session. Last: added Back and Biceps.</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret lp-term-green">@work › </span>@fitness</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">  # switch back (shows recent history)</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret lp-term-green">@fitness › </span>sessions</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  @fitness  /Health/Fitness  (active)</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  @food     /Health/Food</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret lp-term-green">@fitness › </span>@default</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">  # back to default session</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Back to default session.</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>_</div>
             </div>
           </div>
 
           <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 20}}>
-            Sessions stay pinned. <code>@fitness</code> always talks to /Health/Fitness even
-            when you have navigated somewhere else. Navigate away and the session does not follow.
-            It waits. Come back with <code>@fitness</code> from anywhere.
+            <code>@fitness</code> creates a session pinned to /Health/Fitness. Navigate anywhere and the session
+            stays put. Come back with <code>@fitness</code> from anywhere. Each session remembers its own conversation.
+            Close the shell, come back tomorrow, pick up where you stopped.
           </p>
 
-          <div style={{maxWidth: 400, margin: "16px auto 0"}}>
+          <div style={{maxWidth: 500, margin: "20px auto 0"}}>
             <Cmd name="sessions" desc="list all active sessions" />
             <Cmd name="sessions kill fitness" desc="end a session" />
+            <Cmd name="@default" desc="switch back to default session" />
           </div>
         </div>
       </section>
 
-      {/* ── WAIT WHAT ── */}
-      <section className="lp-section lp-section-alt">
-        <div className="lp-container" style={{maxWidth: 700}}>
-          <h2 className="lp-section-title" style={{fontSize: "1.3rem"}}>"Wait. First it was <code>fitness</code>, now it's <code>@fitness</code>?"</h2>
-
-          <p style={{color: "rgba(255,255,255,0.6)", lineHeight: 1.9, fontSize: "0.92rem", marginBottom: 16}}>
-            Both work. <code>fitness "bench 135"</code> is a direct extension command. It fires
-            the fitness AI at your current position, one shot. <code>@fitness "bench 135"</code> opens
-            a persistent session pinned to the fitness branch. The session remembers. The direct command
-            does not.
-          </p>
-          <p style={{color: "rgba(255,255,255,0.6)", lineHeight: 1.9, fontSize: "0.92rem", marginBottom: 16}}>
-            Inside the shell you just type <code>@fitness hello</code>. No <code>chat</code> prefix needed.
-            The shell intercepts the <code>@</code> and routes it. The <code>chat @fitness hello</code> form
-            exists for one-shot use outside the shell (<code>treeos chat @fitness hello</code> from a
-            regular terminal).
-          </p>
-          <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.9, fontSize: "0.88rem"}}>
-            You can <code>cd</code> anywhere, start new chats in any mode, go back, and continue
-            where you left off. Sessions persist. If you close the shell and come back tomorrow,
-            <code> @fitness</code> picks up where it stopped.
-          </p>
-        </div>
-      </section>
-
-      {/* ── CONTINUING CONVERSATIONS ── */}
+      {/* ── CONTEXT CARRIES ── */}
       <section className="lp-section">
         <div className="lp-container" style={{maxWidth: 780}}>
           <h2 className="lp-section-title">Context Carries</h2>
-          <p className="lp-section-sub">
-            The AI remembers within a session. Switch extensions, the context carries.
-          </p>
 
           <div className="lp-terminal">
             <div className="lp-term-header">
@@ -244,26 +320,24 @@ const CLIAbout = () => {
               <span className="lp-term-title">treeos</span>
             </div>
             <div className="lp-term-body">
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>food "eggs and toast for breakfast"</div>
-              <div className="lp-term-line lp-term-output">  Logged. 224 cal, 15g protein. You've got room.</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>food eggs and toast for breakfast</div>
+              <div className="lp-term-line lp-term-output">  Logged. 224 cal, 15g protein.</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>fitness "what should I do today"</div>
-              <div className="lp-term-line lp-term-output">  Based on your 224 cal so far, let's keep it moderate.</div>
-              <div className="lp-term-line lp-term-output">  Push day: bench, OHP, lateral raises.</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>fitness what should I do today</div>
+              <div className="lp-term-line lp-term-output">  224 cal in so far, keep it moderate. Push day: bench, OHP, lateral raises.</div>
             </div>
           </div>
 
           <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 20}}>
-            The fitness AI saw your food data. Not because the extensions talk to each other. Because
-            both write to the same node's metadata, and <code>enrichContext</code> injects both into every
-            prompt. The node is the shared memory. Four messages carry across mode switches. The
-            conversation flows.
+            The fitness AI saw the food data. Not because the extensions talk to each other, but because
+            both write to the same tree and <code>enrichContext</code> injects everything into every prompt.
+            The tree is the shared memory.
           </p>
         </div>
       </section>
 
-      {/* ── AUTONOMOUS ── */}
-      <section className="lp-section">
+      {/* ── THE TREE WORKS ALONE ── */}
+      <section className="lp-section lp-section-alt">
         <div className="lp-container" style={{maxWidth: 780}}>
           <h2 className="lp-section-title">The Tree Works While You Are Away</h2>
 
@@ -276,28 +350,39 @@ const CLIAbout = () => {
             </div>
             <div className="lp-term-body">
               <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>intent</div>
-              <div className="lp-term-line lp-term-output">  Queue: empty</div>
               <div className="lp-term-line lp-term-output">  Last 24h: 2 executed</div>
               <div className="lp-term-line lp-term-output lp-term-green">    Compressed dormant branches under /Projects/Old</div>
-              <div className="lp-term-line lp-term-output lp-term-green">    Nudged: "You said you'd start running 3x/week. No runs logged."</div>
+              <div className="lp-term-line lp-term-output lp-term-green">    Nudged: "You said 3x/week running. No runs logged."</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>intent reject 2</div>
               <div className="lp-term-line lp-term-output lp-term-dim">  Got it. Won't nudge about running again.</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>water</div>
+              <div className="lp-term-line lp-term-output">  Hydration at /Health:</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Cascade: 12 signals today, all succeeded</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Codebook: 23 entries, compressed 2h ago</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Memory: 34 connections to /Health/Food</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Coherence: 0.91 against tree thesis</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">    Evolution: active, 47 notes this week</div>
+              <div className="lp-term-line lp-term-output"></div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>digest</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  This week: 12 workouts logged, protein averaging 134g,</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  sleep improving. Study queue untouched since Monday.</div>
             </div>
           </div>
 
           <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 20}}>
-            The intent extension reads pulse health, evolution metrics, contradictions, codebook compression
-            status, and your stated goals. It generates actions the tree should take on its own. Review
-            them. Reject what you do not want. The tree learns.
+            <code>intent</code> shows what the tree did on its own. <code>water</code> shows the full picture
+            at any position. <code>digest</code> summarizes the week. The tree compresses, detects contradictions,
+            tracks gaps, and nudges you. Review it. Reject what you do not want. It learns.
           </p>
         </div>
       </section>
 
-      {/* ── WATER ── */}
-      <section className="lp-section lp-section-alt">
+      {/* ── LIFE ── */}
+      <section className="lp-section">
         <div className="lp-container" style={{maxWidth: 780}}>
-          <h2 className="lp-section-title">See Everything at Once</h2>
+          <h2 className="lp-section-title">One Command to Start</h2>
 
           <div className="lp-terminal">
             <div className="lp-term-header">
@@ -307,37 +392,29 @@ const CLIAbout = () => {
               <span className="lp-term-title">treeos</span>
             </div>
             <div className="lp-term-body">
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>water</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">~</span> <span className="lp-term-caret">› </span>life food fitness study recovery</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Creating your Life tree...</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Scaffolded: Food, Fitness, Study, Recovery</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Each domain has its own AI, its own commands, its own dashboard.</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line lp-term-output">  Hydration at /Health/Fitness:</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">    Cascade: enabled, 12 signals today</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">    Perspective: accepting fitness, health. Rejecting dreams.</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">    Codebook: 23 entries, last compressed 2h ago</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">    Memory: 34 connections to /Health/Food, 12 to /Health/Recovery</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">    Gaps: none</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">    Coherence: 0.91 against tree thesis</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">    Evolution: active, 47 notes this week, high revisit score</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Life</span> <span className="lp-term-caret">› </span>ls</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Food    Fitness    Study    Recovery</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>water land</div>
-              <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line lp-term-output">  Land health:</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">    Signals: 4,200 today, 98% succeeded</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">    Sessions: 5 human, 12 extension, 3 gateway</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">    Cache: 94% hit rate</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">    Trees: 8 active, 2 dormant</div>
-              <div className="lp-term-line lp-term-output lp-term-dim">    Peers: 3 healthy, 1 degraded</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Life</span> <span className="lp-term-caret">› </span>life add kb</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  Added Knowledge Base to your Life tree.</div>
             </div>
           </div>
 
-          <p style={{color: "rgba(255,255,255,0.5)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 20}}>
-            <code>water</code> is the full picture at any position. Everything the extensions
-            know, assembled in one view. The tree knows its own hydration.
+          <p style={{color: "rgba(255,255,255,0.45)", lineHeight: 1.8, fontSize: "0.88rem", marginTop: 20}}>
+            <code>life</code> scaffolds a tree with the domains you want. Each domain sets up its own
+            extension, modes, tools, and dashboards. Add more later with <code>life add</code>. The tree
+            grows with you.
           </p>
         </div>
       </section>
 
       {/* ── INSTALL ── */}
-      <section className="lp-section">
+      <section className="lp-section lp-section-alt">
         <div className="lp-container" style={{textAlign: "center"}}>
           <h2 className="lp-section-title">Get Started</h2>
           <div className="lp-terminal" style={{maxWidth: 480, margin: "0 auto", textAlign: "left"}}>
@@ -389,16 +466,6 @@ const Cmd = ({ name, desc }) => (
   }}>
     <code style={{color: "#4ade80", fontSize: "0.9rem"}}>{name}</code>
     <span style={{color: "rgba(255,255,255,0.45)", fontSize: "0.85rem"}}>{desc}</span>
-  </div>
-);
-
-const CmdEx = ({ cmd, label }) => (
-  <div style={{
-    display: "flex", justifyContent: "space-between", padding: "6px 0",
-    borderBottom: "1px solid rgba(255,255,255,0.03)",
-  }}>
-    <code style={{color: "rgba(255,255,255,0.55)", fontSize: "0.82rem"}}>{cmd}</code>
-    <span style={{color: "rgba(255,255,255,0.3)", fontSize: "0.8rem"}}>{label}</span>
   </div>
 );
 

@@ -306,8 +306,12 @@ export async function deleteNodeBranch(
   if (nodeToDelete.parent === DELETED) {
     throw new Error("Node has already been deleted");
   }
-  // beforeNodeDelete hook
-  await hooks.run("beforeNodeDelete", { node: nodeToDelete, userId });
+  // beforeNodeDelete hook (before hooks can cancel)
+  const hookResult = await hooks.run("beforeNodeDelete", { node: nodeToDelete, userId });
+  if (hookResult.cancelled) {
+    const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
+    throw new ProtocolError(500, code, hookResult.reason || "Node deletion blocked");
+  }
 
 
   const oldParent = nodeToDelete.parent;

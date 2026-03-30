@@ -170,7 +170,13 @@ export async function findFoodNodes(foodRootId) {
     const meta = child.metadata instanceof Map
       ? child.metadata.get("food")
       : child.metadata?.food;
-    if (meta?.role) result[meta.role] = { id: String(child._id), name: child.name };
+    if (meta?.role) {
+      result[meta.role] = { id: String(child._id), name: child.name };
+    } else {
+      // Unadopted node: no food role yet. Track it so the AI can adopt it.
+      if (!result._unadopted) result._unadopted = [];
+      result._unadopted.push({ id: String(child._id), name: child.name });
+    }
   }
   // Find meal slot children under Meals node
   if (result.meals) {
@@ -182,6 +188,21 @@ export async function findFoodNodes(foodRootId) {
     }
   }
   return result;
+}
+
+/**
+ * Adopt a node into the food tree as a tracked metric.
+ * Sets metadata.food.role and optionally a daily goal.
+ */
+export async function adoptNode(nodeId, role, goal) {
+  if (!_metadata || !_Node) throw new Error("Metadata service not configured");
+  const node = await _Node.findById(nodeId);
+  if (!node) throw new Error("Node not found");
+  await _metadata.setExtMeta(node, "food", { role });
+  if (goal != null && goal > 0) {
+    await _metadata.setExtMeta(node, "goals", { today: goal });
+  }
+  log.info("Food", `Adopted node ${String(nodeId).slice(0, 8)} as "${role}"${goal ? ` (goal: ${goal}g)` : ""}`);
 }
 
 /**
@@ -277,14 +298,14 @@ export async function parseFood(message, userId, username, rootId) {
     return null;
   }
 
-  // Ensure totals exist
+  // Ensure totals exist (sum all numeric fields from items dynamically)
   if (!parsed.totals) {
-    parsed.totals = { protein: 0, carbs: 0, fats: 0, calories: 0 };
+    parsed.totals = {};
     for (const item of parsed.items) {
-      parsed.totals.protein += item.protein || 0;
-      parsed.totals.carbs += item.carbs || 0;
-      parsed.totals.fats += item.fats || 0;
-      parsed.totals.calories += item.calories || 0;
+      for (const [key, val] of Object.entries(item)) {
+        if (key === "name" || typeof val !== "number") continue;
+        parsed.totals[key] = (parsed.totals[key] || 0) + val;
+      }
     }
   }
 
@@ -308,15 +329,11 @@ export async function deliverMacros(logNodeId, foodNodes, parsed) {
       const { v4: uuid } = await import("uuid");
       const signalId = uuid();
 
-      await channelsExt.exports.deliverToChannels(logNodeId, {
-        protein: totals.protein,
-        carbs: totals.carbs,
-        fats: totals.fats,
-        calories: totals.calories,
-        meal: when || meal,
-        source: meal,
-        tags: ["protein", "carbs", "fats"],
-      }, signalId, 0);
+      const payload = { meal: when || meal, source: meal, tags: [] };
+      for (const [key, val] of Object.entries(totals)) {
+        if (typeof val === "number") { payload[key] = val; payload.tags.push(key); }
+      }
+      await channelsExt.exports.deliverToChannels(logNodeId, payload, signalId, 0);
 
       usedChannels = true;
     }
@@ -325,15 +342,15 @@ export async function deliverMacros(logNodeId, foodNodes, parsed) {
   }
 
   // Always do direct increment as well (channels may not have routes set up yet)
+  // Route to ALL metric nodes dynamically (protein, carbs, fats, sugar, fiber, etc.)
   if (foodNodes) {
-    if (foodNodes.protein && totals.protein > 0) {
-      await _metadata.incExtMeta(foodNodes.protein.id, "values", "today", totals.protein);
-    }
-    if (foodNodes.carbs && totals.carbs > 0) {
-      await _metadata.incExtMeta(foodNodes.carbs.id, "values", "today", totals.carbs);
-    }
-    if (foodNodes.fats && totals.fats > 0) {
-      await _metadata.incExtMeta(foodNodes.fats.id, "values", "today", totals.fats);
+    const STRUCTURAL = ["log", "daily", "meals", "profile", "history", "mealSlots"];
+    for (const [role, info] of Object.entries(foodNodes)) {
+      if (STRUCTURAL.includes(role) || !info?.id) continue;
+      const amount = totals[role] || 0;
+      if (amount > 0) {
+        await _metadata.incExtMeta(info.id, "values", "today", amount);
+      }
     }
   }
 }
@@ -351,12 +368,11 @@ export async function handleMacroCascade(node, payload) {
   if (!meta?.role) return;
 
   const role = meta.role;
-  let amount = 0;
+  const STRUCTURAL = ["log", "daily", "meals", "profile", "history"];
+  if (STRUCTURAL.includes(role)) return;
 
-  if (role === "protein") amount = payload.protein || 0;
-  else if (role === "carbs") amount = payload.carbs || 0;
-  else if (role === "fats") amount = payload.fats || 0;
-  else return;
+  // Match cascade payload key to node role (protein->protein, sugar->sugar, etc.)
+  const amount = payload[role] || 0;
 
   if (amount <= 0) return;
 
@@ -392,13 +408,17 @@ export async function checkDailyReset(rootId) {
   log.verbose("Food", `Daily reset firing for ${String(rootId).slice(0, 8)} (lastResetDate=${foodMeta?.lastResetDate}, today=${today})`);
 
   const foodNodes = await findFoodNodes(rootId);
-  if (!foodNodes?.protein) return; // not scaffolded
+  if (!foodNodes) return;
 
-  // Read current macro totals and goals
+  // Discover all metric roles (anything that isn't structural)
+  const STRUCTURAL = ["log", "daily", "meals", "profile", "history", "mealSlots"];
+  const metricRoles = Object.keys(foodNodes).filter(r => !STRUCTURAL.includes(r) && foodNodes[r]?.id);
+  if (metricRoles.length === 0) return;
+
+  // Read current totals and goals for all metric nodes
   const macros = {};
   const goals = {};
-  for (const role of ["protein", "carbs", "fats"]) {
-    if (!foodNodes[role]) continue;
+  for (const role of metricRoles) {
     const node = await _Node.findById(foodNodes[role].id).select("metadata").lean();
     if (!node) continue;
     const values = node.metadata instanceof Map ? node.metadata.get("values") : node.metadata?.values;
@@ -407,23 +427,22 @@ export async function checkDailyReset(rootId) {
     goals[role] = goalMeta?.today || 0;
   }
 
-  const hadData = macros.protein > 0 || macros.carbs > 0 || macros.fats > 0;
+  const hadData = metricRoles.some(r => macros[r] > 0);
 
   // Archive yesterday's totals as a note on the History node
   if (hadData && foodNodes.history) {
     try {
       const date = lastReset.get(rootId) || new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-      const calories = (macros.protein * 4) + (macros.carbs * 4) + (macros.fats * 9);
-      const summary = {
-        date,
-        protein: macros.protein,
-        carbs: macros.carbs,
-        fats: macros.fats,
-        calories,
-        hitProteinGoal: goals.protein > 0 && macros.protein >= goals.protein,
-        hitCarbsGoal: goals.carbs > 0 && macros.carbs >= goals.carbs,
-        hitFatsGoal: goals.fats > 0 && macros.fats >= goals.fats,
-      };
+      const p = macros.protein || 0, c = macros.carbs || 0, f = macros.fats || 0;
+      const calories = (p * 4) + (c * 4) + (f * 9);
+      const summary = { date, calories };
+      // Include all tracked metrics and their hit status
+      for (const role of metricRoles) {
+        summary[role] = macros[role] || 0;
+        if (goals[role] > 0) {
+          summary[`hit${role.charAt(0).toUpperCase() + role.slice(1)}Goal`] = macros[role] >= goals[role];
+        }
+      }
       const { createNote } = await import("../../seed/tree/notes.js");
       await createNote({
         nodeId: foodNodes.history.id,
@@ -436,44 +455,34 @@ export async function checkDailyReset(rootId) {
     }
   }
 
-  // Calculate weekly averages from History node notes
-  if (foodNodes.history && _Note) {
-    try {
-      const recentNotes = await _Note.find({ nodeId: foodNodes.history.id })
-        .sort({ createdAt: -1 })
-        .limit(7)
-        .select("content")
-        .lean();
-      const days = recentNotes.map(n => { try { return JSON.parse(n.content); } catch { return null; } }).filter(Boolean);
-      if (days.length > 0) {
-        for (const role of ["protein", "carbs", "fats"]) {
-          if (!foodNodes[role]) continue;
-          const avg = Math.round(days.reduce((s, d) => s + (d[role] || 0), 0) / days.length);
-          const hitCount = days.filter(d => d[`hit${role.charAt(0).toUpperCase() + role.slice(1)}Goal`]).length;
-          const hitRate = Math.round((hitCount / days.length) * 100) / 100;
-          await _metadata.batchSetExtMeta(foodNodes[role].id, "values", { today: 0, weeklyAvg: avg, weeklyHitRate: hitRate });
-        }
+  // Reset all metric nodes and calculate weekly averages
+  const resetMetrics = async (withAverages, days) => {
+    for (const role of metricRoles) {
+      if (!foodNodes[role]) continue;
+      if (withAverages && days?.length > 0) {
+        const avg = Math.round(days.reduce((s, d) => s + (d[role] || 0), 0) / days.length);
+        const hitKey = `hit${role.charAt(0).toUpperCase() + role.slice(1)}Goal`;
+        const hitCount = days.filter(d => d[hitKey]).length;
+        const hitRate = Math.round((hitCount / days.length) * 100) / 100;
+        await _metadata.batchSetExtMeta(foodNodes[role].id, "values", { today: 0, weeklyAvg: avg, weeklyHitRate: hitRate });
       } else {
-        // No history yet, just reset
-        for (const role of ["protein", "carbs", "fats"]) {
-          if (!foodNodes[role]) continue;
-          await _metadata.batchSetExtMeta(foodNodes[role].id, "values", { today: 0 });
-        }
-      }
-    } catch (err) {
-      log.debug("Food", `Weekly average calculation failed: ${err.message}`);
-      // Fallback: just reset
-      for (const role of ["protein", "carbs", "fats"]) {
-        if (!foodNodes[role]) continue;
         await _metadata.batchSetExtMeta(foodNodes[role].id, "values", { today: 0 });
       }
     }
-  } else {
-    // No History node, just reset
-    for (const role of ["protein", "carbs", "fats"]) {
-      if (!foodNodes[role]) continue;
-      await _metadata.batchSetExtMeta(foodNodes[role].id, "values", { today: 0 });
+  };
+
+  if (foodNodes.history && _Note) {
+    try {
+      const recentNotes = await _Note.find({ nodeId: foodNodes.history.id })
+        .sort({ createdAt: -1 }).limit(7).select("content").lean();
+      const days = recentNotes.map(n => { try { return JSON.parse(n.content); } catch { return null; } }).filter(Boolean);
+      await resetMetrics(days.length > 0, days);
+    } catch (err) {
+      log.debug("Food", `Weekly average calculation failed: ${err.message}`);
+      await resetMetrics(false);
     }
+  } else {
+    await resetMetrics(false);
   }
 
   lastReset.set(rootId, today);
@@ -491,7 +500,8 @@ export async function checkDailyReset(rootId) {
   }
 
   if (hadData) {
-    log.verbose("Food", `Daily reset for ${rootId.slice(0, 8)}... (P:${macros.protein} C:${macros.carbs} F:${macros.fats})`);
+    const macroStr = metricRoles.map(r => `${r}:${macros[r] || 0}`).join(" ");
+    log.verbose("Food", `Daily reset for ${rootId.slice(0, 8)}... (${macroStr})`);
   }
 }
 
@@ -507,33 +517,39 @@ export async function getDailyPicture(foodRootId) {
   const foodNodes = await findFoodNodes(foodRootId);
   if (!foodNodes) return null;
 
-  const picture = { protein: {}, carbs: {}, fats: {} };
+  const CORE_MACROS = ["protein", "carbs", "fats"];
+  const STRUCTURAL_ROLES = ["log", "daily", "meals", "profile", "history"];
+  const picture = {};
 
-  for (const role of ["protein", "carbs", "fats"]) {
-    if (!foodNodes[role]) continue;
-    const node = await _Node.findById(foodNodes[role].id).select("metadata").lean();
+  // Discover all metric nodes (core macros + any user-created ones like sugar, fiber)
+  // Structural roles (log, daily, meals, etc.) are skipped. Everything else is a metric.
+  const valueRoles = [];
+  for (const [role, info] of Object.entries(foodNodes)) {
+    if (role === "mealSlots" || !info?.id || STRUCTURAL_ROLES.includes(role)) continue;
+    const node = await _Node.findById(info.id).select("metadata").lean();
     if (!node) continue;
-
-    const values = node.metadata instanceof Map
-      ? node.metadata.get("values")
-      : node.metadata?.values;
-    const goals = node.metadata instanceof Map
-      ? node.metadata.get("goals")
-      : node.metadata?.goals;
-
+    const values = node.metadata instanceof Map ? node.metadata.get("values") : node.metadata?.values;
+    const goals = node.metadata instanceof Map ? node.metadata.get("goals") : node.metadata?.goals;
     picture[role] = {
       today: values?.today || 0,
       goal: goals?.today || 0,
       weeklyAvg: values?.weeklyAvg || 0,
       weeklyHitRate: values?.weeklyHitRate || 0,
+      name: info.name,
+      isCoreMacro: CORE_MACROS.includes(role),
     };
+    valueRoles.push(role);
   }
 
-  // Calculate calories (protein*4 + carbs*4 + fats*9)
+  // Calculate calories from core macros (protein*4 + carbs*4 + fats*9)
+  const p = picture.protein || {};
+  const c = picture.carbs || {};
+  const f = picture.fats || {};
   picture.calories = {
-    today: (picture.protein.today * 4) + (picture.carbs.today * 4) + (picture.fats.today * 9),
-    goal: (picture.protein.goal * 4) + (picture.carbs.goal * 4) + (picture.fats.goal * 9),
+    today: ((p.today || 0) * 4) + ((c.today || 0) * 4) + ((f.today || 0) * 9),
+    goal: ((p.goal || 0) * 4) + ((c.goal || 0) * 4) + ((f.goal || 0) * 9),
   };
+  picture._valueRoles = valueRoles;
 
   // Get profile from Profile node
   if (foodNodes.profile && _Note) {
@@ -641,16 +657,17 @@ export async function saveProfile(foodRootId, profile, foodNodes) {
     await _metadata.setExtMeta(root, "food", { ...existing, setupPhase: "complete" });
   }
 
-  // Set goals on macro nodes
-  const goalMap = {
-    protein: profile.proteinGoal,
-    carbs: profile.carbsGoal,
-    fats: profile.fatsGoal,
-  };
-
-  for (const [role, goal] of Object.entries(goalMap)) {
-    if (!goal || !foodNodes[role]) continue;
-    await _metadata.batchSetExtMeta(foodNodes[role].id, "goals", { today: goal });
-    await _metadata.batchSetExtMeta(foodNodes[role].id, "values", { today: 0 });
+  // Set goals on all metric nodes that have a matching goal in the profile
+  // Supports both legacy keys (proteinGoal) and dynamic keys (sugarGoal, fiberGoal, etc.)
+  const STRUCTURAL = ["log", "daily", "meals", "profile", "history", "mealSlots", "_unadopted"];
+  for (const [role, info] of Object.entries(foodNodes)) {
+    if (STRUCTURAL.includes(role) || !info?.id) continue;
+    // Check for role-specific goal: proteinGoal, sugarGoal, etc.
+    const goalKey = `${role}Goal`;
+    const goal = profile[goalKey];
+    if (goal) {
+      await _metadata.batchSetExtMeta(info.id, "goals", { today: goal });
+      await _metadata.batchSetExtMeta(info.id, "values", { today: 0 });
+    }
   }
 }

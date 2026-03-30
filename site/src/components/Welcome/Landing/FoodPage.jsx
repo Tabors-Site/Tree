@@ -262,6 +262,86 @@ const FoodPage = () => {
         </div>
       </section>
 
+      {/* ── ADAPTIVE TREE ── */}
+      <section className="lp-section" style={{paddingTop: 60, paddingBottom: 60, background: "rgba(255,255,255,0.02)"}}>
+        <div className="lp-container" style={{maxWidth: 760}}>
+          <h2 style={{color: "#fff", fontSize: "1.5rem", marginBottom: 16, textAlign: "center"}}>
+            Your tree. Your metrics.
+          </h2>
+          <p style={{color: "rgba(255,255,255,0.5)", textAlign: "center", fontSize: "0.95rem", lineHeight: 1.8, maxWidth: 600, margin: "0 auto 32px"}}>
+            Nothing is hardcoded. The scaffold creates Protein, Carbs, and Fats as defaults.
+            After that, the system treats them the same as any node you create yourself.
+          </p>
+
+          <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 32}}>
+            <div style={{background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "16px 20px"}}>
+              <h3 style={{color: "rgba(255,255,255,0.8)", fontSize: "0.95rem", marginTop: 0, marginBottom: 8}}>Structural nodes</h3>
+              <p style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", lineHeight: 1.7, margin: 0}}>
+                Log, Daily, Meals, Profile, History. These define the shape. Only Log is required. Everything else is optional.
+              </p>
+            </div>
+            <div style={{background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "16px 20px"}}>
+              <h3 style={{color: "rgba(255,255,255,0.8)", fontSize: "0.95rem", marginTop: 0, marginBottom: 8}}>Metric nodes</h3>
+              <p style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem", lineHeight: 1.7, margin: 0}}>
+                Everything else. Protein, Carbs, Fats, or whatever you add. Sugar, Fiber, Sodium, Water. The tree tracks whatever exists.
+              </p>
+            </div>
+          </div>
+
+          <div style={{
+            background: "rgba(255,255,255,0.04)", borderRadius: 10,
+            padding: "20px 24px", fontFamily: "monospace", fontSize: "0.85rem",
+            color: "rgba(255,255,255,0.6)", lineHeight: 1.9, marginBottom: 24,
+          }}>
+            <div style={{color: "rgba(255,255,255,0.35)", marginBottom: 8}}>{"// default scaffold"}</div>
+            <div style={{color: "#fff"}}>Food</div>
+            <div>├── Log</div>
+            <div>├── <span style={{color: "#48bb78"}}>Protein</span>{"     "}128/150g</div>
+            <div>├── <span style={{color: "#ecc94b"}}>Carbs</span>{"       "}195/200g</div>
+            <div>├── <span style={{color: "#ecc94b"}}>Fats</span>{"        "}52/65g</div>
+            <div>├── Daily</div>
+            <div>└── History</div>
+            <div style={{color: "rgba(255,255,255,0.35)", marginTop: 16, marginBottom: 8}}>{"// after customization"}</div>
+            <div style={{color: "#fff"}}>Food</div>
+            <div>├── Log</div>
+            <div>├── <span style={{color: "#a78bfa"}}>Fiber</span>{"       "}22/30g</div>
+            <div>├── <span style={{color: "#a78bfa"}}>Sodium</span>{"      "}1,800/2,300mg</div>
+            <div>├── <span style={{color: "#a78bfa"}}>Water</span>{"       "}6/8 glasses</div>
+            <div>├── <span style={{color: "#ecc94b"}}>Fats</span>{"        "}52/65g</div>
+            <div>├── Daily</div>
+            <div>└── History</div>
+          </div>
+
+          <div style={{display: "flex", flexDirection: "column", gap: 24}}>
+            <div>
+              <h3 style={{color: "rgba(255,255,255,0.8)", fontSize: "1rem", marginTop: 0, marginBottom: 8}}>The whole pipeline adapts</h3>
+              <p style={{color: "rgba(255,255,255,0.45)", fontSize: "0.9rem", lineHeight: 1.7, margin: 0}}>
+                The LLM parser prompt is built at runtime from the tree. If your tree tracks protein, carbs, fats, sugar,
+                and fiber, the prompt says exactly that. Delete protein and add sodium, the prompt changes. The parser outputs
+                the right fields. Cascade signals route to the right nodes. Daily reset archives the right totals. The dashboard
+                renders a progress bar for every metric node. No config file. No code change. Just tree structure.
+              </p>
+            </div>
+            <div>
+              <h3 style={{color: "rgba(255,255,255,0.8)", fontSize: "1rem", marginTop: 0, marginBottom: 8}}>Node adoption</h3>
+              <p style={{color: "rgba(255,255,255,0.45)", fontSize: "0.9rem", lineHeight: 1.7, margin: 0}}>
+                Create a plain node under your food tree called Sugar. Next time you log food, the AI notices
+                it and asks: "Sugar isn't tracked yet. Want me to add it? What's your daily goal?" One conversation.
+                The node gets its metadata, joins the pipeline, and starts tracking.
+              </p>
+            </div>
+            <div>
+              <h3 style={{color: "rgba(255,255,255,0.8)", fontSize: "1rem", marginTop: 0, marginBottom: 8}}>Delete protection</h3>
+              <p style={{color: "rgba(255,255,255,0.45)", fontSize: "0.9rem", lineHeight: 1.7, margin: 0}}>
+                Structural nodes are protected across every extension. Any node with a role in any extension's
+                metadata namespace is guarded from deletion. The system names the extension and role. <code style={{color: "rgba(255,255,255,0.55)"}}>--force</code> bypasses
+                it when you mean it.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── CTA ── */}
       <section className="lp-section" style={{paddingTop: 80, paddingBottom: 100, textAlign: "center"}}>
         <div className="lp-container">

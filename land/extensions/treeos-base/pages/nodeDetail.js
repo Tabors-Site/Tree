@@ -577,6 +577,9 @@ export function renderNodeDetail({ node, nodeId, qs, parentName, rootUrl, isPubl
       <a href="/api/v1/node/${nodeId}/chats${qs}" class="back-link">
         AI Chats
       </a>
+      <a href="/api/v1/node/${nodeId}/metadata${qs}" class="back-link">
+        Metadata
+      </a>
     </div>
 
     <!-- Header -->

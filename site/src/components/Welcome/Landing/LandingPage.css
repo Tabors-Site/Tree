@@ -168,6 +168,35 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* ── QUOTE ── */
+.lp-quote-section {
+  padding: 100px 32px;
+  text-align: center;
+  position: relative;
+  background: linear-gradient(180deg, transparent 0%, rgba(249, 115, 22, 0.03) 50%, transparent 100%);
+}
+
+.lp-quote {
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.9);
+  max-width: 800px;
+  margin: 0 auto 24px;
+  letter-spacing: -0.5px;
+  font-style: italic;
+}
+
+.lp-quote-author {
+  display: block;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 500;
+  color: rgba(249, 115, 22, 0.7);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
 /* ── SECTIONS ── */
 .lp-section {
   padding: 120px 0;

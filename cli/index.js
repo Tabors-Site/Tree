@@ -23,7 +23,7 @@ program
         { title: "Getting Started", cmds: ["connect", "register", "login", "logout", "whoami"] },
         { title: "Navigation", cmds: ["pwd", "ls", "cd", "land", "home", "tree", "recent"] },
         { title: "Trees", cmds: ["roots", "use", "root", "mkroot", "retire"] },
-        { title: "Nodes", cmds: ["mkdir", "rm", "mv", "rename", "what", "type", "complete", "activate", "trim"] },
+        { title: "Nodes", cmds: ["mkdir", "rm", "mv", "rename", "node", "type", "complete", "activate", "trim"] },
         { title: "Notes", cmds: ["note", "notes", "cat", "rm-note", "download"] },
         { title: "AI", cmds: ["chat", "place", "query", "chats"] },
         { title: "Collaboration", cmds: ["team", "invite", "invites", "kick", "owner", "visibility", "share", "link", "share-token"] },
