@@ -217,6 +217,12 @@ export async function init(core) {
       isInitialized,
       findFoodNodes,
       getDailyPicture,
+      resolveMode(message) {
+        const lower = (message || "").toLowerCase().trim();
+        if (lower === "be") return "tree:food-coach";
+        if (/\b(what should|how am i|how's my|suggest|recommend|plan|advice|help|adjust|daily|status|today|change.*goal|set.*goal|update.*goal)\b/i.test(lower)) return "tree:food-review";
+        return "tree:food-log";
+      },
     },
     jobs: [
       {

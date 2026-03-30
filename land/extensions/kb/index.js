@@ -142,6 +142,14 @@ export async function init(core) {
       getUnplaced,
       isMaintainer,
       routeKbIntent,
+      resolveMode(message) {
+        const lower = (message || "").toLowerCase().trim();
+        if (lower === "be" || lower === "review") return "tree:kb-review";
+        if (/\b(status|stale|unplaced|coverage|how many|count)\b/.test(lower)) return "tree:kb-ask";
+        // routeKbIntent returns "tell" or "ask"
+        const intent = routeKbIntent(message);
+        return intent === "tell" ? "tree:kb-tell" : "tree:kb-ask";
+      },
     },
   };
 }

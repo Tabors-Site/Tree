@@ -41,13 +41,20 @@ async function localClassify(message, currentNodeId) {
       const { getClassifierHintsForMode } = await import("../loader.js");
       const currentNode = await Node.findById(currentNodeId).select("metadata children").lean();
 
-      // Level 1: current node has a mode override — extension owns all messages here.
-      // No hint matching needed. The user navigated to this node; the extension handles it.
+      // Level 1: current node has a mode override.
+      // If hints match, route with high confidence. If not, still route to the
+      // extension but the mode must handle generic messages (status, review, etc).
       const modes = currentNode?.metadata instanceof Map
         ? currentNode.metadata.get("modes")
         : currentNode?.metadata?.modes;
       if (modes?.respond) {
-        return { intent: "extension", mode: modes.respond, confidence: 0.95, ...base };
+        const hints = getClassifierHintsForMode(modes.respond);
+        if (!hints || hints.some(re => re.test(message))) {
+          return { intent: "extension", mode: modes.respond, confidence: 0.95, ...base };
+        }
+        // No hint match but we're at an extension node. Still route here
+        // because the librarian doesn't understand extension data models.
+        return { intent: "extension", mode: modes.respond, confidence: 0.8, ...base };
       }
 
       // Level 2: direct children (do any of my children claim this message?)
@@ -1620,28 +1627,40 @@ export async function orchestrateTreeRequest({
   }
 
   // ────────────────────────────────────────────────────────
-  // PATH 2: EXTENSION DETECTED — route directly to extension mode
-  // One LLM call. No librarian. No navigation. No respond.
+  // PATH 2: EXTENSION DETECTED — route to extension mode
+  // Extensions register a resolveMode function to pick the right mode
+  // based on the message (review, plan, session, log, etc).
+  // Falls back to modes.respond if no resolver is registered.
   // ────────────────────────────────────────────────────────
 
   if (classification.intent === "extension" && classification.mode) {
-    // Extension modes handle their own AI conversation. No iframe navigation.
-    // The extension node is used for mode resolution, not for visual navigation.
     const extTargetId = classification.targetNodeId || null;
     log.verbose("Tree Orchestrator",
       `  Extension route: ${classification.mode}${extTargetId ? ` via ${extTargetId}` : ""} (behavioral: ${behavioral})`);
 
-    modesUsed.push(classification.mode);
+    // Let the extension pick the right mode for this message
+    let resolvedMode = classification.mode;
+    try {
+      const { getExtension } = await import("../loader.js");
+      // Extract extension name from mode key: "tree:food-log" -> "food", "tree:study-plan" -> "study"
+      const modeParts = classification.mode.replace("tree:", "").split("-");
+      const extName = modeParts[0];
+      const ext = getExtension(extName);
+      if (ext?.exports?.resolveMode) {
+        const picked = ext.exports.resolveMode(message);
+        if (picked) resolvedMode = picked;
+      }
+    } catch {}
+
+    modesUsed.push(resolvedMode);
     emitStatus(socket, "intent", "");
 
-    // Switch to the extension's mode (use the extension node's rootId context)
-    await switchMode(visitorId, classification.mode, {
+    await switchMode(visitorId, resolvedMode, {
       username, userId, rootId,
       conversationMemory: formatMemoryContext(visitorId),
       clearHistory: true,
     });
 
-    // One LLM call. readOnly strips write tools for query constraint.
     const result = await processMessage(visitorId, message, {
       username, userId, rootId, signal, slot,
       readOnly: behavioral === "query",
