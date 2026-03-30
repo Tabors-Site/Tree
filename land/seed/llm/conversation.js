@@ -852,6 +852,7 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     }
   }
 
+
   // Trim if over max. Preserve conversation integrity: tool results must
   // follow their corresponding assistant tool_call message. Trim to a clean
   // boundary (user or assistant without tool_calls) to avoid orphaned tool results.
@@ -1640,6 +1641,7 @@ export function getCurrentNodeId(visitorId) {
 export function getCurrentMode(visitorId) {
   return getSession(visitorId).modeKey;
 }
+
 
 export function clearSession(visitorId) {
   sessions.delete(visitorId);

@@ -566,7 +566,9 @@
       "Bash(grep -n \"toolNames\" /home/tabor/github/Tree/land/extensions/study/modes/*.js)",
       "Bash(grep -n \"ROLES.RESOURCES\\\\|role: ROLES.RESOURCES\" /home/tabor/github/Tree/land/extensions/study/*.js)",
       "Bash(grep -i \"Stream.*Loaded\\\\|stream.*loaded\\\\|DynamicRename\\\\|dynamic.rename\" /tmp/*.log)",
-      "Bash(wc -l /home/tabor/github/Tree/land/extensions/fitness/*.js /home/tabor/github/Tree/land/extensions/fitness/modes/*.js)"
+      "Bash(wc -l /home/tabor/github/Tree/land/extensions/fitness/*.js /home/tabor/github/Tree/land/extensions/fitness/modes/*.js)",
+      "Bash(grep -A 5 \"setUserMeta.*user.*energy\\\\|setUserMeta.*user.*billing\\\\|setUserMeta.*user.*html\\\\|setUserMeta.*user.*nav\\\\|setUserMeta.*user.*phase\" /home/tabor/github/Tree/land/extensions/*/core.js /home/tabor/github/Tree/land/extensions/*/routes.js)",
+      "Bash(grep -i \"archive\\\\|food/metric\\\\|archiveMetric\" /home/tabor/github/Tree/land/logs/*.log)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

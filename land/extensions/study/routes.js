@@ -18,6 +18,7 @@ import { handleMessage } from "./handler.js";
 let Node = NodeModel;
 export function setServices({ Node: N }) { if (N) Node = N; }
 
+
 const router = express.Router();
 
 /**
@@ -169,6 +170,69 @@ router.post("/root/:rootId/study/remove", authenticate, async (req, res) => {
 
     const result = await removeFromQueue(rootId, topic, req.userId);
     sendOk(res, { answer: `Removed "${result.name}".`, name: result.name });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * POST /root/:rootId/study/rename/:nodeId - Rename a topic/queue item
+ */
+router.post("/root/:rootId/study/rename/:nodeId", authenticate, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return sendError(res, 400, ERR.INVALID_INPUT, "name required");
+    // Block renaming URL-based queue items (name is the URL)
+    const node = await Node.findById(req.params.nodeId).select("metadata").lean();
+    if (node) {
+      const meta = node.metadata instanceof Map ? node.metadata.get("study") : node.metadata?.study;
+      if (meta?.url) return sendError(res, 400, ERR.INVALID_INPUT, "Cannot rename URL-based items");
+    }
+    await Node.findByIdAndUpdate(req.params.nodeId, { name: name.trim() });
+    sendOk(res, { renamed: true, name: name.trim() });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * POST /root/:rootId/study/activate/:nodeId - Activate a queue item by ID
+ */
+router.post("/root/:rootId/study/activate/:nodeId", authenticate, async (req, res) => {
+  try {
+    const node = await Node.findById(req.params.nodeId).select("name").lean();
+    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Not found");
+    const result = await switchToTopic(req.params.rootId, node.name, req.userId);
+    sendOk(res, { activated: true, name: result.name });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * POST /root/:rootId/study/dequeue/:nodeId - Move active topic back to queue by ID
+ */
+router.post("/root/:rootId/study/dequeue/:nodeId", authenticate, async (req, res) => {
+  try {
+    const node = await Node.findById(req.params.nodeId).select("name").lean();
+    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Not found");
+    const result = await deactivateTopic(req.params.rootId, node.name, req.userId);
+    sendOk(res, { dequeued: true, name: result.name });
+  } catch (err) {
+    log.error("Study", `Dequeue failed: ${err.message} (userId: ${req.userId}, nodeId: ${req.params.nodeId})`);
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * DELETE /root/:rootId/study/item/:nodeId - Delete a queue item or topic by ID
+ */
+router.delete("/root/:rootId/study/item/:nodeId", authenticate, async (req, res) => {
+  try {
+    const node = await Node.findById(req.params.nodeId).select("name").lean();
+    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Not found");
+    await removeFromQueue(req.params.rootId, node.name, req.userId);
+    sendOk(res, { deleted: true, name: node.name });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
   }

@@ -19,11 +19,18 @@ export function chatBarCss() {
   return `
     .chat-bar {
       position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
       z-index: 1000;
       transition: transform 0.3s ease;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.45);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(30px) saturate(150%);
+      -webkit-backdrop-filter: blur(30px) saturate(150%);
+      overflow: hidden;
     }
     .chat-bar.minimized { transform: translateY(calc(100% - 44px)); }
 
@@ -46,9 +53,8 @@ export function chatBarCss() {
       align-items: center;
       justify-content: space-between;
       padding: 10px 20px;
-      background: rgba(20, 20, 20, 0.95);
-      backdrop-filter: blur(20px);
-      border-top: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255, 255, 255, 0.06);
+      border-top: none;
       cursor: pointer;
       user-select: none;
     }
@@ -68,8 +74,7 @@ export function chatBarCss() {
       height: 300px;
       overflow-y: auto;
       padding: 16px 20px;
-      background: rgba(10, 10, 10, 0.97);
-      backdrop-filter: blur(20px);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.02) 100%);
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -86,13 +91,15 @@ export function chatBarCss() {
     }
     .chat-msg.user {
       align-self: flex-end;
-      background: rgba(102, 126, 234, 0.15);
-      color: rgba(255,255,255,0.85);
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.95);
     }
     .chat-msg.ai {
       align-self: flex-start;
-      background: rgba(255,255,255,0.06);
-      color: rgba(255,255,255,0.75);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.85);
     }
     .chat-msg.error {
       align-self: center;
@@ -102,42 +109,61 @@ export function chatBarCss() {
     }
     .chat-msg.loading {
       align-self: flex-start;
-      color: rgba(255,255,255,0.3);
+      color: rgba(255,255,255,0.4);
       font-style: italic;
+    }
+    .chat-msg.loading .thinking-text {
+      display: inline-block;
+      animation: thinkFade 0.6s ease-in-out;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    @keyframes thinkFade {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.01); }
+    }
+    body.thinking .glass-card,
+    body.thinking .category-card,
+    body.thinking .stat-pill {
+      animation: breathe 2.5s ease-in-out infinite;
     }
 
     .chat-bar-input-row {
       display: flex;
       gap: 8px;
       padding: 12px 20px 16px;
-      background: rgba(10, 10, 10, 0.97);
-      border-top: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255, 255, 255, 0.04);
+      border-top: 1px solid rgba(255,255,255,0.1);
     }
     .chat-bar-input {
       flex: 1;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 8px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 10px;
       padding: 10px 14px;
       color: #fff;
       font-size: 0.9rem;
       outline: none;
       font-family: inherit;
     }
-    .chat-bar-input:focus { border-color: rgba(102, 126, 234, 0.4); }
-    .chat-bar-input::placeholder { color: rgba(255,255,255,0.25); }
+    .chat-bar-input:focus { border-color: rgba(255,255,255,0.4); box-shadow: 0 0 0 2px rgba(255,255,255,0.08); }
+    .chat-bar-input::placeholder { color: rgba(255,255,255,0.35); }
 
     .chat-bar-send {
-      background: rgba(102, 126, 234, 0.2);
-      border: 1px solid rgba(102, 126, 234, 0.3);
-      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 10px;
       padding: 10px 18px;
-      color: rgba(255,255,255,0.8);
+      color: rgba(255,255,255,0.9);
       font-size: 0.85rem;
       cursor: pointer;
       white-space: nowrap;
+      transition: all 0.2s;
     }
-    .chat-bar-send:hover { background: rgba(102, 126, 234, 0.3); }
+    .chat-bar-send:hover { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.4); }
     .chat-bar-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .cmd-ref {
@@ -304,11 +330,47 @@ export function chatBarJs({ endpoint }) {
       appendMessage('user', message);
       saveChatHistory();
 
+      var _thinkingPhrases = [
+        'Reading the tree...',
+        'Thinking through the branches...',
+        'Finding the right path...',
+        'Connecting what you said to what it knows...',
+        'Building the response...',
+        'The tree is listening...',
+        'Processing against the structure...',
+        'Pulling context from the roots...',
+        'Almost there...',
+        'Following the signals...',
+        'Assembling the picture...',
+        'One moment. The tree is working.',
+        'Checking the branches...',
+        'Shaping the answer...',
+      ];
       var loadingEl = document.createElement('div');
       loadingEl.className = 'chat-msg loading';
-      loadingEl.innerHTML = '<span class="loading-dots">Thinking<span>.</span><span>.</span><span>.</span></span> <span style="font-size:0.8rem;opacity:0.5">may take a moment</span>';
+      var _thinkSpan = document.createElement('span');
+      _thinkSpan.className = 'thinking-text';
+      _thinkSpan.textContent = _thinkingPhrases[Math.floor(Math.random() * _thinkingPhrases.length)];
+      loadingEl.appendChild(_thinkSpan);
       document.getElementById('chatMessages').appendChild(loadingEl);
       document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+      document.body.classList.add('thinking');
+
+      var _thinkUsed = [_thinkingPhrases.indexOf(_thinkSpan.textContent)];
+      var _thinkTimer = setInterval(function() {
+        var available = _thinkingPhrases.filter(function(_, i) { return _thinkUsed.indexOf(i) === -1; });
+        if (available.length === 0) { _thinkUsed = []; available = _thinkingPhrases; }
+        var pick = Math.floor(Math.random() * available.length);
+        var _thinkIdx = _thinkingPhrases.indexOf(available[pick]);
+        _thinkUsed.push(_thinkIdx);
+        _thinkSpan.style.opacity = '0';
+        _thinkSpan.style.transform = 'translateY(4px)';
+        setTimeout(function() {
+          _thinkSpan.textContent = _thinkingPhrases[_thinkIdx];
+          _thinkSpan.style.opacity = '1';
+          _thinkSpan.style.transform = 'translateY(0)';
+        }, 300);
+      }, 3000);
 
       _activeAbort = new AbortController();
 
@@ -322,7 +384,7 @@ export function chatBarJs({ endpoint }) {
         });
 
         var data = await res.json();
-        loadingEl.remove();
+        clearInterval(_thinkTimer); document.body.classList.remove('thinking'); loadingEl.remove();
 
         if (data.status === 'ok' && data.data) {
           var answer = data.data.answer || data.data.synthesis || JSON.stringify(data.data);
@@ -336,7 +398,7 @@ export function chatBarJs({ endpoint }) {
           appendMessage('ai', JSON.stringify(data));
         }
       } catch (err) {
-        loadingEl.remove();
+        clearInterval(_thinkTimer); document.body.classList.remove('thinking'); loadingEl.remove();
         if (err.name === 'AbortError') {
           appendMessage('error', 'Cancelled.');
         } else {

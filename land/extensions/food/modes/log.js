@@ -5,7 +5,7 @@
 
 import { findFoodNodes } from "../core.js";
 
-const STRUCTURAL_ROLES = ["log", "daily", "meals", "profile", "history"];
+import { STRUCTURAL_ROLES } from "../core.js";
 
 export default {
   name: "tree:food-log",

@@ -860,6 +860,7 @@ text-decoration: none;
         <li><a href="/api/v1/user/${userId}/deleted${queryString}">Deleted</a></li>
         <li><a href="/api/v1/user/${userId}/api-keys${queryString}">API Keys</a></li>
         <li><a href="/api/v1/user/${userId}/shareToken${queryString}">Share Token</a></li>
+        <li><a href="/api/v1/user/${userId}/inverse${queryString}">Inverse Profile</a></li>
       </ul>
     </div>
 

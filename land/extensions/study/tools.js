@@ -86,15 +86,16 @@ export default function getTools() {
         "0-30: introduced. 30-60: basics understood. 60-80: solid. 80+: can teach it.",
       schema: {
         subtopicId: z.string().describe("Subtopic node ID."),
-        score: z.number().min(0).max(100).describe("New mastery score (0-100)."),
+        score: z.number().min(0).max(100).optional().describe("Mastery score (0-100)."),
+        masteryScore: z.number().min(0).max(100).optional().describe("Alias for score."),
         userId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      handler: async ({ subtopicId, score, userId }) => {
+      handler: async ({ subtopicId, score, masteryScore, userId }) => {
         try {
-          const result = await updateMastery(subtopicId, score, userId);
+          const result = await updateMastery(subtopicId, score ?? masteryScore ?? 0, userId);
           const status = result.complete ? "Complete!" : `${result.mastery}%`;
           return { content: [{ type: "text", text: `Mastery updated: ${status}` }] };
         } catch (err) {

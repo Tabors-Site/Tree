@@ -28,7 +28,11 @@ export function configure({ Node, Note, runChat, metadata }) {
 const ROLES = {
   LOG: "log", PROTEIN: "protein", CARBS: "carbs", FATS: "fats",
   DAILY: "daily", MEALS: "meals", PROFILE: "profile", HISTORY: "history",
+  ARCHIVE: "archive",
 };
+
+// Roles that are structural (not metrics). Used everywhere to distinguish trackable nodes.
+export const STRUCTURAL_ROLES = ["log", "daily", "meals", "profile", "history", "mealSlots", "_unadopted"];
 
 // ── Tree scaffold ──
 
@@ -173,9 +177,8 @@ export async function findFoodNodes(foodRootId) {
     if (meta?.role) {
       result[meta.role] = { id: String(child._id), name: child.name };
     } else {
-      // Unadopted node: no food role yet. Track it so the AI can adopt it.
-      if (!result._unadopted) result._unadopted = [];
-      result._unadopted.push({ id: String(child._id), name: child.name });
+      // Skip. Nodes without food.role are not food's concern.
+      // The user adds metrics through the dashboard or by asking the AI.
     }
   }
   // Find meal slot children under Meals node
@@ -344,7 +347,7 @@ export async function deliverMacros(logNodeId, foodNodes, parsed) {
   // Always do direct increment as well (channels may not have routes set up yet)
   // Route to ALL metric nodes dynamically (protein, carbs, fats, sugar, fiber, etc.)
   if (foodNodes) {
-    const STRUCTURAL = ["log", "daily", "meals", "profile", "history", "mealSlots"];
+    const STRUCTURAL = STRUCTURAL_ROLES;
     for (const [role, info] of Object.entries(foodNodes)) {
       if (STRUCTURAL.includes(role) || !info?.id) continue;
       const amount = totals[role] || 0;
@@ -368,7 +371,7 @@ export async function handleMacroCascade(node, payload) {
   if (!meta?.role) return;
 
   const role = meta.role;
-  const STRUCTURAL = ["log", "daily", "meals", "profile", "history"];
+  const STRUCTURAL = STRUCTURAL_ROLES;
   if (STRUCTURAL.includes(role)) return;
 
   // Match cascade payload key to node role (protein->protein, sugar->sugar, etc.)
@@ -411,8 +414,7 @@ export async function checkDailyReset(rootId) {
   if (!foodNodes) return;
 
   // Discover all metric roles (anything that isn't structural)
-  const STRUCTURAL = ["log", "daily", "meals", "profile", "history", "mealSlots"];
-  const metricRoles = Object.keys(foodNodes).filter(r => !STRUCTURAL.includes(r) && foodNodes[r]?.id);
+  const metricRoles = Object.keys(foodNodes).filter(r => !STRUCTURAL_ROLES.includes(r) && foodNodes[r]?.id);
   if (metricRoles.length === 0) return;
 
   // Read current totals and goals for all metric nodes
@@ -518,7 +520,7 @@ export async function getDailyPicture(foodRootId) {
   if (!foodNodes) return null;
 
   const CORE_MACROS = ["protein", "carbs", "fats"];
-  const STRUCTURAL_ROLES = ["log", "daily", "meals", "profile", "history"];
+  // Uses module-level STRUCTURAL_ROLES
   const picture = {};
 
   // Discover all metric nodes (core macros + any user-created ones like sugar, fiber)
@@ -679,9 +681,8 @@ export async function saveProfile(foodRootId, profile, foodNodes) {
 
   // Set goals on all metric nodes that have a matching goal in the profile
   // Supports both legacy keys (proteinGoal) and dynamic keys (sugarGoal, fiberGoal, etc.)
-  const STRUCTURAL = ["log", "daily", "meals", "profile", "history", "mealSlots", "_unadopted"];
   for (const [role, info] of Object.entries(foodNodes)) {
-    if (STRUCTURAL.includes(role) || !info?.id) continue;
+    if (STRUCTURAL_ROLES.includes(role) || !info?.id) continue;
     // Check for role-specific goal: proteinGoal, sugarGoal, etc.
     const goalKey = `${role}Goal`;
     const goal = profile[goalKey];

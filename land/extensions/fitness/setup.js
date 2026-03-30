@@ -150,7 +150,7 @@ export async function addExerciseNode({
 
   // Create Log -> exercise channel
   if (rootId) {
-    await createLogChannel(rootId, exNode._id, name.toLowerCase().replace(/\s+/g, "-") + "-log", userId);
+    await createLogChannel(rootId, exNode._id, name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-log", userId);
   }
 
   return { id: String(exNode._id), name };

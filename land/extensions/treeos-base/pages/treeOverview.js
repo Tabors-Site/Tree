@@ -886,7 +886,7 @@ transition:
     }
 
     select option {
-      background: #667eea;
+      background: #1a1145;
       color: white;
     }
 

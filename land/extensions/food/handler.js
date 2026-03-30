@@ -59,9 +59,9 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
     // Check if AI already set goals on ANY metric node (not just protein)
     const foodNodes = await findFoodNodes(rootId);
     let hasGoals = false;
-    const STRUCTURAL = ["log", "daily", "meals", "profile", "history", "mealSlots", "_unadopted"];
+    const { STRUCTURAL_ROLES } = await import("./core.js");
     for (const [role, info] of Object.entries(foodNodes)) {
-      if (STRUCTURAL.includes(role) || !info?.id) continue;
+      if (STRUCTURAL_ROLES.includes(role) || !info?.id) continue;
       const mNode = await NodeModel.findById(info.id).select("metadata").lean();
       const goals = mNode?.metadata instanceof Map ? mNode.metadata.get("goals") : mNode?.metadata?.goals;
       if (goals?.today > 0) { hasGoals = true; break; }

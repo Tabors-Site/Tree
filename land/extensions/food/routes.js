@@ -147,11 +147,17 @@ router.get("/root/:rootId/food/profile", authenticate, async (req, res) => {
 router.delete("/root/:rootId/food/entry/:noteId", htmlAuth, async (req, res) => {
   try {
     const { rootId, noteId } = req.params;
+    const userId = req.userId;
     const Note = (await import("../../seed/models/note.js")).default;
     const note = await Note.findById(noteId).lean();
     if (!note) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Note not found");
 
-    // Parse the note to find totals and any linked log note
+    // Already soft-deleted. Don't decrement again.
+    if (note.nodeId === "DELETED" || note.userId === "DELETED") {
+      return sendOk(res, { deleted: true, alreadyDeleted: true });
+    }
+
+    // Parse totals from this note or its linked log note
     let totals = null;
     let logNoteId = null;
     try {
@@ -160,24 +166,22 @@ router.delete("/root/:rootId/food/entry/:noteId", htmlAuth, async (req, res) => 
       logNoteId = data.logNoteId || null;
     } catch {}
 
-    // If this is a slot note pointing to a log note, get totals from the log note
     if (!totals && logNoteId) {
       try {
         const logNote = await Note.findById(logNoteId).lean();
         if (logNote) {
-          const logData = JSON.parse(logNote.content);
-          totals = logData.totals || null;
+          try { totals = JSON.parse(logNote.content).totals || null; } catch {}
         }
       } catch {}
     }
 
-    // Decrement metric values
+    // Decrement metric values before deleting
     if (totals) {
       const foodNodes = await findFoodNodes(rootId);
-      const STRUCTURAL = ["log", "daily", "meals", "profile", "history", "mealSlots", "_unadopted"];
+      const { STRUCTURAL_ROLES } = await import("./core.js");
       const { incExtMeta } = await import("../../seed/tree/extensionMetadata.js");
       for (const [role, info] of Object.entries(foodNodes)) {
-        if (STRUCTURAL.includes(role) || !info?.id) continue;
+        if (STRUCTURAL_ROLES.includes(role) || !info?.id) continue;
         const amount = totals[role] || 0;
         if (amount > 0) {
           await incExtMeta(info.id, "values", "today", -amount);
@@ -185,23 +189,27 @@ router.delete("/root/:rootId/food/entry/:noteId", htmlAuth, async (req, res) => 
       }
     }
 
-    // Delete this note
-    await Note.findByIdAndDelete(noteId);
+    // Use kernel delete (soft-delete, fires afterNote hook)
+    const { deleteNoteAndFile } = await import("../../seed/tree/notes.js");
+    await deleteNoteAndFile({ noteId, userId });
 
-    // If we deleted a log note, also delete its linked slot note
-    // If we deleted a slot note, also delete its linked log note
+    // Delete the linked note too (log <-> slot)
     if (logNoteId) {
-      await Note.findByIdAndDelete(logNoteId).catch(() => {});
+      try { await deleteNoteAndFile({ noteId: logNoteId, userId }); } catch {}
     } else {
-      // This was a log note. Find slot notes that reference it (scoped to this tree's meal slots)
+      // This was a log note. Find and delete its linked slot note.
       const foodNodes = await findFoodNodes(rootId);
       if (foodNodes.mealSlots) {
         const slotNodeIds = Object.values(foodNodes.mealSlots).map(s => s.id);
-        const slotNotes = await Note.find({ nodeId: { $in: slotNodeIds } }).select("_id content").lean();
+        const slotNotes = await Note.find({
+          nodeId: { $in: slotNodeIds },
+        }).select("_id content").lean();
         for (const sn of slotNotes) {
           try {
             const d = JSON.parse(sn.content);
-            if (d.logNoteId === noteId) await Note.findByIdAndDelete(sn._id);
+            if (d.logNoteId === noteId) {
+              await deleteNoteAndFile({ noteId: String(sn._id), userId });
+            }
           } catch {}
         }
       }
@@ -222,8 +230,18 @@ router.post("/root/:rootId/food/metric", htmlAuth, async (req, res) => {
   try {
     const { name, goal } = req.body;
     if (!name) return sendError(res, 400, ERR.INVALID_INPUT, "name required");
-    const { createNode } = await import("../../seed/tree/treeManagement.js");
+
+    // Check if a child with this name already exists (unadopted or cleared)
     const { adoptNode } = await import("./core.js");
+    const existing = await Node.findOne({ parent: req.params.rootId, name: name.trim() }).select("_id").lean();
+    if (existing) {
+      const role = name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      await adoptNode(String(existing._id), role, goal ? Number(goal) : null);
+      sendOk(res, { id: String(existing._id), role });
+      return;
+    }
+
+    const { createNode } = await import("../../seed/tree/treeManagement.js");
     const node = await createNode({ name: name.trim(), parentId: req.params.rootId, userId: req.userId });
     const role = name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
     await adoptNode(String(node._id), role, goal ? Number(goal) : null);
@@ -235,7 +253,6 @@ router.post("/root/:rootId/food/metric", htmlAuth, async (req, res) => {
 
 router.delete("/root/:rootId/food/metric/:nodeId", htmlAuth, async (req, res) => {
   try {
-    // Instead of deleting the node (which the guard would block), unadopt it by clearing metadata
     const { unsetExtMeta } = await import("../../seed/tree/extensionMetadata.js");
     await unsetExtMeta(req.params.nodeId, "food");
     await unsetExtMeta(req.params.nodeId, "values");

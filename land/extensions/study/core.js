@@ -26,6 +26,16 @@ export function configure({ Node, Note, runChat, metadata }) {
 const MAX_HISTORY = 90;
 const MASTERY_COMPLETE = 80;
 
+// Fuzzy name match: exact, then includes, then starts-with
+function fuzzyFind(items, name) {
+  if (!items || !name) return null;
+  const lower = name.toLowerCase();
+  return items.find(t => t.name.toLowerCase() === lower)
+    || items.find(t => t.name.toLowerCase().includes(lower))
+    || items.find(t => lower.includes(t.name.toLowerCase()))
+    || null;
+}
+
 const ROLES = {
   LOG: "log",
   QUEUE: "queue",
@@ -261,7 +271,7 @@ export async function deactivateTopic(rootId, topicName, userId) {
   if (!nodes?.active || !nodes?.queue) throw new Error("Study tree not scaffolded");
 
   const topics = await _Node.find({ parent: nodes.active.id }).select("_id name").lean();
-  const topic = topics.find(t => t.name.toLowerCase() === topicName.toLowerCase());
+  const topic = fuzzyFind(topics, topicName);
   if (!topic) throw new Error(`No active topic named "${topicName}"`);
 
   // Move back to queue
@@ -287,11 +297,11 @@ export async function removeFromQueue(rootId, topicName, userId) {
   let found = null;
   if (nodes.queue) {
     const queueItems = await _Node.find({ parent: nodes.queue.id }).select("_id name").lean();
-    found = queueItems.find(t => t.name.toLowerCase() === topicName.toLowerCase());
+    found = fuzzyFind(queueItems, topicName);
   }
   if (!found && nodes.active) {
     const activeItems = await _Node.find({ parent: nodes.active.id }).select("_id name").lean();
-    found = activeItems.find(t => t.name.toLowerCase() === topicName.toLowerCase());
+    found = fuzzyFind(activeItems, topicName);
   }
   if (!found) throw new Error(`No topic named "${topicName}" in queue or active`);
 
@@ -306,9 +316,9 @@ export async function switchToTopic(rootId, topicName, userId) {
   const nodes = await findStudyNodes(rootId);
   if (!nodes?.queue || !nodes?.active) throw new Error("Study tree not scaffolded");
 
-  // Find in queue
+  // Find in queue (exact, then fuzzy contains, then starts-with)
   const queueItems = await _Node.find({ parent: nodes.queue.id }).select("_id name").lean();
-  let item = queueItems.find(t => t.name.toLowerCase() === topicName.toLowerCase());
+  let item = fuzzyFind(queueItems, topicName);
 
   // Try by index (1-based)
   if (!item && /^\d+$/.test(topicName.trim())) {
@@ -319,7 +329,7 @@ export async function switchToTopic(rootId, topicName, userId) {
   if (!item) {
     // Check if already active
     const activeItems = await _Node.find({ parent: nodes.active.id }).select("_id name").lean();
-    const already = activeItems.find(t => t.name.toLowerCase() === topicName.toLowerCase());
+    const already = fuzzyFind(activeItems, topicName);
     if (already) return { name: already.name, alreadyActive: true };
     throw new Error(`No topic named "${topicName}" in queue`);
   }
@@ -472,6 +482,41 @@ export async function getStudyProgress(rootId) {
     completed: { allTime: completedCount },
     activeTopics: active.map(t => ({ name: t.name, completion: t.completion })),
   };
+}
+
+// ── Completed topics ──
+
+export async function getCompletedTopics(rootId) {
+  const nodes = await findStudyNodes(rootId);
+  if (!nodes?.completed) return [];
+
+  const topics = await _Node.find({ parent: nodes.completed.id }).select("_id name metadata dateCreated").lean();
+  return topics.map(t => {
+    const meta = t.metadata instanceof Map ? t.metadata.get("study") : t.metadata?.study;
+    return {
+      id: String(t._id),
+      name: t.name,
+      completedAt: meta?.completedAt || t.dateCreated,
+    };
+  }).sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""));
+}
+
+// ── Study history (from Log node notes) ──
+
+export async function getStudyHistory(rootId, limit = 20) {
+  const nodes = await findStudyNodes(rootId);
+  if (!nodes?.log || !_Note) return [];
+
+  const notes = await _Note.find({ nodeId: nodes.log.id })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .select("content createdAt")
+    .lean();
+
+  return notes.map(n => ({
+    text: typeof n.content === "string" ? n.content.slice(0, 200) : "",
+    date: n.createdAt,
+  }));
 }
 
 // ── Parse study input ──

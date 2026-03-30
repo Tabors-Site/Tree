@@ -8,9 +8,7 @@
  */
 
 import log from "../../seed/log.js";
-import logMode from "./modes/log.js";
 import sessionMode from "./modes/session.js";
-import reviewMode from "./modes/review.js";
 import planMode from "./modes/plan.js";
 import getTools from "./tools.js";
 import {
@@ -49,16 +47,12 @@ export async function init(core) {
   });
   setSetupDeps({ metadata: core.metadata, Node: core.models.Node });
 
-  // ── Register modes ──
-  core.modes.registerMode("tree:study-log", logMode, "study");
+  // ── Register modes: two modes only ──
   core.modes.registerMode("tree:study-coach", sessionMode, "study");
-  core.modes.registerMode("tree:study-review", reviewMode, "study");
   core.modes.registerMode("tree:study-plan", planMode, "study");
 
   if (core.llm?.registerModeAssignment) {
-    core.llm.registerModeAssignment("tree:study-log", "studyLog");
     core.llm.registerModeAssignment("tree:study-coach", "studySession");
-    core.llm.registerModeAssignment("tree:study-review", "studyReview");
     core.llm.registerModeAssignment("tree:study-plan", "studyPlan");
   }
 
@@ -73,7 +67,7 @@ export async function init(core) {
           ? root.metadata.get("modes")
           : root.metadata?.modes;
         if (!modes?.respond) {
-          await core.modes.setNodeMode(root._id, "respond", "tree:study-log");
+          await core.modes.setNodeMode(root._id, "respond", "tree:study-coach");
           log.verbose("Study", `Self-healed mode on ${String(root._id).slice(0, 8)}...`);
         }
       }
@@ -182,10 +176,7 @@ export async function init(core) {
         "study-add-to-queue", "study-complete-setup", "study-save-profile",
       ]},
       { modeKey: "tree:study-coach", toolNames: [
-        "study-update-mastery", "study-detect-gap", "study-add-subtopic",
-      ]},
-      { modeKey: "tree:study-log", toolNames: [
-        "study-add-to-queue",
+        "study-update-mastery", "study-detect-gap", "study-add-subtopic", "study-add-to-queue",
       ]},
     ],
     exports: {

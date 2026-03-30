@@ -416,12 +416,16 @@ export async function updateParentRelationship(
   // The three core operations ($pull, $set parent, $addToSet) must be atomic.
   // Use a MongoDB transaction if available (replica set). Falls back to
   // sequential ops on standalone MongoDB with a warning.
+  // Three core operations. Use transaction if replica set available, otherwise sequential.
+  // Probe with a lightweight operation first to detect standalone MongoDB.
   let session = null;
   try {
     session = await mongoose.startSession();
     session.startTransaction();
+    // Probe: if this fails, we're on standalone MongoDB
+    await Node.findOne({}).limit(1).session(session).lean();
   } catch {
-    // Standalone MongoDB or transactions not available
+    if (session) { try { await session.abortTransaction(); } catch {} try { session.endSession(); } catch {} }
     session = null;
     log.verbose("Tree", "MongoDB transactions not available. Node move runs without atomicity guarantees.");
   }

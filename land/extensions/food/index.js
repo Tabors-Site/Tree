@@ -16,6 +16,7 @@ import {
   scaffold,
   isInitialized,
   findFoodNodes,
+  STRUCTURAL_ROLES,
   handleMacroCascade,
   checkDailyReset,
   getDailyPicture,
@@ -87,8 +88,7 @@ export async function init(core) {
       ? node.metadata.get("food")
       : node.metadata?.food;
     if (!meta?.role) return;
-    const STRUCTURAL = ["log", "daily", "meals", "profile", "history"];
-    if (STRUCTURAL.includes(meta.role)) return;
+    if (STRUCTURAL_ROLES.includes(meta.role)) return;
 
     // This is a food metric node receiving a cascade signal
     const payload = hookData.writeContext || hookData.payload || {};
@@ -98,6 +98,36 @@ export async function init(core) {
     hookData._resultStatus = "SUCCEEDED";
     hookData._resultExtName = "food";
     hookData._resultPayload = { role: meta.role, handled: true };
+  }, "food");
+
+  // ── afterNote: decrement values when a food log note is deleted externally ──
+  core.hooks.register("afterNote", async ({ nodeId, action, note }) => {
+    if (action !== "delete" || !nodeId) return;
+    // Check if this note belongs to a food Log node
+    try {
+      const node = await core.models.Node.findById(nodeId).select("metadata parent").lean();
+      if (!node) return;
+      const foodMeta = node.metadata instanceof Map ? node.metadata.get("food") : node.metadata?.food;
+      if (foodMeta?.role !== "log") return;
+      // Try to parse totals from the deleted note
+      let totals = null;
+      try {
+        const data = JSON.parse(note?.content || "");
+        totals = data.totals || null;
+      } catch {}
+      if (!totals) return;
+      // Decrement metric values
+      const rootId = node.parent ? String(node.parent) : null;
+      if (!rootId) return;
+      const foodNodes = await findFoodNodes(rootId);
+      for (const [role, info] of Object.entries(foodNodes)) {
+        if (STRUCTURAL_ROLES.includes(role) || !info?.id) continue;
+        const amount = totals[role] || 0;
+        if (amount > 0) {
+          await core.metadata.incExtMeta(info.id, "values", "today", -amount);
+        }
+      }
+    } catch {}
   }, "food");
 
   // ── breath:exhale: daily reset ──

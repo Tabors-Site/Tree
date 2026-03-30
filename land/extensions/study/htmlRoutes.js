@@ -15,6 +15,8 @@ import {
   getGaps,
   getStudyProgress,
   getProfile,
+  getCompletedTopics,
+  getStudyHistory,
 } from "./core.js";
 import { renderStudyDashboard } from "./pages/dashboard.js";
 
@@ -28,14 +30,16 @@ router.get("/root/:rootId/study", urlAuth, htmlOnly, async (req, res) => {
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Study tree not found");
 
     const meta = root.metadata instanceof Map ? root.metadata.get("study") : root.metadata?.study;
-    let queue = [], activeTopics = [], gaps = [], progress = null, profile = {};
+    let queue = [], activeTopics = [], gaps = [], progress = null, profile = {}, completed = [], history = [];
     if (meta?.initialized) {
-      [queue, activeTopics, gaps, progress, profile] = await Promise.all([
+      [queue, activeTopics, gaps, progress, profile, completed, history] = await Promise.all([
         getQueue(rootId),
         getActiveTopics(rootId),
         getGaps(rootId),
         getStudyProgress(rootId),
         getProfile(rootId),
+        getCompletedTopics(rootId),
+        getStudyHistory(rootId),
       ]);
     }
 
@@ -47,6 +51,8 @@ router.get("/root/:rootId/study", urlAuth, htmlOnly, async (req, res) => {
       gaps,
       progress,
       profile,
+      completed,
+      history,
       token: req.query.token || null,
       userId: req.userId,
       qs: req.query,

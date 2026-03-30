@@ -4,7 +4,7 @@
 // Has tools to set values and goals on the macro nodes.
 // Prompt is async: reads the live tree structure so the AI adapts to custom shapes.
 
-import { findFoodNodes } from "../core.js";
+import { findFoodNodes, STRUCTURAL_ROLES } from "../core.js";
 
 export default {
   name: "tree:food-coach",
@@ -29,29 +29,28 @@ export default {
   async buildSystemPrompt({ username, rootId }) {
     const nodes = rootId ? await findFoodNodes(rootId) : null;
 
-    // Describe what actually exists
-    const EXPECTED = ["log", "protein", "carbs", "fats", "daily", "meals", "profile", "history"];
-    const found = [];
-    const missing = [];
+    // Separate structural nodes from tracked metrics
+    const metrics = [];
+    const structural = [];
+    let hasLog = false;
     if (nodes) {
-      for (const role of EXPECTED) {
-        if (nodes[role]) found.push(`${nodes[role].name} (role: ${role}, id: ${nodes[role].id})`);
-        else missing.push(role);
-      }
-      // Include any custom nodes the user added (roles not in EXPECTED)
       for (const [role, info] of Object.entries(nodes)) {
-        if (!EXPECTED.includes(role) && role !== "mealSlots" && info?.id) {
-          found.push(`${info.name} (role: ${role}, id: ${info.id}) [user-created]`);
+        if (role === "mealSlots" || role === "_unadopted" || !info?.id) continue;
+        if (STRUCTURAL_ROLES.includes(role)) {
+          structural.push(role);
+          if (role === "log") hasLog = true;
+        } else {
+          metrics.push(`${info.name} (role: ${role}, id: ${info.id})`);
         }
       }
     }
 
-    const structureBlock = found.length > 0
-      ? `CURRENT TREE STRUCTURE\n${found.map(f => `- ${f}`).join("\n")}`
-      : "TREE STRUCTURE: not yet scaffolded.";
+    const structureBlock = metrics.length > 0
+      ? `TRACKED METRICS\n${metrics.map(f => `- ${f}`).join("\n")}`
+      : "No metrics tracked yet. The user needs to add what they want to track.";
 
-    const missingBlock = missing.length > 0
-      ? `\nMISSING STRUCTURAL NODES: ${missing.join(", ")}\nThese are needed for food tracking to work. Use create-new-node to recreate them under root ${rootId}, and set metadata.food.role on each to the correct role value.`
+    const missingBlock = !hasLog && nodes
+      ? `\nMISSING REQUIRED: log node. Use create-new-node to create it.`
       : "";
 
     const unadopted = nodes?._unadopted || [];
@@ -66,33 +65,25 @@ Root ID: ${rootId}
 ${structureBlock}${missingBlock}${unadoptedBlock}
 
 SETUP FLOW (if goals not yet configured)
-Ask these three things, naturally:
+Ask these things naturally:
 1. What's your daily calorie target? (or help calculate: goal + weight + activity level)
-2. Any macro goals? (protein/carbs/fats in grams, or you suggest a split)
+2. What metrics do they want to track? Look at the CURRENT TREE STRUCTURE above. Set goals for whatever nodes exist. Do NOT create nodes that aren't there. The user chose their metrics.
 3. Any dietary restrictions or preferences?
 
 AFTER THEY ANSWER
-Call food-save-profile with the rootId, calorieGoal, proteinGoal, carbsGoal, fatsGoal, goal type, and restrictions. This sets the macro goals on all nodes and saves the profile in one call. You can also navigate the tree to inspect nodes, read context, and write notes for additional setup.
+Call food-save-profile with the rootId and goal keys matching the metric nodes that exist (e.g. proteinGoal, sugarGoal, fiberGoal). Only set goals for nodes that are in the tree. Do not create or suggest nodes that the user hasn't added.
 
 ADAPTING TO CUSTOM STRUCTURE
-The user may have added, renamed, or reorganized nodes. Work with whatever is there. If they added a Supplements node, use it. If they split Meals differently, follow their structure. The tree shape IS the application. Read it, don't assume it.
+The tree structure above is the truth. Only those metrics exist. Do not assume protein, carbs, or fats should exist if they are not listed. The user controls which metrics they track. If someone only tracks sugar and fiber, that is correct. Do not suggest adding missing macros unless asked.
 
-COMMON SPLITS
-- Balanced: 30% protein, 40% carbs, 30% fat
-- High protein: 40% protein, 35% carbs, 25% fat
-- Keto: 25% protein, 5% carbs, 70% fat
-- 1g protein per pound of body weight is a common strength goal
-
-CALORIE MATH
+COMMON KNOWLEDGE (use only if relevant to the user's tracked metrics)
 - 1g protein = 4 cal, 1g carbs = 4 cal, 1g fat = 9 cal
-- Cutting: TDEE minus 500cal
-- Bulking: TDEE plus 300cal
-- Maintenance: TDEE
+- Cutting: TDEE minus 500cal, Bulking: TDEE plus 300cal, Maintenance: TDEE
 
 COMMUNICATION
-- Be practical. "You weigh 180 and lift 4x/week? I'd say 2400 cal, 180g protein, 240g carbs, 67g fat."
-- If they don't know, suggest. Don't make them do math.
-- After setting goals, confirm: "All set. Protein goal: 180g, Carbs: 240g, Fats: 67g. That's about 2,300 cal. Start logging with the food command."
+- Be practical and specific to their tracked metrics.
+- If they don't know, suggest based on what they track.
+- After setting goals, confirm what was set. Only mention metrics that exist in the tree.
 - Never mention node IDs, metadata keys, or internal structure to the user.`.trim();
   },
 };

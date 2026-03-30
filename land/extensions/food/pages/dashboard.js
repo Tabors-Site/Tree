@@ -81,8 +81,9 @@ export function renderFoodDashboard({ rootId, rootName, picture, token, userId }
     });
   }
 
-  // Recent log (always shown, even when slots exist)
-  if (recentMeals.length > 0) {
+  // Recent log: only show if no slot cards (avoid duplicate entries with double-delete risk)
+  const hasSlotCards = cards.length > 0;
+  if (!hasSlotCards && recentMeals.length > 0) {
     cards.push({
       title: "Recent Log",
       items: recentMeals.slice(0, 10).map(m => ({
@@ -109,7 +110,7 @@ export function renderFoodDashboard({ rootId, rootName, picture, token, userId }
     empty: "History builds as you log meals each day.",
   });
 
-  const addMetricHtml = `
+  const addMetricHtml = bars.length === 0 ? "" : `
     <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
       <input id="newMetricName" type="text" placeholder="Add metric (sugar, fiber, sodium...)"
         style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:#fff;font-size:0.85rem;outline:none" />
