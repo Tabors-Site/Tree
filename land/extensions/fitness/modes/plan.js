@@ -26,6 +26,7 @@ export default {
     "fitness-remove-exercise",
     "fitness-complete-setup",
     "fitness-save-profile",
+    "edit-node-schedule",
   ],
 
   async buildSystemPrompt({ username, rootId }) {

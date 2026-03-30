@@ -564,7 +564,8 @@
       "Bash(grep -l \"mcp\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
       "Bash(echo \"FAILED: $f\")",
       "Bash(grep -n \"toolNames\" /home/tabor/github/Tree/land/extensions/study/modes/*.js)",
-      "Bash(grep -n \"ROLES.RESOURCES\\\\|role: ROLES.RESOURCES\" /home/tabor/github/Tree/land/extensions/study/*.js)"
+      "Bash(grep -n \"ROLES.RESOURCES\\\\|role: ROLES.RESOURCES\" /home/tabor/github/Tree/land/extensions/study/*.js)",
+      "Bash(grep -i \"Stream.*Loaded\\\\|stream.*loaded\\\\|DynamicRename\\\\|dynamic.rename\" /tmp/*.log)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

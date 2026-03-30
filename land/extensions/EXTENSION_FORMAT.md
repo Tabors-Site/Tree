@@ -829,6 +829,34 @@ Convention:
 - Reading metadata from core code (e.g. treeData) should use:
   `(node.metadata instanceof Map ? node.metadata.get("name") : node.metadata?.name)`
 
+### Scaffolding Nodes (the `role` convention)
+
+Extensions that create a tree structure on install (food, fitness, recovery, kb, etc.) MUST set a `role` field in their metadata namespace on every scaffolded node:
+
+```js
+await core.metadata.setExtMeta(logNode, "food", { role: "log" });
+await core.metadata.setExtMeta(mealsNode, "food", { role: "meals" });
+await core.metadata.setExtMeta(profileNode, "food", { role: "profile" });
+```
+
+The `role` field is the structural marker. It means "this node is load-bearing for my extension." TreeOS base registers a generic `beforeNodeDelete` hook that checks every node being deleted. If any extension namespace in the node's metadata contains a `role` field, the delete is cancelled with a message naming the extension and role.
+
+The handler does not know what food is. It does not know what fitness is. It sees `metadata.food.role = "log"` and knows that node is structural to something. Any extension that scaffolds nodes and sets `role` on them gets delete protection automatically.
+
+When looking up scaffolded nodes at runtime, query by role, not by name or stored ID:
+
+```js
+const children = await Node.find({ parent: rootId }).select("_id name metadata").lean();
+const nodes = {};
+for (const child of children) {
+  const meta = child.metadata?.get?.("food") || child.metadata?.food;
+  if (meta?.role) nodes[meta.role] = { id: String(child._id), name: child.name };
+}
+// nodes.log, nodes.meals, nodes.profile — found by role, not name
+```
+
+This makes scaffolded trees resilient to renames (users can rename nodes freely) while protecting against accidental deletion. Users who truly want to delete a structural node can use `--force` to bypass the hook.
+
 ### Reaching other extensions
 
 Use `getExtension()` to access another extension's exports. Never import extension files directly:

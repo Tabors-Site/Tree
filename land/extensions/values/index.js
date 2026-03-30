@@ -29,10 +29,10 @@ export async function init(core) {
     const { getExtension } = await import("../loader.js");
     const base = getExtension("treeos-base");
     if (base?.exports?.registerToolNavigations) {
-      const vUrl = ({ args, withToken: t }) => t(`/api/v1/node/${args.nodeId}/${args.prestige || 0}?html`);
+      const vUrl = ({ args, withToken: t }) => t(`/api/v1/node/${args.nodeId}?html`);
       base.exports.registerToolNavigations({
-        "edit-node-version-value": vUrl,
-        "edit-node-version-goal": vUrl,
+        "edit-node-value": vUrl,
+        "edit-node-goal": vUrl,
       });
     }
   } catch {}
@@ -41,9 +41,9 @@ export async function init(core) {
     router,
     tools: getTools(),
     modeTools: [
-      { modeKey: "tree:edit", toolNames: ["edit-node-version-value", "edit-node-version-goal"] },
-      { modeKey: "tree:be", toolNames: ["edit-node-version-value"] },
-      { modeKey: "tree:librarian", toolNames: ["edit-node-version-value"] },
+      { modeKey: "tree:edit", toolNames: ["edit-node-value", "edit-node-goal"] },
+      { modeKey: "tree:be", toolNames: ["edit-node-value"] },
+      { modeKey: "tree:librarian", toolNames: ["edit-node-value"] },
     ],
     exports: { setValueForNode, setGoalForNode, getGlobalValuesTreeAndFlat, getNodeValues, setNodeValues },
   };

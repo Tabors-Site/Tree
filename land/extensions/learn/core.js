@@ -288,12 +288,12 @@ export async function processNode(nodeId, rootId, userId, username, targetSize) 
         wasAi: true,
       });
 
-      if (result?.node?._id) {
+      if (result?._id) {
         created++;
 
         // If child is still too large, add to queue
         if (section.content.length > targetSize) {
-          addedToQueue.push(result.node._id.toString());
+          addedToQueue.push(result._id.toString());
         }
       }
     } catch (err) {

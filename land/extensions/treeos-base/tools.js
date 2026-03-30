@@ -208,9 +208,6 @@ const TOOL_DEFS = {
   },
 
   // ── WRITE ─────────────────────────────────────────────────────────────
-  // edit-node-version-value and edit-node-version-goal live in the values extension.
-  // edit-node-version-schedule lives in the schedules extension.
-  // add-node-prestige lives in the prestige extension.
 
   "edit-node-or-branch-status": {
     type: "function",
@@ -466,7 +463,7 @@ const TOOL_DEFS = {
         },
         includeNotes: {
           type: "boolean",
-          description: "Include notes for current version. Default true.",
+          description: "Include notes. Default true.",
         },
         includeSiblings: {
           type: "boolean",

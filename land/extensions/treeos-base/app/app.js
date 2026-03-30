@@ -2452,29 +2452,48 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
       return div.innerHTML;
     }
 
-    // Send message
+    // Send message. During processing, messages still send (stream extension
+    // accumulates them for mid-flight injection). Input stays enabled.
     function sendChatMessage(message) {
-      if (!message.trim() || isSending || !isRegistered) return;
+      if (!message.trim() || !isRegistered) return;
 
       addMessage(message, "user");
-      addTypingIndicator();
-      isSending = true;
+      if (!isSending) {
+        addTypingIndicator();
+        isSending = true;
+        lockModeBar(true);
+      }
       requestGeneration++;
       const thisGen = requestGeneration;
       updateSendButtons();
-      lockModeBar(true);
 
-      socket.emit("chat", { message, username: CONFIG.username, generation: thisGen });
+      socket.emit("chat", { message, username: CONFIG.username, generation: thisGen, mode: currentModeKey?.split(":").pop()?.split("-")[0] || "chat" });
     }
 
     function updateSendButtons() {
       const desktopText = chatInput.value.trim();
       const mobileSheetText = mobileSheetInput.value.trim();
 
-      sendBtn.disabled = isSending ? false : !(desktopText && isRegistered);
-      mobileSheetSendBtn.disabled = isSending ? false : !(mobileSheetText && isRegistered);
-      chatInput.disabled = isSending;
-      mobileSheetInput.disabled = isSending;
+      // When AI is working: button is Stop (red) unless user has typed text, then it's Send
+      if (isSending && !desktopText) {
+        sendBtn.disabled = false;
+        sendBtn.classList.add("stop-mode");
+      } else {
+        sendBtn.disabled = !(desktopText && isRegistered);
+        sendBtn.classList.remove("stop-mode");
+      }
+
+      if (isSending && !mobileSheetText) {
+        mobileSheetSendBtn.disabled = false;
+        mobileSheetSendBtn.classList.add("stop-mode");
+      } else {
+        mobileSheetSendBtn.disabled = !(mobileSheetText && isRegistered);
+        mobileSheetSendBtn.classList.remove("stop-mode");
+      }
+
+      // Input always enabled so user can type corrections mid-flight
+      chatInput.disabled = false;
+      mobileSheetInput.disabled = false;
     }
 
     // Input handlers - Desktop
@@ -2488,7 +2507,7 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         const msg = chatInput.value.trim();
-        if (msg && isRegistered && !isSending) {
+        if (msg && isRegistered) {
           sendChatMessage(msg);
           chatInput.value = "";
           chatInput.style.height = "auto";
@@ -2497,17 +2516,22 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
       }
     });
 
+    // Input change: if user starts typing while AI is responding,
+    // switch button from Stop back to Send
+    chatInput.addEventListener("input", () => updateSendButtons());
+    mobileSheetInput.addEventListener("input", () => updateSendButtons());
+
     sendBtn.addEventListener("click", () => {
-      if (isSending) {
-        cancelRequest();
-        return;
-      }
       const msg = chatInput.value.trim();
-      if (msg && isRegistered && !isSending) {
+      if (msg && isRegistered) {
+        // Text in input: send it (even during processing, stream accumulates)
         sendChatMessage(msg);
         chatInput.value = "";
         chatInput.style.height = "auto";
         updateSendButtons();
+      } else if (isSending) {
+        // No text, AI is working: stop
+        cancelRequest();
       }
     });
 
@@ -2599,16 +2623,14 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
     });
 
     mobileSheetSendBtn.addEventListener("click", () => {
-      if (isSending) {
-        cancelRequest();
-        return;
-      }
       const msg = mobileSheetInput.value.trim();
-      if (msg && isRegistered && !isSending) {
+      if (msg && isRegistered) {
         sendChatMessage(msg);
         mobileSheetInput.value = "";
         mobileSheetInput.style.height = "auto";
         updateSendButtons();
+      } else if (isSending) {
+        cancelRequest();
       }
     });
 
@@ -3013,6 +3035,21 @@ function injectIframeParamForwarding() {
 
     socket.on("toolResult", ({ tool, args, success, error }) => {
       console.log("[socket] tool:", tool, success ? "✓" : "✗", error || "");
+    });
+
+    // Stream extension: message was accumulated for mid-flight injection
+    socket.on("messageQueued", ({ message, status }) => {
+      console.log("[stream] queued:", message?.slice(0, 60), status);
+      // Show a subtle indicator that the message was received
+      const indicator = document.createElement("div");
+      indicator.className = "chat-message system";
+      indicator.style.cssText = "font-size:0.75rem;color:rgba(255,255,255,0.3);text-align:center;padding:4px;";
+      indicator.textContent = status || "will be incorporated";
+      const container = document.getElementById("chatMessages");
+      if (container) {
+        container.appendChild(indicator);
+        container.scrollTop = container.scrollHeight;
+      }
     });
 socket.on("executionStatus", ({ phase, text }) => {
   if (!text || phase === "done") return;

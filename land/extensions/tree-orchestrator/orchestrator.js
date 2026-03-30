@@ -1203,6 +1203,7 @@ async function executePlanSteps({
       execResult = await processMessage(visitorId, executionMessage, {
         ...meta,
         signal,
+        onToolLoopCheckpoint,
         meta: { internal: true },
       });
       const execEnd = new Date();
@@ -1293,6 +1294,7 @@ export async function orchestrateTreeRequest({
   rootChatId = null,
   sourceType = null,
   sourceId = null,
+  onToolLoopCheckpoint = null,
 }) {
   if (signal?.aborted) return null;
 
@@ -1729,6 +1731,7 @@ export async function orchestrateTreeRequest({
     const result = await processMessage(visitorId, message, {
       username, userId, rootId, signal, slot,
       readOnly: behavioral === "query",
+      onToolLoopCheckpoint,
       meta: { internal: false },
       onToolResults(results) {
         if (signal?.aborted) return;

@@ -570,7 +570,8 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     const CHAT_RATE_WINDOW_MS = Number(getLandConfigValue("chatRateWindowMs")) || 60000; // 1 min
     const _chatTimestamps = [];
 
-    socket.on("chat", async ({ message, username, generation, mode: chatMode }) => {
+    // Named handler so extensions can call socket._chatHandler() for debounce
+    const _chatHandler = async ({ message, username, generation, mode: chatMode }) => {
       if (!message || typeof message !== "string" || !username || typeof username !== "string" || username.length > 200) {
         return socket.emit(WS.CHAT_ERROR, { error: "Missing or invalid message", generation });
       }
@@ -602,6 +603,20 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         }
       } catch (err) {
         return socket.emit(WS.CHAT_ERROR, { error: err.message, generation });
+      }
+
+      // Stream extension: two modes.
+      // 1. In-flight (processing): accumulate for mid-tool-loop injection
+      // 2. Idle: debounce callback decides whether to swallow or fall through
+      if (socket._onStreamMessage) {
+        if (socket._chatAbort) {
+          socket._onStreamMessage(message, safeChatMode, generation);
+          return;
+        }
+        if (socket._onStreamIdle) {
+          const handled = socket._onStreamIdle(message, safeChatMode, generation);
+          if (handled) return;
+        }
       }
 
       // Serialize per visitorId. Previous message must finish before next starts.
@@ -645,6 +660,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           const bigMode = currentMode?.split(":")[0] || null;
           let response;
 
+          // Stream checkpoint: if the stream extension registered a callback, pass it through
+          const onToolLoopCheckpoint = socket._streamCheckpoint || null;
+
           if (bigMode === "tree") {
             const orch = getOrchestrator("tree");
             if (!orch) throw new Error("No tree orchestrator installed. Install the tree-orchestrator extension.");
@@ -655,10 +673,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
               forceQueryOnly: safeChatMode === "query",
               rootChatId: chat?._id || null,
               sourceType: safeChatMode === "place" ? "ws-tree-place" : safeChatMode === "query" ? "ws-tree-query" : safeChatMode === "be" ? "ws-tree-be" : "tree-chat",
+              onToolLoopCheckpoint,
             });
           } else {
             response = await processMessage(visitorId, message, {
               username, userId: socket.userId, rootId: getRootId(visitorId), signal: abort.signal,
+              onToolLoopCheckpoint,
               onToolResults(results) {
                 if (!abort.signal.aborted) for (const r of results) socket.emit(WS.TOOL_RESULT, r);
               },
@@ -700,7 +720,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           if (socket._chatAbort === abort) socket._chatAbort = null;
         }
       });
-    });
+    };
+    socket.on("chat", _chatHandler);
+    socket._chatHandler = _chatHandler;
 
     // ── CANCEL REQUEST ────────────────────────────────────────────────
     socket.on("cancelRequest", () => {

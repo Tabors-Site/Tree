@@ -1574,6 +1574,18 @@ export async function processMessage(visitorId, message, ctx) {
     if (ctx.onToolResults) {
       ctx.onToolResults(toolResults);
     }
+
+    // Mid-flight checkpoint: let callers inject user updates between tool iterations.
+    // Same pattern as onToolResults. Optional callback. Zero overhead if unused.
+    if (ctx.onToolLoopCheckpoint) {
+      const update = await ctx.onToolLoopCheckpoint();
+      if (update?.inject) {
+        session.messages.push({ role: "user", content: update.inject });
+      }
+      if (update?.abort) {
+        break;
+      }
+    }
   }
 
   // Phase 7: Finalize response

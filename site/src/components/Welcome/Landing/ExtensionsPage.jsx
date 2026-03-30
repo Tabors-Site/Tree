@@ -334,6 +334,20 @@ const ExtensionsPage = () => {
       <section className="lp-section lp-section-alt">
         <div className="lp-container" style={{textAlign: "center"}}>
           <h2 className="lp-section-title">An Operating System Is Just Extensions Working Together</h2>
+
+          <div style={{fontSize: "0.9rem", margin: "0 auto 28px", maxWidth: 560}}>
+            {[
+              ["The Seed", "provides structure, intelligence, extensibility, communication", "#4ade80"],
+              ["Extensions", "provide capabilities, tools, modes, hooks, jobs, orchestrators", "#60a5fa"],
+              ["Trees", "provide applications (food tracker, fitness coach, CRM, journal)", "#c084fc"],
+            ].map(([layer, desc, color]) => (
+              <div key={layer} style={{padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", gap: 16, alignItems: "baseline"}}>
+                <span style={{color, fontWeight: 700, minWidth: 100}}>{layer}</span>
+                <span style={{color: "rgba(255,255,255,0.5)"}}>{desc}</span>
+              </div>
+            ))}
+          </div>
+
           <p className="lp-section-sub lp-section-sub-wide">
             The seed doesn't ship an operating system. It ships the kernel that operating systems
             are built from. An OS emerges when enough extensions depend on each other that a coherent

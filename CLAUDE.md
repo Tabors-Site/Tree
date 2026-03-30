@@ -340,6 +340,8 @@ INVALID_INPUT means garbage the kernel can't parse. Not "I understood your reque
 
 **setExtMeta for all metadata writes.** Extensions can only write to their own namespace. Direct Map manipulation is only acceptable for atomic MongoDB operations that can't go through read-modify-write (long-memory's $push/$slice, gap-detection's $set).
 
+**`role` field marks structural nodes.** Extensions that scaffold a tree shape MUST set `metadata.<extName>.role` on every scaffolded node. TreeOS base has a generic `beforeNodeDelete` hook that cancels deletion of any node with a role in any extension namespace. The handler does not know what any extension is. It sees `metadata.food.role = "log"` and knows that node is structural to something. Lookup scaffolded nodes by role at runtime, not by name or stored ID. Users can rename freely. `--force` bypasses the guard.
+
 **OrchestratorRuntime for multi-step pipelines.** Single LLM call: use runChat. Multi-step background pipeline: use OrchestratorRuntime with init, runStep, trackStep, cleanup. The runtime handles session lifecycle, lock management, abort signals, chain tracking.
 
 **LLM_PRIORITY on every LLM call.** HUMAN for CLI/web. GATEWAY for external channels. INTERACTIVE for scout/explore. BACKGROUND for intent/dreams/codebook/compression. Without priority tags, background extensions starve human responses.

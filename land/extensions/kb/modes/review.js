@@ -18,6 +18,7 @@ export default {
     "edit-node-note",
     "delete-node-note",
     "get-tree-context",
+    "edit-node-schedule",
   ],
 
   buildSystemPrompt({ username }) {

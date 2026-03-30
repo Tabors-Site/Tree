@@ -899,9 +899,130 @@ export async function init(core) {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════ */}
-      {/* 22. THREE TEMPORAL LAYERS */}
+      {/* 21b. TREES VS EXTENSIONS */}
       {/* ══════════════════════════════════════════════════════════════ */}
       <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Trees vs Extensions</h2>
+
+          <div style={{fontSize: "0.9rem", marginBottom: 28}}>
+            {[
+              ["The Seed", "provides structure, intelligence, extensibility, communication", "#4ade80"],
+              ["Extensions", "provide capabilities, tools, modes, hooks, jobs, orchestrators", "#60a5fa"],
+              ["Trees", "provide applications (food tracker, fitness coach, CRM, journal)", "#c084fc"],
+            ].map(([layer, desc, color]) => (
+              <div key={layer} style={{padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", gap: 16, alignItems: "baseline"}}>
+                <span style={{color, fontWeight: 700, minWidth: 100}}>{layer}</span>
+                <span style={{color: "rgba(255,255,255,0.5)"}}>{desc}</span>
+              </div>
+            ))}
+          </div>
+
+          <P>
+            Most things people build on TreeOS will be tree shapes, not extensions. Extensions add
+            capabilities: parsing, tracking, searching, scheduling, communicating. Trees arrange
+            those capabilities into applications. The distinction matters because it tells you when
+            to write code and when to just build structure.
+          </P>
+
+          <h3 style={{color: "rgba(255,255,255,0.8)", fontSize: "1rem", marginTop: 32, marginBottom: 8}}>
+            When you need an extension
+          </h3>
+          <P>
+            You need a new extension when you need a new capability that does not exist yet.
+            A new parsing language. A new tool the AI does not have. A new mode with a specific
+            prompt. A new hook handler that reacts to events in a way no existing extension does.
+          </P>
+          <div style={{fontSize: "0.9rem"}}>
+            {[
+              ["Food", "Parses natural language into macros. That parsing logic does not exist anywhere else."],
+              ["Fitness", "Tracks sets, reps, weight with progressive overload logic. That tracking does not exist anywhere else."],
+              ["KB", "Has tell-vs-ask routing and staleness detection. No existing extension does this."],
+              ["Study", "Has mastery scoring and curriculum scaffolding. No existing extension does this."],
+            ].map(([name, reason]) => (
+              <div key={name} style={{padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)"}}>
+                <span style={{color: "#4ade80", fontWeight: 700}}>{name}</span>
+                <span style={{color: "rgba(255,255,255,0.5)", marginLeft: 12}}>{reason}</span>
+              </div>
+            ))}
+          </div>
+
+          <h3 style={{color: "rgba(255,255,255,0.8)", fontSize: "1rem", marginTop: 32, marginBottom: 8}}>
+            When you just need a tree
+          </h3>
+          <P>
+            If the capabilities already exist as extensions, you do not write code. You create
+            a tree shape, install the extensions you need, and configure them. The structure IS
+            the application.
+          </P>
+          <div style={{fontSize: "0.9rem"}}>
+            {[
+              ["Community Poster", "gateway-reddit, kb, persona, intent, values, scheduler",
+                "A tree that monitors subreddits, stores knowledge, and posts with a consistent voice on a schedule. No new code."],
+              ["Project Manager", "scheduler, values, team",
+                "Tasks as nodes. Status tracking through the status field. Deadlines through scheduler. Team through contributors. No new code."],
+              ["Recipe Book", "values",
+                "Categories as branches. Recipes as nodes. Ingredients as notes. Values for prep time and servings. No new code."],
+              ["CRM", "values, scheduler, gateway-email",
+                "Clients as nodes. Interactions as notes. Deal values through values. Follow-up reminders through scheduler. Email through gateway. No new code."],
+              ["Journal", "purpose, rings, phase",
+                "Days or topics as nodes. Entries as notes. Purpose tracks themes. Rings remembers seasons. Phase detects mood patterns. No new code."],
+            ].map(([name, exts, desc]) => (
+              <div key={name} style={{padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.05)"}}>
+                <div style={{display: "flex", gap: 12, alignItems: "baseline", marginBottom: 4}}>
+                  <span style={{color: "#60a5fa", fontWeight: 700}}>{name}</span>
+                  <span style={{color: "rgba(255,255,255,0.25)", fontSize: "0.8rem"}}>{exts}</span>
+                </div>
+                <p style={{color: "rgba(255,255,255,0.5)", margin: 0, lineHeight: 1.7}}>{desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <h3 style={{color: "rgba(255,255,255,0.8)", fontSize: "1rem", marginTop: 32, marginBottom: 8}}>
+            Example: building a community poster
+          </h3>
+          <P>
+            Every capability already exists as an extension. The tree shape arranges them into
+            a topology.
+          </P>
+          <Code>{`treeos mkroot "Community Poster"
+cd "Community Poster"
+mkdir Communities, Queue, Inbox, Identity, Log, History
+cd Communities
+mkdir r/selfhosted, r/LocalLLM, r/opensource
+cd r/selfhosted
+mkdir Posts, Comments, Profile`}</Code>
+          <P>Then install the extensions that power it:</P>
+          <Code>{`treeos ext install gateway-reddit
+treeos ext install kb
+treeos ext install persona
+treeos ext install treeos-intelligence
+treeos ext install scheduler`}</Code>
+          <P>
+            Set the persona on the root. Enable intent for autonomous action. Map the gateway
+            to the subreddit nodes. Configure the scheduler for your queue cycle. Write the
+            identity as a note on the Identity node. The tree is alive. No new code was written.
+          </P>
+
+          <h3 style={{color: "rgba(255,255,255,0.8)", fontSize: "1rem", marginTop: 32, marginBottom: 8}}>
+            The rule
+          </h3>
+          <P>
+            Extensions are primitives. Trees are applications. The extensions give the tree
+            capabilities: parsing, tracking, searching, compressing, communicating, scheduling.
+            The tree shape determines what those capabilities are applied to. Food applies parsing
+            to nutrition. Fitness applies tracking to workouts. A CRM applies tracking to deals.
+            A community poster applies kb to knowledge, intent to outreach, persona to voice,
+            gateway to Reddit, and values to scoring. Same primitives. Different shape. Different
+            application.
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 22. THREE TEMPORAL LAYERS */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
         <div className="lp-container" style={{maxWidth: 800}}>
           <h2 className="lp-section-title">Three Temporal Layers</h2>
           <P>

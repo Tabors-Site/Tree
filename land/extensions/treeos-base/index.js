@@ -87,6 +87,23 @@ export async function init(core) {
   // Build MCP tools with zod schemas and handlers
   const tools = buildTools();
 
+  // Protect scaffolded nodes — any node with a role in extension metadata is structural
+  core.hooks.register("beforeNodeDelete", async ({ node }) => {
+    if (!node?.metadata) return;
+    const meta = node.metadata instanceof Map
+      ? Object.fromEntries(node.metadata)
+      : node.metadata;
+    for (const [namespace, data] of Object.entries(meta)) {
+      if (data?.role) {
+        return {
+          cancelled: true,
+          reason: `This node is structural for the ${namespace} extension (role: ${data.role}). ` +
+                  `Deleting it will break functionality. Use --force to override.`,
+        };
+      }
+    }
+  }, "treeos-base");
+
   // Register afterToolCall hook for frontend navigation
   const onAfterToolCall = buildNavigationHandler(core);
   core.hooks.register("afterToolCall", onAfterToolCall, "treeos-base");

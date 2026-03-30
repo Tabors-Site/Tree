@@ -63,6 +63,9 @@ export async function createNode({
   if (name.startsWith("/")) {
     throw new Error("Node names cannot start with / (reserved for path separator)");
   }
+  if (!isRoot && !parentId) {
+    throw new Error("Non-root nodes require a parentId");
+  }
   const user = validatedUser ?? (await getUserOrThrow(userId));
 
   // beforeNodeCreate: extensions can modify or cancel.

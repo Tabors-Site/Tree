@@ -28,8 +28,8 @@ export async function init(core) {
     const { getExtension } = await import("../loader.js");
     const base = getExtension("treeos-base");
     if (base?.exports?.registerToolNavigation) {
-      base.exports.registerToolNavigation("edit-node-version-schedule", ({ args, withToken: t }) =>
-        t(`/api/v1/node/${args.nodeId}/${args.prestige || 0}?html`));
+      base.exports.registerToolNavigation("edit-node-schedule", ({ args, withToken: t }) =>
+        t(`/api/v1/node/${args.nodeId}?html`));
     }
   } catch {}
 
@@ -37,7 +37,7 @@ export async function init(core) {
     router,
     tools,
     modeTools: [
-      { modeKey: "tree:edit", toolNames: ["edit-node-version-schedule"] },
+      { modeKey: "tree:edit", toolNames: ["edit-node-schedule"] },
     ],
     exports: { updateSchedule, getCalendar },
   };

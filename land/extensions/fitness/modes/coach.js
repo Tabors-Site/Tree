@@ -19,6 +19,7 @@ export default {
     "navigate-tree",
     "get-tree-context",
     "create-node-note",
+    "edit-node-schedule",
   ],
 
   async buildSystemPrompt({ username, rootId }) {

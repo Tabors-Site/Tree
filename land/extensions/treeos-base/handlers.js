@@ -1182,10 +1182,8 @@ export function buildTools() {
         ),
         parentId: z
           .string()
-          .nullable()
-          .optional()
           .describe(
-            "Parent node ID for the root of this subtree.",
+            "Parent node ID for the root of this subtree. Required.",
           ),
         userId: z.string().describe("Injected by server. Ignore."),
         chatId: z

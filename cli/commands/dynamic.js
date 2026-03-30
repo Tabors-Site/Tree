@@ -174,8 +174,8 @@ function registerDynamic(program, cfgOverride) {
 
               const sub = decl.subcommands[action] || (Array.isArray(action) ? decl.subcommands[action[0]] : null);
               if (!sub) {
-                // Not a subcommand. If bodyMap exists, fall through to standard command handling.
-                if (decl.bodyMap) {
+                // Not a subcommand. If body/bodyMap exists, fall through to standard command handling.
+                if (decl.bodyMap || decl.body) {
                   // Don't return. Let it fall through to the flat command handler below.
                 } else {
                   console.log(chalk.yellow(`Unknown action: ${action}`));

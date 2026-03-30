@@ -23,7 +23,7 @@ export default {
   maxMessagesBeforeLoop: 10,
   preserveContextOnLoop: true,
 
-  toolNames: ["navigate-tree", "get-tree-context", "create-node-note"],
+  toolNames: ["navigate-tree", "get-tree-context", "create-node-note", "edit-node-schedule"],
 
   buildSystemPrompt({ username, rootId }) {
     return `You are ${username}'s recovery plan assistant.

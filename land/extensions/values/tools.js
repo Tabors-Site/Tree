@@ -4,7 +4,7 @@ import { setValueForNode, setGoalForNode } from "./core.js";
 export default function getTools() {
   return [
     {
-      name: "edit-node-version-value",
+      name: "edit-node-value",
       description: "Update a numeric value on a node. Values track quantitative state (strength, progress, count, etc.).",
       schema: {
         nodeId: z.string().describe("The unique ID of the node to edit."),
@@ -21,7 +21,7 @@ export default function getTools() {
       },
     },
     {
-      name: "edit-node-version-goal",
+      name: "edit-node-goal",
       description: "Set a goal for a value on a node. A goal is the target number a value needs to reach.",
       schema: {
         nodeId: z.string().describe("The unique ID of the node to edit."),

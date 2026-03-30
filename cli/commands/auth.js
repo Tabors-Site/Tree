@@ -101,8 +101,12 @@ async function printLoginSuccess(me, api) {
       roots.forEach((r) =>
         console.log(`    ${chalk.cyan(r.name)}  ${chalk.dim(r._id)}`),
       );
-      console.log(chalk.dim(`\n  Run: use "<tree name>" to select one`));
+      console.log(chalk.dim(`\n  Run: cd "<tree name>" to enter a tree`));
     } else {
+      console.log(chalk.dim("\n  No trees yet. Get started:"));
+      console.log(chalk.dim("    llm add             Add an LLM connection (required for AI)"));
+      console.log(chalk.dim("    life food fitness    Set up domains (food, fitness, study, recovery, kb)"));
+      console.log(chalk.dim("    mkroot \"My Tree\"     Or create a blank tree"));
     }
   } catch (_) {}
 }

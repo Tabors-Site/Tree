@@ -18,6 +18,7 @@ const TreeOSPage = () => {
             <a className="lp-btn lp-btn-primary" href="/seed">The Seed</a>
             <a className="lp-btn lp-btn-secondary" href="/guide">Guide</a>
             <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>
+            <a className="lp-btn lp-btn-secondary" href="/cli">CLI</a>
           </div>
         </div>
       </section>
@@ -232,6 +233,104 @@ const TreeOSPage = () => {
                 <p style={{color: "rgba(255,255,255,0.55)", fontSize: "0.85rem", lineHeight: 1.7, margin: "4px 0 0"}}>{desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── HOW TO ORGANIZE YOUR TREE ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 760}}>
+          <h2 className="lp-section-title">Organizing Your Tree</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Two approaches. Different tradeoffs. The right one depends on whether your domains share context.
+          </p>
+
+          <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 24}}>
+            <div style={{padding: 20, borderRadius: 12, background: "rgba(72,187,120,0.06)", border: "1px solid rgba(72,187,120,0.12)"}}>
+              <h3 style={{color: "#4ade80", fontSize: "1rem", margin: "0 0 12px"}}>Separate Trees</h3>
+              <div style={{fontFamily: "monospace", fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", lineHeight: 1.8, marginBottom: 12}}>
+                Land<br/>
+                {"├── "}Health (tree root)<br/>
+                {"│   ├── "}Fitness/...<br/>
+                {"│   └── "}Food/...<br/>
+                {"├── "}Study (tree root)<br/>
+                {"├── "}Datacenter Ops (tree root)<br/>
+                {"└── "}Recovery (tree root)
+              </div>
+              <p style={{color: "rgba(255,255,255,0.45)", fontSize: "0.85rem", lineHeight: 1.7, margin: 0}}>
+                Each tree has its own purpose thesis, its own conversation boundary, its own rings.
+                Navigate between them and the conversation resets. The AI at Health doesn't carry context
+                from Datacenter Ops. Best when domains are unrelated.
+              </p>
+            </div>
+            <div style={{padding: 20, borderRadius: 12, background: "rgba(102,126,234,0.06)", border: "1px solid rgba(102,126,234,0.12)"}}>
+              <h3 style={{color: "#667eea", fontSize: "1rem", margin: "0 0 12px"}}>One Tree, Many Branches</h3>
+              <div style={{fontFamily: "monospace", fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", lineHeight: 1.8, marginBottom: 12}}>
+                Life (tree root)<br/>
+                {"├── "}Health<br/>
+                {"│   ├── "}Fitness/...<br/>
+                {"│   └── "}Food/...<br/>
+                {"├── "}Learning<br/>
+                {"│   └── "}Study/...<br/>
+                {"├── "}Work<br/>
+                {"│   └── "}KB/...<br/>
+                {"└── "}Recovery/...
+              </div>
+              <p style={{color: "rgba(255,255,255,0.45)", fontSize: "0.85rem", lineHeight: 1.7, margin: 0}}>
+                One conversation. One purpose thesis. Navigate between Health and Learning and the AI
+                remembers. Channels between siblings are internal cascade. Rings capture the whole life.
+                Best when everything is connected.
+              </p>
+            </div>
+          </div>
+
+          <p style={{color: "rgba(255,255,255,0.5)", fontSize: "0.9rem", lineHeight: 1.8, marginTop: 24, textAlign: "center"}}>
+            The rule: if the domains share context, one tree. If they don't, separate trees.
+            Health and Food share context. Datacenter Ops and personal fitness don't.
+          </p>
+        </div>
+      </section>
+
+      {/* ── GATEWAY ROUTING ── */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 760}}>
+          <h2 className="lp-section-title">Gateway Routing</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            A gateway maps an external platform to a position in the tree. Any position.
+            The message arrives. The classifier detects the extension. The mode fires. The response returns.
+          </p>
+
+          <div style={{
+            background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "20px 24px",
+            fontFamily: "monospace", fontSize: "0.85rem", color: "rgba(255,255,255,0.55)", lineHeight: 2,
+            marginBottom: 20,
+          }}>
+            <div style={{color: "rgba(255,255,255,0.35)", marginBottom: 8}}># Map a platform to a specific branch</div>
+            treeos gateway map telegram /Health/Food/Log<br/>
+            treeos gateway map discord /Work/KB/Topics<br/>
+            <br/>
+            <div style={{color: "rgba(255,255,255,0.35)", marginBottom: 8}}># Or map to the root. The tree routes internally.</div>
+            treeos gateway map telegram /Life
+          </div>
+
+          <p style={{color: "rgba(255,255,255,0.5)", fontSize: "0.9rem", lineHeight: 1.8}}>
+            One Telegram bot. One entry point. The tree figures out where everything goes.
+            "Ate chicken for lunch" routes to Food. "Bench 135x10" routes to Fitness.
+            "What's the server layout" routes to KB. You just talk. The tree routes.
+          </p>
+
+          <div style={{
+            background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "16px 20px",
+            fontFamily: "monospace", fontSize: "0.82rem", color: "rgba(255,255,255,0.5)", lineHeight: 1.9,
+            marginTop: 20,
+          }}>
+            <span style={{color: "rgba(255,255,255,0.3)"}}>telegram {">"} </span>
+            ate chicken for lunch<br/>
+            <span style={{color: "rgba(255,255,255,0.25)"}}>{"  "}classifier checks /Life children</span><br/>
+            <span style={{color: "rgba(255,255,255,0.25)"}}>{"  "}finds Health/Food, hints match "ate" + "chicken"</span><br/>
+            <span style={{color: "rgba(255,255,255,0.25)"}}>{"  "}routes to /Life/Health/Food/Log</span><br/>
+            <span style={{color: "#4ade80"}}>Logged: chicken breast (165 cal, 31g protein)</span><br/>
+            <span style={{color: "#4ade80"}}>Today: protein 49/150g (33%)</span>
           </div>
         </div>
       </section>

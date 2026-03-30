@@ -220,8 +220,19 @@ program.configureOutput({
   },
 });
 
-// Catch unknown top-level commands (don't exit in shell mode)
+// In shell mode, unknown input becomes chat. Outside shell, show error.
+let _shellMode = false;
+let _shellChatFallback = null; // set by onLine to capture the full input
+
 program.on("command:*", (operands) => {
+  if (_shellMode && _shellChatFallback) {
+    // Re-dispatch as chat in the shell
+    const fullInput = _shellChatFallback;
+    _shellChatFallback = null;
+    program.parseAsync(["node", "tree", "chat", fullInput]).catch(() => {});
+    return;
+  }
+
   const unknown = operands[0];
   console.log(chalk.red(`Unknown command: ${unknown}`));
 
@@ -266,6 +277,7 @@ function shellSplit(input) {
 }
 
 const startShell = module.exports.startShell = async () => {
+    _shellMode = true;
     const readline = require("readline");
     const fs = require("fs");
     const path = require("path");
@@ -610,8 +622,11 @@ const startShell = module.exports.startShell = async () => {
       rl.removeListener("close", onClose);
       rl.close();
       try {
+        _shellChatFallback = cleanInput;
         await program.parseAsync(["node", "tree", ...shellSplit(cleanInput)]);
+        _shellChatFallback = null;
       } catch (e) {
+        _shellChatFallback = null;
         if (!e.code?.startsWith("commander.")) {
           console.error(chalk.red(e.message));
         }
