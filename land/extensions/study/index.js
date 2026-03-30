@@ -24,6 +24,7 @@ import {
   getGaps,
 } from "./core.js";
 import { setDeps as setSetupDeps } from "./setup.js";
+import { handleMessage } from "./handler.js";
 
 export async function init(core) {
   core.llm.registerRootLlmSlot?.("study");
@@ -195,14 +196,7 @@ export async function init(core) {
       getStudyProgress,
       getQueue,
       getGaps,
-      resolveMode(message) {
-        const lower = (message || "").toLowerCase().trim();
-        if (lower === "be" || /\b(study session|continue studying|let's study|teach me)\b/.test(lower)) return "tree:study-session";
-        if (/\b(progress|mastery|how am i|gaps?|review|status|streak|what do i have|so far|daily)\b/.test(lower)) return "tree:study-review";
-        if (/\b(curriculum|break.*down|plan|organize|structure|build|create.*topic|add.*topic|learn)\b/.test(lower)) return "tree:study-plan";
-        if (/\b(needlearn|need to learn|want to learn|add to queue|queue)\b/.test(lower)) return "tree:study-log";
-        return "tree:study-plan";
-      },
+      handleMessage,
     },
   };
 }

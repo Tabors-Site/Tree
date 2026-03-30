@@ -1627,35 +1627,50 @@ export async function orchestrateTreeRequest({
   }
 
   // ────────────────────────────────────────────────────────
-  // PATH 2: EXTENSION DETECTED — route to extension mode
-  // Extensions register a resolveMode function to pick the right mode
-  // based on the message (review, plan, session, log, etc).
-  // Falls back to modes.respond if no resolver is registered.
+  // PATH 2: EXTENSION DETECTED — hand off to the extension
+  // The orchestrator routes TO the extension. The extension routes WITHIN itself.
+  // Extensions export handleMessage(message, ctx) which does its own intent
+  // detection, mode selection, and execution. Returns { answer, mode }.
+  // Fallback: direct processMessage with modes.respond for old extensions.
   // ────────────────────────────────────────────────────────
 
   if (classification.intent === "extension" && classification.mode) {
     const extTargetId = classification.targetNodeId || null;
+
+    // Resolve extension name from mode ownership
+    const { getModeOwner } = await import("../../seed/tree/extensionScope.js");
+    const { getExtension } = await import("../loader.js");
+    const extName = getModeOwner(classification.mode);
+    const ext = extName ? getExtension(extName) : null;
+
     log.verbose("Tree Orchestrator",
-      `  Extension route: ${classification.mode}${extTargetId ? ` via ${extTargetId}` : ""} (behavioral: ${behavioral})`);
+      `  Extension route: ${classification.mode} (ext: ${extName || "?"}, behavioral: ${behavioral})`);
 
-    // Let the extension pick the right mode for this message
-    let resolvedMode = classification.mode;
-    try {
-      const { getExtension } = await import("../loader.js");
-      // Extract extension name from mode key: "tree:food-log" -> "food", "tree:study-plan" -> "study"
-      const modeParts = classification.mode.replace("tree:", "").split("-");
-      const extName = modeParts[0];
-      const ext = getExtension(extName);
-      if (ext?.exports?.resolveMode) {
-        const picked = ext.exports.resolveMode(message);
-        if (picked) resolvedMode = picked;
+    // ── Primary path: extension handles everything ──
+    if (ext?.exports?.handleMessage) {
+      emitStatus(socket, "intent", "");
+      try {
+        const result = await ext.exports.handleMessage(message, {
+          userId, username, rootId, signal, res: null,
+        });
+        emitStatus(socket, "done", "");
+        const answer = result?.answer || null;
+        const mode = result?.mode || classification.mode;
+        if (answer) pushMemory(visitorId, message, answer);
+        modesUsed.push(mode);
+        return { success: true, answer, modeKey: mode, modesUsed, rootId };
+      } catch (err) {
+        log.error("Tree Orchestrator", `Extension handleMessage failed: ${err.message}`);
+        emitStatus(socket, "done", "");
+        return { success: false, answer: "Extension request failed.", modeKey: classification.mode, modesUsed, rootId };
       }
-    } catch {}
+    }
 
-    modesUsed.push(resolvedMode);
+    // ── Fallback: direct processMessage with modes.respond ──
+    modesUsed.push(classification.mode);
     emitStatus(socket, "intent", "");
 
-    await switchMode(visitorId, resolvedMode, {
+    await switchMode(visitorId, classification.mode, {
       username, userId, rootId,
       conversationMemory: formatMemoryContext(visitorId),
       clearHistory: true,
@@ -1672,51 +1687,9 @@ export async function orchestrateTreeRequest({
     });
 
     emitStatus(socket, "done", "");
-
-    // If the extension mode returned JSON (parser modes like fitness-log),
-    // don't show raw JSON to the user. Build a human response.
-    let answer = result?.answer || null;
-    if (answer && /^\s*\{/.test(answer)) {
-      try {
-        const parsed = JSON.parse(answer);
-        // Build a human summary from the parsed data
-        if (parsed.exercises) {
-          // Fitness parser response
-          answer = parsed.exercises.map(ex => {
-            const sets = ex.sets?.map(s => s.weight > 0 ? `${s.weight}x${s.reps}` : `${s.reps}`).join("/") || "";
-            return `${ex.name}: ${sets}`;
-          }).join(", ") + ". Logged.";
-        } else if (parsed.items) {
-          // Food parser response
-          answer = parsed.items.map(i => `${i.name} (${i.calories}cal)`).join(", ") + ". Logged.";
-        } else {
-          answer = "Done.";
-        }
-      } catch {
-        // Not valid JSON, use as-is
-      }
-    }
-
+    const answer = result?.content || result?.answer || null;
     if (answer) pushMemory(visitorId, message, answer);
-
-    // Apply behavioral constraint to response
-    if (behavioral === "place" && answer) {
-      return {
-        success: true,
-        answer: answer.split("\n")[0],
-        modeKey: classification.mode,
-        modesUsed,
-        rootId,
-      };
-    }
-
-    return {
-      success: true,
-      answer,
-      modeKey: classification.mode,
-      modesUsed,
-      rootId,
-    };
+    return { success: true, answer, modeKey: classification.mode, modesUsed, rootId };
   }
 
   // ────────────────────────────────────────────────────────

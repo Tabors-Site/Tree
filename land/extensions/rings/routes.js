@@ -16,11 +16,11 @@ const router = express.Router();
 router.get("/root/:rootId/rings", htmlAuth, async (req, res) => {
   try {
     const { rootId } = req.params;
-    const { monthly, annual } = await getRings(rootId);
+    const { rings, annual } = await getRings(rootId);
 
     sendOk(res, {
       rootId,
-      annual: annual.map(r => ({
+      annual: (annual || []).map(r => ({
         date: r.ringDate,
         treeAge: r.treeAge,
         character: r.character,
@@ -28,7 +28,7 @@ router.get("/root/:rootId/rings", htmlAuth, async (req, res) => {
         structure: r.structure,
         vitals: r.vitals,
       })),
-      monthly: monthly.map(r => ({
+      monthly: (rings || []).map(r => ({
         date: r.ringDate,
         treeAge: r.treeAge,
         character: r.character,

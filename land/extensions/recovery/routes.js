@@ -2,25 +2,18 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import log from "../../seed/log.js";
-import { createNote } from "../../seed/tree/notes.js";
 import NodeModel from "../../seed/models/node.js";
 import UserModel from "../../seed/models/user.js";
-import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 import {
-  scaffold,
   isInitialized,
   findRecoveryNodes,
-  parseCheckIn,
-  recordDoses,
-  recordCraving,
-  recordMood,
-  recordEnergy,
   getStatus,
   getPatterns,
   getMilestones,
   getHistory,
   addSubstance,
 } from "./core.js";
+import { handleMessage } from "./handler.js";
 
 const router = express.Router();
 
@@ -75,168 +68,15 @@ router.post("/root/:rootId/recovery", authenticate, async (req, res) => {
 
     const user = await UserModel.findById(userId).select("username").lean();
     const username = user?.username || "user";
-    const { runChat } = await import("../../seed/llm/conversation.js");
 
-    // ── PATH 1: First use ──
-    if (!(await isInitialized(rootId))) {
-      await scaffold(rootId, userId);
+    const result = await handleMessage(message, { userId, username, rootId, res });
 
-      try {
-        const { answer, chatId } = await runChat({
-          userId, username,
-          message: `First time setup. The user said: "${message}". Ask them what substances they want to track, their current usage, and their goals. Be warm. This is the beginning.`,
-          mode: "tree:recovery-log",
-          rootId, res,
-          slot: "recovery",
-        });
-        if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:recovery-log", setup: true });
-      } catch (llmErr) {
-        if (!res.headersSent) sendOk(res, { answer: "Tree created. Set up an LLM connection to start the conversation.", mode: "tree:recovery-log", setup: true });
-      }
+    if (result.error) {
+      if (!res.headersSent) sendError(res, result.status || 500, result.code || ERR.INTERNAL, result.message);
       return;
     }
 
-    // ── PATH 1b: Setup incomplete (scaffold done, no substances configured yet) ──
-    const { getSetupPhase } = await import("./core.js");
-    const phase = await getSetupPhase(rootId);
-    if (phase === "base") {
-      // Check if substances were already added
-      const nodes = await findRecoveryNodes(rootId);
-      const hasSubstances = nodes?.substances && Object.keys(nodes.substances).length > 0;
-
-      if (hasSubstances) {
-        const { completeSetup } = await import("./core.js");
-        await completeSetup(rootId);
-      } else {
-        try {
-          const { answer, chatId } = await runChat({
-            userId, username, message,
-            mode: "tree:recovery-log",
-            rootId, res, slot: "recovery",
-          });
-          if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:recovery-log", setup: true });
-        } catch (llmErr) {
-          if (!res.headersSent) sendOk(res, { answer: "What substances are you tracking?", mode: "tree:recovery-log", setup: true });
-        }
-        return;
-      }
-    }
-
-    const nodes = await findRecoveryNodes(rootId);
-
-    // ── PATH: "be" command → guided check-in ──
-    if (message.trim().toLowerCase() === "be") {
-      try {
-        const { answer, chatId } = await runChat({
-          userId, username, message: "The user said 'be'. Start a guided check-in. Ask how they're feeling today, any substance use, cravings, energy level.",
-          mode: "tree:recovery-log", rootId, res, slot: "recovery",
-        });
-        if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:recovery-log" });
-      } catch (llmErr) {
-        if (!res.headersSent) sendOk(res, { answer: "How are you doing today?", mode: "tree:recovery-log" });
-      }
-      return;
-    }
-
-    // ── PATH 3: Questions/reflection/planning ──
-    const isReflect = /\b(how am i|how's my|pattern|trend|week|month|progress|review|doing)\b/i.test(message);
-    const isPlan = /\b(taper|plan|schedule|adjust|slow down|speed up|change.*target|set.*target)\b/i.test(message);
-    const isJournal = /\b(journal|just writing|need to write|vent)\b/i.test(message);
-
-    if (isJournal && nodes?.journal) {
-      // Write to journal, minimal response
-      try {
-        await createNote({ nodeId: nodes.journal.id, content: message, contentType: "text", userId });
-      } catch {}
-      sendOk(res, { answer: "Written.", mode: "tree:recovery-journal" });
-      return;
-    }
-
-    if (isPlan) {
-      const { answer, chatId } = await runChat({
-        userId, username, message,
-        mode: "tree:recovery-plan",
-        rootId, res, slot: "recovery",
-      });
-      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:recovery-plan" });
-      return;
-    }
-
-    if (isReflect) {
-      const { answer, chatId } = await runChat({
-        userId, username, message,
-        mode: "tree:recovery-reflect",
-        rootId, res, slot: "recovery",
-      });
-      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:recovery-reflect" });
-      return;
-    }
-
-    // ── PATH 2: Check-in (default) ──
-    const parsed = await parseCheckIn(message, userId, username, rootId);
-
-    if (parsed) {
-      // Record substances
-      if (parsed.substances) {
-        for (const sub of parsed.substances) {
-          if (sub.name && sub.doses != null) {
-            try { await recordDoses(nodes, sub.name, sub.doses); } catch {}
-          }
-        }
-      }
-
-      // Record cravings
-      if (parsed.cravings) {
-        for (const cr of parsed.cravings) {
-          try { await recordCraving(nodes, cr.intensity || 0, !!cr.resisted, cr.trigger || null); } catch {}
-        }
-      }
-
-      // Record mood
-      if (parsed.mood?.score != null) {
-        try { await recordMood(nodes, parsed.mood.score); } catch {}
-      }
-
-      // Record energy
-      if (parsed.energy != null) {
-        try { await recordEnergy(nodes, parsed.energy); } catch {}
-      }
-
-      // Write note to Log
-      if (nodes?.log) {
-        try {
-          const noteContent = parsed.context || message;
-          await createNote({ nodeId: nodes.log.id, content: noteContent, contentType: "text", userId });
-        } catch {}
-      }
-    }
-
-    // Get fresh status for response
-    const status = await getStatus(rootId);
-
-    // Build natural language response (separate from the JSON parse call)
-    let answer = null;
-    let chatId = null;
-    try {
-      const result = await runChat({
-        userId, username,
-        message: parsed
-          ? `The user checked in. Here's what they said: "${message}". Parsed data: ${JSON.stringify(parsed)}. Respond naturally. Acknowledge what's hard. Point out patterns if visible. Keep it short.`
-          : message,
-        mode: "tree:recovery-log",
-        rootId, slot: "recovery",
-      });
-      answer = result.answer;
-      chatId = result.chatId;
-    } catch {}
-
-    // If LLM failed, build a simple confirmation
-    if (!answer && parsed?.substances?.length > 0) {
-      const subs = parsed.substances.map(s => `${s.name}: ${s.doses}`).join(", ");
-      answer = `Logged. ${subs}.`;
-    }
-
-    if (!res.headersSent) sendOk(res, { answer: answer || "Logged.", chatId, mode: "tree:recovery-log", parsed, status });
+    if (!res.headersSent) sendOk(res, result);
   } catch (err) {
     log.error("Recovery", "Route error:", err.message);
     if (!res.headersSent) sendError(res, 500, ERR.INTERNAL, err.message);

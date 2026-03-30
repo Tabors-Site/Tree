@@ -78,9 +78,9 @@ export default {
       {
         command: "boundary [action]", scope: ["tree"],
         description:
-          "Structural cohesion analysis. Actions: status, branch.",
-        method: "POST",
-        endpoint: "/root/:rootId/boundary/analyze",
+          "Structural cohesion analysis. Actions: status, analyze, branch.",
+        method: "GET",
+        endpoint: "/root/:rootId/boundary",
         subcommands: {
           status: {
             method: "GET",

@@ -24,6 +24,7 @@ import {
   buildValueFields,
 } from "./core.js";
 import { setDeps as setSetupDeps } from "./setup.js";
+import { handleMessage } from "./handler.js";
 
 export async function init(core) {
   core.llm.registerRootLlmSlot?.("fitness");
@@ -203,13 +204,7 @@ export async function init(core) {
       findFitnessNodes,
       getExerciseState,
       getWeeklyStats,
-      resolveMode(message) {
-        const lower = (message || "").toLowerCase().trim();
-        if (lower === "be" || /\b(go|workout|start session|let's go|ready|begin|next set)\b/.test(lower)) return "tree:fitness-coach";
-        if (/\b(how am i|progress|show.*history|review|stats|prs?|personal record|missed|daily|status)\b/.test(lower)) return "tree:fitness-review";
-        if (/\b(plan|program|build|create.*plan|restructure|add.*exercise|remove|modify|change.*program)\b/.test(lower)) return "tree:fitness-plan";
-        return "tree:fitness-log";
-      },
+      handleMessage,
     },
   };
 }

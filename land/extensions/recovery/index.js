@@ -27,6 +27,7 @@ import {
   recordMood,
   recordEnergy,
 } from "./core.js";
+import { handleMessage } from "./handler.js";
 
 export async function init(core) {
   core.llm.registerRootLlmSlot?.("recovery");
@@ -199,13 +200,7 @@ export async function init(core) {
       getPatterns,
       getMilestones,
       addSubstance,
-      resolveMode(message) {
-        const lower = (message || "").toLowerCase().trim();
-        if (lower === "be") return "tree:recovery-reflect";
-        if (/\b(how am i|progress|streak|milestone|pattern|status|daily|review)\b/.test(lower)) return "tree:recovery-review";
-        if (/\b(plan|taper|schedule|adjust|change.*plan|set.*goal)\b/.test(lower)) return "tree:recovery-plan";
-        return "tree:recovery-log";
-      },
+      handleMessage,
     },
     jobs: [
       {
