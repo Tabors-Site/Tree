@@ -1,4 +1,5 @@
 import "./LandingPage.css";
+import Particles from "./Particles.jsx";
 
 const Guide = () => {
   return (
@@ -6,6 +7,7 @@ const Guide = () => {
 
       {/* ── HERO ── */}
       <section className="lp-hero" style={{minHeight: "50vh"}}>
+        <Particles count={25} />
         <div className="lp-hero-inner">
           <h1 className="lp-title">The Guide</h1>
           <p className="lp-subtitle">Simple to advanced. Everything you need to know.</p>

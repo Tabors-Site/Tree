@@ -50,6 +50,15 @@
   overflow: hidden;
 }
 
+.lp-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
 .lp-hero::before {
   content: "";
   position: absolute;
@@ -70,6 +79,12 @@
 .lp-hero-inner {
   position: relative;
   z-index: 1;
+  animation: heroBreathe 6s ease-in-out infinite;
+}
+
+@keyframes heroBreathe {
+  0%, 100% { transform: scale(1); opacity: 0.95; }
+  50% { transform: scale(1.012); opacity: 1; }
 }
 
 .lp-tree-icon {
@@ -152,10 +167,17 @@
 .lp-btn-primary {
   background: #fff;
   color: #0a0a0a;
+  animation: btnBreathe 8s ease-in-out infinite;
 }
 .lp-btn-primary:hover {
   background: #e5e5e5;
   transform: translateY(-1px);
+  animation: none;
+}
+
+@keyframes btnBreathe {
+  0%, 100% { background: #fff; box-shadow: 0 0 12px rgba(100, 140, 255, 0.05); }
+  50% { background: #e4ecff; box-shadow: 0 0 24px rgba(100, 140, 255, 0.2); }
 }
 
 .lp-btn-secondary {

@@ -1,5 +1,6 @@
 
 import "../Landing/LandingPage.css";
+import Particles from "../Landing/Particles.jsx";
 
 const CLIAbout = () => {
   return (
@@ -7,6 +8,7 @@ const CLIAbout = () => {
 
       {/* ── HERO ── */}
       <section className="lp-hero" style={{minHeight: "50vh"}}>
+        <Particles count={25} />
         <div className="lp-hero-inner">
           <h1 className="lp-title">The CLI</h1>
           <p className="lp-subtitle">Just type. It understands.</p>

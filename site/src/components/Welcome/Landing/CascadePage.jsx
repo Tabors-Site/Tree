@@ -1,4 +1,5 @@
 import "./LandingPage.css";
+import Particles from "./Particles.jsx";
 
 const CascadePage = () => {
   return (
@@ -6,6 +7,7 @@ const CascadePage = () => {
 
       {/* ── HERO ── */}
       <section className="lp-hero">
+        <Particles count={25} />
         <div className="lp-hero-inner">
           <div className="lp-tree-icon">💧</div>
           <h1 className="lp-title">Cascade</h1>

@@ -1,4 +1,5 @@
 import "./LandingPage.css";
+import Particles from "./Particles.jsx";
 
 const ExtensionsPage = () => {
   return (
@@ -6,6 +7,7 @@ const ExtensionsPage = () => {
 
       {/* ── HERO ── */}
       <section className="lp-hero" style={{minHeight: "60vh"}}>
+        <Particles count={25} />
         <div className="lp-hero-inner">
           <h1 className="lp-title">Extensions</h1>
           <p className="lp-subtitle">How the tree grows.</p>

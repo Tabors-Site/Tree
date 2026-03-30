@@ -1,4 +1,5 @@
 import "./LandingPage.css";
+import Particles from "./Particles.jsx";
 
 const RecoveryPage = () => {
   return (
@@ -6,6 +7,7 @@ const RecoveryPage = () => {
 
       {/* ── HERO ── */}
       <section className="lp-hero" style={{minHeight: "80vh"}}>
+        <Particles count={25} />
         <div className="lp-hero-inner">
           <div className="lp-tree-icon">🌿</div>
           <h1 className="lp-title">Recovery</h1>

@@ -1,4 +1,5 @@
 import "./LandingPage.css";
+import Particles from "./Particles.jsx";
 
 const FlowPage = () => {
   return (
@@ -6,6 +7,7 @@ const FlowPage = () => {
 
       {/* ── HERO ── */}
       <section className="lp-hero" style={{minHeight: "55vh"}}>
+        <Particles count={25} />
         <div className="lp-hero-inner">
           <h1 className="lp-title">The Flow</h1>
           <p className="lp-subtitle">How data moves through TreeOS.</p>

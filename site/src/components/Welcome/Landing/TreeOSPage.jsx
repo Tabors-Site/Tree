@@ -1,4 +1,5 @@
 import "./LandingPage.css";
+import Particles from "./Particles.jsx";
 
 const TreeOSPage = () => {
   return (
@@ -6,6 +7,7 @@ const TreeOSPage = () => {
 
       {/* ── HERO ── */}
       <section className="lp-hero" style={{minHeight: "55vh"}}>
+        <Particles count={25} />
         <div className="lp-hero-inner">
           <h1 className="lp-title">TreeOS</h1>
           <p className="lp-subtitle">The first operating system built on the seed.</p>

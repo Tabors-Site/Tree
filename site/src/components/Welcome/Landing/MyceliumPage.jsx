@@ -1,4 +1,5 @@
 import "./LandingPage.css";
+import Particles from "./Particles.jsx";
 
 const MyceliumPage = () => {
   return (
@@ -6,6 +7,7 @@ const MyceliumPage = () => {
 
       {/* ── HERO ── */}
       <section className="lp-hero" style={{minHeight: "60vh"}}>
+        <Particles count={25} />
         <div className="lp-hero-inner">
           <h1 className="lp-title">Mycelium</h1>
           <p className="lp-subtitle">The forest underground.</p>

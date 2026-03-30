@@ -1,6 +1,89 @@
+import { useEffect, useRef } from "react";
 import "./LandingPage.css";
 
+function useParticles(canvasRef) {
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    let animId;
+    let particles = [];
+    const COUNT = 60;
+
+    function resize() {
+      canvas.width = canvas.parentElement.offsetWidth;
+      canvas.height = canvas.parentElement.offsetHeight;
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    for (let i = 0; i < COUNT; i++) {
+      const isOrange = i >= COUNT - Math.floor(COUNT * 0.2);
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        r: isOrange ? Math.random() * 1.2 + 0.3 : Math.random() * 1.8 + 0.4,
+        dx: (Math.random() - 0.5) * (isOrange ? 0.15 : 0.3),
+        dy: (Math.random() - 0.5) * (isOrange ? 0.15 : 0.3),
+        opacity: isOrange ? Math.random() * 0.35 + 0.1 : Math.random() * 0.5 + 0.2,
+        pulse: Math.random() * Math.PI * 2,
+        color: isOrange ? [249, 115, 22] : [200, 180, 255],
+        glow: isOrange ? [249, 140, 60] : [180, 160, 255],
+      });
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Fade based on scroll
+      const scrollFade = Math.max(0, 1 - window.scrollY / (canvas.height * 0.8));
+
+      for (const p of particles) {
+        p.x += p.dx;
+        p.y += p.dy;
+        p.pulse += 0.01;
+
+        // Wrap around
+        if (p.x < -5) p.x = canvas.width + 5;
+        if (p.x > canvas.width + 5) p.x = -5;
+        if (p.y < -5) p.y = canvas.height + 5;
+        if (p.y > canvas.height + 5) p.y = -5;
+
+        const flicker = 0.7 + Math.sin(p.pulse) * 0.3;
+        const alpha = p.opacity * flicker * scrollFade;
+        if (alpha < 0.01) continue;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        const [cr, cg, cb] = p.color;
+        ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${alpha})`;
+        ctx.fill();
+
+        // Glow
+        if (p.r > 0.8) {
+          const [gr, gg, gb] = p.glow;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${gr}, ${gg}, ${gb}, ${alpha * 0.15})`;
+          ctx.fill();
+        }
+      }
+
+      animId = requestAnimationFrame(draw);
+    }
+    draw();
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener("resize", resize);
+    };
+  }, [canvasRef]);
+}
+
 const LandingPage = () => {
+  const particleRef = useRef(null);
+  useParticles(particleRef);
+
   return (
     <div className="lp">
 
@@ -11,6 +94,7 @@ const LandingPage = () => {
 
       {/* ── HERO ── */}
       <section className="lp-hero">
+        <canvas ref={particleRef} className="lp-particles" />
         <div className="lp-hero-inner">
           <div className="lp-tree-icon">🌱</div>
           <h1 className="lp-title">The Seed</h1>
