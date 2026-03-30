@@ -89,7 +89,7 @@ export async function scaffold(rootId, userId) {
   await setNodeMode(rootId, "respond", "tree:recovery-log");
   await setNodeMode(logNode._id, "respond", "tree:recovery-log");
   await setNodeMode(journalNode._id, "respond", "tree:recovery-journal");
-  await setNodeMode(patternsNode._id, "respond", "tree:recovery-reflect");
+  await setNodeMode(patternsNode._id, "respond", "tree:recovery-review");
 
   // Mark initialized (base phase: scaffold done, substances not yet configured)
   const root = await _Node.findById(rootId);

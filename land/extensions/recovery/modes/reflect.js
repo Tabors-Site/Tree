@@ -14,9 +14,9 @@ HARD RULES:
 `.trim();
 
 export default {
-  name: "tree:recovery-reflect",
+  name: "tree:recovery-review",
   emoji: "🔍",
-  label: "Recovery Reflect",
+  label: "Recovery Review",
   bigMode: "tree",
   hidden: true,
 

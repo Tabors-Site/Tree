@@ -40,7 +40,7 @@ export default {
     routes: "./routes.js",
     tools: true,
     jobs: true,
-    guidedMode: "tree:food-log",
+    guidedMode: "tree:food-coach",
 
     hooks: {
       fires: [],

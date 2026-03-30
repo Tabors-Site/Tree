@@ -892,6 +892,36 @@ export async function init(core) {
 
 Modes cannot override core modes. The conversation system routes to custom modes the same way it routes to built-in modes.
 
+## Mode Naming Convention
+
+Extensions that register AI modes should follow suffix conventions. The tree-orchestrator uses these suffixes for automatic routing when a user is at an extension's node. No per-extension routing code needed.
+
+**Standard suffixes:**
+
+| Suffix | Purpose | Activated by |
+|--------|---------|-------------|
+| `:log` | Default receiver. Parses input, routes data. | All unmatched messages |
+| `:coach` | Guided mode. AI leads. | `be` command |
+| `:review` | Backward-looking. Patterns, progress, analysis. | Questions about history or status |
+| `:plan` | Forward-looking. Creates structure, sets goals. | Requests to build or organize |
+| `:ask` | Read-only query against stored knowledge. | Falls back from `:review` |
+| `:tell` | Write new knowledge to the tree. | Default for KB-style extensions |
+
+Not every extension uses all six. Use what fits your domain.
+
+**How it works:** When the orchestrator detects an extension at the current node (Level 1), it calls `getModesOwnedBy(extName)` to get all registered modes. It matches the user's message against standard intent patterns and picks the mode with the matching suffix. If no suffix matches, it falls to the node's `modes.respond` default (usually `:log` or `:tell`).
+
+**Examples:**
+```
+food:log, food:coach, food:review
+fitness:log, fitness:coach, fitness:review, fitness:plan
+study:log, study:coach, study:review, study:plan
+recovery:log, recovery:coach, recovery:review
+kb:tell, kb:ask, kb:review
+```
+
+**Custom routing:** Extensions with complex internal routing (food's macro parsing, KB's tell/ask detection) can export `handleMessage(message, ctx)` from their init return. The orchestrator calls `handleMessage` first. Suffix matching is the fallback for extensions without it. Convention with override.
+
 ## Per-Node Tool Customization
 
 Any node can allow or block specific MCP tools. This lets you create branches with different AI capabilities without writing code.

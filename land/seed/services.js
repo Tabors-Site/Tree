@@ -53,7 +53,7 @@ import { getUserMeta, setUserMeta, incUserMeta, pushUserMeta, batchSetUserMeta, 
 import { deliverCascade } from "./tree/cascade.js";
 import { createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType } from "./tree/treeManagement.js";
 import { createNote, editNote, deleteNoteAndFile, transferNote, getNotes } from "./tree/notes.js";
-import { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, isToolReadOnly, getToolOwner, getModeOwner } from "./tree/extensionScope.js";
+import { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, isToolReadOnly, getToolOwner, getModeOwner, getModesOwnedBy } from "./tree/extensionScope.js";
 import {
   addContributor, removeContributor,
   setOwner, removeOwner, transferOwnership,
@@ -190,7 +190,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     userMetadata: { getUserMeta, setUserMeta, incUserMeta, pushUserMeta, batchSetUserMeta, unsetUserMeta },
 
     // --- Extension scope (check blocked/allowed status at positions) ---
-    scope: { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, isToolReadOnly, getToolOwner, getModeOwner },
+    scope: { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, isToolReadOnly, getToolOwner, getModeOwner, getModesOwnedBy },
 
     // --- Cascade (extensions call deliverCascade to propagate signals) ---
     cascade: { deliverCascade },

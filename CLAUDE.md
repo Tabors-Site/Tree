@@ -214,6 +214,8 @@ Per-node mode overrides via `metadata.modes`:
 - Kernel `resolveMode(intent, bigMode, nodeMetadata)` handles resolution
 - CLI: `modes`, `mode-set <intent> <modeKey>`, `mode-clear`
 
+**Mode naming convention:** Extensions name modes as `tree:{ext}-{suffix}`. Standard suffixes: `:log` (default receiver), `:coach` (guided/"be"), `:review` (analysis), `:plan` (building), `:ask` (query), `:tell` (write). The orchestrator discovers modes via `getModesOwnedBy(extName)` and routes by suffix automatically. Extensions with complex routing export `handleMessage` to override.
+
 ### Extensions (what CAPABILITIES exist)
 ```
 Global:   metadata.extensions.blocked[] -> inherits parent to child (opt-out)

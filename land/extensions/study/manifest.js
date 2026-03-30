@@ -48,7 +48,7 @@ export default {
     tools: true,
     jobs: false,
 
-    guidedMode: "tree:study-session",
+    guidedMode: "tree:study-coach",
 
     hooks: {
       fires: [],

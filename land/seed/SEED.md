@@ -175,11 +175,13 @@ Same pattern as node metadata, applied to users. Six functions.
 
 ### Extension Scope (core.scope)
 
-`core.scope.isExtensionBlockedAtNode(extName, nodeId)` lets extensions check their own blocked status. `core.scope.getBlockedExtensionsAtNode(nodeId)` returns the full blocked/restricted/allowed sets. `core.scope.isToolReadOnly(toolName)` checks the readOnlyHint flag. `core.scope.getToolOwner(toolName)` and `core.scope.getModeOwner(modeKey)` find which extension owns a tool or mode.
+`core.scope.isExtensionBlockedAtNode(extName, nodeId)` lets extensions check their own blocked status. `core.scope.getBlockedExtensionsAtNode(nodeId)` returns the full blocked/restricted/allowed sets. `core.scope.isToolReadOnly(toolName)` checks the readOnlyHint flag. `core.scope.getToolOwner(toolName)` and `core.scope.getModeOwner(modeKey)` find which extension owns a tool or mode. `core.scope.getModesOwnedBy(extName)` returns all mode keys registered by an extension (reverse lookup on the ownership map).
 
 ### Mode Management (core.modes)
 
 `core.modes.registerMode(key, config, extName)` registers a custom mode. `core.modes.setDefaultMode(bigMode, key)` sets the default for a zone. `core.modes.setNodeMode(nodeId, intent, modeKey)` sets a per-node mode override atomically. Extensions use this to assign custom modes to specific nodes without direct MongoDB calls.
+
+**Mode naming convention.** Extensions should name modes as `tree:{ext}-{suffix}` where suffix encodes intent: `:log` (default receiver), `:coach` (guided, "be" command), `:review` (backward-looking analysis), `:plan` (forward-looking, builds structure), `:ask` (read-only query), `:tell` (write knowledge). The tree-orchestrator uses `getModesOwnedBy(extName)` to discover an extension's modes and matches suffixes to route messages automatically. Extensions with complex routing can export `handleMessage` to override suffix-based routing.
 
 ### New Hooks
 

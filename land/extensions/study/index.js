@@ -51,13 +51,13 @@ export async function init(core) {
 
   // ── Register modes ──
   core.modes.registerMode("tree:study-log", logMode, "study");
-  core.modes.registerMode("tree:study-session", sessionMode, "study");
+  core.modes.registerMode("tree:study-coach", sessionMode, "study");
   core.modes.registerMode("tree:study-review", reviewMode, "study");
   core.modes.registerMode("tree:study-plan", planMode, "study");
 
   if (core.llm?.registerModeAssignment) {
     core.llm.registerModeAssignment("tree:study-log", "studyLog");
-    core.llm.registerModeAssignment("tree:study-session", "studySession");
+    core.llm.registerModeAssignment("tree:study-coach", "studySession");
     core.llm.registerModeAssignment("tree:study-review", "studyReview");
     core.llm.registerModeAssignment("tree:study-plan", "studyPlan");
   }
@@ -181,7 +181,7 @@ export async function init(core) {
         "study-create-topic", "study-add-subtopic", "study-move-to-active",
         "study-add-to-queue", "study-complete-setup", "study-save-profile",
       ]},
-      { modeKey: "tree:study-session", toolNames: [
+      { modeKey: "tree:study-coach", toolNames: [
         "study-update-mastery", "study-detect-gap", "study-add-subtopic",
       ]},
       { modeKey: "tree:study-log", toolNames: [

@@ -54,13 +54,13 @@ export async function init(core) {
 
   // Register modes
   core.modes.registerMode("tree:recovery-log", logMode, "recovery");
-  core.modes.registerMode("tree:recovery-reflect", reflectMode, "recovery");
+  core.modes.registerMode("tree:recovery-review", reflectMode, "recovery");
   core.modes.registerMode("tree:recovery-plan", planMode, "recovery");
   core.modes.registerMode("tree:recovery-journal", journalMode, "recovery");
 
   if (core.llm?.registerModeAssignment) {
     core.llm.registerModeAssignment("tree:recovery-log", "recovery");
-    core.llm.registerModeAssignment("tree:recovery-reflect", "recovery");
+    core.llm.registerModeAssignment("tree:recovery-review", "recovery");
     core.llm.registerModeAssignment("tree:recovery-plan", "recovery");
     core.llm.registerModeAssignment("tree:recovery-journal", "recovery");
   }

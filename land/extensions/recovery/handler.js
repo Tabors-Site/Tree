@@ -111,12 +111,12 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
     try {
       const { answer, chatId } = await runChat({
         userId, username, message,
-        mode: "tree:recovery-reflect",
+        mode: "tree:recovery-review",
         rootId, res, slot: "recovery",
       });
-      return { answer, chatId, mode: "tree:recovery-reflect" };
+      return { answer, chatId, mode: "tree:recovery-review" };
     } catch (llmErr) {
-      return { answer: "Reflect failed. Check LLM connection.", mode: "tree:recovery-reflect" };
+      return { answer: "Reflect failed. Check LLM connection.", mode: "tree:recovery-review" };
     }
   }
 

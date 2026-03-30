@@ -1584,60 +1584,90 @@ export async function orchestrateTreeRequest({
   // ────────────────────────────────────────────────────────
 
   if (behavioral === "be") {
-    // Check if an extension at this position declares a guidedMode
-    let guidedMode = "tree:be"; // default fallback
     const currentNodeId = getCurrentNodeId(visitorId) || rootId;
+
+    // If the extension at this position exports handleMessage, delegate.
+    // The extension knows how to handle "be" (food logs food, study teaches, etc).
     try {
-      const { getExtensionManifest, getLoadedExtensionNames } = await import("../loader.js");
+      const { getExtensionManifest, getLoadedExtensionNames, getExtension } = await import("../loader.js");
+      const { getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
       const nodeDoc = currentNodeId ? await Node.findById(currentNodeId).select("metadata").lean() : null;
       if (nodeDoc) {
-        // Check node's extension metadata for a matching extension with guidedMode
         const meta = nodeDoc.metadata instanceof Map ? Object.fromEntries(nodeDoc.metadata) : (nodeDoc.metadata || {});
         for (const extName of getLoadedExtensionNames()) {
           if (meta[extName]?.role || meta[extName]?.initialized) {
-            const manifest = getExtensionManifest(extName);
-            if (manifest?.provides?.guidedMode) {
-              guidedMode = manifest.provides.guidedMode;
-              break;
+            const ext = getExtension(extName);
+
+            // Tier 1: handleMessage override
+            if (ext?.exports?.handleMessage) {
+              log.verbose("Tree Orchestrator", `  BE mode: delegating to ${extName}.handleMessage`);
+              emitStatus(socket, "intent", "");
+              try {
+                const result = await ext.exports.handleMessage(message, {
+                  userId, username, rootId, signal, res: null,
+                });
+                emitStatus(socket, "done", "");
+                const answer = result?.answer || null;
+                const mode = result?.mode || `tree:${extName}-coach`;
+                if (answer) pushMemory(visitorId, message, answer);
+                modesUsed.push(mode);
+                return { success: true, answer, modeKey: mode, modesUsed, rootId };
+              } catch (err) {
+                log.error("Tree Orchestrator", `BE handleMessage failed: ${err.message}`);
+              }
             }
+
+            // Tier 2: manifest guidedMode or :coach suffix
+            const manifest = getExtensionManifest(extName);
+            let guidedMode = manifest?.provides?.guidedMode || null;
+            if (!guidedMode) {
+              const extModes = getModesOwnedBy(extName);
+              guidedMode = extModes.find(m => m.endsWith("-coach")) || null;
+            }
+            if (guidedMode) {
+              log.verbose("Tree Orchestrator", `  BE mode: switching to ${guidedMode}`);
+              await switchMode(visitorId, guidedMode, {
+                username, userId, rootId,
+                conversationMemory: formatMemoryContext(visitorId),
+                clearHistory: true,
+              });
+              const result = await processMessage(visitorId, message, {
+                username, userId, rootId, signal, socket, sessionId,
+              });
+              modesUsed.push(guidedMode);
+              return { success: true, answer: result?.content || "", modeKey: guidedMode, modesUsed, rootId };
+            }
+            break;
           }
         }
       }
     } catch {}
 
-    log.verbose("Tree Orchestrator", `  BE mode: switching to ${guidedMode}`);
-    await switchMode(visitorId, guidedMode, {
+    // Tier 3: generic tree:be fallback
+    log.verbose("Tree Orchestrator", `  BE mode: switching to tree:be`);
+    await switchMode(visitorId, "tree:be", {
       username, userId, rootId,
       conversationMemory: formatMemoryContext(visitorId),
       clearHistory: true,
     });
     const result = await processMessage(visitorId, message, {
-      username, userId, rootId, signal,
-      socket, sessionId,
+      username, userId, rootId, signal, socket, sessionId,
     });
-    modesUsed.push(guidedMode);
-
-    return {
-      success: true,
-      answer: result?.content || "",
-      modeKey: guidedMode,
-      modesUsed,
-      rootId,
-    };
+    modesUsed.push("tree:be");
+    return { success: true, answer: result?.content || "", modeKey: "tree:be", modesUsed, rootId };
   }
 
   // ────────────────────────────────────────────────────────
   // PATH 2: EXTENSION DETECTED — hand off to the extension
-  // The orchestrator routes TO the extension. The extension routes WITHIN itself.
-  // Extensions export handleMessage(message, ctx) which does its own intent
-  // detection, mode selection, and execution. Returns { answer, mode }.
-  // Fallback: direct processMessage with modes.respond for old extensions.
+  //
+  // Three tiers:
+  // 1. handleMessage override: extension exports a full handler. It decides everything.
+  // 2. Suffix convention: orchestrator resolves mode by naming convention.
+  //    :coach (be), :review (questions), :plan (building), :log (default).
+  // 3. modes.respond fallback: whatever the node declared.
   // ────────────────────────────────────────────────────────
 
   if (classification.intent === "extension" && classification.mode) {
-    const extTargetId = classification.targetNodeId || null;
-
-    // Resolve extension name from mode ownership
     const { getModeOwner } = await import("../../seed/tree/extensionScope.js");
     const { getExtension } = await import("../loader.js");
     const extName = getModeOwner(classification.mode);
@@ -1646,7 +1676,7 @@ export async function orchestrateTreeRequest({
     log.verbose("Tree Orchestrator",
       `  Extension route: ${classification.mode} (ext: ${extName || "?"}, behavioral: ${behavioral})`);
 
-    // ── Primary path: extension handles everything ──
+    // ── Tier 1: handleMessage override ──
     if (ext?.exports?.handleMessage) {
       emitStatus(socket, "intent", "");
       try {
@@ -1666,11 +1696,36 @@ export async function orchestrateTreeRequest({
       }
     }
 
-    // ── Fallback: direct processMessage with modes.respond ──
-    modesUsed.push(classification.mode);
+    // ── Tier 2: suffix convention routing ──
+    // Match against real registered modes, not constructed guesses.
+    // :coach = guided (be), :review/:ask = analysis, :plan = building, :log/:tell = default
+    let resolvedMode = classification.mode;
+    if (extName) {
+      const { getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
+      const extModes = getModesOwnedBy(extName);
+      const find = (...suffixes) => {
+        for (const s of suffixes) {
+          const match = extModes.find(m => m.endsWith(`-${s}`));
+          if (match) return match;
+        }
+        return null;
+      };
+      const lower = message.toLowerCase().trim();
+
+      if (behavioral === "be" || lower === "be") {
+        resolvedMode = find("coach") || resolvedMode;
+      } else if (/\b(how am i|progress|status|review|daily|stats|streak|history|so far|pattern|doing)\b/.test(lower)) {
+        resolvedMode = find("review", "ask") || resolvedMode;
+      } else if (/\b(plan|build|create|structure|organize|add|modify|remove|restructure|program|taper|schedule|adjust|set.*goal|change|curriculum)\b/.test(lower)) {
+        resolvedMode = find("plan") || resolvedMode;
+      }
+      // else: stays on classification.mode (modes.respond, usually :log or :tell)
+    }
+
+    modesUsed.push(resolvedMode);
     emitStatus(socket, "intent", "");
 
-    await switchMode(visitorId, classification.mode, {
+    await switchMode(visitorId, resolvedMode, {
       username, userId, rootId,
       conversationMemory: formatMemoryContext(visitorId),
       clearHistory: true,
@@ -1689,7 +1744,7 @@ export async function orchestrateTreeRequest({
     emitStatus(socket, "done", "");
     const answer = result?.content || result?.answer || null;
     if (answer) pushMemory(visitorId, message, answer);
-    return { success: true, answer, modeKey: classification.mode, modesUsed, rootId };
+    return { success: true, answer, modeKey: resolvedMode, modesUsed, rootId };
   }
 
   // ────────────────────────────────────────────────────────

@@ -157,12 +157,12 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
     try {
       const { answer, chatId } = await runChat({
         userId, username, message,
-        mode: "tree:study-session",
+        mode: "tree:study-coach",
         rootId, res, slot: "study",
       });
-      return { answer, chatId, mode: "tree:study-session" };
+      return { answer, chatId, mode: "tree:study-coach" };
     } catch (llmErr) {
-      return { answer: "Session failed. Check LLM connection.", mode: "tree:study-session" };
+      return { answer: "Session failed. Check LLM connection.", mode: "tree:study-coach" };
     }
   }
 

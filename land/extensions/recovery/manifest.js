@@ -44,7 +44,7 @@ export default {
     tools: false,
     jobs: true,
     modes: true,
-    guidedMode: "tree:recovery-log",
+    guidedMode: "tree:recovery-review",
 
     hooks: {
       fires: ["recovery:milestone", "recovery:patternDetected"],
