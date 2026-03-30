@@ -23,7 +23,7 @@ export default {
     "navigate-tree",
     "get-tree-context",
     "get-node-notes",
-    "create-node-version-note",
+    "create-node-note",
   ],
 
   async buildSystemPrompt({ username, rootId, guided }) {

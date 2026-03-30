@@ -23,7 +23,7 @@ export default {
       "get-tree-context",
       // Write tools for placement (filtered out by query constraint if active)
       "create-new-node-branch",
-      "create-node-version-note",
+      "create-node-note",
       "edit-node-name",
       "edit-node-type",
     ];
@@ -78,12 +78,12 @@ TOOLS:
 - navigate-tree: search by keyword, jump to a node, see children. Fast. Call multiple times.
 - get-tree-context: read a node's notes, children, type. Use includeNotes=true.
 - create-new-node-branch: create a node (or nested children). Use for things with their own state.
-- create-node-version-note: add a note to a node. Use for thoughts, observations, records.
+- create-node-note: add a note to a node. Use for thoughts, observations, records.
 - edit-node-name: rename a node.
 - edit-node-type: set a node's semantic type.
 
 TOOL SELECTION (follow exactly):
-- If the input is a thought about something existing, use create-node-version-note.
+- If the input is a thought about something existing, use create-node-note.
 - If the input introduces something with its own state (sets, reps, dates, goals, sections), use create-new-node-branch.
 - If the input modifies an existing field (rename, retype, set a value), use the edit tool.
 - When in doubt, it is a note. Notes are cheap. Nodes are structure.

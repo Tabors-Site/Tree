@@ -18,7 +18,7 @@ export default {
   toolNames: [
     "navigate-tree",
     "get-tree-context",
-    "create-node-version-note",
+    "create-node-note",
   ],
 
   async buildSystemPrompt({ username, rootId }) {

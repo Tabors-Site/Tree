@@ -24,7 +24,7 @@ export default {
     "study-save-profile",
     "navigate-tree",
     "get-tree-context",
-    "create-node-version-note",
+    "create-node-note",
   ],
 
   async buildSystemPrompt({ username, rootId }) {
@@ -94,7 +94,7 @@ You can:
 - Create new topics directly (study-create-topic, needs activeNodeId)
 - Break topics into subtopics (study-add-subtopic)
 - Add to queue (study-add-to-queue)
-- Write study plans as notes (create-node-version-note on topic nodes)
+- Write study plans as notes (create-node-note on topic nodes)
 
 When the user says "break down X" or "build curriculum for X":
 1. Use study-create-topic to create it under Active

@@ -11,6 +11,7 @@ import logMode from "./modes/log.js";
 import reflectMode from "./modes/reflect.js";
 import planMode from "./modes/plan.js";
 import journalMode from "./modes/journal.js";
+import getTools from "./tools.js";
 import {
   configure,
   scaffold,
@@ -190,8 +191,15 @@ export async function init(core) {
 
   log.info("Recovery", "Loaded. The tree grows toward health.");
 
+  const tools = getTools();
+
   return {
     router,
+    tools,
+    modeTools: [
+      { modeKey: "tree:recovery-log", toolNames: ["recovery-add-substance"] },
+      { modeKey: "tree:recovery-plan", toolNames: ["recovery-add-substance", "recovery-complete-setup"] },
+    ],
     exports: {
       scaffold,
       isInitialized,

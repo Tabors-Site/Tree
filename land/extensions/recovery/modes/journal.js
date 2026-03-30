@@ -12,7 +12,7 @@ export default {
   maxMessagesBeforeLoop: 2,
   preserveContextOnLoop: false,
 
-  toolNames: ["create-node-version-note", "get-node-notes"],
+  toolNames: ["create-node-note", "get-node-notes"],
 
   buildSystemPrompt({ username }) {
     return `You are at ${username}'s journal. This is the safe space.

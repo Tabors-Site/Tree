@@ -115,7 +115,7 @@ export function renderFoodDashboard({ rootId, rootName, picture, token, userId }
 
   const body = `
     <div class="food-layout">
-      ${userId ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><a href="/api/v1/user/${userId}/apps?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">← Apps</a><a href="/api/v1/user/${userId}/llm?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM</a></div>` : ""}
+      ${userId ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><a href="/api/v1/user/${userId}/apps?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">← Apps</a><div style="display:flex;gap:16px;"><a href="/api/v1/root/${rootId}?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">Tree</a><a href="/api/v1/user/${userId}/llm?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM</a></div></div>` : ""}
       <h1 style="font-size: 1.5rem; color: #fff; margin-bottom: 0;">${esc(rootName || "Food")}</h1>
       <div style="color: rgba(255,255,255,0.35); font-size: 0.85rem; margin-top: 4px;">${dateStr} . ${timeStr}</div>
       ${profileStr ? `<div style="color: rgba(255,255,255,0.3); font-size: 0.8rem; margin-top: 2px;">${esc(profileStr)}</div>` : ""}

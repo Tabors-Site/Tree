@@ -28,7 +28,7 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
     try {
       const { answer, chatId } = await runChat({
         userId, username,
-        message: `Knowledge base just created. The user said: "${message}".\n\nFirst: infer what domain this knowledge base covers from the user's message. Rename the root node to a clear, short name for this domain (e.g. "Datacenter Ops", "Company Policies", "Product Knowledge") using the rename tool.\n\nThen: if they're telling you something, organize it into the Topics tree. If they're asking, explain the kb is empty and invite them to start adding knowledge.`,
+        message: `Knowledge base just created. The user said: "${message}".\n\nIf they're telling you something, organize it into the Topics tree. If they're asking, explain the kb is empty and invite them to start adding knowledge.`,
         mode: "tree:kb-tell",
         rootId, res, slot: "kb",
       });

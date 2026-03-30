@@ -69,15 +69,11 @@ const TOOL_DEFS = {
     type: "function",
     function: {
       name: "get-node-notes",
-      description: "Get notes for a node at a specific prestige version.",
+      description: "Get notes for a node.",
       parameters: {
         type: "object",
         properties: {
           nodeId: { type: "string" },
-          prestige: {
-            type: "number",
-            description: "Version number (0 = first)",
-          },
           limit: { type: "number", description: "Max notes to return" },
           startDate: { type: "string", description: "ISO date filter start" },
           endDate: { type: "string", description: "ISO date filter end" },
@@ -91,17 +87,16 @@ const TOOL_DEFS = {
     type: "function",
     function: {
       name: "get-node-contributions",
-      description: "Get contribution history for a node version.",
+      description: "Get contribution history for a node.",
       parameters: {
         type: "object",
         properties: {
           nodeId: { type: "string" },
-          version: { type: "number" },
           limit: { type: "number" },
           startDate: { type: "string" },
           endDate: { type: "string" },
         },
-        required: ["nodeId", "version"],
+        required: ["nodeId"],
       },
     },
   },
@@ -240,17 +235,16 @@ const TOOL_DEFS = {
     },
   },
 
-  "create-node-version-note": {
+  "create-node-note": {
     type: "function",
     function: {
-      name: "create-node-version-note",
+      name: "create-node-note",
       description: "Create a text note on a node. Confirm exact wording first.",
       parameters: {
         type: "object",
         properties: {
           content: { type: "string", description: "Note text content" },
           nodeId: { type: "string" },
-          prestige: { type: "number" },
           userId: { type: "string" },
         },
         required: ["content", "nodeId", "userId"],
@@ -462,7 +456,7 @@ const TOOL_DEFS = {
   function: {
     name: "get-tree-context",
     description:
-      "Reads node data with configurable scope. Returns current version, notes, and optionally siblings, parent chain, scripts.",
+      "Reads node data with configurable scope. Returns notes, and optionally siblings, parent chain, scripts.",
     parameters: {
       type: "object",
       properties: {
@@ -486,15 +480,7 @@ const TOOL_DEFS = {
           type: "boolean",
           description: "Include children names. Default true.",
         },
-        includeValues: {
-          type: "boolean",
-          description: "Include version values and goals. Default true.",
-        },
-        includeScripts: {
-          type: "boolean",
-          description: "Include script names. Default false.",
-        },
-      },
+},
       required: ["nodeId"],
     },
   },

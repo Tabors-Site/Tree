@@ -11,7 +11,7 @@ export default {
 
   toolNames: [
     "get-node-notes",
-    "create-node-version-note",
+    "create-node-note",
     "edit-node-note",
     "delete-node-note",
     "transfer-node-note",
@@ -30,7 +30,7 @@ Workflow: Read context, call tool(s), return JSON summary.
 
 TOOLS:
 - get-node-notes: fetch existing notes (use current prestige)
-- create-node-version-note: create new note. Write exactly what was requested, do not embellish.
+- create-node-note: create new note. Write exactly what was requested, do not embellish.
 - edit-node-note: modify existing note
   Full replace: noteId + content
   Line-range: noteId + content + lineStart + lineEnd (0-indexed, [start, end) replaced)

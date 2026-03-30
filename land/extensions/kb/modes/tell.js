@@ -2,6 +2,8 @@
 // Parse statements into knowledge. Find or create the right location.
 // Write notes. Detect updates to existing notes.
 
+import { findKbNodes } from "../core.js";
+
 export default {
   name: "tree:kb-tell",
   emoji: "📝",
@@ -18,25 +20,34 @@ export default {
     "get-tree",
     "get-node-notes",
     "create-new-node",
-    "create-node-version-note",
+    "create-node-note",
     "edit-node-note",
     "edit-node-name",
     "get-searched-notes-by-user",
   ],
 
-  buildSystemPrompt({ username }) {
+  async buildSystemPrompt({ username, rootId }) {
+    const nodes = await findKbNodes(rootId);
+    const topicsId = nodes?.topics?.id || "unknown";
+    const unplacedId = nodes?.unplaced?.id || "unknown";
+
     return `You are maintaining a knowledge base for ${username}.
 
 The user tells you things. Your job is to organize that information into the Topics tree.
 
+IMPORTANT NODE IDS:
+- Topics parent node: ${topicsId} (ALL topic branches go under this node)
+- Unplaced node: ${unplacedId} (for things you can't categorize)
+
 WORKFLOW:
 1. Read the input. Understand what information is being shared.
-2. Search the existing Topics tree for a matching branch.
-3. If a branch exists: read its notes. If the new info updates existing knowledge, edit the existing note. If it's new knowledge for that branch, add a new note.
-4. If no branch exists: create one under Topics with a clear name. Write the note there.
-5. If you genuinely can't categorize it: write it to the Unplaced node. Say so.
+2. Use navigate-tree on the Topics node (${topicsId}) to see existing branches.
+3. If a matching branch exists: read its notes. Update existing notes or add new ones.
+4. If no matching branch exists: create a new node under Topics (parentId: ${topicsId}). Write the note there.
+5. If you genuinely can't categorize it: write to Unplaced (${unplacedId}). Say so.
 
 RULES:
+- ALWAYS create topic branches under the Topics node (${topicsId}), never under root.
 - Keep note content factual and clear. Strip conversational filler.
 - Use the user's exact terminology for names, numbers, procedures.
 - When updating existing notes, preserve what's still accurate. Change only what's new.

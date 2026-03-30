@@ -781,7 +781,7 @@ async function executePlanSteps({
               const ctx = await getContextForAi(candidate.nodeId, {
                 includeChildren: true,
                 includeParentChain: true,
-                includeValues: false,
+
                 includeNotes: false,
                 userId,
               });
@@ -936,25 +936,21 @@ async function executePlanSteps({
         structure: {
           includeChildren: true,
           includeParentChain: true,
-          includeValues: true,
           includeNotes: true,
         },
         edit: {
           includeChildren: true,
           includeParentChain: true,
-          includeValues: true,
           includeNotes: false,
         },
         notes: {
           includeChildren: false,
           includeParentChain: false,
-          includeValues: false,
           includeNotes: true,
         },
         query: {
           includeChildren: true,
           includeParentChain: true,
-          includeValues: true,
           includeNotes: true,
         },
       };
@@ -1025,7 +1021,6 @@ async function executePlanSteps({
             const childCtx = await getContextForAi(child.id, {
               includeChildren: true,
               includeParentChain: false,
-              includeValues: false,
               includeNotes: false,
               userId,
             });
@@ -2643,7 +2638,6 @@ async function scoutExistingStructure({
     const deeperCtx = await getContextForAi(match.id, {
       includeChildren: true,
       includeParentChain: true,
-      includeValues: false,
       includeNotes: false,
       userId,
     });
@@ -2790,7 +2784,6 @@ async function fetchMoveCounterparts(directive, navigatedNodeId, rootId, userId 
         const ctx = await getContextForAi(match.id, {
           includeChildren: true,
           includeParentChain: true,
-          includeValues: false,
           includeNotes: false,
           userId,
         });

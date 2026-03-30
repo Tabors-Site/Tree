@@ -531,7 +531,6 @@ export async function getContextForAi(nodeId, options = {}) {
     includeSiblings = false,
     includeChildren = true,
     includeParentChain = false,
-    includeScripts = false,
     includeDirectives = false,
   } = options;
 

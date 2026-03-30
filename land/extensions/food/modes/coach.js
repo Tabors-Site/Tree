@@ -17,7 +17,7 @@ export default {
     "food-save-profile",
     "navigate-tree",
     "get-tree-context",
-    "create-node-version-note",
+    "create-node-note",
   ],
 
   buildSystemPrompt({ username, rootId }) {

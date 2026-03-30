@@ -16,7 +16,7 @@ export default {
     "get-tree",
     "get-node",
     "get-node-notes",
-    "create-node-version-note",
+    "create-node-note",
     "edit-node-or-branch-status",
   ],
 

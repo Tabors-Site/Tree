@@ -359,19 +359,21 @@ export function chatBarJs({ endpoint }) {
     // Refresh dashboard content without full page reload
     async function refreshDashboardData() {
       try {
-        // Fetch the same page as HTML, parse it, swap the content
         var res = await fetch(window.location.href, { credentials: 'include' });
-        if (!res.ok) return;
+        if (!res.ok) { window.location.reload(); return; }
         var html = await res.text();
         var parser = new DOMParser();
         var doc = parser.parseFromString(html, 'text/html');
-        // Find the main content (everything except chat bar)
         var newContent = doc.querySelector('.container, .rec-layout, .kb-layout, [class*="-layout"]');
         var oldContent = document.querySelector('.container, .rec-layout, .kb-layout, [class*="-layout"]');
         if (newContent && oldContent) {
           oldContent.innerHTML = newContent.innerHTML;
+        } else {
+          window.location.reload();
         }
-      } catch {}
+      } catch {
+        window.location.reload();
+      }
     }
 
     // Drag to resize chat bar

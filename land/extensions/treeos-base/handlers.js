@@ -244,7 +244,7 @@ export function buildTools() {
     {
       name: "get-node-notes",
       description:
-        "Retrieves notes associated with a specific node's prestige.",
+        "Retrieves notes for a node.",
       schema: {
         nodeId: z
           .string()
@@ -255,9 +255,6 @@ export function buildTools() {
           .describe(
             "Optional limit for the number of most recent notes",
           ),
-        prestige: z
-          .number()
-          .describe("Specific number prestige version to filter by"),
         ...TimeWindowSchema,
       },
       annotations: {
@@ -266,12 +263,10 @@ export function buildTools() {
         idempotentHint: true,
         openWorldHint: false,
       },
-      handler: async ({ nodeId, prestige, limit, startDate, endDate }) => {
+      handler: async ({ nodeId, limit, startDate, endDate }) => {
         try {
           const result = await getNotes({
             nodeId,
-            version:
-              typeof prestige === "number" ? prestige : undefined,
             limit,
             startDate,
             endDate,
@@ -286,12 +281,11 @@ export function buildTools() {
     {
       name: "get-node-contributions",
       description:
-        "Fetches contributions for a specific node and prestige version (optionally limited).",
+        "Fetches contributions for a node.",
       schema: {
         nodeId: z
           .string()
           .describe("The ID of the node to fetch contributions for."),
-        version: z.number().describe("Prestige version of the node."),
         limit: z
           .number()
           .optional()
@@ -306,18 +300,13 @@ export function buildTools() {
         idempotentHint: true,
         openWorldHint: false,
       },
-      handler: async ({ nodeId, version, limit, startDate, endDate }) => {
-        const ensuredVersion = await resolvePrestige({
-          nodeId,
-          prestige: version,
-        });
+      handler: async ({ nodeId, limit, startDate, endDate }) => {
         if (typeof limit === "number" && limit > 30) {
           limit = 30;
         }
         try {
           const result = await getContributions({
             nodeId,
-            version: ensuredVersion,
             limit,
             startDate,
             endDate,
@@ -702,16 +691,6 @@ export function buildTools() {
           .boolean()
           .optional()
           .describe("Include children names. Default true."),
-        includeValues: z
-          .boolean()
-          .optional()
-          .describe(
-            "Include version values and goals. Default true.",
-          ),
-        includeScripts: z
-          .boolean()
-          .optional()
-          .describe("Include script names. Default false."),
       },
       annotations: {
         readOnlyHint: true,
@@ -809,7 +788,7 @@ export function buildTools() {
     },
 
     {
-      name: "create-node-version-note",
+      name: "create-node-note",
       description:
         "Creates a new text note for a node. Please confirm exact wording of content and do not add anything unless asked.",
       schema: {
@@ -830,9 +809,6 @@ export function buildTools() {
         nodeId: z
           .string()
           .describe("The ID of the node the note belongs to."),
-        prestige: z
-          .number()
-          .describe("The prestige version of the node"),
       },
       annotations: {
         readOnlyHint: false,
@@ -844,7 +820,6 @@ export function buildTools() {
         content,
         userId,
         nodeId,
-        prestige,
         chatId,
         sessionId,
       }) => {

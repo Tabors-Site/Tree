@@ -41,7 +41,7 @@ export default {
   provides: {
     models: {},
     routes: "./routes.js",
-    tools: false,
+    tools: true,
     jobs: true,
     modes: true,
     guidedMode: "tree:recovery-review",

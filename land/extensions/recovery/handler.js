@@ -34,12 +34,12 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
     try {
       const { answer, chatId } = await runChat({
         userId, username,
-        message: `First time setup. The user said: "${message}". Ask them what substances they want to track, their current usage, and their goals. Be warm. This is the beginning.`,
-        mode: "tree:recovery-log",
+        message: `First time setup. The user said: "${message}". Use the recovery-add-substance tool to add each substance they mention. Ask about current usage and target goals. Pass rootId "${rootId}". Be warm. This is the beginning.`,
+        mode: "tree:recovery-plan",
         rootId, res,
         slot: "recovery",
       });
-      return { answer, chatId, mode: "tree:recovery-log", setup: true };
+      return { answer, chatId, mode: "tree:recovery-plan", setup: true };
     } catch (llmErr) {
       return { answer: "Tree created. Set up an LLM connection to start the conversation.", mode: "tree:recovery-log", setup: true };
     }
@@ -57,12 +57,12 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
       try {
         const { answer, chatId } = await runChat({
           userId, username, message,
-          mode: "tree:recovery-log",
+          mode: "tree:recovery-plan",
           rootId, res, slot: "recovery",
         });
-        return { answer, chatId, mode: "tree:recovery-log", setup: true };
+        return { answer, chatId, mode: "tree:recovery-plan", setup: true };
       } catch (llmErr) {
-        return { answer: "What substances are you tracking?", mode: "tree:recovery-log", setup: true };
+        return { answer: "What substances are you tracking?", mode: "tree:recovery-plan", setup: true };
       }
     }
   }

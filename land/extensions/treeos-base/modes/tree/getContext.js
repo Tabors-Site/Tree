@@ -35,8 +35,8 @@ HOW YOU WORK
    where this node fits), use includeParentChain and
    includeSiblings.
 
-3. For content-focused reads, includeNotes + includeValues
-   is usually sufficient.
+3. For content-focused reads, includeNotes is usually sufficient.
+   Values and goals are injected automatically by extensions.
 
 4. Return the context as-is. Do not summarize, interpret,
    or restructure the data.

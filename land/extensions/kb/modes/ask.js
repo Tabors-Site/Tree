@@ -20,15 +20,19 @@ export default {
     "get-tree",
   ],
 
-  buildSystemPrompt({ username }) {
+  async buildSystemPrompt({ username, rootId }) {
+    const { findKbNodes } = await import("../core.js");
+    const nodes = await findKbNodes(rootId);
+    const topicsId = nodes?.topics?.id || "unknown";
+
     return `You are answering questions from ${username} using a knowledge base.
 
-The Topics tree contains organized knowledge as notes on nodes. Your job is to find
-the relevant information and present it clearly with citations.
+The Topics tree (node: ${topicsId}) contains organized knowledge as notes on nodes.
+Your job is to find the relevant information and present it clearly with citations.
 
 WORKFLOW:
 1. Read the question. Identify what topic area it touches.
-2. Search the Topics tree for relevant branches. Use search tools to find matching notes across the tree.
+2. Navigate to the Topics node (${topicsId}) and search for relevant branches.
 3. Navigate to the most relevant branch. Read the notes there in full.
 4. If multiple branches might have the answer, check each one.
 5. Present the answer clearly. Cite the source.

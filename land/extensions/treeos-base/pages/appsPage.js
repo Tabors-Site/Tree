@@ -176,8 +176,11 @@ export function renderAppsPage({ userId, username, rootMap, qs }) {
 
   const body = `
     <div style="max-width: 960px; margin: 0 auto; padding: 12px 20px 0; display: flex; justify-content: space-between; align-items: center;">
-      <a href="/chat" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">← Chat</a>
-      <a href="/api/v1/user/${userId}/llm?html${tokenParam}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM Connections</a>
+      <a href="/chat" target="_top" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">← Chat</a>
+      <div style="display:flex;gap:16px;">
+        <a href="/dashboard" target="_top" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">Advanced</a>
+        <a href="/api/v1/user/${userId}/llm?html${tokenParam}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM</a>
+      </div>
     </div>
     <div class="page-header">
       <div class="page-title">Apps</div>

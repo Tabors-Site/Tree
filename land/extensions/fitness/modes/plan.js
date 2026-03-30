@@ -19,7 +19,7 @@ export default {
     "navigate-tree",
     "get-tree-context",
     "create-new-node",
-    "create-node-version-note",
+    "create-node-note",
     "fitness-add-modality",
     "fitness-add-group",
     "fitness-add-exercise",
@@ -80,7 +80,7 @@ You can:
 - Add new modalities (fitness-add-modality)
 - Add groups and exercises (fitness-add-group, fitness-add-exercise)
 - Remove exercises (fitness-remove-exercise)
-- Write program schedules as notes on the Program node (create-node-version-note)
+- Write program schedules as notes on the Program node (create-node-note)
 - Navigate to inspect current state (navigate-tree, get-tree-context)
 
 Ask what they want to change. Make the changes with tools. Keep it conversational.`;

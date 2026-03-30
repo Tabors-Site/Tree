@@ -53,7 +53,7 @@ registerToolNavigations({
 
   // Notes
   "get-node-notes": ({ args, withToken: t }) => notesUrl(args, t),
-  "create-node-version-note": ({ args, withToken: t }) => notesUrl(args, t),
+  "create-node-note": ({ args, withToken: t }) => notesUrl(args, t),
   "create-node-version-image-note": ({ args, withToken: t }) => notesUrl(args, t),
   "delete-node-note": ({ args, withToken: t }) => notesUrl(args, t),
   "transfer-node-note": ({ args, withToken: t }) => notesUrl(args, t),
