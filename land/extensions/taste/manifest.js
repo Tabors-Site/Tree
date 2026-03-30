@@ -1,6 +1,7 @@
 export default {
   name: "taste",
   version: "1.0.0",
+  builtFor: "treeos",
   description:
     "The tree learns what you like. Not from settings. From watching. " +
     "Signals accumulate on nodes as users interact. AI-generated content that gets kept is positive. " +
@@ -11,7 +12,7 @@ export default {
     "The tree knows both.",
 
   needs: {
-    services: ["hooks"],
+    services: ["hooks", "llm", "metadata"],
     models: ["Node", "Contribution"],
   },
 

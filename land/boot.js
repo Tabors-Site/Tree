@@ -151,7 +151,7 @@ const PROFILES = {
       // Kernel extensions (required for basic operation)
       "treeos-base", "tree-orchestrator", "navigation", "starter-types", "console",
       // Basic functionality
-      "values", "html-rendering", "dashboard",
+      "values", "html-rendering", "dashboard", "user-tiers",
     ],
   },
 
@@ -166,22 +166,24 @@ const PROFILES = {
       "values", "html-rendering", "dashboard",
       // Core experience
       "notifications", "monitor", "team", "llm-response-formatting",
-      "water", "heartbeat", "purpose", "phase", "remember", "approve",
+      "user-tiers", "water", "heartbeat", "purpose", "phase", "remember", "approve",
       // Cascade (the nervous system)
       "propagation", "perspective-filter", "sealed-transport", "codebook",
       "gap-detection", "long-memory", "pulse", "flow",
       // Intelligence
-      "tree-compress", "contradiction", "intent", "embed",
+      "tree-compress", "contradiction", "inverse-tree", "intent", "embed",
       "scout", "explore", "trace", "boundary", "competence", "reflect", "evolve",
       // Maintenance
       "prune", "reroot", "changelog", "digest", "delegate",
       // Infrastructure
       "breath", "scheduler", "schedules", "prestige",
-      "persona", "peer-review", "channels",
+      "persona", "peer-review", "channels", "taste",
+      // Proficiency apps
+      "food", "fitness", "recovery", "study", "kb", "life",
       // Core gateways
       "gateway", "gateway-discord", "gateway-telegram", "gateway-reddit",
       // User features
-      "instructions", "rings",
+      "instructions", "rings", "dynamic-rename", "stream", "learn",
     ],
   },
 
