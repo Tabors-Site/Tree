@@ -738,7 +738,8 @@ router.get("/chat", authenticateLite, async (req, res) => {
         <div class="welcome-message" id="welcomeMsg">
           <div class="welcome-icon">🌳</div>
           <h2>Start chatting</h2>
-          <p>Ask anything about your tree or tell it something new.</p>
+          <p>Just type. Natural language works. Say hello, log food, ask a question, or tell it something new.</p>
+          <p style="margin-top:8px;font-size:13px;color:var(--text-tertiary);">Connect via CLI too: <code style="background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;">npm i -g treeos</code> . <a href="/cli" style="color:inherit;text-decoration:underline;" target="_blank">Reference</a></p>
         </div>
       </div>
       <div class="chat-input-area">
@@ -914,7 +915,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
         const disc = chatMessages.querySelector(".welcome-message.disconnected");
         if (disc) {
           disc.remove();
-          chatMessages.innerHTML = '<div class="welcome-message" id="welcomeMsg"><div class="welcome-icon">🌳</div><h2>Start chatting</h2><p>Ask anything about your tree or tell it something new.</p></div>';
+          chatMessages.innerHTML = '<div class="welcome-message" id="welcomeMsg"><div class="welcome-icon">🌳</div><h2>Start chatting</h2><p>Just type. Natural language works.</p></div>';
           chatArea.classList.add("empty");
         }
 
@@ -1237,7 +1238,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
         isSending = false;
       }
       socket.emit("clearConversation");
-      chatMessages.innerHTML = '<div class="welcome-message" id="welcomeMsg"><div class="welcome-icon">🌳</div><h2>Start chatting</h2><p>Ask anything about your tree or tell it something new.</p></div>';
+      chatMessages.innerHTML = '<div class="welcome-message" id="welcomeMsg"><div class="welcome-icon">🌳</div><h2>Start chatting</h2><p>Just type. Natural language works.</p></div>';
       chatArea.classList.add("empty");
       document.getElementById("clearChatBtn").classList.remove("visible");
       updateSendBtn();

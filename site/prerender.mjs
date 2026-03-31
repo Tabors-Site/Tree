@@ -49,6 +49,7 @@ const STATIC_ROUTES = [
   "/recovery",
   "/kb",
   "/app",
+  "/start",
 ];
 
 const BLOG_API = (process.env.VITE_LAND_URL || "https://treeos.ai") + "/api/v1";
@@ -138,6 +139,10 @@ const PAGE_META = {
   "/kb": {
     title: "KB . The Tree That Remembers Everything",
     description: "Tell it things. Ask it things. One person maintains, everyone benefits. Knowledge base with citations, staleness detection, and guided review. The coworker who never forgets.",
+  },
+  "/start": {
+    title: "Get Started . TreeOS",
+    description: "Your own AI. Your own system. Free. Join a land or run your own. CLI or browser. Choose extensions, talk to your tree, build your own. Not a product. Already yours.",
   },
   "/app": {
     title: "TreeOS . The First OS Built on the Seed",

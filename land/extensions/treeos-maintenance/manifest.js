@@ -24,14 +24,10 @@ export default {
     "\n\n" +
     "Install: treeos ext install treeos-maintenance",
 
+  includes: ["prune", "reroot", "changelog", "digest", "delegate"],
+
   needs: {
-    extensions: [
-      "prune",
-      "reroot",
-      "changelog",
-      "digest",
-      "delegate",
-    ],
+    extensions: ["prune", "reroot", "changelog", "digest", "delegate"],
   },
 
   optional: {},

@@ -11,6 +11,15 @@ export default {
     "breathes, remembers every age, and connects to the world through eight channel types. " +
     "The operator decides what to keep.",
 
+  includes: [
+    "treeos-base", "tree-orchestrator", "land-manager", "navigation",
+    "starter-types", "console", "dashboard", "notifications", "monitor",
+    "llm-response-formatting", "team", "user-tiers", "html-rendering",
+    "water", "heartbeat", "purpose", "phase", "remember", "breath",
+    "instructions", "channels", "persona", "mycelium", "peer-review",
+    "seed-export", "governance", "teach", "split", "approve",
+  ],
+
   bundles: [
     "treeos-cascade@^1.0.0",
     "treeos-connect@^1.0.0",

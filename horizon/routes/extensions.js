@@ -83,7 +83,7 @@ async function validateRequiredDeps(manifest) {
     const versions = await Extension.find({ name }).select("version").lean();
 
     if (versions.length === 0) {
-      missing.push({ dep, reason: `dependency "${name}" not found in directory` });
+      missing.push({ dep, reason: `dependency "${name}" not found in horizon` });
       continue;
     }
 
@@ -163,18 +163,23 @@ function levenshtein(a, b) {
  * Only runs for brand new names (first publish). Threshold: distance 1 for
  * short names (<8 chars), distance 2 for longer names.
  */
-async function checkTyposquatting(name) {
-  // Get all distinct published extension names
-  const existingNames = await Extension.distinct("name");
+async function checkTyposquatting(name, landId) {
+  // Get all published extensions (name + author) to check similarity
+  const existingExts = await Extension.aggregate([
+    { $group: { _id: "$name", authorLandId: { $first: "$authorLandId" } } },
+  ]);
 
   const threshold = name.length < 8 ? 1 : 2;
   const suspicious = [];
 
-  for (const existing of existingNames) {
+  for (const ext of existingExts) {
+    const existing = ext._id;
     // Skip exact match (same name is fine, ownership check handles it)
     if (existing === name) continue;
     // Skip names in the same family (shared prefix with hyphen separator)
     if (name.startsWith(existing + "-") || existing.startsWith(name + "-")) continue;
+    // Skip extensions published by the same land (same author, not typosquatting)
+    if (landId && ext.authorLandId === landId) continue;
     const dist = levenshtein(name, existing);
     if (dist <= threshold) {
       suspicious.push(existing);
@@ -789,7 +794,7 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
     // Typosquatting: only for brand new names (no existing versions)
     const existingAny = await Extension.findOne({ name: manifest.name }).select("_id").lean();
     if (!existingAny) {
-      const suspicious = await checkTyposquatting(manifest.name);
+      const suspicious = await checkTyposquatting(manifest.name, req.landId);
       if (suspicious.length > 0) {
         return res.status(409).json({
           error: `Name "${manifest.name}" is suspiciously similar to existing extensions: ${suspicious.join(", ")}. If this is intentional, contact the directory maintainers.`,
@@ -802,7 +807,7 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
     if (!depCheck.valid) {
       const reasons = depCheck.missing.map((m) => m.reason);
       return res.status(400).json({
-        error: "Required extension dependencies not found in directory",
+        error: "Required extension dependencies not found in horizon",
         missing: reasons,
       });
     }
@@ -814,7 +819,7 @@ router.post("/", verifyHorizonAuth(), attachLandIdentity(), async (req, res) => 
       const unregistered = maintainers.filter((m) => !registeredDomains.has(m));
       if (unregistered.length > 0) {
         return res.status(400).json({
-          error: `Maintainer domains not found in directory: ${unregistered.join(", ")}. Only registered lands can be maintainers.`,
+          error: `Maintainer domains not found in horizon: ${unregistered.join(", ")}. Only registered lands can be maintainers.`,
         });
       }
     }

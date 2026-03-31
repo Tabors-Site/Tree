@@ -24,6 +24,7 @@ import LandPage from "./Landing/LandPage.jsx";
 import TreeOSPage from "./Landing/TreeOSPage.jsx";
 import StudyPage from "./Landing/StudyPage.jsx";
 import HTMLPage from "./Landing/HTMLPage.jsx";
+import StartPage from "./Landing/StartPage.jsx";
 import FitnessPage from "./Landing/FitnessPage.jsx";
 import FoodPage from "./Landing/FoodPage.jsx";
 import RecoveryPage from "./Landing/RecoveryPage.jsx";
@@ -64,6 +65,7 @@ const WelcomeRoutes = () => {
       <Route path="/flow" element={<FlowPage />} />
       <Route path="/build" element={<BuildPage />} />
       <Route path="/html" element={<HTMLPage />} />
+      <Route path="/start" element={<StartPage />} />
       <Route path="/cli" element={<CLIAbout />} />
       <Route path="/mycelium" element={<MyceliumPage />} />
       <Route path="/land" element={<LandPage />} />

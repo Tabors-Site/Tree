@@ -37,19 +37,17 @@ export default {
     "\n\n" +
     "Install: treeos ext install treeos-connect",
 
+  includes: [
+    "gateway", "gateway-telegram", "gateway-discord", "gateway-webhook",
+    "gateway-email", "gateway-sms", "gateway-slack", "gateway-matrix",
+    "gateway-reddit", "gateway-x", "gateway-tree",
+  ],
+
   needs: {
     extensions: [
-      "gateway",
-      "gateway-telegram",
-      "gateway-discord",
-      "gateway-webhook",
-      "gateway-email",
-      "gateway-sms",
-      "gateway-slack",
-      "gateway-matrix",
-      "gateway-reddit",
-      "gateway-x",
-      "gateway-tree",
+      "gateway", "gateway-telegram", "gateway-discord", "gateway-webhook",
+      "gateway-email", "gateway-sms", "gateway-slack", "gateway-matrix",
+      "gateway-reddit", "gateway-x", "gateway-tree",
     ],
   },
 

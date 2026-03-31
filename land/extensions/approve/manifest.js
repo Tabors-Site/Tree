@@ -1,6 +1,6 @@
 export default {
   name: "approve",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "The AI pauses and waits for you. Any tool call can be put on a watchlist. When the AI " +

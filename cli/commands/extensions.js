@@ -831,7 +831,7 @@ Examples:
         // Fetch bundle from registry
         console.log(chalk.dim(`Fetching bundle ${name} from directory...`));
         const res = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}`);
-        if (!res.ok) return console.log(chalk.red(`Bundle "${name}" not found in directory.`));
+        if (!res.ok) return console.log(chalk.red(`Bundle "${name}" not found in horizon.`));
         const data = await res.json();
         const b = data.latest;
         if (!b || b.type !== "bundle") return console.log(chalk.red(`"${name}" is not a bundle.`));
@@ -1037,7 +1037,7 @@ Examples:
 
         console.log(chalk.dim(`Fetching OS ${name} from directory...`));
         const res = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}`);
-        if (!res.ok) return console.log(chalk.red(`OS "${name}" not found in directory.`));
+        if (!res.ok) return console.log(chalk.red(`OS "${name}" not found in horizon.`));
         const data = await res.json();
         const o = data.latest;
         if (!o || o.type !== "os") return console.log(chalk.red(`"${name}" is not an OS.`));
@@ -1059,7 +1059,7 @@ Examples:
 
           const bRes = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(bundleName)}`);
           if (!bRes.ok) {
-            console.log(chalk.red(`  Bundle "${bundleName}" not found in directory.`));
+            console.log(chalk.red(`  Bundle "${bundleName}" not found in horizon.`));
             failed++;
             continue;
           }

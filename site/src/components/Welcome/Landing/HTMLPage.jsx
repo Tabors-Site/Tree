@@ -61,11 +61,11 @@ const HTMLPage = () => {
           </P>
           <Code>{`# JSON (for CLI, AI, extensions, integrations)
 GET /api/v1/node/abc-123
-→ { "status": "ok", "data": { "name": "Fitness", "type": "goal", "children": [...] } }
+-> { "status": "ok", "data": { "name": "Fitness", "type": "goal", "children": [...] } }
 
 # HTML (for browsers)
 GET /api/v1/node/abc-123?html
-→ <html>... rendered page with the same node data ...</html>`}</Code>
+-> <html>... rendered page with the same node data ...</html>`}</Code>
           <P>
             The kernel serves JSON. The html-rendering extension intercepts <code>?html</code> requests
             and wraps the same data in a visual interface. Remove html-rendering and the API still works.
@@ -124,101 +124,266 @@ GET /api/v1/node/abc-123?html
         </div>
       </section>
 
-      {/* ── DYNAMIC HTML ── */}
+      {/* ── UI SLOTS ── */}
       <section className="lp-section">
-        <div className="lp-container" style={{maxWidth: 800}}>
-          <h2 className="lp-section-title">Dynamic HTML</h2>
-          <P>
-            The HTML pages are server-rendered. No React. No build step. No client-side framework.
-            Template strings that read from the database and return HTML. Fast, lightweight,
-            works everywhere. The same Node.js process that runs the AI serves the pages.
-          </P>
-          <P>
-            Pages are assembled from render functions. Each function takes data and returns HTML.
-            Extensions register their own render functions. The html-rendering extension provides
-            the layout. TreeOS extensions provide the pages. Third-party extensions add their own.
-          </P>
-          <Code>{`// Extension registers a page
-const treeos = getExtension("treeos-base");
-treeos?.exports?.registerSlot("node-detail", "my-ext", (ctx) => {
-  const data = getExtMeta(ctx.node, "my-ext");
-  return \`<div class="my-ext-panel">\${data.summary}</div>\`;
-});
-
-// The node detail page resolves all registered slots:
-const extraHtml = resolveSlots("node-detail", { node, user });
-// → includes my-ext's panel if my-ext is installed
-// → excludes it if my-ext is blocked at this position`}</Code>
-        </div>
-      </section>
-
-      {/* ── SLOTS ── */}
-      <section className="lp-section lp-section-alt">
         <div className="lp-container" style={{maxWidth: 800}}>
           <h2 className="lp-section-title">UI Slots</h2>
           <P>
-            Pages don't know which extensions are installed. They define slots.
-            Extensions register fragments for those slots. The page resolves whatever's registered.
+            Pages don't know which extensions are installed. They define named slots.
+            Extensions register HTML fragments for those slots during init().
+            The page resolves whatever's registered.
             Same pattern as hooks, modes, and tools. Extensions register. The resolver filters.
           </P>
+          <Code>{`// Extension registers a fragment for the apps page grid
+const treeos = getExtension("treeos-base");
+treeos?.exports?.registerSlot?.("apps-grid", "fitness", (ctx) => {
+  const roots = ctx.rootMap.get("Fitness") || [];
+  return \`<div class="app-card">
+    <div class="app-header">
+      <span class="app-emoji">&#x1F4AA;</span>
+      <span class="app-name">Fitness</span>
+    </div>
+    <div class="app-desc">Track workouts. Progressive overload.</div>
+    \${roots.map(r => \`<a class="app-active" href="...">\${r.name}</a>\`).join("")}
+  </div>\`;
+}, { priority: 10 });
+
+// The apps page resolves all registered cards:
+const cards = resolveSlots("apps-grid", { userId, rootMap, tokenParam });
+// -> fitness card + food card + kb card + whatever else is installed`}</Code>
+          <P>
+            Spatial scoping applies to slots. If an extension is blocked at the current node position,
+            its slot fragments don't render. The page doesn't decide. The slot resolver uses the same
+            spatial scoping that filters the AI's tools.
+          </P>
+
+          <h3 style={{color: "#fff", fontSize: "1rem", marginTop: 28, marginBottom: 12}}>Slot Names</h3>
           <div style={{maxWidth: 600, margin: "0 auto"}}>
             {[
-              ["user-profile", "The user profile page. Extensions add energy badges, tier labels, wallet links."],
-              ["node-detail", "The node detail view. Extensions add values panels, schedule widgets, script editors."],
-              ["tree-overview", "The tree root page. Extensions add understanding summaries, cascade status, health indicators."],
-              ["welcome-stats", "The landing page stats row. Extensions add custom metrics."],
-              ["land-admin", "The /land admin page. Extensions add their own management sections."],
-              ["nav-sidebar", "The navigation sidebar. Extensions add quick links, recent items, bookmarks."],
+              ["apps-grid", "App cards on the /apps page. Fitness, food, recovery, study, kb each register one."],
+              ["user-quick-links", "Links on the user profile page. Notes, AI Chats, Contributions, Mail, Invites, etc."],
+              ["user-profile-badge", "Tier badge or plan badge on the profile header."],
+              ["user-profile-energy", "Energy meter on the profile header."],
+              ["user-profile-sections", "Full sections below the profile header. Raw idea capture form, etc."],
+              ["tree-quick-links", "Back-nav links on the tree overview page. AI Chats, etc."],
+              ["tree-owner-sections", "Owner-only sections on the tree overview. Gateway config, etc."],
+              ["tree-holdings", "Holdings section on tree overview. Deferred cascade items."],
+              ["tree-dream", "Dream schedule section on tree overview."],
+              ["tree-team", "Team/collaboration section on tree overview."],
+              ["node-detail-sections", "Sections on the node detail page. Values, versions, etc."],
+              ["node-detail-below", "Below the detail sections. Scripts, etc."],
+              ["node-type-options", "Options inside the node type dropdown."],
+              ["energy-payment", "Payment/billing UI on the energy page. Only renders if billing extension installed."],
+              ["version-badge", "Badge on version detail page."],
+              ["version-meta-cards", "Metadata cards on version detail."],
+              ["version-detail-sections", "Full sections on version detail."],
             ].map(([name, desc]) => (
               <div key={name} style={{padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.04)"}}>
-                <code style={{color: "#4ade80", fontSize: "0.85rem"}}>{name}</code>
+                <code style={{color: "#6ee7b7", fontSize: "0.85rem"}}>{name}</code>
                 <span style={{color: "#666", fontSize: "0.85rem", marginLeft: 12}}>{desc}</span>
               </div>
             ))}
           </div>
-          <P style={{marginTop: 20, color: "rgba(255,255,255,0.5)", fontSize: "0.9rem"}}>
-            Spatial scoping applies to slots. Navigate to a Finance tree where solana is allowed:
-            the wallet link appears. Navigate to a Journal tree where solana is blocked: the wallet
-            link is gone. Same extension installed on the land. Different position, different UI.
-            The page doesn't decide. The slot resolver uses the same spatial scoping that filters
-            the AI's tools. What the AI can do, the browser shows. What the AI can't, the browser hides.
+
+          <h3 style={{color: "#fff", fontSize: "1rem", marginTop: 28, marginBottom: 12}}>Raw Mode</h3>
+          <P>
+            By default, each slot fragment is wrapped in a <code>{"<div data-slot=\"...\" data-ext=\"...\">"}</code> for
+            live WebSocket updates. When slots render inside elements that don't allow div children
+            (like <code>{"<ul>"}</code> or <code>{"<select>"}</code>), pass <code>{`{ raw: true }`}</code> to skip the wrapper:
+          </P>
+          <Code>{`// Inside a <ul> - divs would break the HTML
+<ul class="nav-links">
+  \${resolveSlots("user-quick-links", { userId, queryString }, { raw: true })}
+</ul>
+
+// Inside a <select> - divs would completely break rendering
+<select>
+  \${resolveSlots("node-type-options", { node }, { raw: true })}
+</select>`}</Code>
+        </div>
+      </section>
+
+      {/* ── LIVE UPDATES ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Live Dashboard Updates</h2>
+          <P>
+            When extension data changes (a workout is logged, a meal is tracked, a note is added),
+            the dashboard updates without a page refresh. Two mechanisms work together.
+          </P>
+
+          <h3 style={{color: "#fff", fontSize: "1rem", marginTop: 20, marginBottom: 12}}>After Chat Response</h3>
+          <P>
+            Every app dashboard includes a chat bar (via <code>chatBarJs</code>). After the AI responds,
+            the built-in <code>refreshDashboardData()</code> function re-fetches the page HTML, parses it,
+            and swaps the layout content. The dashboard updates in place. No full reload.
+          </P>
+
+          <h3 style={{color: "#fff", fontSize: "1rem", marginTop: 20, marginBottom: 12}}>Background Changes via WebSocket</h3>
+          <P>
+            When data changes from other sources (cascade signals, background jobs, another device),
+            extensions emit a <code>dashboardUpdate</code> event via WebSocket. The client catches it
+            and re-fetches the page.
+          </P>
+          <Code>{`// Server side: extension hooks emit updates when data changes
+core.hooks.register("afterNote", async ({ nodeId }) => {
+  const node = await core.models.Node.findById(nodeId).select("rootOwner metadata").lean();
+  if (!node?.rootOwner) return;
+  const fm = node.metadata instanceof Map ? node.metadata.get("fitness") : node.metadata?.fitness;
+  if (!fm?.role) return;
+  core.websocket?.emitToUser?.(
+    String(node.rootOwner),
+    "dashboardUpdate",
+    { rootId: String(node.rootOwner) }
+  );
+}, "fitness");
+
+// Client side: chatBarJs connects via socket.io and listens
+socket.on("dashboardUpdate", function(msg) {
+  if (msg.rootId !== currentRootId) return;
+  if (document.body.classList.contains("thinking")) return;
+  refreshDashboardData();
+});`}</Code>
+
+          <h3 style={{color: "#fff", fontSize: "1rem", marginTop: 20, marginBottom: 12}}>emitSlotUpdate</h3>
+          <P>
+            For more targeted updates, <code>emitSlotUpdate</code> re-renders a single slot fragment
+            and pushes just that HTML to the client. The client swaps the matching <code>data-slot</code> container.
+          </P>
+          <Code>{`// Re-render one extension's fragment for one slot and push to the user
+const treeos = getExtension("treeos-base");
+treeos?.exports?.emitSlotUpdate?.(core, userId, "apps-grid", "fitness", { rootMap });`}</Code>
+        </div>
+      </section>
+
+      {/* ── THE APP SHELL ── */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">The App Shell</h2>
+          <P>
+            The <code>/dashboard</code> route serves the app shell: a split-panel layout with a chat
+            panel on the left and an iframe viewport on the right. The iframe loads HTML pages. The chat
+            panel connects via WebSocket for real-time AI conversation.
+          </P>
+          <P>
+            When the iframe navigates to an app dashboard (e.g. <code>/root/:id/fitness?html</code>),
+            the app shell detects the URL change, extracts the rootId, and emits <code>urlChanged</code> so
+            the server switches the chat session to that tree. The tree's mode overrides kick in
+            automatically. You're on the fitness page, the AI thinks in fitness mode.
+          </P>
+
+          <h3 style={{color: "#fff", fontSize: "1rem", marginTop: 20, marginBottom: 12}}>inApp</h3>
+          <P>
+            The app shell adds <code>?inApp=1</code> to every iframe URL. Dashboard pages check this
+            and skip rendering their own chat bar, because the app shell's chat panel handles conversation.
+            Without this check, there would be two chat interfaces: the shell's panel and the iframe's bar.
+          </P>
+          <Code>{`// In your dashboard renderer
+export function renderMyDashboard({ rootId, rootName, token, userId, inApp }) {
+  return page({
+    css: css + (!inApp ? chatBarCss() : ""),
+    body: body + (!inApp ? chatBarHtml({ placeholder: "..." }) : ""),
+    js: !inApp ? chatBarJs({ endpoint: \`/api/v1/root/\${rootId}/my-ext\`, token, rootId }) : "",
+  });
+}
+
+// In your route handler, pass inApp through
+res.send(renderMyDashboard({
+  rootId, rootName, token: req.query.token,
+  userId: req.userId, inApp: !!req.query.inApp,
+}));`}</Code>
+          <P>
+            When loaded standalone (direct URL, no iframe), dashboards keep their embedded chat bar.
+            When loaded inside the app shell, the shell owns the chat. One codebase, two contexts.
           </P>
         </div>
       </section>
 
       {/* ── BUILDING TREEOS APPS ── */}
-      <section className="lp-section">
+      <section className="lp-section lp-section-alt">
         <div className="lp-container" style={{maxWidth: 800}}>
-          <h2 className="lp-section-title">Building TreeOS Apps</h2>
+          <h2 className="lp-section-title">Building an App Extension</h2>
           <P>
-            A TreeOS app is just an extension that registers pages, tools, modes, and slots.
+            A TreeOS app is an extension that registers pages, tools, modes, slots, and hooks.
             The tree is the database. The AI is the backend logic. The HTML is the frontend.
             The CLI is the power user interface. All four access the same data through the same API.
           </P>
-          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
-            <div className="lp-card">
-              <h3>Fitness App</h3>
-              <p style={{fontSize: "0.85rem", color: "#888"}}>
-                The fitness extension registers: two AI modes (coach and log), one route
-                (<code>/root/:rootId/fitness</code>), one CLI command (<code>fitness</code>),
-                and HTML slots for the node detail page (workout values, set tracking).
-                Users interact through chat, CLI, or browser. Same tree.
-              </p>
-            </div>
-            <div className="lp-card">
-              <h3>Your App</h3>
-              <p style={{fontSize: "0.85rem", color: "#888"}}>
-                Create an extension. Register modes for how the AI thinks about your domain.
-                Register tools for what the AI can do. Register routes for your API.
-                Register slots for your UI fragments. Register CLI commands for power users.
-                The tree holds the data. Everything else is a view into it.
-              </p>
-            </div>
-          </div>
-          <P style={{marginTop: 20}}>
-            <a href="/build" style={{color: "#4ade80"}}>Developer reference</a> covers
-            everything: manifest, init, hooks, modes, tools, routes, slots, CLI commands.
+          <Code>{`// manifest.js
+export default {
+  name: "my-app",
+  version: "1.0.0",
+  description: "My custom app",
+  needs: { services: ["hooks", "modes", "metadata"], models: ["Node"], extensions: [] },
+  optional: { extensions: ["treeos-base", "html-rendering"] },
+  provides: { routes: true, tools: true, cli: [
+    { command: "my-app", scope: ["tree"], description: "Talk to my app", method: "POST",
+      endpoint: "/root/:rootId/my-app", body: { message: "$message" } },
+  ]},
+};
+
+// index.js
+export async function init(core) {
+  // Register AI modes
+  core.modes.registerMode("tree:my-app-log", myLogMode, "my-app");
+  core.modes.registerMode("tree:my-app-plan", myPlanMode, "my-app");
+
+  // Register app card on the apps page
+  const treeos = getExtension("treeos-base");
+  treeos?.exports?.registerSlot?.("apps-grid", "my-app", (ctx) => {
+    return \`<div class="app-card">...</div>\`;
+  }, { priority: 60 });
+
+  // Live dashboard updates when data changes
+  core.hooks.register("afterNote", async ({ nodeId }) => {
+    // ... emit dashboardUpdate for this tree
+  }, "my-app");
+
+  core.hooks.register("afterMetadataWrite", async ({ nodeId, extName }) => {
+    if (extName !== "my-app" && extName !== "values") return;
+    // ... emit dashboardUpdate for this tree
+  }, "my-app");
+
+  // Enrich AI context
+  core.hooks.register("enrichContext", async ({ context, node, meta }) => {
+    const myMeta = meta?.["my-app"];
+    if (!myMeta?.role) return;
+    context.myAppState = await getState(String(node._id));
+  }, "my-app");
+
+  // Routes + tools
+  const router = (await import("./routes.js")).default;
+  const tools = (await import("./tools.js")).default();
+
+  return { router, tools, modeTools: [
+    { modeKey: "tree:my-app-plan", toolNames: ["my-app-create", "my-app-update"] },
+  ]};
+}`}</Code>
+        </div>
+      </section>
+
+      {/* ── RENDERING STACK ── */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">The Rendering Stack</h2>
+          <P>
+            No React. No build step. No client-side framework. Server-rendered HTML from template strings.
+            The same Node.js process that runs the AI serves the pages. Fast, lightweight, works everywhere.
           </P>
+          <div style={{maxWidth: 600, margin: "0 auto"}}>
+            {[
+              ["page()", "html-rendering/html/layout.js. The HTML document skeleton. Every page calls this with title, css, body, js."],
+              ["baseStyles", "html-rendering/html/baseStyles.js. Shared CSS: glass cards, headers, forms, grids, animations. Import what you need."],
+              ["chatBarJs()", "html-rendering/html/chatBar.js. Embeddable chat widget. Handles send, receive, thinking animation, history, auto-send, live dashboard refresh."],
+              ["renderAppDashboard()", "html-rendering/html/appDashboard.js. Generic app dashboard. Pass hero, stats, bars, cards, commands. Gets chatbar, delete button, entry animations."],
+              ["resolveSlots()", "treeos-base/slots.js. Resolve registered HTML fragments for a named slot. Filters by spatial scoping."],
+              ["emitSlotUpdate()", "treeos-base/slots.js. Push a re-rendered slot fragment to the client via WebSocket."],
+            ].map(([name, desc]) => (
+              <div key={name} style={{padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.04)"}}>
+                <code style={{color: "#6ee7b7", fontSize: "0.85rem"}}>{name}</code>
+                <div style={{color: "#666", fontSize: "0.85rem", marginTop: 4}}>{desc}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

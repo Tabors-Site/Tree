@@ -124,47 +124,40 @@ const LandPage = () => {
       {/* ── CONNECT TO YOUR LAND ── */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title"><a href="/cli" style={{color: "inherit", textDecoration: "none"}}>Connect to your land</a></h2>
+          <h2 className="lp-section-title">Connect to your land</h2>
+          <p className="lp-section-sub">Two ways in. Both work. Use whichever feels right.</p>
 
-          <div className="lp-terminal">
-            <div className="lp-term-header">
-              <span className="lp-term-dot" style={{background: "#ff5f56"}} />
-              <span className="lp-term-dot" style={{background: "#ffbd2e"}} />
-              <span className="lp-term-dot" style={{background: "#27c93f"}} />
-              <span className="lp-term-title">cli</span>
+          <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, maxWidth: 800, margin: "0 auto"}}>
+            <div>
+              <h3 style={{color: "#fff", fontSize: "1.1rem", marginBottom: 12}}>Browser</h3>
+              <p style={{color: "rgba(255,255,255,0.5)", fontSize: "0.9rem", lineHeight: 1.7, marginBottom: 16}}>
+                Open <code style={{color: "rgba(255,255,255,0.7)"}}>http://localhost:3000</code> in your browser.
+                Register, set up your LLM, and start chatting. Natural language works. Just type.
+              </p>
+              <p style={{color: "rgba(255,255,255,0.35)", fontSize: "0.85rem", lineHeight: 1.7}}>
+                Say hello. Ask a question. Log food. Start a study session.
+                The tree figures out what to do based on where you are.
+              </p>
             </div>
-            <div className="lp-term-body">
-              <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> npm install -g treeos
+            <div>
+              <h3 style={{color: "#fff", fontSize: "1.1rem", marginBottom: 12}}>CLI</h3>
+              <div className="lp-terminal" style={{marginBottom: 0}}>
+                <div className="lp-term-header">
+                  <span className="lp-term-dot" style={{background: "#ff5f56"}} />
+                  <span className="lp-term-dot" style={{background: "#ffbd2e"}} />
+                  <span className="lp-term-dot" style={{background: "#27c93f"}} />
+                  <span className="lp-term-title">terminal</span>
+                </div>
+                <div className="lp-term-body">
+                  <div className="lp-term-line"><span className="lp-term-prompt">$</span> npm install -g treeos</div>
+                  <div className="lp-term-line"><span className="lp-term-prompt">$</span> treeos connect http://localhost:3000</div>
+                  <div className="lp-term-line"><span className="lp-term-prompt">$</span> treeos register</div>
+                  <div className="lp-term-line"><span className="lp-term-prompt">$</span> treeos start</div>
+                  <div className="lp-term-line" />
+                  <div className="lp-term-line"><span style={{color: "#60a5fa"}}>you@localhost</span><span style={{color: "#666"}}>/~</span> <span className="lp-term-dim">{">"}</span> hello</div>
+                  <div className="lp-term-line lp-term-dim">  Home: Hey! You have no trees yet. Try: life food fitness</div>
+                </div>
               </div>
-              <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> treeos connect http://localhost:3000
-              </div>
-              <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> treeos register
-              </div>
-              <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> treeos chat "hello"
-              </div>
-            </div>
-          </div>
-
-          <div style={{height: 24}} />
-
-          <div className="lp-terminal">
-            <div className="lp-term-header">
-              <span className="lp-term-dot" style={{background: "#ff5f56"}} />
-              <span className="lp-term-dot" style={{background: "#ffbd2e"}} />
-              <span className="lp-term-dot" style={{background: "#27c93f"}} />
-              <span className="lp-term-title">response</span>
-            </div>
-            <div className="lp-term-body">
-              <div className="lp-term-line">
-                <span style={{color: "#60a5fa"}}>tabor@localhost</span><span style={{color: "#666"}}>/~</span> <span className="lp-term-dim">{">"}</span> chat "hello"
-              </div>
-              <div className="lp-term-line" />
-              <div className="lp-term-line"><span className="lp-term-green">Tree:</span> <span className="lp-term-output">Welcome to your land. You have no trees yet.</span></div>
-              <div className="lp-term-line"><span className="lp-term-output">      Try: mkroot "My First Tree"</span></div>
             </div>
           </div>
 
@@ -189,11 +182,11 @@ const LandPage = () => {
               </p>
             </div>
             <div className="lp-card">
-              <h3>Twenty base extensions</h3>
+              <h3>77 extensions on standard</h3>
               <p>
-                Navigation, orchestration, dashboard, notifications, monitoring, team
-                collaboration, presence detection, purpose tracking, cognitive phase
-                awareness, and memory of what was lost. All loaded automatically.
+                Intelligence, cascade, proficiency apps (food, fitness, study, recovery, KB),
+                navigation, orchestration, dashboard, notifications, monitoring, and more.
+                105 total available. Install what you need.
               </p>
             </div>
             <div className="lp-card">
@@ -218,57 +211,37 @@ const LandPage = () => {
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
           <h2 className="lp-section-title">First things to do</h2>
+          <p className="lp-section-sub">Natural language works everywhere. Just type what you mean.</p>
 
           <div className="lp-terminal">
             <div className="lp-term-header">
               <span className="lp-term-dot" style={{background: "#ff5f56"}} />
               <span className="lp-term-dot" style={{background: "#ffbd2e"}} />
               <span className="lp-term-dot" style={{background: "#27c93f"}} />
-              <span className="lp-term-title">plant a tree</span>
+              <span className="lp-term-title">get started</span>
             </div>
             <div className="lp-term-body">
-              <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> treeos mkroot "Life"
-              </div>
-              <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> treeos cd Life
-              </div>
-              <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> treeos mkdir Health, Work, Projects
-              </div>
-              <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> treeos cd Health
-              </div>
-              <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> treeos chat "help me organize my health goals"
-              </div>
+              <div className="lp-term-line"><span className="lp-term-prompt">you@localhost</span><span style={{color: "#666"}}>~</span> <span className="lp-term-dim">{">"}</span> life food fitness study recovery</div>
+              <div className="lp-term-line lp-term-dim">  Creating your Life tree...</div>
+              <div className="lp-term-line lp-term-dim">  Scaffolded: Food, Fitness, Study, Recovery</div>
+              <div className="lp-term-line" />
+              <div className="lp-term-line"><span className="lp-term-prompt">you@localhost</span><span style={{color: "#666"}}>/Life</span> <span className="lp-term-dim">{">"}</span> I had eggs and toast for breakfast</div>
+              <div className="lp-term-line lp-term-dim">  Logged. 310 cal, 18g protein.</div>
+              <div className="lp-term-line" />
+              <div className="lp-term-line"><span className="lp-term-prompt">you@localhost</span><span style={{color: "#666"}}>/Life</span> <span className="lp-term-dim">{">"}</span> bench 135x10x10x8</div>
+              <div className="lp-term-line lp-term-dim">  Push day logged. Bench up from 130 last session.</div>
+              <div className="lp-term-line" />
+              <div className="lp-term-line"><span className="lp-term-prompt">you@localhost</span><span style={{color: "#666"}}>/Life</span> <span className="lp-term-dim">{">"}</span> go food</div>
+              <div className="lp-term-line lp-term-dim">  Navigating to /Life/Health/Food</div>
+              <div className="lp-term-line" />
+              <div className="lp-term-line"><span className="lp-term-prompt">you@localhost</span><span style={{color: "#666"}}>/Life/Health/Food</span> <span className="lp-term-dim">{">"}</span> how am I doing this week</div>
+              <div className="lp-term-line lp-term-dim">  Averaging 1,850 cal. Protein at 82%. Breakfast consistency improving.</div>
             </div>
           </div>
 
-          <div style={{height: 24}} />
-
-          <div className="lp-terminal">
-            <div className="lp-term-header">
-              <span className="lp-term-dot" style={{background: "#ff5f56"}} />
-              <span className="lp-term-dot" style={{background: "#ffbd2e"}} />
-              <span className="lp-term-dot" style={{background: "#27c93f"}} />
-              <span className="lp-term-title">add an extension</span>
-            </div>
-            <div className="lp-term-body">
-              <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> treeos ext search fitness
-              </div>
-              <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> treeos ext install fitness
-              </div>
-              <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> treeos cd Health/Fitness
-              </div>
-              <div className="lp-term-line">
-                <span className="lp-term-prompt">$</span> treeos fitness "bench 135x10"
-              </div>
-            </div>
-          </div>
+          <p style={{color: "rgba(255,255,255,0.35)", fontSize: "0.85rem", textAlign: "center", marginTop: 16}}>
+            One command scaffolds your whole stack. Then just talk to it. The tree routes to the right extension.
+          </p>
         </div>
       </section>
 

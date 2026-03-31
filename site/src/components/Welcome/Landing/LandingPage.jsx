@@ -105,7 +105,7 @@ const LandingPage = () => {
             Build anything on top of it.
           </p>
           <div className="lp-hero-ctas">
-            <a className="lp-btn lp-btn-primary" href="/land">Start a Land</a>
+            <a className="lp-btn lp-btn-primary" href="/start">Start</a>
             <a className="lp-btn lp-btn-secondary" href="/kernel">Inside the Seed</a>
             <a className="lp-btn lp-btn-secondary" href="/treeos">TreeOS</a>
           </div>
@@ -185,6 +185,8 @@ const LandingPage = () => {
               { href: "/extensions", title: "Extensions", desc: "How does the tree grow?" },
               { href: "/network", title: "The Network", desc: "How do trees connect?" },
               { href: "/mycelium", title: "Mycelium", desc: "The forest underground." },
+              { href: "/html", title: "HTML System", desc: "Three interfaces, one tree." },
+              { href: "/start", title: "Get Started", desc: "Join or run your own." },
               { href: "/guide", title: "The Guide", desc: "Everything in one place." },
             ].map(({ href, title, desc }) => (
               <a key={href} href={href} className="lp-card" style={{textDecoration: "none", textAlign: "center", padding: 20}}>

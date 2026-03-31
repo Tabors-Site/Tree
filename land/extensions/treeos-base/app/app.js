@@ -1512,8 +1512,9 @@ body.show-bg-messages .chat-message.system {
       <div class="chat-messages" id="chatMessages">
         <div class="welcome-message">
           <div class="welcome-icon">🌳</div>
-          <h2>Welcome to Tree</h2>
-          <p>Your intelligent workspace is ready</p>
+          <h2>Welcome</h2>
+          <p>Just type. Say hello, ask a question, or tell it something. Natural language works.</p>
+          <p style="margin-top:8px;font-size:13px;color:var(--text-tertiary);">You can also connect via CLI: <code style="background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;">npm i -g treeos</code></p>
         </div>
       </div>
 
@@ -1619,8 +1620,8 @@ body.show-bg-messages .chat-message.system {
     <div class="mobile-chat-messages" id="mobileChatMessages">
       <div class="welcome-message">
         <div class="welcome-icon">🌳</div>
-        <h2>Welcome to Tree</h2>
-        <p>Your intelligent workspace is ready.</p>
+        <h2>Welcome</h2>
+        <p>Just type. Say hello, ask a question, or tell it something.</p>
       </div>
     </div>
     <div class="mobile-chat-input-area">

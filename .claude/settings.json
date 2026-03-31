@@ -579,7 +579,14 @@
       "Bash(git rm:*)",
       "Bash(grep -rn \"user.*llm\\\\|rawIdea\\\\|userLlm\\\\|user-llm\" land/routes/ --include=*.js)",
       "Bash(grep -rn user-quick-links land/extensions/ --include=*.js)",
-      "Bash(grep -n \"resolveSlots\" land/extensions/treeos-base/pages/*.js)"
+      "Bash(grep -n \"resolveSlots\" land/extensions/treeos-base/pages/*.js)",
+      "Bash(grep -rn \"HTMLPage\\\\|Route\\\\|path.*html\\\\|import.*Landing\" site/src/ --include=*.jsx --include=*.tsx)",
+      "Bash(tr -d ' \"\"\"\",')",
+      "Bash(grep -rn \"suspiciously similar\\\\|similar.*name\\\\|levenshtein\\\\|editDistance\\\\|similarity\" horizon/ --include=*.js)",
+      "WebFetch(domain:hor.treeos.ai)",
+      "Bash(curl -s https://hor.treeos.ai/extensions?limit=200)",
+      "Bash(sed -i \"s/\"\"1.0.0\"\"/\"\"1.0.1\"\"/\" \"land/extensions/$ext/manifest.js\")",
+      "Bash(echo \"Bumped $ext to 1.0.1\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
