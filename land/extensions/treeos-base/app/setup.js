@@ -10,6 +10,7 @@ import User from "../../../seed/models/user.js";
 import LlmConnection from "../../../seed/models/llmConnection.js";
 import { renderSetup } from "./setupPage.js";
 import { isHtmlEnabled } from "../../html-rendering/config.js";
+import { getExtension } from "../../loader.js";
 
 const router = express.Router();
 
@@ -47,7 +48,15 @@ router.get("/setup", authenticateLite, async (req, res) => {
     const userId = req.userId;
     const username = user.username;
 
-    return res.send(renderSetup({ userId, username, needsLlm, needsTree }));
+    const appDefs = [
+      { ext: "fitness",  emoji: "💪", label: "Fitness",  sub: "Track workouts" },
+      { ext: "food",     emoji: "🍎", label: "Food",     sub: "Track nutrition" },
+      { ext: "recovery", emoji: "🌿", label: "Recovery", sub: "Track healing" },
+      { ext: "study",    emoji: "📚", label: "Study",    sub: "Learn anything" },
+      { ext: "kb",       emoji: "🧠", label: "KB",       sub: "Knowledge base" },
+    ].filter(a => getExtension(a.ext));
+
+    return res.send(renderSetup({ userId, username, needsLlm, needsTree, apps: appDefs }));
   } catch (err) {
     log.error("HTML", "Setup page error:", err.message);
     return res.status(500).send("Something went wrong");

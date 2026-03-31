@@ -2,7 +2,7 @@
 /* HTML renderer for setup / onboarding page       */
 /* ─────────────────────────────────────────────── */
 
-export function renderSetup({ userId, username, needsLlm, needsTree }) {
+export function renderSetup({ userId, username, needsLlm, needsTree, apps = [] }) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -242,26 +242,12 @@ export function renderSetup({ userId, username, needsLlm, needsTree }) {
         Pick an app to get started. Each one creates a tree with guided AI setup.
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        ${apps.map(a => `
         <a href="#" onclick="goToApps()" style="display:flex;flex-direction:column;align-items:center;padding:16px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:12px;text-decoration:none;transition:all 0.2s;">
-          <span style="font-size:1.5rem;margin-bottom:4px;">💪</span>
-          <span style="color:white;font-weight:600;font-size:0.9rem;">Fitness</span>
-          <span style="color:rgba(255,255,255,0.5);font-size:0.75rem;">Track workouts</span>
-        </a>
-        <a href="#" onclick="goToApps()" style="display:flex;flex-direction:column;align-items:center;padding:16px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:12px;text-decoration:none;transition:all 0.2s;">
-          <span style="font-size:1.5rem;margin-bottom:4px;">🍎</span>
-          <span style="color:white;font-weight:600;font-size:0.9rem;">Food</span>
-          <span style="color:rgba(255,255,255,0.5);font-size:0.75rem;">Track nutrition</span>
-        </a>
-        <a href="#" onclick="goToApps()" style="display:flex;flex-direction:column;align-items:center;padding:16px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:12px;text-decoration:none;transition:all 0.2s;">
-          <span style="font-size:1.5rem;margin-bottom:4px;">🌿</span>
-          <span style="color:white;font-weight:600;font-size:0.9rem;">Recovery</span>
-          <span style="color:rgba(255,255,255,0.5);font-size:0.75rem;">Track healing</span>
-        </a>
-        <a href="#" onclick="goToApps()" style="display:flex;flex-direction:column;align-items:center;padding:16px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:12px;text-decoration:none;transition:all 0.2s;">
-          <span style="font-size:1.5rem;margin-bottom:4px;">📚</span>
-          <span style="color:white;font-weight:600;font-size:0.9rem;">Study</span>
-          <span style="color:rgba(255,255,255,0.5);font-size:0.75rem;">Learn anything</span>
-        </a>
+          <span style="font-size:1.5rem;margin-bottom:4px;">${a.emoji}</span>
+          <span style="color:white;font-weight:600;font-size:0.9rem;">${a.label}</span>
+          <span style="color:rgba(255,255,255,0.5);font-size:0.75rem;">${a.sub}</span>
+        </a>`).join("")}
       </div>
       <button class="btn-primary" onclick="goToApps()">Choose an App</button>
       <div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.15);">

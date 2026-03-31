@@ -572,7 +572,8 @@
       "Bash(grep -rn \"iframe\\\\|embed\\\\|/fitness\\\\|/food\\\\|/recovery\\\\|/study\\\\|/kb\" land/extensions/treeos-base/ --include=*.js)",
       "Bash(curl -s https://horizon.treeos.ai/extensions?limit=5)",
       "Bash(grep -rn \"governance-check\\\\|governance\\\\.check\\\\|governanceCheck\" land/extensions/governance/ --include=*.js)",
-      "Read(//home/tabor/github/Tree/land/extensions/$b/**)"
+      "Read(//home/tabor/github/Tree/land/extensions/$b/**)",
+      "Bash(ls -d land/extensions/*/manifest.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

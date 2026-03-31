@@ -147,23 +147,30 @@ export const pageRouter = express.Router();
 // "/" owned by treeos-base extension (welcome page). If treeos-base not installed,
 // fall through to kernel 404. The "/" route is an OS-level concept, not kernel.
 
+let _hasEmailCached = false;
+// Set after boot via init
+export function setEmailAvailable(v) { _hasEmailCached = !!v; }
+
 pageRouter.get("/login", (req, res) => {
   if (!isHtmlEnabled()) {
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
-  renderLoginPage(req, res);
+  renderLoginPage(req, res, { hasEmail: _hasEmailCached });
 });
 
 pageRouter.get("/register", (req, res) => {
   if (!isHtmlEnabled()) {
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
-  renderRegisterPage(req, res);
+  renderRegisterPage(req, res, { hasEmail: _hasEmailCached });
 });
 
 pageRouter.get("/forgot-password", (req, res) => {
   if (!isHtmlEnabled()) {
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
+  }
+  if (!_hasEmailCached) {
+    return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Email extension not installed.");
   }
   renderForgotPasswordPage(req, res);
 });

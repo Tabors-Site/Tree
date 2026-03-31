@@ -150,7 +150,7 @@ const PROFILES = {
     description: "The tree works. No AI background jobs. No LLM cost when idle.",
     extensions: [
       // Kernel extensions (required for basic operation)
-      "treeos-base", "tree-orchestrator", "navigation", "starter-types", "console",
+      "treeos-base", "tree-orchestrator", "land-manager", "navigation", "starter-types", "console",
       // Basic functionality
       "values", "html-rendering", "dashboard",
     ],
@@ -163,13 +163,13 @@ const PROFILES = {
     description: "Full tree experience. Intelligence, cascade, scheduling. Moderate LLM usage.",
     extensions: [
       // Everything in minimal
-      "treeos-base", "tree-orchestrator", "navigation", "starter-types", "console",
+      "treeos-base", "tree-orchestrator", "land-manager", "navigation", "starter-types", "console",
       "values", "html-rendering", "dashboard",
       // Core experience
       "notifications", "monitor", "team", "llm-response-formatting",
       "water", "heartbeat", "purpose", "phase", "remember", "approve",
-      "raw-ideas", "deleted-revive", "understanding",
-      "user-queries", "dreams", "book", "llm-failover",
+      "deleted-revive", "understanding",
+      "user-queries", "book", "llm-failover",
       // Cascade (the nervous system)
       "propagation", "perspective-filter", "sealed-transport", "codebook",
       "gap-detection", "long-memory", "pulse", "flow",
