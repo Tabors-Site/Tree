@@ -115,6 +115,21 @@ router.get("/land/extensions", authenticate, async (req, res) => {
   }
 });
 
+// GET /land/extensions/:name - single extension info
+router.get("/land/extensions/:name", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
+    const { getLoadedManifests } = await import("../../extensions/loader.js");
+    const manifests = getLoadedManifests();
+    const ext = manifests.find(m => m.name === req.params.name);
+    if (!ext) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, `Extension "${req.params.name}" not found`);
+    sendOk(res, ext);
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
 // POST /land/extensions/:name/disable
 router.post("/land/extensions/:name/disable", authenticate, async (req, res) => {
   try {
