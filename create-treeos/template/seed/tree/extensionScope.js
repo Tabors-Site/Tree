@@ -223,6 +223,18 @@ export function getModeOwner(modeKey) {
 }
 
 /**
+ * Get all mode keys owned by an extension.
+ * Reverse lookup on the ownership map populated during registration.
+ */
+export function getModesOwnedBy(extName) {
+  const modes = [];
+  for (const [modeKey, owner] of _modeOwnership) {
+    if (owner === extName) modes.push(modeKey);
+  }
+  return modes;
+}
+
+/**
  * Remove all mode ownership entries for an extension.
  * Called during extension uninstall.
  */

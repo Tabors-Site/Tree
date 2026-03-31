@@ -49,7 +49,8 @@ export function disconnectChannel(channelId) {
  */
 export async function startupScan() {
   try {
-    const GatewayChannel = (await import("../gateway/model.js")).default;
+    const { getExtension } = await import("../loader.js");
+    const GatewayChannel = getExtension("gateway")?.exports?.GatewayChannel;
     const channels = await GatewayChannel.find({
       type: "matrix",
       enabled: true,
@@ -58,7 +59,6 @@ export async function startupScan() {
 
     if (channels.length === 0) return;
 
-    const { getExtension } = await import("../loader.js");
     const gateway = getExtension("gateway");
     if (!gateway?.exports?.getChannelWithSecrets) return;
 

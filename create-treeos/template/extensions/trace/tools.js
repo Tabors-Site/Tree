@@ -24,21 +24,25 @@ export default [
         if (result.error) {
           return { content: [{ type: "text", text: result.error }] };
         }
+
+        // Human-readable output for AI to relay
+        const parts = [];
+        if (result.origin?.summary) {
+          parts.push(`Origin: ${result.origin.nodeName} (${result.origin.date || "unknown date"}) - ${result.origin.summary}`);
+        }
+        if (result.touchpoints?.length > 0) {
+          parts.push(`\nThread (${result.matches} mentions across ${result.nodesVisited} nodes${result.crossBranch ? ", cross-branch" : ""}):`);
+          for (const tp of result.touchpoints.slice(0, 10)) {
+            parts.push(`  ${tp.nodeName} (${tp.date || "?"}) - ${tp.what}`);
+          }
+          if (result.touchpoints.length > 10) parts.push(`  ...and ${result.touchpoints.length - 10} more`);
+        }
+        if (result.currentState) parts.push(`\nCurrent state: ${result.currentState}`);
+        if (result.unresolved?.length > 0) parts.push(`\nUnresolved: ${result.unresolved.join("; ")}`);
+        if (result.threadLength) parts.push(`\nThread span: ${result.threadLength}`);
+
         return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              query: result.query,
-              matches: result.matches,
-              nodesVisited: result.nodesVisited,
-              origin: result.origin,
-              touchpoints: result.touchpoints,
-              currentState: result.currentState,
-              unresolved: result.unresolved,
-              threadLength: result.threadLength,
-              crossBranch: result.crossBranch,
-            }, null, 2),
-          }],
+          content: [{ type: "text", text: parts.join("\n") || "No trace data found." }],
         };
       } catch (err) {
         return { content: [{ type: "text", text: `Trace failed: ${err.message}` }] };

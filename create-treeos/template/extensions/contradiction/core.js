@@ -88,7 +88,6 @@ export async function detectContradictions(nodeId, noteContent, userId, username
       includeNotes: true,
       includeChildren: true,
       includeParentChain: true,
-      includeValues: true,
       userId,
     });
     contextSummary = JSON.stringify(ctx, null, 0);

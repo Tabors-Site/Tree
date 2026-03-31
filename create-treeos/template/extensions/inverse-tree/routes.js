@@ -6,7 +6,10 @@ import { getProfile, addCorrection, resetProfile } from "./core.js";
 const router = express.Router();
 
 // GET /user/:userId/inverse - profile as the AI sees it
-router.get("/user/:userId/inverse", authenticate, async (req, res) => {
+router.get("/user/:userId/inverse", (req, res, next) => {
+  if ("html" in req.query) return next("route");
+  next();
+}, authenticate, async (req, res) => {
   try {
     // Users can only read their own inverse profile
     if (req.params.userId !== req.userId) {

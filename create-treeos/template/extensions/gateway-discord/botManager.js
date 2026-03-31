@@ -177,8 +177,10 @@ export function getActiveBotCount() {
  */
 export async function startupScan() {
   try {
-    const GatewayChannel = (await import("../gateway/model.js")).default;
-    const { getChannelWithSecrets } = await import("../gateway/core.js");
+    const { getExtension } = await import("../loader.js");
+    const gatewayExt = getExtension("gateway");
+    const GatewayChannel = gatewayExt?.exports?.GatewayChannel;
+    const getChannelWithSecrets = gatewayExt?.exports?.getChannelWithSecrets;
 
     const channels = await GatewayChannel.find({
       type: "discord",

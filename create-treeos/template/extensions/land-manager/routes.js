@@ -8,12 +8,12 @@ import { getUserMeta } from "../../seed/tree/userMetadata.js";
 
 const router = express.Router();
 
-// GET /land/status - land overview (god only)
+// GET /land/status - land overview (admin only)
 router.get("/land/status", authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select("isAdmin").lean();
     if (!user?.isAdmin) {
-      return sendError(res, 403, ERR.FORBIDDEN, "Requires god-tier.");
+      return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     }
 
     const { getLoadedManifests, getLoadedExtensionNames } = await import("../../extensions/loader.js");
@@ -42,12 +42,12 @@ router.get("/land/status", authenticate, async (req, res) => {
   }
 });
 
-// GET /land/users - list users (god only)
+// GET /land/users - list users (admin only)
 router.get("/land/users", authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select("isAdmin").lean();
     if (!user?.isAdmin) {
-      return sendError(res, 403, ERR.FORBIDDEN, "Requires god-tier.");
+      return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     }
 
     const users = await User.find({ isRemote: { $ne: true } })
@@ -69,13 +69,13 @@ router.get("/land/users", authenticate, async (req, res) => {
   }
 });
 
-// POST /land/chat - land management chat (god only)
-// POST /land/chat - land management chat (god only)
+// POST /land/chat - land management chat (admin only)
+// POST /land/chat - land management chat (admin only)
 router.post("/land/chat", authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select("isAdmin username").lean();
     if (!user?.isAdmin) {
-      return sendError(res, 403, ERR.FORBIDDEN, "Requires god-tier.");
+      return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     }
 
     const { message } = req.body;
@@ -94,6 +94,79 @@ router.post("/land/chat", authenticate, async (req, res) => {
     sendOk(res, { answer, chatId });
   } catch (err) {
     log.error("LandManager", "Chat error:", err.message);
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+// ── Extension management endpoints ──
+
+// GET /land/extensions - list loaded extensions
+router.get("/land/extensions", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
+    const { getLoadedManifests } = await import("../../extensions/loader.js");
+    const { getLandConfigValue } = await import("../../seed/landConfig.js");
+    const manifests = getLoadedManifests();
+    const disabled = getLandConfigValue("disabledExtensions") || [];
+    sendOk(res, { loaded: manifests, count: manifests.length, disabled });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+// GET /land/extensions/:name - single extension info
+router.get("/land/extensions/:name", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
+    const { getLoadedManifests } = await import("../../extensions/loader.js");
+    const manifests = getLoadedManifests();
+    const ext = manifests.find(m => m.name === req.params.name);
+    if (!ext) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, `Extension "${req.params.name}" not found`);
+    sendOk(res, ext);
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+// POST /land/extensions/:name/disable
+router.post("/land/extensions/:name/disable", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
+    const { getLandConfigValue, setLandConfigValue } = await import("../../seed/landConfig.js");
+    const { hasExtension } = await import("../../extensions/loader.js");
+    const name = req.params.name;
+    if (!hasExtension(name)) {
+      return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, `Extension "${name}" is not loaded`);
+    }
+    const disabled = getLandConfigValue("disabledExtensions") || [];
+    if (!disabled.includes(name)) {
+      disabled.push(name);
+      await setLandConfigValue("disabledExtensions", disabled, { internal: true });
+    }
+    sendOk(res, { disabled: name, message: "Restart the land to apply." });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+// POST /land/extensions/:name/enable
+router.post("/land/extensions/:name/enable", authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("isAdmin").lean();
+    if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
+    const { getLandConfigValue, setLandConfigValue } = await import("../../seed/landConfig.js");
+    const disabled = getLandConfigValue("disabledExtensions") || [];
+    const name = req.params.name;
+    if (!disabled.includes(name)) {
+      return sendError(res, 400, ERR.INVALID_INPUT, `Extension "${name}" is not disabled`);
+    }
+    const updated = disabled.filter(n => n !== name);
+    await setLandConfigValue("disabledExtensions", updated, { internal: true });
+    sendOk(res, { enabled: name, message: "Restart the land to apply." });
+  } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });

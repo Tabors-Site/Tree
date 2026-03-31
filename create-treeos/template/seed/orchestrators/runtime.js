@@ -2,7 +2,7 @@
 // orchestrators/runtime.js
 // Shared lifecycle for background orchestrator pipelines.
 // Wraps session, MCP, Chat, LLM resolution, lock, and cleanup into a single class.
-// Every background pipeline (dreams, understanding, cleanup, raw ideas) uses this.
+// Every background extension pipeline uses this.
 
 import log from "../log.js";
 import jwt from "jsonwebtoken";

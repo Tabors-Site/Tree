@@ -555,7 +555,7 @@ If your hook handler creates, moves, or deletes nodes, acquire a node lock via `
 core.hooks.register("afterNote", async ({ nodeId }) => {
   const lock = await core.nodeLocks.acquireNodeLock(parentId, sessionId);
   try {
-    await createNode("Child", null, null, parentId, false, userId);
+    await createNode({ name: "Child", parentId, userId });
   } finally {
     core.nodeLocks.releaseNodeLock(parentId, sessionId);
   }
@@ -829,6 +829,34 @@ Convention:
 - Reading metadata from core code (e.g. treeData) should use:
   `(node.metadata instanceof Map ? node.metadata.get("name") : node.metadata?.name)`
 
+### Scaffolding Nodes (the `role` convention)
+
+Extensions that create a tree structure on install (food, fitness, recovery, kb, etc.) MUST set a `role` field in their metadata namespace on every scaffolded node:
+
+```js
+await core.metadata.setExtMeta(logNode, "food", { role: "log" });
+await core.metadata.setExtMeta(mealsNode, "food", { role: "meals" });
+await core.metadata.setExtMeta(profileNode, "food", { role: "profile" });
+```
+
+The `role` field is the structural marker. It means "this node is load-bearing for my extension." TreeOS base registers a generic `beforeNodeDelete` hook that checks every node being deleted. If any extension namespace in the node's metadata contains a `role` field, the delete is cancelled with a message naming the extension and role.
+
+The handler does not know what food is. It does not know what fitness is. It sees `metadata.food.role = "log"` and knows that node is structural to something. Any extension that scaffolds nodes and sets `role` on them gets delete protection automatically.
+
+When looking up scaffolded nodes at runtime, query by role, not by name or stored ID:
+
+```js
+const children = await Node.find({ parent: rootId }).select("_id name metadata").lean();
+const nodes = {};
+for (const child of children) {
+  const meta = child.metadata?.get?.("food") || child.metadata?.food;
+  if (meta?.role) nodes[meta.role] = { id: String(child._id), name: child.name };
+}
+// nodes.log, nodes.meals, nodes.profile — found by role, not name
+```
+
+This makes scaffolded trees resilient to renames (users can rename nodes freely) while protecting against accidental deletion. Users who truly want to delete a structural node can use `--force` to bypass the hook.
+
 ### Reaching other extensions
 
 Use `getExtension()` to access another extension's exports. Never import extension files directly:
@@ -891,6 +919,36 @@ export async function init(core) {
 ```
 
 Modes cannot override core modes. The conversation system routes to custom modes the same way it routes to built-in modes.
+
+## Mode Naming Convention
+
+Extensions that register AI modes should follow suffix conventions. The tree-orchestrator uses these suffixes for automatic routing when a user is at an extension's node. No per-extension routing code needed.
+
+**Standard suffixes:**
+
+| Suffix | Purpose | Activated by |
+|--------|---------|-------------|
+| `:log` | Default receiver. Parses input, routes data. | All unmatched messages |
+| `:coach` | Guided mode. AI leads. | `be` command |
+| `:review` | Backward-looking. Patterns, progress, analysis. | Questions about history or status |
+| `:plan` | Forward-looking. Creates structure, sets goals. | Requests to build or organize |
+| `:ask` | Read-only query against stored knowledge. | Falls back from `:review` |
+| `:tell` | Write new knowledge to the tree. | Default for KB-style extensions |
+
+Not every extension uses all six. Use what fits your domain.
+
+**How it works:** When the orchestrator detects an extension at the current node (Level 1), it calls `getModesOwnedBy(extName)` to get all registered modes. It matches the user's message against standard intent patterns and picks the mode with the matching suffix. If no suffix matches, it falls to the node's `modes.respond` default (usually `:log` or `:tell`).
+
+**Examples:**
+```
+food:log, food:coach, food:review
+fitness:log, fitness:coach, fitness:review, fitness:plan
+study:log, study:coach, study:review, study:plan
+recovery:log, recovery:coach, recovery:review
+kb:tell, kb:ask, kb:review
+```
+
+**Custom routing:** Extensions with complex internal routing (food's macro parsing, KB's tell/ask detection) can export `handleMessage(message, ctx)` from their init return. The orchestrator calls `handleMessage` first. Suffix matching is the fallback for extensions without it. Convention with override.
 
 ## Per-Node Tool Customization
 
@@ -1222,7 +1280,7 @@ export default {
   name: "crop-tracker",
   type: "extension",             // default if omitted
   version: "1.0.0",
-  builtFor: "FarmOS",            // "kernel" (universal), bundle name, or OS name
+  builtFor: "FarmOS",            // "seed" (universal), bundle name, or OS name
   description: "Track crop yields per node",
   needs: { extensions: ["farm-core@>=1.0.0"] },
   provides: { routes: true, tools: true },
@@ -1230,7 +1288,7 @@ export default {
 ```
 
 **`builtFor`** declares where this extension is designed to work:
-- `"kernel"` (default): works on any land with no special extensions. Universal.
+- `"seed"` (default): works on any land with no special extensions. Universal.
 - `"treeos-cascade"`: needs that bundle's extensions to be present.
 - `"FarmOS"`: built specifically for that OS distribution.
 
@@ -1245,7 +1303,7 @@ export default {
   name: "treeos-cascade",
   type: "bundle",
   version: "1.0.0",
-  builtFor: "kernel",
+  builtFor: "seed",
   description: "The cascade nervous system",
   includes: [
     "propagation@^1.0.0",
@@ -1276,7 +1334,7 @@ export default {
   name: "TreeOS",
   type: "os",
   version: "1.0.0",
-  builtFor: "kernel",
+  builtFor: "seed",
   description: "The first operating system built on the seed",
   bundles: [
     "treeos-cascade@^1.0.0",
@@ -1285,7 +1343,7 @@ export default {
     "treeos-maintenance@^1.0.0",
   ],
   standalone: [
-    "treeos@^1.0.0",
+    "treeos-base@^1.0.0",
     "tree-orchestrator@^1.0.0",
     "fitness@^1.0.0",
     "food@^1.0.0",
@@ -1297,7 +1355,7 @@ export default {
   orchestrators: {
     tree: "tree-orchestrator",
     land: "land-manager",
-    home: "treeos",
+    home: "treeos-base",
   },
 };
 ```
@@ -1325,3 +1383,29 @@ treeos bundle install <name>    Install all member extensions.
 ```
 
 `os info` shows: bundles, extension count, config defaults, orchestrator assignments, estimated disk footprint, npm dependencies across all members. The operator makes an informed decision before committing.
+
+## Collaboration
+
+Code lives on your land. You build extensions in `extensions/my-extension/`, test them locally, and publish to Horizon when ready. If you want others to contribute, push the code to GitHub (or any git host) and link it with `repoUrl`. If you don't need collaboration, skip the repo. The extension works either way.
+
+### Workflow
+
+1. **Build** locally. Create your extension in `extensions/`. Test it on your land.
+2. **Publish** to Horizon. `treeos ext publish my-extension --notes "what changed"`. Horizon stores the package.
+3. **Others install** from Horizon. `treeos ext install my-extension`. They get the published version.
+4. **Collaborate** (optional). Push to GitHub. Others fork, PR, contribute. You publish the next version.
+
+### Linking code and packages
+
+If your code is on a public repo, include `repoUrl` when publishing so Horizon can link to the source:
+
+```js
+// In your manifest or publish command
+repoUrl: "https://github.com/yourname/my-extension"
+```
+
+Horizon displays this on the extension detail page as a "Source Code" button. Browse cards show a "source" indicator when repoUrl is present.
+
+### If the author is inactive
+
+Fork the repo. Publish under a new name. Horizon tracks name ownership (first publisher owns the name), not code ownership. The ecosystem grows through open contribution. If you improve an abandoned extension, publish your version and let operators choose.

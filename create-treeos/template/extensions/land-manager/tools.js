@@ -3,6 +3,7 @@ import Node from "../../seed/models/node.js";
 import User from "../../seed/models/user.js";
 import log from "../../seed/log.js";
 import { SYSTEM_ROLE, DELETED } from "../../seed/protocol.js";
+import { setLandConfigValue } from "../../seed/landConfig.js";
 
 let _metadata = null;
 export function setMetadata(metadata) { _metadata = metadata; }
@@ -86,13 +87,7 @@ export default function getTools() {
           return { content: [{ type: "text", text: "Permission denied. Requires god-tier." }] };
         }
         try {
-          const configNode = await Node.findOne({ systemRole: SYSTEM_ROLE.CONFIG });
-          if (!configNode) return { content: [{ type: "text", text: "No .config node found." }] };
-          if (!configNode.metadata) configNode.metadata = new Map();
-          if (configNode.metadata instanceof Map) { configNode.metadata.set(key, value); }
-          else { configNode.metadata[key] = value; }
-          configNode.markModified("metadata");
-          await configNode.save();
+          await setLandConfigValue(key, value);
           log.info("LandManager", `Config set: ${key} = ${value} (by ${userId})`);
           return { content: [{ type: "text", text: `Set ${key} = ${value}` }] };
         } catch (err) {

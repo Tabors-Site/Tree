@@ -65,7 +65,8 @@ async function send(secrets, metadata, notification) {
     if (err.statusCode === 410) {
       // Subscription expired, disable the channel
       try {
-        const GatewayChannel = (await import("../gateway/model.js")).default;
+        const { getExtension } = await import("../loader.js");
+        const GatewayChannel = getExtension("gateway")?.exports?.GatewayChannel;
         await GatewayChannel.findByIdAndUpdate(notification._channelId, {
           $set: { enabled: false, lastError: "Push subscription expired (410 Gone)" },
         });

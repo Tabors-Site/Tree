@@ -2,7 +2,16 @@ export default {
   name: "html-rendering",
   version: "1.0.0",
   builtFor: "TreeOS",
-  description: "Server-rendered HTML pages, share token auth, and a page registration API for other extensions",
+  description:
+    "Server-rendered HTML pages, share token auth, and a page registration API for other extensions.\n\n" +
+    "Direct imports (used by extensions that build their own pages):\n" +
+    "  import { page } from '../html-rendering/html/layout.js'\n" +
+    "  import { esc, escapeHtml } from '../html-rendering/html/utils.js'\n" +
+    "  import { baseStyles, glassHeaderStyles, glassCardStyles } from '../html-rendering/html/baseStyles.js'\n" +
+    "  import { htmlOnly, buildQS, tokenQS } from '../html-rendering/htmlHelpers.js'\n" +
+    "  import urlAuth from '../html-rendering/urlAuth.js'\n" +
+    "  import authenticateLite from '../html-rendering/authenticateLite.js'\n" +
+    "  import { isHtmlEnabled } from '../html-rendering/config.js'",
 
   needs: {
     models: ["User", "Node"],

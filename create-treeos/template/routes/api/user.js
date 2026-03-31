@@ -58,22 +58,13 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "Name is required");
     }
 
-    const rootNode = await createNode(
+    const rootNode = await createNode({
       name,
-      null,
-      0,
-      null,
-      true, // isRoot
+      isRoot: true,
       userId,
-      {},
-      {},
-      null,
-      req.user,
-      false, // wasAi
-      null, // chatId
-      null, // sessionId
-      type || null,
-    );
+      type: type || null,
+      validatedUser: req.user,
+    });
 
     sendOk(res, {
       rootId: rootNode._id,

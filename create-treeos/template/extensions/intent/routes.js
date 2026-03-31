@@ -112,10 +112,10 @@ router.get("/root/:rootId/intent/history", authenticate, async (req, res) => {
       .limit(50)
       .lean();
 
-    // Filter to this tree's nodes
-    const nodeIds = new Set();
-    const nodes = await Node.find({ rootOwner: rootId }).select("_id").lean();
-    for (const n of nodes) nodeIds.add(n._id.toString());
+    // Filter to this tree's nodes (walk from root, not rootOwner which is a userId)
+    const { getDescendantIds } = await import("../../seed/tree/treeFetch.js");
+    const allIds = await getDescendantIds(rootId, { maxResults: 10000 });
+    const nodeIds = new Set(allIds.map(id => String(id)));
 
     const treeContributions = contributions
       .filter(c => nodeIds.has(c.nodeId?.toString()))

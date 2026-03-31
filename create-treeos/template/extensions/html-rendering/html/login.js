@@ -1,7 +1,7 @@
 import { getLandUrl } from "../../../canopy/identity.js";
 import { baseStyles } from "./baseStyles.js";
 
-export function renderLoginPage(req, res) {
+export function renderLoginPage(req, res, { hasEmail = false } = {}) {
   // Only allow relative redirects starting with / to prevent open redirect and JS injection
   const rawRedirect = req.query.redirect || "";
   const redirect = (typeof rawRedirect === "string" && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//"))
@@ -422,9 +422,9 @@ export function renderLoginPage(req, res) {
         <button type="button" id="registerBtn" class="secondary-btn">
         Create an account
       </button>
-      <button type="button" id="forgotPasswordBtn" class="secondary-btn">
+      ${hasEmail ? `<button type="button" id="forgotPasswordBtn" class="secondary-btn">
         Forgot your password?
-      </button>
+      </button>` : ""}
 
   
 
@@ -441,7 +441,8 @@ export function renderLoginPage(req, res) {
       window.location.href = "/register";
     });
 
-    document.getElementById("forgotPasswordBtn").addEventListener("click", () => {
+    var forgotBtn = document.getElementById("forgotPasswordBtn");
+    if (forgotBtn) forgotBtn.addEventListener("click", () => {
       window.location.href = "/forgot-password";
     });
 
@@ -492,7 +493,7 @@ export function renderLoginPage(req, res) {
 </body>
 </html>`);
 }
-export function renderRegisterPage(req, res) {
+export function renderRegisterPage(req, res, { hasEmail = false, hasLegal = false } = {}) {
   res.setHeader("Content-Type", "text/html");
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -975,17 +976,17 @@ export function renderRegisterPage(req, res) {
         />
       </div>
 
-      <div class="input-group">
+      ${hasEmail ? `<div class="input-group">
         <label for="email">Email</label>
-        <input 
-          type="email" 
-          id="email" 
+        <input
+          type="email"
+          id="email"
           placeholder="Enter your email"
-          required 
+          required
           autocomplete="email"
           autocapitalize="off"
         />
-      </div>
+      </div>` : ""}
 
       <div class="input-group">
         <label for="password">Password</label>
@@ -1011,18 +1012,18 @@ export function renderRegisterPage(req, res) {
       </div>
       <button type="submit" id="registerBtn">Create Account</button>
 
-      <div class="agreement-text">
+      ${hasLegal ? `<div class="agreement-text">
         By creating an account, you agree to our
         <span class="agreement-link" onclick="openModal('terms')">Terms of Service</span>
         and
         <span class="agreement-link" onclick="openModal('privacy')">Privacy Policy</span>.
-      </div>
+      </div>` : ""}
 
     </form>
 
     <div id="errorMessage" class="message error-message"></div>
     <div id="successMessage" class="message success-message">
-      ✓ Registration successful! Check your email to complete registration.
+      ${hasEmail ? "✓ Registration successful! Check your email to complete registration." : "✓ Registration successful! You can now log in."}
     </div>
 
     <div class="secondary-actions">
@@ -1032,7 +1033,7 @@ export function renderRegisterPage(req, res) {
     </div>
   </div>
 
-  <!-- Terms Modal -->
+  ${hasLegal ? `
   <div class="modal-overlay" id="termsModal">
     <div class="modal-container">
       <div class="modal-header">
@@ -1044,8 +1045,6 @@ export function renderRegisterPage(req, res) {
       </div>
     </div>
   </div>
-
-  <!-- Privacy Modal -->
   <div class="modal-overlay" id="privacyModal">
     <div class="modal-container">
       <div class="modal-header">
@@ -1057,6 +1056,7 @@ export function renderRegisterPage(req, res) {
       </div>
     </div>
   </div>
+  ` : ""}
 
   <script>
     const apiUrl = "${getLandUrl()}";
@@ -1097,7 +1097,8 @@ export function renderRegisterPage(req, res) {
       e.preventDefault();
 
       const username = document.getElementById("username").value.trim();
-      const email = document.getElementById("email").value.trim();
+      const emailEl = document.getElementById("email");
+      const email = emailEl ? emailEl.value.trim() : "";
       const password = document.getElementById("password").value;
       const confirmPassword = document.getElementById("confirmPassword").value;
 
@@ -1135,7 +1136,7 @@ export function renderRegisterPage(req, res) {
         const res = await fetch(\`\${apiUrl}/register\`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, email, password })
+          body: JSON.stringify(email ? { username, email, password } : { username, password })
         });
 
         const data = await res.json();

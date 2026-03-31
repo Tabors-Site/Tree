@@ -205,12 +205,19 @@ function printReady() {
   const boot = getBootReport();
 
   console.log("");
+  console.log("  ────────────────────────────────────────────");
   log.info("Land", "Land node online.");
+  console.log("  ────────────────────────────────────────────");
+  console.log("");
   log.info("Land", `API:  ${apiUrl}`);
 
   if (hasHtml) {
-    log.info("Land", `HTML: ${apiUrl}/login`);
+    log.info("Land", `Web:  ${apiUrl}`);
+    log.info("Land", `      Open in a browser to manage your land, trees, and extensions.`);
+    log.info("Land", `      The CLI is more powerful but the web interface works for basics.`);
   }
+
+  console.log("");
 
   // Boot summary
   if (boot.skipped === 0) {
@@ -218,6 +225,10 @@ function printReady() {
   } else {
     log.info("Land", `Extensions: ${boot.loaded} loaded, ${boot.skipped} skipped.`);
     log.warn("Land", `Skipped: ${boot.skippedNames.join(", ")}`);
+  }
+
+  if (hasHtml) {
+    log.info("Land", `Admin:  ${apiUrl}/land (manage extensions, config, users)`);
   }
 
   const siteDir = path.resolve(__dirname, "../site");
@@ -228,11 +239,15 @@ function printReady() {
   }
 
   console.log("");
-  log.info("Land", "Quick start:");
+  console.log("  ────────────────────────────────────────────");
+  log.info("Land", "CLI quick start:");
+  console.log("");
   console.log("  npm install -g treeos");
   console.log(`  treeos connect ${apiUrl}`);
   console.log("  treeos register");
   console.log("  treeos start");
+  console.log("");
+  console.log("  ────────────────────────────────────────────");
   console.log("");
 }
 

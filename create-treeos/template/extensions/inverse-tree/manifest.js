@@ -25,7 +25,9 @@ export default {
     models: ["Node", "User"],
   },
 
-  optional: {},
+  optional: {
+    extensions: ["html-rendering"],
+  },
 
   provides: {
     models: {},

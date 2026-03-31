@@ -309,7 +309,7 @@ export async function runExplore(nodeId, query, userId, username, opts = {}) {
     llmPriority: LLM_PRIORITY?.INTERACTIVE || 2,
   });
 
-  const ok = await rt.init("Starting exploration");
+  const ok = await rt.init(query);
   if (!ok) {
     return { error: "Exploration already in progress at this node" };
   }
@@ -462,13 +462,15 @@ export async function runExplore(nodeId, query, userId, username, opts = {}) {
       contentType: CONTENT_TYPE.TEXT,
     });
 
+    const coverageStr = totalNotes > 0 ? `${((totalNotesRead / totalNotes) * 100).toFixed(2)}%` : "0%";
     const map = {
       query,
+      answer: `Explored ${explored.size} nodes under ${allNodes[0]?.name || nodeId}, read ${totalNotesRead} of ${totalNotes} notes (${coverageStr} coverage). Found ${allFindings.length} relevant items.${allGaps.length > 0 ? ` Gaps: ${allGaps.slice(0, 3).join("; ")}.` : ""}`,
       rootNode: allNodes[0]?.name || nodeId,
       nodesExplored: explored.size,
       notesRead: totalNotesRead,
       totalNotesInBranch: totalNotes,
-      coverage: totalNotes > 0 ? `${((totalNotesRead / totalNotes) * 100).toFixed(2)}%` : "0%",
+      coverage: coverageStr,
       iterations: iteration,
       map: allFindings.sort((a, b) => (b.relevance || 0) - (a.relevance || 0)),
       unexplored: scored
@@ -488,7 +490,7 @@ export async function runExplore(nodeId, query, userId, username, opts = {}) {
       },
     });
 
-    rt.setResult("Exploration complete", "tree:explore");
+    rt.setResult(`Explored ${explored.size} nodes, read ${totalNotesRead} notes. Coverage: ${map.coverage}. ${map.gaps.length > 0 ? `Gaps: ${map.gaps.slice(0, 3).join("; ")}` : "No gaps found."}`, "tree:explore");
     return map;
 
   } catch (err) {

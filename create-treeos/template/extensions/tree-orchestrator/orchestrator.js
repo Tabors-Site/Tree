@@ -27,29 +27,44 @@ import { getLandConfigValue } from "../../seed/landConfig.js";
  * 2. Intent classification: greetings/questions → query, destructive → destructive,
  *    action commands → place, everything else → place (librarian decides).
  */
-async function localClassify(message, currentNodeId) {
+async function localClassify(message, currentNodeId, rootId) {
   const lower = message.toLowerCase().trim();
   const base = { summary: message.slice(0, 100), responseHint: "" };
 
-  // ── Extension routing (Path 2) ──
-  // Check if an extension mode claims this message. Two levels:
-  // 1. Current node's mode override (user is AT the extension node)
-  // 2. Direct children's mode overrides (user is one level above)
-  // Never walk ancestors. Modes resolve downward.
+  // ── Routing index (fast path) ──
+  // One Map scan. No DB queries. Catches deep extensions that Level 1-3 miss.
+  if (rootId && currentNodeId) {
+    try {
+      const { queryIndex } = await import("./routingIndex.js");
+      const currentPath = await _buildCurrentPath(currentNodeId);
+      const match = queryIndex(rootId, message, currentPath);
+      if (match) {
+        return { intent: "extension", mode: match.mode, targetNodeId: match.targetNodeId, confidence: match.confidence, ...base };
+      }
+    } catch {}
+  }
+
+  // ── Extension routing (Path 2, fallback) ──
+  // Level-by-level DB walk. Kept as backup for unindexed trees.
   if (currentNodeId) {
     try {
       const { getClassifierHintsForMode } = await import("../loader.js");
       const currentNode = await Node.findById(currentNodeId).select("metadata children").lean();
 
-      // Level 1: current node
+      // Level 1: current node has a mode override.
+      // If hints match, route with high confidence. If not, still route to the
+      // extension but the mode must handle generic messages (status, review, etc).
       const modes = currentNode?.metadata instanceof Map
         ? currentNode.metadata.get("modes")
         : currentNode?.metadata?.modes;
       if (modes?.respond) {
         const hints = getClassifierHintsForMode(modes.respond);
-        if (hints?.some(re => re.test(message))) {
-          return { intent: "extension", mode: modes.respond, confidence: 0.9, ...base };
+        if (!hints || hints.some(re => re.test(message))) {
+          return { intent: "extension", mode: modes.respond, confidence: 0.95, ...base };
         }
+        // No hint match but we're at an extension node. Still route here
+        // because the librarian doesn't understand extension data models.
+        return { intent: "extension", mode: modes.respond, confidence: 0.8, ...base };
       }
 
       // Level 2: direct children (do any of my children claim this message?)
@@ -134,15 +149,17 @@ async function localClassify(message, currentNodeId) {
 
 /**
  * Extract the behavioral constraint from the source type.
- * The three commands (chat/place/query) are constraints on the router.
+ * Four commands constrain what happens at any position.
  *
  *   query  →  tools: read-only    response: full       writes: blocked
  *   place  →  tools: all          response: minimal    writes: allowed
  *   chat   →  tools: all          response: full       writes: allowed
+ *   be     →  tools: all          response: guided     writes: allowed
  */
 function extractBehavioral(sourceType) {
-  if (sourceType === "query") return "query";
-  if (sourceType === "place") return "place";
+  if (sourceType === "query" || sourceType.endsWith("-query")) return "query";
+  if (sourceType === "place" || sourceType.endsWith("-place")) return "place";
+  if (sourceType === "be" || sourceType.endsWith("-be")) return "be";
   return "chat"; // default
 }
 import { setChatContext } from "../../seed/llm/chatTracker.js";
@@ -157,6 +174,37 @@ import mongoose from "mongoose";
 import Node from "../../seed/models/node.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 import { resolveMode } from "../../seed/modes/registry.js";
+
+// ─────────────────────────────────────────────────────────────────────────
+// PATH RESOLUTION (for routing index scope check)
+// ─────────────────────────────────────────────────────────────────────────
+
+const _pathCache = new Map(); // nodeId -> { path, ts }
+const PATH_TTL = 30000;
+
+async function _buildCurrentPath(nodeId) {
+  const cached = _pathCache.get(String(nodeId));
+  if (cached && Date.now() - cached.ts < PATH_TTL) return cached.path;
+
+  const parts = [];
+  let current = await Node.findById(nodeId).select("name parent rootOwner").lean();
+  let depth = 0;
+  while (current && depth < 20) {
+    parts.unshift(current.name || String(current._id));
+    if (current.rootOwner || !current.parent) break;
+    current = await Node.findById(current.parent).select("name parent rootOwner").lean();
+    depth++;
+  }
+  const path = "/" + parts.join("/");
+
+  _pathCache.set(String(nodeId), { path, ts: Date.now() });
+  // Cap cache
+  if (_pathCache.size > 500) {
+    const oldest = [..._pathCache.entries()].sort((a, b) => a[1].ts - b[1].ts);
+    for (let i = 0; i < 100; i++) _pathCache.delete(oldest[i][0]);
+  }
+  return path;
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // INTELLIGENCE BRIEF (cached per tree, 60s TTL)
@@ -756,14 +804,6 @@ async function executePlanSteps({
       if (navResult?.action === "found") {
         targetNodeId = navResult.targetNodeId;
         targetPath = navResult.targetPath;
-
-        // Only navigate if this session controls the iframe
-        if (isActiveNavigator(userId, rt.sessionId)) {
-          socket.emit(WS.NAVIGATE, {
-            url: `/api/v1/node/${targetNodeId}?html`,
-            replace: false,
-          });
-        }
       } else if (navResult?.action === "ambiguous") {
         // For merge/dedup/duplicate operations, ambiguity is EXPECTED.
         const isBatchOp =
@@ -782,7 +822,7 @@ async function executePlanSteps({
               const ctx = await getContextForAi(candidate.nodeId, {
                 includeChildren: true,
                 includeParentChain: true,
-                includeValues: false,
+
                 includeNotes: false,
                 userId,
               });
@@ -876,6 +916,13 @@ async function executePlanSteps({
 
     if (intent.intent === "navigate" && targetNodeId) {
       if (isOnlyStep) {
+        // Pure navigation: user asked to go somewhere. Move the iframe.
+        if (isActiveNavigator(userId, rt.sessionId)) {
+          socket.emit(WS.NAVIGATE, {
+            url: `/api/v1/node/${targetNodeId}?html`,
+            replace: false,
+          });
+        }
         const navSummary = `Navigated to ${targetPath || targetNodeId}.`;
         emitStatus(socket, "done", "");
         pushMemory(visitorId, message, navSummary);
@@ -930,25 +977,21 @@ async function executePlanSteps({
         structure: {
           includeChildren: true,
           includeParentChain: true,
-          includeValues: true,
           includeNotes: true,
         },
         edit: {
           includeChildren: true,
           includeParentChain: true,
-          includeValues: true,
           includeNotes: false,
         },
         notes: {
           includeChildren: false,
           includeParentChain: false,
-          includeValues: false,
           includeNotes: true,
         },
         query: {
           includeChildren: true,
           includeParentChain: true,
-          includeValues: true,
           includeNotes: true,
         },
       };
@@ -1019,7 +1062,6 @@ async function executePlanSteps({
             const childCtx = await getContextForAi(child.id, {
               includeChildren: true,
               includeParentChain: false,
-              includeValues: false,
               includeNotes: false,
               userId,
             });
@@ -1202,6 +1244,7 @@ async function executePlanSteps({
       execResult = await processMessage(visitorId, executionMessage, {
         ...meta,
         signal,
+        onToolLoopCheckpoint,
         meta: { internal: true },
       });
       const execEnd = new Date();
@@ -1292,6 +1335,7 @@ export async function orchestrateTreeRequest({
   rootChatId = null,
   sourceType = null,
   sourceId = null,
+  onToolLoopCheckpoint = null,
 }) {
   if (signal?.aborted) return null;
 
@@ -1440,7 +1484,7 @@ export async function orchestrateTreeRequest({
         );
       }
       log.error("Tree Orchestrator", " Classification failed:", err.message);
-      classification = await localClassify(message, getCurrentNodeId(visitorId) || rootId);
+      classification = await localClassify(message, getCurrentNodeId(visitorId) || rootId, rootId);
     }
   } else {
     // Default: local classification. Zero LLM calls.
@@ -1477,8 +1521,21 @@ export async function orchestrateTreeRequest({
   // ────────────────────────────────────────────────────────
 
   if (classification.intent === "no_fit") {
-    const reason = classification.summary || "Idea does not fit this tree.";
- log.verbose("Tree Orchestrator", ` No fit: ${reason}`);
+    let reason = classification.summary || "Idea does not fit this tree.";
+
+    // Suggest go if the message might match an extension in another tree
+    try {
+      const { getExtension } = await import("../loader.js");
+      const goExt = getExtension("go");
+      if (goExt?.exports?.findDestination) {
+        const goResult = await goExt.exports.findDestination(message, userId);
+        if (goResult?.found && !goResult.ambiguous && goResult.destination) {
+          reason += ` Try: go ${goResult.destination.name || goResult.destination.path}`;
+        }
+      }
+    } catch {}
+
+    log.verbose("Tree Orchestrator", ` No fit: ${reason}`);
 
     emitStatus(socket, "done", "");
 
@@ -1573,37 +1630,162 @@ export async function orchestrateTreeRequest({
   const behavioral = extractBehavioral(sourceType);
 
   // ────────────────────────────────────────────────────────
-  // PATH 2: EXTENSION DETECTED — route directly to extension mode
-  // One LLM call. No librarian. No navigation. No respond.
+  // BE: GUIDED MODE — the tree leads, the user follows
+  // Skip classification. Find the guided mode at this position.
+  // ────────────────────────────────────────────────────────
+
+  if (behavioral === "be") {
+    const currentNodeId = getCurrentNodeId(visitorId) || rootId;
+
+    // If the extension at this position exports handleMessage, delegate.
+    // The extension knows how to handle "be" (food logs food, study teaches, etc).
+    try {
+      const { getExtensionManifest, getLoadedExtensionNames, getExtension } = await import("../loader.js");
+      const { getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
+      const nodeDoc = currentNodeId ? await Node.findById(currentNodeId).select("metadata").lean() : null;
+      if (nodeDoc) {
+        const meta = nodeDoc.metadata instanceof Map ? Object.fromEntries(nodeDoc.metadata) : (nodeDoc.metadata || {});
+        for (const extName of getLoadedExtensionNames()) {
+          if (meta[extName]?.role || meta[extName]?.initialized) {
+            const ext = getExtension(extName);
+
+            // Tier 1: handleMessage override
+            if (ext?.exports?.handleMessage) {
+              log.verbose("Tree Orchestrator", `  BE mode: delegating to ${extName}.handleMessage`);
+              emitStatus(socket, "intent", "");
+              try {
+                const result = await ext.exports.handleMessage(message, {
+                  userId, username, rootId, signal, res: null,
+                });
+                emitStatus(socket, "done", "");
+                const answer = result?.answer || null;
+                const mode = result?.mode || `tree:${extName}-coach`;
+                if (answer) pushMemory(visitorId, message, answer);
+                modesUsed.push(mode);
+                return { success: true, answer, modeKey: mode, modesUsed, rootId };
+              } catch (err) {
+                log.error("Tree Orchestrator", `BE handleMessage failed: ${err.message}`);
+              }
+            }
+
+            // Tier 2: manifest guidedMode or :coach suffix
+            const manifest = getExtensionManifest(extName);
+            let guidedMode = manifest?.provides?.guidedMode || null;
+            if (!guidedMode) {
+              const extModes = getModesOwnedBy(extName);
+              guidedMode = extModes.find(m => m.endsWith("-coach")) || null;
+            }
+            if (guidedMode) {
+              log.verbose("Tree Orchestrator", `  BE mode: switching to ${guidedMode}`);
+              await switchMode(visitorId, guidedMode, {
+                username, userId, rootId,
+                conversationMemory: formatMemoryContext(visitorId),
+                clearHistory: true,
+              });
+              const result = await processMessage(visitorId, message, {
+                username, userId, rootId, signal, socket, sessionId,
+              });
+              modesUsed.push(guidedMode);
+              return { success: true, answer: result?.content || "", modeKey: guidedMode, modesUsed, rootId };
+            }
+            break;
+          }
+        }
+      }
+    } catch {}
+
+    // Tier 3: generic tree:be fallback
+    log.verbose("Tree Orchestrator", `  BE mode: switching to tree:be`);
+    await switchMode(visitorId, "tree:be", {
+      username, userId, rootId,
+      conversationMemory: formatMemoryContext(visitorId),
+      clearHistory: true,
+    });
+    const result = await processMessage(visitorId, message, {
+      username, userId, rootId, signal, socket, sessionId,
+    });
+    modesUsed.push("tree:be");
+    return { success: true, answer: result?.content || "", modeKey: "tree:be", modesUsed, rootId };
+  }
+
+  // ────────────────────────────────────────────────────────
+  // PATH 2: EXTENSION DETECTED — hand off to the extension
+  //
+  // Three tiers:
+  // 1. handleMessage override: extension exports a full handler. It decides everything.
+  // 2. Suffix convention: orchestrator resolves mode by naming convention.
+  //    :coach (be), :review (questions), :plan (building), :log (default).
+  // 3. modes.respond fallback: whatever the node declared.
   // ────────────────────────────────────────────────────────
 
   if (classification.intent === "extension" && classification.mode) {
-    // If the classifier matched a child/sibling node, auto-navigate there.
-    // Query stays put (read-only browsing). Chat and place move the user.
-    const extTargetId = classification.targetNodeId || null;
-    if (extTargetId && behavioral !== "query") {
-      log.verbose("Tree Orchestrator",
-        `  Extension route: ${classification.mode} via ${extTargetId} (behavioral: ${behavioral}, auto-navigate)`);
-      socket.emit(WS.NAVIGATE, { nodeId: extTargetId, rootId });
-    } else {
-      log.verbose("Tree Orchestrator",
-        `  Extension route: ${classification.mode} (behavioral: ${behavioral}${extTargetId ? ", no nav (query)" : ""})`);
+    const { getModeOwner } = await import("../../seed/tree/extensionScope.js");
+    const { getExtension } = await import("../loader.js");
+    const extName = getModeOwner(classification.mode);
+    const ext = extName ? getExtension(extName) : null;
+
+    log.verbose("Tree Orchestrator",
+      `  Extension route: ${classification.mode} (ext: ${extName || "?"}, behavioral: ${behavioral})`);
+
+    // ── Tier 1: handleMessage override ──
+    if (ext?.exports?.handleMessage) {
+      emitStatus(socket, "intent", "");
+      try {
+        const result = await ext.exports.handleMessage(message, {
+          userId, username, rootId, signal, res: null,
+        });
+        emitStatus(socket, "done", "");
+        const answer = result?.answer || null;
+        const mode = result?.mode || classification.mode;
+        if (answer) pushMemory(visitorId, message, answer);
+        modesUsed.push(mode);
+        return { success: true, answer, modeKey: mode, modesUsed, rootId };
+      } catch (err) {
+        log.error("Tree Orchestrator", `Extension handleMessage failed: ${err.message}`);
+        emitStatus(socket, "done", "");
+        return { success: false, answer: "Extension request failed.", modeKey: classification.mode, modesUsed, rootId };
+      }
     }
 
-    modesUsed.push(classification.mode);
+    // ── Tier 2: suffix convention routing ──
+    // Match against real registered modes, not constructed guesses.
+    // :coach = guided (be), :review/:ask = analysis, :plan = building, :log/:tell = default
+    let resolvedMode = classification.mode;
+    if (extName) {
+      const { getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
+      const extModes = getModesOwnedBy(extName);
+      const find = (...suffixes) => {
+        for (const s of suffixes) {
+          const match = extModes.find(m => m.endsWith(`-${s}`));
+          if (match) return match;
+        }
+        return null;
+      };
+      const lower = message.toLowerCase().trim();
+
+      if (behavioral === "be" || lower === "be") {
+        resolvedMode = find("coach") || resolvedMode;
+      } else if (/\b(how am i|progress|status|review|daily|stats|streak|history|so far|pattern|doing)\b/.test(lower)) {
+        resolvedMode = find("review", "ask") || resolvedMode;
+      } else if (/\b(plan|build|create|structure|organize|add|modify|remove|restructure|program|taper|schedule|adjust|set.*goal|change|curriculum)\b/.test(lower)) {
+        resolvedMode = find("plan") || resolvedMode;
+      }
+      // else: stays on classification.mode (modes.respond, usually :log or :tell)
+    }
+
+    modesUsed.push(resolvedMode);
     emitStatus(socket, "intent", "");
 
-    // Switch to the extension's mode (use the extension node's rootId context)
-    await switchMode(visitorId, classification.mode, {
+    await switchMode(visitorId, resolvedMode, {
       username, userId, rootId,
       conversationMemory: formatMemoryContext(visitorId),
       clearHistory: true,
     });
 
-    // One LLM call. readOnly strips write tools for query constraint.
     const result = await processMessage(visitorId, message, {
       username, userId, rootId, signal, slot,
       readOnly: behavioral === "query",
+      onToolLoopCheckpoint,
       meta: { internal: false },
       onToolResults(results) {
         if (signal?.aborted) return;
@@ -1612,51 +1794,9 @@ export async function orchestrateTreeRequest({
     });
 
     emitStatus(socket, "done", "");
-
-    // If the extension mode returned JSON (parser modes like fitness-log),
-    // don't show raw JSON to the user. Build a human response.
-    let answer = result?.answer || null;
-    if (answer && /^\s*\{/.test(answer)) {
-      try {
-        const parsed = JSON.parse(answer);
-        // Build a human summary from the parsed data
-        if (parsed.exercises) {
-          // Fitness parser response
-          answer = parsed.exercises.map(ex => {
-            const sets = ex.sets?.map(s => s.weight > 0 ? `${s.weight}x${s.reps}` : `${s.reps}`).join("/") || "";
-            return `${ex.name}: ${sets}`;
-          }).join(", ") + ". Logged.";
-        } else if (parsed.items) {
-          // Food parser response
-          answer = parsed.items.map(i => `${i.name} (${i.calories}cal)`).join(", ") + ". Logged.";
-        } else {
-          answer = "Done.";
-        }
-      } catch {
-        // Not valid JSON, use as-is
-      }
-    }
-
+    const answer = result?.content || result?.answer || null;
     if (answer) pushMemory(visitorId, message, answer);
-
-    // Apply behavioral constraint to response
-    if (behavioral === "place" && answer) {
-      return {
-        success: true,
-        answer: answer.split("\n")[0],
-        modeKey: classification.mode,
-        modesUsed,
-        rootId,
-      };
-    }
-
-    return {
-      success: true,
-      answer,
-      modeKey: classification.mode,
-      modesUsed,
-      rootId,
-    };
+    return { success: true, answer, modeKey: resolvedMode, modesUsed, rootId };
   }
 
   // ────────────────────────────────────────────────────────
@@ -2555,7 +2695,6 @@ async function scoutExistingStructure({
     const deeperCtx = await getContextForAi(match.id, {
       includeChildren: true,
       includeParentChain: true,
-      includeValues: false,
       includeNotes: false,
       userId,
     });
@@ -2702,7 +2841,6 @@ async function fetchMoveCounterparts(directive, navigatedNodeId, rootId, userId 
         const ctx = await getContextForAi(match.id, {
           includeChildren: true,
           includeParentChain: true,
-          includeValues: false,
           includeNotes: false,
           userId,
         });

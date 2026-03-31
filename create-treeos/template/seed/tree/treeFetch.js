@@ -236,14 +236,14 @@ export async function buildDeepTreeSummary(
     const ctx = await getContextForAi(nodeId, {
       includeChildren: true,
       includeParentChain: false,
-      includeValues: true,
       includeNotes: true,
     });
 
     const indent = "  ".repeat(depth);
+    // Values come from the values extension via enrichContext (if installed)
     const values = ctx.values;
     const valueStr =
-      values && Object.keys(values).length > 0
+      values && typeof values === "object" && Object.keys(values).length > 0
         ? ` (${Object.entries(values)
             .map(([k, v]) => `${k}: ${v}`)
             .join(", ")})`
@@ -531,8 +531,6 @@ export async function getContextForAi(nodeId, options = {}) {
     includeSiblings = false,
     includeChildren = true,
     includeParentChain = false,
-    includeValues = true,
-    includeScripts = false,
     includeDirectives = false,
   } = options;
 
@@ -671,7 +669,7 @@ export async function getContextForAi(nodeId, options = {}) {
     }
   }
 
-  // Scripts injected by scripts extension via enrichContext hook
+  // Extensions inject additional context via enrichContext hook
 
   // ---- Directives (future) ----
   if (includeDirectives && node.directives?.length > 0) {

@@ -31,7 +31,9 @@ export default {
     models: ["Node"],
   },
 
-  optional: {},
+  optional: {
+    extensions: ["treeos-base"],
+  },
 
   provides: {
     routes: false,

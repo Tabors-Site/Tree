@@ -1,6 +1,7 @@
 import log from "../../seed/log.js";
 import express from "express";
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import authenticate from "../../seed/middleware/authenticate.js";
 import urlAuth from "./urlAuth.js";
 import User from "../../seed/models/user.js";
@@ -11,7 +12,6 @@ import {
   renderRegisterPage,
   renderForgotPasswordPage,
 } from "./pages.js";
-import rateLimit from "express-rate-limit";
 import { isHtmlEnabled } from "./config.js";
 
 const router = express.Router();
@@ -24,14 +24,6 @@ router.use((req, _res, next) => {
     req.query.token = "";
   }
   next();
-});
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  handler: (req, res) => {
-    sendError(res, 429, ERR.RATE_LIMITED, "Too many requests. Try again later.");
-  },
 });
 
 
@@ -152,23 +144,35 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
 // Page routes (mounted at / not /api/v1)
 export const pageRouter = express.Router();
 
+// "/" owned by treeos-base extension (welcome page). If treeos-base not installed,
+// fall through to kernel 404. The "/" route is an OS-level concept, not kernel.
+
+let _hasEmailCached = false;
+let _hasLegalCached = false;
+// Set after boot via init
+export function setEmailAvailable(v) { _hasEmailCached = !!v; }
+export function setLegalAvailable(v) { _hasLegalCached = !!v; }
+
 pageRouter.get("/login", (req, res) => {
   if (!isHtmlEnabled()) {
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
-  renderLoginPage(req, res);
+  renderLoginPage(req, res, { hasEmail: _hasEmailCached });
 });
 
 pageRouter.get("/register", (req, res) => {
   if (!isHtmlEnabled()) {
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
-  renderRegisterPage(req, res);
+  renderRegisterPage(req, res, { hasEmail: _hasEmailCached, hasLegal: _hasLegalCached });
 });
 
 pageRouter.get("/forgot-password", (req, res) => {
   if (!isHtmlEnabled()) {
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
+  }
+  if (!_hasEmailCached) {
+    return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Email extension not installed.");
   }
   renderForgotPasswordPage(req, res);
 });

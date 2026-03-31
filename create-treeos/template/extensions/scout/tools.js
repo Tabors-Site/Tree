@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { resolveRootNode } from "../../seed/tree/treeFetch.js";
 import { runScout, getScoutHistory, getScoutGaps } from "./core.js";
 
 export default [
@@ -19,24 +20,27 @@ export default [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     handler: async ({ nodeId, query, userId, username }) => {
       try {
-        const result = await runScout(nodeId, query, userId, username || "system", {});
+        // Walk up to tree root so strategies search the whole tree
+        const rootNode = await resolveRootNode(nodeId);
+        const rootId = String(rootNode._id);
+
+        const result = await runScout(nodeId, query, userId, username || "system", { rootId });
         if (result.error) {
           return { content: [{ type: "text", text: result.error }] };
         }
+
+        // Return human-readable answer as primary content, structured data as context
+        const parts = [result.answer];
+        if (result.citations?.length > 0) {
+          parts.push(`\nCitations: ${result.citations.map(c => typeof c === "string" ? c : c.nodeName || c.nodeId).join(", ")}`);
+        }
+        if (result.gaps?.length > 0) {
+          parts.push(`\nGaps: ${result.gaps.join("; ")}`);
+        }
+        parts.push(`\n(${result.findings.length} findings from ${result.strategiesUsed.length} strategies, confidence: ${result.confidence})`);
+
         return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              synthesis: result.synthesis,
-              confidence: result.confidence,
-              strategiesUsed: result.strategiesUsed,
-              strategiesSkipped: result.strategiesSkipped,
-              findingsCount: result.findings.length,
-              citations: result.citations,
-              gaps: result.gaps,
-              angles: result.angles,
-            }, null, 2),
-          }],
+          content: [{ type: "text", text: parts.join("") }],
         };
       } catch (err) {
         return { content: [{ type: "text", text: `Scout failed: ${err.message}` }] };

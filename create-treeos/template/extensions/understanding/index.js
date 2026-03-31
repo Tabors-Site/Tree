@@ -84,6 +84,38 @@ export async function init(core) {
     } catch (err) { log.debug("Understanding", "Failed to enrich context with understanding:", err.message); }
   }, "understanding");
 
+  // Register navigation for understanding tools (if treeos-base installed)
+  try {
+    const { getExtension } = await import("../loader.js");
+    const base = getExtension("treeos-base");
+    if (!base?.exports?.registerToolNavigations) throw 0;
+    base.exports.registerToolNavigations({
+      "understanding-create": ({ args, withToken: t }) =>
+        t(`/api/v1/root/${args.rootId || args.rootNodeId}/understandings?html`),
+      "understanding-list": ({ args, withToken: t }) =>
+        t(`/api/v1/root/${args.rootNodeId}/understandings?html`),
+      "understanding-process": ({ args, withToken: t }) => {
+        const rid = args.rootNodeId;
+        const uid = args.understandingRunId;
+        const unid = args.understandingNodeId || args.previousResult?.understandingNodeId;
+        if (!rid || !uid) return null;
+        return unid
+          ? t(`/api/v1/root/${rid}/understandings/run/${uid}/${unid}?html`)
+          : t(`/api/v1/root/${rid}/understandings/run/${uid}?html`);
+      },
+    });
+  } catch {}
+
+  // Register tree quick link
+  try {
+    const { getExtension } = await import("../loader.js");
+    const treeos = getExtension("treeos-base");
+    treeos?.exports?.registerSlot?.("tree-quick-links", "understanding", ({ rootId, queryString }) =>
+      `<a href="/api/v1/root/${rootId}/understandings${queryString}" class="back-link">Understandings</a>`,
+      { priority: 35 }
+    );
+  } catch {}
+
   return {
     models: { UnderstandingRun, UnderstandingNode },
     router,

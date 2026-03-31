@@ -11,7 +11,7 @@ import { getLandConfigValue } from "./landConfig.js";
  *   beforeNote         - Before note save. Modify { nodeId, content, userId, contentType, metadata }
  *   afterNote          - After note saved. React to { note, nodeId, userId, sizeKB, action }
  *   beforeContribution - Before contribution log. Modify { nodeId, action, userId, ...extensionData }
- *   beforeNodeCreate   - Before node creation. Modify/cancel { name, type, parentNodeID, isRoot, userId }
+ *   beforeNodeCreate   - Before node creation. Modify/cancel { name, type, parentId, parentType, isRoot, userId, metadata }
  *   afterNodeCreate    - After node saved. React to { node, userId }
  *   beforeStatusChange - Before status write. Modify/validate { node, status, userId }
  *   afterStatusChange  - After status saved. React to { node, status, userId }
@@ -35,10 +35,9 @@ import { getLandConfigValue } from "./landConfig.js";
  *   onTreeTripped      - Tree circuit breaker tripped. { rootId, reason, scores, timestamp }
  *   onTreeRevived      - Tripped tree revived. { rootId, timestamp }
  *
- * Extension hooks (examples, extensions define their own):
- *   gateway:beforeDispatch    - Before notification dispatch
- *   understanding:afterRun    - After understanding run completes
- *   dreams:afterDream         - After dream cycle finishes
+ * Extension hooks (extensions define their own using "extName:hookName"):
+ *   myext:beforeProcess       - Before processing begins
+ *   myext:afterComplete        - After processing completes
  *
  * Naming convention: core hooks are camelCase. Extension hooks use "extName:hookName".
  *
@@ -178,8 +177,8 @@ function register(hookName, handler, extName = "unknown") {
       "enrichContext", "onCascade", "onDocumentPressure",
       "beforeLLMCall", "afterLLMCall", "beforeToolCall", "afterToolCall",
       "beforeResponse", "beforeRegister", "afterRegister",
-      "afterSessionCreate", "afterSessionEnd", "afterNavigate",
-      "afterMetadataWrite", "afterScopeChange", "afterOwnershipChange", "afterBoot",
+      "afterSessionCreate", "afterSessionEnd", "afterNavigate", "onNodeNavigate",
+      "afterNodeMove", "afterMetadataWrite", "afterScopeChange", "afterOwnershipChange", "afterBoot",
       "onTreeTripped", "onTreeRevived",
     ];
     if (!hookName.includes(":")) {

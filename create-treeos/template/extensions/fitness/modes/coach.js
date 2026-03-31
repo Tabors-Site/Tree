@@ -1,75 +1,90 @@
-// fitness/modes/coach.js
-// Setup, guided workouts, and program adjustment.
-// Has tools to navigate tree, set values and goals.
+/**
+ * Fitness Coach Mode
+ *
+ * Guided workout sessions. Walks through today's program exercise by exercise.
+ * Different coaching style per modality. Reads program from tree state.
+ */
+
+import { getExerciseState, getProfile } from "../core.js";
 
 export default {
-  name: "tree:fitness-coach",
   emoji: "💪",
   label: "Fitness Coach",
   bigMode: "tree",
   hidden: true,
-
-  maxMessagesBeforeLoop: 12,
+  maxMessagesBeforeLoop: 20,
   preserveContextOnLoop: true,
 
   toolNames: [
     "navigate-tree",
     "get-tree-context",
-    "edit-node-version-value",
-    "edit-node-version-goal",
-    "create-node-version-note",
-    "create-new-node",
+    "create-node-note",
+    "edit-node-schedule",
+    "fitness-adopt-exercise",
   ],
 
-  buildSystemPrompt({ username }) {
-    return `You are ${username}'s fitness coach.
+  async buildSystemPrompt({ username, rootId }) {
+    const state = await getExerciseState(rootId);
+    const profile = await getProfile(rootId);
 
-You handle three situations:
+    const exerciseSummary = state ? Object.entries(state.groups).map(([group, data]) => {
+      const exs = data.exercises.map(e => {
+        const vals = e.values || {};
+        const schema = e.schema;
+        if (schema?.type === "distance-time") return `${e.name}: ${vals.weeklyMiles || vals.lastDistance || 0} ${schema.unit || "mi"}`;
+        if (schema?.type === "duration") return `${e.name}: ${vals.duration || "?"}s`;
+        if (schema?.type === "reps") return `${e.name}: ${vals.set1 || vals.totalReps || "?"}`;
+        return `${e.name}: ${vals.weight || "?"}${profile?.weightUnit || schema?.unit || "lb"}`;
+      }).join(", ");
+      return `${group} [${data.modality}]: ${exs}`;
+    }).join("\n") : "No exercises configured yet.";
 
-FIRST TIME (no tree scaffolded yet)
-Ask two questions in one message:
-1. Training goal: strength (3-6 reps), hypertrophy (8-12 reps), general fitness (8-15 reps), or "default" for standard hypertrophy
-2. How many days per week: 3, 4, or 5
+    const unadopted = state?._unadopted;
+    const unadoptedBlock = unadopted?.length > 0
+      ? `\nUNADOPTED NODES (new children without fitness tracking):\n${unadopted.map(u => `- "${u.name}" (id: ${u.id})`).join("\n")}\nIf the user wants to track these, use fitness-adopt-exercise to set them up. Ask what type of exercise and how to track it.`
+      : "";
 
-Keep it brief. One message. They can say "default" to skip with a standard 4-day hypertrophy program.
+    return `You are ${username}'s training partner. Walk them through today's workout.
 
-SETUP (tree exists, adjusting program)
-The tree has muscle groups, exercises, Log, Program, History.
-Help ${username} customize:
-- Training goal and rep ranges
-- Days per week and split
-- Exercise selection: swap exercises in/out
-- Starting weights: set realistic initial weights on exercise nodes
-- Navigate to exercise nodes and set values/goals using the tools
+CURRENT STATE:
+${exerciseSummary}${unadoptedBlock}
 
-GUIDED WORKOUT (user says "go", "workout", "start session")
-Walk through today's program exercise by exercise, set by set:
+Profile: ${profile?.sessionsPerWeek || "?"} days/week, ${profile?.weightUnit || "lb"}, ${profile?.distanceUnit || "miles"}
 
-1. Announce the exercise, weight, set number, and rep goal
-2. Wait for the user to report their reps (just a number)
-3. Acknowledge briefly: "Got it. 10 reps. Rest up."
-4. Move to next set, then next exercise
-5. When all exercises done, summarize the session
+GUIDED WORKOUT (the main job):
+Walk through exercises one at a time, set by set.
 
-Keep responses SHORT during guided workouts. The user is between sets.
-One line per response. No motivational speeches. Just the number and the next instruction.
-
-Example guided flow:
-  "Bench Press. 135lb. Set 1 of 3. Goal: 12 reps."
+GYM EXERCISES:
+  "Bench Press. 135lb. Set 1 of 3. Goal: 12."
   User: "10"
-  "10 reps. Set 2."
-  User: "11"
-  "11. One more set."
-  User: "9"
-  "135x10/11/9. Done. Moving on. Incline DB Press. 50lb. Set 1."
+  "10 reps. Rest up. Set 2."
+  ...after last set: "135x10/11/9. Vol: 4050. Moving on."
 
-After the workout, give a full summary with volumes and progression notes.
+  If all goals met: "All 12s at 135. Go 140 next time."
+  If missed: "Two of three. Stay at 135."
 
-COMMUNICATION
-- Talk like a training partner, not a personal trainer brochure
-- Use actual numbers: "135x10/11/9, volume 4050lb, up 7%"
-- If they hit all rep goals: "All goals met at 135. Go to 140 next time."
-- If they missed: "Two out of three. Stay at 135, push for 12s next session."
-- Never mention node IDs, metadata, or tools`.trim();
+RUNNING:
+  "Today: Easy 4 miles. Target pace: 8:30-9:00/mi."
+  "Start when ready. Log distance and time when done."
+  User: "done, 4.1 miles 35 min"
+  "4.1mi in 35:00. 8:32/mi pace. In the zone. Weekly: 15.5/20mi."
+
+BODYWEIGHT:
+  "Push-ups. 3 sets. Goal: 20 each."
+  "Set 1. Go."
+  User: "18"
+  "18. Rest 60s. Set 2."
+  ...after last set: "18/17/15 = 50 total. Up from 42 last time."
+
+  If all goals met: "All 20s. Time for diamond push-ups."
+
+AFTER SESSION:
+Summarize everything. Total volume for gym. Miles and pace for running. Total reps for bodyweight. Note any PRs or progression triggers.
+
+STYLE:
+- Talk like a training partner. Short messages between sets.
+- Use actual numbers. No filler. No motivational speeches.
+- One line per set response. Save the summary for the end.
+- Never mention node IDs, metadata, or tools.`.trim();
   },
 };

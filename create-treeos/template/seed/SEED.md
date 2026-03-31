@@ -45,7 +45,7 @@ Node and User are the data contract. The seed also owns models for kernel operat
 
 | Model | Purpose |
 |-------|---------|
-| Note | Content attached to nodes. Six fields: contentType, content, userId, nodeId, metadata (Map), createdAt. Extensions tag notes via metadata (prestige writes version, treeos writes isReflection). beforeNote/afterNote hooks fire. |
+| Note | Content attached to nodes. Six fields: contentType, content, userId, nodeId, metadata (Map), createdAt. Extensions tag notes via metadata. Each extension uses its own namespace. beforeNote/afterNote hooks fire. |
 | Contribution | Audit trail. Core action shapes + extensionData for everything else. |
 | AIChat | Conversation sessions. The conversation loop is kernel. |
 | LLMConnection | LLM endpoint storage. The resolution chain is kernel. |
@@ -175,11 +175,13 @@ Same pattern as node metadata, applied to users. Six functions.
 
 ### Extension Scope (core.scope)
 
-`core.scope.isExtensionBlockedAtNode(extName, nodeId)` lets extensions check their own blocked status. `core.scope.getBlockedExtensionsAtNode(nodeId)` returns the full blocked/restricted/allowed sets. `core.scope.isToolReadOnly(toolName)` checks the readOnlyHint flag. `core.scope.getToolOwner(toolName)` and `core.scope.getModeOwner(modeKey)` find which extension owns a tool or mode.
+`core.scope.isExtensionBlockedAtNode(extName, nodeId)` lets extensions check their own blocked status. `core.scope.getBlockedExtensionsAtNode(nodeId)` returns the full blocked/restricted/allowed sets. `core.scope.isToolReadOnly(toolName)` checks the readOnlyHint flag. `core.scope.getToolOwner(toolName)` and `core.scope.getModeOwner(modeKey)` find which extension owns a tool or mode. `core.scope.getModesOwnedBy(extName)` returns all mode keys registered by an extension (reverse lookup on the ownership map).
 
 ### Mode Management (core.modes)
 
 `core.modes.registerMode(key, config, extName)` registers a custom mode. `core.modes.setDefaultMode(bigMode, key)` sets the default for a zone. `core.modes.setNodeMode(nodeId, intent, modeKey)` sets a per-node mode override atomically. Extensions use this to assign custom modes to specific nodes without direct MongoDB calls.
+
+**Mode naming convention.** Extensions should name modes as `tree:{ext}-{suffix}` where suffix encodes intent: `:log` (default receiver), `:coach` (guided, "be" command), `:review` (backward-looking analysis), `:plan` (forward-looking, builds structure), `:ask` (read-only query), `:tell` (write knowledge). The tree-orchestrator uses `getModesOwnedBy(extName)` to discover an extension's modes and matches suffixes to route messages automatically. Extensions with complex routing can export `handleMessage` to override suffix-based routing.
 
 ### New Hooks
 
@@ -228,6 +230,8 @@ Two rules, no exceptions. Before hooks run sequential because they can cancel. A
 | afterSessionCreate | after | Session registered. React to { sessionId, userId, type }. |
 | afterSessionEnd | after | Session ended. React to { sessionId, userId, type }. |
 | afterNavigate | after | Fires when user navigates to a tree root. Extensions track recency. |
+| onNodeNavigate | after | User navigates between nodes within a tree. { userId, rootId, nodeId, socket }. Distinct from afterNavigate which fires on root load only. |
+| afterNodeMove | after | Node reparented. All five resolution chains shift. { nodeId, oldParentId, newParentId, userId }. Fires after cache invalidation and lock release. |
 | afterMetadataWrite | after | After setExtMeta succeeds. { nodeId, extName, data }. Zero overhead if no listeners. |
 | afterScopeChange | after | After extension scope changes. { nodeId, blocked, restricted, allowed, userId } |
 | afterOwnershipChange | after | After rootOwner or contributors changed. { nodeId, action, targetUserId, previousOwnerId? } |

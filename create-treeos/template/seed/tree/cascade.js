@@ -87,6 +87,7 @@ export async function checkCascade(nodeId, writeContext) {
     signalId,
     writeContext,
     cascadeConfig,
+    source: nodeId,
     depth: 0,
   };
 

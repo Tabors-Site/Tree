@@ -80,7 +80,8 @@ async function registerInput(channel, secrets) {
   }
 
   // Store secret token in metadata for webhook verification
-  const GatewayChannel = (await import("../gateway/model.js")).default;
+  const { getExtension } = await import("../loader.js");
+  const GatewayChannel = getExtension("gateway")?.exports?.GatewayChannel;
   await GatewayChannel.findByIdAndUpdate(channel._id, {
     $set: { "config.metadata.webhookSecret": secretToken },
   });
@@ -106,7 +107,8 @@ async function unregisterInput(channel, secrets) {
 
 export async function sendTelegramReply(channel, chatId, text) {
   try {
-    const { getChannelWithSecrets } = (await import("../gateway/core.js"));
+    const { getExtension } = await import("../loader.js");
+    const getChannelWithSecrets = getExtension("gateway")?.exports?.getChannelWithSecrets;
     const fullChannel = await getChannelWithSecrets(channel._id);
     if (!fullChannel?.config?.decryptedSecrets?.botToken) return;
 

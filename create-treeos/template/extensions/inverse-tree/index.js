@@ -1,6 +1,6 @@
 import log from "../../seed/log.js";
 import tools from "./tools.js";
-import { setRunChat, recordSignal, compress, getInverseConfig, getInverseData } from "./core.js";
+import { setRunChat, recordSignal, compress, getInverseConfig, getInverseData, getProfile } from "./core.js";
 import { SYSTEM_ROLE } from "../../seed/protocol.js";
 import Node from "../../seed/models/node.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
@@ -172,12 +172,23 @@ export async function init(core) {
 
   const { default: router } = await import("./routes.js");
 
+  // Register HTML page with html-rendering
+  try {
+    const { getExtension } = await import("../loader.js");
+    const htmlExt = getExtension("html-rendering");
+    if (htmlExt) {
+      const { default: buildHtmlRoutes } = await import("./htmlRoutes.js");
+      htmlExt.router.use("/", buildHtmlRoutes());
+    }
+  } catch {}
+
   return {
     router,
     tools,
     exports: {
       compress,
       recordSignal,
+      getProfile,
     },
   };
 }

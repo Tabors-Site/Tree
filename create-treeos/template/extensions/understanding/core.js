@@ -1,6 +1,7 @@
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
 import { getNotes } from "../../seed/tree/notes.js";
+import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 
 // Services wired from init() via setServices()
 let Node = null;
@@ -29,7 +30,8 @@ export async function createUnderstandingRun(
   chatId = null,
   sessionId = null,
 ) {
-  const nodes = await Node.find({}).lean();
+  const descendantIds = await getDescendantIds(rootNodeId, { maxResults: 10000 });
+  const nodes = await Node.find({ _id: { $in: descendantIds } }).lean();
   const nodeById = new Map(nodes.map((n) => [String(n._id), n]));
 
   const rootNode = nodeById.get(String(rootNodeId));
@@ -771,7 +773,8 @@ export async function commitCompressionResult({
  */
 async function refreshRunTopology(run) {
   const runId = String(run._id);
-  const nodes = await Node.find({}).lean();
+  const descendantIds = await getDescendantIds(run.rootNodeId, { maxResults: 10000 });
+  const nodes = await Node.find({ _id: { $in: descendantIds } }).lean();
   const nodeById = new Map(nodes.map((n) => [String(n._id), n]));
 
   const rootNode = nodeById.get(String(run.rootNodeId));

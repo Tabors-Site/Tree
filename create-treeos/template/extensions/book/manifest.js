@@ -36,7 +36,7 @@ export default {
   },
 
   optional: {
-    extensions: ["html-rendering"],
+    extensions: ["html-rendering", "treeos-base"],
   },
 
   provides: {

@@ -21,7 +21,8 @@ router.post("/gateway/telegram/:channelId", async (req, res) => {
     if (!update || !update.message || !update.message.text) return;
 
     // Load channel
-    const GatewayChannel = (await import("../gateway/model.js")).default;
+    const { getExtension } = await import("../loader.js");
+    const GatewayChannel = getExtension("gateway")?.exports?.GatewayChannel;
     const channel = await GatewayChannel.findById(channelId).lean();
     if (!channel || !channel.enabled) return;
     if (channel.type !== "telegram") return;
@@ -63,7 +64,6 @@ router.post("/gateway/telegram/:channelId", async (req, res) => {
     );
 
     // Process the message via gateway core
-    const { getExtension } = await import("../loader.js");
     const gateway = getExtension("gateway");
     if (!gateway?.exports?.processGatewayMessage) {
       log.error("GatewayTelegram", "Gateway core not loaded");

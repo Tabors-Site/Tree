@@ -280,26 +280,20 @@ export async function processNode(nodeId, rootId, userId, username, targetSize) 
     if (section.content.length < MIN_SECTION_SIZE) continue;
 
     try {
-      const result = await createNode(
-        section.title,
-        null, null,
-        nodeId,
-        false,
+      const result = await createNode({
+        name: section.title,
+        parentId: nodeId,
         userId,
-        {}, {},
-        section.content,
-        null,
-        true,
-        null, null,
-        null,
-      );
+        note: section.content,
+        wasAi: true,
+      });
 
-      if (result?.node?._id) {
+      if (result?._id) {
         created++;
 
         // If child is still too large, add to queue
         if (section.content.length > targetSize) {
-          addedToQueue.push(result.node._id.toString());
+          addedToQueue.push(result._id.toString());
         }
       }
     } catch (err) {

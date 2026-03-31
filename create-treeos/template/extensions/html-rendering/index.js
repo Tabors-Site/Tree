@@ -65,6 +65,16 @@ export async function init(core) {
     await freshUser.save();
   }, "html-rendering");
 
+  // Detect optional extensions after boot
+  core.hooks.register("afterBoot", async () => {
+    try {
+      const { getExtension } = await import("../loader.js");
+      const { setEmailAvailable, setLegalAvailable } = await import("./routes.js");
+      setEmailAvailable(!!getExtension("email"));
+      setLegalAvailable(!!getExtension("legal"));
+    } catch {}
+  }, "html-rendering");
+
   return {
     router,
     pageRouter,

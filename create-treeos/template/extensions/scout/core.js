@@ -13,6 +13,7 @@ import Node from "../../seed/models/node.js";
 import Note from "../../seed/models/note.js";
 import { CONTENT_TYPE } from "../../seed/protocol.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
+import { getDescendantIds, resolveRootNode } from "../../seed/tree/treeFetch.js";
 
 let LLM_PRIORITY;
 try {
@@ -78,43 +79,29 @@ async function searchSemantic(query, rootId, userId, opts) {
 // STRATEGY 2: STRUCTURAL SEARCH
 // ─────────────────────────────────────────────────────────────────────────
 
-async function searchStructural(query, nodeId, opts) {
+async function searchStructural(query, nodeId, rootId, opts) {
   try {
-    const node = await Node.findById(nodeId).select("_id name parent children").lean();
-    if (!node) return { strategy: "structural", findings: [] };
+    // Walk the full tree from the root to get every descendant
+    const allIds = await getDescendantIds(rootId, { maxResults: 500 });
+    if (!allIds.length) return { strategy: "structural", findings: [] };
 
-    const searchNodeIds = [nodeId];
-    if (node.parent) searchNodeIds.push(node.parent.toString());
-    if (node.children) {
-      for (const c of node.children.slice(0, 20)) {
-        searchNodeIds.push(c.toString());
-      }
-    }
-
-    // Also get sibling nodes (parent's other children)
-    if (node.parent) {
-      const parent = await Node.findById(node.parent).select("children").lean();
-      if (parent?.children) {
-        for (const c of parent.children.slice(0, 20)) {
-          const cStr = c.toString();
-          if (cStr !== nodeId && !searchNodeIds.includes(cStr)) {
-            searchNodeIds.push(cStr);
-          }
-        }
-      }
-    }
-
-    const notes = await Note.find({
-      nodeId: { $in: searchNodeIds },
-      contentType: CONTENT_TYPE.TEXT,
-    }).sort({ createdAt: -1 }).limit(opts.maxFindingsPerStrategy || 10).select("_id content nodeId createdAt").lean();
-
-    // Build a node name lookup
+    // Build node name lookup
     const nodeNames = new Map();
-    const nodeDocs = await Node.find({ _id: { $in: searchNodeIds } }).select("_id name").lean();
+    const nodeDocs = await Node.find({ _id: { $in: allIds } }).select("_id name").lean();
     for (const n of nodeDocs) nodeNames.set(n._id.toString(), n.name);
 
     const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    if (queryWords.length === 0) return { strategy: "structural", findings: [] };
+
+    // Pre-filter in MongoDB with regex so we don't pull every note in the tree
+    const escaped = queryWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const regexPattern = escaped.join("|");
+
+    const notes = await Note.find({
+      nodeId: { $in: allIds },
+      contentType: CONTENT_TYPE.TEXT,
+      content: { $regex: regexPattern, $options: "i" },
+    }).sort({ createdAt: -1 }).limit(50).select("_id content nodeId createdAt").lean();
 
     return {
       strategy: "structural",
@@ -122,7 +109,6 @@ async function searchStructural(query, nodeId, opts) {
         .map(n => {
           const content = (n.content || "").toLowerCase();
           const matches = queryWords.filter(w => content.includes(w)).length;
-          if (matches === 0) return null;
           return {
             noteId: String(n._id),
             nodeId: String(n.nodeId),
@@ -131,7 +117,8 @@ async function searchStructural(query, nodeId, opts) {
             score: matches / queryWords.length,
           };
         })
-        .filter(Boolean),
+        .sort((a, b) => b.score - a.score)
+        .slice(0, opts.maxFindingsPerStrategy || 10),
     };
   } catch (err) {
     log.debug("Scout", `Structural search failed: ${err.message}`);
@@ -302,7 +289,7 @@ export async function runScout(nodeId, query, userId, username, opts = {}) {
     llmPriority: LLM_PRIORITY?.INTERACTIVE || 2,
   });
 
-  const ok = await rt.init("Starting scout");
+  const ok = await rt.init(query);
   if (!ok) {
     return { error: "Scout already running at this node" };
   }
@@ -342,7 +329,13 @@ Return ONLY JSON:
     }
 
     // Step 2: Run all five strategies in parallel
-    const rootId = opts.rootId || nodeId;
+    let rootId = opts.rootId;
+    if (!rootId) {
+      try {
+        const rootNode = await resolveRootNode(nodeId);
+        rootId = String(rootNode._id);
+      } catch { rootId = nodeId; }
+    }
     const strategyOpts = {
       similarityThreshold: opts.similarityThreshold || 0.7,
       maxFindingsPerStrategy: opts.maxFindingsPerAngle || 10,
@@ -351,7 +344,7 @@ Return ONLY JSON:
     const startStrategies = Date.now();
     const [semantic, structural, memory, codebook, profile] = await Promise.all([
       searchSemantic(query, rootId, userId, strategyOpts),
-      searchStructural(query, nodeId, strategyOpts),
+      searchStructural(query, nodeId, rootId, strategyOpts),
       searchMemory(nodeId, query, strategyOpts),
       searchCodebook(nodeId, userId, query, strategyOpts),
       searchProfile(userId, query, strategyOpts),
@@ -439,28 +432,40 @@ ${top.map(f => `[${f.strategies.join("+")}] score=${f.finalScore.toFixed(2)} nod
 
 ${codebook.findings.length > 0 ? `\nCodebook terms found: ${codebook.findings.map(f => f.snippet).join(", ")}` : ""}
 
-Synthesize an answer. Cite specific nodes. Name gaps where the tree lacks information.`;
+Synthesize findings into a direct answer. Cite specific node names. Name any gaps.
+
+Return JSON:
+{ "synthesis": "your answer here", "confidence": 0.0-1.0, "citations": ["nodeName1", "nodeName2"], "gaps": ["what is missing"] }`;
 
     let synthesis = null;
+    let rawSynthesis = null;
     try {
       const result = await rt.runStep("tree:scout", {
         prompt: synthesisPrompt,
       });
       synthesis = result?.parsed;
+      rawSynthesis = result?.raw?.content || result?.raw || null;
     } catch (err) {
       log.debug("Scout", `Synthesis failed: ${err.message}`);
     }
 
     // Step 5: Build result
+    const answer = synthesis?.synthesis
+      || (typeof rawSynthesis === "string" && rawSynthesis.length > 0 ? rawSynthesis : null)
+      || (top.length > 0
+        ? `Found ${top.length} results but synthesis failed. Top match: "${top[0].snippet}" (${top[0].nodeName})`
+        : "No findings. The tree has no data matching this query.");
+
     const result = {
       query,
+      answer,
       angles: angles.angles,
       strategiesUsed: usedStrategies,
       strategiesSkipped: allStrategies
         .filter(s => s.skipped)
         .map(s => ({ strategy: s.strategy, reason: s.reason })),
       findings: top,
-      synthesis: synthesis?.synthesis || "Could not synthesize findings",
+      synthesis: answer,
       confidence: synthesis?.confidence || 0,
       citations: synthesis?.citations || [],
       gaps: synthesis?.gaps || [],
@@ -492,7 +497,7 @@ Synthesize an answer. Cite specific nodes. Name gaps where the tree lacks inform
       log.debug("Scout", `Failed to write scout metadata: ${err.message}`);
     }
 
-    rt.setResult("Scout complete", "tree:scout");
+    rt.setResult(answer, "tree:scout");
     return result;
 
   } catch (err) {

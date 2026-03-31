@@ -62,7 +62,7 @@ const REQUIRED_INDEXES = [
   { collection: "aichats", fields: { "treeContext.targetNodeId": 1 }, options: { sparse: true } },
   // Chat retention cleanup: deleteMany by startMessage.time
   { collection: "aichats", fields: { "startMessage.time": 1 }, options: {} },
-  // Mode zone queries (gateway, monitor)
+  // Mode zone queries
   { collection: "aichats", fields: { "aiContext.zone": 1 }, options: {} },
 
   // LLM connection queries (connections by user)

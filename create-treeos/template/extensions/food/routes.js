@@ -2,22 +2,47 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import log from "../../seed/log.js";
-import { createNote } from "../../seed/tree/notes.js";
 import NodeModel from "../../seed/models/node.js";
 import UserModel from "../../seed/models/user.js";
-import {
-  scaffold,
-  isInitialized,
-  findFoodNodes,
-  parseFood,
-  deliverMacros,
-  getDailyPicture,
-} from "./core.js";
+import { isInitialized, findFoodNodes, getDailyPicture } from "./core.js";
+import { handleMessage } from "./handler.js";
 
 let Node = NodeModel;
 export function setServices({ Node: N }) { if (N) Node = N; }
 
+// Auth middleware that accepts both cookie JWT and URL token (for frontend HTML pages)
+async function htmlAuth(req, res, next) {
+  if (req.query.token) {
+    try { const urlAuth = (await import("../html-rendering/urlAuth.js")).default; return urlAuth(req, res, next); } catch {}
+  }
+  return authenticate(req, res, next);
+}
+
 const router = express.Router();
+
+// ── HTML Dashboard (GET with ?html) ──
+router.get("/root/:rootId/food", async (req, res, next) => {
+  if (!("html" in req.query)) return next();
+  try {
+    const { isHtmlEnabled } = await import("../html-rendering/config.js");
+    if (!isHtmlEnabled()) return next();
+    const urlAuth = (await import("../html-rendering/urlAuth.js")).default;
+    urlAuth(req, res, async () => {
+      const { rootId } = req.params;
+      const root = await Node.findById(rootId).select("name metadata").lean();
+      if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Not found");
+      let picture = null;
+      if (await isInitialized(rootId)) {
+        const { getDailyPicture } = await import("./core.js");
+        picture = await getDailyPicture(rootId);
+      }
+      const { renderFoodDashboard } = await import("./pages/dashboard.js");
+      res.send(renderFoodDashboard({ rootId, rootName: root.name, picture, token: req.query.token || null, userId: req.userId, inApp: !!req.query.inApp }));
+    });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, "Dashboard failed");
+  }
+});
 
 /**
  * POST /root/:rootId/food
@@ -52,111 +77,189 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
 
     const user = await UserModel.findById(userId).select("username").lean();
     const username = user?.username || "user";
-    const { runChat } = await import("../../seed/llm/conversation.js");
 
-    // ── PATH 1: First use. Scaffold and run setup conversation. ──
-    const initialized = await isInitialized(rootId);
-    if (!initialized) {
-      await scaffold(rootId, userId);
-
-      // Run the coach mode for the setup conversation
-      const { answer, chatId } = await runChat({
-        userId,
-        username,
-        message: `First time setup. The user said: "${message}". Ask them about their calorie target, macro goals, and dietary restrictions. If they already provided info in their message, use it.`,
-        mode: "tree:food-coach",
-        rootId,
-        res,
-        slot: "food",
-      });
-
-      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-coach", setup: true });
-      return;
-    }
-
-    const foodNodes = await findFoodNodes(rootId);
-    if (!foodNodes?.log) {
-      return sendError(res, 500, ERR.INTERNAL, "Food tree structure not found.");
-    }
-
-    // ── PATH 3: Questions, advice, planning. Route to coach/daily mode. ──
-    const isQuestion = /\b(what should|how am i|how's my|suggest|recommend|plan|advice|help|adjust|change.*goal|set.*goal|update.*goal)\b/i.test(message);
-    if (isQuestion) {
-      const { answer, chatId } = await runChat({
-        userId,
-        username,
-        message,
-        mode: "tree:food-daily",
-        rootId,
-        res,
-        slot: "food",
-      });
-
-      if (!res.headersSent) sendOk(res, { answer, chatId, mode: "tree:food-daily" });
-      return;
-    }
-
-    // ── PATH 2: Food input. Parse, cascade, respond. ──
-
-    // One LLM call: parse food into structured macros
-    const parsed = await parseFood(message, userId, username, rootId);
-    if (!parsed) {
-      return sendOk(res, {
-        answer: "Could not parse that as food. Try something like: 'chicken breast and rice for lunch'.",
-        mode: "tree:food-log",
-      });
-    }
-
-    // Write note to Log node with raw input
-    try {
-      await createNote({
-        nodeId: foodNodes.log.id,
-        content: `${parsed.when || "meal"}: ${parsed.meal} (P:${parsed.totals.protein}g C:${parsed.totals.carbs}g F:${parsed.totals.fats}g ${parsed.totals.calories}cal)`,
-        contentType: "text",
-        userId,
-      });
-    } catch (err) {
-      log.warn("Food", `Note creation failed: ${err.message}`);
-    }
-
-    // Fire cascade signals to macro nodes
-    await deliverMacros(foodNodes.log.id, foodNodes, parsed);
-
-    // Small delay for $inc to settle, then read fresh totals
-    await new Promise(r => setTimeout(r, 50));
-    const picture = await getDailyPicture(rootId);
-
-    // Build natural language response
-    const itemList = parsed.items.map(i =>
-      `${i.name} (${i.calories}cal, ${i.protein}p/${i.carbs}c/${i.fats}f)`
-    ).join(", ");
-    let response = `Logged: ${itemList}`;
-
-    if (picture) {
-      const lines = [];
-      for (const macro of ["protein", "carbs", "fats"]) {
-        const m = picture[macro];
-        if (m) {
-          const pct = m.goal > 0 ? Math.round((m.today / m.goal) * 100) : 0;
-          const goalStr = m.goal > 0 ? `/${m.goal}g (${pct}%)` : "g";
-          lines.push(`${macro}: ${m.today}${goalStr}`);
-        }
-      }
-      if (picture.calories) {
-        const c = picture.calories;
-        const pct = c.goal > 0 ? Math.round((c.today / c.goal) * 100) : 0;
-        const goalStr = c.goal > 0 ? `/${c.goal} (${pct}%)` : "";
-        lines.push(`calories: ${c.today}${goalStr}`);
-      }
-      if (lines.length > 0) {
-        response += `\nToday: ${lines.join(", ")}`;
-      }
-    }
-
-    sendOk(res, { answer: response, parsed, mode: "tree:food-log" });
+    const result = await handleMessage(message, { userId, username, rootId, res });
+    if (!res.headersSent) sendOk(res, result);
   } catch (err) {
     log.error("Food", "Route error:", err.message);
     if (!res.headersSent) sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * GET /root/:rootId/food/daily
+ * Today's nutrition dashboard.
+ */
+router.get("/root/:rootId/food/daily", authenticate, async (req, res) => {
+  try {
+    const picture = await getDailyPicture(req.params.rootId);
+    if (!picture) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Food tree not found or not initialized");
+    sendOk(res, picture);
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * GET /root/:rootId/food/week
+ * Weekly nutrition review (last 7 days from History node).
+ */
+router.get("/root/:rootId/food/week", authenticate, async (req, res) => {
+  try {
+    const foodNodes = await findFoodNodes(req.params.rootId);
+    if (!foodNodes?.history) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Food tree not found");
+
+    const Note = (await import("../../seed/models/note.js")).default;
+    const notes = await Note.find({ nodeId: foodNodes.history.id })
+      .sort({ createdAt: -1 })
+      .limit(7)
+      .select("content createdAt")
+      .lean();
+
+    const days = notes
+      .map(n => { try { return JSON.parse(n.content); } catch { return null; } })
+      .filter(Boolean);
+
+    sendOk(res, { days, count: days.length });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * GET /root/:rootId/food/profile
+ * Dietary profile and goals.
+ */
+router.get("/root/:rootId/food/profile", authenticate, async (req, res) => {
+  try {
+    const picture = await getDailyPicture(req.params.rootId);
+    if (!picture) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Food tree not found");
+    sendOk(res, { profile: picture.profile || null, macros: { protein: picture.protein, carbs: picture.carbs, fats: picture.fats } });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * DELETE /root/:rootId/food/entry/:noteId
+ * Delete a meal entry and decrement the metric values it added.
+ */
+router.delete("/root/:rootId/food/entry/:noteId", htmlAuth, async (req, res) => {
+  try {
+    const { rootId, noteId } = req.params;
+    const userId = req.userId;
+    const Note = (await import("../../seed/models/note.js")).default;
+    const note = await Note.findById(noteId).lean();
+    if (!note) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Note not found");
+
+    // Already soft-deleted. Don't decrement again.
+    if (note.nodeId === "DELETED" || note.userId === "DELETED") {
+      return sendOk(res, { deleted: true, alreadyDeleted: true });
+    }
+
+    // Parse totals from this note or its linked log note
+    let totals = null;
+    let logNoteId = null;
+    try {
+      const data = JSON.parse(note.content);
+      totals = data.totals || null;
+      logNoteId = data.logNoteId || null;
+    } catch {}
+
+    if (!totals && logNoteId) {
+      try {
+        const logNote = await Note.findById(logNoteId).lean();
+        if (logNote) {
+          try { totals = JSON.parse(logNote.content).totals || null; } catch {}
+        }
+      } catch {}
+    }
+
+    // Decrement metric values before deleting
+    if (totals) {
+      const foodNodes = await findFoodNodes(rootId);
+      const { STRUCTURAL_ROLES } = await import("./core.js");
+      const { incExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+      for (const [role, info] of Object.entries(foodNodes)) {
+        if (STRUCTURAL_ROLES.includes(role) || !info?.id) continue;
+        const amount = totals[role] || 0;
+        if (amount > 0) {
+          await incExtMeta(info.id, "values", "today", -amount);
+        }
+      }
+    }
+
+    // Use kernel delete (soft-delete, fires afterNote hook)
+    const { deleteNoteAndFile } = await import("../../seed/tree/notes.js");
+    await deleteNoteAndFile({ noteId, userId });
+
+    // Delete the linked note too (log <-> slot)
+    if (logNoteId) {
+      try { await deleteNoteAndFile({ noteId: logNoteId, userId }); } catch {}
+    } else {
+      // This was a log note. Find and delete its linked slot note.
+      const foodNodes = await findFoodNodes(rootId);
+      if (foodNodes.mealSlots) {
+        const slotNodeIds = Object.values(foodNodes.mealSlots).map(s => s.id);
+        const slotNotes = await Note.find({
+          nodeId: { $in: slotNodeIds },
+        }).select("_id content").lean();
+        for (const sn of slotNotes) {
+          try {
+            const d = JSON.parse(sn.content);
+            if (d.logNoteId === noteId) {
+              await deleteNoteAndFile({ noteId: String(sn._id), userId });
+            }
+          } catch {}
+        }
+      }
+    }
+
+    sendOk(res, { deleted: true, decremented: !!totals });
+  } catch (err) {
+    log.error("Food", "Delete entry error:", err.message);
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * POST /root/:rootId/food/metric - Create + adopt a metric node in one call
+ * DELETE /root/:rootId/food/metric/:nodeId - Delete a metric node
+ */
+router.post("/root/:rootId/food/metric", htmlAuth, async (req, res) => {
+  try {
+    const { name, goal } = req.body;
+    if (!name) return sendError(res, 400, ERR.INVALID_INPUT, "name required");
+
+    // Check if a child with this name already exists (unadopted or cleared)
+    const { adoptNode } = await import("./core.js");
+    const existing = await Node.findOne({ parent: req.params.rootId, name: name.trim() }).select("_id").lean();
+    if (existing) {
+      const role = name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      await adoptNode(String(existing._id), role, goal ? Number(goal) : null);
+      sendOk(res, { id: String(existing._id), role });
+      return;
+    }
+
+    const { createNode } = await import("../../seed/tree/treeManagement.js");
+    const node = await createNode({ name: name.trim(), parentId: req.params.rootId, userId: req.userId });
+    const role = name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    await adoptNode(String(node._id), role, goal ? Number(goal) : null);
+    sendOk(res, { id: String(node._id), role }, 201);
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+router.delete("/root/:rootId/food/metric/:nodeId", htmlAuth, async (req, res) => {
+  try {
+    const { unsetExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+    await unsetExtMeta(req.params.nodeId, "food");
+    await unsetExtMeta(req.params.nodeId, "values");
+    await unsetExtMeta(req.params.nodeId, "goals");
+    sendOk(res, { removed: true });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 

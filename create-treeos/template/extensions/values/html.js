@@ -3,6 +3,13 @@
 /* ------------------------------------------------- */
 
 import { baseStyles } from "../html-rendering/html/baseStyles.js";
+import { getExtension } from "../loader.js";
+
+function valuesResolveSlots(slotName, ctx) {
+  try {
+    return getExtension("treeos-base")?.exports?.resolveSlots?.(slotName, ctx) || "";
+  } catch { return ""; }
+}
 
 function isAutoKey(key) {
   return key.startsWith("_auto__");
@@ -669,12 +676,7 @@ td code.show-tooltip::before {
         <a href="/api/v1/node/${nodeId}/${nodeVersion}${queryString}" class="back-link">
           Back to Version
         </a>
-        <a
-          href="/api/v1/node/${nodeId}/${parsedVersion}/values/solana${queryString}"
-          class="back-link"
-        >
-          Solana Wallet
-        </a>
+        ${valuesResolveSlots("values-nav-links", { nodeId, version: parsedVersion, queryString })}
       </div>
 
       <!-- Header -->

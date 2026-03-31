@@ -102,18 +102,17 @@ function detectState(entries) {
 
 export async function init(core) {
   // afterLLMCall: record the exchange pattern
-  core.hooks.register("afterLLMCall", async ({ userId, sessionId, message, answer, mode, usage }) => {
-    if (!sessionId || !userId || userId === "SYSTEM") return;
+  core.hooks.register("afterLLMCall", async ({ userId, rootId, mode, usage, hasToolCalls }) => {
+    if (!rootId || !userId || userId === "SYSTEM") return;
 
-    const key = sessionId;
+    const key = `${rootId}:${userId}`;
     if (!windows.has(key)) windows.set(key, []);
     const window = windows.get(key);
 
     window.push({
       ts: Date.now(),
-      userLen: (message || "").length,
-      responseLen: (answer || "").length,
-      toolCount: usage?.toolCalls || 0,
+      hasToolCalls: !!hasToolCalls,
+      tokenCount: (usage?.prompt_tokens || 0) + (usage?.completion_tokens || 0),
       mode: mode || null,
     });
 

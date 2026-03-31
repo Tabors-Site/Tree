@@ -30,17 +30,14 @@ export async function init(core) {
   }, "evolve");
 
   // afterLLMCall: record interaction patterns
-  core.hooks.register("afterLLMCall", async ({ userId, nodeId, message, answer }) => {
+  core.hooks.register("afterLLMCall", async ({ userId, rootId, mode, hasToolCalls }) => {
     if (!userId || userId === "SYSTEM") return;
-
-    const text = (answer || "").toLowerCase();
-    const silence = /i don't (have|see|find)|no (information|data|notes?)|i('m| am) not (sure|finding)|can't find/i.test(text);
 
     recordSignal({
       type: "llm-response",
-      hadAnswer: !silence,
-      query: (message || "").slice(0, 200),
-      nodeId,
+      hadToolCalls: !!hasToolCalls,
+      mode: mode || "unknown",
+      rootId,
       userId,
     });
   }, "evolve");

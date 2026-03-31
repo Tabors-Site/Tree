@@ -32,7 +32,7 @@ export default {
 
   optional: {
     services: ["energy"],
-    extensions: ["values", "schedules"],
+    extensions: ["values", "schedules", "treeos-base"],
   },
 
   provides: {

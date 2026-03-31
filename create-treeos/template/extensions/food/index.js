@@ -9,17 +9,19 @@
 
 import log from "../../seed/log.js";
 import logMode from "./modes/log.js";
-import dailyMode from "./modes/daily.js";
+import reviewMode from "./modes/review.js";
 import coachMode from "./modes/coach.js";
 import {
   configure,
   scaffold,
   isInitialized,
   findFoodNodes,
+  STRUCTURAL_ROLES,
   handleMacroCascade,
   checkDailyReset,
   getDailyPicture,
 } from "./core.js";
+import { handleMessage } from "./handler.js";
 
 export async function init(core) {
   core.llm.registerRootLlmSlot?.("food");
@@ -40,18 +42,18 @@ export async function init(core) {
           });
         }
       : null,
-    hooks: core.hooks,
+    Note: core.models.Note,
     metadata: core.metadata,
   });
 
   // Register modes
   core.modes.registerMode("tree:food-log", logMode, "food");
-  core.modes.registerMode("tree:food-daily", dailyMode, "food");
+  core.modes.registerMode("tree:food-review", reviewMode, "food");
   core.modes.registerMode("tree:food-coach", coachMode, "food");
 
   if (core.llm?.registerModeAssignment) {
     core.llm.registerModeAssignment("tree:food-log", "foodLog");
-    core.llm.registerModeAssignment("tree:food-daily", "foodDaily");
+    core.llm.registerModeAssignment("tree:food-review", "foodReview");
     core.llm.registerModeAssignment("tree:food-coach", "foodCoach");
   }
 
@@ -86,9 +88,9 @@ export async function init(core) {
       ? node.metadata.get("food")
       : node.metadata?.food;
     if (!meta?.role) return;
-    if (!["protein", "carbs", "fats"].includes(meta.role)) return;
+    if (STRUCTURAL_ROLES.includes(meta.role)) return;
 
-    // This is a food macro node receiving a cascade signal
+    // This is a food metric node receiving a cascade signal
     const payload = hookData.writeContext || hookData.payload || {};
     await handleMacroCascade(node, payload);
 
@@ -96,6 +98,36 @@ export async function init(core) {
     hookData._resultStatus = "SUCCEEDED";
     hookData._resultExtName = "food";
     hookData._resultPayload = { role: meta.role, handled: true };
+  }, "food");
+
+  // ── afterNote: decrement values when a food log note is deleted externally ──
+  core.hooks.register("afterNote", async ({ nodeId, action, note }) => {
+    if (action !== "delete" || !nodeId) return;
+    // Check if this note belongs to a food Log node
+    try {
+      const node = await core.models.Node.findById(nodeId).select("metadata parent").lean();
+      if (!node) return;
+      const foodMeta = node.metadata instanceof Map ? node.metadata.get("food") : node.metadata?.food;
+      if (foodMeta?.role !== "log") return;
+      // Try to parse totals from the deleted note
+      let totals = null;
+      try {
+        const data = JSON.parse(note?.content || "");
+        totals = data.totals || null;
+      } catch {}
+      if (!totals) return;
+      // Decrement metric values
+      const rootId = node.parent ? String(node.parent) : null;
+      if (!rootId) return;
+      const foodNodes = await findFoodNodes(rootId);
+      for (const [role, info] of Object.entries(foodNodes)) {
+        if (STRUCTURAL_ROLES.includes(role) || !info?.id) continue;
+        const amount = totals[role] || 0;
+        if (amount > 0) {
+          await core.metadata.incExtMeta(info.id, "values", "today", -amount);
+        }
+      }
+    } catch {}
   }, "food");
 
   // ── breath:exhale: daily reset ──
@@ -156,11 +188,14 @@ export async function init(core) {
       const picture = await getDailyPicture(String(parent));
       if (picture) {
         const lines = [];
-        for (const macro of ["protein", "carbs", "fats"]) {
-          const m = picture[macro];
+        // Render all value-tracked nodes (core macros + user-created)
+        for (const role of (picture._valueRoles || ["protein", "carbs", "fats"])) {
+          const m = picture[role];
           if (m) {
+            const label = m.name || role;
             const pct = m.goal > 0 ? Math.round((m.today / m.goal) * 100) : 0;
-            lines.push(`${macro}: ${m.today}/${m.goal}g (${pct}%)`);
+            const weekPart = m.weeklyAvg > 0 ? `, weekly avg ${m.weeklyAvg}g (${Math.round(m.weeklyHitRate * 100)}% hit rate)` : "";
+            lines.push(`${label}: ${m.today}/${m.goal}g (${pct}%)${weekPart}`);
           }
         }
         if (picture.calories) {
@@ -180,33 +215,86 @@ export async function init(core) {
           context.foodHistory = picture.recentHistory;
         }
       }
-    } else if (["protein", "carbs", "fats"].includes(role)) {
-      // Show running total for this macro
+    } else if (meta?.values?.today != null) {
+      // Any value-tracked node (core macros or user-created)
       const values = meta?.values;
       const goals = meta?.goals;
-      if (values?.today != null) {
-        context.foodMacro = {
-          type: role,
-          today: values.today,
-          goal: goals?.today || 0,
-        };
-      }
+      context.foodMacro = {
+        type: foodMeta.role,
+        name: node.name,
+        today: values.today,
+        goal: goals?.today || 0,
+      };
     }
   }, "food");
+
+  // ── Live dashboard updates ──
+  core.hooks.register("afterNote", async ({ nodeId }) => {
+    if (!nodeId) return;
+    try {
+      const node = await core.models.Node.findById(nodeId).select("rootOwner metadata").lean();
+      if (!node?.rootOwner) return;
+      const fm = node.metadata instanceof Map ? node.metadata.get("food") : node.metadata?.food;
+      if (!fm?.role) return;
+      core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+    } catch {}
+  }, "food");
+
+  core.hooks.register("afterMetadataWrite", async ({ nodeId, extName }) => {
+    if (extName !== "values" && extName !== "food" && extName !== "goals") return;
+    try {
+      const node = await core.models.Node.findById(nodeId).select("rootOwner").lean();
+      if (!node?.rootOwner) return;
+      core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+    } catch {}
+  }, "food");
+
+  // ── Register apps-grid slot ──
+  try {
+    const { getExtension } = await import("../loader.js");
+    const base = getExtension("treeos-base");
+    base?.exports?.registerSlot?.("apps-grid", "food", ({ userId, rootMap, tokenParam, tokenField, esc: e }) => {
+      const entries = rootMap.get("Food") || [];
+      const existing = entries.map(entry =>
+        entry.ready
+          ? `<a class="app-active" href="/api/v1/root/${entry.id}/food?html${tokenParam}" style="margin-right:8px;margin-bottom:6px;">${e(entry.name)}</a>`
+          : `<a class="app-active" style="background:rgba(236,201,75,0.12);border-color:rgba(236,201,75,0.3);color:#ecc94b;margin-right:8px;margin-bottom:6px;" href="/api/v1/root/${entry.id}/food?html${tokenParam}">${e(entry.name)} (setup)</a>`
+      ).join("");
+      return `<div class="app-card">
+        <div class="app-header"><span class="app-emoji">🍎</span><span class="app-name">Food</span></div>
+        <div class="app-desc">Say what you ate. One LLM call parses macros. Daily totals tracked. History archives daily summaries.</div>
+        ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
+        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+          ${tokenField}<input type="hidden" name="app" value="food" />
+          <input class="app-input" name="message" placeholder="What did you eat? (or just say hi to set up your goals)" required />
+          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} Food</button>
+        </form>
+      </div>`;
+    }, { priority: 20 });
+  } catch {}
 
   // ── Import router ──
   const { default: router, setServices } = await import("./routes.js");
   setServices({ Node: core.models.Node });
 
+  const { default: getTools } = await import("./tools.js");
+  const tools = getTools();
+
   log.info("Food", "Loaded. The tree tracks nutrition.");
 
   return {
     router,
+    tools,
+    modeTools: [
+      { modeKey: "tree:food-coach", toolNames: ["food-save-profile", "food-adopt-node"] },
+      { modeKey: "tree:edit", toolNames: ["food-adopt-node"] },
+    ],
     exports: {
       scaffold,
       isInitialized,
       findFoodNodes,
       getDailyPicture,
+      handleMessage,
     },
     jobs: [
       {

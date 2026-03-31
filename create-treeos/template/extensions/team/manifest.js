@@ -29,7 +29,7 @@ export default {
 
   optional: {
     services: ["energy", "websocket"],
-    extensions: ["html-rendering"],
+    extensions: ["html-rendering", "treeos-base"],
   },
 
   provides: {

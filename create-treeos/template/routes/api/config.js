@@ -123,18 +123,15 @@ router.get("/land/extensions/:name", authenticate, async (req, res) => {
       return sendOk(res, { name, manifest, status: NODE_STATUS.ACTIVE });
     }
 
-    // Check if it's disabled (exists on disk but not loaded)
-    if (disabled.includes(name)) {
-      // Try to read manifest from disk
-      const { readExtensionFiles } = await import("../../extensions/loader.js");
-      try {
-        const { manifest } = await readExtensionFiles(name);
-        if (manifest) {
-          return sendOk(res, { name, manifest, status: "disabled" });
-        }
-      } catch {}
-      return sendOk(res, { name, manifest: { name, version: "?" }, status: "disabled" });
-    }
+    // Check disk (disabled extensions, bundles, OS packages without index.js)
+    const { readExtensionFiles } = await import("../../extensions/loader.js");
+    try {
+      const { manifest } = await readExtensionFiles(name);
+      if (manifest) {
+        const status = disabled.includes(name) ? "disabled" : "unloaded";
+        return sendOk(res, { name, manifest, status });
+      }
+    } catch {}
 
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, `Extension "${name}" not found`);
   } catch (err) {
@@ -352,7 +349,8 @@ router.post("/land/extensions/:name/publish", authenticate, async (req, res) => 
 
     const dirData = await dirRes.json();
     if (!dirRes.ok) {
-      return sendError(res, dirRes.status, ERR.INTERNAL, dirData.error || "Registry publish failed");
+      const detail = dirData.details ? dirData.details.join("; ") : undefined;
+      return sendError(res, dirRes.status, ERR.INTERNAL, dirData.error || "Registry publish failed", detail);
     }
 
     sendOk(res, {

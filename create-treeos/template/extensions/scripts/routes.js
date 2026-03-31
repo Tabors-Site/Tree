@@ -157,11 +157,11 @@ router.get("/node/:nodeId/scripts/help", htmlAuth, async (req, res) => {
             example: '{ "health": 200, "gold": 100 }',
           },
           {
-            property: "metadata.schedule",
+            property: "metadata.schedules.date",
             description: "Timestamp (ISO string) for scheduled execution",
           },
           {
-            property: "metadata.reeffectTime",
+            property: "metadata.schedules.reeffectTime",
             description: "Repeat interval in hours for recurring scripts",
           },
         ],

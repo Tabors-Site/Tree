@@ -58,6 +58,25 @@ export async function init(core) {
 
   const canopyHandlers = await import("./canopyHandlers.js");
 
+  // Register quick link on user profile
+  try {
+    const { getExtension } = await import("../loader.js");
+    const treeos = getExtension("treeos-base");
+    treeos?.exports?.registerSlot?.("user-quick-links", "team", ({ userId, queryString }) =>
+      `<li><a href="/api/v1/user/${userId}/invites${queryString}">Invites</a></li>`,
+      { priority: 35 }
+    );
+
+    treeos?.exports?.registerSlot?.("tree-team", "team", ({ ownerHtml, contributorsHtml, inviteFormHtml }) => {
+      return `<div class="content-card">
+  <div class="section-header"><h2>Team</h2></div>
+  ${ownerHtml || ""}
+  ${contributorsHtml || ""}
+  ${inviteFormHtml || ""}
+</div>`;
+    }, { priority: 10 });
+  } catch {}
+
   return {
     router,
     exports: {

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -149,7 +150,7 @@ const PROFILES = {
     description: "The tree works. No AI background jobs. No LLM cost when idle.",
     extensions: [
       // Kernel extensions (required for basic operation)
-      "treeos", "tree-orchestrator", "navigation", "starter-types", "console",
+      "treeos-base", "tree-orchestrator", "land-manager", "navigation", "starter-types", "console",
       // Basic functionality
       "values", "html-rendering", "dashboard",
     ],
@@ -162,26 +163,30 @@ const PROFILES = {
     description: "Full tree experience. Intelligence, cascade, scheduling. Moderate LLM usage.",
     extensions: [
       // Everything in minimal
-      "treeos", "tree-orchestrator", "navigation", "starter-types", "console",
+      "treeos-base", "tree-orchestrator", "land-manager", "navigation", "starter-types", "console",
       "values", "html-rendering", "dashboard",
       // Core experience
       "notifications", "monitor", "team", "llm-response-formatting",
       "water", "heartbeat", "purpose", "phase", "remember", "approve",
+      "deleted-revive", "understanding",
+      "user-queries", "book", "llm-failover",
       // Cascade (the nervous system)
       "propagation", "perspective-filter", "sealed-transport", "codebook",
       "gap-detection", "long-memory", "pulse", "flow",
       // Intelligence
-      "tree-compress", "contradiction", "intent", "embed",
-      "scout", "explore", "trace", "boundary", "competence", "reflect", "evolve",
+      "tree-compress", "contradiction", "inverse-tree", "evolution", "intent", "embed",
+      "scout", "explore", "trace", "boundary", "competence", "reflect", "evolve", "inner",
       // Maintenance
       "prune", "reroot", "changelog", "digest", "delegate",
       // Infrastructure
       "breath", "scheduler", "schedules", "prestige",
-      "persona", "peer-review", "channels",
+      "persona", "peer-review", "channels", "taste",
+      // Proficiency apps
+      "food", "fitness", "recovery", "study", "kb", "life",
       // Core gateways
       "gateway", "gateway-discord", "gateway-telegram", "gateway-reddit",
       // User features
-      "instructions", "rings",
+      "instructions", "rings", "dynamic-rename", "stream", "learn", "go", "legal",
     ],
   },
 
@@ -198,8 +203,29 @@ async function pickExtensions(horizonUrl) {
   let extensions = [];
   let isLocal = false;
 
-  // Try Horizon registry first
-  if (horizonUrl) {
+  // Scan local extensions/ directory first
+  const extDir = path.join(__dirname, "extensions");
+  if (fs.existsSync(extDir)) {
+    const entries = fs.readdirSync(extDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
+      const manifestPath = path.join(extDir, entry.name, "manifest.js");
+      if (fs.existsSync(manifestPath)) {
+        try {
+          const { pathToFileURL } = await import("url");
+          const { default: manifest } = await import(pathToFileURL(manifestPath).href);
+          extensions.push({ name: manifest.name || entry.name, version: manifest.version || "1.0.0", local: true });
+        } catch {}
+      }
+    }
+    if (extensions.length > 0) {
+      isLocal = true;
+      console.log(`  Found ${extensions.length} local extensions.\n`);
+    }
+  }
+
+  // If no local extensions, try Horizon registry
+  if (extensions.length === 0 && horizonUrl) {
     try {
       const fetch = globalThis.fetch || (await import("node-fetch")).default;
       console.log(`  Checking extension registry at ${horizonUrl}...`);
@@ -211,29 +237,6 @@ async function pickExtensions(horizonUrl) {
       extensions = data.extensions || [];
     } catch (err) {
       console.log(`  Could not reach registry: ${err.message}`);
-    }
-  }
-
-  // Fallback: scan local extensions/ directory
-  if (extensions.length === 0) {
-    const extDir = path.join(__dirname, "extensions");
-    if (fs.existsSync(extDir)) {
-      const entries = fs.readdirSync(extDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory() || entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
-        const manifestPath = path.join(extDir, entry.name, "manifest.js");
-        if (fs.existsSync(manifestPath)) {
-          try {
-            const { pathToFileURL } = await import("url");
-            const { default: manifest } = await import(pathToFileURL(manifestPath).href);
-            extensions.push({ name: manifest.name || entry.name, version: manifest.version || "1.0.0" });
-          } catch {}
-        }
-      }
-      if (extensions.length > 0) {
-        isLocal = true;
-        console.log(`  Found ${extensions.length} local extensions.\n`);
-      }
     }
   }
 
@@ -263,13 +266,13 @@ async function pickExtensions(horizonUrl) {
 
   const finalize = async (selected) => {
     const names = selected.map(e => e.name);
-    if (isLocal) {
-      // Write profile filter so the loader only loads selected extensions
-      const profilePath = path.join(__dirname, "extensions", ".treeos-profile");
-      fs.writeFileSync(profilePath, names.join("\n") + "\n", "utf8");
-      console.log(`  Profile saved. ${names.length} extensions will load on boot.\n`);
-    } else {
-      // Install from Horizon registry
+    // Write profile filter FIRST. The loader only loads listed extensions.
+    // If remote install fails below, the land boots with only what's on disk
+    // that matches the profile. Missing extensions are skipped, not substituted.
+    const profilePath = path.join(__dirname, "extensions", ".treeos-profile");
+    fs.writeFileSync(profilePath, names.join("\n") + "\n", "utf8");
+    console.log(`  Profile saved. ${names.length} extensions will load on boot.\n`);
+    if (!isLocal) {
       await installSelected(selected, horizonUrl);
     }
   };
@@ -300,7 +303,7 @@ async function pickExtensions(horizonUrl) {
   const categories = [
     {
       title: "Core (required for chat/place/query)",
-      names: ["treeos", "tree-orchestrator", "navigation", "starter-types", "console"],
+      names: ["treeos-base", "tree-orchestrator", "navigation", "starter-types", "console"],
       force: true,
     },
     {

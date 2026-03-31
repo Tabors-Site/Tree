@@ -15,7 +15,7 @@ export async function init(core) {
   core.hooks.register("afterNodeCreate", async ({ node, userId }) => {
     if (!node || !userId) return;
     // Only tree roots (node.rootOwner is the creating user)
-    if (node.rootOwner && node.rootOwner.toString() === userId) {
+    if (node.rootOwner && node.rootOwner.toString() === String(userId)) {
       await addRoot(userId, node._id.toString());
     }
   }, "navigation");
@@ -94,6 +94,37 @@ export async function init(core) {
       socket.emit(RECENT_ROOTS_EVENT, { roots: [] });
     }
   });
+
+  // ── Boot: one-time backfill for roots missed by the ObjectId comparison bug ──
+  core.hooks.register("afterBoot", async () => {
+    try {
+      const { SYSTEM_OWNER } = await import("../../seed/protocol.js");
+      const roots = await core.models.Node.find({
+        rootOwner: { $nin: [null, SYSTEM_OWNER] },
+        parent: { $ne: "deleted" },
+      }).select("_id rootOwner").lean();
+
+      const byUser = new Map();
+      for (const r of roots) {
+        const uid = String(r.rootOwner);
+        if (!byUser.has(uid)) byUser.set(uid, []);
+        byUser.get(uid).push(String(r._id));
+      }
+
+      let fixed = 0;
+      for (const [uid, ownedIds] of byUser) {
+        const existing = await getUserRoots(uid);
+        const missing = ownedIds.filter(id => !existing.includes(id));
+        for (const id of missing) {
+          await addRoot(uid, id);
+          fixed++;
+        }
+      }
+      if (fixed > 0) log.info("Navigation", `Backfilled ${fixed} missing root(s) in user nav lists`);
+    } catch (err) {
+      log.warn("Navigation", `Root backfill failed: ${err.message}`);
+    }
+  }, "navigation");
 
   log.info("Navigation", "Navigation and recent roots tracking loaded");
 

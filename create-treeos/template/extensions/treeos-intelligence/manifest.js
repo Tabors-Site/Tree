@@ -2,7 +2,7 @@ export default {
   name: "treeos-intelligence",
   version: "1.0.0",
   type: "bundle",
-  builtFor: "kernel",
+  builtFor: "seed",
   description:
     "Self-awareness. Fourteen extensions that teach the tree to know itself. " +
     "\n\n" +

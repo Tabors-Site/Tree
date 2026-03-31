@@ -367,23 +367,8 @@ async function ensureIntentNode(rootId) {
   }).select("_id").lean();
 
   if (!intentNode) {
-    const { v4: uuidv4 } = await import("uuid");
-    intentNode = new Node({
-      _id: uuidv4(),
-      name: ".intent",
-      parent: rootId,
-      children: [],
-      contributors: [],
-      metadata: {},
-    });
-    await intentNode.save();
-
-    // Add to root's children
-    await Node.updateOne(
-      { _id: rootId },
-      { $addToSet: { children: intentNode._id } },
-    );
-
+    const { createSystemNode } = await import("../../seed/tree/treeManagement.js");
+    intentNode = await createSystemNode({ name: ".intent", parentId: rootId });
     log.verbose("Intent", `Created .intent node for tree ${rootId}`);
   }
 

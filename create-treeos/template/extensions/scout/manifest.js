@@ -50,6 +50,7 @@ export default {
         description: "Triangulate across the tree",
         method: "POST",
         endpoint: "/node/:nodeId/scout",
+        bodyMap: { query: 0 },
         subcommands: {
           history: {
             method: "GET",
