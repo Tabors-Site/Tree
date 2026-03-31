@@ -577,7 +577,9 @@
       "Bash(ls cli/README* cli/*.md)",
       "Bash(grep -n \"login\\\\|--key\\\\|register\" cli/commands/*.js)",
       "Bash(git rm:*)",
-      "Bash(grep -rn \"user.*llm\\\\|rawIdea\\\\|userLlm\\\\|user-llm\" land/routes/ --include=*.js)"
+      "Bash(grep -rn \"user.*llm\\\\|rawIdea\\\\|userLlm\\\\|user-llm\" land/routes/ --include=*.js)",
+      "Bash(grep -rn user-quick-links land/extensions/ --include=*.js)",
+      "Bash(grep -n \"resolveSlots\" land/extensions/treeos-base/pages/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

@@ -806,7 +806,7 @@ text-decoration: none;
       <ul class="nav-links">
         <li><a href="/api/v1/user/${userId}/apps${queryString}">Apps</a></li>
         <li><a href="/api/v1/user/${userId}/llm${queryString}">LLM</a></li>
-        ${resolveSlots("user-quick-links", { userId, queryString })}
+        ${resolveSlots("user-quick-links", { userId, queryString }, { raw: true })}
       </ul>
     </div>
 

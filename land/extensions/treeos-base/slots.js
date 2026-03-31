@@ -85,10 +85,11 @@ export function unregisterSlots(extName) {
  * @param {object} [context] - passed to each render function. May include { user, node, nodeId, ... }
  * @returns {string} HTML
  */
-export function resolveSlots(slotName, context = {}) {
+export function resolveSlots(slotName, context = {}, opts = {}) {
   const registered = slots.get(slotName);
   if (!registered || registered.length === 0) return "";
 
+  const raw = opts.raw === true;
   const parts = [];
   for (const slot of registered) {
     // Spatial scoping: if the extension is blocked at this position, skip its fragment
@@ -97,7 +98,7 @@ export function resolveSlots(slotName, context = {}) {
     try {
       const html = slot.render(context);
       if (html && typeof html === "string") {
-        parts.push(`<div data-slot="${slotName}" data-ext="${slot.extName}">${html}</div>`);
+        parts.push(raw ? html : `<div data-slot="${slotName}" data-ext="${slot.extName}">${html}</div>`);
       }
     } catch (err) {
       log.warn("Slots", `Slot "${slotName}" render from ${slot.extName} failed: ${err.message}`);
