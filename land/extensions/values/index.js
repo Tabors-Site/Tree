@@ -37,6 +37,19 @@ export async function init(core) {
     }
   } catch {}
 
+  // Register tree quick link
+  try {
+    const base = getExtension("treeos-base");
+    base?.exports?.registerSlot?.("tree-quick-links", "values", ({ rootId, queryString }) =>
+      `<a href="/api/v1/root/${rootId}/values${queryString}" class="back-link">Global Values</a>`,
+      { priority: 30 }
+    );
+    base?.exports?.registerSlot?.("version-quick-links", "values", ({ nodeId, version, qs }) =>
+      `<a href="/api/v1/node/${nodeId}/${version}/values${qs}">Values / Goals</a>`,
+      { priority: 10 }
+    );
+  } catch {}
+
   return {
     router,
     tools: getTools(),

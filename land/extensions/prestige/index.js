@@ -45,6 +45,43 @@ export async function init(core) {
     }
   } catch {}
 
+  // Register UI slots
+  try {
+    const { getExtension } = await import("../loader.js");
+    const treeos = getExtension("treeos-base");
+    if (treeos?.exports?.registerSlot) {
+      // Versions list on node detail page
+      treeos.exports.registerSlot("node-detail-sections", "prestige", ({ node, nodeId, qs, isPublicAccess }) => {
+        const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+        const prestige = meta.prestige || { current: 0, history: [] };
+        return `<div class="versions-section">
+          <h2>Versions</h2>
+          <ul class="versions-list">
+            ${[...Array(prestige.current + 1)].map((_, i) =>
+              `<li><a href="/api/v1/node/${nodeId}/${i}${qs}">Version ${i}${i === prestige.current ? " (current)" : ""}</a></li>`
+            ).reverse().join("")}
+          </ul>
+          ${!isPublicAccess ? `<form method="POST" action="/api/v1/node/${nodeId}/prestige${qs}"
+            onsubmit="return confirm('Complete current version and create new prestige level?')" style="margin-top:16px;">
+            <button type="submit" class="primary-button">Add New Version</button>
+          </form>` : ""}
+        </div>`;
+      }, { priority: 10 });
+
+      // Version control on version detail page
+      treeos.exports.registerSlot("version-detail-sections", "prestige", ({ nodeId, version, qs, showPrestige }) => {
+        if (!showPrestige) return "";
+        return `<div class="actions-section">
+          <h3>Version Control</h3>
+          <form method="POST" action="/api/v1/node/${nodeId}/${version}/prestige${qs}"
+            onsubmit="return confirm('Complete current version and create new prestige level?')" class="action-form">
+            <button type="submit" class="primary-button">Add New Version</button>
+          </form>
+        </div>`;
+      }, { priority: 10 });
+    }
+  } catch {}
+
   return {
     router,
     tools,

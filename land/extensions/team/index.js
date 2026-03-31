@@ -58,6 +58,16 @@ export async function init(core) {
 
   const canopyHandlers = await import("./canopyHandlers.js");
 
+  // Register quick link on user profile
+  try {
+    const { getExtension } = await import("../loader.js");
+    const treeos = getExtension("treeos-base");
+    treeos?.exports?.registerSlot?.("user-quick-links", "team", ({ userId, queryString }) =>
+      `<li><a href="/api/v1/user/${userId}/invites${queryString}">Invites</a></li>`,
+      { priority: 35 }
+    );
+  } catch {}
+
   return {
     router,
     exports: {

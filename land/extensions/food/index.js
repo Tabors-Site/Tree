@@ -230,6 +230,30 @@ export async function init(core) {
 
   // HTML dashboard is now inline in routes.js (GET with ?html check)
 
+  // ── Register apps-grid slot ──
+  try {
+    const { getExtension } = await import("../loader.js");
+    const base = getExtension("treeos-base");
+    base?.exports?.registerSlot?.("apps-grid", "food", ({ userId, rootMap, tokenParam, tokenField, esc: e }) => {
+      const entries = rootMap.get("Food") || [];
+      const existing = entries.map(entry =>
+        entry.ready
+          ? `<a class="app-active" href="/api/v1/root/${entry.id}/food?html${tokenParam}" style="margin-right:8px;margin-bottom:6px;">${e(entry.name)}</a>`
+          : `<a class="app-active" style="background:rgba(236,201,75,0.12);border-color:rgba(236,201,75,0.3);color:#ecc94b;margin-right:8px;margin-bottom:6px;" href="/api/v1/root/${entry.id}/food?html${tokenParam}">${e(entry.name)} (setup)</a>`
+      ).join("");
+      return `<div class="app-card">
+        <div class="app-header"><span class="app-emoji">🍎</span><span class="app-name">Food</span></div>
+        <div class="app-desc">Say what you ate. One LLM call parses macros. Daily totals tracked. History archives daily summaries.</div>
+        ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
+        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+          ${tokenField}<input type="hidden" name="app" value="food" />
+          <input class="app-input" name="message" placeholder="What did you eat? (or just say hi to set up your goals)" required />
+          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} Food</button>
+        </form>
+      </div>`;
+    }, { priority: 20 });
+  } catch {}
+
   // ── Import router ──
   const { default: router, setServices } = await import("./routes.js");
   setServices({ Node: core.models.Node });

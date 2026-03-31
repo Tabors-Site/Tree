@@ -23,7 +23,9 @@ export default {
     services: ["protocol"],
   },
 
-  optional: {},
+  optional: {
+    extensions: ["treeos-base"],
+  },
 
   provides: {
     routes: "./routes.js",

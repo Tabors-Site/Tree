@@ -130,18 +130,18 @@ module.exports = (program) => {
         if (!target.rootId && !cfg.atHome) {
           console.log(chalk.dim("Land Manager…"));
           const data = await api.post("/land/chat", { message }, { signal });
-          console.log(chalk.bold("\nLand:") + " " + (data.answer || "No response."));
+          console.log(chalk.bold("\nLand:") + " " + (data.answer || "No response.") + "\n");
         } else if (!target.rootId) {
           console.log(chalk.dim("Thinking…"));
           const data = await api.post("/home/chat", { message }, { signal });
-          console.log(chalk.bold("\nHome:") + " " + (data.answer || "No response."));
+          console.log(chalk.bold("\nHome:") + " " + (data.answer || "No response.") + "\n");
         } else {
           console.log(chalk.dim("Thinking…"));
           const data = await api.chat(target.rootId, message, {
             signal,
             sessionHandle: handle || undefined,
           });
-          console.log(`\n${label}: ` + (data.answer || "No response."));
+          console.log(`\n${label}: ` + (data.answer || "No response.") + "\n");
         }
       } catch (e) {
         if (e.name === "AbortError") return console.log(chalk.dim("Cancelled."));

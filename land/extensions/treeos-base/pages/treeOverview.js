@@ -3,6 +3,7 @@
 /* ------------------------------------------------- */
 
 import { page } from "../../html-rendering/html/layout.js";
+import { resolveSlots } from "../slots.js";
 import { escapeHtml, rainbow } from "../../html-rendering/html/utils.js";
 
 export function renderRootOverview({
@@ -1194,33 +1195,13 @@ transition:
       <a href="/api/v1/user/${currentUserId}${queryString}" class="back-link">
         <- Back to Profile
       </a>
-        <a href="/api/v1/user/${currentUserId}/apps${queryString}" class="back-link">
+      <a href="/api/v1/user/${currentUserId}/apps${queryString}" class="back-link">
         Apps
       </a>
-        <a href="/api/v1/root/${allData._id}/calendar${queryString}" class="back-link">
-        Calendar
-      </a>
-      </a>
-        <a href="/api/v1/root/${allData._id}/book${queryString}" class="back-link">
-        Book
-      </a>
-       </a>
-        <a href="/api/v1/root/${allData._id}/values${queryString}" class="back-link">
-        Global Values
-      </a>
-      </a>
-        <a href="/api/v1/root/${allData._id}/understandings${queryString}" class="back-link">
-        Understandings
-      </a>
-        <a href="/api/v1/root/${allData._id}/chats${queryString}" class="back-link">
-        AI Chats
-      </a>
-        <a href="/api/v1/node/${allData._id}/metadata${queryString}" class="back-link">
+      <a href="/api/v1/node/${allData._id}/metadata${queryString}" class="back-link">
         Metadata
       </a>
-        <a href="/dashboard/flow" class="back-link">
-        Flow
-      </a>
+      ${resolveSlots("tree-quick-links", { rootId: allData._id, nodeId: allData._id, userId: currentUserId, queryString })}
     </div>
     `
         : ""
@@ -1344,23 +1325,7 @@ ${
   ${treeLlmHtml}
 </div>` : ""}
 
-  ${isOwner ? `
-<div class="content-card">
-  <div class="section-header">
-    <h2>Gateway</h2>
-  </div>
-  <p style="color:rgba(255,255,255,0.7);font-size:0.85rem;margin:0 0 12px">
-    Manage output channels for this tree -- send dream summaries and notifications to Telegram, Discord, or your browser.
-  </p>
-  <a href="/api/v1/root/${nodeId}/gateway${queryString}"
-     style="display:inline-block;padding:8px 16px;border-radius:8px;
-            border:1px solid rgba(115,111,230,0.4);background:rgba(115,111,230,0.15);
-            color:rgba(200,200,255,0.95);font-weight:600;text-decoration:none;
-            font-size:0.9rem;cursor:pointer">
-    Manage Channels
-  </a>
-</div>
-  ` : ""}
+  ${isOwner ? resolveSlots("tree-owner-sections", { rootId: nodeId, nodeId, queryString, token, userId }) : ""}
 
   ${
     !isOwner && userId

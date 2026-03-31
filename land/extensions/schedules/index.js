@@ -33,6 +33,30 @@ export async function init(core) {
     }
   } catch {}
 
+  // Register tree quick link
+  try {
+    const base = getExtension("treeos-base");
+    base?.exports?.registerSlot?.("tree-quick-links", "schedules", ({ rootId, queryString }) =>
+      `<a href="/api/v1/root/${rootId}/calendar${queryString}" class="back-link">Calendar</a>`,
+      { priority: 20 }
+    );
+    base?.exports?.registerSlot?.("version-meta-cards", "schedules", ({ nodeId, version, qs, scheduleHtml, reeffectTime }) =>
+      `<div class="meta-card">
+        <div class="meta-label">Schedule</div>
+        <div class="schedule-info">
+          <div class="schedule-row">
+            <div class="schedule-text">
+              <div class="meta-value">${scheduleHtml || "Not set"}</div>
+              <div class="repeat-text">Repeat: ${reeffectTime || 0} hours</div>
+            </div>
+            <button id="editScheduleBtn" style="padding:8px 12px;">&#9999;&#65039;</button>
+          </div>
+        </div>
+      </div>`,
+      { priority: 10 }
+    );
+  } catch {}
+
   return {
     router,
     tools,

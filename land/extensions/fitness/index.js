@@ -178,6 +178,29 @@ export async function init(core) {
     }
   } catch {}
 
+  // ── Register apps-grid slot ──
+  try {
+    const base = getExtension("treeos-base");
+    base?.exports?.registerSlot?.("apps-grid", "fitness", ({ userId, rootMap, tokenParam, tokenField, esc: e }) => {
+      const entries = rootMap.get("Fitness") || [];
+      const existing = entries.map(entry =>
+        entry.ready
+          ? `<a class="app-active" href="/api/v1/root/${entry.id}/fitness?html${tokenParam}" style="margin-right:8px;margin-bottom:6px;">${e(entry.name)}</a>`
+          : `<a class="app-active" style="background:rgba(236,201,75,0.12);border-color:rgba(236,201,75,0.3);color:#ecc94b;margin-right:8px;margin-bottom:6px;" href="/api/v1/root/${entry.id}/fitness?html${tokenParam}">${e(entry.name)} (setup)</a>`
+      ).join("");
+      return `<div class="app-card">
+        <div class="app-header"><span class="app-emoji">💪</span><span class="app-name">Fitness</span></div>
+        <div class="app-desc">Three languages: gym (weight x reps x sets), running (distance x time x pace), bodyweight (reps x sets or duration). Progressive overload tracked per modality.</div>
+        ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
+        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+          ${tokenField}<input type="hidden" name="app" value="fitness" />
+          <input class="app-input" name="message" placeholder="What do you train? (e.g. hypertrophy 4 days, running, bodyweight)" required />
+          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} Fitness</button>
+        </form>
+      </div>`;
+    }, { priority: 10 });
+  } catch {}
+
   // ── Import router ──
   const { default: router, setServices } = await import("./routes.js");
   setServices({ Node: core.models.Node });

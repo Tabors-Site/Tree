@@ -106,6 +106,16 @@ export async function init(core) {
   core.hooks.register("afterSessionCreate", pushDashboard, "dashboard");
   core.hooks.register("afterSessionEnd", pushDashboard, "dashboard");
 
+  // Register tree quick link
+  try {
+    const { getExtension } = await import("../loader.js");
+    const treeos = getExtension("treeos-base");
+    treeos?.exports?.registerSlot?.("tree-quick-links", "dashboard", () =>
+      `<a href="/dashboard/flow" class="back-link">Flow</a>`,
+      { priority: 50 }
+    );
+  } catch {}
+
   log.info("Dashboard", "Dashboard socket handlers registered");
 
   return {};

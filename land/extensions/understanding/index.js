@@ -106,6 +106,16 @@ export async function init(core) {
     });
   } catch {}
 
+  // Register tree quick link
+  try {
+    const { getExtension } = await import("../loader.js");
+    const treeos = getExtension("treeos-base");
+    treeos?.exports?.registerSlot?.("tree-quick-links", "understanding", ({ rootId, queryString }) =>
+      `<a href="/api/v1/root/${rootId}/understandings${queryString}" class="back-link">Understandings</a>`,
+      { priority: 35 }
+    );
+  } catch {}
+
   return {
     models: { UnderstandingRun, UnderstandingNode },
     router,

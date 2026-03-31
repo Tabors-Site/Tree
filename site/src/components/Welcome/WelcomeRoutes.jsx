@@ -23,6 +23,7 @@ import MyceliumPage from "./Landing/MyceliumPage.jsx";
 import LandPage from "./Landing/LandPage.jsx";
 import TreeOSPage from "./Landing/TreeOSPage.jsx";
 import StudyPage from "./Landing/StudyPage.jsx";
+import HTMLPage from "./Landing/HTMLPage.jsx";
 import FitnessPage from "./Landing/FitnessPage.jsx";
 import FoodPage from "./Landing/FoodPage.jsx";
 import RecoveryPage from "./Landing/RecoveryPage.jsx";
@@ -62,6 +63,7 @@ const WelcomeRoutes = () => {
       <Route path="/network" element={<NetworkPage />} />
       <Route path="/flow" element={<FlowPage />} />
       <Route path="/build" element={<BuildPage />} />
+      <Route path="/html" element={<HTMLPage />} />
       <Route path="/cli" element={<CLIAbout />} />
       <Route path="/mycelium" element={<MyceliumPage />} />
       <Route path="/land" element={<LandPage />} />

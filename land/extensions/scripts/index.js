@@ -39,5 +39,27 @@ export async function init(core) {
     }
   } catch {}
 
+  // Register scripts section on node detail page
+  try {
+    const treeos = getExtension("treeos-base");
+    treeos?.exports?.registerSlot?.("node-detail-below", "scripts", ({ node, nodeId, qs }) => {
+      const scripts = (node.metadata instanceof Map ? node.metadata?.get("scripts") : node.metadata?.scripts)?.list || [];
+      return `<div class="scripts-section">
+        <h2><a href="/api/v1/node/${node._id}/scripts/help${qs}">Scripts</a></h2>
+        <form method="POST" action="/api/v1/node/${nodeId}/script/create${qs}"
+              style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">
+          <input type="text" name="name" placeholder="New script name" required
+                 style="padding:12px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.2);color:white;font-size:15px;min-width:200px;flex:1;" />
+          <button type="submit" class="primary-button" title="Create script" style="padding:10px 18px;font-size:16px;">+</button>
+        </form>
+        <ul class="scripts-list">
+          ${scripts.length
+            ? scripts.map(s => `<a href="/api/v1/node/${node._id}/script/${s._id}${qs}"><li><strong>${s.name}</strong><pre>${s.script}</pre></li></a>`).join("")
+            : `<li><em>No scripts defined</em></li>`}
+        </ul>
+      </div>`;
+    }, { priority: 20 });
+  } catch {}
+
   return { router, tools };
 }

@@ -294,11 +294,7 @@ export function buildTreeosHtmlRoutes() {
         userId,
         user,
         roots,
-        plan,
-        energy,
-        extraEnergy,
         queryString: buildQS(req),
-        resetTimeLabel,
         storageUsedKB,
       }));
     } catch (err) {

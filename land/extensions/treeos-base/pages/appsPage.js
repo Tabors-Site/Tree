@@ -8,55 +8,10 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { esc } from "../../html-rendering/html/utils.js";
 import { glassCardStyles, glassHeaderStyles, responsiveBase } from "../../html-rendering/html/baseStyles.js";
+import { resolveSlots } from "../slots.js";
 
-const APPS = [
-  {
-    key: "fitness",
-    emoji: "💪",
-    name: "Fitness",
-    treeName: "Fitness",
-    description: "Three languages: gym (weight x reps x sets), running (distance x time x pace), bodyweight (reps x sets or duration). One LLM call detects modality and parses. Progressive overload tracked per modality. Type be and the coach walks you through today's program set by set.",
-    placeholder: "What do you train? (e.g. hypertrophy 4 days, running, bodyweight, or mix)",
-    dashboardPath: "fitness",
-  },
-  {
-    key: "food",
-    emoji: "🍎",
-    name: "Food",
-    treeName: "Food",
-    description: "Say what you ate. One LLM call parses macros. Cascade routes to Protein, Carbs, Fats nodes. Meals subtree tracks patterns by slot. History archives daily summaries. The food AI sees your workouts through channels.",
-    placeholder: "What did you eat? (or just say hi to set up your goals)",
-    dashboardPath: "food",
-  },
-  {
-    key: "recovery",
-    emoji: "🌿",
-    name: "Recovery",
-    treeName: "Recovery",
-    description: "Track substances, feelings, cravings, and patterns. Taper schedules that bend around you. Pattern detection that finds correlations you can't see. A journal that holds without analyzing. The tree is a mirror, not a judge.",
-    placeholder: "What are you working on? (e.g. caffeine reduction, alcohol, any substance)",
-    dashboardPath: "recovery",
-  },
-  {
-    key: "study",
-    emoji: "📚",
-    name: "Study",
-    treeName: "Study",
-    description: "Queue what you want to learn. The AI breaks it into a curriculum, teaches through conversation, tracks mastery per concept, and detects gaps you can't see. Paste a URL and it reads the content. Type be and it picks the next lesson.",
-    placeholder: "What do you want to learn? (e.g. React hooks, Rust, Kubernetes)",
-    dashboardPath: "study",
-  },
-  {
-    key: "kb",
-    emoji: "📖",
-    name: "KB",
-    treeName: "KB",
-    description: "Knowledge base. Tell it things. Ask it things. One person maintains. Everyone benefits. The tree organizes. The AI answers from what it knows.",
-    placeholder: "What is this knowledge base about? (e.g. Datacenter Ops, Company Policies)",
-    dashboardPath: "kb",
-  },
-];
-
+// Legacy export for backward compat. Extensions should use registerSlot("apps-grid", ...) instead.
+const APPS = [];
 export { APPS };
 
 export function renderAppsPage({ userId, username, rootMap, qs }) {
@@ -145,34 +100,9 @@ export function renderAppsPage({ userId, username, rootMap, qs }) {
     .page-subtitle { color: rgba(255,255,255,0.45); font-size: 0.95rem; }
   `;
 
-  const cards = APPS.map(app => {
-    const entries = rootMap.get(app.treeName) || [];
-
-    // List existing trees for this app type
-    const existingHtml = entries.map(entry => {
-      if (entry.ready) {
-        return `<a class="app-active" href="/api/v1/root/${entry.id}/${app.dashboardPath}?html${tokenParam}" style="margin-right:8px;margin-bottom:6px;">${esc(entry.name)}</a>`;
-      }
-      return `<a class="app-active" style="background:rgba(236,201,75,0.12);border-color:rgba(236,201,75,0.3);color:#ecc94b;margin-right:8px;margin-bottom:6px;" href="/api/v1/root/${entry.id}/${app.dashboardPath}?html${tokenParam}">${esc(entry.name)} (setup)</a>`;
-    }).join("");
-
-    return `
-      <div class="app-card">
-        <div class="app-header">
-          <span class="app-emoji">${app.emoji}</span>
-          <span class="app-name">${app.name}</span>
-        </div>
-        <div class="app-desc">${app.description}</div>
-        ${existingHtml ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existingHtml}</div>` : ""}
-        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
-          ${tokenField}
-          <input type="hidden" name="app" value="${app.key}" />
-          <input class="app-input" name="message" placeholder="${app.placeholder}" required />
-          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} ${app.name}</button>
-        </form>
-      </div>
-    `;
-  }).join("");
+  // Extensions register app cards via the "apps-grid" slot.
+  // Each card receives { userId, rootMap, tokenParam, tokenField, esc } context.
+  const cards = resolveSlots("apps-grid", { userId, rootMap, tokenParam, tokenField, esc });
 
   const body = `
     <div style="max-width: 960px; margin: 0 auto; padding: 12px 20px 0; display: flex; justify-content: space-between; align-items: center;">

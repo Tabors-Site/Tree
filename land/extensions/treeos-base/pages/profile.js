@@ -1,8 +1,9 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { esc, escapeHtml } from "../../html-rendering/html/utils.js";
 import { getUserMeta } from "../../../seed/tree/userMetadata.js";
+import { resolveSlots } from "../slots.js";
 
-export function renderUserProfile({ userId, user, roots, plan, energy, extraEnergy, queryString, resetTimeLabel, storageUsedKB }) {
+export function renderUserProfile({ userId, user, roots, queryString, storageUsedKB }) {
   const safeUsername = escapeHtml(user.username);
 
   const css = `
@@ -768,15 +769,10 @@ text-decoration: none;
         <h1>@${safeUsername}</h1> </a>
 
         <div class="user-meta">
-   <a href="/api/v1/user/${userId}/energy${queryString}">
-  <span class="plan-badge plan-${plan}">
-  ${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan
-</span></a>
+          ${resolveSlots("user-profile-badge", { userId, queryString, user }) ||
+            `<span class="plan-badge plan-basic">${user.isAdmin ? "Admin" : "User"}</span>`}
 
-          <span class="meta-item">
-            <a href="/api/v1/user/${userId}/energy${queryString}">\u26A1 ${(energy?.amount ?? 0) + (extraEnergy?.amount ?? 0)} \u00B7 resets ${resetTimeLabel}
-</a>
-          </span>
+          ${resolveSlots("user-profile-energy", { userId, queryString, user })}
 
           <span class="meta-item">
             \uD83D\uDCBE <span id="storageValue"></span>
@@ -802,46 +798,8 @@ text-decoration: none;
       </div>
     </div>
 
-    <!-- Raw Ideas Capture -->
-    <div class="glass-card raw-ideas-section">
-      <h2>Capture a Raw Idea</h2>
-      <form
-        method="POST"
-        action="/api/v1/user/${userId}/raw-ideas${queryString}"
-        enctype="multipart/form-data"
-        class="raw-idea-form"
-        id="rawIdeaForm"
-      >
-        <textarea
-          name="content"
-          placeholder="What's on your mind?"
-          id="rawIdeaInput"
-          rows="1"
-          maxlength="5000"
-          autofocus
-        ></textarea>
-
-        <div class="char-counter" id="charCounter">
-          <span id="charCount">0</span> / 5000
-          <span class="energy-display" id="energyDisplay"></span>
-        </div>
-
-        <div class="form-actions">
-          <div class="file-input-wrapper">
-            <input type="file" name="file" id="fileInput" />
-            <div class="file-selected-badge" id="fileSelectedBadge">
-              <span>\uD83D\uDCCE</span>
-              <span class="file-name" id="fileName"></span>
-              <button type="button" class="clear-file" id="clearFileBtn" title="Remove file">\u2715</button>
-            </div>
-          </div>
-          <button type="submit" class="send-button" title="Save raw idea" id="rawIdeaSendBtn">
-            <span class="send-label">Send</span>
-            <span class="send-progress"></span>
-          </button>
-        </div>
-      </form>
-    </div>
+    <!-- Extension sections (raw ideas capture, etc.) -->
+    ${resolveSlots("user-profile-sections", { userId, queryString, user })}
 
     <!-- Navigation Links -->
     <div class="glass-card nav-section">
@@ -849,18 +807,7 @@ text-decoration: none;
       <ul class="nav-links">
         <li><a href="/api/v1/user/${userId}/apps${queryString}">Apps</a></li>
         <li><a href="/api/v1/user/${userId}/llm${queryString}">LLM</a></li>
-        <li><a href="/api/v1/user/${userId}/raw-ideas${queryString}">Raw Ideas</a></li>
-        <li><a href="/api/v1/user/${userId}/chats${queryString}">AI Chats</a></li>
-
-        <li><a href="/api/v1/user/${userId}/notes${queryString}">Notes</a></li>
-        <li><a href="/api/v1/user/${userId}/tags${queryString}">Mail</a></li>
-        <li><a href="/api/v1/user/${userId}/contributions${queryString}">Contributions</a></li>
-        <li><a href="/api/v1/user/${userId}/notifications${queryString}">Notifications</a></li>
-        <li><a href="/api/v1/user/${userId}/invites${queryString}">Invites</a></li>
-        <li><a href="/api/v1/user/${userId}/deleted${queryString}">Deleted</a></li>
-        <li><a href="/api/v1/user/${userId}/api-keys${queryString}">API Keys</a></li>
-        <li><a href="/api/v1/user/${userId}/shareToken${queryString}">Share Token</a></li>
-        <li><a href="/api/v1/user/${userId}/inverse${queryString}">Inverse Profile</a></li>
+        ${resolveSlots("user-quick-links", { userId, queryString })}
       </ul>
     </div>
 

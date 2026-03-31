@@ -3,6 +3,7 @@
 /* ------------------------------------------------------------------ */
 
 import { page } from "../../html-rendering/html/layout.js";
+import { resolveSlots } from "../slots.js";
 
 /* ── page-specific CSS ── */
 
@@ -875,10 +876,9 @@ export function renderVersionDetail({
       <h2>Quick Access</h2>
       <div class="nav-links">
         <a href="/api/v1/node/${nodeId}/${version}/notes${qs}">Notes</a>
-        <a href="/api/v1/node/${nodeId}/${version}/values${qs}">Values / Goals</a>
         <a href="/api/v1/node/${nodeId}/${version}/contributions${qs}">Contributions</a>
-        <a href="/api/v1/node/${nodeId}/${version}/transactions${qs}">Transactions</a>
         <a href="/api/v1/node/${nodeId}/chats${qs}">AI Chats</a>
+        ${resolveSlots("version-quick-links", { nodeId, version, qs })}
       </div>
     </div>
 
@@ -909,41 +909,12 @@ export function renderVersionDetail({
         </form>
       </div>
 
-      <!-- Schedule + Repeat Hours Card -->
-      <div class="meta-card">
-        <div class="meta-label">Schedule</div>
-        <div class="schedule-info">
-          <div class="schedule-row">
-            <div class="schedule-text">
-              <div class="meta-value">${scheduleHtml}</div>
-              <div class="repeat-text">Repeat: ${reeffectTime} hours</div>
-            </div>
-            <button id="editScheduleBtn" style="padding:8px 12px;">✏️</button>
-          </div>
-        </div>
-      </div>
+      <!-- Extension meta cards (schedule, etc.) -->
+      ${resolveSlots("version-meta-cards", { nodeId, version, qs, scheduleHtml, reeffectTime, data })}
     </div>
 
-    ${
-      showPrestige
-        ? `
-    <!-- Version Control Section -->
-    <div class="actions-section">
-      <h3>Version Control</h3>
-      <form
-        method="POST"
-        action="/api/v1/node/${nodeId}/${version}/prestige${qs}"
-        onsubmit="return confirm('This will complete the current version and create a new prestige level. Continue?')"
-        class="action-form"
-      >
-        <button type="submit" class="primary-button">
-          Add New Version
-        </button>
-      </form>
-    </div>
-    `
-        : ""
-    }
+    <!-- Extension sections (version control, etc.) -->
+    ${resolveSlots("version-detail-sections", { nodeId, version, qs, showPrestige, data })}
   </div>
 
   <!-- Schedule Modal -->

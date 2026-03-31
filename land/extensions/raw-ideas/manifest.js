@@ -38,7 +38,7 @@ export default {
 
   optional: {
     services: ["energy"],
-    extensions: ["html-rendering"],
+    extensions: ["html-rendering", "treeos-base"],
   },
 
   provides: {

@@ -645,6 +645,14 @@ const startShell = module.exports.startShell = async () => {
       rl.on("SIGINT", onSigint);
       process.stdin.on("keypress", _onKeypress);
 
+      // Flush stdout before re-prompting to avoid race condition
+      // where late console.log overwrites the prompt
+      await new Promise(resolve => {
+        if (process.stdout.write("")) resolve();
+        else process.stdout.once("drain", resolve);
+      });
+      // One more tick to let any queued writes land
+      await new Promise(resolve => setImmediate(resolve));
       prompt();
     }
 

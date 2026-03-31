@@ -449,6 +449,19 @@ const CLIAbout = () => {
         </div>
       </section>
 
+      {/* ── PREFER BROWSER ── */}
+      <section className="lp-section" style={{paddingTop: 32, paddingBottom: 32}}>
+        <div className="lp-container" style={{textAlign: "center"}}>
+          <p style={{color: "rgba(255,255,255,0.35)", fontSize: "0.9rem"}}>
+            Prefer a browser? TreeOS also has a{" "}
+            <a href="/html" style={{color: "rgba(255,255,255,0.6)", textDecoration: "underline"}}>
+              web interface
+            </a>
+            . Same tree, same data, rendered as HTML pages. Manage your land, browse trees, and interact with AI from the browser.
+          </p>
+        </div>
+      </section>
+
       {/* ── FOOTER ── */}
       <footer className="lp-footer">
         <div className="lp-container">

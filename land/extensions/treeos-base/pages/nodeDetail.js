@@ -3,6 +3,7 @@
 /* ------------------------------------------------------------------ */
 
 import { page } from "../../html-rendering/html/layout.js";
+import { resolveSlots } from "../slots.js";
 
 /* ── page-specific CSS ── */
 
@@ -567,7 +568,6 @@ const jsCode = `
 /* ================================================================== */
 
 export function renderNodeDetail({ node, nodeId, qs, parentName, rootUrl, isPublicAccess }) {
-  const _nodeScripts = (node.metadata instanceof Map ? node.metadata?.get("scripts") : node.metadata?.scripts)?.list || [];
 
   const body = `
   <div class="container">
@@ -682,27 +682,8 @@ export function renderNodeDetail({ node, nodeId, qs, parentName, rootUrl, isPubl
       </div>`;
     })() : ""}
 
-    <!-- Versions Section (prestige extension) -->
-    ${(() => {
-      const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
-      const prestige = meta.prestige || { current: 0, history: [] };
-      const history = prestige.history || [];
-      return `<div class="versions-section">
-        <h2>Versions</h2>
-        <ul class="versions-list">
-          ${[...Array(prestige.current + 1)].map((_, i) =>
-            `<li><a href="/api/v1/node/${nodeId}/${i}${qs}">Version ${i}${i === prestige.current ? " (current)" : ""}</a></li>`
-          ).reverse().join("")}
-        </ul>
-        ${!isPublicAccess ? `<form
-          method="POST"
-          action="/api/v1/node/${nodeId}/prestige${qs}"
-          onsubmit="return confirm('This will complete the current version and create a new prestige level. Continue?')"
-          style="margin-top: 16px;">
-          <button type="submit" class="primary-button">Add New Version</button>
-        </form>` : ""}
-      </div>`;
-    })()}
+    <!-- Extension sections (versions, scripts, etc.) -->
+    ${resolveSlots("node-detail-sections", { node, nodeId, qs, isPublicAccess })}
 
     <!-- Parent Section -->
     <div class="hierarchy-section">
@@ -765,57 +746,8 @@ export function renderNodeDetail({ node, nodeId, qs, parentName, rootUrl, isPubl
       </form>
     </div>
 
-    <!-- Scripts Section -->
-    <div class="scripts-section">
-      <h2><a href="/api/v1/node/${node._id}/scripts/help${qs}">Scripts</a></h2>
-      <form
-        method="POST"
-        action="/api/v1/node/${nodeId}/script/create${qs}"
-        style="display:flex;gap:8px;align-items:center;margin-bottom:16px;"
-      >
-        <input
-          type="text"
-          name="name"
-          placeholder="New script name"
-          required
-          style="
-            padding:12px 16px;
-            border-radius:10px;
-            border:1px solid rgba(255,255,255,0.3);
-            background:rgba(255,255,255,0.2);
-            color:white;
-            font-size:15px;
-            min-width:200px;
-            flex:1;
-          "
-        />
-        <button
-          type="submit"
-          class="primary-button"
-          title="Create script"
-          style="padding:10px 18px;font-size:16px;"
-        >
-          ➕
-        </button>
-      </form>
-      <ul class="scripts-list">
-        ${
-          _nodeScripts.length
-            ? _nodeScripts
-                .map(
-                  (s) => `
-            <a href="/api/v1/node/${node._id}/script/${s._id}${qs}">
-              <li>
-                <strong>${s.name}</strong>
-                <pre>${s.script}</pre>
-              </li>
-            </a>`,
-                )
-                .join("")
-            : `<li><em>No scripts defined</em></li>`
-        }
-      </ul>
-    </div>
+    <!-- Extension sections below hierarchy (scripts, etc.) -->
+    ${resolveSlots("node-detail-below", { node, nodeId, qs, isPublicAccess })}
 
     ${!isPublicAccess ? `<!-- Delete Section -->
     <div class="actions-section">

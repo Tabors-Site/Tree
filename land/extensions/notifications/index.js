@@ -15,6 +15,15 @@ export async function init(core) {
     }
   } catch {}
 
+  // Register quick link on user profile
+  try {
+    const treeos = getExtension("treeos-base");
+    treeos?.exports?.registerSlot?.("user-quick-links", "notifications", ({ userId, queryString }) =>
+      `<li><a href="/api/v1/user/${userId}/notifications${queryString}">Notifications</a></li>`,
+      { priority: 40 }
+    );
+  } catch {}
+
   return {
     router,
     exports: {

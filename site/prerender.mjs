@@ -37,6 +37,7 @@ const STATIC_ROUTES = [
   "/flow",
   "/network",
   "/build",
+  "/html",
   "/cli",
   "/mycelium",
   "/seed",
@@ -89,6 +90,10 @@ const PAGE_META = {
   "/extensions": {
     title: "Extensions . How the Tree Grows",
     description: "The manifest, the loader, five registries, spatial scoping. How to build an extension. How an operating system emerges from extensions working together.",
+  },
+  "/html": {
+    title: "One Tree, Three Interfaces . CLI, AI, Browser",
+    description: "Every node is accessible three ways. The CLI reads it. The AI reads it. The browser renders it. Same data. Same API. ?html turns JSON into pages.",
   },
   "/build": {
     title: "Build Extensions . Developer Reference",

@@ -28,6 +28,26 @@ export async function init(core) {
   // Replace the no-op energy service with the real one
   core.energy = { useEnergy, maybeResetEnergy, registerAction, DAILY_LIMITS };
 
+  // Register energy display on user profile
+  try {
+    const { getExtension } = await import("../loader.js");
+    const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
+    const treeos = getExtension("treeos-base");
+    treeos?.exports?.registerSlot?.("user-profile-energy", "energy", ({ userId, queryString, user }) => {
+      maybeResetEnergy(user);
+      const energyData = getUserMeta(user, "energy");
+      const amount = (energyData.available?.amount ?? 0) + (energyData.additional?.amount ?? 0);
+      const lastReset = energyData.available?.lastResetAt;
+      const nextReset = lastReset ? new Date(new Date(lastReset).getTime() + 86400000) : null;
+      const resetLabel = nextReset
+        ? nextReset.toLocaleString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short" })
+        : "...";
+      return `<span class="meta-item">
+        <a href="/api/v1/user/${userId}/energy${queryString}">\u26A1 ${amount} \u00B7 resets ${resetLabel}</a>
+      </span>`;
+    }, { priority: 10 });
+  } catch {}
+
   return {
     router,
     exports: { maybeResetEnergy, useEnergy, DAILY_LIMITS },
