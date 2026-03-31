@@ -57,5 +57,9 @@ export default {
     tools: false,
     jobs: false,
     orchestrator: { bigMode: "tree" },
+    hooks: {
+      fires: [],
+      listens: ["afterBoot", "afterMetadataWrite", "beforeNodeDelete", "afterNodeMove"],
+    },
   },
 };

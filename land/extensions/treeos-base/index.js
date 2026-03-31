@@ -1,6 +1,7 @@
 import log from "../../seed/log.js";
 import { buildNavigationHandler, registerToolNavigation, registerToolNavigations } from "./navigation.js";
 import { buildTools } from "./handlers.js";
+import { registerSlot, unregisterSlots, resolveSlots, resolveSlotsAsync, listSlots } from "./slots.js";
 
 // Tree modes
 import treeNavigate from "./modes/tree/navigate.js";
@@ -126,6 +127,72 @@ export async function init(core) {
       htmlExt.pageRouter.use("/", chatRouter);
       htmlExt.pageRouter.use("/", setupRouter);
 
+      // ── Welcome page ("/") ──
+      const authenticateLite = (await import("../html-rendering/authenticateLite.js")).default;
+      const { renderWelcome } = await import("./pages/welcome.js");
+      const { getLandConfigValue: _getLandConfigValue } = await import("../../seed/landConfig.js");
+      const { getLandIdentity: _getLandIdentity } = await import("../../canopy/identity.js");
+
+      registerPage("get", "/", authenticateLite, async (req, res) => {
+        try {
+          const landIdentity = _getLandIdentity();
+          const landName = _getLandConfigValue("LAND_NAME") || landIdentity.name || "My Land";
+          const isLoggedIn = !!req.userId;
+          let isAdmin = false;
+          let username = null;
+          if (isLoggedIn) {
+            const u = await core.models.User.findById(req.userId).select("isAdmin username").lean();
+            isAdmin = u?.isAdmin || false;
+            username = u?.username || null;
+          }
+          const userCount = await core.models.User.countDocuments({ isRemote: { $ne: true } });
+          const treeCount = await core.models.Node.countDocuments({ rootOwner: { $nin: [null, "SYSTEM"] } });
+          const { getLoadedExtensionNames: _getExts } = await import("../loader.js");
+          res.send(renderWelcome({ landName, landUrl: landIdentity.baseUrl, isLoggedIn, isAdmin, username, extensionCount: _getExts().length, userCount, treeCount }));
+        } catch (err) {
+          res.redirect("/login");
+        }
+      });
+
+      // ── Land admin page ("/land") ──
+      const { renderLandPage } = await import("./pages/land.js");
+      const { SEED_VERSION } = await import("../../seed/version.js");
+
+      registerPage("get", "/land", authenticate, async (req, res) => {
+        try {
+          const user = await core.models.User.findById(req.userId).select("isAdmin").lean();
+          if (!user?.isAdmin) return _sendError(res, 403, _ERR.FORBIDDEN, "Admin required");
+
+          const landIdentity = _getLandIdentity();
+          const landName = _getLandConfigValue("LAND_NAME") || landIdentity.name || "My Land";
+          const { getLoadedManifests: _getManifests, getLoadedExtensionNames: _getExts } = await import("../loader.js");
+          const { getAllLandConfig } = await import("../../seed/landConfig.js");
+          const { default: LandPeer } = await import("../../canopy/models/landPeer.js");
+
+          const userCount = await core.models.User.countDocuments({ isRemote: { $ne: true } });
+          const treeCount = await core.models.Node.countDocuments({ rootOwner: { $nin: [null, "SYSTEM"] } });
+          const peerCount = await LandPeer.countDocuments();
+          const disabledList = _getLandConfigValue("disabledExtensions") || [];
+          const horizonUrl = _getLandConfigValue("HORIZON_URL") || process.env.HORIZON_URL || "https://horizon.treeos.ai";
+
+          res.send(renderLandPage({
+            landName,
+            domain: landIdentity.domain,
+            seedVersion: SEED_VERSION,
+            landUrl: landIdentity.baseUrl,
+            userCount,
+            treeCount,
+            peerCount,
+            extensions: _getManifests(),
+            disabledExtensions: Array.isArray(disabledList) ? disabledList : [],
+            config: getAllLandConfig(),
+            horizonUrl,
+          }));
+        } catch (err) {
+          _sendError(res, 500, _ERR.INTERNAL, err.message);
+        }
+      });
+
       // Mount HTML intercept routes (before kernel routes)
       const { buildTreeosHtmlRoutes } = await import("./htmlRoutes.js");
       htmlExt.router.use("/", buildTreeosHtmlRoutes());
@@ -181,6 +248,9 @@ export async function init(core) {
 
   return {
     tools,
-    exports: { TOOL_DEFS, registerToolNavigation, registerToolNavigations },
+    exports: {
+      TOOL_DEFS, registerToolNavigation, registerToolNavigations,
+      registerSlot, unregisterSlots, resolveSlots, resolveSlotsAsync, listSlots,
+    },
   };
 }

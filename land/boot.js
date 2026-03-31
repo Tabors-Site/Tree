@@ -151,7 +151,7 @@ const PROFILES = {
       // Kernel extensions (required for basic operation)
       "treeos-base", "tree-orchestrator", "navigation", "starter-types", "console",
       // Basic functionality
-      "values", "html-rendering", "dashboard", "user-tiers",
+      "values", "html-rendering", "dashboard",
     ],
   },
 
@@ -166,13 +166,15 @@ const PROFILES = {
       "values", "html-rendering", "dashboard",
       // Core experience
       "notifications", "monitor", "team", "llm-response-formatting",
-      "user-tiers", "water", "heartbeat", "purpose", "phase", "remember", "approve",
+      "water", "heartbeat", "purpose", "phase", "remember", "approve",
+      "raw-ideas", "deleted-revive", "understanding",
+      "user-queries", "dreams", "book", "llm-failover",
       // Cascade (the nervous system)
       "propagation", "perspective-filter", "sealed-transport", "codebook",
       "gap-detection", "long-memory", "pulse", "flow",
       // Intelligence
-      "tree-compress", "contradiction", "inverse-tree", "intent", "embed",
-      "scout", "explore", "trace", "boundary", "competence", "reflect", "evolve",
+      "tree-compress", "contradiction", "inverse-tree", "evolution", "intent", "embed",
+      "scout", "explore", "trace", "boundary", "competence", "reflect", "evolve", "inner",
       // Maintenance
       "prune", "reroot", "changelog", "digest", "delegate",
       // Infrastructure
@@ -183,7 +185,7 @@ const PROFILES = {
       // Core gateways
       "gateway", "gateway-discord", "gateway-telegram", "gateway-reddit",
       // User features
-      "instructions", "rings", "dynamic-rename", "stream", "learn",
+      "instructions", "rings", "dynamic-rename", "stream", "learn", "go",
     ],
   },
 

@@ -27,15 +27,25 @@ import { getLandConfigValue } from "../../seed/landConfig.js";
  * 2. Intent classification: greetings/questions → query, destructive → destructive,
  *    action commands → place, everything else → place (librarian decides).
  */
-async function localClassify(message, currentNodeId) {
+async function localClassify(message, currentNodeId, rootId) {
   const lower = message.toLowerCase().trim();
   const base = { summary: message.slice(0, 100), responseHint: "" };
 
-  // ── Extension routing (Path 2) ──
-  // Check if an extension mode claims this message. Two levels:
-  // 1. Current node's mode override (user is AT the extension node)
-  // 2. Direct children's mode overrides (user is one level above)
-  // Never walk ancestors. Modes resolve downward.
+  // ── Routing index (fast path) ──
+  // One Map scan. No DB queries. Catches deep extensions that Level 1-3 miss.
+  if (rootId && currentNodeId) {
+    try {
+      const { queryIndex } = await import("./routingIndex.js");
+      const currentPath = await _buildCurrentPath(currentNodeId);
+      const match = queryIndex(rootId, message, currentPath);
+      if (match) {
+        return { intent: "extension", mode: match.mode, targetNodeId: match.targetNodeId, confidence: match.confidence, ...base };
+      }
+    } catch {}
+  }
+
+  // ── Extension routing (Path 2, fallback) ──
+  // Level-by-level DB walk. Kept as backup for unindexed trees.
   if (currentNodeId) {
     try {
       const { getClassifierHintsForMode } = await import("../loader.js");
@@ -164,6 +174,37 @@ import mongoose from "mongoose";
 import Node from "../../seed/models/node.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 import { resolveMode } from "../../seed/modes/registry.js";
+
+// ─────────────────────────────────────────────────────────────────────────
+// PATH RESOLUTION (for routing index scope check)
+// ─────────────────────────────────────────────────────────────────────────
+
+const _pathCache = new Map(); // nodeId -> { path, ts }
+const PATH_TTL = 30000;
+
+async function _buildCurrentPath(nodeId) {
+  const cached = _pathCache.get(String(nodeId));
+  if (cached && Date.now() - cached.ts < PATH_TTL) return cached.path;
+
+  const parts = [];
+  let current = await Node.findById(nodeId).select("name parent rootOwner").lean();
+  let depth = 0;
+  while (current && depth < 20) {
+    parts.unshift(current.name || String(current._id));
+    if (current.rootOwner || !current.parent) break;
+    current = await Node.findById(current.parent).select("name parent rootOwner").lean();
+    depth++;
+  }
+  const path = "/" + parts.join("/");
+
+  _pathCache.set(String(nodeId), { path, ts: Date.now() });
+  // Cap cache
+  if (_pathCache.size > 500) {
+    const oldest = [..._pathCache.entries()].sort((a, b) => a[1].ts - b[1].ts);
+    for (let i = 0; i < 100; i++) _pathCache.delete(oldest[i][0]);
+  }
+  return path;
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // INTELLIGENCE BRIEF (cached per tree, 60s TTL)
@@ -1443,7 +1484,7 @@ export async function orchestrateTreeRequest({
         );
       }
       log.error("Tree Orchestrator", " Classification failed:", err.message);
-      classification = await localClassify(message, getCurrentNodeId(visitorId) || rootId);
+      classification = await localClassify(message, getCurrentNodeId(visitorId) || rootId, rootId);
     }
   } else {
     // Default: local classification. Zero LLM calls.
@@ -1480,8 +1521,21 @@ export async function orchestrateTreeRequest({
   // ────────────────────────────────────────────────────────
 
   if (classification.intent === "no_fit") {
-    const reason = classification.summary || "Idea does not fit this tree.";
- log.verbose("Tree Orchestrator", ` No fit: ${reason}`);
+    let reason = classification.summary || "Idea does not fit this tree.";
+
+    // Suggest go if the message might match an extension in another tree
+    try {
+      const { getExtension } = await import("../loader.js");
+      const goExt = getExtension("go");
+      if (goExt?.exports?.findDestination) {
+        const goResult = await goExt.exports.findDestination(message, userId);
+        if (goResult?.found && !goResult.ambiguous && goResult.destination) {
+          reason += ` Try: go ${goResult.destination.name || goResult.destination.path}`;
+        }
+      }
+    } catch {}
+
+    log.verbose("Tree Orchestrator", ` No fit: ${reason}`);
 
     emitStatus(socket, "done", "");
 
