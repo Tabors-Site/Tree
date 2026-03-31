@@ -10,7 +10,7 @@ import { timeAgo } from "../../html-rendering/html/utils.js";
 
 const MACRO_COLORS = { protein: "#667eea", carbs: "#48bb78", fats: "#ecc94b" };
 
-export function renderFoodDashboard({ rootId, rootName, picture, token, userId }) {
+export function renderFoodDashboard({ rootId, rootName, picture, token, userId, inApp }) {
   const p = picture || {};
   const calories = p.calories || {};
   const profile = p.profile || {};
@@ -137,7 +137,7 @@ export function renderFoodDashboard({ rootId, rootName, picture, token, userId }
   `;
 
   return renderAppDashboard({
-    rootId, rootName, token, userId,
+    rootId, rootName, token, userId, inApp,
     subtitle: profileParts.join(" . ") || null,
     hero: {
       value: String(Math.round(calories.today || 0)),

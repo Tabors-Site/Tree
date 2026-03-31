@@ -49,6 +49,7 @@ router.get("/root/:rootId/kb", async (req, res, next) => {
         userId: req.userId,
         hasEmbed,
         hasScout,
+        inApp: !!req.query.inApp,
       }));
     });
   } catch (err) {

@@ -208,7 +208,15 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
         max-width: 960px;
       }
     }
-/* Orchestrator step messages */
+/* Orchestrator step / system messages: hidden by default, toggle to show */
+.message.orchestrator-step,
+.chat-message.system {
+  display: none;
+}
+body.show-bg-messages .message.orchestrator-step,
+body.show-bg-messages .chat-message.system {
+  display: flex;
+}
 .message.orchestrator-step .message-content {
   background: rgba(255, 255, 255, 0.06);
   border: 1px dashed rgba(255, 255, 255, 0.15);
@@ -786,6 +794,34 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
     .navigator-badge:hover .nav-icon { color: #ef4444; }
     .navigator-badge:hover .nav-label { color: #ef4444; }
     .navigator-badge:hover .nav-close-icon { color: #ef4444; }
+
+    /* Welcome/background message toggle */
+    .welcome-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 2px 8px 4px;
+    }
+    .welcome-toggle-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-size: 10px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .welcome-toggle-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-secondary); }
+    .welcome-toggle-btn.active { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.25); color: var(--accent); }
+    .welcome-toggle-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+    @media (max-width: 768px) {
+      .welcome-toggle { display: none; }
+    }
 
     .panel-divider { width: 16px; height: 100%; display: flex; align-items: center; justify-content: center; cursor: col-resize; position: relative; z-index: 20; flex-shrink: 0; }
     .divider-handle { width: 6px; height: 80px; background: rgba(var(--glass-rgb), 0.5); backdrop-filter: blur(var(--glass-blur)); border: 1px solid var(--glass-border); border-radius: 4px; transition: all var(--transition-fast); }
@@ -1454,6 +1490,14 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
         </div>
       </div>
 
+      <!-- Background messages toggle -->
+      <div class="welcome-toggle">
+        <button class="welcome-toggle-btn" id="bgMsgToggleBtn" title="Show background system messages">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span>System</span>
+        </button>
+      </div>
+
       <!-- Recent Roots Dropdown (absolute positioned, top-left overlay) -->
       <div class="recent-roots-dropdown hidden" id="recentRootsDropdown">
         <div class="recent-roots-trigger" id="recentRootsTrigger">
@@ -1708,6 +1752,8 @@ function buildIframeUrl(raw) {
       isSending = false;
       updateSendButtons();
       lockModeBar(false);
+      // Refresh iframe content after AI response (data may have changed)
+      try { iframe.contentWindow?.location.reload(); } catch(e) {}
     });
 
     socket.on("chatError", ({ error, generation }) => {
@@ -1833,6 +1879,16 @@ socket.on("navigate", ({ url, replace }) => {
     socket.on("reload", () => {
       loadingOverlay.classList.add("visible");
       iframe.contentWindow?.location.reload();
+    });
+
+    // Live dashboard updates: when extension data changes in the background,
+    // refresh the iframe if it's showing that tree's dashboard.
+    socket.on("dashboardUpdate", ({ rootId: updatedRootId }) => {
+      if (!updatedRootId || isSending) return;
+      const currentRoot = getCurrentRootId();
+      if (currentRoot === updatedRootId) {
+        try { iframe.contentWindow?.location.reload(); } catch(e) {}
+      }
     });
 
     socket.on("disconnect", () => {
@@ -2231,12 +2287,15 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
         const extDashMatch = path.match(new RegExp('(?:/api/v1)?/root/(' + ID + ')/[a-z]', 'i'));
         const bareMatch = path.match(new RegExp('(?:/api/v1)?/(' + ID + ')(?:[?/]|$)', 'i'));
 
-        // Extension dashboards (/root/:id/kb, /root/:id/fitness, etc.)
-        // have their own chat bars. Don't switch the main chat session.
-        // Detach navigator so tool calls don't redirect the iframe.
+        // Extension dashboards (/root/:id/fitness, /root/:id/food, etc.)
+        // Chat bar is now in the app shell, not in the iframe.
+        // Emit urlChanged so the server switches to the right tree session.
         if (extDashMatch) {
-          activeRootId = extDashMatch[1];
-          if (isRegistered) socket.emit("detachNavigator");
+          rootId = extDashMatch[1];
+          activeRootId = rootId;
+          if (isRegistered) {
+            socket.emit("urlChanged", { url: path, rootId, nodeId: null });
+          }
         } else {
           if (rootMatch) rootId = rootMatch[1];
           else if (bareMatch) nodeId = bareMatch[1];
@@ -2851,6 +2910,15 @@ function goHome() {
   currentIframeUrl = CONFIG.homeUrl;
   iframe.src = CONFIG.homeUrl; // home doesn't need rootId
 }
+
+    // Background messages toggle (defaults off)
+    $("bgMsgToggleBtn").addEventListener("click", () => {
+      const on = document.body.classList.toggle("show-bg-messages");
+      $("bgMsgToggleBtn").classList.toggle("active", on);
+      try { localStorage.setItem("treeos:bgMessages", on ? "1" : "0"); } catch {}
+    });
+    // Restore preference
+    try { if (localStorage.getItem("treeos:bgMessages") === "1") { document.body.classList.add("show-bg-messages"); $("bgMsgToggleBtn").classList.add("active"); } } catch {}
 
     $("desktopHomeBtn").addEventListener("click", goHome);
     $("mobileHomeBtn").addEventListener("click", (e) => {

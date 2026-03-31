@@ -148,6 +148,27 @@ export async function init(core) {
     }
   } catch {}
 
+  // ── Live dashboard updates ──
+  core.hooks.register("afterNote", async ({ nodeId }) => {
+    if (!nodeId) return;
+    try {
+      const node = await core.models.Node.findById(nodeId).select("rootOwner metadata").lean();
+      if (!node?.rootOwner) return;
+      const fm = node.metadata instanceof Map ? node.metadata.get("study") : node.metadata?.study;
+      if (!fm?.role) return;
+      core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+    } catch {}
+  }, "study");
+
+  core.hooks.register("afterMetadataWrite", async ({ nodeId, extName }) => {
+    if (extName !== "values" && extName !== "study") return;
+    try {
+      const node = await core.models.Node.findById(nodeId).select("rootOwner").lean();
+      if (!node?.rootOwner) return;
+      core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+    } catch {}
+  }, "study");
+
   // ── Register HTML dashboard (if html-rendering installed) ──
   try {
     const { getExtension } = await import("../loader.js");

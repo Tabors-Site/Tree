@@ -126,6 +126,27 @@ export async function init(core) {
     } catch {}
   }, "kb");
 
+  // ── Live dashboard updates ──
+  core.hooks.register("afterNote", async ({ nodeId }) => {
+    if (!nodeId) return;
+    try {
+      const node = await core.models.Node.findById(nodeId).select("rootOwner metadata").lean();
+      if (!node?.rootOwner) return;
+      const fm = node.metadata instanceof Map ? node.metadata.get("kb") : node.metadata?.kb;
+      if (!fm?.role) return;
+      core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+    } catch {}
+  }, "kb");
+
+  core.hooks.register("afterMetadataWrite", async ({ nodeId, extName }) => {
+    if (extName !== "values" && extName !== "kb") return;
+    try {
+      const node = await core.models.Node.findById(nodeId).select("rootOwner").lean();
+      if (!node?.rootOwner) return;
+      core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+    } catch {}
+  }, "kb");
+
   // ── Register apps-grid slot ──
   try {
     const { getExtension } = await import("../loader.js");

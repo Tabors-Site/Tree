@@ -43,7 +43,7 @@ function pctColor(pct) {
 
 export function renderAppDashboard(opts) {
   const {
-    rootId, rootName, token, userId, dateStr,
+    rootId, rootName, token, userId, dateStr, inApp,
     subtitle, hero, stats, bars, cards, tags,
     commands, chatBar, emptyState, afterBars, extraCss, extraJs,
   } = opts;
@@ -253,8 +253,8 @@ export function renderAppDashboard(opts) {
 
   return page({
     title: `${rootName || "App"} . ${date}`,
-    css: css + (extraCss || "") + chatBarCss(),
-    body: body + (chatBar ? chatBarHtml({ placeholder: chatBar.placeholder || "Type a message..." }) : ""),
-    js: deleteJs + (extraJs || "") + (chatBar ? chatBarJs({ endpoint: chatBar.endpoint, token }) : ""),
+    css: css + (extraCss || "") + (!inApp ? chatBarCss() : ""),
+    body: body + (!inApp && chatBar ? chatBarHtml({ placeholder: chatBar.placeholder || "Type a message..." }) : ""),
+    js: deleteJs + (extraJs || "") + (!inApp && chatBar ? chatBarJs({ endpoint: chatBar.endpoint, token, rootId }) : ""),
   });
 }

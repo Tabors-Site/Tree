@@ -29,7 +29,7 @@ router.get("/root/:rootId/fitness", async (req, res, next) => {
         [state, weekly, profile] = await Promise.all([core.getExerciseState(rootId), core.getWeeklyStats(rootId), core.getProfile(rootId)]);
       }
       const { renderFitnessDashboard } = await import("./pages/dashboard.js");
-      res.send(renderFitnessDashboard({ rootId, rootName: root.name, state, weekly, profile, token: req.query.token || null, userId: req.userId }));
+      res.send(renderFitnessDashboard({ rootId, rootName: root.name, state, weekly, profile, token: req.query.token || null, userId: req.userId, inApp: !!req.query.inApp }));
     });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, "Dashboard failed");

@@ -37,7 +37,7 @@ router.get("/root/:rootId/food", async (req, res, next) => {
         picture = await getDailyPicture(rootId);
       }
       const { renderFoodDashboard } = await import("./pages/dashboard.js");
-      res.send(renderFoodDashboard({ rootId, rootName: root.name, picture, token: req.query.token || null, userId: req.userId }));
+      res.send(renderFoodDashboard({ rootId, rootName: root.name, picture, token: req.query.token || null, userId: req.userId, inApp: !!req.query.inApp }));
     });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, "Dashboard failed");

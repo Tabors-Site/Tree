@@ -96,13 +96,46 @@ export function resolveSlots(slotName, context = {}) {
 
     try {
       const html = slot.render(context);
-      if (html && typeof html === "string") parts.push(html);
+      if (html && typeof html === "string") {
+        parts.push(`<div data-slot="${slotName}" data-ext="${slot.extName}">${html}</div>`);
+      }
     } catch (err) {
       log.warn("Slots", `Slot "${slotName}" render from ${slot.extName} failed: ${err.message}`);
     }
   }
 
   return parts.join("\n");
+}
+
+/**
+ * Emit a slot update over WebSocket.
+ * The client-side script replaces the matching data-slot container.
+ *
+ * @param {object} core - core services bundle (needs core.websocket)
+ * @param {string} userId - target user
+ * @param {string} slotName - which slot to update
+ * @param {string} extName - which extension's fragment to update
+ * @param {object} context - passed to the render function
+ */
+export function emitSlotUpdate(core, userId, slotName, extName, context = {}) {
+  const registered = slots.get(slotName);
+  if (!registered) return;
+
+  const slot = registered.find(s => s.extName === extName);
+  if (!slot) return;
+
+  try {
+    const html = slot.render(context);
+    if (html && typeof html === "string" && core.websocket?.emitToUser) {
+      core.websocket.emitToUser(userId, "slotUpdate", {
+        slotName,
+        extName,
+        html,
+      });
+    }
+  } catch (err) {
+    log.debug("Slots", `emitSlotUpdate "${slotName}" from ${extName} failed: ${err.message}`);
+  }
 }
 
 /**

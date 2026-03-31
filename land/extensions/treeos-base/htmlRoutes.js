@@ -169,18 +169,23 @@ export function buildTreeosHtmlRoutes() {
       const { app: appKey, message } = req.body;
       if (!appKey || !message) return sendError(res, 400, ERR.INVALID_INPUT, "app and message required");
 
-      const { APPS } = await import("./pages/appsPage.js");
-      const appDef = APPS.find(a => a.key === appKey);
+      // App definitions: key -> { treeName, dashboardPath, multiInstance }
+      // Extensions register UI cards via slots, but creation metadata lives here.
+      const APP_DEFS = {
+        fitness:  { treeName: "Fitness",  dashboardPath: "fitness",  multiInstance: false },
+        food:     { treeName: "Food",     dashboardPath: "food",     multiInstance: false },
+        recovery: { treeName: "Recovery", dashboardPath: "recovery", multiInstance: false },
+        study:    { treeName: "Study",    dashboardPath: "study",    multiInstance: false },
+        kb:       { treeName: "Knowledge Base", dashboardPath: "kb", multiInstance: true },
+      };
+      const appDef = APP_DEFS[appKey];
       if (!appDef) return sendError(res, 400, ERR.INVALID_INPUT, "Unknown app");
 
-      // For single-instance apps, reuse existing tree if setup incomplete
-      // For multi-instance apps (KB), always create new
-      const multiInstance = appDef.key === "kb";
-      if (!multiInstance) {
+      if (!appDef.multiInstance) {
         const existing = await Node.findOne({
           rootOwner: userId, parent: { $ne: DELETED },
-          [`metadata.${appDef.key}.initialized`]: true,
-          [`metadata.${appDef.key}.setupPhase`]: "base",
+          [`metadata.${appKey}.initialized`]: true,
+          [`metadata.${appKey}.setupPhase`]: "base",
         }).select("_id").lean();
         if (existing) {
           const qs = req.body.token ? `?html&token=${req.body.token}` : "?html";
@@ -189,8 +194,7 @@ export function buildTreeosHtmlRoutes() {
         }
       }
 
-      // Use message as tree name for multi-instance apps, default name for single
-      const treeName = multiInstance ? (message.slice(0, 80) || appDef.treeName) : appDef.treeName;
+      const treeName = appDef.multiInstance ? (message.slice(0, 80) || appDef.treeName) : appDef.treeName;
 
       const { createNode } = await import("../../seed/tree/treeManagement.js");
       const rootNode = await createNode({

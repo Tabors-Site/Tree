@@ -35,7 +35,7 @@ router.get("/root/:rootId/recovery", async (req, res, next) => {
         ]);
       }
       const { renderRecoveryDashboard } = await import("./pages/dashboard.js");
-      res.send(renderRecoveryDashboard({ rootId, rootName: root.name, status, milestones, patterns, history, token: req.query.token || null, userId: req.userId }));
+      res.send(renderRecoveryDashboard({ rootId, rootName: root.name, status, milestones, patterns, history, token: req.query.token || null, userId: req.userId, inApp: !!req.query.inApp }));
     });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, "Dashboard failed");

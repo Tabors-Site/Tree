@@ -228,7 +228,26 @@ export async function init(core) {
     }
   }, "food");
 
-  // HTML dashboard is now inline in routes.js (GET with ?html check)
+  // ── Live dashboard updates ──
+  core.hooks.register("afterNote", async ({ nodeId }) => {
+    if (!nodeId) return;
+    try {
+      const node = await core.models.Node.findById(nodeId).select("rootOwner metadata").lean();
+      if (!node?.rootOwner) return;
+      const fm = node.metadata instanceof Map ? node.metadata.get("food") : node.metadata?.food;
+      if (!fm?.role) return;
+      core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+    } catch {}
+  }, "food");
+
+  core.hooks.register("afterMetadataWrite", async ({ nodeId, extName }) => {
+    if (extName !== "values" && extName !== "food" && extName !== "goals") return;
+    try {
+      const node = await core.models.Node.findById(nodeId).select("rootOwner").lean();
+      if (!node?.rootOwner) return;
+      core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+    } catch {}
+  }, "food");
 
   // ── Register apps-grid slot ──
   try {

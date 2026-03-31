@@ -8,10 +8,10 @@
 import { renderAppDashboard } from "../../html-rendering/html/appDashboard.js";
 import { timeAgo } from "../../html-rendering/html/utils.js";
 
-export function renderKbDashboard({ rootId, rootName, status, stale, unplaced, token, userId, hasEmbed, hasScout }) {
+export function renderKbDashboard({ rootId, rootName, status, stale, unplaced, token, userId, hasEmbed, hasScout, inApp }) {
   if (!status) {
     return renderAppDashboard({
-      rootId, rootName, token, userId,
+      rootId, rootName, token, userId, inApp,
       emptyState: { title: "Not initialized yet", message: "Tell it something to get started. The AI will create the topic structure from what you say." },
       commands: [
         { cmd: "kb <statement>", desc: "Tell the kb something new" },
@@ -84,7 +84,7 @@ export function renderKbDashboard({ rootId, rootName, status, stale, unplaced, t
   }
 
   return renderAppDashboard({
-    rootId, rootName: status.name || rootName, token, userId,
+    rootId, rootName: status.name || rootName, token, userId, inApp,
     subtitle: subParts.join(" . ") || null,
     stats,
     tags: tags.length > 0 ? tags : null,

@@ -56,6 +56,7 @@ router.get("/root/:rootId/study", urlAuth, htmlOnly, async (req, res) => {
       token: req.query.token || null,
       userId: req.userId,
       qs: req.query,
+      inApp: !!req.query.inApp,
     }));
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, "Dashboard failed");

@@ -18,7 +18,7 @@ function goalColor(current, goal) {
   return "rgba(255,255,255,0.08)";
 }
 
-export function renderFitnessDashboard({ rootId, rootName, state, weekly, profile, token, userId }) {
+export function renderFitnessDashboard({ rootId, rootName, state, weekly, profile, token, userId, inApp }) {
   const modalities = state?.modalities || [];
   const groups = state?.groups || {};
   const today = new Date();
@@ -27,7 +27,7 @@ export function renderFitnessDashboard({ rootId, rootName, state, weekly, profil
   // If no exercises, use generic dashboard with empty state
   if (Object.keys(groups).length === 0) {
     return renderAppDashboard({
-      rootId, rootName, token, userId,
+      rootId, rootName, token, userId, inApp,
       tags: modalities.map(m => ({ label: m, color: m === "gym" ? "#667eea" : m === "running" ? "#48bb78" : "#ecc94b" })),
       emptyState: { title: "No exercises configured yet", message: "Type a message below to get started." },
       commands: [
@@ -192,8 +192,8 @@ export function renderFitnessDashboard({ rootId, rootName, state, weekly, profil
 
   return page({
     title: `${rootName || "Fitness"} . ${dateStr}`,
-    css: css + chatBarCss(),
-    body: body + chatBarHtml({ placeholder: "Log a workout, say 'workout' to start, or ask about progress..." }),
-    js: chatBarJs({ endpoint: `/api/v1/root/${rootId}/fitness`, token }),
+    css: css + (!inApp ? chatBarCss() : ""),
+    body: body + (!inApp ? chatBarHtml({ placeholder: "Log a workout, say 'workout' to start, or ask about progress..." }) : ""),
+    js: !inApp ? chatBarJs({ endpoint: `/api/v1/root/${rootId}/fitness`, token, rootId }) : "",
   });
 }

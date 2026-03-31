@@ -249,7 +249,7 @@ export function chatBarHtml({ placeholder = "Type a message..." } = {}) {
   `;
 }
 
-export function chatBarJs({ endpoint }) {
+export function chatBarJs({ endpoint, rootId, token } = {}) {
   return `
     function clearChatBar() {
       document.getElementById('chatMessages').innerHTML = '';
@@ -520,6 +520,27 @@ export function chatBarJs({ endpoint }) {
           sendChatMessage();
         }, 500);
       }
+    })();
+
+    // Live dashboard updates via WebSocket.
+    // When any extension writes data to this tree, the server emits dashboardUpdate.
+    // We re-fetch and swap the layout content (same logic as refreshDashboardData).
+    (function() {
+      ${rootId ? `
+      var liveRootId = '${rootId}';
+      var src = document.createElement('script');
+      src.src = '/socket.io/socket.io.js';
+      src.onload = function() {
+        var sock = io({ auth: { token: '${token || ''}' } });
+        sock.on('dashboardUpdate', function(msg) {
+          if (msg.rootId !== liveRootId) return;
+          // Skip if the user is currently typing a chat message
+          if (document.body.classList.contains('thinking')) return;
+          refreshDashboardData();
+        });
+      };
+      document.head.appendChild(src);
+      ` : '// No rootId provided, live updates disabled.'}
     })();
   `;
 }

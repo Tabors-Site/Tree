@@ -159,6 +159,21 @@ export async function init(core) {
     }
   }, "fitness");
 
+  // ── Live dashboard updates: push to client when data changes ──
+  core.hooks.register("afterNote", async ({ node }) => {
+    if (!node?.rootOwner) return;
+    const fm = node.metadata instanceof Map ? node.metadata.get("fitness") : node.metadata?.fitness;
+    if (!fm?.role) return;
+    core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+  }, "fitness");
+
+  core.hooks.register("afterMetadataWrite", async ({ nodeId, extName }) => {
+    if (extName !== "values" && extName !== "fitness" && extName !== "goals") return;
+    const node = await core.models.Node.findById(nodeId).select("rootOwner").lean();
+    if (!node?.rootOwner) return;
+    core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+  }, "fitness");
+
   // HTML dashboard is now inline in routes.js (GET with ?html check)
 
   // ── Register tool navigation (if treeos-base installed) ──

@@ -1,7 +1,7 @@
 import log from "../../seed/log.js";
 import { buildNavigationHandler, registerToolNavigation, registerToolNavigations } from "./navigation.js";
 import { buildTools } from "./handlers.js";
-import { registerSlot, unregisterSlots, resolveSlots, resolveSlotsAsync, listSlots } from "./slots.js";
+import { registerSlot, unregisterSlots, resolveSlots, resolveSlotsAsync, listSlots, emitSlotUpdate } from "./slots.js";
 
 // Tree modes
 import treeNavigate from "./modes/tree/navigate.js";
@@ -244,12 +244,9 @@ export async function init(core) {
     log.verbose("TreeOS", `HTML pages not registered: ${err.message}`);
   }
 
-  // ── Register core quick links (not owned by any extension) ──
+  // ── Register core quick links (ones no extension owns) ──
   registerSlot("user-quick-links", "treeos-base", ({ userId, queryString }) =>
-    `<li><a href="/api/v1/user/${userId}/contributions${queryString}">Contributions</a></li>
-     <li><a href="/api/v1/user/${userId}/tags${queryString}">Mail</a></li>
-     <li><a href="/api/v1/user/${userId}/invites${queryString}">Invites</a></li>
-     <li><a href="/api/v1/user/${userId}/shareToken${queryString}">Share Token</a></li>
+    `<li><a href="/api/v1/user/${userId}/shareToken${queryString}">Share Token</a></li>
      <li><a href="/api/v1/user/${userId}/inverse${queryString}">Inverse Profile</a></li>`,
   { priority: 90 });
 
@@ -259,7 +256,7 @@ export async function init(core) {
     tools,
     exports: {
       TOOL_DEFS, registerToolNavigation, registerToolNavigations,
-      registerSlot, unregisterSlots, resolveSlots, resolveSlotsAsync, listSlots,
+      registerSlot, unregisterSlots, resolveSlots, resolveSlotsAsync, listSlots, emitSlotUpdate,
     },
   };
 }

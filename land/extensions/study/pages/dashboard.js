@@ -24,7 +24,7 @@ function masteryLabel(pct) {
   return "not started";
 }
 
-export function renderStudyDashboard({ rootId, rootName, queue, activeTopics, gaps, progress, profile, completed, history, token, userId }) {
+export function renderStudyDashboard({ rootId, rootName, queue, activeTopics, gaps, progress, profile, completed, history, token, userId, inApp }) {
   const completedCount = completed?.length || progress?.completed?.allTime || 0;
   const queueCount = queue?.length || 0;
   const dailyGoal = profile?.dailyStudyMinutes || 0;
@@ -341,8 +341,8 @@ export function renderStudyDashboard({ rootId, rootName, queue, activeTopics, ga
 
   return page({
     title: `${rootName || "Study"} . ${dateStr}`,
-    css: css + chatBarCss(),
-    body: body + chatBarHtml({ placeholder: "What do you want to learn? Or say 'study' to start a session..." }),
-    js: js + chatBarJs({ endpoint: `/api/v1/root/${rootId}/study`, token }),
+    css: css + (!inApp ? chatBarCss() : ""),
+    body: body + (!inApp ? chatBarHtml({ placeholder: "What do you want to learn? Or say 'study' to start a session..." }) : ""),
+    js: js + (!inApp ? chatBarJs({ endpoint: `/api/v1/root/${rootId}/study`, token, rootId }) : ""),
   });
 }
