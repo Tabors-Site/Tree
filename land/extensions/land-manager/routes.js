@@ -145,6 +145,9 @@ router.post("/land/extensions/:name/enable", authenticate, async (req, res) => {
     const { getLandConfigValue, setLandConfigValue } = await import("../../seed/landConfig.js");
     const disabled = getLandConfigValue("disabledExtensions") || [];
     const name = req.params.name;
+    if (!disabled.includes(name)) {
+      return sendError(res, 400, ERR.INVALID_INPUT, `Extension "${name}" is not disabled`);
+    }
     const updated = disabled.filter(n => n !== name);
     await setLandConfigValue("disabledExtensions", updated, { internal: true });
     sendOk(res, { enabled: name, message: "Restart the land to apply." });
