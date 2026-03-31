@@ -186,7 +186,7 @@ const PROFILES = {
       // Core gateways
       "gateway", "gateway-discord", "gateway-telegram", "gateway-reddit",
       // User features
-      "instructions", "rings", "dynamic-rename", "stream", "learn", "go",
+      "instructions", "rings", "dynamic-rename", "stream", "learn", "go", "legal",
     ],
   },
 

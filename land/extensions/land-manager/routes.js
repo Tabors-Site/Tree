@@ -106,8 +106,10 @@ router.get("/land/extensions", authenticate, async (req, res) => {
     const user = await User.findById(req.userId).select("isAdmin").lean();
     if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     const { getLoadedManifests } = await import("../../extensions/loader.js");
+    const { getLandConfigValue } = await import("../../seed/landConfig.js");
     const manifests = getLoadedManifests();
-    sendOk(res, { loaded: manifests, count: manifests.length });
+    const disabled = getLandConfigValue("disabledExtensions") || [];
+    sendOk(res, { loaded: manifests, count: manifests.length, disabled });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
   }
@@ -119,8 +121,12 @@ router.post("/land/extensions/:name/disable", authenticate, async (req, res) => 
     const user = await User.findById(req.userId).select("isAdmin").lean();
     if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     const { getLandConfigValue, setLandConfigValue } = await import("../../seed/landConfig.js");
-    const disabled = getLandConfigValue("disabledExtensions") || [];
+    const { hasExtension } = await import("../../extensions/loader.js");
     const name = req.params.name;
+    if (!hasExtension(name)) {
+      return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, `Extension "${name}" is not loaded`);
+    }
+    const disabled = getLandConfigValue("disabledExtensions") || [];
     if (!disabled.includes(name)) {
       disabled.push(name);
       await setLandConfigValue("disabledExtensions", disabled, { internal: true });

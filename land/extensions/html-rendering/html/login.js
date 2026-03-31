@@ -493,7 +493,7 @@ export function renderLoginPage(req, res, { hasEmail = false } = {}) {
 </body>
 </html>`);
 }
-export function renderRegisterPage(req, res, { hasEmail = false } = {}) {
+export function renderRegisterPage(req, res, { hasEmail = false, hasLegal = false } = {}) {
   res.setHeader("Content-Type", "text/html");
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -1012,12 +1012,12 @@ export function renderRegisterPage(req, res, { hasEmail = false } = {}) {
       </div>
       <button type="submit" id="registerBtn">Create Account</button>
 
-      <div class="agreement-text">
+      ${hasLegal ? `<div class="agreement-text">
         By creating an account, you agree to our
         <span class="agreement-link" onclick="openModal('terms')">Terms of Service</span>
         and
         <span class="agreement-link" onclick="openModal('privacy')">Privacy Policy</span>.
-      </div>
+      </div>` : ""}
 
     </form>
 
@@ -1033,7 +1033,7 @@ export function renderRegisterPage(req, res, { hasEmail = false } = {}) {
     </div>
   </div>
 
-  <!-- Terms Modal -->
+  ${hasLegal ? `
   <div class="modal-overlay" id="termsModal">
     <div class="modal-container">
       <div class="modal-header">
@@ -1045,8 +1045,6 @@ export function renderRegisterPage(req, res, { hasEmail = false } = {}) {
       </div>
     </div>
   </div>
-
-  <!-- Privacy Modal -->
   <div class="modal-overlay" id="privacyModal">
     <div class="modal-container">
       <div class="modal-header">
@@ -1058,6 +1056,7 @@ export function renderRegisterPage(req, res, { hasEmail = false } = {}) {
       </div>
     </div>
   </div>
+  ` : ""}
 
   <script>
     const apiUrl = "${getLandUrl()}";

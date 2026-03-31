@@ -148,8 +148,10 @@ export const pageRouter = express.Router();
 // fall through to kernel 404. The "/" route is an OS-level concept, not kernel.
 
 let _hasEmailCached = false;
+let _hasLegalCached = false;
 // Set after boot via init
 export function setEmailAvailable(v) { _hasEmailCached = !!v; }
+export function setLegalAvailable(v) { _hasLegalCached = !!v; }
 
 pageRouter.get("/login", (req, res) => {
   if (!isHtmlEnabled()) {
@@ -162,7 +164,7 @@ pageRouter.get("/register", (req, res) => {
   if (!isHtmlEnabled()) {
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }
-  renderRegisterPage(req, res, { hasEmail: _hasEmailCached });
+  renderRegisterPage(req, res, { hasEmail: _hasEmailCached, hasLegal: _hasLegalCached });
 });
 
 pageRouter.get("/forgot-password", (req, res) => {
