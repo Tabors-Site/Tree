@@ -159,14 +159,11 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
       font-weight: 600;
       font-size: 13px;
       cursor: pointer;
-      transition: all 0.3s;
-      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+      transition: all 0.2s;
     }
 
     .logout-btn:hover {
       background: rgba(239, 68, 68, 0.5);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
     }
 
     .header { position: relative; }
@@ -184,15 +181,12 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
       font-weight: 600;
       font-size: 13px;
       cursor: pointer;
-      transition: all 0.3s;
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+      transition: all 0.2s;
       text-decoration: none;
     }
 
     .basic-btn:hover {
       background: rgba(16, 185, 129, 0.5);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
     }
 
     /* User ID */
@@ -771,8 +765,7 @@ text-decoration: none;
     <div class="glass-card header">
       <button class="basic-btn" onclick="try{window.top.location='/chat'}catch(e){window.location='/chat'}">Back to Basic Chat</button>
       <div class="user-info">
-       <a href="/api/v1/user/${userId}/llm${queryString}">
-        <h1>@${safeUsername}</h1> </a>
+        <h1>@${safeUsername}</h1>
 
         <div class="user-meta">
           ${resolveSlots("user-profile-badge", { userId, queryString, user }) ||
