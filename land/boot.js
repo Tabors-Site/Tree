@@ -203,8 +203,29 @@ async function pickExtensions(horizonUrl) {
   let extensions = [];
   let isLocal = false;
 
-  // Try Horizon registry first
-  if (horizonUrl) {
+  // Scan local extensions/ directory first
+  const extDir = path.join(__dirname, "extensions");
+  if (fs.existsSync(extDir)) {
+    const entries = fs.readdirSync(extDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
+      const manifestPath = path.join(extDir, entry.name, "manifest.js");
+      if (fs.existsSync(manifestPath)) {
+        try {
+          const { pathToFileURL } = await import("url");
+          const { default: manifest } = await import(pathToFileURL(manifestPath).href);
+          extensions.push({ name: manifest.name || entry.name, version: manifest.version || "1.0.0", local: true });
+        } catch {}
+      }
+    }
+    if (extensions.length > 0) {
+      isLocal = true;
+      console.log(`  Found ${extensions.length} local extensions.\n`);
+    }
+  }
+
+  // If no local extensions, try Horizon registry
+  if (extensions.length === 0 && horizonUrl) {
     try {
       const fetch = globalThis.fetch || (await import("node-fetch")).default;
       console.log(`  Checking extension registry at ${horizonUrl}...`);
@@ -216,29 +237,6 @@ async function pickExtensions(horizonUrl) {
       extensions = data.extensions || [];
     } catch (err) {
       console.log(`  Could not reach registry: ${err.message}`);
-    }
-  }
-
-  // Fallback: scan local extensions/ directory
-  if (extensions.length === 0) {
-    const extDir = path.join(__dirname, "extensions");
-    if (fs.existsSync(extDir)) {
-      const entries = fs.readdirSync(extDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory() || entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
-        const manifestPath = path.join(extDir, entry.name, "manifest.js");
-        if (fs.existsSync(manifestPath)) {
-          try {
-            const { pathToFileURL } = await import("url");
-            const { default: manifest } = await import(pathToFileURL(manifestPath).href);
-            extensions.push({ name: manifest.name || entry.name, version: manifest.version || "1.0.0" });
-          } catch {}
-        }
-      }
-      if (extensions.length > 0) {
-        isLocal = true;
-        console.log(`  Found ${extensions.length} local extensions.\n`);
-      }
     }
   }
 

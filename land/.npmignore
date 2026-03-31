@@ -1,0 +1,4 @@
+.env
+.treeos-profile
+node_modules/
+*.log

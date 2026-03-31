@@ -12,7 +12,12 @@
   "keywords": ["treeos", "ai", "agents", "kernel", "tree", "federation"],
   "author": "Tabor Holly",
   "license": "AGPL-3.0",
-  "description": "TreeOS Land server. Run npm start for setup wizard.",
+  "description": "TreeOS Land server. Plant the seed. Grow trees. AI agents live here.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/taborgreat/treeos-land"
+  },
+  "homepage": "https://treeos.ai",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
     "bcrypt": "^6.0.0",
