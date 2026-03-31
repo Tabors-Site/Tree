@@ -251,10 +251,10 @@ async function pickExtensions(horizonUrl) {
   });
 
   console.log(`\n  ${extensions.length} extensions available. Choose an install profile:\n`);
-  console.log("  1. Minimal     Chat, place, query. No background AI. Zero idle LLM cost.");
-  console.log("                 Good for: builders, testing, low-power setups.\n");
-  console.log("  2. Standard    Full tree experience with intelligence and cascade.");
-  console.log("                 Moderate LLM usage. Recommended for most users.\n");
+  console.log("  1. Minimal     Bare kernel. Chat, place, query only. No apps, no intelligence.");
+  console.log("                 Not recommended for regular use. For builders and testing only.\n");
+  console.log("  2. Standard    Full tree experience with intelligence, cascade, and apps.");
+  console.log("                 Includes food, fitness, study, recovery, KB. Recommended.\n");
   console.log("  3. Full        Everything. All gateways, federation, teaching, splitting.");
   console.log("                 Heavy LLM usage. For production and public lands.\n");
   console.log("  4. Custom      Choose extensions individually by category.\n");

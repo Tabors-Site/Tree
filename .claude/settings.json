@@ -575,7 +575,8 @@
       "Read(//home/tabor/github/Tree/land/extensions/$b/**)",
       "Bash(ls -d land/extensions/*/manifest.js)",
       "Bash(ls cli/README* cli/*.md)",
-      "Bash(grep -n \"login\\\\|--key\\\\|register\" cli/commands/*.js)"
+      "Bash(grep -n \"login\\\\|--key\\\\|register\" cli/commands/*.js)",
+      "Bash(git rm:*)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

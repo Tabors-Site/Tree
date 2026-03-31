@@ -10,5 +10,11 @@ land/.env
 land/extensions/.disabled
 .land/
 
+create-treeos/template/uploads
+create-treeos/template/.env
+create-treeos/template/.treeos-profile
+create-treeos/template/node_modules
+create-treeos/template/.land/
+
 site/node_modules
 site/dist/

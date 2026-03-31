@@ -1,0 +1,9 @@
+{
+  "type": "module",
+  "name": "treeos-ext-gateway-discord",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "discord.js": "^14.25.1"
+  }
+}
