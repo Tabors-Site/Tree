@@ -166,6 +166,26 @@ export function chatBarCss() {
     .chat-bar-send:hover { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.4); }
     .chat-bar-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    @media (max-width: 640px) {
+      .chat-bar {
+        bottom: 0;
+        left: 0;
+        right: 0;
+        border-radius: 16px 16px 0 0;
+        border-bottom: none;
+        background: rgba(15, 10, 46, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-color: rgba(255,255,255,0.15);
+      }
+      .chat-bar.minimized { transform: translateY(calc(100% - 40px)); }
+      .chat-bar-messages { height: 200px; }
+      .chat-bar-toggle { padding: 8px 16px; }
+      .chat-bar-input-row { padding: 8px 12px 12px; }
+      .chat-bar-input { font-size: 16px; }
+      .cmd-ref { margin-bottom: 100px; }
+    }
+
     .cmd-ref {
       margin-top: 24px;
       margin-bottom: 80px;

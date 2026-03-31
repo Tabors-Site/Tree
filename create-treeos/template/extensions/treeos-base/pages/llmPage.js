@@ -134,6 +134,16 @@ export function renderLlmPage({ userId, username, connections, mainAssignment, u
       font-weight: 600; font-size: 14px; border: 1px solid rgba(255,255,255,0.28);
     }
     .back-link:hover { background: rgba(115, 111, 230, 0.38); }
+    .container > * {
+      animation: fadeInUp 0.5s ease-out both;
+    }
+    .container > :nth-child(1) { animation-delay: 0s; }
+    .container > :nth-child(2) { animation-delay: 0.08s; }
+    .container > :nth-child(3) { animation-delay: 0.16s; }
+    .container > :nth-child(4) { animation-delay: 0.24s; }
+    .container > :nth-child(5) { animation-delay: 0.32s; }
+    .container > :nth-child(6) { animation-delay: 0.4s; }
+    .container > :nth-child(7) { animation-delay: 0.48s; }
   `;
 
   const js = `
