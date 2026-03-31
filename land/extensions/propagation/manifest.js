@@ -22,9 +22,7 @@ export default {
     models: ["Node"],
   },
 
-  optional: {
-    extensions: ["perspective-filter", "sealed-transport"],
-  },
+  optional: {},
 
   provides: {
     routes: "./routes.js",

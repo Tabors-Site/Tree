@@ -637,12 +637,7 @@ export function renderNodeDetail({ node, nodeId, qs, parentName, rootUrl, isPubl
       >
         <select name="type" style="flex:1;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:white;font-size:14px;">
           <option value="" ${!node.type ? "selected" : ""}>None</option>
-          <option value="goal" ${node.type === "goal" ? "selected" : ""}>goal</option>
-          <option value="plan" ${node.type === "plan" ? "selected" : ""}>plan</option>
-          <option value="task" ${node.type === "task" ? "selected" : ""}>task</option>
-          <option value="knowledge" ${node.type === "knowledge" ? "selected" : ""}>knowledge</option>
-          <option value="resource" ${node.type === "resource" ? "selected" : ""}>resource</option>
-          <option value="identity" ${node.type === "identity" ? "selected" : ""}>identity</option>
+          ${resolveSlots("node-type-options", { node, nodeType: node.type })}
         </select>
         <input
           type="text"

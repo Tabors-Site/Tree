@@ -10,10 +10,11 @@ const HTMLPage = () => {
           <h1 className="lp-title">One Tree, Three Interfaces</h1>
           <p className="lp-subtitle">CLI. AI. Browser. Same data.</p>
           <p className="lp-tagline">
-            Every node, note, and value in the tree is accessible three ways.
-            The CLI reads and writes it. The AI reads and writes it. The browser
-            renders it as HTML. All three see the same tree. All three use the same API.
-            The data never diverges.
+            Install an extension and it adds tools the AI can call, commands the CLI shows,
+            and pages the browser renders. All from one package. Uninstall it and all three
+            vanish together. Block it at a branch and the AI loses the tool, the CLI loses
+            the command, and the browser loses the page. At that position. Same tree. Same rules.
+            Three interfaces that always agree.
           </p>
           <div className="lp-hero-ctas">
             <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
@@ -23,8 +24,34 @@ const HTMLPage = () => {
         </div>
       </section>
 
-      {/* ── THE PATTERN ── */}
+      {/* ── WHY THIS MATTERS ── */}
       <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Why This Matters</h2>
+          <P>
+            Most platforms have a frontend team and a backend team and they disagree about what the UI
+            should show. The frontend checks permissions its own way. The backend checks a different way.
+            They drift. Buttons appear that lead to 404s. Links show for features that aren't installed.
+            Admin panels display options the user can't actually use.
+          </P>
+          <P>
+            TreeOS doesn't have this problem. The same extension that registers an AI tool also registers
+            the UI that displays it. The same spatial scoping that determines whether the AI can use a
+            tool at a position determines whether the browser shows it. Install the solana extension and
+            the wallet link appears on every node's values page. Block solana on a Journal tree and the
+            wallet link vanishes there. Not because of a CSS rule. Because the kernel filtered it using
+            the same resolution chain that filtered the AI's tools.
+          </P>
+          <P style={{color: "rgba(255,255,255,0.4)"}}>
+            One extension. One init(). Backend logic, AI tools, CLI commands, and browser UI.
+            All deployed together. All scoped together. All removed together.
+            The frontend is not a separate app. It's a view into the same tree the AI sees.
+          </P>
+        </div>
+      </section>
+
+      {/* ── THE PATTERN ── */}
+      <section className="lp-section lp-section-alt">
         <div className="lp-container" style={{maxWidth: 800}}>
           <h2 className="lp-section-title">?html</h2>
           <P>
@@ -149,10 +176,12 @@ const extraHtml = resolveSlots("node-detail", { node, user });
               </div>
             ))}
           </div>
-          <P style={{marginTop: 20, color: "rgba(255,255,255,0.4)", fontSize: "0.85rem"}}>
-            Spatial scoping applies to slots. If an extension is blocked at a node position,
-            its UI fragments don't render at that position. The page doesn't decide. The slot
-            resolver filters. Consistent with tools, hooks, and modes.
+          <P style={{marginTop: 20, color: "rgba(255,255,255,0.5)", fontSize: "0.9rem"}}>
+            Spatial scoping applies to slots. Navigate to a Finance tree where solana is allowed:
+            the wallet link appears. Navigate to a Journal tree where solana is blocked: the wallet
+            link is gone. Same extension installed on the land. Different position, different UI.
+            The page doesn't decide. The slot resolver uses the same spatial scoping that filters
+            the AI's tools. What the AI can do, the browser shows. What the AI can't, the browser hides.
           </P>
         </div>
       </section>

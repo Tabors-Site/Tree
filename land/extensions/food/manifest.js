@@ -32,6 +32,7 @@ export default {
       "phase",           // suppress during focus
       "schedules",       // meal timing
       "html-rendering",  // dashboard page
+      "treeos-base",     // slot registration
     ],
   },
 

@@ -861,7 +861,7 @@ export function renderVersionDetail({
         </div>
       </div>
 
-      <span class="version-badge version-status-${data.status}">Version ${version}</span>
+      ${resolveSlots("version-badge", { version, data }) || ""}
 
       <div class="created-date">Created: ${createdDate}</div>
 

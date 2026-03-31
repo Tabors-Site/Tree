@@ -39,6 +39,7 @@ export async function init(core) {
 
   // Register tree quick link
   try {
+    const { getExtension } = await import("../loader.js");
     const base = getExtension("treeos-base");
     base?.exports?.registerSlot?.("tree-quick-links", "values", ({ rootId, queryString }) =>
       `<a href="/api/v1/root/${rootId}/values${queryString}" class="back-link">Global Values</a>`,

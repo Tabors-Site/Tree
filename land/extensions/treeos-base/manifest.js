@@ -55,7 +55,7 @@ export default {
   },
 
   optional: {
-    extensions: ["html-rendering", "navigation", "energy", "prestige", "team", "notifications"],
+    extensions: ["html-rendering", "navigation"],
   },
 
   provides: {

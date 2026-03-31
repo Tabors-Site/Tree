@@ -21,6 +21,17 @@ export async function init(core) {
     context.suggestedTypes = configuredTypes;
   }, "starter-types");
 
+  // Register type options on node detail page
+  try {
+    const { getExtension } = await import("../loader.js");
+    const treeos = getExtension("treeos-base");
+    treeos?.exports?.registerSlot?.("node-type-options", "starter-types", ({ nodeType }) => {
+      return configuredTypes.map(t =>
+        `<option value="${t}" ${nodeType === t ? "selected" : ""}>${t}</option>`
+      ).join("\n");
+    }, { priority: 10 });
+  } catch {}
+
   log.info("StarterTypes", `Loaded ${configuredTypes.length} type suggestions`);
 
   const tools = [

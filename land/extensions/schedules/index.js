@@ -35,6 +35,7 @@ export async function init(core) {
 
   // Register tree quick link
   try {
+    const { getExtension } = await import("../loader.js");
     const base = getExtension("treeos-base");
     base?.exports?.registerSlot?.("tree-quick-links", "schedules", ({ rootId, queryString }) =>
       `<a href="/api/v1/root/${rootId}/calendar${queryString}" class="back-link">Calendar</a>`,

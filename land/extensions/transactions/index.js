@@ -14,6 +14,14 @@ export async function init(core) {
       `<a href="/api/v1/node/${nodeId}/${version}/transactions${qs}">Transactions</a>`,
       { priority: 20 }
     );
+
+    treeos?.exports?.registerSlot?.("tree-transaction-policy", "transactions", ({ policyHtml }) => {
+      if (!policyHtml) return "";
+      return `<div class="content-card">
+  <div class="section-header"><h2>Transaction Policy</h2></div>
+  ${policyHtml}
+</div>`;
+    }, { priority: 30 });
   } catch {}
 
   return { router };

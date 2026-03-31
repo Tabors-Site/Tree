@@ -60,6 +60,7 @@ export function registerSlot(slotName, extName, renderFn, opts = {}) {
   // Sort by priority (lower first)
   list.sort((a, b) => a.priority - b.priority);
 
+  log.verbose("Slots", `Registered "${slotName}" from ${extName} (priority ${opts.priority ?? 50})`);
   return true;
 }
 
@@ -97,7 +98,7 @@ export function resolveSlots(slotName, context = {}) {
       const html = slot.render(context);
       if (html && typeof html === "string") parts.push(html);
     } catch (err) {
-      log.debug("Slots", `Slot "${slotName}" render from ${slot.extName} failed: ${err.message}`);
+      log.warn("Slots", `Slot "${slotName}" render from ${slot.extName} failed: ${err.message}`);
     }
   }
 

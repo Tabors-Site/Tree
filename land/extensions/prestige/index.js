@@ -68,6 +68,11 @@ export async function init(core) {
         </div>`;
       }, { priority: 10 });
 
+      // Version badge on version detail page
+      treeos.exports.registerSlot("version-badge", "prestige", ({ version, data }) => {
+        return `<span class="version-badge version-status-${data?.status || "active"}">Version ${version}</span>`;
+      }, { priority: 10 });
+
       // Version control on version detail page
       treeos.exports.registerSlot("version-detail-sections", "prestige", ({ nodeId, version, qs, showPrestige }) => {
         if (!showPrestige) return "";

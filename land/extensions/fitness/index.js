@@ -180,6 +180,7 @@ export async function init(core) {
 
   // ── Register apps-grid slot ──
   try {
+    const { getExtension } = await import("../loader.js");
     const base = getExtension("treeos-base");
     base?.exports?.registerSlot?.("apps-grid", "fitness", ({ userId, rootMap, tokenParam, tokenField, esc: e }) => {
       const entries = rootMap.get("Fitness") || [];

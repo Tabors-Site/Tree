@@ -34,6 +34,11 @@ export default {
   needs: {
     extensions: [
       "propagation",
+    ],
+  },
+
+  optional: {
+    extensions: [
       "perspective-filter",
       "sealed-transport",
       "codebook",
@@ -43,8 +48,6 @@ export default {
       "flow",
     ],
   },
-
-  optional: {},
 
   provides: {
     models: {},

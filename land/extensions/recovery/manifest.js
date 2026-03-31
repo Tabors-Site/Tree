@@ -35,6 +35,7 @@ export default {
       "breath",
       "notifications",
       "html-rendering",  // dashboard page
+      "treeos-base",     // slot registration
     ],
   },
 

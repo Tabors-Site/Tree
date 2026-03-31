@@ -238,6 +238,11 @@ export function renderLandPage({
     <!-- Horizon -->
     <div class="section">
       <h2>Horizon</h2>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <span style="color:rgba(255,255,255,0.3);font-size:0.8rem;">Connected to:</span>
+        <code style="color:#60a5fa;font-size:0.8rem;" id="horizonUrlDisplay">${esc(horizonUrl)}</code>
+        <button class="btn-sm" onclick="changeHorizon()" style="font-size:0.7rem;padding:3px 8px;">Change</button>
+      </div>
       <div class="search-row">
         <input type="text" id="horizon-search" placeholder="Search extensions on the network..." />
         <button onclick="searchHorizon()">Search</button>
@@ -262,6 +267,26 @@ export function renderLandPage({
       el.textContent = msg;
       document.body.appendChild(el);
       setTimeout(() => { el.style.opacity = "0"; setTimeout(() => el.remove(), 300); }, 3000);
+    }
+
+    async function changeHorizon() {
+      const newUrl = prompt("Horizon URL:", document.getElementById("horizonUrlDisplay").textContent);
+      if (!newUrl || !newUrl.startsWith("http")) return;
+      try {
+        const res = await fetch("/api/v1/land/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ key: "HORIZON_URL", value: newUrl }),
+        });
+        if (res.ok) {
+          document.getElementById("horizonUrlDisplay").textContent = newUrl;
+          toast("Horizon URL updated.", "ok");
+        } else {
+          const data = await res.json();
+          toast(data.error?.message || "Failed", "err");
+        }
+      } catch (err) { toast(err.message, "err"); }
     }
 
     async function toggleExt(name, isCurrentlyDisabled) {

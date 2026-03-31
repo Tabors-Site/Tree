@@ -66,6 +66,15 @@ export async function init(core) {
       `<li><a href="/api/v1/user/${userId}/invites${queryString}">Invites</a></li>`,
       { priority: 35 }
     );
+
+    treeos?.exports?.registerSlot?.("tree-team", "team", ({ ownerHtml, contributorsHtml, inviteFormHtml }) => {
+      return `<div class="content-card">
+  <div class="section-header"><h2>Team</h2></div>
+  ${ownerHtml || ""}
+  ${contributorsHtml || ""}
+  ${inviteFormHtml || ""}
+</div>`;
+    }, { priority: 10 });
   } catch {}
 
   return {

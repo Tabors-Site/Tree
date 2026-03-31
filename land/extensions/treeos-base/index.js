@@ -244,6 +244,15 @@ export async function init(core) {
     log.verbose("TreeOS", `HTML pages not registered: ${err.message}`);
   }
 
+  // ── Register core quick links (not owned by any extension) ──
+  registerSlot("user-quick-links", "treeos-base", ({ userId, queryString }) =>
+    `<li><a href="/api/v1/user/${userId}/contributions${queryString}">Contributions</a></li>
+     <li><a href="/api/v1/user/${userId}/tags${queryString}">Mail</a></li>
+     <li><a href="/api/v1/user/${userId}/invites${queryString}">Invites</a></li>
+     <li><a href="/api/v1/user/${userId}/shareToken${queryString}">Share Token</a></li>
+     <li><a href="/api/v1/user/${userId}/inverse${queryString}">Inverse Profile</a></li>`,
+  { priority: 90 });
+
   log.info("TreeOS", `Registered ${tools.length} tools, 10 modes, navigation hook`);
 
   return {

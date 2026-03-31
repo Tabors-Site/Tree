@@ -45,7 +45,7 @@ export default {
 
   optional: {
     services: ["energy", "llm"],
-    extensions: ["gateway", "notifications"],
+    extensions: ["gateway", "notifications", "treeos-base"],
   },
 
   provides: {

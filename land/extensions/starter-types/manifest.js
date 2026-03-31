@@ -23,7 +23,9 @@ export default {
     services: ["hooks"],
   },
 
-  optional: {},
+  optional: {
+    extensions: ["treeos-base"],
+  },
 
   provides: {
     models: {},

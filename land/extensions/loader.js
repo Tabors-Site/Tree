@@ -596,12 +596,25 @@ function topologicalSort(manifests) {
     visited.add(name);
 
     // Visit REQUIRED extension dependencies first (strip semver constraints for lookup).
-    // Optional deps are NOT visited here. They don't affect load order.
-    // Optional deps load IF present, checked at runtime via getExtension().
     if (item.manifest.needs?.extensions) {
       for (const dep of item.manifest.needs.extensions) {
         const depName = parseDepString(dep).name;
         if (byName.has(depName)) visit(byName.get(depName));
+      }
+    }
+    // Visit OPTIONAL extension dependencies too for load ordering.
+    // They won't cause failures if missing (checked at runtime via getExtension()),
+    // but if present they should load first so init() can access their exports.
+    // Skip if the optional dep requires us (would invert the required chain).
+    if (item.manifest.optional?.extensions) {
+      for (const dep of item.manifest.optional.extensions) {
+        const depName = parseDepString(dep).name;
+        const depItem = byName.get(depName);
+        if (!depItem) continue;
+        // Don't visit if it requires us (circular would invert required ordering)
+        const depNeeds = depItem.manifest.needs?.extensions?.map(d => parseDepString(d).name) || [];
+        if (depNeeds.includes(name)) continue;
+        visit(depItem);
       }
     }
 

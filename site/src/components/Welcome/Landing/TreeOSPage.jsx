@@ -21,6 +21,7 @@ const TreeOSPage = () => {
             <a className="lp-btn lp-btn-secondary" href="/guide">Guide</a>
             <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>
             <a className="lp-btn lp-btn-secondary" href="/cli">CLI</a>
+            <a className="lp-btn lp-btn-secondary" href="/html">HTML</a>
           </div>
         </div>
       </section>

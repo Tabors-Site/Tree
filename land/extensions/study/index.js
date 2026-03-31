@@ -159,6 +159,30 @@ export async function init(core) {
     }
   } catch {}
 
+  // ── Register apps-grid slot ──
+  try {
+    const { getExtension } = await import("../loader.js");
+    const base = getExtension("treeos-base");
+    base?.exports?.registerSlot?.("apps-grid", "study", ({ userId, rootMap, tokenParam, tokenField, esc: e }) => {
+      const entries = rootMap.get("Study") || [];
+      const existing = entries.map(entry =>
+        entry.ready
+          ? `<a class="app-active" href="/api/v1/root/${entry.id}/study?html${tokenParam}" style="margin-right:8px;margin-bottom:6px;">${e(entry.name)}</a>`
+          : `<a class="app-active" style="background:rgba(236,201,75,0.12);border-color:rgba(236,201,75,0.3);color:#ecc94b;margin-right:8px;margin-bottom:6px;" href="/api/v1/root/${entry.id}/study?html${tokenParam}">${e(entry.name)} (setup)</a>`
+      ).join("");
+      return `<div class="app-card">
+        <div class="app-header"><span class="app-emoji">📚</span><span class="app-name">Study</span></div>
+        <div class="app-desc">Queue topics, track mastery, detect gaps. The tree manages your curriculum.</div>
+        ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
+        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+          ${tokenField}<input type="hidden" name="app" value="study" />
+          <input class="app-input" name="message" placeholder="What do you want to learn? (e.g. distributed systems, react hooks)" required />
+          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} Study</button>
+        </form>
+      </div>`;
+    }, { priority: 40 });
+  } catch {}
+
   // ── Import router ──
   const { default: router, setServices } = await import("./routes.js");
   setServices({ Node: core.models.Node });
