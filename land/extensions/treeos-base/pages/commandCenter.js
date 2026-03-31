@@ -372,6 +372,7 @@ body {
     <!-- HEADER -->
     <header class="cc-header">
       <div class="cc-container">
+        <a href="/api/v1/node/${nodeId}${qs}" class="cc-back" style="margin-bottom:8px;">\u2190 Back to node</a>
         <div class="cc-breadcrumb">${esc(path || rootName || rootId)}</div>
         <h1 class="cc-title">Command Center</h1>
         <p class="cc-subtitle">${esc(nodeName)} . ${activeTools}/${totalTools} tools . ${activeModes}/${totalModes} modes . ${activeExts}/${totalExts} extensions</p>
@@ -489,7 +490,7 @@ body {
     <!-- FOOTER -->
     <footer class="cc-footer">
       <div class="cc-container">
-        <a href="/api/v1/node/${nodeId}?html${qs ? "&" + qs.slice(1) : ""}" class="cc-back">Back to node</a>
+        <a href="/api/v1/node/${nodeId}${qs}" class="cc-back">Back to node</a>
       </div>
     </footer>
 

@@ -569,7 +569,10 @@
       "Bash(wc -l /home/tabor/github/Tree/land/extensions/fitness/*.js /home/tabor/github/Tree/land/extensions/fitness/modes/*.js)",
       "Bash(grep -A 5 \"setUserMeta.*user.*energy\\\\|setUserMeta.*user.*billing\\\\|setUserMeta.*user.*html\\\\|setUserMeta.*user.*nav\\\\|setUserMeta.*user.*phase\" /home/tabor/github/Tree/land/extensions/*/core.js /home/tabor/github/Tree/land/extensions/*/routes.js)",
       "Bash(grep -i \"archive\\\\|food/metric\\\\|archiveMetric\" /home/tabor/github/Tree/land/logs/*.log)",
-      "Bash(grep -rn \"iframe\\\\|embed\\\\|/fitness\\\\|/food\\\\|/recovery\\\\|/study\\\\|/kb\" land/extensions/treeos-base/ --include=*.js)"
+      "Bash(grep -rn \"iframe\\\\|embed\\\\|/fitness\\\\|/food\\\\|/recovery\\\\|/study\\\\|/kb\" land/extensions/treeos-base/ --include=*.js)",
+      "Bash(curl -s https://horizon.treeos.ai/extensions?limit=5)",
+      "Bash(grep -rn \"governance-check\\\\|governance\\\\.check\\\\|governanceCheck\" land/extensions/governance/ --include=*.js)",
+      "Read(//home/tabor/github/Tree/land/extensions/$b/**)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

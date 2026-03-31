@@ -53,7 +53,7 @@ export function renderLlmPage({ userId, username, connections, mainAssignment, u
   const body = `
     <div class="container">
       <div class="back-nav">
-        <a href="/api/v1/user/${esc(userId)}/energy${qs}" class="back-link">Back to Energy</a>
+        <a href="/api/v1/user/${esc(userId)}${qs}" class="back-link">Home</a>
         ${rootId ? `<a href="/api/v1/root/${esc(rootId)}${qs}" class="back-link">Back to ${esc(rootName || "Tree")}</a>` : ""}
       </div>
 

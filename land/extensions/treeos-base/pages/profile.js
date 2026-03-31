@@ -562,6 +562,12 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 12px;
+      padding: 0;
+      margin: 0;
+    }
+
+    .nav-links li {
+      list-style: none;
     }
 
     .nav-links a {
@@ -763,7 +769,7 @@ text-decoration: none;
   <div class="container">
     <!-- Header -->
     <div class="glass-card header">
-      <a href="/chat" target="_top" class="basic-btn">Back to Basic Chat</a>
+      <button class="basic-btn" onclick="try{window.top.location='/chat'}catch(e){window.location='/chat'}">Back to Basic Chat</button>
       <div class="user-info">
        <a href="/api/v1/user/${userId}/llm${queryString}">
         <h1>@${safeUsername}</h1> </a>

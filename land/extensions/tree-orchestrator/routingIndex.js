@@ -100,7 +100,7 @@ export async function rebuildIndexForRoot(rootId) {
 
     _indices.set(rid, index);
     if (index.size > 0) {
-      log.verbose("RoutingIndex", `Built index for ${root?.name || rid}: ${index.size} extensions`);
+      log.debug("RoutingIndex", `Built index for ${root?.name || rid}: ${index.size} extensions`);
     }
   } catch (err) {
     log.debug("RoutingIndex", `Failed to build index for ${rid}: ${err.message}`);
@@ -143,7 +143,7 @@ export async function rebuildAll() {
   for (const root of roots) {
     await rebuildIndexForRoot(root._id);
   }
-  log.info("RoutingIndex", `Indexed ${_indices.size} trees`);
+  log.debug("RoutingIndex", `Indexed ${_indices.size} trees`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────

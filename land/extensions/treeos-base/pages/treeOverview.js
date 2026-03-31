@@ -1195,6 +1195,9 @@ transition:
       <a href="/api/v1/user/${currentUserId}${queryString}" class="back-link">
         <- Back to Profile
       </a>
+      <a href="/api/v1/root/${allData._id}/llm${queryString}" class="back-link">
+        LLM
+      </a>
       <a href="/api/v1/node/${allData._id}/metadata${queryString}" class="back-link">
         Metadata
       </a>
@@ -1272,13 +1275,6 @@ ${
 
   ${resolveSlots("tree-transaction-policy", { rootId: nodeId, nodeId, queryString, token, userId, isOwner, policyHtml })}
 
-  ${treeLlmHtml ? `
-<div class="content-card">
-  <div class="section-header">
-    <h2>Tree Models</h2>
-  </div>
-  ${treeLlmHtml}
-</div>` : ""}
 
   ${isOwner ? resolveSlots("tree-owner-sections", { rootId: nodeId, nodeId, queryString, token, userId }) : ""}
 

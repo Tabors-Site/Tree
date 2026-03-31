@@ -42,6 +42,7 @@ import { renderContributions } from "./pages/contributions.js";
 import { renderCommandCenter } from "./pages/commandCenter.js";
 import { renderShareToken } from "./pages/shareToken.js";
 import { renderLlmPage } from "./pages/llmPage.js";
+import { renderNodeLlmPage } from "./pages/nodeLlmPage.js";
 import { escapeHtml, renderMedia } from "../html-rendering/html/utils.js";
 import { notFoundPage } from "../html-rendering/notFoundPage.js";
 
@@ -654,6 +655,43 @@ export function buildTreeosHtmlRoutes() {
       }));
     } catch (err) {
       log.error("HTML", "Root overview render error:", err.message);
+      sendError(res, 500, ERR.INTERNAL, err.message);
+    }
+  });
+
+  // ===================================================================
+  // NODE LLM PAGE
+  // ===================================================================
+
+  router.get("/root/:rootId/llm", urlAuth, htmlOnly, async (req, res) => {
+    try {
+      const { rootId } = req.params;
+      const root = await Node.findById(rootId).select("name llmDefault metadata rootOwner").lean();
+      if (!root) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Tree not found");
+
+      const userId = req.userId;
+      const isOwner = root.rootOwner && String(root.rootOwner) === String(userId);
+      if (!isOwner) return sendError(res, 403, ERR.FORBIDDEN, "Only the tree owner can manage LLM assignments");
+
+      const connections = await getConnectionsForUser(userId);
+      const qs = buildQS(req);
+
+      const meta = root.metadata instanceof Map ? Object.fromEntries(root.metadata) : (root.metadata || {});
+      const llmSlots = meta.llm?.slots || {};
+      const allSlots = getAllRootLlmSlots();
+
+      return res.send(renderNodeLlmPage({
+        nodeId: rootId,
+        nodeName: root.name,
+        connections,
+        defaultLlm: root.llmDefault || null,
+        slots: llmSlots,
+        allSlots,
+        qs,
+        userId,
+      }));
+    } catch (err) {
+      log.error("HTML", "Node LLM page error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });

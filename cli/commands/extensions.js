@@ -76,10 +76,12 @@ Examples:
         const maxName = Math.max(...data.loaded.map(e => e.name.length), 8);
         for (const ext of data.loaded) {
           const parts = [];
-          if (ext.provides.routes) parts.push("routes");
-          if (ext.provides.tools) parts.push("tools");
-          if (ext.provides.jobs) parts.push("jobs");
-          if (ext.provides.models.length) parts.push(`${ext.provides.models.length} models`);
+          if (ext.provides?.routes) parts.push("routes");
+          if (ext.provides?.tools) parts.push("tools");
+          if (ext.provides?.jobs) parts.push("jobs");
+          const models = ext.provides?.models;
+          const modelCount = Array.isArray(models) ? models.length : (models ? Object.keys(models).length : 0);
+          if (modelCount) parts.push(`${modelCount} models`);
 
           const badges = parts.length ? chalk.dim(parts.join(", ")) : "";
           const name = ext.name.padEnd(maxName);

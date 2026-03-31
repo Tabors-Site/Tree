@@ -664,7 +664,6 @@ router.get("/chat", authenticateLite, async (req, res) => {
           <span class="notif-btn-icon">☰</span>
           <span class="notif-btn-label">Menu</span>
         </button>
-        <a href="#" class="advanced-btn" id="appsLink" onclick="window.location='/api/v1/user/'+CONFIG.userId+'/apps?html';return false;">Apps</a>
         <a href="/dashboard" class="advanced-btn" id="advancedLink">Advanced</a>
       </div>
     </div>
@@ -683,15 +682,11 @@ router.get("/chat", authenticateLite, async (req, res) => {
         <button class="notif-close" onclick="toggleNotifs()">&#x2715;</button>
       </div>
       <div class="notif-tabs">
-        <button class="notif-tab active" id="tabDreams" onclick="switchTab('dreams')">Dreams<span class="tab-dot" id="dreamsDot"></span></button>
-        <button class="notif-tab" id="tabInvites" onclick="switchTab('invites')">Invites<span class="tab-dot" id="invitesDot"></span></button>
+        ${getExtension("dreams") ? `<button class="notif-tab active" id="tabDreams" onclick="switchTab('dreams')">Dreams<span class="tab-dot" id="dreamsDot"></span></button>` : ""}
+        ${getExtension("team") ? `<button class="notif-tab${getExtension("dreams") ? "" : " active"}" id="tabInvites" onclick="switchTab('invites')">Invites<span class="tab-dot" id="invitesDot"></span></button>` : ""}
       </div>
-      <div class="notif-list" id="notifList">
-        <div class="notif-loading">Loading...</div>
-      </div>
-      <div class="notif-list" id="invitesList" style="display:none">
-        <div class="notif-loading">Loading...</div>
-      </div>
+      ${getExtension("dreams") ? `<div class="notif-list" id="notifList"><div class="notif-loading">Loading...</div></div>` : ""}
+      ${getExtension("team") ? `<div class="notif-list" id="invitesList"${getExtension("dreams") ? ' style="display:none"' : ""}><div class="notif-loading">Loading...</div></div>` : ""}
       <div class="notif-panel-footer">
         <button class="logout-btn" onclick="doLogout()">Log out</button>
       </div>
@@ -702,11 +697,11 @@ router.get("/chat", authenticateLite, async (req, res) => {
       <!-- Apps: the recommended way to start -->
       <div style="text-align:center;margin-bottom:24px;">
         <a href="#" onclick="window.location='/api/v1/user/'+CONFIG.userId+'/apps?html';return false;"
-           style="display:inline-block;padding:14px 32px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);border-radius:12px;color:#10b981;font-size:1rem;font-weight:600;text-decoration:none;transition:all 0.2s;">
+           style="display:inline-block;padding:14px 32px;background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.35);border-radius:12px;color:#fff;font-size:1rem;font-weight:600;text-decoration:none;transition:all 0.2s;">
           Start with Apps
         </a>
-        <p style="color:rgba(255,255,255,0.4);font-size:0.8rem;margin-top:8px;">
-          Fitness, Food, Recovery, Study. Guided setup. Recommended.
+        <p style="color:rgba(255,255,255,0.35);font-size:0.8rem;margin-top:10px;">
+          Fitness, Food, Recovery, Study, KB. Guided setup.
         </p>
       </div>
 
@@ -1257,7 +1252,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     let notifOpen = false;
     let dreamsLoaded = false;
     let invitesLoaded = false;
-    let activeTab = "dreams";
+    let activeTab = notifList ? "dreams" : invitesList ? "invites" : "dreams";
 
     async function doLogout() {
       try {
@@ -1273,17 +1268,19 @@ router.get("/chat", authenticateLite, async (req, res) => {
       notifPanel.classList.toggle("open", notifOpen);
       notifOverlay.classList.toggle("open", notifOpen);
       if (notifOpen) {
-        if (activeTab === "dreams" && !dreamsLoaded) fetchDreams();
-        if (activeTab === "invites" && !invitesLoaded) fetchInvites();
+        if (activeTab === "dreams" && !dreamsLoaded && notifList) fetchDreams();
+        if (activeTab === "invites" && !invitesLoaded && invitesList) fetchInvites();
       }
     }
 
     function switchTab(tab) {
       activeTab = tab;
-      document.getElementById("tabDreams").classList.toggle("active", tab === "dreams");
-      document.getElementById("tabInvites").classList.toggle("active", tab === "invites");
-      notifList.style.display = tab === "dreams" ? "" : "none";
-      invitesList.style.display = tab === "invites" ? "" : "none";
+      var tabDreams = document.getElementById("tabDreams");
+      var tabInvites = document.getElementById("tabInvites");
+      if (tabDreams) tabDreams.classList.toggle("active", tab === "dreams");
+      if (tabInvites) tabInvites.classList.toggle("active", tab === "invites");
+      if (notifList) notifList.style.display = tab === "dreams" ? "" : "none";
+      if (invitesList) invitesList.style.display = tab === "invites" ? "" : "none";
       if (tab === "dreams" && !dreamsLoaded) fetchDreams();
       if (tab === "invites" && !invitesLoaded) fetchInvites();
     }
