@@ -2,9 +2,6 @@
   "name": "treeos-land",
   "version": "1.0.0",
   "type": "module",
-  "bin": {
-    "treeos-land": "./boot.js"
-  },
   "scripts": {
     "start": "node boot.js",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -13,10 +10,6 @@
   "author": "Tabor Holly",
   "license": "AGPL-3.0",
   "description": "TreeOS Land server. Plant the seed. Grow trees. AI agents live here.",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/taborgreat/treeos-land"
-  },
   "homepage": "https://treeos.ai",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",

@@ -65,8 +65,8 @@ export function baseStyles() {
       --glass-alpha-hover: 0.38;
       --text-primary: #ffffff;
       --text-secondary: rgba(255, 255, 255, 0.75);
-      --text-muted: rgba(255, 255, 255, 0.45);
-      --accent: #10b981;
+      --text-muted: rgba(255, 255, 255, 0.55);
+      --accent: #6ee7b7;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }

@@ -154,6 +154,8 @@ An extension can provide:
 - **Session types** (tracking)
 - **LLM slots** (per-tree/per-user model assignment in metadata)
 - **Env vars** (with auto-generation)
+- **UI Slots** (HTML fragments injected into pages via `registerSlot`: app cards, quick links, profile sections, dashboard panels)
+- **HTML Pages** (server-rendered pages registered via the html-rendering extension)
 
 See `extensions/EXTENSION_FORMAT.md` for full documentation.
 
