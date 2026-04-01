@@ -6,7 +6,6 @@ import { getContextForAi } from "../../seed/tree/treeFetch.js";
 import { createNote } from "../../seed/tree/notes.js";
 
 const MAX_THOUGHTS = 200;
-const SYSTEM_USER = "SYSTEM";
 
 // Track consecutive idle exhales per tree to avoid thinking when quiet
 const _idleCount = new Map();
@@ -35,7 +34,21 @@ export async function init(core) {
       _idleCount.set(rid, 0);
     }
 
+    // Fire and forget. Don't block the breath hook with an LLM call.
+    think(rootId, runChat).catch(err => log.debug("Inner", `Thought failed: ${err.message}`));
+  }, "inner");
+
+  log.info("Inner", "Loaded. The tree thinks to itself.");
+  return {};
+}
+
+async function think(rootId, runChat) {
     try {
+      // Get tree owner for LLM access
+      const rootNode = await Node.findById(rootId).select("rootOwner").lean();
+      const ownerId = rootNode?.rootOwner ? String(rootNode.rootOwner) : null;
+      if (!ownerId) return;
+
       // Find or create .inner node under tree root
       const innerNode = await getOrCreateInnerNode(rootId);
       if (!innerNode) return;
@@ -61,7 +74,7 @@ export async function init(core) {
 
       // One thought
       const { answer } = await runChat({
-        userId: SYSTEM_USER,
+        userId: ownerId,
         username: "inner",
         message:
           `You are the tree's internal monologue. You are looking at the node "${randomNode.name}" ` +
@@ -80,7 +93,7 @@ export async function init(core) {
       await createNote({
         contentType: "text",
         content: answer.trim(),
-        userId: SYSTEM_USER,
+        userId: ownerId,
         nodeId: String(innerNode._id),
         wasAi: true,
       });
@@ -102,10 +115,6 @@ export async function init(core) {
     } catch (err) {
       log.debug("Inner", `Thought failed: ${err.message}`);
     }
-  }, "inner");
-
-  log.info("Inner", "Loaded. The tree thinks to itself.");
-  return {};
 }
 
 // ─────────────────────────────────────────────────────────────────────────

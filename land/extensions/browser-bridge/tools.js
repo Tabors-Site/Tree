@@ -63,12 +63,30 @@ export default function getTools() {
           pageText = typeof content === "string" ? content : JSON.stringify(content);
         } catch {}
 
-        // Combine into one response
+        // Extract only interactive elements (the ones with IDs that can be clicked/typed)
+        const interactiveElements = [];
+        function walkTree(nodes) {
+          if (!nodes) return;
+          const list = Array.isArray(nodes) ? nodes : [nodes];
+          for (const node of list) {
+            if (node.id) {
+              interactiveElements.push({
+                id: node.id,
+                role: node.role,
+                name: node.name ? node.name.slice(0, 80) : undefined,
+              });
+            }
+            if (node.children) walkTree(node.children);
+          }
+        }
+        walkTree(state?.tree);
+
+        // Put interactive elements FIRST (AI needs these to act), text SECOND (gets truncated first)
         const combined = {
           url: state?.url || "unknown",
           title: state?.title || "unknown",
-          text: pageText.slice(0, 3000),
-          elements: state?.tree || state,
+          interactiveElements,
+          pageText: pageText.slice(0, 2000),
         };
 
         return json(combined);

@@ -189,6 +189,7 @@
     const nodes = [];
 
     for (const child of root.children || []) {
+      if (!child.tagName) continue;
       if (SKIP_TAGS.has(child.tagName)) continue;
       if (!isVisible(child)) continue;
 
@@ -221,7 +222,7 @@
       } else if (childNodes.length) {
         // Flatten — skip this container, promote children
         nodes.push(...childNodes);
-      } else if (name && child.children.length === 0) {
+      } else if (name && (!child.children || child.children.length === 0)) {
         // Leaf text node worth including
         const textContent = child.textContent.trim();
         if (textContent.length > 1 && textContent.length < 500) {
