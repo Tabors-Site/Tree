@@ -43,26 +43,37 @@ export async function init(core) {
         return;
       }
 
-      // Validate API key against api-keys extension or user lookup
+      // Validate API key using the same bcrypt logic as api-keys extension
       let userId = null;
       try {
-        const { getExtension } = await import("../loader.js");
-        const apiKeysExt = getExtension("api-keys");
-        if (apiKeysExt?.exports?.validateApiKey) {
-          const result = await apiKeysExt.exports.validateApiKey(apiKey);
-          if (result?.userId) userId = result.userId;
-        }
-      } catch {}
+        const User = core.models.User;
+        const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
+        const bcrypt = await import("bcrypt");
 
-      // Fallback: check if apiKey matches any user's stored key
-      if (!userId) {
-        try {
-          const User = core.models.User;
-          const user = await User.findOne({
-            "metadata.api-keys.keys.key": apiKey,
-          }).select("_id username").lean();
-          if (user) userId = String(user._id);
-        } catch {}
+        // Prefix match (first 8 chars), then bcrypt verify
+        const prefix = apiKey.slice(0, 8);
+        const candidates = await User.find({
+          "metadata.apiKeys": {
+            $elemMatch: { keyPrefix: prefix, revoked: { $ne: true } },
+          },
+        }).select("_id username metadata");
+
+        for (const user of candidates) {
+          const keys = getUserMeta(user, "apiKeys");
+          if (!Array.isArray(keys)) continue;
+          for (const key of keys) {
+            if (key.revoked || key.keyPrefix !== prefix) continue;
+            const match = await bcrypt.compare(apiKey, key.keyHash);
+            if (match) {
+              userId = String(user._id);
+              socket.username = user.username;
+              break;
+            }
+          }
+          if (userId) break;
+        }
+      } catch (err) {
+        log.debug("BrowserBridge", `API key validation error: ${err.message}`);
       }
 
       if (!userId) {
