@@ -18,6 +18,7 @@ const TreeOSPage = () => {
           </p>
           <div className="lp-hero-ctas">
             <a className="lp-btn lp-btn-primary" href="/seed">The Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="/what">What?</a>
             <a className="lp-btn lp-btn-secondary" href="/guide">Guide</a>
             <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>
             <a className="lp-btn lp-btn-secondary" href="/cli">CLI</a>
@@ -374,6 +375,7 @@ const TreeOSPage = () => {
         <div className="lp-container" style={{textAlign: "center"}}>
           <div className="lp-hero-ctas">
             <a className="lp-btn lp-btn-primary" href="/land">Start a Land</a>
+            <a className="lp-btn lp-btn-secondary" href="/what">More Into TreeOS</a>
             <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
             <a className="lp-btn lp-btn-secondary" href="/guide">Guide</a>
             <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>

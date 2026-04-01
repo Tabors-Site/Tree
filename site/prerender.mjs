@@ -50,6 +50,7 @@ const STATIC_ROUTES = [
   "/kb",
   "/app",
   "/start",
+  "/what",
 ];
 
 const BLOG_API = (process.env.VITE_LAND_URL || "https://treeos.ai") + "/api/v1";
@@ -139,6 +140,10 @@ const PAGE_META = {
   "/kb": {
     title: "KB . The Tree That Remembers Everything",
     description: "Tell it things. Ask it things. One person maintains, everyone benefits. Knowledge base with citations, staleness detection, and guided review. The coworker who never forgets.",
+  },
+  "/what": {
+    title: "What Is TreeOS? . Apps and a Filesystem",
+    description: "The structured extensions are applications. The free-form tree is the operating system. Position determines reality. Both live in the same tree. That's TreeOS.",
   },
   "/start": {
     title: "Get Started . TreeOS",

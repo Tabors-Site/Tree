@@ -175,7 +175,7 @@ const LandingPage = () => {
       <section className="lp-section">
         <div className="lp-container">
           <h2 className="lp-section-title">Go Deeper</h2>
-          <p className="lp-section-sub">Eight pages. Each one answers one question.</p>
+          <p className="lp-section-sub">Eleven pages. Each one answers one question.</p>
           <div className="lp-cards-3" style={{gridTemplateColumns: "repeat(4, 1fr)"}}>
             {[
               { href: "/seed", title: "The Seed", desc: "What is the contract?" },
@@ -185,6 +185,7 @@ const LandingPage = () => {
               { href: "/extensions", title: "Extensions", desc: "How does the tree grow?" },
               { href: "/network", title: "The Network", desc: "How do trees connect?" },
               { href: "/mycelium", title: "Mycelium", desc: "The forest underground." },
+              { href: "/what", title: "What Is TreeOS?", desc: "Apps + filesystem." },
               { href: "/html", title: "HTML System", desc: "Three interfaces, one tree." },
               { href: "/start", title: "Get Started", desc: "Join or run your own." },
               { href: "/guide", title: "The Guide", desc: "Everything in one place." },
