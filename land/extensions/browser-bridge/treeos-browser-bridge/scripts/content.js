@@ -268,12 +268,25 @@
     el.scrollIntoView({ behavior: 'instant', block: 'center' });
     el.focus();
 
+    // Contenteditable elements (rich text editors like Reddit, Slack, etc.)
+    if (el.contentEditable === 'true' || el.getAttribute('role') === 'textbox') {
+      if (clear) el.textContent = '';
+      el.textContent = text;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      // Also try execCommand for React-based editors
+      try {
+        document.execCommand('selectAll', false, null);
+        document.execCommand('insertText', false, text);
+      } catch {}
+      return;
+    }
+
+    // Regular inputs and textareas
     if (clear) {
       el.value = '';
       el.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
-    // Set value directly and dispatch events
     el.value = text;
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
@@ -364,6 +377,109 @@
         case 'screenshot': {
           // Content scripts can't take screenshots — delegate to background
           return { success: false, error: 'screenshot must be handled by background script' };
+        }
+
+        case 'comment': {
+          // Scripted comment/reply flow for social sites
+          // Finds reply button near target, clicks it, waits for textbox, types, submits
+          const text = action.text;
+          if (!text) return { success: false, error: 'text is required for comment action' };
+
+          // Find the target comment/post to reply to (optional elementId)
+          let scope = document;
+          if (action.elementId) {
+            const el = elementRegistry.get(action.elementId);
+            if (el) scope = el.closest('shreddit-comment, article, [data-testid="comment"], .comment, .Comment') || el.parentElement?.parentElement || document;
+          }
+
+          // Strategy 1: Find a reply/comment button by aria-label or text
+          const replySelectors = [
+            'button[aria-label*="reply" i]',
+            'button[aria-label*="Reply" i]',
+            'button[data-testid*="reply" i]',
+            '[role="button"][aria-label*="reply" i]',
+            'button[aria-label*="comment" i]',
+          ];
+          let replyBtn = null;
+          for (const sel of replySelectors) {
+            replyBtn = scope.querySelector(sel) || document.querySelector(sel);
+            if (replyBtn) break;
+          }
+
+          // Strategy 2: Find unnamed buttons near comment actions and guess reply
+          if (!replyBtn) {
+            const actionRows = scope.querySelectorAll('shreddit-comment-action-row, [data-testid="comment-action-row"], .comment-action-row');
+            for (const row of actionRows) {
+              const buttons = row.querySelectorAll('button');
+              // Reply is typically the first or second button in the action row
+              if (buttons.length >= 1) {
+                replyBtn = buttons[0];
+                break;
+              }
+            }
+          }
+
+          if (!replyBtn) return { success: false, error: 'Could not find reply button. Try clicking it manually first.' };
+
+          // Click reply button
+          simulateClick(replyBtn);
+          await new Promise(r => setTimeout(r, 1000));
+
+          // Find the textbox that appeared
+          let textbox = document.querySelector('[contenteditable="true"]:focus, textarea:focus, [role="textbox"]:focus');
+          if (!textbox) {
+            // Try broader search
+            const textboxes = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
+            // Pick the last one (most recently added)
+            textbox = textboxes[textboxes.length - 1];
+          }
+
+          if (!textbox) return { success: false, error: 'Reply clicked but no textbox appeared. The site may need a different approach.' };
+
+          // Type into it
+          textbox.focus();
+          if (textbox.contentEditable === 'true') {
+            textbox.textContent = text;
+            textbox.dispatchEvent(new Event('input', { bubbles: true }));
+          } else {
+            textbox.value = text;
+            textbox.dispatchEvent(new Event('input', { bubbles: true }));
+            textbox.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+
+          await new Promise(r => setTimeout(r, 500));
+
+          // Find and click submit button
+          const submitSelectors = [
+            'button[type="submit"]',
+            'button[aria-label*="comment" i]',
+            'button[aria-label*="submit" i]',
+            'button[aria-label*="post" i]',
+            'button[aria-label*="reply" i]',
+          ];
+          let submitBtn = null;
+
+          // Look for a button with text "Comment", "Reply", "Post", "Submit"
+          const allButtons = document.querySelectorAll('button');
+          for (const btn of allButtons) {
+            const btnText = btn.textContent.trim().toLowerCase();
+            if (btnText === 'comment' || btnText === 'reply' || btnText === 'post' || btnText === 'submit') {
+              submitBtn = btn;
+              break;
+            }
+          }
+
+          if (!submitBtn) {
+            for (const sel of submitSelectors) {
+              submitBtn = document.querySelector(sel);
+              if (submitBtn) break;
+            }
+          }
+
+          if (!submitBtn) return { success: true, typed: true, submitted: false, error: 'Typed the comment but could not find submit button. Click it manually.' };
+
+          simulateClick(submitBtn);
+          return { success: true, typed: true, submitted: true, text };
         }
 
         default:

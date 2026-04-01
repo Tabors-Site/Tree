@@ -188,12 +188,13 @@ export async function init(core) {
       note: "BROWSER BRIDGE IS ACTIVE. You control the user's REAL browser. " +
         "To interact with websites use BROWSER tools, NOT tree tools. " +
         "browser-read = see the actual webpage content and elements. " +
-        "browser-click = click a real button/link on the website. " +
-        "browser-type = type into a real input field on the website. " +
-        "browser-navigate = go to a real URL in the browser. " +
+        "browser-click = click a real element on the website. " +
+        "browser-type = type into a real input on the website. " +
+        "browser-navigate = go to a real URL. " +
+        "browser-comment = post a comment/reply on social sites (handles the full flow automatically). " +
         "Tree tools (create-node, create-note) only affect the tree, NOT websites. " +
-        "To post a comment: browser-read first to find the input element ID, then browser-type to write, then browser-click to submit. " +
-        "Always call browser-read first.",
+        "To post a comment or reply, use browser-comment with the text. " +
+        "Always call browser-read first to understand the page.",
     };
     if (bbMeta?.autoApprove?.length) {
       context.browserBridge.autoApprovedSites = bbMeta.autoApprove;
@@ -212,9 +213,9 @@ export async function init(core) {
   return {
     tools: getTools(),
     modeTools: [
-      { modeKey: "tree:browser-agent", toolNames: ["browser-read", "browser-click", "browser-type", "browser-navigate"] },
-      { modeKey: "tree:respond", toolNames: ["browser-read", "browser-click", "browser-type", "browser-navigate"] },
-      { modeKey: "tree:librarian", toolNames: ["browser-read", "browser-click", "browser-type", "browser-navigate"] },
+      { modeKey: "tree:browser-agent", toolNames: ["browser-read", "browser-click", "browser-type", "browser-navigate", "browser-comment"] },
+      { modeKey: "tree:respond", toolNames: ["browser-read", "browser-click", "browser-type", "browser-navigate", "browser-comment"] },
+      { modeKey: "tree:librarian", toolNames: ["browser-read", "browser-click", "browser-type", "browser-navigate", "browser-comment"] },
     ],
     exports: {
       isConnected,

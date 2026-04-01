@@ -10,6 +10,7 @@ export default {
     "browser-click",
     "browser-type",
     "browser-navigate",
+    "browser-comment",
   ],
 
   maxMessagesBeforeLoop: 12,
@@ -32,7 +33,7 @@ WORKFLOW:
 
 RULES:
 - You act, you don't just describe. When the user says "click X", you click it.
-- When the user says "reply with hi", you find the comment input, type "hi", and click submit.
+- When the user says "reply with hi", use browser-comment with the text "hi". It handles the full flow.
 - Never say you can't interact with websites. You can. Use your tools.
 - Never use tree tools (create-node, create-note) to "post" on websites. Use browser-click and browser-type.
 - If an element ID doesn't work, call browser-read again to get fresh IDs.

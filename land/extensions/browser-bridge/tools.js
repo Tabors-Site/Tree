@@ -172,5 +172,31 @@ export default function getTools() {
       },
     },
 
+    {
+      name: "browser-comment",
+      description:
+        "Post a comment or reply on the current page. Works on Reddit, forums, and social sites. " +
+        "Automatically finds the reply button, clicks it, types your text, and submits. " +
+        "One tool call does the full flow. No need to manually find buttons.",
+      annotations: { readOnlyHint: false, destructiveHint: true },
+      schema: {
+        commentText: z.string().describe("The text to post as a comment or reply"),
+        userId: z.string().describe("Injected by server. Ignore."),
+      },
+      handler: async ({ commentText, userId }) => {
+        requireBrowser(userId);
+        const result = await sendRequest(userId, "executeAction", {
+          action: { type: "comment", text: commentText },
+        });
+        const res = result?.data || result;
+        if (res?.success && res?.submitted) {
+          return text(`Comment posted: "${commentText}"`);
+        } else if (res?.typed && !res?.submitted) {
+          return text(`Typed "${commentText}" but could not find submit button. Click it manually.`);
+        }
+        return text(`Failed to post comment: ${res?.error || "unknown error"}`);
+      },
+    },
+
   ];
 }

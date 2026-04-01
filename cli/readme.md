@@ -643,4 +643,4 @@ All commands map to the [Tree REST API](https://treeOS.ai/about/api). Named sess
 - [CLI Guide](https://treeOS.ai/about/cli)
 - [Extensions](https://treeOS.ai/about/extensions)
 - [The Horizon](https://horizon.treeOS.ai)
-- [GitHub](https://github.com/taborgreat/TreeOS)
+- [GitHub](https://github.com/taborgreat/create-treeos)
