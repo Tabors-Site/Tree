@@ -373,10 +373,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const state = await getPageStateFromTab();
         if (socket?.connected) {
           socket.emit('pageState', { requestId: 'manual', data: state });
-          sendResponse({ success: true, sent: true });
-        } else {
-          sendResponse({ success: true, sent: false, state });
         }
+        sendResponse({ success: true, sent: !!socket?.connected, state });
         break;
       }
 

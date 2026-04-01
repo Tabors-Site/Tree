@@ -22,7 +22,12 @@ tabTree.addEventListener('click', async () => {
   tabLog.classList.remove('active');
   tabTree.classList.add('active');
   chrome.runtime.sendMessage({ type: 'manualCapture' }, (resp) => {
-    if (resp?.state?.tree) renderTree(resp.state.tree);
+    const tree = resp?.state?.tree || (Array.isArray(resp?.state) ? resp.state : null);
+    if (tree) {
+      renderTree(Array.isArray(tree) ? tree : [tree]);
+    } else {
+      treeView.innerHTML = '<div class="empty-state"><div>Could not load page tree</div><div style="font-size:11px">Make sure you have a tab open</div></div>';
+    }
   });
 });
 
