@@ -1,7 +1,11 @@
 // TreeOS Browser Bridge — Background Service Worker
 // Manages Socket.IO connection to TreeOS and bridges content script <-> server
 
-importScripts('lib/socket.io.min.js');
+try {
+  importScripts('lib/socket.io.min.js');
+} catch (e) {
+  console.error('[TreeOS Bridge] Failed to load Socket.IO:', e);
+}
 
 let socket = null;
 let config = { serverUrl: '', apiKey: '', autoCapture: false, confirmActions: true };
