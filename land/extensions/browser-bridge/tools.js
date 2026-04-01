@@ -6,6 +6,7 @@
  */
 
 import { z } from "zod";
+import log from "../../seed/log.js";
 import { sendRequest, isConnected, getCurrentUrl, checkSiteAccess, logAction } from "./core.js";
 
 function text(str) {
@@ -39,10 +40,10 @@ export default function getTools() {
     // ── READ TOOLS ──────────────────────────────────────────────────
 
     {
-      name: "browser-get-state",
+      name: "browser-read",
       description:
-        "Get the current page's accessibility tree from the user's browser. " +
-        "Returns interactive elements with IDs (e1, e2, etc.) that can be used with browser-click and browser-type. " +
+        "Read the current page in the user's browser. Returns the page URL, title, text content, " +
+        "and interactive elements with IDs (e1, e2, etc.) for clicking and typing. " +
         "Call this first to understand what's on the page before taking any action.",
       annotations: { readOnlyHint: true },
       schema: {
@@ -50,26 +51,28 @@ export default function getTools() {
       },
       handler: async ({ userId }) => {
         requireBrowser(userId);
-        const result = await sendRequest(userId, "getPageState", {});
-        return json(result);
-      },
-    },
 
-    {
-      name: "browser-extract",
-      description:
-        "Extract the text content of the current page. Returns clean text without HTML markup. " +
-        "Use for reading articles, documentation, wiki pages, or any text-heavy content.",
-      annotations: { readOnlyHint: true },
-      schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
-      },
-      handler: async ({ userId }) => {
-        requireBrowser(userId);
-        const result = await sendRequest(userId, "executeAction", {
-          action: { type: "extract" },
-        });
-        return json(result);
+        // Get page state (accessibility tree + metadata)
+        const stateResult = await sendRequest(userId, "getPageState", {});
+        const state = stateResult?.data || stateResult;
+
+        // Get text content
+        let pageText = "";
+        try {
+          const extractResult = await sendRequest(userId, "executeAction", { action: { type: "extract" } });
+          const content = extractResult?.data?.text || extractResult?.text || extractResult?.data || extractResult;
+          pageText = typeof content === "string" ? content : JSON.stringify(content);
+        } catch {}
+
+        // Combine into one response
+        const combined = {
+          url: state?.url || "unknown",
+          title: state?.title || "unknown",
+          text: pageText.slice(0, 3000),
+          elements: state?.tree || state,
+        };
+
+        return json(combined);
       },
     },
 

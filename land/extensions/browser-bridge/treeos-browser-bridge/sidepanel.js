@@ -21,12 +21,25 @@ tabTree.addEventListener('click', async () => {
   treeView.style.display = '';
   tabLog.classList.remove('active');
   tabTree.classList.add('active');
+  treeView.innerHTML = '<div class="empty-state"><div>Loading...</div></div>';
   chrome.runtime.sendMessage({ type: 'manualCapture' }, (resp) => {
-    const tree = resp?.state?.tree || (Array.isArray(resp?.state) ? resp.state : null);
+    const state = resp?.state;
+    if (state?.error) {
+      treeView.innerHTML = `<div class="empty-state"><div>Error</div><div style="font-size:11px">${escHtml(state.error)}</div></div>`;
+      return;
+    }
+    const tree = state?.tree;
     if (tree) {
+      treeView.innerHTML = '';
+      if (state.url) {
+        const header = document.createElement('div');
+        header.style.cssText = 'padding:4px 0 8px;font-size:11px;color:#888;border-bottom:1px solid #ffffff10;margin-bottom:8px;';
+        header.textContent = state.url;
+        treeView.appendChild(header);
+      }
       renderTree(Array.isArray(tree) ? tree : [tree]);
     } else {
-      treeView.innerHTML = '<div class="empty-state"><div>Could not load page tree</div><div style="font-size:11px">Make sure you have a tab open</div></div>';
+      treeView.innerHTML = '<div class="empty-state"><div>Could not load page tree</div><div style="font-size:11px">Try refreshing the tab, then click Page Tree again</div></div>';
     }
   });
 });
