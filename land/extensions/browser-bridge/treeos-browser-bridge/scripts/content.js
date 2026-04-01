@@ -421,50 +421,55 @@
             }
           }
 
-          // Step 2: If no target or replyTo not found, look for the main post comment box
+          // Step 2: If no textbox found via replyTo, try to open one
           if (!textbox) {
-            textbox = document.querySelector('[contenteditable="true"]:focus, textarea:focus, [role="textbox"]:focus');
-          }
-
-          if (!textbox) {
-            // Look for already open textboxes (last one is most recent)
-            const textboxes = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
-            if (textboxes.length > 0) {
-              textbox = textboxes[textboxes.length - 1];
+            // Check for already visible comment textbox (not search bars)
+            const candidates = document.querySelectorAll('textarea, [contenteditable="true"][role="textbox"], [contenteditable="true"][data-testid]');
+            for (const c of candidates) {
+              // Skip tiny elements (search bars etc)
+              const rect = c.getBoundingClientRect();
+              if (rect.height > 30) { textbox = c; break; }
             }
           }
 
           if (!textbox) {
-            // No textbox open. Try to click the main reply/comment button
-            const allButtons = document.querySelectorAll('button');
+            // No textbox visible. Click a reply button to open one.
             let replyBtn = null;
 
-            for (const btn of allButtons) {
-              const btnText = btn.textContent.trim().toLowerCase();
-              const label = (btn.getAttribute('aria-label') || '').toLowerCase();
-              if (btnText === 'reply' || label.includes('reply') || label.includes('comment')) {
-                replyBtn = btn;
-                break;
+            // Strategy 1: Find button spans with "Reply" text
+            const spans = document.querySelectorAll('button span');
+            for (const span of spans) {
+              const t = span.textContent.trim().toLowerCase();
+              if (t === 'reply') { replyBtn = span.closest('button'); break; }
+            }
+
+            // Strategy 2: First shreddit action row's first button
+            if (!replyBtn) {
+              const row = document.querySelector('shreddit-comment-action-row');
+              if (row) {
+                const btns = row.querySelectorAll('button');
+                if (btns.length >= 1) replyBtn = btns[0];
               }
             }
 
-            // Fallback: first action row's first button
+            // Strategy 3: Any button with aria-label containing reply
             if (!replyBtn) {
-              const firstRow = document.querySelector('shreddit-comment-action-row');
-              if (firstRow) {
-                const buttons = firstRow.querySelectorAll('button');
-                if (buttons.length >= 1) replyBtn = buttons[0];
-              }
+              replyBtn = document.querySelector('button[aria-label*="reply" i], button[aria-label*="Reply"]');
             }
 
             if (replyBtn) {
               simulateClick(replyBtn);
               await new Promise(r => setTimeout(r, 1500));
-            }
 
-            // Now search for the textbox that appeared
-            const textboxes = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
-            textbox = textboxes[textboxes.length - 1];
+              // Find the newly appeared textbox
+              const newCandidates = document.querySelectorAll('textarea, [contenteditable="true"]');
+              for (const c of newCandidates) {
+                const rect = c.getBoundingClientRect();
+                if (rect.height > 30) { textbox = c; break; }
+              }
+              // Last resort: pick the last one
+              if (!textbox && newCandidates.length) textbox = newCandidates[newCandidates.length - 1];
+            }
           }
 
           if (!textbox) return { success: false, error: 'Could not find or open a comment box. Try clicking the reply button manually first.' };
