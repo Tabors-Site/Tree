@@ -470,16 +470,26 @@
           await new Promise(r => setTimeout(r, 500));
 
           // ── CLICK SUBMIT ──
+          // Find the submit button near the textbox (not just any button on the page)
 
           let submitBtn = null;
           const submitWords = ['comment', 'reply', 'post', 'submit', 'send'];
-          const spans = document.querySelectorAll('button span');
-          for (const span of spans) {
-            if (submitWords.includes(span.textContent.trim().toLowerCase())) {
-              submitBtn = span.closest('button');
-              break;
+
+          // Search near the textbox first (parent, siblings, nearby containers)
+          let searchScope = textbox.parentElement;
+          for (let i = 0; i < 5 && searchScope && !submitBtn; i++) {
+            const spans = searchScope.querySelectorAll('button span[slot="content"], button span');
+            for (const span of spans) {
+              const t = span.textContent.trim().toLowerCase();
+              if (submitWords.includes(t)) {
+                submitBtn = span.closest('button');
+                break;
+              }
             }
+            searchScope = searchScope.parentElement;
           }
+
+          // Fallback: any button with type=submit
           if (!submitBtn) submitBtn = document.querySelector('button[type="submit"]');
 
           if (!submitBtn) return { success: true, typed: true, submitted: false, error: 'Typed but could not find submit button.' };
