@@ -51,21 +51,24 @@ export async function init(core) {
         try {
           const User = core.models.User;
           const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
-          const bcrypt = await import("bcrypt");
+          const { default: bcryptMod } = await import("bcrypt");
 
           const prefix = apiKey.slice(0, 8);
+          log.debug("BrowserBridge", `API key auth attempt, prefix: ${prefix}`);
           const candidates = await User.find({
             "metadata.apiKeys": {
               $elemMatch: { keyPrefix: prefix, revoked: { $ne: true } },
             },
           }).select("_id username metadata");
 
+          log.debug("BrowserBridge", `Found ${candidates.length} candidates for prefix ${prefix}`);
+
           for (const user of candidates) {
             const keys = getUserMeta(user, "apiKeys");
             if (!Array.isArray(keys)) continue;
             for (const key of keys) {
               if (key.revoked || key.keyPrefix !== prefix) continue;
-              const match = await bcrypt.compare(apiKey, key.keyHash);
+              const match = await bcryptMod.compare(apiKey, key.keyHash);
               if (match) {
                 userId = String(user._id);
                 socket.username = user.username;
@@ -75,7 +78,7 @@ export async function init(core) {
             if (userId) break;
           }
         } catch (err) {
-          log.debug("BrowserBridge", `API key auth error: ${err.message}`);
+          log.warn("BrowserBridge", `API key auth error: ${err.message}`);
         }
       }
 
@@ -83,14 +86,21 @@ export async function init(core) {
       if (!userId && username && password) {
         try {
           const User = core.models.User;
-          const bcrypt = await import("bcrypt");
+          const { default: bcryptMod } = await import("bcrypt");
+          log.debug("BrowserBridge", `Password auth attempt for user: ${username}`);
           const user = await User.findOne({ username }).select("_id username password");
-          if (user && await bcrypt.compare(password, user.password)) {
-            userId = String(user._id);
-            socket.username = user.username;
+          if (user) {
+            const match = await bcryptMod.compare(password, user.password);
+            log.debug("BrowserBridge", `Password match for ${username}: ${match}`);
+            if (match) {
+              userId = String(user._id);
+              socket.username = user.username;
+            }
+          } else {
+            log.debug("BrowserBridge", `User not found: ${username}`);
           }
         } catch (err) {
-          log.debug("BrowserBridge", `Password auth error: ${err.message}`);
+          log.warn("BrowserBridge", `Password auth error: ${err.message}`);
         }
       }
 
