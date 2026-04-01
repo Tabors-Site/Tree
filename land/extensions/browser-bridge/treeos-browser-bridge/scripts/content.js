@@ -381,70 +381,123 @@
 
         case 'comment': {
           // Scripted comment/reply flow for social sites
-          // Finds reply button near target, clicks it, waits for textbox, types, submits
           const text = action.text;
+          const replyTo = action.replyTo;
           if (!text) return { success: false, error: 'text is required for comment action' };
 
-          // Find the target comment/post to reply to (optional elementId)
-          let scope = document;
-          if (action.elementId) {
-            const el = elementRegistry.get(action.elementId);
-            if (el) scope = el.closest('shreddit-comment, article, [data-testid="comment"], .comment, .Comment') || el.parentElement?.parentElement || document;
-          }
+          // Step 1: If replyTo is specified, find that user's comment and click its reply button
+          let textbox = null;
+          let targetScope = null;
 
-          // Strategy 1: Find a reply/comment button by aria-label or text
-          const replySelectors = [
-            'button[aria-label*="reply" i]',
-            'button[aria-label*="Reply" i]',
-            'button[data-testid*="reply" i]',
-            '[role="button"][aria-label*="reply" i]',
-            'button[aria-label*="comment" i]',
-          ];
-          let replyBtn = null;
-          for (const sel of replySelectors) {
-            replyBtn = scope.querySelector(sel) || document.querySelector(sel);
-            if (replyBtn) break;
-          }
+          if (replyTo) {
+            // Find the comment by username
+            const cleanName = replyTo.replace(/^u\//, '').toLowerCase();
+            // Look for "Reply to u/username" text or links containing the username
+            const allText = document.querySelectorAll('a, span, [data-testid]');
+            for (const el of allText) {
+              const t = (el.textContent || '').toLowerCase();
+              if (t.includes(cleanName) || (el.href && el.href.includes('/user/' + cleanName))) {
+                targetScope = el.closest('shreddit-comment, article, [data-testid="comment"], .comment, .Comment');
+                if (targetScope) break;
+              }
+            }
 
-          // Strategy 2: Find unnamed buttons near comment actions and guess reply
-          if (!replyBtn) {
-            const actionRows = scope.querySelectorAll('shreddit-comment-action-row, [data-testid="comment-action-row"], .comment-action-row');
-            for (const row of actionRows) {
-              const buttons = row.querySelectorAll('button');
-              // Reply is typically the first or second button in the action row
-              if (buttons.length >= 1) {
-                replyBtn = buttons[0];
-                break;
+            if (targetScope) {
+              // Check if there's already an open textbox in this comment scope
+              textbox = targetScope.querySelector('[contenteditable="true"], textarea, [role="textbox"]');
+
+              if (!textbox) {
+                // Find and click the reply button in this comment's action row
+                const actionRow = targetScope.querySelector('shreddit-comment-action-row, [data-testid="comment-action-row"]');
+                if (actionRow) {
+                  const buttons = actionRow.querySelectorAll('button');
+                  if (buttons.length >= 1) {
+                    simulateClick(buttons[0]);
+                    await new Promise(r => setTimeout(r, 1500));
+                    textbox = targetScope.querySelector('[contenteditable="true"], textarea, [role="textbox"]');
+                  }
+                }
               }
             }
           }
 
-          if (!replyBtn) return { success: false, error: 'Could not find reply button. Try clicking it manually first.' };
-
-          // Click reply button
-          simulateClick(replyBtn);
-          await new Promise(r => setTimeout(r, 1000));
-
-          // Find the textbox that appeared
-          let textbox = document.querySelector('[contenteditable="true"]:focus, textarea:focus, [role="textbox"]:focus');
+          // Step 2: If no target or replyTo not found, look for the main post comment box
           if (!textbox) {
-            // Try broader search
+            textbox = document.querySelector('[contenteditable="true"]:focus, textarea:focus, [role="textbox"]:focus');
+          }
+
+          if (!textbox) {
+            // Look for already open textboxes (last one is most recent)
             const textboxes = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
-            // Pick the last one (most recently added)
+            if (textboxes.length > 0) {
+              textbox = textboxes[textboxes.length - 1];
+            }
+          }
+
+          if (!textbox) {
+            // No textbox open. Try to click the main reply/comment button
+            const allButtons = document.querySelectorAll('button');
+            let replyBtn = null;
+
+            for (const btn of allButtons) {
+              const btnText = btn.textContent.trim().toLowerCase();
+              const label = (btn.getAttribute('aria-label') || '').toLowerCase();
+              if (btnText === 'reply' || label.includes('reply') || label.includes('comment')) {
+                replyBtn = btn;
+                break;
+              }
+            }
+
+            // Fallback: first action row's first button
+            if (!replyBtn) {
+              const firstRow = document.querySelector('shreddit-comment-action-row');
+              if (firstRow) {
+                const buttons = firstRow.querySelectorAll('button');
+                if (buttons.length >= 1) replyBtn = buttons[0];
+              }
+            }
+
+            if (replyBtn) {
+              simulateClick(replyBtn);
+              await new Promise(r => setTimeout(r, 1500));
+            }
+
+            // Now search for the textbox that appeared
+            const textboxes = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
             textbox = textboxes[textboxes.length - 1];
           }
 
-          if (!textbox) return { success: false, error: 'Reply clicked but no textbox appeared. The site may need a different approach.' };
+          if (!textbox) return { success: false, error: 'Could not find or open a comment box. Try clicking the reply button manually first.' };
 
-          // Type into it
+          // Step 2: Type into it using multiple strategies
+          textbox.scrollIntoView({ behavior: 'instant', block: 'center' });
           textbox.focus();
-          if (textbox.contentEditable === 'true') {
-            textbox.textContent = text;
-            textbox.dispatchEvent(new Event('input', { bubbles: true }));
-          } else {
-            textbox.value = text;
-            textbox.dispatchEvent(new Event('input', { bubbles: true }));
-            textbox.dispatchEvent(new Event('change', { bubbles: true }));
+          await new Promise(r => setTimeout(r, 200));
+
+          // Strategy A: execCommand (works with React/contenteditable editors)
+          let typed = false;
+          try {
+            // Select all existing content first
+            const sel = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(textbox);
+            sel.removeAllRanges();
+            sel.addRange(range);
+
+            // Insert text via execCommand (triggers React's onChange)
+            typed = document.execCommand('insertText', false, text);
+          } catch {}
+
+          // Strategy B: direct textContent/value as fallback
+          if (!typed) {
+            if (textbox.contentEditable === 'true') {
+              textbox.innerHTML = `<p>${text}</p>`;
+              textbox.dispatchEvent(new Event('input', { bubbles: true }));
+            } else {
+              textbox.value = text;
+              textbox.dispatchEvent(new Event('input', { bubbles: true }));
+              textbox.dispatchEvent(new Event('change', { bubbles: true }));
+            }
           }
 
           await new Promise(r => setTimeout(r, 500));

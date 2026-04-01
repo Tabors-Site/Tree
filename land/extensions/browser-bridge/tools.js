@@ -181,12 +181,13 @@ export default function getTools() {
       annotations: { readOnlyHint: false, destructiveHint: true },
       schema: {
         commentText: z.string().describe("The text to post as a comment or reply"),
+        replyTo: z.string().optional().describe("Username to reply to (e.g. 'u/someone'). If omitted, posts to the main post."),
         userId: z.string().describe("Injected by server. Ignore."),
       },
-      handler: async ({ commentText, userId }) => {
+      handler: async ({ commentText, replyTo, userId }) => {
         requireBrowser(userId);
         const result = await sendRequest(userId, "executeAction", {
-          action: { type: "comment", text: commentText },
+          action: { type: "comment", text: commentText, replyTo: replyTo || null },
         });
         const res = result?.data || result;
         if (res?.success && res?.submitted) {
