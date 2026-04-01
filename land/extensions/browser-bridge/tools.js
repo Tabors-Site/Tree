@@ -8,6 +8,26 @@
 import { z } from "zod";
 import { sendRequest, isConnected, getCurrentUrl, checkSiteAccess, logAction } from "./core.js";
 
+function text(str) {
+  return { content: [{ type: "text", text: String(str) }] };
+}
+
+function json(data) {
+  const str = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  return text(truncate(str));
+}
+
+// Cap tool results to prevent token overload
+const MAX_RESULT_CHARS = 6000;
+
+function truncate(str) {
+  if (typeof str !== "string") str = JSON.stringify(str, null, 2);
+  if (str.length > MAX_RESULT_CHARS) {
+    return str.slice(0, MAX_RESULT_CHARS) + "\n\n[truncated, " + str.length + " total chars. Page is large. Use browser-extract for text content or ask about specific elements.]";
+  }
+  return str;
+}
+
 function requireBrowser(userId) {
   if (!isConnected(userId)) {
     throw new Error("No browser connected. The user needs to install the TreeOS Chrome extension and connect it.");
@@ -31,7 +51,7 @@ export default function getTools() {
       handler: async ({ userId }) => {
         requireBrowser(userId);
         const result = await sendRequest(userId, "getPageState", {});
-        return typeof result === "string" ? result : JSON.stringify(result);
+        return json(result);
       },
     },
 
@@ -49,7 +69,7 @@ export default function getTools() {
         const result = await sendRequest(userId, "executeAction", {
           action: { type: "extract" },
         });
-        return typeof result === "string" ? result : JSON.stringify(result);
+        return json(result);
       },
     },
 
@@ -65,7 +85,7 @@ export default function getTools() {
       handler: async ({ userId }) => {
         requireBrowser(userId);
         const result = await sendRequest(userId, "screenshot", {});
-        return typeof result === "string" ? result : JSON.stringify(result);
+        return json(result);
       },
     },
 
@@ -88,7 +108,7 @@ export default function getTools() {
           action: { type: "click", elementId },
         });
         await logAction(nodeId, userId, { type: "click", elementId }, getCurrentUrl(userId), result);
-        return typeof result === "string" ? result : JSON.stringify(result);
+        return json(result);
       },
     },
 
@@ -110,7 +130,7 @@ export default function getTools() {
           action: { type: "type", elementId, text },
         });
         await logAction(nodeId, userId, { type: "type", elementId }, getCurrentUrl(userId), result);
-        return typeof result === "string" ? result : JSON.stringify(result);
+        return json(result);
       },
     },
 
@@ -130,13 +150,13 @@ export default function getTools() {
         // Check site access against the TARGET url specifically
         const access = await checkSiteAccess(nodeId, url);
         if (access.blocked) {
-          return `Blocked: ${access.reason}. This site is not allowed at this tree position.`;
+          return text(`Blocked: ${access.reason}. This site is not allowed at this tree position.`);
         }
         const result = await sendRequest(userId, "executeAction", {
           action: { type: "navigate", url },
         });
         await logAction(nodeId, userId, { type: "navigate", url }, url, result);
-        return typeof result === "string" ? result : JSON.stringify(result);
+        return json(result);
       },
     },
 
@@ -155,7 +175,7 @@ export default function getTools() {
         const result = await sendRequest(userId, "executeAction", {
           action: { type: "scroll", direction, amount },
         });
-        return typeof result === "string" ? result : JSON.stringify(result);
+        return json(result);
       },
     },
   ];

@@ -182,6 +182,11 @@ export async function init(core) {
 
   return {
     tools: getTools(),
+    modeTools: [
+      { modeKey: "tree:respond", toolNames: ["browser-get-state", "browser-extract", "browser-screenshot", "browser-click", "browser-type", "browser-navigate", "browser-scroll"] },
+      { modeKey: "tree:librarian", toolNames: ["browser-get-state", "browser-extract", "browser-screenshot"] },
+      { modeKey: "tree:chat", toolNames: ["browser-get-state", "browser-extract", "browser-screenshot", "browser-click", "browser-type", "browser-navigate", "browser-scroll"] },
+    ],
     exports: {
       isConnected,
       sendRequest,

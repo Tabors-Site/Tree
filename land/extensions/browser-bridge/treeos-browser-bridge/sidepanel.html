@@ -293,6 +293,17 @@
     if (msg.type === 'confirmAction') {
       addConfirmation(msg.confirmId, msg.description);
     }
+
+    if (msg.type === 'activity') {
+      const e = msg.entry;
+      const type = e.action === 'action' ? 'action' : 'state';
+      let desc = '';
+      if (e.action === 'getPageState') desc = `Read page state`;
+      else if (e.action === 'screenshot') desc = `Took screenshot`;
+      else if (e.action === 'action') desc = `<code>${e.details.type}</code> ${e.details.target ? 'on <code>' + escHtml(String(e.details.target)) + '</code>' : ''} ${e.details.success ? '✓' : '✗'}`;
+      else desc = `${e.action}`;
+      addLog(type, desc);
+    }
   });
 
   // Initial state

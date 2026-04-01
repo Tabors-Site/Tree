@@ -117,6 +117,13 @@ chrome.runtime.onMessage.addListener((msg) => {
     updateUI(msg);
   }
 
+  if (msg.type === 'activity') {
+    const e = msg.entry;
+    if (e.action === 'getPageState') statusBar.textContent = 'AI read page state';
+    else if (e.action === 'screenshot') statusBar.textContent = 'AI took screenshot';
+    else if (e.action === 'action') statusBar.textContent = `AI: ${e.details.type} ${e.details.target || ''} ${e.details.success ? '✓' : '✗'}`;
+  }
+
   if (msg.type === 'confirmAction') {
     const card = document.createElement('div');
     card.className = 'confirm-card';

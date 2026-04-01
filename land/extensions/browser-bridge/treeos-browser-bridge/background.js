@@ -85,6 +85,7 @@ function connect() {
     socket.on('getPageState', async (msg) => {
       const state = await getPageStateFromTab(msg.tabId);
       socket.emit('pageState', { requestId: msg.requestId, data: state });
+      broadcastActivity('getPageState', { url: state?.url || 'current page' });
     });
 
     socket.on('executeAction', async (msg) => {
@@ -114,6 +115,7 @@ function connect() {
 
       const result = await executeActionInTab(msg.action, msg.tabId);
       socket.emit('actionResult', { requestId: msg.requestId, data: result });
+      broadcastActivity('action', { type: msg.action.type, target: msg.action.elementId || msg.action.url || '', success: result.success });
 
       // Auto-capture new state after action
       if (result.success && config.autoCapture) {
@@ -126,6 +128,7 @@ function connect() {
     socket.on('screenshot', async (msg) => {
       const dataUrl = await captureScreenshot(msg.tabId);
       socket.emit('screenshot', { requestId: msg.requestId, data: dataUrl });
+      broadcastActivity('screenshot', {});
     });
 
     socket.on('getNetworkLog', async (msg) => {
@@ -281,6 +284,18 @@ function describeAction(action) {
     case 'extract': return 'Extract page text';
     default: return `${action.type} action`;
   }
+}
+
+// ── Activity Log ──────────────────────────────────────────────
+
+let activityLog = [];
+const MAX_ACTIVITY = 50;
+
+function broadcastActivity(action, details) {
+  const entry = { action, details, time: new Date().toISOString() };
+  activityLog.push(entry);
+  if (activityLog.length > MAX_ACTIVITY) activityLog.shift();
+  chrome.runtime.sendMessage({ type: 'activity', entry, log: activityLog }).catch(() => {});
 }
 
 // ── State Broadcasting ────────────────────────────────────────────
