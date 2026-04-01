@@ -586,7 +586,15 @@
       "WebFetch(domain:hor.treeos.ai)",
       "Bash(curl -s https://hor.treeos.ai/extensions?limit=200)",
       "Bash(sed -i \"s/\"\"1.0.0\"\"/\"\"1.0.1\"\"/\" \"land/extensions/$ext/manifest.js\")",
-      "Bash(echo \"Bumped $ext to 1.0.1\")"
+      "Bash(echo \"Bumped $ext to 1.0.1\")",
+      "Bash(find /home/tabor/github/Tree -name *extensionScope* -o -name *extension*scope*)",
+      "Bash(find /home/tabor/github/Tree -type f -name *browser*)",
+      "Bash(grep -A 20 \"registerSocketHandler\" /home/tabor/github/Tree/land/extensions/*/index.js)",
+      "Bash(grep -r \"socketHandlers\\\\|ws/browser-bridge\\\\|browser_getState\" /home/tabor/github/Tree/land/extensions --include=*.js)",
+      "Bash(find /home/tabor/github/Tree/land -name *websocket* -o -name *socket*)",
+      "Bash(grep -r socketHandlers /home/tabor/github/Tree/land/extensions --include=*.js -l)",
+      "Bash(grep -r \"exports.*socketHandlers\\\\|socketHandlers.*=\" /home/tabor/github/Tree/land/extensions --include=*.js -A 5)",
+      "Bash(grep -r socketHandlers /home/tabor/github/Tree/land/extensions --include=*.js -B 2 -A 8)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-size: 13px;
+    color: #e0e0e0;
+    background: #1a1a2e;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #ffffff10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .header h1 { font-size: 14px; font-weight: 600; color: #fff; }
+
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .status-dot.disconnected { background: #666; }
+  .status-dot.connecting { background: #f0a030; animation: pulse 1s infinite; }
+  .status-dot.connected { background: #40c060; }
+
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+  .toolbar {
+    padding: 8px 16px;
+    border-bottom: 1px solid #ffffff10;
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .toolbar button {
+    padding: 5px 10px;
+    border: 1px solid #ffffff15;
+    border-radius: 5px;
+    background: none;
+    color: #aaa;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .toolbar button:hover { background: #ffffff08; color: #ddd; }
+  .toolbar button.active { background: #4a6fa520; color: #7a9fd5; border-color: #4a6fa540; }
+
+  .log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+  }
+
+  .log-entry {
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    border-radius: 6px;
+    background: #0f0f1a;
+    border-left: 3px solid #333;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .log-entry.action { border-left-color: #4a6fa5; }
+  .log-entry.state { border-left-color: #40c060; }
+  .log-entry.error { border-left-color: #c04040; }
+  .log-entry.confirm { border-left-color: #f0a030; }
+
+  .log-time {
+    font-size: 10px;
+    color: #666;
+    margin-bottom: 2px;
+  }
+
+  .log-content { color: #ccc; }
+  .log-content code {
+    background: #ffffff10;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 11px;
+  }
+
+  .confirm-inline {
+    margin-top: 6px;
+    display: flex;
+    gap: 6px;
+  }
+  .confirm-inline button {
+    padding: 3px 10px;
+    border: none;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .confirm-inline .allow { background: #4a6fa5; color: #fff; }
+  .confirm-inline .deny { background: #5a2020; color: #e88; }
+
+  .tree-view {
+    flex: 1;
+    overflow: auto;
+    padding: 12px 16px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    display: none;
+  }
+
+  .tree-node { padding-left: 16px; }
+  .tree-node.interactive { color: #7ac; }
+  .tree-node .role { color: #c97; }
+  .tree-node .name { color: #9b9; }
+  .tree-node .id { color: #666; font-size: 10px; }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: #555;
+    text-align: center;
+    gap: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="status-dot disconnected" id="statusDot"></div>
+    <h1>TreeOS Bridge</h1>
+  </div>
+</div>
+
+<div class="toolbar">
+  <button id="tabLog" class="active">Activity</button>
+  <button id="tabTree">Page Tree</button>
+  <button id="sendState">Send State</button>
+  <button id="sendScreenshot">Screenshot</button>
+</div>
+
+<div class="log" id="logView">
+  <div class="empty-state">
+    <div>No activity yet</div>
+    <div style="font-size:11px">Connect to your TreeOS land to start</div>
+  </div>
+</div>
+
+<div class="tree-view" id="treeView"></div>
+
+<script>
+  const statusDot = document.getElementById('statusDot');
+  const logView = document.getElementById('logView');
+  const treeView = document.getElementById('treeView');
+  const tabLog = document.getElementById('tabLog');
+  const tabTree = document.getElementById('tabTree');
+  let currentView = 'log';
+  let logStarted = false;
+
+  // Tab switching
+  tabLog.addEventListener('click', () => {
+    currentView = 'log';
+    logView.style.display = '';
+    treeView.style.display = 'none';
+    tabLog.classList.add('active');
+    tabTree.classList.remove('active');
+  });
+
+  tabTree.addEventListener('click', async () => {
+    currentView = 'tree';
+    logView.style.display = 'none';
+    treeView.style.display = '';
+    tabLog.classList.remove('active');
+    tabTree.classList.add('active');
+    // Capture and render tree
+    chrome.runtime.sendMessage({ type: 'manualCapture' }, (resp) => {
+      if (resp?.state?.tree) renderTree(resp.state.tree);
+    });
+  });
+
+  // Manual actions
+  document.getElementById('sendState').addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'manualCapture' }, (resp) => {
+      addLog('state', 'Page state sent');
+    });
+  });
+
+  document.getElementById('sendScreenshot').addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'manualScreenshot' }, (resp) => {
+      addLog('state', 'Screenshot sent');
+    });
+  });
+
+  // Logging
+  function addLog(type, content) {
+    if (!logStarted) {
+      logView.innerHTML = '';
+      logStarted = true;
+    }
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    const now = new Date().toLocaleTimeString();
+    entry.innerHTML = `<div class="log-time">${now}</div><div class="log-content">${content}</div>`;
+    logView.appendChild(entry);
+    logView.scrollTop = logView.scrollHeight;
+  }
+
+  function addConfirmation(confirmId, description) {
+    if (!logStarted) { logView.innerHTML = ''; logStarted = true; }
+    const entry = document.createElement('div');
+    entry.className = 'log-entry confirm';
+    entry.id = `confirm-${confirmId}`;
+    const now = new Date().toLocaleTimeString();
+    entry.innerHTML = `
+      <div class="log-time">${now}</div>
+      <div class="log-content">Agent wants to: <code>${description}</code></div>
+      <div class="confirm-inline">
+        <button class="allow">Allow</button>
+        <button class="deny">Deny</button>
+      </div>
+    `;
+    entry.querySelector('.allow').onclick = () => {
+      chrome.runtime.sendMessage({ type: 'confirmActionResponse', confirmId, allowed: true });
+      entry.querySelector('.confirm-inline').innerHTML = '<span style="color:#40c060">Allowed</span>';
+    };
+    entry.querySelector('.deny').onclick = () => {
+      chrome.runtime.sendMessage({ type: 'confirmActionResponse', confirmId, allowed: false });
+      entry.querySelector('.confirm-inline').innerHTML = '<span style="color:#c04040">Denied</span>';
+    };
+    logView.appendChild(entry);
+    logView.scrollTop = logView.scrollHeight;
+  }
+
+  // Tree rendering
+  function renderTree(nodes, depth = 0) {
+    if (depth === 0) treeView.innerHTML = '';
+    const container = depth === 0 ? treeView : document.createDocumentFragment();
+
+    for (const node of nodes) {
+      const div = document.createElement('div');
+      div.className = `tree-node${node.id ? ' interactive' : ''}`;
+      div.style.paddingLeft = `${depth * 16}px`;
+
+      let html = `<span class="role">${node.role}</span>`;
+      if (node.name) html += ` <span class="name">"${escHtml(node.name.slice(0, 60))}"</span>`;
+      if (node.id) html += ` <span class="id">[${node.id}]</span>`;
+      if (node.state) {
+        const stateStr = Object.entries(node.state)
+          .filter(([k]) => k !== 'options' && k !== 'value')
+          .map(([k, v]) => `${k}:${v}`)
+          .join(' ');
+        if (stateStr) html += ` <span class="id">(${stateStr})</span>`;
+      }
+      div.innerHTML = html;
+      container.appendChild(div);
+
+      if (node.children) renderTree(node.children, depth + 1);
+    }
+
+    if (depth === 0) treeView.appendChild(container);
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Listen for updates
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'stateUpdate') {
+      statusDot.className = `status-dot ${msg.connectionState}`;
+      if (msg.connectionState === 'connected') {
+        addLog('state', `Connected to <code>${msg.config.serverUrl}</code>`);
+      } else if (msg.connectionState === 'disconnected') {
+        addLog('error', 'Disconnected');
+      }
+    }
+
+    if (msg.type === 'confirmAction') {
+      addConfirmation(msg.confirmId, msg.description);
+    }
+  });
+
+  // Initial state
+  chrome.runtime.sendMessage({ type: 'getState' }, (resp) => {
+    if (resp) statusDot.className = `status-dot ${resp.connectionState}`;
+  });
+</script>
+</body>
+</html>
