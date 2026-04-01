@@ -380,170 +380,109 @@
         }
 
         case 'comment': {
-          // Scripted comment/reply flow for social sites
           const text = action.text;
           const replyTo = action.replyTo;
           if (!text) return { success: false, error: 'text is required for comment action' };
 
-          // Step 1: If replyTo is specified, find that user's comment and click its reply button
           let textbox = null;
-          let targetScope = null;
+
+          // ── FIND OR OPEN A COMMENT BOX ──
 
           if (replyTo) {
-            // Find the comment by username
+            // Reply to specific user: find their comment, click its reply button
             const cleanName = replyTo.replace(/^u\//, '').toLowerCase();
-            // Look for "Reply to u/username" text or links containing the username
-            const allText = document.querySelectorAll('a, span, [data-testid]');
-            for (const el of allText) {
-              const t = (el.textContent || '').toLowerCase();
-              if (t.includes(cleanName) || (el.href && el.href.includes('/user/' + cleanName))) {
-                targetScope = el.closest('shreddit-comment, article, [data-testid="comment"], .comment, .Comment');
-                if (targetScope) break;
+            const links = document.querySelectorAll('a');
+            let scope = null;
+            for (const link of links) {
+              if ((link.href || '').toLowerCase().includes('/user/' + cleanName)) {
+                scope = link.closest('shreddit-comment, article, .comment');
+                if (scope) break;
               }
             }
-
-            if (targetScope) {
-              // Check if there's already an open textbox in this comment scope
-              textbox = targetScope.querySelector('[contenteditable="true"], textarea, [role="textbox"]');
-
-              if (!textbox) {
-                // Find and click the reply button in this comment's action row
-                const actionRow = targetScope.querySelector('shreddit-comment-action-row, [data-testid="comment-action-row"]');
-                if (actionRow) {
-                  const buttons = actionRow.querySelectorAll('button');
-                  if (buttons.length >= 1) {
-                    simulateClick(buttons[0]);
-                    await new Promise(r => setTimeout(r, 1500));
-                    textbox = targetScope.querySelector('[contenteditable="true"], textarea, [role="textbox"]');
-                  }
-                }
-              }
-            }
-          }
-
-          // Step 2: If no textbox found via replyTo, try to open one
-          if (!textbox) {
-            // Check for already visible comment textbox (not search bars)
-            const candidates = document.querySelectorAll('textarea, [contenteditable="true"][role="textbox"], [contenteditable="true"][data-testid]');
-            for (const c of candidates) {
-              // Skip tiny elements (search bars etc)
-              const rect = c.getBoundingClientRect();
-              if (rect.height > 30) { textbox = c; break; }
-            }
-          }
-
-          if (!textbox) {
-            // No textbox visible. Click a reply button to open one.
-            let replyBtn = null;
-
-            // Strategy 1: Find button spans with "Reply" text
-            const spans = document.querySelectorAll('button span');
-            for (const span of spans) {
-              const t = span.textContent.trim().toLowerCase();
-              if (t === 'reply') { replyBtn = span.closest('button'); break; }
-            }
-
-            // Strategy 2: First shreddit action row's first button
-            if (!replyBtn) {
-              const row = document.querySelector('shreddit-comment-action-row');
+            if (scope) {
+              const row = scope.querySelector('shreddit-comment-action-row');
               if (row) {
                 const btns = row.querySelectorAll('button');
-                if (btns.length >= 1) replyBtn = btns[0];
+                if (btns.length >= 1) simulateClick(btns[0]);
+                await new Promise(r => setTimeout(r, 1500));
               }
-            }
-
-            // Strategy 3: Any button with aria-label containing reply
-            if (!replyBtn) {
-              replyBtn = document.querySelector('button[aria-label*="reply" i], button[aria-label*="Reply"]');
-            }
-
-            if (replyBtn) {
-              simulateClick(replyBtn);
-              await new Promise(r => setTimeout(r, 1500));
-
-              // Find the newly appeared textbox
-              const newCandidates = document.querySelectorAll('textarea, [contenteditable="true"]');
-              for (const c of newCandidates) {
-                const rect = c.getBoundingClientRect();
-                if (rect.height > 30) { textbox = c; break; }
-              }
-              // Last resort: pick the last one
-              if (!textbox && newCandidates.length) textbox = newCandidates[newCandidates.length - 1];
+              textbox = scope.querySelector('[contenteditable="true"], textarea');
             }
           }
 
-          if (!textbox) return { success: false, error: 'Could not find or open a comment box. Try clicking the reply button manually first.' };
+          if (!textbox) {
+            // Check for already open textbox (user clicked reply manually, or previous attempt)
+            const all = document.querySelectorAll('[contenteditable="true"], textarea');
+            for (const el of all) {
+              const r = el.getBoundingClientRect();
+              if (r.height > 30 && r.width > 100) { textbox = el; break; }
+            }
+          }
 
-          // Step 2: Type into it using multiple strategies
+          if (!textbox) {
+            // Nothing open. Click the first action row's first button (reply on first comment or post)
+            const row = document.querySelector('shreddit-comment-action-row');
+            if (row) {
+              const btns = row.querySelectorAll('button');
+              if (btns.length >= 1) {
+                simulateClick(btns[0]);
+                await new Promise(r => setTimeout(r, 1500));
+              }
+            }
+            // Find what appeared
+            const all = document.querySelectorAll('[contenteditable="true"], textarea');
+            for (const el of all) {
+              const r = el.getBoundingClientRect();
+              if (r.height > 30 && r.width > 100) { textbox = el; break; }
+            }
+            if (!textbox && all.length) textbox = all[all.length - 1];
+          }
+
+          if (!textbox) return { success: false, error: 'Could not find or open a comment box.' };
+
+          // ── TYPE TEXT ──
+
           textbox.scrollIntoView({ behavior: 'instant', block: 'center' });
           textbox.focus();
-          await new Promise(r => setTimeout(r, 200));
+          await new Promise(r => setTimeout(r, 300));
 
-          // Strategy A: execCommand (works with React/contenteditable editors)
           let typed = false;
           try {
-            // Select all existing content first
             const sel = window.getSelection();
             const range = document.createRange();
             range.selectNodeContents(textbox);
             sel.removeAllRanges();
             sel.addRange(range);
-
-            // Insert text via execCommand (triggers React's onChange)
             typed = document.execCommand('insertText', false, text);
           } catch {}
 
-          // Strategy B: direct textContent/value as fallback
           if (!typed) {
             if (textbox.contentEditable === 'true') {
-              textbox.innerHTML = `<p>${text}</p>`;
-              textbox.dispatchEvent(new Event('input', { bubbles: true }));
+              textbox.innerHTML = '<p>' + text + '</p>';
             } else {
               textbox.value = text;
-              textbox.dispatchEvent(new Event('input', { bubbles: true }));
-              textbox.dispatchEvent(new Event('change', { bubbles: true }));
             }
+            textbox.dispatchEvent(new Event('input', { bubbles: true }));
           }
 
-          // Wait for the editor to register the text
           await new Promise(r => setTimeout(r, 1000));
-
-          // Dispatch extra events to ensure React picks up the change
           textbox.dispatchEvent(new Event('input', { bubbles: true }));
-          textbox.dispatchEvent(new Event('change', { bubbles: true }));
           await new Promise(r => setTimeout(r, 500));
 
-          // Find submit button by looking for spans with exact text inside buttons
+          // ── CLICK SUBMIT ──
+
           let submitBtn = null;
           const submitWords = ['comment', 'reply', 'post', 'submit', 'send'];
-          const allSpans = document.querySelectorAll('button span');
-          for (const span of allSpans) {
-            const spanText = span.textContent.trim().toLowerCase();
-            if (submitWords.includes(spanText)) {
+          const spans = document.querySelectorAll('button span');
+          for (const span of spans) {
+            if (submitWords.includes(span.textContent.trim().toLowerCase())) {
               submitBtn = span.closest('button');
               break;
             }
           }
+          if (!submitBtn) submitBtn = document.querySelector('button[type="submit"]');
 
-          // Fallback: button with type=submit
-          if (!submitBtn) {
-            submitBtn = document.querySelector('button[type="submit"]');
-          }
-
-          // Fallback: aria-label
-          if (!submitBtn) {
-            const selectors = [
-              'button[aria-label*="comment" i]',
-              'button[aria-label*="submit" i]',
-              'button[aria-label*="post" i]',
-            ];
-            for (const sel of selectors) {
-              submitBtn = document.querySelector(sel);
-              if (submitBtn) break;
-            }
-          }
-
-          if (!submitBtn) return { success: true, typed: true, submitted: false, error: 'Typed the comment but could not find submit button. Click it manually.' };
+          if (!submitBtn) return { success: true, typed: true, submitted: false, error: 'Typed but could not find submit button.' };
 
           simulateClick(submitBtn);
           return { success: true, typed: true, submitted: true, text };
