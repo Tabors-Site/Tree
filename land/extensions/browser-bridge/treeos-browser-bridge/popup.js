@@ -4,6 +4,8 @@ const statusDot = $('statusDot');
 const statusBar = $('statusBar');
 const serverUrl = $('serverUrl');
 const apiKey = $('apiKey');
+const username = $('username');
+const loginPassword = $('loginPassword');
 const confirmActions = $('confirmActions');
 const autoCapture = $('autoCapture');
 const connectBtn = $('connectBtn');
@@ -52,6 +54,8 @@ $('saveBtn').addEventListener('click', () => {
     config: {
       serverUrl: serverUrl.value.replace(/\/+$/, ''),
       apiKey: apiKey.value,
+      username: username.value,
+      password: loginPassword.value,
       confirmActions: confirmActions.checked,
       autoCapture: autoCapture.checked,
     },
@@ -69,6 +73,8 @@ connectBtn.addEventListener('click', () => {
     config: {
       serverUrl: serverUrl.value.replace(/\/+$/, ''),
       apiKey: apiKey.value,
+      username: username.value,
+      password: loginPassword.value,
       confirmActions: confirmActions.checked,
       autoCapture: autoCapture.checked,
     },

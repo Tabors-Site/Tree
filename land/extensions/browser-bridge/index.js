@@ -38,42 +38,60 @@ export async function init(core) {
   core.websocket.registerSocketHandler("browserAuth", async ({ socket, data }) => {
     try {
       const apiKey = data?.apiKey;
-      if (!apiKey) {
-        socket.emit("browserAuthResult", { success: false, error: "API key required" });
+      if (!apiKey && !(data.username && data.password)) {
+        socket.emit("browserAuthResult", { success: false, error: "API key or username + password required" });
         return;
       }
 
-      // Validate API key using the same bcrypt logic as api-keys extension
       let userId = null;
-      try {
-        const User = core.models.User;
-        const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
-        const bcrypt = await import("bcrypt");
+      const { username, password } = data;
 
-        // Prefix match (first 8 chars), then bcrypt verify
-        const prefix = apiKey.slice(0, 8);
-        const candidates = await User.find({
-          "metadata.apiKeys": {
-            $elemMatch: { keyPrefix: prefix, revoked: { $ne: true } },
-          },
-        }).select("_id username metadata");
+      // Method 1: API key (if api-keys extension data exists)
+      if (apiKey) {
+        try {
+          const User = core.models.User;
+          const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
+          const bcrypt = await import("bcrypt");
 
-        for (const user of candidates) {
-          const keys = getUserMeta(user, "apiKeys");
-          if (!Array.isArray(keys)) continue;
-          for (const key of keys) {
-            if (key.revoked || key.keyPrefix !== prefix) continue;
-            const match = await bcrypt.compare(apiKey, key.keyHash);
-            if (match) {
-              userId = String(user._id);
-              socket.username = user.username;
-              break;
+          const prefix = apiKey.slice(0, 8);
+          const candidates = await User.find({
+            "metadata.apiKeys": {
+              $elemMatch: { keyPrefix: prefix, revoked: { $ne: true } },
+            },
+          }).select("_id username metadata");
+
+          for (const user of candidates) {
+            const keys = getUserMeta(user, "apiKeys");
+            if (!Array.isArray(keys)) continue;
+            for (const key of keys) {
+              if (key.revoked || key.keyPrefix !== prefix) continue;
+              const match = await bcrypt.compare(apiKey, key.keyHash);
+              if (match) {
+                userId = String(user._id);
+                socket.username = user.username;
+                break;
+              }
             }
+            if (userId) break;
           }
-          if (userId) break;
+        } catch (err) {
+          log.debug("BrowserBridge", `API key auth error: ${err.message}`);
         }
-      } catch (err) {
-        log.debug("BrowserBridge", `API key validation error: ${err.message}`);
+      }
+
+      // Method 2: username + password (always available, no extension needed)
+      if (!userId && username && password) {
+        try {
+          const User = core.models.User;
+          const bcrypt = await import("bcrypt");
+          const user = await User.findOne({ username }).select("_id username password");
+          if (user && await bcrypt.compare(password, user.password)) {
+            userId = String(user._id);
+            socket.username = user.username;
+          }
+        } catch (err) {
+          log.debug("BrowserBridge", `Password auth error: ${err.message}`);
+        }
       }
 
       if (!userId) {

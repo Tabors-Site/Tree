@@ -8,7 +8,7 @@ try {
 }
 
 let socket = null;
-let config = { serverUrl: '', apiKey: '', autoCapture: false, confirmActions: true };
+let config = { serverUrl: '', apiKey: '', username: '', password: '', autoCapture: false, confirmActions: true };
 let connectionState = 'disconnected'; // disconnected | connecting | connected
 let reconnectTimer = null;
 let pendingConfirmations = new Map();
@@ -54,9 +54,11 @@ function connect() {
       updateState('connected');
       clearReconnectTimer();
 
-      // Authenticate with API key
+      // Authenticate with API key or username/password
       socket.emit('browserAuth', {
-        apiKey: config.apiKey,
+        apiKey: config.apiKey || null,
+        username: config.username || null,
+        password: config.password || null,
         capabilities: ['page_state', 'execute_action', 'screenshot', 'network_log'],
       });
     });
