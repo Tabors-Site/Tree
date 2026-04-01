@@ -326,6 +326,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         break;
       }
 
+      case 'getActivityLog': {
+        sendResponse({ log: activityLog });
+        break;
+      }
+
       case 'saveConfig': {
         const updated = await saveConfig(msg.config);
         sendResponse({ success: true, config: updated });

@@ -306,9 +306,29 @@
     }
   });
 
-  // Initial state
+  // Initial state + replay activity log
   chrome.runtime.sendMessage({ type: 'getState' }, (resp) => {
-    if (resp) statusDot.className = `status-dot ${resp.connectionState}`;
+    if (resp) {
+      statusDot.className = `status-dot ${resp.connectionState}`;
+      if (resp.connectionState === 'connected') {
+        addLog('state', `Connected to <code>${resp.config?.serverUrl || 'server'}</code>`);
+      }
+    }
+  });
+
+  // Request activity history from background
+  chrome.runtime.sendMessage({ type: 'getActivityLog' }, (resp) => {
+    if (resp?.log?.length) {
+      resp.log.forEach(e => {
+        const type = e.action === 'action' ? 'action' : 'state';
+        let desc = '';
+        if (e.action === 'getPageState') desc = 'Read page state';
+        else if (e.action === 'screenshot') desc = 'Took screenshot';
+        else if (e.action === 'action') desc = `<code>${e.details.type}</code> ${e.details.target ? 'on <code>' + escHtml(String(e.details.target)) + '</code>' : ''} ${e.details.success ? '✓' : '✗'}`;
+        else desc = e.action;
+        addLog(type, desc);
+      });
+    }
   });
 </script>
 </body>
