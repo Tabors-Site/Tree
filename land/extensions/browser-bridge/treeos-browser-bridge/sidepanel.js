@@ -9,7 +9,7 @@ let logStarted = false;
 // Tab switching
 tabLog.addEventListener('click', () => {
   currentView = 'log';
-  logView.style.display = '';
+  logView.style.display = 'block';
   treeView.style.display = 'none';
   tabLog.classList.add('active');
   tabTree.classList.remove('active');
@@ -18,7 +18,7 @@ tabLog.addEventListener('click', () => {
 tabTree.addEventListener('click', async () => {
   currentView = 'tree';
   logView.style.display = 'none';
-  treeView.style.display = '';
+  treeView.style.display = 'block';
   tabLog.classList.remove('active');
   tabTree.classList.add('active');
   treeView.innerHTML = '<div class="empty-state"><div>Loading...</div></div>';
