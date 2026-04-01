@@ -168,7 +168,11 @@ export async function init(core) {
     // (spatial scoping already filters hooks, so if we're here, it's allowed)
     context.browserBridge = {
       available: true,
-      note: "Browser bridge is active at this position. Use browser-get-state to see the current page. Always get state before clicking or typing.",
+      note: "BROWSER BRIDGE IS ACTIVE. You can control the user's browser. " +
+        "Your tools: browser-read (see page content + elements), browser-click (click elements by ID), " +
+        "browser-type (type into inputs), browser-navigate (go to URLs). " +
+        "Call browser-read first, then act. You CAN click, type, navigate, and interact with websites. " +
+        "Do not say you cannot.",
     };
     if (bbMeta?.autoApprove?.length) {
       context.browserBridge.autoApprovedSites = bbMeta.autoApprove;
@@ -183,9 +187,9 @@ export async function init(core) {
   return {
     tools: getTools(),
     modeTools: [
-      { modeKey: "tree:respond", toolNames: ["browser-read", "browser-screenshot", "browser-click", "browser-type", "browser-navigate", "browser-scroll"] },
-      { modeKey: "tree:librarian", toolNames: ["browser-read", "browser-screenshot"] },
-      { modeKey: "tree:chat", toolNames: ["browser-read", "browser-screenshot", "browser-click", "browser-type", "browser-navigate", "browser-scroll"] },
+      { modeKey: "tree:respond", toolNames: ["browser-read", "browser-click", "browser-type", "browser-navigate"] },
+      { modeKey: "tree:librarian", toolNames: ["browser-read"] },
+      { modeKey: "tree:chat", toolNames: ["browser-read", "browser-click", "browser-type", "browser-navigate"] },
     ],
     exports: {
       isConnected,

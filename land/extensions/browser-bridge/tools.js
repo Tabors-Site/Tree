@@ -6,7 +6,6 @@
  */
 
 import { z } from "zod";
-import log from "../../seed/log.js";
 import { sendRequest, isConnected, getCurrentUrl, checkSiteAccess, logAction } from "./core.js";
 
 function text(str) {
@@ -76,21 +75,6 @@ export default function getTools() {
       },
     },
 
-    {
-      name: "browser-screenshot",
-      description:
-        "Take a screenshot of the current browser tab. Returns base64 encoded image data. " +
-        "Use to see what the user sees, verify page state, or capture visual content.",
-      annotations: { readOnlyHint: true },
-      schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
-      },
-      handler: async ({ userId }) => {
-        requireBrowser(userId);
-        const result = await sendRequest(userId, "screenshot", {});
-        return json(result);
-      },
-    },
 
     // ── WRITE TOOLS ─────────────────────────────────────────────────
 
@@ -160,23 +144,5 @@ export default function getTools() {
       },
     },
 
-    {
-      name: "browser-scroll",
-      description:
-        "Scroll the page in the user's browser. Use to reveal more content below or above the current viewport.",
-      annotations: { readOnlyHint: false },
-      schema: {
-        direction: z.enum(["up", "down", "left", "right"]).describe("Scroll direction"),
-        amount: z.number().optional().describe("Pixels to scroll. Default: one viewport height."),
-        userId: z.string().describe("Injected by server. Ignore."),
-      },
-      handler: async ({ direction, amount, userId }) => {
-        requireBrowser(userId);
-        const result = await sendRequest(userId, "executeAction", {
-          action: { type: "scroll", direction, amount },
-        });
-        return json(result);
-      },
-    },
   ];
 }
