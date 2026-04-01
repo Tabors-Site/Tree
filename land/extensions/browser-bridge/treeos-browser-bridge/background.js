@@ -43,11 +43,19 @@ function connect() {
   updateState('connecting');
 
   try {
-    socket = io(config.serverUrl, {
+    // Ensure full URL with protocol for service worker context
+    let serverUrl = config.serverUrl;
+    if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
+      serverUrl = 'http://' + serverUrl;
+    }
+
+    socket = io(serverUrl, {
+      path: '/socket.io',
       transports: ['websocket'],
       reconnection: true,
       reconnectionDelay: 5000,
       reconnectionAttempts: Infinity,
+      forceNew: true,
     });
 
     socket.on('connect', () => {

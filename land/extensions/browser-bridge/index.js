@@ -7,6 +7,7 @@
  */
 
 import log from "../../seed/log.js";
+import User from "../../seed/models/user.js";
 import {
   configure,
   registerConnection,
@@ -49,7 +50,7 @@ export async function init(core) {
       // Method 1: API key (if api-keys extension data exists)
       if (apiKey) {
         try {
-          const User = core.models.User;
+          // User imported at top of file
           const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
           const { default: bcryptMod } = await import("bcrypt");
 
@@ -85,7 +86,7 @@ export async function init(core) {
       // Method 2: username + password (always available, no extension needed)
       if (!userId && username && password) {
         try {
-          const User = core.models.User;
+          // User imported at top of file
           const { default: bcryptMod } = await import("bcrypt");
           log.debug("BrowserBridge", `Password auth attempt for user: ${username}`);
           const user = await User.findOne({ username }).select("_id username password");
