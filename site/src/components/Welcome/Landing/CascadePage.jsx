@@ -328,12 +328,8 @@ const CascadePage = () => {
               <p>Named signal paths between nodes. Instead of broadcasting to all children, a channel extension routes signals to specific destinations. Pub/sub within the tree.</p>
             </div>
             <div className="lp-card lp-card-sm">
-              <h4>Bridge Lands</h4>
-              <p>Cascade across the network. A bridge extension delivers signals from one land to another through Canopy. Two lands share knowledge through their trees without merging.</p>
-            </div>
-            <div className="lp-card lp-card-sm">
-              <h4>Brain Lands</h4>
-              <p>A land that exists to think. It receives cascade signals from other lands, processes them through its own AI, and sends results back. Distributed intelligence as a service.</p>
+              <h4><a href="/mycelium" style={{color: "#fff", textDecoration: "none"}}>Mycelium</a></h4>
+              <p>The intelligent underground network. Routes cascade signals between lands based on observed need. Reads extension lists, gap reports, and evolution patterns. Delivers where the signal would be useful. Not a server. An extension any land installs to become a routing node.</p>
             </div>
             <div className="lp-card lp-card-sm">
               <h4>Gap Detection</h4>
@@ -406,7 +402,7 @@ const CascadePage = () => {
             </div>
             <div className="lp-footer-col">
               <h4>Source</h4>
-              <a href="https://github.com/taborgreat/TreeOS">GitHub</a>
+              <a href="https://github.com/taborgreat/create-treeos">GitHub</a>
               <a href="https://github.com/taborgreat/TreeOS/blob/main/LICENSE">AGPL-3.0 License</a>
             </div>
           </div>

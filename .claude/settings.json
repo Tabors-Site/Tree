@@ -594,7 +594,8 @@
       "Bash(find /home/tabor/github/Tree/land -name *websocket* -o -name *socket*)",
       "Bash(grep -r socketHandlers /home/tabor/github/Tree/land/extensions --include=*.js -l)",
       "Bash(grep -r \"exports.*socketHandlers\\\\|socketHandlers.*=\" /home/tabor/github/Tree/land/extensions --include=*.js -A 5)",
-      "Bash(grep -r socketHandlers /home/tabor/github/Tree/land/extensions --include=*.js -B 2 -A 8)"
+      "Bash(grep -r socketHandlers /home/tabor/github/Tree/land/extensions --include=*.js -B 2 -A 8)",
+      "Bash(grep -rn \"bridge\\\\|Bridge\\\\|brain land\\\\|Brain Land\" site/src/ --include=*.jsx --include=*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

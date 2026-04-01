@@ -74,7 +74,7 @@ export function renderTermsPage() {
       <p>The land operator may terminate your account at any time. You may delete your account at any time.</p>
 
       <h2>7. Open Source</h2>
-      <p>TreeOS is licensed under AGPL-3.0. The source code is available at <a href="https://github.com/taborgreat/treeos-land">GitHub</a>.</p>
+      <p>TreeOS is licensed under AGPL-3.0. The source code is available at <a href="https://github.com/taborgreat/create-treeos">GitHub</a>.</p>
 
       <h2>8. No Warranty</h2>
       <p>This service is provided as-is. No guarantees of uptime, data preservation, or AI accuracy.</p>

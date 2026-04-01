@@ -63,29 +63,39 @@ export default function getTools() {
           pageText = typeof content === "string" ? content : JSON.stringify(content);
         } catch {}
 
-        // Extract only interactive elements (the ones with IDs that can be clicked/typed)
+        // Extract only useful interactive elements
+        // Skip: unnamed spans, unnamed links, sidebar/footer noise
+        const SKIP_ROLES = new Set(["presentation", "img", "complementary", "contentinfo", "navigation"]);
         const interactiveElements = [];
         function walkTree(nodes) {
           if (!nodes) return;
           const list = Array.isArray(nodes) ? nodes : [nodes];
           for (const node of list) {
-            if (node.id) {
-              interactiveElements.push({
-                id: node.id,
-                role: node.role,
-                name: node.name ? node.name.slice(0, 80) : undefined,
-              });
+            if (node.id && !SKIP_ROLES.has(node.role)) {
+              // Only include elements with names, or key roles (button, textbox, link with name)
+              const hasName = node.name && node.name.trim().length > 0;
+              const isAction = node.role === "button" || node.role === "textbox" || node.role === "searchbox" || node.role === "combobox";
+              if (hasName || isAction) {
+                interactiveElements.push({
+                  id: node.id,
+                  role: node.role,
+                  name: node.name ? node.name.slice(0, 60) : undefined,
+                });
+              }
             }
             if (node.children) walkTree(node.children);
           }
         }
         walkTree(state?.tree);
 
+        // Cap at 40 elements max
+        const elements = interactiveElements.slice(0, 40);
+
         // Put interactive elements FIRST (AI needs these to act), text SECOND (gets truncated first)
         const combined = {
           url: state?.url || "unknown",
           title: state?.title || "unknown",
-          interactiveElements,
+          elements,
           pageText: pageText.slice(0, 2000),
         };
 

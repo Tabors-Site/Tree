@@ -99,7 +99,7 @@ export function renderAboutPage() {
     <div class="glass-card" style="animation-delay:0.35s;">
       <h2>Get involved</h2>
       <p style="color:var(--text-secondary);line-height:1.8;font-size:14px;">
-        <a href="https://github.com/taborgreat/TreeOS" style="color:var(--accent);">Source code on GitHub</a>.
+        <a href="https://github.com/taborgreat/create-treeos" style="color:var(--accent);">Source code on GitHub</a>.
         Start a land. Build an extension. Publish it here. If something is broken, file an issue.
         If something is missing, build it.
       </p>

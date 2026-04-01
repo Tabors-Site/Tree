@@ -13,7 +13,7 @@ const ExtensionFormat = () => {
         setLoading(false);
       })
       .catch(() => {
-        setContent("Failed to load. View on GitHub: https://github.com/taborgreat/TreeOS/blob/main/land/extensions/EXTENSION_FORMAT.md");
+        setContent("Failed to load. View on GitHub: https://github.com/taborgreat/create-treeos");
         setLoading(false);
       });
   }, []);
