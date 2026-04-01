@@ -99,7 +99,6 @@ export default function getTools() {
       annotations: { readOnlyHint: false, destructiveHint: true },
       schema: {
         elementId: z.string().describe("Element ID from the accessibility tree (e.g. 'e5')"),
-        nodeId: z.string().describe("Injected by server. Ignore."),
         userId: z.string().describe("Injected by server. Ignore."),
       },
       handler: async ({ elementId, nodeId, userId }) => {
@@ -107,7 +106,7 @@ export default function getTools() {
         const result = await sendRequest(userId, "executeAction", {
           action: { type: "click", elementId },
         });
-        await logAction(nodeId, userId, { type: "click", elementId }, getCurrentUrl(userId), result);
+        logAction(nodeId, userId, { type: "click", elementId }, getCurrentUrl(userId), result).catch(() => {});
         return json(result);
       },
     },
@@ -121,7 +120,6 @@ export default function getTools() {
       schema: {
         elementId: z.string().describe("Element ID of the input field (e.g. 'e12')"),
         text: z.string().describe("Text to type into the field"),
-        nodeId: z.string().describe("Injected by server. Ignore."),
         userId: z.string().describe("Injected by server. Ignore."),
       },
       handler: async ({ elementId, text, nodeId, userId }) => {
@@ -129,7 +127,7 @@ export default function getTools() {
         const result = await sendRequest(userId, "executeAction", {
           action: { type: "type", elementId, text },
         });
-        await logAction(nodeId, userId, { type: "type", elementId }, getCurrentUrl(userId), result);
+        logAction(nodeId, userId, { type: "type", elementId }, getCurrentUrl(userId), result).catch(() => {});
         return json(result);
       },
     },
@@ -142,7 +140,6 @@ export default function getTools() {
       annotations: { readOnlyHint: false, destructiveHint: true },
       schema: {
         url: z.string().describe("The URL to navigate to"),
-        nodeId: z.string().describe("Injected by server. Ignore."),
         userId: z.string().describe("Injected by server. Ignore."),
       },
       handler: async ({ url, nodeId, userId }) => {
@@ -155,7 +152,7 @@ export default function getTools() {
         const result = await sendRequest(userId, "executeAction", {
           action: { type: "navigate", url },
         });
-        await logAction(nodeId, userId, { type: "navigate", url }, url, result);
+        logAction(nodeId, userId, { type: "navigate", url }, url, result).catch(() => {});
         return json(result);
       },
     },

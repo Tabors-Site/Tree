@@ -104,6 +104,12 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// Clear activity
+document.getElementById('clearLog').addEventListener('click', () => {
+  logView.innerHTML = '';
+  logStarted = false;
+});
+
 // Listen for updates
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'stateUpdate') {
