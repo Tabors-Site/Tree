@@ -12,8 +12,16 @@ export default {
     "Every browser action is logged as a note. The most powerful and most dangerous extension " +
     "in the ecosystem. All safety layers active by default.",
 
+  classifierHints: [
+    /\b(click|type|navigate|browse|open|visit|go to|read.*page|what.*page|this site|this page|webpage|website)\b/i,
+    /\b(post|comment|reply|submit|login|sign in|search.*web|fill.*form|enter.*field)\b/i,
+    /\b(browser|tab|screen|what do you see|what's on)\b/i,
+  ],
+
+  guidedMode: "tree:browser-agent",
+
   needs: {
-    services: ["hooks", "websocket", "metadata"],
+    services: ["hooks", "websocket", "metadata", "modes"],
     models: ["Node"],
   },
 

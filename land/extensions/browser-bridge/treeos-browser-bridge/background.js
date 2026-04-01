@@ -370,11 +370,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
 
       case 'manualCapture': {
-        const state = await getPageStateFromTab();
-        if (socket?.connected) {
-          socket.emit('pageState', { requestId: 'manual', data: state });
+        console.log('[TreeOS Bridge] manualCapture requested');
+        try {
+          const state = await getPageStateFromTab();
+          console.log('[TreeOS Bridge] manualCapture result:', state?.error || `tree: ${!!state?.tree}, url: ${state?.url}`);
+          if (socket?.connected) {
+            socket.emit('pageState', { requestId: 'manual', data: state });
+          }
+          sendResponse({ success: true, sent: !!socket?.connected, state });
+        } catch (err) {
+          console.error('[TreeOS Bridge] manualCapture error:', err);
+          sendResponse({ success: false, state: { error: err.message } });
         }
-        sendResponse({ success: true, sent: !!socket?.connected, state });
         break;
       }
 

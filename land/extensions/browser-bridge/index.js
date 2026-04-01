@@ -160,6 +160,23 @@ export async function init(core) {
     }
   }, "browser-bridge");
 
+  // ── afterScopeChange: auto-set browser-agent mode when allowed ──────
+  core.hooks.register("afterScopeChange", async ({ nodeId, allowed }) => {
+    if (!allowed || !Array.isArray(allowed)) return;
+    if (!allowed.includes("browser-bridge")) return;
+    try {
+      const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+      const node = await core.models.Node.findById(nodeId);
+      if (!node) return;
+      const modes = node.metadata instanceof Map ? node.metadata.get("modes") : node.metadata?.modes;
+      // Only set if no respond mode already set
+      if (!modes?.respond) {
+        await setExtMeta(node, "modes", { ...(modes || {}), respond: "tree:browser-agent" });
+        log.info("BrowserBridge", `Auto-set browser-agent mode on ${nodeId}`);
+      }
+    } catch {}
+  }, "browser-bridge");
+
   // ── enrichContext: tell AI browser is available ─────────────────────
 
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
@@ -168,11 +185,15 @@ export async function init(core) {
     // (spatial scoping already filters hooks, so if we're here, it's allowed)
     context.browserBridge = {
       available: true,
-      note: "BROWSER BRIDGE IS ACTIVE. You can control the user's browser. " +
-        "Your tools: browser-read (see page content + elements), browser-click (click elements by ID), " +
-        "browser-type (type into inputs), browser-navigate (go to URLs). " +
-        "Call browser-read first, then act. You CAN click, type, navigate, and interact with websites. " +
-        "Do not say you cannot.",
+      note: "BROWSER BRIDGE IS ACTIVE. You control the user's REAL browser. " +
+        "To interact with websites use BROWSER tools, NOT tree tools. " +
+        "browser-read = see the actual webpage content and elements. " +
+        "browser-click = click a real button/link on the website. " +
+        "browser-type = type into a real input field on the website. " +
+        "browser-navigate = go to a real URL in the browser. " +
+        "Tree tools (create-node, create-note) only affect the tree, NOT websites. " +
+        "To post a comment: browser-read first to find the input element ID, then browser-type to write, then browser-click to submit. " +
+        "Always call browser-read first.",
     };
     if (bbMeta?.autoApprove?.length) {
       context.browserBridge.autoApprovedSites = bbMeta.autoApprove;
@@ -182,14 +203,18 @@ export async function init(core) {
     }
   }, "browser-bridge");
 
+  // Register browser agent mode
+  const { default: agentMode } = await import("./modes/agent.js");
+  core.modes.registerMode("tree:browser-agent", agentMode, "browser-bridge");
+
   log.info("BrowserBridge", "Loaded. Confined. The AI can see and act through the browser.");
 
   return {
     tools: getTools(),
     modeTools: [
+      { modeKey: "tree:browser-agent", toolNames: ["browser-read", "browser-click", "browser-type", "browser-navigate"] },
       { modeKey: "tree:respond", toolNames: ["browser-read", "browser-click", "browser-type", "browser-navigate"] },
-      { modeKey: "tree:librarian", toolNames: ["browser-read"] },
-      { modeKey: "tree:chat", toolNames: ["browser-read", "browser-click", "browser-type", "browser-navigate"] },
+      { modeKey: "tree:librarian", toolNames: ["browser-read", "browser-click", "browser-type", "browser-navigate"] },
     ],
     exports: {
       isConnected,
