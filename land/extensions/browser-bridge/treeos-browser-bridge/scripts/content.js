@@ -500,30 +500,39 @@
             }
           }
 
+          // Wait for the editor to register the text
+          await new Promise(r => setTimeout(r, 1000));
+
+          // Dispatch extra events to ensure React picks up the change
+          textbox.dispatchEvent(new Event('input', { bubbles: true }));
+          textbox.dispatchEvent(new Event('change', { bubbles: true }));
           await new Promise(r => setTimeout(r, 500));
 
-          // Find and click submit button
-          const submitSelectors = [
-            'button[type="submit"]',
-            'button[aria-label*="comment" i]',
-            'button[aria-label*="submit" i]',
-            'button[aria-label*="post" i]',
-            'button[aria-label*="reply" i]',
-          ];
+          // Find submit button by looking for spans with exact text inside buttons
           let submitBtn = null;
-
-          // Look for a button with text "Comment", "Reply", "Post", "Submit"
-          const allButtons = document.querySelectorAll('button');
-          for (const btn of allButtons) {
-            const btnText = btn.textContent.trim().toLowerCase();
-            if (btnText === 'comment' || btnText === 'reply' || btnText === 'post' || btnText === 'submit') {
-              submitBtn = btn;
+          const submitWords = ['comment', 'reply', 'post', 'submit', 'send'];
+          const allSpans = document.querySelectorAll('button span');
+          for (const span of allSpans) {
+            const spanText = span.textContent.trim().toLowerCase();
+            if (submitWords.includes(spanText)) {
+              submitBtn = span.closest('button');
               break;
             }
           }
 
+          // Fallback: button with type=submit
           if (!submitBtn) {
-            for (const sel of submitSelectors) {
+            submitBtn = document.querySelector('button[type="submit"]');
+          }
+
+          // Fallback: aria-label
+          if (!submitBtn) {
+            const selectors = [
+              'button[aria-label*="comment" i]',
+              'button[aria-label*="submit" i]',
+              'button[aria-label*="post" i]',
+            ];
+            for (const sel of selectors) {
               submitBtn = document.querySelector(sel);
               if (submitBtn) break;
             }
