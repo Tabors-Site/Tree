@@ -137,8 +137,9 @@ async function _compare(rootId, runChat) {
     wasAi: true,
   });
 
-  // Update last comparison time
-  await mergeExtMeta(reflectNode._id, "compare-inner", { lastComparison: Date.now() });
+  // Update last comparison time. Re-fetch for mergeExtMeta (needs full doc, not ID).
+  const reflectNodeFull = await Node.findById(reflectNode._id).select("_id metadata").lean();
+  if (reflectNodeFull) await mergeExtMeta(reflectNodeFull, "compare-inner", { lastComparison: Date.now() });
 
   // Cap comparisons
   const noteCount = await Note.countDocuments({ nodeId: String(compareNode._id) });

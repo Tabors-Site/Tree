@@ -66,7 +66,8 @@ router.get("/persona", authenticate, async (req, res) => {
 // Body: { nodeId, field, value } or { nodeId, persona: { ...full object } }
 router.post("/persona/set", authenticate, async (req, res) => {
   try {
-    const { nodeId, field, value, persona: fullPersona } = req.body;
+    const { field, value, persona: fullPersona } = req.body;
+    const nodeId = req.body.nodeId || req.query.nodeId;
     if (!nodeId) return sendError(res, 400, ERR.INVALID_INPUT, "nodeId required");
 
     const node = await Node.findById(nodeId);

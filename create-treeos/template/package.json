@@ -1,14 +1,15 @@
 {
-  "name": "my-land",
+  "name": "treeos-land",
   "version": "1.0.0",
   "type": "module",
-  "private": true,
   "scripts": {
-    "start": "node boot.js"
+    "start": "node boot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
+  "keywords": ["treeos", "ai", "agents", "kernel", "tree", "federation"],
+  "author": "Tabor Holly",
   "license": "AGPL-3.0",
-  "description": "A TreeOS land server.",
+  "description": "TreeOS Land server. Plant the seed. Grow trees. AI agents live here.",
   "homepage": "https://treeos.ai",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",

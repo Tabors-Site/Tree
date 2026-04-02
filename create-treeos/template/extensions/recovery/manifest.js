@@ -1,6 +1,6 @@
 export default {
   name: "recovery",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "The tree that grows toward health. Track substances, feelings, cravings, " +
@@ -13,11 +13,10 @@ export default {
     "how you're doing today. The person is always the agent.",
 
   classifierHints: [
-    /\b(craving|crave|urge|tempt|slip|relapse|sober|clean|quit)\b/i,
-    /\b(taper|reduce|cut down|cut back|wean|withdraw)\b/i,
-    /\b(drink|smoke|vape|dose|hit|use|substance)\b/i,
-    /\b(streak|days clean|days sober|milestone)\b/i,
-    /\b(feeling|anxious|stressed|mood|angry|sad|hopeless)\b/i,
+    /\b(craving|crave|urge|tempt|slip|relapse|sober|clean days|quit)\b/i,
+    /\b(taper|taper plan|cut down|cut back|wean|withdraw)\b/i,
+    /\b(drink|smoke|vape|dose|substance|sobriety)\b/i,
+    /\b(days clean|days sober|sober streak|milestone)\b/i,
   ],
 
   needs: {

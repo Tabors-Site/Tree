@@ -1,6 +1,6 @@
 export default {
   name: "persona",
-  version: "1.0.2",
+  version: "1.0.3",
   builtFor: "seed",
   description: "AI identity at every position. Name, voice, traits, boundaries. Inherits down the tree. Override at any branch.",
 
@@ -29,7 +29,7 @@ export default {
         method: "GET",
         endpoint: "/persona?nodeId=:nodeId",
         subcommands: {
-          set: { method: "POST", endpoint: "/persona/set", body: ["nodeId", "field", "value"], description: "Set a persona field directly" },
+          set: { method: "POST", endpoint: "/persona/set?nodeId=:nodeId", args: ["field", "value"], description: "Set a persona field directly" },
           clear: { method: "DELETE", endpoint: "/persona?nodeId=:nodeId", description: "Remove persona, inherit from parent" },
           tree: { method: "GET", endpoint: "/persona/tree?rootId=:rootId", description: "Persona map across the whole tree" },
         },

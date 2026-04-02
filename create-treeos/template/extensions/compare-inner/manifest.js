@@ -1,6 +1,6 @@
 export default {
   name: "compare-inner",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-intelligence",
   description:
     "Layer 3 of the inner monologue. Compares this week's themes to last week's. " +

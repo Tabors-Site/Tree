@@ -182,11 +182,14 @@ async function _synthesizeNarrative(rootId, runChat) {
   // Write the narrative identity and voice to metadata.narrative on the tree ROOT.
   // The persona extension reads metadata.narrative.voice and layers it under
   // the operator-defined persona.
-  await mergeExtMeta(rootId, "narrative", {
-    identity: answer.trim(),
-    voice: answer.trim(),
-    updatedAt: Date.now(),
-  });
+  const rootDoc = await Node.findById(rootId).select("_id metadata").lean();
+  if (rootDoc) {
+    await mergeExtMeta(rootDoc, "narrative", {
+      identity: answer.trim(),
+      voice: answer.trim(),
+      updatedAt: Date.now(),
+    });
+  }
 
   // ── Layer 6: Initiative ──
   // Generate behavioral shifts from the narrative. Not tool calls. Approach changes.
@@ -219,17 +222,21 @@ async function _synthesizeNarrative(rootId, runChat) {
     });
 
     if (initiativeAnswer && initiativeAnswer.length > 20) {
-      await mergeExtMeta(rootId, "narrative", {
-        initiative: initiativeAnswer.trim(),
-      });
+      const rootDocForInit = await Node.findById(rootId).select("_id metadata").lean();
+      if (rootDocForInit) {
+        await mergeExtMeta(rootDocForInit, "narrative", {
+          initiative: initiativeAnswer.trim(),
+        });
+      }
       log.verbose("Narrative", `Initiative updated: "${initiativeAnswer.trim().slice(0, 100)}"`);
     }
   } catch (err) {
     log.debug("Narrative", `Initiative generation failed: ${err.message}`);
   }
 
-  // Update cooldown
-  await mergeExtMeta(compareNode._id, "narrative", { lastNarrative: Date.now() });
+  // Update cooldown. Re-fetch for mergeExtMeta (needs full doc, not ID).
+  const compareNodeFull = await Node.findById(compareNode._id).select("_id metadata").lean();
+  if (compareNodeFull) await mergeExtMeta(compareNodeFull, "narrative", { lastNarrative: Date.now() });
 
   // Cap narratives
   const noteCount = await Note.countDocuments({ nodeId: String(narrativeNode._id) });

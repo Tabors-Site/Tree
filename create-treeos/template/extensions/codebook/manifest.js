@@ -1,6 +1,6 @@
 export default {
   name: "codebook",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-cascade",
   description:
     "What makes two nodes faster together over time. Listens to afterNote on any node. Tracks " +

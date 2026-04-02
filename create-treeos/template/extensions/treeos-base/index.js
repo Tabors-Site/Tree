@@ -12,6 +12,7 @@ import treeLibrarian from "./modes/tree/librarian.js";
 import treeGetContext from "./modes/tree/getContext.js";
 import treeBe from "./modes/tree/be.js";
 import treeNotes from "./modes/tree/notes.js";
+import treeConverse from "./modes/tree/converse.js";
 
 // Home modes
 import homeDefault from "./modes/home/default.js";
@@ -53,6 +54,7 @@ export async function init(core) {
   core.modes.registerMode("tree:get-context", treeGetContext, "treeos-base");
   core.modes.registerMode("tree:be", treeBe, "treeos-base");
   core.modes.registerMode("tree:notes", treeNotes, "treeos-base");
+  core.modes.registerMode("tree:converse", treeConverse, "treeos-base");
 
   // Register home modes
   core.modes.registerMode("home:default", homeDefault, "treeos-base");
@@ -81,6 +83,7 @@ export async function init(core) {
     core.llm.registerModeAssignment("tree:be", "librarian");
     // User-facing conversation
     core.llm.registerModeAssignment("tree:respond", "respond");
+    core.llm.registerModeAssignment("tree:converse", "respond");
     // Note operations
     core.llm.registerModeAssignment("tree:notes", "notes");
   }

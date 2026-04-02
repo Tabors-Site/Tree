@@ -19,18 +19,22 @@ import {
  * Handle a KB message. Returns { answer, chatId?, mode, setup? }
  * or { error: true, status, code, message } on failure.
  */
-export async function handleMessage(message, { userId, username, rootId, res }) {
+export async function handleMessage(message, { userId, username, rootId, targetNodeId, res }) {
   const { runChat } = await import("../../seed/llm/conversation.js");
 
+  // The KB node is the target from the routing index.
+  // Scaffold and metadata live on this node, not the tree root.
+  const kbRoot = targetNodeId || rootId;
+
   // ── PATH 1: First use ──
-  if (!(await isInitialized(rootId))) {
-    await scaffold(rootId, userId);
+  if (!(await isInitialized(kbRoot))) {
+    await scaffold(kbRoot, userId);
     try {
       const { answer, chatId } = await runChat({
         userId, username,
         message: `Knowledge base just created. The user said: "${message}".\n\nIf they're telling you something, organize it into the Topics tree. If they're asking, explain the kb is empty and invite them to start adding knowledge.`,
         mode: "tree:kb-tell",
-        rootId, res, slot: "kb",
+        rootId: kbRoot, res, slot: "kb",
       });
       return { answer, chatId, mode: "tree:kb-tell", setup: true };
     } catch (llmErr) {
@@ -39,13 +43,13 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
   }
 
   // ── PATH 1b: Setup incomplete ──
-  const phase = await getSetupPhase(rootId);
+  const phase = await getSetupPhase(kbRoot);
   if (phase === "base") {
     try {
       const { answer, chatId } = await runChat({
         userId, username, message,
         mode: "tree:kb-tell",
-        rootId, res, slot: "kb",
+        rootId: kbRoot, res, slot: "kb",
       });
       return { answer, chatId, mode: "tree:kb-tell", setup: true };
     } catch (llmErr) {
@@ -55,7 +59,7 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
 
   // ── Review: start guided review mode ──
   if (message.trim().toLowerCase() === "review") {
-    const maintainer = await isMaintainer(rootId, userId);
+    const maintainer = await isMaintainer(kbRoot, userId);
     if (!maintainer) {
       return { error: true, status: 403, message: "Only maintainers can review." };
     }
@@ -64,7 +68,7 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
         userId, username,
         message: "Start a guided review of stale notes in this knowledge base.",
         mode: "tree:kb-review",
-        rootId, res, slot: "kb",
+        rootId: kbRoot, res, slot: "kb",
       });
       return { answer, chatId, mode: "tree:kb-review" };
     } catch (llmErr) {
@@ -76,12 +80,12 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
 
   // ── Tell: only maintainers ──
   if (intent === "tell") {
-    const maintainer = await isMaintainer(rootId, userId);
+    const maintainer = await isMaintainer(kbRoot, userId);
     if (!maintainer) {
       return { error: true, status: 403, message: "Only maintainers can add knowledge. You can ask questions." };
     }
 
-    const nodes = await findKbNodes(rootId);
+    const nodes = await findKbNodes(kbRoot);
     if (nodes?.log) {
       try { await createNote({ nodeId: nodes.log.id, content: message, contentType: "text", userId }); } catch {}
     }
@@ -90,7 +94,7 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
       const { answer, chatId } = await runChat({
         userId, username, message,
         mode: "tree:kb-tell",
-        rootId, res, slot: "kb",
+        rootId: kbRoot, res, slot: "kb",
       });
       return { answer, chatId, mode: "tree:kb-tell" };
     } catch (llmErr) {
@@ -103,7 +107,7 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
     const { answer, chatId } = await runChat({
       userId, username, message,
       mode: "tree:kb-ask",
-      rootId, res, slot: "kb",
+      rootId: kbRoot, res, slot: "kb",
     });
     return { answer, chatId, mode: "tree:kb-ask" };
   } catch (llmErr) {

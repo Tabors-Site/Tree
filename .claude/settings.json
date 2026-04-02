@@ -617,7 +617,8 @@
       "Bash(grep -A 20 \"registerSlot.*tree-quick-links\" /home/tabor/github/Tree/land/extensions/*/index.js)",
       "Bash(grep -i Chain: /home/tabor/github/Tree/land/*.log)",
       "Bash(grep -i Chain: /tmp/*.log)",
-      "Bash(grep -r \"classifierHints\" extensions/*/manifest.js)"
+      "Bash(grep -r \"classifierHints\" extensions/*/manifest.js)",
+      "Read(//home/tabor/github/Tree/create-treeos/template/extensions/**)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

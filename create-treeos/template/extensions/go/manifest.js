@@ -1,7 +1,7 @@
 export default {
   name: "go",
-  version: "1.0.1",
-  builtFor: "treeos",
+  version: "1.0.2",
+  builtFor: "TreeOS",
   description:
     "Navigate by intent. Say where, not how. " +
     "'go workout' finds fitness across all your trees. 'go food' finds the food node. " +

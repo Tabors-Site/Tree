@@ -76,6 +76,7 @@ function CHAIN_TIMEOUT_MS() { return Number(getLandConfigValue("hookChainTimeout
 const SEQUENTIAL_OVERRIDES = {
   enrichContext: true,  // builds cumulative AI context, each handler adds to previous
   onCascade: true,      // ordered .flow writes, result ordering matters
+  onCompress: true,     // handlers refine the same summary field sequentially
 };
 const _failureCounts = new Map(); // "hookName:extName" -> count
 const _circuitOpenedAt = new Map(); // "hookName:extName" -> timestamp when breaker opened
@@ -179,7 +180,7 @@ function register(hookName, handler, extName = "unknown") {
       "beforeResponse", "beforeRegister", "afterRegister",
       "afterSessionCreate", "afterSessionEnd", "afterNavigate", "onNodeNavigate",
       "afterNodeMove", "afterMetadataWrite", "afterScopeChange", "afterOwnershipChange", "afterBoot",
-      "onTreeTripped", "onTreeRevived",
+      "onTreeTripped", "onTreeRevived", "onCompress",
     ];
     if (!hookName.includes(":")) {
       // Only check non-namespaced hooks (ext hooks use "extName:hookName")

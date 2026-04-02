@@ -124,6 +124,21 @@ export async function init(core) {
     if (persona) context.persona = persona;
   }, "persona");
 
+  // HTML page + tree quick link
+  try {
+    const { getExtension } = await import("../loader.js");
+    const htmlExt = getExtension("html-rendering");
+    const base = getExtension("treeos-base");
+    if (htmlExt) {
+      const { default: buildHtmlRoutes } = await import("./htmlRoutes.js");
+      htmlExt.router.use("/", buildHtmlRoutes());
+    }
+    base?.exports?.registerSlot?.("tree-quick-links", "persona", ({ rootId, queryString }) =>
+      `<a href="/api/v1/root/${rootId}/identity${queryString}" class="back-link">Identity</a>`,
+      { priority: 40 }
+    );
+  } catch {}
+
   return {
     router,
     tools,

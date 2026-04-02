@@ -74,6 +74,21 @@ export async function init(core) {
 
   const { default: router } = await import("./routes.js");
 
+  // HTML page + tree quick link
+  try {
+    const { getExtension } = await import("../loader.js");
+    const htmlExt = getExtension("html-rendering");
+    const base = getExtension("treeos-base");
+    if (htmlExt) {
+      const { default: buildHtmlRoutes } = await import("./htmlRoutes.js");
+      htmlExt.router.use("/", buildHtmlRoutes());
+    }
+    base?.exports?.registerSlot?.("tree-quick-links", "codebook", ({ rootId, queryString }) =>
+      `<a href="/api/v1/root/${rootId}/codebook${queryString}" class="back-link">Codebook</a>`,
+      { priority: 50 }
+    );
+  } catch {}
+
   return {
     router,
     tools,

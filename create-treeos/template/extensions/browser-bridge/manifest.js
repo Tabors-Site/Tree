@@ -1,8 +1,8 @@
 export default {
   name: "browser-bridge",
-  version: "1.0.0",
+  version: "1.0.2",
   scope: "confined",
-  builtFor: "treeos",
+  builtFor: "treeos-connect",
   description:
     "The AI sees and acts through your browser. A Chrome extension connects via Socket.IO. " +
     "The AI gets accessibility trees, clicks elements, types text, navigates pages, takes screenshots. " +

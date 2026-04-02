@@ -894,16 +894,84 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
   session.messages.push({ role: "user", content: safeUserMsg });
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// MID-CONVERSATION COMPRESSION
+// When the message list gets long during tool loops, compress older messages
+// into a summary. Keeps the system prompt and recent messages intact.
+//
+// Default: mechanical (concat assistant messages, no LLM call).
+// Extensions can register a custom compressor via the onCompress hook
+// for LLM-powered summaries.
+// ─────────────────────────────────────────────────────────────────────────
+
+const COMPRESSION_ENABLED = () => getLandConfigValue("conversationCompression") === true;
+const COMPRESSION_THRESHOLD = () => Number(getLandConfigValue("compressionThreshold")) || 30;
+const COMPRESSION_KEEP = () => Number(getLandConfigValue("compressionKeep")) || 6;
+
 /**
- * Resolve per-node LLM config from the ancestor snapshot.
- * Walks from current node to root. First value found for each key wins
- * (closest to current node takes priority). Returns an object with
- * overrides only for keys that were set. Callers fall back to globals.
+ * Compress mid-conversation messages into a summary.
+ * Preserves: system prompt (index 0), last `keep` messages.
+ * Compresses: everything in between into a single summary message.
  *
- * Supported keys in metadata.llm.config:
- *   maxToolIterations, toolCallTimeout (ms), toolResultMaxBytes,
- *   maxConversationMessages
+ * @param {object} session - conversation session with messages[]
+ * @param {number} threshold - message count trigger
+ * @param {number} keep - messages to preserve at end
  */
+async function compressConversation(session, threshold, keep) {
+  const msgs = session.messages;
+  if (msgs.length < threshold) return;
+
+  // Don't compress if we already compressed recently (check for marker)
+  if (msgs[1]?.role === "system" && msgs[1]?._compressed) return;
+
+  const systemPrompt = msgs[0]; // always preserve
+  const preserveStart = Math.max(1, msgs.length - keep);
+  const toCompress = msgs.slice(1, preserveStart);
+  const toKeep = msgs.slice(preserveStart);
+
+  if (toCompress.length < 4) return; // not worth compressing
+
+  // Build mechanical summary: extract assistant content, skip tool call details
+  const summaryParts = [];
+  for (const msg of toCompress) {
+    if (msg.role === "assistant" && msg.content && typeof msg.content === "string") {
+      // Skip very short tool-call-only messages
+      const text = msg.content.trim();
+      if (text.length > 20) summaryParts.push(text);
+    }
+  }
+
+  if (summaryParts.length === 0) return;
+
+  // Cap summary at ~2000 chars to keep it useful but compact
+  let summary = summaryParts.join("\n").slice(0, 2000);
+  if (summaryParts.join("\n").length > 2000) summary += "\n... (earlier context compressed)";
+
+  // Fire onCompress hook if registered. Extensions can replace the mechanical
+  // summary with an LLM-powered one. The hook receives the raw messages and
+  // the mechanical summary, and can return a better one.
+  try {
+    const hookData = {
+      messages: toCompress,
+      mechanicalSummary: summary,
+      summary, // extensions write to this field to override
+    };
+    await hooks.run("onCompress", hookData);
+    summary = hookData.summary; // use extension override if provided
+  } catch {}
+
+  // Replace messages: system prompt + compressed summary + kept messages
+  const compressedMsg = {
+    role: "system",
+    content: `[Compressed context from ${toCompress.length} earlier messages]\n${summary}`,
+    _compressed: true,
+  };
+
+  session.messages = [systemPrompt, compressedMsg, ...toKeep];
+
+  log.verbose("LLM", `Compressed ${toCompress.length} messages into summary (${summary.length} chars), kept ${toKeep.length}`);
+}
+
 /**
  * Resolve per-position LLM config. Three-layer resolution:
  *   1. Node config (metadata.llm.config) - operator override at position
@@ -917,6 +985,8 @@ const LLM_CONFIG_KEYS = {
   toolCallTimeout: 600000,       // 10 minutes max
   toolResultMaxBytes: 1000000,   // 1MB max
   maxConversationMessages: 200,
+  compressionThreshold: 200,     // message count before mid-loop compression
+  compressionKeep: 20,           // messages to preserve at the end
 };
 
 function resolveLlmConfig(ancestors, mode) {
@@ -999,6 +1069,8 @@ async function resolveToolsForPosition(session) {
       log.warn("LLM", `Tool scope resolution failed for node ${currentNodeId}: ${scopeErr.message}`);
     }
   }
+  // Mode-based tool resolution: each mode declares its own tools.
+  // Extensions chain via the orchestrator when a message needs multiple extensions.
   let tools = getToolsForMode(session.modeKey, treeToolConfig);
   // Filter tools by spatial extension scope (blocked + restricted)
   if (blockedExtensions || restrictedExtensions) {
@@ -1590,6 +1662,19 @@ export async function processMessage(visitorId, message, ctx) {
       if (update?.abort) {
         break;
       }
+    }
+
+    // Mid-conversation compression: when messages pile up during long tool chains,
+    // compress older messages into a summary. Keeps the AI focused.
+    // Config: conversationCompression (bool), compressionThreshold (int), compressionKeep (int)
+    // Per-node override: metadata.llm.config.compressionThreshold / compressionKeep
+    const compEnabled = session._nodeLlmConfig?.compressionThreshold !== undefined
+      ? true // node-level config implies enabled
+      : COMPRESSION_ENABLED();
+    if (compEnabled) {
+      const compThreshold = session._nodeLlmConfig?.compressionThreshold ?? COMPRESSION_THRESHOLD();
+      const compKeep = session._nodeLlmConfig?.compressionKeep ?? COMPRESSION_KEEP();
+      await compressConversation(session, compThreshold, compKeep);
     }
   }
 

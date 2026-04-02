@@ -1,6 +1,6 @@
 export default {
   name: "narrative",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-intelligence",
   description:
     "Layers 4, 5, and 6 of the inner monologue. The tree's sense of self, its voice, and its " +
