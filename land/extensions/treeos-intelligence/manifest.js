@@ -1,6 +1,6 @@
 export default {
   name: "treeos-intelligence",
-  version: "1.0.0",
+  version: "1.0.1",
   type: "bundle",
   builtFor: "seed",
   description:
@@ -28,6 +28,7 @@ export default {
   includes: [
     "tree-compress", "contradiction", "inverse-tree", "evolution", "intent", "embed",
     "scout", "explore", "trace", "boundary", "competence", "reflect", "evolve", "rings",
+    "inner", "reflect-inner", "compare-inner", "narrative", "prediction", "taste",
   ],
 
   needs: {

@@ -611,7 +611,9 @@
       "Bash(grep -n atHome cli/ -r --include=*.js)",
       "Bash(grep -rn \"socket\\\\|WebSocket\\\\|io\\(\" cli/ --include=*.js)",
       "Bash(sed -i 's/\"\"1.0.0\"\"/\"\"1.0.2\"\"/' land/extensions/$ext/manifest.js)",
-      "Bash(echo \"Bumped $ext to 1.0.2\")"
+      "Bash(echo \"Bumped $ext to 1.0.2\")",
+      "Bash(sed -i '0,/\"\"1.0.0\"\"/s/\"\"1.0.0\"\"/\"\"1.0.1\"\"/' land/extensions/treeos-intelligence/manifest.js)",
+      "Bash(sed -i '0,/\"\"1.0.0\"\"/s/\"\"1.0.0\"\"/\"\"1.0.1\"\"/' land/extensions/treeos-connect/manifest.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

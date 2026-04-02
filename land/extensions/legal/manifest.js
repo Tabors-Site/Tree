@@ -1,7 +1,7 @@
 export default {
   name: "legal",
-  version: "1.0.1",
-  builtFor: "treeos",
+  version: "1.0.2",
+  builtFor: "TreeOS",
   description:
     "Terms of Service and Privacy Policy pages. Renders on /terms and /privacy. " +
     "The register page conditionally shows agreement text and modals when this " +
