@@ -498,10 +498,10 @@ async function toggleAutoPlace({ userId, enabled }) {
     }
   }
 
+  const { batchSetUserMeta } = await import("../../seed/tree/userMetadata.js");
   const rawIdeas = getUserMeta(user, "rawIdeas");
   rawIdeas.autoPlace = enabled;
-  setUserMeta(user, "rawIdeas", rawIdeas);
-  await user.save();
+  await batchSetUserMeta(String(user._id), "rawIdeas", rawIdeas);
 
   return { message: `Auto-place ${enabled ? "enabled" : "disabled"}`, enabled };
 }

@@ -83,8 +83,8 @@ export async function init(core) {
     if (existing?.address) return;
 
     const normalizedEmail = email.trim().toLowerCase();
-    setUserMeta(freshUser, "email", { address: normalizedEmail, verified: false });
-    await freshUser.save();
+    const { batchSetUserMeta } = await import("../../seed/tree/userMetadata.js");
+    await batchSetUserMeta(String(freshUser._id), "email", { address: normalizedEmail, verified: false });
   }, "email");
 
   try {

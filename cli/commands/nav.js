@@ -221,7 +221,7 @@ module.exports = (program) => {
             const api = isOwnLand ? new TreeAPI(cfg.apiKey) : createProxyApi(cfg.apiKey, domain);
             const landData = await api.getLandRoot();
             const children = landData.children || [];
-            const target = findChild(children, rest);
+            const target = await findChild(children, rest);
             if (!target) return;
 
             cfg.remoteDomain = isOwnLand ? null : domain;
@@ -310,7 +310,7 @@ module.exports = (program) => {
             const proxyApi = createProxyApi(cfg.apiKey, cfg.remoteDomain);
             const landData = await proxyApi.getLandRoot();
             const children = landData.children || [];
-            const target = findChild(children, name);
+            const target = await findChild(children, name);
             if (!target) return;
             cfg.activeRootId = target._id;
             cfg.activeRootName = target.name;
@@ -339,7 +339,7 @@ module.exports = (program) => {
             const childSegments = segments.slice(1);
 
             // Try local roots first
-            const localTarget = findChild(roots, treeName);
+            const localTarget = await findChild(roots, treeName);
             if (localTarget) {
               cfg.activeRootId = localTarget._id;
               cfg.activeRootName = localTarget.name;
@@ -353,7 +353,7 @@ module.exports = (program) => {
                   const nodeId = currentNodeId(cfg);
                   const nodeData = await api.getNode(nodeId);
                   const children = getChildren(nodeData);
-                  const child = findChild(children, seg);
+                  const child = await findChild(children, seg);
                   if (!child) {
                     console.log(chalk.yellow(`Stopped at ${currentPath(cfg)} — no child matching "${seg}"`));
                     break;
@@ -369,7 +369,7 @@ module.exports = (program) => {
             }
 
             // Try remote roots
-            const remoteTarget = findChild(
+            const remoteTarget = await findChild(
               remoteRoots.map((r) => ({ _id: r.rootId, name: r.rootName, landDomain: r.landDomain })),
               treeName,
             );
@@ -393,7 +393,7 @@ module.exports = (program) => {
           try {
             const landData = await api.getLandRoot();
             const children = landData.children || [];
-            const target = findChild(children, name);
+            const target = await findChild(children, name);
             if (!target) return;
             cfg.activeRootId = target._id;
             cfg.activeRootName = target.name;
@@ -430,7 +430,7 @@ module.exports = (program) => {
           try {
             const data = await api.getUser(cfg.userId);
             const roots = data.roots || data.user?.roots || [];
-            const target = findChild(roots, rest);
+            const target = await findChild(roots, rest);
             if (!target) { save(cfg); return; }
             cfg.activeRootId = target._id;
             cfg.activeRootName = target.name;
@@ -465,7 +465,7 @@ module.exports = (program) => {
             const nodeId = currentNodeId(cfg);
             const data = await api.getNode(nodeId);
             const children = getChildren(data);
-            const target = findChild(children, seg);
+            const target = await findChild(children, seg);
             if (!target) {
               console.log(chalk.yellow(`Stopped at ${currentPath(cfg)} — no child matching "${seg}"`));
               break;
@@ -517,7 +517,7 @@ module.exports = (program) => {
         const nodeId = currentNodeId(cfg);
         const data = await api.getNode(nodeId);
         const children = getChildren(data);
-        const target = findChild(children, name);
+        const target = await findChild(children, name);
 
         if (!target) {
           const looksLikeId = /^[0-9a-f-]{8,}$/i.test(name);

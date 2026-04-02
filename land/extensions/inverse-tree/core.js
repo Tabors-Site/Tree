@@ -7,7 +7,7 @@
 
 import log from "../../seed/log.js";
 import User from "../../seed/models/user.js";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { getUserMeta, setUserMeta, batchSetUserMeta } from "../../seed/tree/userMetadata.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _runChat = null;
@@ -69,11 +69,8 @@ function ensureState(data) {
 }
 
 async function saveState(userId, data) {
-  const user = await loadUser(userId);
-  if (!user) return;
   data.lastUpdated = new Date().toISOString();
-  setUserMeta(user, META_KEY, data);
-  await user.save();
+  await batchSetUserMeta(userId, META_KEY, data);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -117,8 +114,7 @@ export async function recordSignal(userId, signal, config) {
   }
 
   data.lastUpdated = new Date().toISOString();
-  setUserMeta(user, META_KEY, data);
-  await user.save();
+  await batchSetUserMeta(userId, META_KEY, data);
 
   return data.stats.interactionsSinceCompression >= config.compressionInterval;
 }
@@ -235,8 +231,7 @@ export async function compress(userId) {
     data.stats.lastCompressed = new Date().toISOString();
 
     data.lastUpdated = new Date().toISOString();
-    setUserMeta(user, META_KEY, data);
-    await user.save();
+    await batchSetUserMeta(userId, META_KEY, data);
 
     log.verbose("InverseTree", `Compressed profile for ${user.username}: ${Object.keys(newProfile).length} categories`);
     return newProfile;
@@ -260,8 +255,7 @@ export async function addCorrection(userId, text) {
   // Cap corrections
   if (data.corrections.length > 50) data.corrections = data.corrections.slice(-50);
   data.lastUpdated = new Date().toISOString();
-  setUserMeta(user, META_KEY, data);
-  await user.save();
+  await batchSetUserMeta(userId, META_KEY, data);
   return data.corrections;
 }
 
@@ -284,8 +278,5 @@ export async function getProfile(userId) {
 }
 
 export async function resetProfile(userId) {
-  const user = await loadUser(userId);
-  if (!user) throw new Error("User not found");
-  setUserMeta(user, META_KEY, emptyState());
-  await user.save();
+  await batchSetUserMeta(userId, META_KEY, emptyState());
 }

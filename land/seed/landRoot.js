@@ -161,10 +161,17 @@ export function getLandRootId() {
 }
 
 /**
- * Check if a node is a user-created root (not the Land system root).
+ * Check if a node is a user-created tree root.
+ * A tree root is: parent is land root, has rootOwner that isn't SYSTEM, no systemRole.
+ * This is the single source of truth. Use it everywhere.
  */
 export function isUserRoot(node) {
-  return !!node?.rootOwner && node.rootOwner !== SYSTEM_OWNER;
+  if (!node) return false;
+  if (node.systemRole) return false;
+  if (!node.rootOwner || String(node.rootOwner) === SYSTEM_OWNER) return false;
+  const landId = getLandRootId();
+  if (landId && node.parent && String(node.parent) !== String(landId)) return false;
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

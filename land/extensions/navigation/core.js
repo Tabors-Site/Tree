@@ -1,4 +1,4 @@
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { getUserMeta, addToUserMetaSet, batchSetUserMeta } from "../../seed/tree/userMetadata.js";
 import log from "../../seed/log.js";
 
 let User, Node;
@@ -50,18 +50,11 @@ export async function getUserRootsWithNames(userId) {
  */
 export async function addRoot(userId, rootId) {
   if (!userId || !rootId) return;
-  const user = await User.findById(userId);
-  if (!user) return;
-
-  const nav = getUserMeta(user, "nav");
-  let roots = Array.isArray(nav.roots) ? nav.roots : [];
-
-  const id = rootId.toString();
-  if (!roots.includes(id)) {
-    roots.push(id);
-    nav.roots = roots;
-    setUserMeta(user, "nav", nav);
-    await user.save();
+  try {
+    await addToUserMetaSet(userId, "nav", "roots", String(rootId));
+    log.info("Navigation", `addRoot: saved root ${rootId} for user ${userId}`);
+  } catch (err) {
+    log.warn("Navigation", `addRoot failed: ${err.message}`);
   }
 }
 
@@ -70,19 +63,10 @@ export async function addRoot(userId, rootId) {
  */
 export async function removeRoot(userId, rootId) {
   if (!userId || !rootId) return;
-  const user = await User.findById(userId);
-  if (!user) return;
-
-  const nav = getUserMeta(user, "nav");
-  let roots = Array.isArray(nav.roots) ? nav.roots : [];
-
-  const id = rootId.toString();
-  const filtered = roots.filter(r => r !== id);
-  if (filtered.length !== roots.length) {
-    nav.roots = filtered;
-    setUserMeta(user, "nav", nav);
-    await user.save();
-  }
+  await User.updateOne(
+    { _id: String(userId) },
+    { $pull: { "metadata.nav.roots": String(rootId) } },
+  );
 }
 
 // ── Recent roots (metadata.nav.recentRoots) ──
@@ -97,30 +81,19 @@ export async function updateRecentRoots(userId, rootId) {
   const node = await Node.findById(rootId).select("name").lean();
   if (!node) return;
 
-  const user = await User.findById(userId);
+  // Read current recents with lean (read-only, no save conflict)
+  const user = await User.findById(userId).select("metadata").lean();
   if (!user) return;
 
-  const nav = getUserMeta(user, "nav");
-  let recents = Array.isArray(nav.recentRoots) ? nav.recentRoots : [];
+  const nav = (user.metadata instanceof Map ? user.metadata.get("nav") : user.metadata?.nav) || {};
+  let recents = Array.isArray(nav.recentRoots) ? [...nav.recentRoots] : [];
 
-  // Remove existing entry for this root
   recents = recents.filter((r) => r.rootId !== rootId);
+  recents.unshift({ rootId, rootName: node.name, lastVisitedAt: new Date() });
+  if (recents.length > MAX_RECENT) recents = recents.slice(0, MAX_RECENT);
 
-  // Add to front
-  recents.unshift({
-    rootId,
-    rootName: node.name,
-    lastVisitedAt: new Date(),
-  });
-
-  // Trim
-  if (recents.length > MAX_RECENT) {
-    recents = recents.slice(0, MAX_RECENT);
-  }
-
-  nav.recentRoots = recents;
-  setUserMeta(user, "nav", nav);
-  await user.save();
+  // Atomic write to just the recentRoots field
+  await batchSetUserMeta(userId, "nav", { recentRoots: recents });
 }
 
 /**

@@ -1151,7 +1151,11 @@ export function buildTools() {
         userId,
         chatId,
         sessionId,
+        rootId,
       }) => {
+        if (rootId) {
+          return text("create-tree can only be used from home (~). Use create-new-node to add nodes inside a tree.");
+        }
         try {
           const rootNode = await createNode({
             name,

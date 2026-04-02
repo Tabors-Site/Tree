@@ -15,7 +15,7 @@ export default {
   },
 
   optional: {
-    extensions: ["breath"],
+    extensions: ["breath", "html-rendering", "treeos-base"],
   },
 
   provides: {

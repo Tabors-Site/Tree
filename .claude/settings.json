@@ -595,7 +595,21 @@
       "Bash(grep -r socketHandlers /home/tabor/github/Tree/land/extensions --include=*.js -l)",
       "Bash(grep -r \"exports.*socketHandlers\\\\|socketHandlers.*=\" /home/tabor/github/Tree/land/extensions --include=*.js -A 5)",
       "Bash(grep -r socketHandlers /home/tabor/github/Tree/land/extensions --include=*.js -B 2 -A 8)",
-      "Bash(grep -rn \"bridge\\\\|Bridge\\\\|brain land\\\\|Brain Land\" site/src/ --include=*.jsx --include=*.js)"
+      "Bash(grep -rn \"bridge\\\\|Bridge\\\\|brain land\\\\|Brain Land\" site/src/ --include=*.jsx --include=*.js)",
+      "Bash(grep -rn \"user\\\\.save\\(\\)\\\\|await.*\\\\.save\\(\\)\" land/extensions/*/core.js land/extensions/*/index.js)",
+      "Bash(grep -n \"disambigu\\\\|multiple\\\\|matches found\\\\|choose\\\\|pick\\\\|select.*match\\\\|did you mean\" cli/commands/*.js cli/*.js)",
+      "Bash(grep -rn \"use\\\\|root\\\\|\\\\.command.*root\\\\|\\\\.command.*use\" cli/commands/*.js)",
+      "Bash(grep -rn \"user\\\\.save\\(\\)\\\\|freshUser\\\\.save\\(\\)\" land/extensions/*/core.js land/extensions/*/index.js)",
+      "Bash(grep -rn \"readline\\\\|inquirer\\\\|prompt\\\\|rl\\\\.question\" cli/ --include=*.js)",
+      "Bash(grep -rn 'mode: \"\"home:default\"\"' land/extensions/reflect-inner/index.js land/extensions/compare-inner/index.js land/extensions/narrative/index.js land/extensions/prediction/index.js)",
+      "Bash(sed -i 's/mode: \"\"home:default\"\"/mode: \"\"tree:respond\"\"/g' \"$f\")",
+      "Bash(echo \"Fixed $f\")",
+      "Bash(sed -i 's/const ownerId = rootNode?.rootOwner ? String\\(rootNode.rootOwner\\) : null;/if \\(rootNode?.systemRole\\) return;\\\\n    const ownerId = rootNode?.rootOwner ? String\\(rootNode.rootOwner\\) : null;/' \"$f\")",
+      "Bash(sed -i 's/if \\(!ownerId\\) return;/if \\(!ownerId || ownerId === \"\"SYSTEM\"\"\\) return;/' \"$f\")",
+      "Bash(grep -n router.get.*node.*:nodeId land/routes/api/node.js)",
+      "Bash(grep -rn _scope cli/ --include=*.js)",
+      "Bash(grep -n atHome cli/ -r --include=*.js)",
+      "Bash(grep -rn \"socket\\\\|WebSocket\\\\|io\\(\" cli/ --include=*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

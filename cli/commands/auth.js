@@ -63,6 +63,7 @@ async function saveLogin(cfg, apiKey) {
   cfg.pathStack = [];
   cfg.activeRootId = null;
   cfg.activeRootName = null;
+  cfg.atHome = true;
   save(cfg);
   return { me, api };
 }
@@ -84,6 +85,7 @@ async function createCliApiKey(cfg, token, userId, username) {
     cfg.pathStack = [];
     cfg.activeRootId = null;
     cfg.activeRootName = null;
+    cfg.atHome = true;
     save(cfg);
     return { me: { userId, username: username || null }, api: new TreeAPI(null) };
   }

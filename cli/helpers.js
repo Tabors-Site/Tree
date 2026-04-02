@@ -21,7 +21,20 @@ function flattenTree(node, pathStack = []) {
   return results;
 }
 
-function findChild(children, query) {
+function promptChoice(matches) {
+  return new Promise((resolve) => {
+    const readline = require("readline");
+    const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+    rl.question(chalk.dim("  Pick a number (or press enter to cancel): "), (answer) => {
+      rl.close();
+      const num = parseInt(answer, 10);
+      if (num >= 1 && num <= matches.length) resolve(matches[num - 1]);
+      else resolve(null);
+    });
+  });
+}
+
+async function findChild(children, query) {
   const q = query.toLowerCase();
 
   // Exact ID match
@@ -36,39 +49,33 @@ function findChild(children, query) {
   const byName = children.filter((c) => c.name && c.name.toLowerCase() === q);
   if (byName.length === 1) return byName[0];
   if (byName.length > 1) {
-    console.error(
-      chalk.yellow(`Multiple matches for "${query}". Use an ID to disambiguate (tip: rename one with: rename <name> <newname>):`),
+    console.error(chalk.yellow(`Multiple matches for "${query}":`));
+    byName.forEach((c, i) =>
+      console.log(`  ${chalk.white(i + 1)}) ${chalk.cyan(c.name)}  ${chalk.dim(c._id)}`),
     );
-    byName.forEach((c) =>
-      console.log(`  ${chalk.cyan(c.name)}  ${chalk.dim(c._id)}`),
-    );
-    return null;
+    return promptChoice(byName);
   }
 
-  // Partial name match — name starts with query
+  // Partial name match
   const byStart = children.filter((c) => c.name && c.name.toLowerCase().startsWith(q));
   if (byStart.length === 1) return byStart[0];
   if (byStart.length > 1) {
-    console.error(
-      chalk.yellow(`Multiple matches for "${query}". Use an ID to disambiguate (tip: rename one with: rename <name> <newname>):`),
+    console.error(chalk.yellow(`Multiple matches for "${query}":`));
+    byStart.forEach((c, i) =>
+      console.log(`  ${chalk.white(i + 1)}) ${chalk.cyan(c.name)}  ${chalk.dim(c._id)}`),
     );
-    byStart.forEach((c) =>
-      console.log(`  ${chalk.cyan(c.name)}  ${chalk.dim(c._id)}`),
-    );
-    return null;
+    return promptChoice(byStart);
   }
 
-  // Substring match — query appears anywhere in name
+  // Substring match
   const bySub = children.filter((c) => c.name && c.name.toLowerCase().includes(q));
   if (bySub.length === 1) return bySub[0];
   if (bySub.length > 1) {
-    console.error(
-      chalk.yellow(`Multiple matches for "${query}". Use an ID to disambiguate (tip: rename one with: rename <name> <newname>):`),
+    console.error(chalk.yellow(`Multiple matches for "${query}":`));
+    bySub.forEach((c, i) =>
+      console.log(`  ${chalk.white(i + 1)}) ${chalk.cyan(c.name)}  ${chalk.dim(c._id)}`),
     );
-    bySub.forEach((c) =>
-      console.log(`  ${chalk.cyan(c.name)}  ${chalk.dim(c._id)}`),
-    );
-    return null;
+    return promptChoice(bySub);
   }
 
   // Nothing found

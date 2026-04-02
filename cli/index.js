@@ -3,7 +3,8 @@
 const { Command } = require("commander");
 const chalk = require("chalk");
 const { version } = require("./package.json");
-const { load, currentPath, currentLand, getProtocolCli, currentZone } = require("./config");
+const { load, currentPath, currentLand, getProtocolCli, currentZone, currentNodeId } = require("./config");
+const { getApi } = require("./helpers");
 
 const program = new Command();
 
@@ -170,12 +171,15 @@ require("./commands/dynamic")(program);
     roots: HOME, mkroot: HOME, use: HOME, root: HOME, recent: HOME, home: HOME,
     ideas: HOME, idea: HOME, "idea-store": HOME, "idea-place": HOME,
     "idea-transfer": HOME, "idea-auto": HOME, "rm-idea": HOME,
-    energy: HOME, tier: HOME, invites: HOME, deleted: HOME, revive: HOME,
+    energy: HOME, tier: HOME, invites: HOME, deleted: HOME, revive: HOME, "share-token": HOME,
     "api-keys": HOME, backup: HOME, "backup-snapshot": HOME, "backup-restore": HOME, "backup-list": HOME,
 
     // Land zone
-    config: LAND, peers: LAND, peer: LAND, search: LAND, browse: LAND,
+    config: LAND, peers: LAND, peer: LAND,
     "log-level": LAND,
+
+    // Home + Land
+    search: HOME_LAND, browse: HOME_LAND,
 
     // Tree zone
     cd: TREE, ls: TREE, pwd: TREE, tree: TREE,
@@ -184,7 +188,7 @@ require("./commands/dynamic")(program);
     note: TREE, cat: TREE, "rm-note": TREE, download: TREE, book: TREE,
     chat: TREE, place: TREE, query: TREE, chats: TREE,
     team: TREE, invite: TREE, kick: TREE, owner: TREE,
-    share: TREE, visibility: TREE, "share-token": TREE,
+    share: TREE, visibility: TREE,
     values: TREE, value: TREE, goal: TREE,
     prestige: TREE, schedule: TREE, calendar: TREE, "dream-time": TREE,
     holdings: TREE, "holdings-dismiss": TREE, "holdings-view": TREE,
@@ -198,8 +202,23 @@ require("./commands/dynamic")(program);
     "learn-status": TREE, "learn-resume": TREE, "learn-pause": TREE, "learn-stop": TREE,
 
     // Two-zone
-    notes: TREE_HOME, contributions: TREE_HOME, tags: TREE_HOME,
+    notes: TREE_HOME, contributions: TREE_HOME, tags: TREE_HOME, link: TREE_HOME,
     activity: HOME_LAND,
+    llms: TREE_HOME, llm: TREE_HOME,
+
+    // Tree only (dynamic/extension commands that leak without scope)
+    be: TREE, cc: TREE, go: TREE,
+    scout: TREE, explore: TREE, trace: TREE,
+    changelog: TREE, digest: TREE, delegate: TREE,
+    competence: TREE, evolve: TREE, inverse: TREE,
+    intent: TREE, reflect: TREE,
+
+    // Land only
+    bundle: LAND, os: LAND, ext: LAND,
+    "governance-status": LAND, "governance-check": LAND,
+
+    // Global (no scope needed, available everywhere)
+    // whoami, help, logout, connect, login, register, start, stop, protocol, sessions
   };
 
   for (const cmd of program.commands) {
@@ -226,10 +245,8 @@ let _shellChatFallback = null; // set by onLine to capture the full input
 
 program.on("command:*", (operands) => {
   if (_shellMode && _shellChatFallback) {
-    // Re-dispatch as chat in the shell
-    const fullInput = _shellChatFallback;
-    _shellChatFallback = null;
-    program.parseAsync(["node", "tree", "chat", fullInput]).catch(() => {});
+    // Mark for chat fallback. onLine will handle it after parseAsync returns.
+    _shellChatFallback = "__fallback__";
     return;
   }
 
@@ -383,8 +400,33 @@ const startShell = module.exports.startShell = async () => {
     let _tabIndex = -1;
     let _tabPartial = "";   // what the user typed before first tab
     let _tabPrefix = "";    // leading part of line before the word being completed
-    let _tabContext = "";   // "cmd", "sub:X", or "ext-arg"
+    let _tabContext = "";   // "cmd", "sub:X", "ext-arg", or "child"
     let _hintLine = "";
+
+    // Cached child node names for tab completion
+    let _childCache = null;    // { nodeId, names: ["name1", ...] }
+    async function getChildNames() {
+      const cfg = load();
+      const nodeId = currentNodeId(cfg);
+      const cacheKey = nodeId || "home";
+      if (_childCache && _childCache.nodeId === cacheKey) return _childCache.names;
+      try {
+        const api = getApi(cfg);
+        if (!nodeId) {
+          // At home: list roots
+          const data = await api.getUser(cfg.userId);
+          const roots = data.roots || data.user?.roots || [];
+          const names = roots.map(r => r.name).filter(Boolean);
+          _childCache = { nodeId: cacheKey, names };
+          return names;
+        }
+        const data = await api.getNode(nodeId);
+        const children = (data.node || data).children || [];
+        const names = children.map(c => c.name).filter(Boolean);
+        _childCache = { nodeId: cacheKey, names };
+        return names;
+      } catch { return []; }
+    }
 
     function clearHint() {
       _hintLine = "";
@@ -454,14 +496,16 @@ const startShell = module.exports.startShell = async () => {
     });
 
     // Intercept tab before readline processes it
+    let _tabFetching = false;
     const _onKeypress = (ch, key) => {
       if (key && key.name === "tab") {
         // First tab: compute matches from what the user has typed
-        if (_tabMatches.length === 0) {
+        if (_tabMatches.length === 0 && !_tabFetching) {
           const line = rl.line || "";
           const parts = line.split(/\s+/);
           const extArgTopLevel = new Set(["ext-block", "ext-allow", "ext-unallow", "ext-restrict"]);
           const extArgSubs = new Set(["disable", "enable", "info", "uninstall", "update", "publish"]);
+          const navCmds = new Set(["cd", "use", "root", "rm", "rename", "mv"]);
 
           if (parts.length <= 1) {
             // Completing command name (filtered by current zone)
@@ -476,6 +520,25 @@ const startShell = module.exports.startShell = async () => {
             _tabPartial = partial;
             _tabPrefix = "";
             _tabContext = "cmd";
+          } else if (parts.length === 2 && parts[0] === "cd") {
+            // cd <partial>: complete against child node names
+            const partial = parts[1] || "";
+            _tabFetching = true;
+            getChildNames().then(names => {
+              _tabFetching = false;
+              const hits = partial.length > 0
+                ? names.filter(n => n.toLowerCase().startsWith(partial.toLowerCase()))
+                : names;
+              if (hits.length === 0) return;
+              _tabMatches = hits;
+              _tabIndex = 0;
+              _tabPartial = partial;
+              _tabPrefix = "cd ";
+              _tabContext = "child";
+              showHint("");
+              setLine("cd " + hits[0]);
+            }).catch(() => { _tabFetching = false; });
+            return;
           } else if (parts.length === 2 && extArgTopLevel.has(parts[0])) {
             // ext-block/ext-allow <extName> completion
             const cfg = load();
@@ -534,10 +597,11 @@ const startShell = module.exports.startShell = async () => {
         return;
       }
 
-      // Any non-tab key: reset tab state, clear hint
+      // Any non-tab key: reset tab state, clear hint, invalidate child cache
       if (_tabMatches.length > 0) {
         _tabMatches = [];
         _tabIndex = -1;
+        _childCache = null;
         _tabPartial = "";
         _tabPrefix = "";
         _tabContext = "";
@@ -578,19 +642,17 @@ const startShell = module.exports.startShell = async () => {
       }
     }
 
-    async function onLine(line) {
-      clearHint();
-      _tabMatches = [];
-      _tabIndex = -1;
-      const input = line.trim();
-      if (!input) return prompt();
+    let _processing = false;
+    const _lineQueue = [];
+
+    async function processLine(input) {
       if (input === "exit" || input === "quit") {
         rl.close();
         return;
       }
       if (input === "shell" || input === "start") {
         console.log(chalk.dim("Already in shell. Type 'help' for commands, 'exit' to quit."));
-        return prompt();
+        return;
       }
 
       // Reset all subcommand options so flags don't stick between invocations
@@ -624,6 +686,11 @@ const startShell = module.exports.startShell = async () => {
       try {
         _shellChatFallback = cleanInput;
         await program.parseAsync(["node", "tree", ...shellSplit(cleanInput)]);
+        // If command:* set the fallback marker, re-dispatch as chat and await it
+        if (_shellChatFallback === "__fallback__") {
+          _shellChatFallback = null;
+          await program.parseAsync(["node", "tree", "chat", cleanInput]);
+        }
         _shellChatFallback = null;
       } catch (e) {
         _shellChatFallback = null;
@@ -644,8 +711,34 @@ const startShell = module.exports.startShell = async () => {
       rl.on("close", onClose);
       rl.on("SIGINT", onSigint);
       process.stdin.on("keypress", _onKeypress);
+    }
 
+    async function drainQueue() {
+      while (_lineQueue.length > 0) {
+        const next = _lineQueue.shift();
+        await processLine(next);
+      }
+      _processing = false;
       prompt();
+    }
+
+    async function onLine(line) {
+      clearHint();
+      _tabMatches = [];
+      _tabIndex = -1;
+      const input = line.trim();
+      if (!input) return prompt();
+
+      if (_processing) {
+        // Queue the line, it will run after the current command finishes
+        _lineQueue.push(input);
+        console.log(chalk.dim(`  queued: ${input}`));
+        return;
+      }
+
+      _processing = true;
+      await processLine(input);
+      await drainQueue();
     }
 
     rl.on("line", onLine);

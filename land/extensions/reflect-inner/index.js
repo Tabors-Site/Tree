@@ -16,15 +16,15 @@ import { getExtMeta, mergeExtMeta } from "../../seed/tree/extensionMetadata.js";
 const DAILY_MS = 24 * 60 * 60 * 1000;
 const MIN_THOUGHTS = 10;
 const MAX_REFLECTIONS = 30;
+const _reflecting = new Set();
 
 export async function init(core) {
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
 
   core.llm.registerRootLlmSlot?.("reflectInner");
 
-  const runChat = async (opts) => {
-    return core.llm.runChat({ ...opts, llmPriority: BG });
-  };
+  const { runChat: _runChatDirect } = await import("../../seed/llm/conversation.js");
+  const runChat = async (opts) => _runChatDirect({ ...opts, llmPriority: BG });
 
   core.hooks.register("breath:exhale", ({ rootId, breathRate }) => {
     if (breathRate === "dormant") return;
@@ -36,6 +36,13 @@ export async function init(core) {
 }
 
 async function reflect(rootId, runChat) {
+  const rid = String(rootId);
+  if (_reflecting.has(rid)) return;
+  _reflecting.add(rid);
+  try { await _reflect(rootId, runChat); } finally { _reflecting.delete(rid); }
+}
+
+async function _reflect(rootId, runChat) {
   // Find .inner node
   const innerNode = await Node.findOne({ parent: rootId, name: ".inner" }).select("_id metadata").lean();
   if (!innerNode) return;
@@ -46,9 +53,10 @@ async function reflect(rootId, runChat) {
   if (Date.now() - lastReflection < DAILY_MS) return;
 
   // Get tree owner for LLM access
-  const rootNode = await Node.findById(rootId).select("rootOwner").lean();
-  const ownerId = rootNode?.rootOwner ? String(rootNode.rootOwner) : null;
-  if (!ownerId) return;
+  const { isUserRoot } = await import("../../seed/landRoot.js");
+  const rootNode = await Node.findById(rootId).select("rootOwner systemRole parent").lean();
+  if (!isUserRoot(rootNode)) return;
+  const ownerId = String(rootNode.rootOwner);
 
   // Read thoughts
   const result = await getNotes({ nodeId: String(innerNode._id), limit: 200 });
@@ -71,7 +79,8 @@ async function reflect(rootId, runChat) {
       `Not "the user is active" but "the user logs chicken 3x more than any other protein source."\n` +
       `Not "the tree has gaps" but "the study queue has 4 items untouched for 2 weeks."\n\n` +
       `Return as a numbered list. Nothing else.`,
-    mode: "home:default",
+    mode: "tree:respond",
+    rootId,
     slot: "reflectInner",
   });
 

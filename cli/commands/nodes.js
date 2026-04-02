@@ -67,7 +67,7 @@ module.exports = (program) => {
         const nodeId = currentNodeId(cfg);
         const data = await api.getNode(nodeId);
         const children = getChildren(data);
-        const target = findChild(children, name);
+        const target = await findChild(children, name);
         if (!target) return;
 
         if (!force) {
@@ -99,7 +99,7 @@ module.exports = (program) => {
         const nodeId = currentNodeId(cfg);
         const data = await api.getNode(nodeId);
         const children = getChildren(data);
-        const target = findChild(children, nodeName);
+        const target = await findChild(children, nodeName);
         if (!target) return;
 
         await api.moveNode(target._id, destNodeId);
@@ -122,7 +122,7 @@ module.exports = (program) => {
         const nodeId = currentNodeId(cfg);
         const data = await api.getNode(nodeId);
         const children = getChildren(data);
-        const target = findChild(children, oldName);
+        const target = await findChild(children, oldName);
         if (!target) return;
 
         await api.renameNode(target._id, newName);

@@ -55,7 +55,7 @@ module.exports = (program) => {
       try {
         const data = await api.getUser(cfg.userId);
         const roots = data.roots || data.user?.roots || [];
-        const root = findChild(roots, nameOrId);
+        const root = await findChild(roots, nameOrId);
         if (!root) return;
         cfg.activeRootId = root._id;
         cfg.activeRootName = root.name;
@@ -78,7 +78,7 @@ module.exports = (program) => {
       try {
         const data = await api.getUser(cfg.userId);
         const roots = data.roots || data.user?.roots || [];
-        const root = findChild(roots, nameOrId);
+        const root = await findChild(roots, nameOrId);
         if (!root) return;
         cfg.activeRootId = root._id;
         cfg.activeRootName = root.name;
@@ -132,7 +132,7 @@ module.exports = (program) => {
           const nameOrId = parts.join(" ");
           const data = await api.getUser(cfg.userId);
           const roots = data.roots || data.user?.roots || [];
-          const root = findChild(roots, nameOrId);
+          const root = await findChild(roots, nameOrId);
           if (!root) return;
           rootId = root._id;
           rootName = root.name;
