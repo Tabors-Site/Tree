@@ -49,26 +49,24 @@ function connect() {
       serverUrl = 'http://' + serverUrl;
     }
 
-    socket = io(serverUrl, {
+    socket = io(serverUrl + '/browser-bridge', {
       path: '/socket.io',
       transports: ['websocket'],
       reconnection: true,
       reconnectionDelay: 5000,
       reconnectionAttempts: Infinity,
       forceNew: true,
+      auth: {
+        apiKey: config.apiKey || null,
+        username: config.username || null,
+        password: config.password || null,
+      },
     });
 
     socket.on('connect', () => {
       updateState('connected');
       clearReconnectTimer();
-
-      // Authenticate with API key or username/password
-      socket.emit('browserAuth', {
-        apiKey: config.apiKey || null,
-        username: config.username || null,
-        password: config.password || null,
-        capabilities: ['page_state', 'execute_action', 'screenshot', 'network_log'],
-      });
+      console.log('[TreeOS Bridge] Connected to /browser-bridge namespace');
     });
 
     socket.on('browserAuthResult', (data) => {
@@ -78,6 +76,11 @@ function connect() {
         console.error('[TreeOS Bridge] Auth failed:', data.error);
         disconnect();
       }
+    });
+
+    socket.on('connect_error', (err) => {
+      console.error('[TreeOS Bridge] Connection error:', err.message);
+      updateState('error');
     });
 
     // ── Server requests ──────────────────────────────────────────

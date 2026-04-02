@@ -53,23 +53,10 @@ export async function init(core) {
   core.hooks.register("breath:exhale", async ({ rootId, breathRate }) => {
     if (breathRate === "dormant") return;
 
-    // Fire and forget
-    runFlows(rootId, runChat, core).catch(err =>
+    // Fire and forget. Pass _recordActivity so the flow can poke breath when done.
+    runFlows(rootId, runChat, core, _recordActivity).catch(err =>
       log.debug("Automate", `Flow failed: ${err.message}`)
     );
-
-    // If this tree has enabled flows, keep it alive by recording activity.
-    // Prevents dormancy between flow cadence gaps.
-    if (_recordActivity) {
-      try {
-        const children = await Node.find({ parent: rootId }).select("metadata").lean();
-        const hasFlows = children.some(c => {
-          const meta = c.metadata instanceof Map ? c.metadata.get("automate") : c.metadata?.automate;
-          return meta?.enabled;
-        });
-        if (hasFlows) _recordActivity(rootId);
-      } catch {}
-    }
   }, "automate");
 
   log.info("Automate", "Loaded. Trees can run flows on repeat.");
@@ -79,7 +66,7 @@ export async function init(core) {
 /**
  * Find and run all enabled flows in a tree.
  */
-async function runFlows(rootId, runChat, core) {
+async function runFlows(rootId, runChat, core, recordActivity) {
   const rid = String(rootId);
   if (_running.has(rid)) return;
   _running.add(rid);
@@ -112,6 +99,10 @@ async function runFlows(rootId, runChat, core) {
       } catch (err) {
         log.debug("Automate", `Flow "${child.name}" failed: ${err.message}`);
       }
+
+      // Poke breath after each flow. The flow is the activity.
+      // This prevents dormancy between cadence gaps.
+      if (recordActivity) recordActivity(rootId);
     }
   } finally {
     _running.delete(rid);

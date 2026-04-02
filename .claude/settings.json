@@ -622,7 +622,8 @@
       "Bash(node --input-type=module -e \":*)",
       "Bash(grep -l \"file\\\\|code\\\\|parse\\\\|syntax\" /home/tabor/github/Tree/land/extensions/*/index.js)",
       "Bash(grep -E \"name|description\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
-      "Bash(wc -l /home/tabor/github/Tree/land/extensions/*/index.js)"
+      "Bash(wc -l /home/tabor/github/Tree/land/extensions/*/index.js)",
+      "Bash(MONGODB_URI=mongodb://localhost:27017 node --input-type=module -e \":*)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

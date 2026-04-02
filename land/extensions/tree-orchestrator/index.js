@@ -43,6 +43,14 @@ export async function init(core) {
   // afterNodeCreate itself doesn't need a handler since modes are set
   // after creation via setExtMeta, which fires afterMetadataWrite.
 
+  // ── Routing index: rebuild when extension scoping changes (ext-allow, ext-block) ──
+  core.hooks.register("afterScopeChange", async ({ nodeId }) => {
+    try {
+      const root = await resolveRootNode(nodeId);
+      if (root?._id) await rebuildIndexForRoot(root._id);
+    } catch {}
+  }, "tree-orchestrator");
+
   core.hooks.register("afterNodeMove", async ({ nodeId, oldParentId, newParentId }) => {
     try {
       const oldRoot = await resolveRootNode(oldParentId);

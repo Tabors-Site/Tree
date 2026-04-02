@@ -83,6 +83,13 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 let io;
 
+/**
+ * Get the socket.io server instance.
+ * Extensions use this to create separate namespaces (e.g. browser-bridge).
+ * Returns null if WebSocket server hasn't been initialized yet.
+ */
+export function getIO() { return io || null; }
+
 // Socket tracking
 const userSockets = new Map(); // visitorId → socket.id
 const authSessions = new Map(); // userId → socket.id

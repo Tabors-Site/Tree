@@ -110,7 +110,7 @@ export async function rebuildIndexForRoot(rootId) {
         const hints = Array.isArray(manifest?.classifierHints) ? manifest.classifierHints : [];
         if (hints.length === 0) continue;
         const modes = getModesOwnedBy(extName);
-        const defaultMode = modes.find(m => m.endsWith("-agent") || m.endsWith("-tell") || m.endsWith("-log")) || modes[0];
+        const defaultMode = modes.find(m => m.endsWith("-agent") || m.endsWith("-tell") || m.endsWith("-log") || m.endsWith("-browse")) || modes[0];
         if (!defaultMode) continue;
         index.set(extName, {
           nodeId: rid,
