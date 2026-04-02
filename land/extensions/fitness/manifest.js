@@ -19,10 +19,9 @@ export default {
     /\b(bench|squat|deadlift|press|curl|row|pull-?up|dip)\b/i,  // gym exercises
     /\b(push-?ups?|sit-?ups?|burpees?|plank|lunges?)\b/i,       // bodyweight
     /\b(ran|run|jog|sprint|mile|marathon|pace|tempo|5k|10k)\b/i, // running
-    /\b(workout|exercise|training|sets|reps|weight|session)\b/i, // general fitness
-    /\b(record|log|track|session|complete|finished|did)\b/i,     // action verbs
+    /\b(workout|exercise|training|sets|reps|weight)\b/i,         // fitness-specific
     /\b(chest|back|legs|shoulders|core|calves|bicep|tricep)\b/i, // muscle groups
-    /\b(yoga|stretching|plank|hold|seconds|minutes|pose)\b/i,    // flexibility
+    /\b(yoga|stretching|plank|hold.*seconds|pose)\b/i,           // flexibility
     /\b(pr|personal record|fastest|heaviest|longest)\b/i,        // records
   ],
 

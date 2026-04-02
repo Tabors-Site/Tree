@@ -98,6 +98,30 @@ export async function rebuildIndexForRoot(rootId) {
       });
     }
 
+    // Also include confined extensions that are ext-allowed at the tree root.
+    // These don't scaffold nodes or set modes.respond, but they're active here.
+    try {
+      const { getConfinedExtensions, isExtensionBlockedAtNode, getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
+      const { getExtensionManifest } = await import("../loader.js");
+      for (const extName of getConfinedExtensions()) {
+        if (index.has(extName)) continue;
+        if (await isExtensionBlockedAtNode(extName, rid)) continue;
+        const manifest = getExtensionManifest(extName);
+        const hints = Array.isArray(manifest?.classifierHints) ? manifest.classifierHints : [];
+        if (hints.length === 0) continue;
+        const modes = getModesOwnedBy(extName);
+        const defaultMode = modes.find(m => m.endsWith("-agent") || m.endsWith("-tell") || m.endsWith("-log")) || modes[0];
+        if (!defaultMode) continue;
+        index.set(extName, {
+          nodeId: rid,
+          name: extName,
+          path: "/" + (root?.name || rid),
+          mode: defaultMode,
+          hints,
+        });
+      }
+    } catch {}
+
     _indices.set(rid, index);
     if (index.size > 0) {
       log.debug("RoutingIndex", `Built index for ${root?.name || rid}: ${index.size} extensions`);
@@ -175,6 +199,27 @@ export function queryIndex(rootId, message, currentPath) {
   }
 
   return null;
+}
+
+/**
+ * Query the routing index for ALL extensions that match a message.
+ * Used by the orchestrator to detect multi-extension chains.
+ * Returns [{ mode, targetNodeId, extName }] (all matches, not just first).
+ */
+export function queryAllMatches(rootId, message, currentPath) {
+  const index = _indices.get(String(rootId));
+  if (!index || index.size === 0) return [];
+
+  const matches = [];
+  for (const [extName, entry] of index) {
+    if (currentPath && entry.path !== currentPath && !entry.path.startsWith(currentPath + "/")) {
+      continue;
+    }
+    if (entry.hints.length > 0 && entry.hints.some(re => re.test(message))) {
+      matches.push({ mode: entry.mode, targetNodeId: entry.nodeId, extName });
+    }
+  }
+  return matches;
 }
 
 /**

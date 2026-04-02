@@ -613,7 +613,11 @@
       "Bash(sed -i 's/\"\"1.0.0\"\"/\"\"1.0.2\"\"/' land/extensions/$ext/manifest.js)",
       "Bash(echo \"Bumped $ext to 1.0.2\")",
       "Bash(sed -i '0,/\"\"1.0.0\"\"/s/\"\"1.0.0\"\"/\"\"1.0.1\"\"/' land/extensions/treeos-intelligence/manifest.js)",
-      "Bash(sed -i '0,/\"\"1.0.0\"\"/s/\"\"1.0.0\"\"/\"\"1.0.1\"\"/' land/extensions/treeos-connect/manifest.js)"
+      "Bash(sed -i '0,/\"\"1.0.0\"\"/s/\"\"1.0.0\"\"/\"\"1.0.1\"\"/' land/extensions/treeos-connect/manifest.js)",
+      "Bash(grep -A 20 \"registerSlot.*tree-quick-links\" /home/tabor/github/Tree/land/extensions/*/index.js)",
+      "Bash(grep -i Chain: /home/tabor/github/Tree/land/*.log)",
+      "Bash(grep -i Chain: /tmp/*.log)",
+      "Bash(grep -r \"classifierHints\" extensions/*/manifest.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

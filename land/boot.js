@@ -181,7 +181,7 @@ const PROFILES = {
       "prune", "reroot", "changelog", "digest", "delegate",
       // Infrastructure
       "breath", "scheduler", "schedules", "prestige",
-      "persona", "peer-review", "channels", "taste",
+      "persona", "peer-review", "channels", "taste", "home-memory",
       // Proficiency apps
       "food", "fitness", "recovery", "study", "kb", "life",
       // Core gateways

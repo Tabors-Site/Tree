@@ -1,7 +1,7 @@
 // orchestrators/tree.js
-// Orchestrates tree requests: classify → librarian (place/query) or destructive flow
-// Librarian: navigates, reads, places — behind the scenes
-// Destructive: translate → navigate → confirm → execute (existing flow)
+// Position determines reality.
+// Extension at this position? Route to its mode.
+// No extension? tree:converse. The AI reads what's here and talks.
 
 import log from "../../seed/log.js";
 import { WS } from "../../seed/protocol.js";
@@ -10,11 +10,10 @@ import {
   processMessage,
   getRootId,
   getCurrentNodeId,
-  resetConversation,
   getClientForUser,
   resolveRootLlmForMode,
 } from "../../seed/llm/conversation.js";
-import { classify, translateDestructive } from "./translator.js";
+import { classify } from "./translator.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
 
 /**
@@ -121,30 +120,11 @@ async function localClassify(message, currentNodeId, rootId) {
     } catch {}
   }
 
-  // ── Standard classification ──
-
-  // Conversational: skip librarian, go straight to respond
-  if (/^(hey|hi|hello|thanks|ok|sure|yep|yeah|what's up|sup|yo|nice|cool|got it|good)\b/i.test(lower))
-    return { intent: "query", confidence: 0.9, ...base };
-
-  // Questions: read-only query flow
-  if (/^(what|how|why|when|where|who|is |are |does |do |can |show |tell |list )/.test(lower))
-    return { intent: "query", confidence: 0.8, ...base };
-
-  // Destructive: needs LLM translation for safety
-  if (/\b(delete|remove|move|merge|reorganize|clean up|mark .* completed?)\b/.test(lower))
-    return { intent: "destructive", confidence: 0.7, ...base };
-
-  // Explicit action commands: high-confidence placement
-  if (/^(start|build|create|add|give me|set up|make|write|plan|draft|outline|design|launch|begin)\b/.test(lower))
-    return { intent: "place", confidence: 0.8, ...base };
-
-  // Personal/reflective statements: conversational query
-  if (/^(i did|i was|it was|that was|we did|we were|he |she |they |it's been|i've been|i think|i feel|i guess|so |exactly|sounds good|makes sense)\b/.test(lower))
-    return { intent: "query", confidence: 0.7, ...base };
-
-  // Everything else: placement (librarian decides)
-  return { intent: "place", confidence: 0.6, ...base };
+  // ── No extension claimed this message ──
+  // Position determines reality. The AI at this position has all the tools
+  // it needs (read, write, navigate, delete). Let it decide what to do.
+  // No regex. No guessing. Just converse.
+  return { intent: "converse", confidence: 0.8, ...base };
 }
 
 /**
@@ -342,11 +322,6 @@ async function resolveModeForNode(intent, nodeId) {
 // ─────────────────────────────────────────────────────────────────────────
 // PENDING OPERATIONS (confirmation flow)
 // ─────────────────────────────────────────────────────────────────────────
-
-// visitorId → { action, targetNodeId, targetPath, nodeContext, originalMessage }
-const pendingOperations = new Map();
-
-// ─────────────────────────────────────────────────────────────────────────
 // CONVERSATION MEMORY (survives mode switches)
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -385,124 +360,6 @@ function formatMemoryContext(visitorId) {
     m.role === "user" ? `User: ${m.content}` : `Assistant: ${m.content}`,
   );
   return `\n\nRecent conversation:\n${lines.join("\n")}`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// STEP SUMMARY HELPERS
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Build a compact summary string for a completed plan step.
- * This is the ONLY thing carried between steps — full conversation is dropped.
- */
-function buildStepSummary({
-  stepNum,
-  intent,
-  targetPath,
-  targetNodeId,
-  navResult,
-  execResult,
-  nodeContext,
-  skipped,
-  skipReason,
-}) {
-  if (skipped) {
-    return { step: stepNum, intent, skipped: true, reason: skipReason };
-  }
-
-  const summary = {
-    step: stepNum,
-    intent,
-    target: targetPath || targetNodeId || "root",
-  };
-
-  // Pull key info from execution result
-  if (execResult) {
-    summary.action = execResult.action || intent;
-    summary.operations = execResult.operations || undefined;
-    summary.detail = execResult.summary || execResult.reason || undefined;
-
-    // Detect failed execution
-    const ops = execResult.operations;
-    const hasFailed =
-      (Array.isArray(ops) && ops.length === 0) ||
-      execResult.action === "error" ||
-      /\b(fail|error|not found|not available|unable|could not)\b/i.test(
-        execResult.summary || "",
-      );
-    if (hasFailed) {
-      summary.failed = true;
-    }
-  }
-
-  // For query/reflect — note what context was available
-  if (intent === "query" || intent === "reflect") {
-    if (nodeContext) {
-      try {
-        const ctx =
-          typeof nodeContext === "string"
-            ? JSON.parse(nodeContext)
-            : nodeContext;
-        summary.contextKeys = Object.keys(ctx);
-        // Include a brief snapshot — node name, child count, etc.
-        if (ctx.name) summary.nodeName = ctx.name;
-        if (ctx.children) summary.childCount = ctx.children.length;
-      } catch (err) { log.debug("TreeOrch", "Could not parse nodeContext for step summary:", err.message); }
-    }
-  }
-
-  return summary;
-}
-
-/**
- * Map an execution result to a treeContext stepResult enum value.
- * Mirrors the failure-detection logic in buildStepSummary.
- */
-function execResultToStepResult(execResult) {
-  if (!execResult) return "failed";
-  const ops = execResult.operations;
-  const hasFailed =
-    (Array.isArray(ops) && ops.length === 0) ||
-    execResult.action === "error" ||
-    /\b(fail|error|not found|not available|unable|could not)\b/i.test(
-      execResult.summary || "",
-    );
-  return hasFailed ? "failed" : "success";
-}
-
-/**
- * Format accumulated step summaries as context string for injection
- * into subsequent steps and the responder.
- */
-function formatStepSummaries(stepSummaries) {
-  if (stepSummaries.length === 0) return "";
-  const lines = stepSummaries.map((s) => {
-    if (s.skipped)
-      return `- Step ${s.step} (${s.intent}): SKIPPED — ${s.reason}`;
-    if (s.failed)
-      return `- Step ${s.step} (${s.intent}): FAILED — ${s.detail || "Operation did not complete"}`;
-    const target = s.target ? ` on ${s.target}` : "";
-    const detail = s.detail ? ` — ${s.detail}` : "";
-    return `- Step ${s.step} (${s.intent}${target}): ${s.action || "done"}${detail}`;
-  });
-  return `\nCompleted steps:\n${lines.join("\n")}`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// CONFIRMATION CHECK
-// ─────────────────────────────────────────────────────────────────────────
-
-const CONFIRM_WORDS =
-  /^(yes|yeah|yep|y|confirm|proceed|do it|go ahead|ok|sure|approved?)\s*[.!]?$/i;
-const DENY_WORDS =
-  /^(no|nah|nope|n|cancel|stop|don'?t|abort|never\s*mind)\s*[.!]?$/i;
-
-function isConfirmation(message) {
-  return CONFIRM_WORDS.test(message.trim());
-}
-
-function isDenial(message) {
-  return DENY_WORDS.test(message.trim());
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -555,770 +412,13 @@ async function resolveLlmProvider(userId, rootId, modeKey, slot) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// SHARED: RESPOND TO PLAN COMPLETION
-// Takes a completed plan result and generates the final user-facing response.
-// Used by destructive path, librarian flow, and pending operation resume.
+// ORCHESTRATE TREE REQUEST
 // ─────────────────────────────────────────────────────────────────────────
 
-async function respondToCompletion({
-  planResult,
-  visitorId,
-  socket,
-  signal,
-  meta,
-  message,
-  responseHint,
-  modesUsed,
-  confidence,
-  skipRespond,
-  rt,
-  librarianContext,
-}) {
-  if (!planResult) return null;
-
-  // Early exits: confirm or respond (ambiguity/not found)
-  if (planResult.type === "confirm" || planResult.type === "respond") {
-    const r = planResult.response;
-    if (r) {
-      r.modesUsed = modesUsed;
-      r.confidence = confidence;
-    }
-    return r;
-  }
-
-  if (planResult.navigateOnly) return planResult.navigateOnly;
-
-  const { stepSummaries, lastTargetNodeId, lastTargetPath } = planResult;
-  const anyFailed = stepSummaries.some((s) => s.failed || s.skipped);
-
-  if (skipRespond) {
-    return {
-      success: !anyFailed,
-      answer: null,
-      modeKey: "tree:orchestrator",
-      modesUsed,
-      confidence,
-      stepSummaries,
-      lastTargetNodeId,
-      lastTargetPath,
-    };
-  }
-
-  const operationContext =
-    stepSummaries.length > 0 ? formatStepSummaries(stepSummaries) : null;
-  const structuredResults =
-    stepSummaries.length > 0 ? JSON.stringify(stepSummaries, null, 2) : null;
-
-  const finalResponseHint = anyFailed
-    ? `${responseHint ? responseHint + " " : ""}IMPORTANT: Some operations failed. Report what succeeded and what failed honestly.`
-    : responseHint;
-
-  modesUsed.push("tree:respond");
-  const respondStart = new Date();
-
-  const response = await runRespond({
-    visitorId,
-    socket,
-    signal,
-    ...meta,
-    nodeContext: null,
-    operationContext: structuredResults || operationContext,
-    originalMessage: message,
-    responseHint: finalResponseHint,
-    librarianContext: librarianContext || null,
-    stepSummaries,
-  });
-
-  const respondEnd = new Date();
-  rt.trackStep("tree:respond", {
-    input: responseHint || "Respond to the user",
-    output: response?.answer || null,
-    startTime: respondStart,
-    endTime: respondEnd,
-    llmProvider: response?.llmProvider || rt.llmProvider,
-    treeContext: {
-      targetNodeId: lastTargetNodeId,
-      targetPath: lastTargetPath,
-      directive: responseHint || "Respond to the user",
-      stepResult: anyFailed ? "failed" : "success",
-    },
-  });
-
-  if (response) {
-    response.modesUsed = modesUsed;
-    response.confidence = confidence;
-    response.stepSummaries = stepSummaries;
-  }
-  return response;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// SHARED PLAN EXECUTION LOOP
-// Used by both destructive path and librarian flow.
-// Each step: navigate → context/scout → destructive check → execute → summarize
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Execute a plan (array of steps) produced by either the translator or librarian.
- *
- * Returns:
- *   { type: "completed", stepSummaries, lastTargetNodeId, lastTargetPath }
- *   { type: "confirm", response }  — destructive step paused for confirmation
- *   { type: "respond", response }   — early exit (ambiguity, not found)
- *   null — signal aborted
- */
-async function executePlanSteps({
-  plan,
-  visitorId,
-  message,
-  socket,
-  signal,
-  username,
-  userId,
-  rootId,
-  modesUsed,
-  initialTargetNodeId,
-  initialTargetPath,
-  stepSummaries,
-  responseHint,
-  includeMemoryOnFirstStep,
-  rt,
-}) {
-  const meta = { username, userId, rootId };
-  let lastTargetNodeId = initialTargetNodeId || rootId;
-  let lastTargetPath = initialTargetPath || null;
-
-  for (let i = 0; i < plan.length; i++) {
-    if (signal?.aborted) {
-      if (stepSummaries.length > 0) {
-        pushMemory(
-          visitorId,
-          message,
-          `[Stopped mid-plan. ${formatStepSummaries(stepSummaries)}]`,
-        );
-      }
-      return null;
-    }
-
-    const op = plan[i];
-    const stepNum = stepSummaries.length + 1;
-    const totalSteps = stepSummaries.length + plan.length - i;
-    const isOnlyStep = plan.length === 1 && stepSummaries.length === 0;
-
-    // Emit plan step marker
-    rt.trackStep(`tree:orchestrator:plan:${stepNum}`, {
-      input: `Step ${stepNum}: ${op.intent}${op.targetHint ? ` → ${op.targetHint}` : ""}\n${op.directive}`,
-      llmProvider: rt.llmProvider,
-      treeContext: {
-        targetNodeId: op.targetNodeId || lastTargetNodeId,
-        targetPath: lastTargetPath,
-        planStepIndex: stepNum,
-        planTotalSteps: plan.length,
-        directive: op.directive,
-        stepResult: "pending",
-      },
-    });
-
-    // Map plan op to intent shape
-    const intent = {
-      intent: op.intent,
-      needsNavigation: op.needsNavigation,
-      needsContext: !["navigate"].includes(op.intent),
-      isDestructive: op.isDestructive,
-      targetHint: op.targetHint,
-      directive: op.directive,
-      summary: op.directive,
-    };
-
- log.verbose("Tree Orchestrator", 
-      `  📋 Step ${stepNum}: ${intent.intent} → ${intent.targetHint || "(current)"}`,
-    );
-
-    // ══════════════════════════════════════════════════════
-    // A) NAVIGATE — establish position
-    // ══════════════════════════════════════════════════════
-
-    let targetNodeId = op.targetNodeId || lastTargetNodeId;
-    let targetPath = lastTargetPath;
-
-    // If librarian already provided a targetNodeId, skip navigation
-    if (op.targetNodeId && !op.needsNavigation) {
- log.verbose("Tree Orchestrator", ` Librarian provided ID: ${op.targetNodeId}`);
-      targetNodeId = op.targetNodeId;
-    } else if (intent.targetHint) {
-      // ── LLM NAVIGATION — search for a specific node ──
-      emitStatus(
-        socket,
-        "navigate",
-        isOnlyStep ? "Finding node…" : `Step ${stepNum}: Finding node…`,
-      );
-
-      const navMode = await resolveModeForNode("navigate", lastTargetNodeId);
-      await switchMode(visitorId, navMode, {
-        ...meta,
-        currentNodeId: getCurrentNodeId(visitorId) || rootId,
-        clearHistory: true,
-      });
-
-      const priorStepsCtx = formatStepSummaries(stepSummaries);
-      const memCtx =
-        i === 0 && includeMemoryOnFirstStep
-          ? formatMemoryContext(visitorId)
-          : "";
-      const navDirective = intent.directive || message;
-
-      let navMessage = navDirective;
-      if (priorStepsCtx || memCtx) {
-        navMessage = `${memCtx}${priorStepsCtx}\n\nCurrent request: ${navDirective}`;
-      }
-
-      const navStart = new Date();
-      const navResult = await processMessage(visitorId, navMessage, {
-        ...meta,
-        signal,
-        meta: { internal: true },
-      });
-      const navEnd = new Date();
-
-      if (signal?.aborted) return null;
-      emitModeResult(socket, "tree:navigate", navResult);
-
-      modesUsed.push("tree:navigate");
-      rt.trackStep("tree:navigate", {
-        input: navDirective,
-        output: navResult,
-        startTime: navStart,
-        endTime: navEnd,
-        llmProvider: navResult?._llmProvider || rt.llmProvider,
-        treeContext: {
-          targetNodeId: navResult?.action === "found" ? navResult.targetNodeId : lastTargetNodeId,
-          targetPath: navResult?.action === "found" ? navResult.targetPath : lastTargetPath,
-          planStepIndex: stepNum,
-          planTotalSteps: plan.length,
-          directive: navDirective,
-          stepResult: navResult?.action === "found" ? "success" : navResult?.action === "ambiguous" ? "pending" : "failed",
-          resultDetail: navResult?.reason || navResult?.summary || null,
-        },
-      });
-
-      if (navResult?.action === "found") {
-        targetNodeId = navResult.targetNodeId;
-        targetPath = navResult.targetPath;
-      } else if (navResult?.action === "ambiguous") {
-        // For merge/dedup/duplicate operations, ambiguity is EXPECTED.
-        const isBatchOp =
-          /\b(merge|dedup|duplicat|redundan|consolidat|delet|remov|clean\s*up|all|both|every|each)\b/i.test(
-            intent.directive || message,
-          );
-
-        if (isBatchOp && navResult.candidates?.length > 0) {
- log.verbose("Tree Orchestrator", 
-            `  🔀 Merge operation — collecting ${navResult.candidates.length} ambiguous candidates`,
-          );
-
-          const candidateContexts = [];
-          for (const candidate of navResult.candidates) {
-            try {
-              const ctx = await getContextForAi(candidate.nodeId, {
-                includeChildren: true,
-                includeParentChain: true,
-
-                includeNotes: false,
-                userId,
-              });
-              candidateContexts.push(ctx);
-            } catch (err) {
- log.error("Tree Orchestrator", 
-                `⚠️ Failed to fetch candidate ${candidate.nodeId}:`,
-                err.message,
-              );
-            }
-          }
-
-          const firstCandidate = candidateContexts[0];
-          if (firstCandidate?.parent?.id) {
-            targetNodeId = firstCandidate.parent.id;
-            targetPath =
-              firstCandidate.path?.split(" > ").slice(0, -1).join(" > ") ||
-              null;
-          } else {
-            targetNodeId = rootId;
-            targetPath = null;
-          }
-
-          intent._mergeContext = {
-            mergeTarget: targetNodeId,
-            candidates: candidateContexts,
-          };
-
- log.verbose("Tree Orchestrator", 
-            `  📍 Merge target: ${targetPath || targetNodeId} with ${candidateContexts.length} candidates`,
-          );
-        } else {
-          // Normal ambiguity — ask user
-          const response = await runRespond({
-            visitorId,
-            socket,
-            signal,
-            ...meta,
-            nodeContext: JSON.stringify(navResult, null, 2),
-            operationContext:
-              stepSummaries.length > 0
-                ? `${formatStepSummaries(stepSummaries)}\n\nThen hit ambiguity — need user to disambiguate.`
-                : "Navigation found multiple matches. Need user to disambiguate.",
-            originalMessage: message,
-            responseHint:
-              "Ask the user to clarify which node they mean. List the options clearly.",
-            stepSummaries,
-          });
-          return { type: "respond", response };
-        }
-      } else if (navResult?.action === "not_found") {
-        if (i === 0 && stepSummaries.length === 0) {
-          const response = await runRespond({
-            visitorId,
-            socket,
-            signal,
-            ...meta,
-            nodeContext: null,
-            operationContext: `Could not find a node matching: "${intent.targetHint || message}"`,
-            originalMessage: message,
-            responseHint:
-              "Let the user know the node wasn't found. Suggest alternatives if possible.",
-            stepSummaries,
-          });
-          return { type: "respond", response };
-        } else {
-          stepSummaries.push(
-            buildStepSummary({
-              stepNum,
-              intent: intent.intent,
-              targetNodeId,
-              targetPath,
-              skipped: true,
-              skipReason: "Node not found",
-            }),
-          );
-          await resetConversation(visitorId, { username, userId });
-          continue;
-        }
-      }
-    } else {
-      // ── NO TARGET — operate on current position (root or last step's target) ──
-      targetNodeId = lastTargetNodeId || getCurrentNodeId(visitorId) || rootId;
-      targetPath = lastTargetPath || null;
- log.verbose("Tree Orchestrator", ` Using current position: ${targetPath || targetNodeId}`);
-    }
-
-    // ══════════════════════════════════════════════════════
-    // B) PURE NAVIGATION — if that's all this step does
-    // ══════════════════════════════════════════════════════
-
-    if (intent.intent === "navigate" && targetNodeId) {
-      if (isOnlyStep) {
-        // Pure navigation: user asked to go somewhere. Move the iframe.
-        if (isActiveNavigator(userId, rt.sessionId)) {
-          socket.emit(WS.NAVIGATE, {
-            url: `/api/v1/node/${targetNodeId}?html`,
-            replace: false,
-          });
-        }
-        const navSummary = `Navigated to ${targetPath || targetNodeId}.`;
-        emitStatus(socket, "done", "");
-        pushMemory(visitorId, message, navSummary);
-        return {
-          type: "completed",
-          stepSummaries,
-          lastTargetNodeId: targetNodeId,
-          lastTargetPath: targetPath,
-          navigateOnly: {
-            success: true,
-            answer: navSummary,
-            modeKey: "tree:navigate",
-            rootId,
-            modesUsed,
-          },
-        };
-      }
-      stepSummaries.push(
-        buildStepSummary({
-          stepNum,
-          intent: "navigate",
-          targetPath,
-          targetNodeId,
-          execResult: {
-            action: "navigated",
-            summary: `Moved to ${targetPath || targetNodeId}`,
-          },
-        }),
-      );
-      lastTargetNodeId = targetNodeId;
-      lastTargetPath = targetPath;
-      await resetConversation(visitorId, { username, userId });
-      continue;
-    }
-
-    // ══════════════════════════════════════════════════════
-    // C) GET CONTEXT + SCOUT
-    // ══════════════════════════════════════════════════════
-
-    let nodeContext = null;
-    let ctxResult = null;
-
-    if (intent.needsContext && targetNodeId) {
-      emitStatus(
-        socket,
-        "context",
-        isOnlyStep ? "Reading node…" : `Step ${stepNum}: Reading node…`,
-      );
-      const ctxStart = new Date();
-
-      const contextProfiles = {
-        structure: {
-          includeChildren: true,
-          includeParentChain: true,
-          includeNotes: true,
-        },
-        edit: {
-          includeChildren: true,
-          includeParentChain: true,
-          includeNotes: false,
-        },
-        notes: {
-          includeChildren: false,
-          includeParentChain: false,
-          includeNotes: true,
-        },
-        query: {
-          includeChildren: true,
-          includeParentChain: true,
-          includeNotes: true,
-        },
-      };
-
-      const profile = contextProfiles[intent.intent] || contextProfiles.query;
-      ctxResult = await getContextForAi(targetNodeId, { ...profile, userId });
-
-      // ── SCOUT LOOP ──
-      const shouldScout =
-        !intent.isDestructive &&
-        !/\b(delet|merg|dedup|duplicat|remov|consolidat|redundan|clean\s*up|reorgani[sz]|move|reparent|relocat|transfer)\b/i.test(
-          intent.directive,
-        ) &&
-        !/\b(move|from|into)\b.*\b(child|node|branch|content)/i.test(
-          intent.directive,
-        );
-
-      if (
-        intent.intent === "structure" &&
-        ctxResult.children?.length > 0 &&
-        shouldScout
-      ) {
-        const scoutResult = await scoutExistingStructure({
-          ctxResult,
-          directive: intent.directive,
-          targetNodeId,
-          profile,
-          signal,
-          userId,
-        });
-
-        if (scoutResult.adapted) {
-          targetNodeId = scoutResult.targetNodeId;
-          targetPath = scoutResult.targetPath || targetPath;
-          ctxResult = scoutResult.ctxResult;
-          intent.intent = scoutResult.newIntent;
-          intent.directive = scoutResult.newDirective || intent.directive;
-
- log.verbose("Tree Orchestrator", 
-            `  🔍 Scout adapted: ${op.intent} → ${intent.intent} at ${targetPath || targetNodeId}`,
-          );
-          emitModeResult(socket, "tree:scout", {
-            adapted: true,
-            newIntent: intent.intent,
-            targetNodeId,
-            reason: scoutResult.reason,
-          });
-        }
-      }
-
-      nodeContext = JSON.stringify(ctxResult, null, 2);
-
-      // ── DEEP CONTEXT for destructive restructure operations ──
-      const isRestructure =
-        intent.isDestructive ||
-        /\b(delet|merg|dedup|remov|consolidat|redundan|clean\s*up|reorgani[sz])\b/i.test(
-          intent.directive,
-        );
-
-      if (
-        intent.intent === "structure" &&
-        isRestructure &&
-        ctxResult.children?.length > 0
-      ) {
-        const childContexts = [];
-        for (const child of ctxResult.children) {
-          try {
-            const childCtx = await getContextForAi(child.id, {
-              includeChildren: true,
-              includeParentChain: false,
-              includeNotes: false,
-              userId,
-            });
-            childContexts.push(childCtx);
-          } catch (err) {
- log.error("Tree Orchestrator", 
-              `⚠️ Deep context failed for "${child.name}":`,
-              err.message,
-            );
-          }
-        }
-
-        if (childContexts.length > 0) {
-          nodeContext = JSON.stringify(
-            {
-              currentNode: ctxResult,
-              childrenDetail: childContexts,
-            },
-            null,
-            2,
-          );
- log.verbose("Tree Orchestrator", 
-            `  🔬 Deep context: fetched details for ${childContexts.length} children`,
-          );
-        }
-      }
-
-      // ── SECONDARY CONTEXT for move/reparent operations ──
-      if (
-        intent.intent === "structure" &&
-        /\b(move|reparent|relocate|transfer)\b/i.test(intent.directive)
-      ) {
-        const counterparts = await fetchMoveCounterparts(
-          intent.directive,
-          targetNodeId,
-          rootId,
-          userId,
-        );
-        if (counterparts.length > 0) {
-          const combined = {
-            navigatedNode: ctxResult,
-            referencedNodes: counterparts,
-          };
-          nodeContext = JSON.stringify(combined, null, 2);
- log.verbose("Tree Orchestrator", 
-            `  📦 Move detected — fetched ${counterparts.length} counterpart(s): ${counterparts.map((c) => c.name).join(", ")}`,
-          );
-        }
-      }
-
-      // ── MERGE CONTEXT: inject candidate data from ambiguous nav ──
-      if (intent._mergeContext) {
-        const mc = intent._mergeContext;
-        try {
-          const parsed = JSON.parse(nodeContext);
-          nodeContext = JSON.stringify(
-            {
-              mergeTarget: parsed,
-              duplicateCandidates: mc.candidates,
-            },
-            null,
-            2,
-          );
-        } catch {
-          nodeContext = JSON.stringify(
-            {
-              mergeTarget: ctxResult,
-              duplicateCandidates: mc.candidates,
-            },
-            null,
-            2,
-          );
-        }
- log.verbose("Tree Orchestrator", 
-          `  🔀 Injected ${mc.candidates.length} merge candidates into context`,
-        );
-      }
-
-      emitModeResult(socket, "tree:get-context", ctxResult);
-
-      const ctxEnd = new Date();
-      rt.trackStep("tree:get-context", {
-        input: `getContextForAi(${targetNodeId}, ${intent.intent})`,
-        output: ctxResult,
-        startTime: ctxStart,
-        endTime: ctxEnd,
-        llmProvider: rt.llmProvider,
-        treeContext: {
-          targetNodeId,
-          targetPath,
-          planStepIndex: stepNum,
-          planTotalSteps: plan.length,
-          directive: intent.intent,
-          stepResult: "success",
-        },
-      });
-    }
-
-    // ══════════════════════════════════════════════════════
-    // D) DESTRUCTIVE CHECK — pause for confirmation
-    // ══════════════════════════════════════════════════════
-
-    if (intent.isDestructive) {
-      const remainingPlan = plan.slice(i + 1);
-
-      pendingOperations.set(visitorId, {
-        action: op.intent,
-        directive: op.directive,
-        targetNodeId,
-        targetPath,
-        nodeContext,
-        originalMessage: message,
-        remainingPlan,
-        stepSummaries: [...stepSummaries],
-        stepNum,
-        responseHint,
-        sessionId: rt.sessionId,
-        modesUsed: [...modesUsed],
-        chainIndex: rt.chainIndex,
-      });
-
-      const response = await runRespond({
-        visitorId,
-        socket,
-        signal,
-        ...meta,
-        nodeContext,
-        operationContext:
-          stepSummaries.length > 0
-            ? `${formatStepSummaries(stepSummaries)}\n\nPending destructive operation: ${intent.directive}`
-            : `Destructive operation requested: ${intent.directive}`,
-        confirmNeeded: true,
-        originalMessage: message,
-        responseHint:
-          "Clearly describe the destructive action and ask for explicit confirmation.",
-        stepSummaries,
-      });
-      return { type: "confirm", response };
-    }
-
-    // ══════════════════════════════════════════════════════
-    // E) EXECUTE MUTATION
-    // ══════════════════════════════════════════════════════
-
-    const mutationIntents = ["structure", "edit", "notes"];
-    const isMutation = mutationIntents.includes(intent.intent);
-    const executionMode = isMutation ? await resolveModeForNode(intent.intent, targetNodeId) : null;
-    let execResult = null;
-
-    if (executionMode) {
-      emitStatus(
-        socket,
-        "execute",
-        isOnlyStep ? "Making changes…" : `Step ${stepNum}: Making changes…`,
-      );
-
-      let prestige = 0;
-      if (nodeContext) {
-        try {
-          const parsed = JSON.parse(nodeContext);
-          prestige = parsed.prestige ?? 0;
-        } catch (err) { log.debug("TreeOrch", "Could not parse nodeContext for prestige:", err.message); }
-      }
-
-      await switchMode(visitorId, executionMode, {
-        ...meta,
-        targetNodeId,
-        prestige,
-        clearHistory: true,
-      });
-
-      const executionMessage = buildExecutionMessage(
-        intent.directive || message,
-        targetNodeId,
-        nodeContext,
-        stepSummaries,
-      );
-
-      const execStart = new Date();
-      execResult = await processMessage(visitorId, executionMessage, {
-        ...meta,
-        signal,
-        onToolLoopCheckpoint,
-        meta: { internal: true },
-      });
-      const execEnd = new Date();
-
-      if (signal?.aborted) return null;
-      emitModeResult(socket, executionMode, execResult);
-
-      modesUsed.push(executionMode);
-      rt.trackStep(executionMode, {
-        input: intent.directive,
-        output: execResult,
-        startTime: execStart,
-        endTime: execEnd,
-        llmProvider: execResult?._llmProvider || rt.llmProvider,
-        treeContext: {
-          targetNodeId,
-          targetPath,
-          planStepIndex: stepNum,
-          planTotalSteps: plan.length,
-          directive: intent.directive,
-          stepResult: execResultToStepResult(execResult),
-          resultDetail: execResult?.summary || execResult?.reason || null,
-        },
-      });
-
-      // Notify frontend of tree changes
-      if (intent.intent === "structure" && execResult?.operations?.length > 0) {
-        socket.emit(WS.TREE_CHANGED, {
-          nodeId: targetNodeId,
-          changeType: execResult?.action || "modified",
-        });
-      }
-    }
-
-    // ══════════════════════════════════════════════════════
-    // F) SUMMARIZE & RESET
-    // ══════════════════════════════════════════════════════
-
-    const stepSummary = buildStepSummary({
-      stepNum,
-      intent: intent.intent,
-      targetPath,
-      targetNodeId,
-      navResult: null,
-      execResult,
-      nodeContext,
-    });
-    stepSummaries.push(stepSummary);
-
-    if (stepSummary.failed) {
- log.verbose("Tree Orchestrator", 
-        `  ❌ Step ${stepNum} FAILED: ${stepSummary.detail || "unknown"}`,
-      );
-    } else {
- log.verbose("Tree Orchestrator", 
-        `  ✅ Step ${stepNum} summary: ${stepSummary.detail || stepSummary.action || intent.intent}`,
-      );
-    }
-
-    // Reset conversation — next step starts fresh
-    await resetConversation(visitorId, { username, userId });
-
-    // Carry forward position
-    lastTargetNodeId = targetNodeId;
-    lastTargetPath = targetPath;
-  }
-
-  return {
-    type: "completed",
-    stepSummaries,
-    lastTargetNodeId,
-    lastTargetPath,
-  };
-}
+// NOTE: respondToCompletion, executePlanSteps, runQueryFlow, runLibrarianFlow,
+// executePendingOperation, scoutExistingStructure, fetchMoveCounterparts
+// were removed. The orchestrator now routes to tree:converse for all
+// non-extension messages. The AI has all tools at its position.
 
 export async function orchestrateTreeRequest({
   visitorId,
@@ -1367,69 +467,33 @@ export async function orchestrateTreeRequest({
   const modesUsed = []; // Track full chain for Chat
 
   // ────────────────────────────────────────────────────────
-  // QUERY FAST PATH — skip classifier, go straight to context gather + respond
+  // QUERY FAST PATH — converse in read-only mode
   // ────────────────────────────────────────────────────────
 
   if (forceQueryOnly) {
-    return await runQueryFlow({
-      visitorId,
-      message,
-      socket,
-      signal,
-      username,
-      userId,
-      rootId,
-      modesUsed,
-      rt,
-      slot,
+    modesUsed.push("tree:converse");
+    emitStatus(socket, "intent", "");
+
+    await switchMode(visitorId, "tree:converse", {
+      username, userId, rootId,
+      conversationMemory: formatMemoryContext(visitorId),
+      clearHistory: true,
     });
-  }
 
-  // ────────────────────────────────────────────────────────
-  // CHECK FOR PENDING CONFIRMATION
-  // ────────────────────────────────────────────────────────
+    const result = await processMessage(visitorId, message, {
+      username, userId, rootId, signal, slot,
+      readOnly: true,
+      onToolLoopCheckpoint,
+      onToolResults(results) {
+        if (signal?.aborted) return;
+        for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+      },
+    });
 
-  const pending = pendingOperations.get(visitorId);
-  if (pending) {
-    pendingOperations.delete(visitorId);
-
-    if (isConfirmation(message)) {
-      return await executePendingOperation({
-        visitorId,
-        pending,
-        socket,
-        signal,
-        ...meta,
-        rt,
-        skipRespond,
-      });
-    } else if (isDenial(message)) {
-      const remaining = pending.remainingPlan?.length || 0;
-      const cancelContext =
-        remaining > 0
-          ? `User cancelled the destructive operation. ${remaining} remaining plan step(s) were also abandoned.`
-          : "User cancelled the operation.";
-
-      if (skipRespond) {
-        return {
-          success: true,
-          answer: null,
-          modeKey: "tree:orchestrator",
-          stepSummaries: pending.stepSummaries || [],
-        };
-      }
-      return await runRespond({
-        visitorId,
-        socket,
-        signal,
-        ...meta,
-        operationContext: cancelContext,
-        nodeContext: pending.nodeContext,
-        originalMessage: message,
-        stepSummaries: pending.stepSummaries || [],
-      });
-    }
-    // If neither confirm nor deny, treat as a new request (fall through)
+    emitStatus(socket, "done", "");
+    const answer = result?.content || result?.answer || null;
+    if (answer) pushMemory(visitorId, message, answer);
+    return { success: true, answer, modeKey: "tree:converse", modesUsed, rootId };
   }
 
   // ────────────────────────────────────────────────────────
@@ -1719,8 +783,105 @@ export async function orchestrateTreeRequest({
   // ────────────────────────────────────────────────────────
 
   if (classification.intent === "extension" && classification.mode) {
-    const { getModeOwner } = await import("../../seed/tree/extensionScope.js");
-    const { getExtension } = await import("../loader.js");
+    const { getModeOwner, getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
+    const { getExtension, getExtensionManifest } = await import("../loader.js");
+
+    // ── Check for multi-extension chain before single routing ──
+    // If the message also matches other extensions, chain them instead.
+    try {
+      const currentNodeId = getCurrentNodeId(visitorId) || rootId;
+      const primaryExt = getModeOwner(classification.mode);
+      const otherMatches = [];
+
+      // Find earliest match position in the message for the primary extension
+      let primaryPos = 0;
+      const primaryManifest = getExtensionManifest(primaryExt);
+      if (Array.isArray(primaryManifest?.classifierHints)) {
+        for (const re of primaryManifest.classifierHints) {
+          const m = re.exec(message);
+          if (m) { primaryPos = m.index; break; }
+        }
+      }
+
+      // Two sources of chain candidates, both position-based:
+      // 1. Routing index: extensions with scaffolded nodes in this tree
+      // 2. Confined extensions ext-allowed at this position (e.g. browser-bridge)
+      const { queryAllMatches } = await import("./routingIndex.js");
+      const allTreeMatches = queryAllMatches(rootId, message, null);
+      const seenExts = new Set([primaryExt]);
+
+      for (const match of allTreeMatches) {
+        if (seenExts.has(match.extName)) continue;
+        seenExts.add(match.extName);
+
+        const manifest = getExtensionManifest(match.extName);
+        let matchPos = -1;
+        if (Array.isArray(manifest?.classifierHints)) {
+          for (const re of manifest.classifierHints) {
+            const m = re.exec(message);
+            if (m) { matchPos = matchPos === -1 ? m.index : Math.min(matchPos, m.index); }
+          }
+        }
+        if (matchPos === -1) matchPos = message.length;
+        otherMatches.push({ mode: match.mode, targetNodeId: match.targetNodeId, extName: match.extName, pos: matchPos });
+      }
+
+      log.verbose("Tree Orchestrator", `  Chain: ${otherMatches.length} other matches: ${otherMatches.map(m => m.extName).join(", ") || "none"}`);
+
+      if (otherMatches.length > 0) {
+        // Build chain ordered by position in the user's message
+        const allSteps = [
+          { mode: classification.mode, targetNodeId: classification.targetNodeId || currentNodeId, extName: primaryExt, pos: primaryPos },
+          ...otherMatches,
+        ];
+        const chain = allSteps.sort((a, b) => a.pos - b.pos);
+        log.verbose("Tree Orchestrator", `  Chain detected: ${chain.map(m => m.extName).join(" -> ")}`);
+        emitStatus(socket, "intent", "Chaining extensions...");
+
+        let context = message;
+        const chainModes = [];
+
+        for (let i = 0; i < chain.length; i++) {
+          const step = chain[i];
+          const isLast = i === chain.length - 1;
+
+          // Navigate to the extension's node for this step
+          const stepNodeId = step.targetNodeId || getCurrentNodeId(visitorId) || rootId;
+          await switchMode(visitorId, step.mode, {
+            username, userId, rootId,
+            currentNodeId: stepNodeId,
+            conversationMemory: context,
+            clearHistory: true,
+          });
+
+          const stepResult = await processMessage(visitorId, isLast ? context : `${context}\n\nDo this step and return what you produced.`, {
+            username, userId, rootId, signal, slot,
+            onToolLoopCheckpoint,
+            onToolResults(results) {
+              if (signal?.aborted) return;
+              for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+            },
+          });
+
+          if (signal?.aborted) return null;
+
+          const stepAnswer = stepResult?.content || stepResult?.answer || "";
+          chainModes.push(step.mode);
+
+          if (!isLast) {
+            context = `Original request: ${message}\n\nPrevious step (${step.extName}) result:\n${stepAnswer}`;
+          } else {
+            context = stepAnswer;
+          }
+        }
+
+        emitStatus(socket, "done", "");
+        if (context) pushMemory(visitorId, message, context);
+        return { success: true, answer: context, modeKey: chainModes[chainModes.length - 1], modesUsed: [...modesUsed, ...chainModes], rootId };
+      }
+    } catch (err) {
+      log.debug("Tree Orchestrator", `Chain check failed: ${err.message}`);
+    }
     const extName = getModeOwner(classification.mode);
     const ext = extName ? getExtension(extName) : null;
 
@@ -1732,7 +893,7 @@ export async function orchestrateTreeRequest({
       emitStatus(socket, "intent", "");
       try {
         const result = await ext.exports.handleMessage(message, {
-          userId, username, rootId, signal, res: null,
+          userId, username, rootId, targetNodeId: classification.targetNodeId, signal, res: null,
         });
         emitStatus(socket, "done", "");
         const answer = result?.answer || null;
@@ -1778,6 +939,7 @@ export async function orchestrateTreeRequest({
 
     await switchMode(visitorId, resolvedMode, {
       username, userId, rootId,
+      currentNodeId: classification.targetNodeId || rootId,
       conversationMemory: formatMemoryContext(visitorId),
       clearHistory: true,
     });
@@ -1799,569 +961,132 @@ export async function orchestrateTreeRequest({
     return { success: true, answer, modeKey: resolvedMode, modesUsed, rootId };
   }
 
-  // ────────────────────────────────────────────────────────
-  // PATH 3: LIBRARIAN (place/query) — merged navigate + execute
-  // ────────────────────────────────────────────────────────
-
-  if (classification.intent === "place" || classification.intent === "query") {
-    return await runLibrarianFlow({
-      visitorId,
-      message,
-      socket,
-      signal,
-      username,
-      userId,
-      rootId,
-      treeSummary,
-      classification,
-      modesUsed,
-      skipRespond,
-      behavioral,
-      rt,
-    });
-  }
 
   // ────────────────────────────────────────────────────────
-  // DESTRUCTIVE PATH — full translate → plan → execute flow
+  // MULTI-EXTENSION CHAIN — message matches 2+ extensions
+  // Each extension runs as a focused agent with its own tools.
+  // Results pass from one step to the next.
   // ────────────────────────────────────────────────────────
 
-  emitStatus(socket, "intent", "Planning operation…");
-
-  let translation;
-  const translatorStart = new Date();
-  try {
-    translation = await translateDestructive({
-      message,
-      userId,
-      conversationMemory: formatMemoryContext(visitorId),
-      treeSummary,
-      signal,
-      slot,
-      rootId,
-    });
-  } catch (err) {
-    if (signal?.aborted) return null;
- log.error("Tree Orchestrator", " Destructive translation failed:", err.message);
-    translation = {
-      plan: [
-        {
-          intent: "query",
-          targetHint: null,
-          directive: message,
-          needsNavigation: false,
-          isDestructive: false,
-        },
-      ],
-      responseHint: "Respond naturally to the user's message.",
-      summary: message,
-    };
-  }
-  const translatorEnd = new Date();
-
-  if (signal?.aborted) return null;
-
-  const responseHint = translation.responseHint || "";
-  const plan = translation.plan;
-
- log.verbose("Tree Orchestrator", 
-    `🎯 Destructive plan: ${plan.length} step(s) | "${translation.summary}"`,
-  );
-  emitModeResult(socket, "intent", {
-    plan,
-    responseHint,
-    summary: translation.summary,
-    confidence,
-  });
-
-  modesUsed.push("translator");
-  rt.trackStep("translator", {
-    input: message,
-    output: translation,
-    startTime: translatorStart,
-    endTime: translatorEnd,
-    llmProvider: translation.llmProvider || llmProvider,
-  });
-
-  // ────────────────────────────────────────────────────────
-  // STEP 2+3: EXECUTE PLAN → RESPOND
-  // ────────────────────────────────────────────────────────
-
-  const planResult = await executePlanSteps({
-    plan,
-    visitorId,
-    message,
-    socket,
-    signal,
-    username,
-    userId,
-    rootId,
-    modesUsed,
-    initialTargetNodeId: rootId,
-    initialTargetPath: null,
-    stepSummaries: [],
-    responseHint,
-    includeMemoryOnFirstStep: true,
-    rt,
-  });
-
-  return await respondToCompletion({
-    planResult,
-    visitorId, socket, signal, meta, message,
-    responseHint, modesUsed, confidence, skipRespond, rt,
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// QUERY FLOW — dedicated read-only path
-// Skips classifier entirely. Librarian gathers context, respond generates answer.
-// Two LLM calls instead of three. No plan generation, no discard.
-// ─────────────────────────────────────────────────────────────────────────
-
-async function runQueryFlow({
-  visitorId,
-  message,
-  socket,
-  signal,
-  username,
-  userId,
-  rootId,
-  modesUsed,
-  rt,
-  slot,
-}) {
-  const meta = { username, userId, rootId, slot };
-
-  // Fetch tree summary for the librarian
-  let treeSummary = null;
-  if (rootId) {
+  if (rootId && classification.intent === "converse") {
     try {
-      let encodingMap = null;
-      try {
-        const { getExtension } = await import("../loader.js");
-        const uExt = getExtension("understanding");
-        if (uExt?.exports?.getEncodingMap) encodingMap = await uExt.exports.getEncodingMap(rootId);
-      } catch {}
-      treeSummary = await buildDeepTreeSummary(rootId, { encodingMap });
+      const currentNodeId = getCurrentNodeId(visitorId) || rootId;
+      const currentPath = await _buildCurrentPath(currentNodeId);
 
-      const brief = await getIntelligenceBrief(rootId, userId);
-      if (brief) treeSummary += "\n\n" + brief;
+      // Routing index now includes both scaffolded and confined ext-allowed extensions.
+      // One path, one query.
+      const { queryAllMatches } = await import("./routingIndex.js");
+      const indexMatches = queryAllMatches(rootId, message, null);
+
+      log.verbose("Tree Orchestrator", `  Converse chain check: ${indexMatches.length} matches: ${indexMatches.map(m => m.extName).join(", ") || "none"}`);
+
+      // Single match from converse path: route to that extension instead of converse
+      if (indexMatches.length === 1) {
+        const single = indexMatches[0];
+        log.verbose("Tree Orchestrator", `  Single extension in converse: routing to ${single.extName}`);
+        modesUsed.push(single.mode);
+        emitStatus(socket, "intent", "");
+
+        await switchMode(visitorId, single.mode, {
+          username, userId, rootId,
+          currentNodeId: single.targetNodeId,
+          conversationMemory: formatMemoryContext(visitorId),
+          clearHistory: true,
+        });
+
+        const singleResult = await processMessage(visitorId, message, {
+          username, userId, rootId, signal, slot,
+          onToolLoopCheckpoint,
+          onToolResults(results) {
+            if (signal?.aborted) return;
+            for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+          },
+        });
+
+        emitStatus(socket, "done", "");
+        const singleAnswer = singleResult?.content || singleResult?.answer || null;
+        if (singleAnswer) pushMemory(visitorId, message, singleAnswer);
+        return { success: true, answer: singleAnswer, modeKey: single.mode, modesUsed, rootId };
+      }
+
+      if (indexMatches.length > 1) {
+        log.verbose("Tree Orchestrator", `  Chain detected: ${indexMatches.map(m => m.extName).join(" -> ")}`);
+        emitStatus(socket, "intent", "Chaining extensions...");
+
+        let context = message;
+        const chainModes = [];
+
+        for (let i = 0; i < indexMatches.length; i++) {
+          const step = indexMatches[i];
+          const isLast = i === indexMatches.length - 1;
+
+          // Navigate to the extension's node for this step
+          const stepNodeId = step.targetNodeId || getCurrentNodeId(visitorId) || rootId;
+          await switchMode(visitorId, step.mode, {
+            username, userId, rootId,
+            currentNodeId: stepNodeId,
+            conversationMemory: context,
+            clearHistory: true,
+          });
+
+          const stepResult = await processMessage(visitorId, isLast ? context : `${context}\n\nDo this step and return what you produced.`, {
+            username, userId, rootId, signal, slot,
+            onToolLoopCheckpoint,
+            onToolResults(results) {
+              if (signal?.aborted) return;
+              for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+            },
+          });
+
+          if (signal?.aborted) return null;
+
+          const stepAnswer = stepResult?.content || stepResult?.answer || "";
+          chainModes.push(step.mode);
+
+          // Pass result to next step as context
+          if (!isLast) {
+            context = `Original request: ${message}\n\nPrevious step (${step.extName}) result:\n${stepAnswer}`;
+          } else {
+            context = stepAnswer;
+          }
+        }
+
+        emitStatus(socket, "done", "");
+        if (context) pushMemory(visitorId, message, context);
+        return { success: true, answer: context, modeKey: chainModes[chainModes.length - 1], modesUsed: [...modesUsed, ...chainModes], rootId };
+      }
     } catch (err) {
-      log.error("Tree Orchestrator", "Query: tree summary failed:", err.message);
+      log.debug("Tree Orchestrator", `Chain detection failed: ${err.message}`);
     }
   }
 
-  if (signal?.aborted) return null;
+  // ────────────────────────────────────────────────────────
+  // FALLBACK — anything not caught above goes to converse
+  // ────────────────────────────────────────────────────────
 
-  // ── LIBRARIAN: navigate and gather context (no plan needed) ──
-  emitStatus(socket, "navigate", "Reading tree...");
+  modesUsed.push("tree:converse");
+  emitStatus(socket, "intent", "");
 
-  const queryLibMode = await resolveModeForNode("librarian", getCurrentNodeId(visitorId) || rootId);
-  await switchMode(visitorId, queryLibMode, {
-    ...meta,
-    treeSummary: treeSummary || "",
-    intent: "query",
-    clearHistory: true,
+  await switchMode(visitorId, "tree:converse", {
+    username, userId, rootId,
     conversationMemory: formatMemoryContext(visitorId),
-  });
-
-  const libStart = new Date();
-  const libResult = await processMessage(visitorId, message, {
-    ...meta,
-    signal,
-    meta: { internal: true },
-  });
-  const libEnd = new Date();
-
-  if (signal?.aborted) return null;
-  emitModeResult(socket, "tree:librarian", libResult);
-
-  modesUsed.push("tree:librarian");
-  rt.trackStep("tree:librarian", {
-    input: message,
-    output: libResult,
-    startTime: libStart,
-    endTime: libEnd,
-    llmProvider: libResult?._llmProvider || rt.llmProvider,
-    treeContext: {
-      targetNodeId: rootId,
-      directive: "query context gathering",
-      stepResult: libResult ? "success" : "failed",
-    },
-  });
-
-  // ── RESPOND: generate answer from gathered context ──
-  const responseHint = libResult?.responseHint || "Respond naturally based on what you found in the tree.";
-
-  modesUsed.push("tree:respond");
-  const respondStart = new Date();
-
-  const response = await runRespond({
-    visitorId,
-    socket,
-    signal,
-    ...meta,
-    nodeContext: null,
-    operationContext: null,
-    originalMessage: message,
-    responseHint,
-    librarianContext: libResult,
-    stepSummaries: [],
-  });
-
-  const respondEnd = new Date();
-  rt.trackStep("tree:respond", {
-    input: responseHint,
-    output: response?.answer || null,
-    startTime: respondStart,
-    endTime: respondEnd,
-    llmProvider: response?.llmProvider || rt.llmProvider,
-    treeContext: {
-      targetNodeId: rootId,
-      directive: responseHint,
-      stepResult: "success",
-    },
-  });
-
-  if (response) {
-    response.modesUsed = modesUsed;
-    response.confidence = libResult?.confidence || 0.8;
-    response.modeKey = "tree:query";
-  }
-
-  // Save to conversation memory
-  if (response?.answer) {
-    pushMemory(visitorId, message, response.answer);
-  }
-
-  return response;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// LIBRARIAN FLOW (place or chat — the main path for write operations)
-// Librarian navigates tree with navigate-tree tool, returns a plan,
-// then executePlanSteps runs the plan through existing modes.
-// ─────────────────────────────────────────────────────────────────────────
-
-async function runLibrarianFlow({
-  visitorId,
-  message,
-  socket,
-  signal,
-  username,
-  userId,
-  rootId,
-  treeSummary,
-  classification,
-  modesUsed,
-  skipRespond = false,
-  behavioral = "chat",
-  rt,
-}) {
-  const meta = { username, userId, rootId, slot: rt?.slot };
-  const isQuery = classification.intent === "query";
-
-  // ── MERGED LIBRARIAN: navigate + read + execute in one conversation ──
-  emitStatus(
-    socket,
-    "navigate",
-    isQuery ? "Reading tree…" : "Working…",
-  );
-
-  const libMode = await resolveModeForNode("librarian", getCurrentNodeId(visitorId) || rootId);
-  await switchMode(visitorId, libMode, {
-    ...meta,
-    treeSummary: treeSummary || "",
-    intent: classification.intent,
     clearHistory: true,
-    conversationMemory: formatMemoryContext(visitorId),
   });
 
-  const libStart = new Date();
-
-  // The merged librarian has execution tools for placement.
-  // processMessage with internal:false lets it navigate, execute, AND respond
-  // all in one tool-calling loop. No plan handoff.
-  const libResult = await processMessage(visitorId, message, {
-    ...meta,
-    signal,
-    meta: { internal: isQuery }, // query: internal (parse JSON). place: external (natural response)
+  const fallbackResult = await processMessage(visitorId, message, {
+    username, userId, rootId, signal, slot,
+    onToolLoopCheckpoint,
     onToolResults(results) {
       if (signal?.aborted) return;
       for (const r of results) socket.emit(WS.TOOL_RESULT, r);
     },
   });
-  const libEnd = new Date();
-
-  if (signal?.aborted) return null;
-
-  modesUsed.push("tree:librarian");
-  rt.trackStep("tree:librarian", {
-    input: message,
-    output: libResult?.answer?.slice(0, 500) || null,
-    startTime: libStart,
-    endTime: libEnd,
-    llmProvider: libResult?._internal?.connectionId ? { connectionId: libResult._internal.connectionId } : rt.llmProvider,
-    treeContext: {
-      targetNodeId: rootId,
-      directive: classification.summary,
-      stepResult: libResult?.answer ? "success" : "failed",
-    },
-  });
 
   emitStatus(socket, "done", "");
-
-  // ── Handle failure ──
-  if (!libResult || libResult.action === "error") {
-    log.error("Tree Orchestrator", "Librarian failed:", libResult?.reason || "no response");
-    if (skipRespond) return { success: false, answer: null, modeKey: "tree:orchestrator", modesUsed, stepSummaries: [] };
-
-    modesUsed.push("tree:respond");
-    const response = await runRespond({
-      visitorId, socket, signal, ...meta,
-      originalMessage: message,
-      responseHint: classification.responseHint || "Respond naturally to the user's message.",
-      stepSummaries: [],
-    });
-    if (response) { response.modesUsed = modesUsed; response.confidence = classification.confidence; }
-    return response;
-  }
-
-  // ── Smart response: check if the librarian's answer is sufficient ──
-
-  const lastContent = libResult?.answer || libResult?.content || "";
-  const hasNaturalResponse = lastContent.length > 20 && !/^(Tool |Error:|Failed:|{)/.test(lastContent);
-
-  // For query mode, the librarian returns JSON (internal:true) with responseHint.
-  // Always go to respond mode.
-  if (isQuery) {
-    // Parse the librarian's JSON output for responseHint
-    let librarianContext = libResult;
-    try {
-      const { parseJsonSafe } = await import("../../seed/orchestrators/helpers.js");
-      const parsed = parseJsonSafe(lastContent);
-      if (parsed?.responseHint) librarianContext = parsed;
-    } catch {}
-
-    if (skipRespond) {
-      return {
-        success: true, answer: null, modeKey: "tree:orchestrator",
-        modesUsed, confidence: librarianContext?.confidence || classification.confidence,
-        stepSummaries: [],
-      };
-    }
-
-    modesUsed.push("tree:respond");
-    const response = await runRespond({
-      visitorId, socket, signal, ...meta,
-      originalMessage: message,
-      responseHint: librarianContext?.responseHint || "",
-      librarianContext,
-      stepSummaries: [],
-    });
-    if (response) {
-      response.modesUsed = modesUsed;
-      response.confidence = librarianContext?.confidence || classification.confidence;
-    }
-    if (response?.answer) pushMemory(visitorId, message, response.answer);
-    return response;
-  }
-
-  // For placement: the merged librarian navigated AND executed in one conversation.
-  // Check if its response is user-friendly.
-
-  if (hasNaturalResponse) {
-    // Librarian wrote a good response. Use directly. Zero extra calls.
-    log.verbose("Tree Orchestrator", "Librarian response sufficient. Skipping respond mode.");
-    if (lastContent) pushMemory(visitorId, message, lastContent);
-    return {
-      success: true,
-      answer: behavioral === "place" ? lastContent.split("\n")[0] : lastContent,
-      modeKey: "tree:librarian",
-      modesUsed,
-      rootId,
-      confidence: 0.9,
-    };
-  }
-
-  // Librarian executed but response isn't user-friendly. Fall through to respond.
-  if (skipRespond) {
-    return { success: true, answer: lastContent || null, modeKey: "tree:orchestrator", modesUsed, stepSummaries: [] };
-  }
-
-  modesUsed.push("tree:respond");
-  const response = await runRespond({
-    visitorId, socket, signal, ...meta,
-    originalMessage: message,
-    responseHint: "Summarize what was just done. Be brief.",
-    stepSummaries: [],
-  });
-  if (response) { response.modesUsed = modesUsed; response.confidence = 0.8; }
-  if (response?.answer) pushMemory(visitorId, message, response.answer);
-  return response;
+  const fallbackAnswer = fallbackResult?.content || fallbackResult?.answer || null;
+  if (fallbackAnswer) pushMemory(visitorId, message, fallbackAnswer);
+  return { success: true, answer: fallbackAnswer, modeKey: "tree:converse", modesUsed, rootId };
 }
-
-// ─────────────────────────────────────────────────────────────────────────
-// EXECUTE PENDING (after confirmation)
-// Executes the confirmed destructive step, then resumes remaining plan
-// steps using the shared executePlanSteps loop.
-// ─────────────────────────────────────────────────────────────────────────
-
-async function executePendingOperation({
-  visitorId,
-  pending,
-  socket,
-  signal,
-  username,
-  userId,
-  rootId,
-  rt,
-  skipRespond = false,
-}) {
-  const meta = { username, userId, rootId };
-  const modesUsed = pending.modesUsed || [];
-  const stepSummaries = pending.stepSummaries || [];
-
-  // Restore rt's chainIndex from the pending state
-  if (pending.chainIndex) {
-    rt.chainIndex = pending.chainIndex;
-  }
-
-  emitStatus(socket, "execute", "Executing confirmed operation…");
-
-  const pendingMutationIntents = ["structure", "edit", "notes"];
-  const executionMode = pendingMutationIntents.includes(pending.action)
-    ? await resolveModeForNode(pending.action, pending.targetNodeId)
-    : null;
-  if (!executionMode) {
-    return await runRespond({
-      visitorId,
-      socket,
-      signal,
-      ...meta,
-      nodeContext: pending.nodeContext,
-      operationContext: "Error: Unknown operation type for confirmation.",
-      originalMessage: pending.originalMessage,
-    });
-  }
-
-  // Extract prestige from context
-  let prestige = 0;
-  if (pending.nodeContext) {
-    try {
-      const parsed = JSON.parse(pending.nodeContext);
-      prestige = parsed.prestige ?? 0;
-    } catch (err) { log.debug("TreeOrch", "Could not parse pending nodeContext for prestige:", err.message); }
-  }
-
-  await switchMode(visitorId, executionMode, {
-    ...meta,
-    targetNodeId: pending.targetNodeId,
-    prestige,
-    clearHistory: true,
-  });
-
-  const executionMessage = buildExecutionMessage(
-    pending.directive || pending.originalMessage,
-    pending.targetNodeId,
-    pending.nodeContext,
-    stepSummaries,
-  );
-
-  const execStart = new Date();
-  const execResult = await processMessage(visitorId, executionMessage, {
-    ...meta,
-    signal,
-    meta: { internal: true },
-  });
-  const execEnd = new Date();
-
-  if (signal?.aborted) return null;
-
-  emitModeResult(socket, executionMode, execResult);
-  modesUsed.push(executionMode);
-  rt.trackStep(executionMode, {
-    input: pending.directive || pending.originalMessage,
-    output: execResult,
-    startTime: execStart,
-    endTime: execEnd,
-    llmProvider: execResult?._llmProvider || rt.llmProvider,
-    treeContext: {
-      targetNodeId: pending.targetNodeId,
-      targetPath: pending.targetPath,
-      planStepIndex: pending.stepNum,
-      planTotalSteps: null,
-      directive: pending.directive,
-      stepResult: execResultToStepResult(execResult),
-      resultDetail: execResult?.summary || execResult?.reason || null,
-    },
-  });
-
-  if (pending.action === "structure" && execResult?.operations?.length > 0) {
-    socket.emit(WS.TREE_CHANGED, {
-      nodeId: pending.targetNodeId,
-      changeType: execResult?.action || "modified",
-    });
-  }
-
-  // Record this step's summary
-  stepSummaries.push(
-    buildStepSummary({
-      stepNum: pending.stepNum || stepSummaries.length + 1,
-      intent: pending.action,
-      targetPath: pending.targetPath,
-      targetNodeId: pending.targetNodeId,
-      execResult,
-      nodeContext: pending.nodeContext,
-    }),
-  );
-
-  await resetConversation(visitorId, { username, userId });
-
-  // ── RESUME REMAINING PLAN STEPS (using shared loop) ──
-  const remainingPlan = pending.remainingPlan || [];
-  const pendingMessage = pending.originalMessage;
-  const responseHint = pending.responseHint || "";
-
-  if (remainingPlan.length > 0) {
-    const planResult = await executePlanSteps({
-      plan: remainingPlan,
-      visitorId,
-      message: pendingMessage,
-      socket,
-      signal,
-      username,
-      userId,
-      rootId,
-      modesUsed,
-      initialTargetNodeId: pending.targetNodeId,
-      initialTargetPath: pending.targetPath,
-      stepSummaries,
-      responseHint,
-      includeMemoryOnFirstStep: false,
-      rt,
-    });
-
-    if (!planResult) return null;
-
-    // Early exits (nested destructive confirmation)
-    if (planResult.type === "confirm" || planResult.type === "respond") {
-      const r = planResult.response;
-      if (r) {
-        r.modesUsed = modesUsed;
-        r.stepSummaries = stepSummaries;
-      }
-      return r;
-    }
-  }
-
-  return await respondToCompletion({
-    planResult: { type: "completed", stepSummaries, lastTargetNodeId: pending.targetNodeId, lastTargetPath: pending.targetPath },
-    visitorId, socket, signal, meta,
-    message: pendingMessage,
-    responseHint, modesUsed, skipRespond, rt,
-  });
-}
-
 // ─────────────────────────────────────────────────────────────────────────
 // RESPOND (final user-facing output)
 // ─────────────────────────────────────────────────────────────────────────
@@ -2470,389 +1195,3 @@ async function runRespond({
  *
  * @returns {{ defer: boolean, reason?: string }}
  */
-function shouldDeferToMemory(classification) {
-  if (classification.intent !== "place") return { defer: false };
-  const axes = classification.placementAxes;
-  if (!axes) return { defer: false };
-
-  // Explicit structural intent — never defer
-  if (axes.pathConfidence >= 0.9) return { defer: false };
-
-  // Relational complexity — touches multiple subtrees
-  if (axes.relationalComplexity > 0.5) {
-    return {
-      defer: true,
-      reason: "Touches multiple subtrees — needs more context",
-    };
-  }
-
-  // New domain area — no existing structure to attach to
-  if (axes.domainNovelty > 0.5) {
-    return {
-      defer: true,
-      reason: "New area — holding until more context emerges",
-    };
-  }
-
-  // No clear existing spot
-  if (axes.pathConfidence < 0.6) {
-    return {
-      defer: true,
-      reason: "No clear home — holding for better placement",
-    };
-  }
-
-  return { defer: false };
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Build a directive execution message for mutation modes.
- */
-function buildExecutionMessage(
-  userMessage,
-  targetNodeId,
-  nodeContext,
-  stepSummaries = [],
-) {
-  const parts = [];
-
-  // Include prior step results so the mode can reference created IDs, moved nodes, etc.
-  if (stepSummaries.length > 0) {
-    const priorOps = stepSummaries
-      .filter((s) => s.operations || s.action)
-      .map((s) => {
-        const ops = s.operations
-          ? s.operations
-              .map(
-                (o) =>
-                  `${o.type}: "${o.nodeName}" (${o.nodeId})${o.parentId ? ` under ${o.parentId}` : ""}`,
-              )
-              .join("; ")
-          : `${s.action} on ${s.target}`;
-        return `Step ${s.step}: ${ops}`;
-      });
-    if (priorOps.length > 0) {
-      parts.push(`Prior steps (use these IDs):\n${priorOps.join("\n")}`);
-    }
-  }
-
-  if (nodeContext) parts.push(nodeContext);
-  parts.push(`Target: ${targetNodeId}`);
-  parts.push(userMessage);
-  return parts.join("\n\n");
-}
-
-/**
- * Scout loop: when the plan says "create structure" but children already
- * exist that match, explore deeper before committing.
- *
- * Returns { adapted: false } if nothing matches, or:
- * {
- *   adapted: true,
- *   targetNodeId, targetPath, ctxResult,
- *   newIntent, newDirective, reason
- * }
- *
- * Logic:
- * - Extract keywords from the directive
- * - Check if any existing children fuzzy-match those keywords
- * - If a match exists, fetch its context and check deeper
- * - If the matched child already has the planned sub-structure → convert to edit
- * - If the matched child exists but is empty → dive in, keep structure intent
- * - Max 3 levels deep to prevent runaway
- */
-async function scoutExistingStructure({
-  ctxResult,
-  directive,
-  targetNodeId,
-  profile,
-  signal,
-  userId = null,
-}) {
-  const MAX_SCOUT_DEPTH = 3;
-  const directiveLower = directive.toLowerCase();
-
-  // Extract likely node names from the directive
-  // Look for quoted names or capitalized phrases
-  const quotedNames =
-    directive.match(/['"]([^'"]+)['"]/g)?.map((s) => s.slice(1, -1)) || [];
-
-  // Only use meaningful words — skip short words and common stop words
-  const STOP_WORDS = new Set([
-    "the",
-    "and",
-    "for",
-    "are",
-    "but",
-    "not",
-    "you",
-    "all",
-    "can",
-    "had",
-    "her",
-    "was",
-    "one",
-    "our",
-    "out",
-    "has",
-    "his",
-    "how",
-    "its",
-    "may",
-    "new",
-    "now",
-    "old",
-    "see",
-    "way",
-    "who",
-    "did",
-    "get",
-    "let",
-    "say",
-    "she",
-    "too",
-    "use",
-    "from",
-    "into",
-    "each",
-    "make",
-    "like",
-    "been",
-    "have",
-    "this",
-    "will",
-    "with",
-    "that",
-    "they",
-    "them",
-    "then",
-    "than",
-    "some",
-    "move",
-    "create",
-    "delete",
-    "under",
-    "child",
-    "node",
-    "branch",
-    "already",
-    "present",
-    "level",
-    "named",
-    "after",
-    "their",
-    "contents",
-  ]);
-  const words = directive
-    .split(/\s+/)
-    .map((w) => w.replace(/['",.!?()]/g, ""))
-    .filter((w) => w.length > 3 && !STOP_WORDS.has(w.toLowerCase()));
-
-  let currentCtx = ctxResult;
-  let currentNodeId = targetNodeId;
-  let depth = 0;
-
-  while (depth < MAX_SCOUT_DEPTH && currentCtx.children?.length > 0) {
-    if (signal?.aborted) return { adapted: false };
-
-    // Find a child that matches the directive's target
-    let match = findMatchingChild(
-      currentCtx.children,
-      directiveLower,
-      quotedNames,
-      words,
-    );
-
-    // Competence: prefer a competent sibling over a weak or absent name match
-    if (!match || !quotedNames.some(q => match.name.toLowerCase() === q.toLowerCase())) {
-      try {
-        const compExt = (await import("../loader.js")).getExtension("competence");
-        if (compExt?.exports?.getCompetence) {
-          for (const child of currentCtx.children) {
-            if (child === match) continue;
-            const comp = await compExt.exports.getCompetence(child.id || child._id);
-            if (comp?.strongTopics?.some(t => directiveLower.includes(t.toLowerCase()))) {
-              match = child;
-              break;
-            }
-          }
-        }
-      } catch {}
-    }
-
-    if (!match) break;
-
-    // Found a matching child — dive deeper
-    depth++;
- log.verbose("Tree Orchestrator", 
-      `  🔍 Scout depth ${depth}: found existing "${match.name}" (${match.id})`,
-    );
-
-    const deeperCtx = await getContextForAi(match.id, {
-      includeChildren: true,
-      includeParentChain: true,
-      includeNotes: false,
-      userId,
-    });
-
-    // Decide: does this child already cover what the plan wants to create?
-    if (deeperCtx.children?.length > 0) {
-      // Child has sub-structure — check if it overlaps with what we'd create
-      const subNames = deeperCtx.children.map((c) => c.name.toLowerCase());
-      const directiveKeywords = words.map((w) => w.toLowerCase());
-      const overlap = directiveKeywords.filter((kw) =>
-        subNames.some((sn) => sn.includes(kw) || kw.includes(sn)),
-      );
-
-      if (overlap.length >= 2) {
-        // Significant overlap — this structure exists, convert to edit
-        return {
-          adapted: true,
-          targetNodeId: match.id,
-          targetPath: deeperCtx.path || match.name,
-          ctxResult: deeperCtx,
-          newIntent: "edit",
-          newDirective: `Update existing structure. ${directive}`,
-          reason: `"${match.name}" already exists with matching sub-nodes (${overlap.join(", ")}). Converted to edit.`,
-        };
-      }
-
-      // Has children but no overlap — keep exploring
-      currentCtx = deeperCtx;
-      currentNodeId = match.id;
-      continue;
-    }
-
-    // Child exists but is empty — re-target to it so structure builds inside
-    return {
-      adapted: true,
-      targetNodeId: match.id,
-      targetPath: deeperCtx.path || match.name,
-      ctxResult: deeperCtx,
-      newIntent: "structure",
-      newDirective: directive,
-      reason: `"${match.name}" already exists but is empty. Building inside it instead of creating a duplicate.`,
-    };
-  }
-
-  return { adapted: false };
-}
-
-/**
- * Fuzzy match a child against the directive's target.
- * Checks quoted names first (exact), then keyword overlap.
- */
-function findMatchingChild(children, directiveLower, quotedNames, words) {
-  // Exact match on quoted names — this is reliable
-  for (const qName of quotedNames) {
-    const qLower = qName.toLowerCase();
-    const match = children.find((c) => c.name.toLowerCase() === qLower);
-    if (match) return match;
-  }
-
-  // Check if full child name appears literally in directive (e.g., "Life Plan" in directive)
-  // Require at least 4 chars to avoid junk matches
-  let bestMatch = null;
-  let bestScore = 0;
-
-  for (const child of children) {
-    const childLower = child.name.toLowerCase();
-
-    if (childLower.length >= 4 && directiveLower.includes(childLower)) {
-      const score = childLower.length;
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = child;
-      }
-      continue;
-    }
-
-    // Word overlap: only exact word-to-word matches (no substring games)
-    // Both words must be 4+ chars to count
-    const childWords = childLower.split(/\s+/).filter((w) => w.length >= 4);
-    const filteredWords = words
-      .filter((w) => w.length >= 4)
-      .map((w) => w.toLowerCase());
-
-    const overlap = childWords.filter((cw) =>
-      filteredWords.some((fw) => fw === cw),
-    );
-    const score =
-      childWords.length > 0 ? overlap.length / childWords.length : 0;
-    if (score > 0.5 && overlap.length >= 1 && score > bestScore) {
-      bestScore = score;
-      bestMatch = child;
-    }
-  }
-
-  return bestMatch;
-}
-
-/**
- * For move/reparent directives, find ALL nodes referenced in the directive
- * that we DIDN'T navigate to. Returns their contexts with children and IDs.
- *
- * "Move 'Backend' to 'JavaScript Project'" — if nav found Backend,
- * this returns JavaScript Project's context (and vice versa).
- *
- * Returns array of contexts, each with { id, name, children, path, ... }
- */
-async function fetchMoveCounterparts(directive, navigatedNodeId, rootId, userId = null) {
-  // Extract ALL quoted node names from the directive
-  const quotedNames =
-    directive.match(/['"]([^'"]+)['"]/g)?.map((s) => s.slice(1, -1)) || [];
-
-  // Also extract unquoted names from common move patterns
-  const movePatterns = [
-    /\bmove\s+(?:node\s+)?['"]?([^'",.]+?)['"]?\s+(?:to|under|into)\b/i,
-    /\b(?:to|under|into)\s+(?:be\s+)?(?:a\s+)?(?:child\s+of\s+)?['"]?([^'",.]+?)['"]?\.?\s*$/i,
-    /\bof\s+['"]?([^'",.]+?)['"]?\s/i,
-    /\bfrom\s+['"]?([^'",.]+?)['"]?\s/i,
-  ];
-
-  const candidates = new Set(quotedNames);
-  for (const pattern of movePatterns) {
-    const match = directive.match(pattern);
-    if (match?.[1]) {
-      candidates.add(match[1].trim());
-    }
-  }
-
-  if (candidates.size === 0) return [];
-
-  const searchRoot = rootId || navigatedNodeId;
-  const results = [];
-  const seenIds = new Set([navigatedNodeId]);
-
-  for (const name of candidates) {
-    try {
-      const navCtx = await getNavigationContext(searchRoot, { search: name });
-      if (!navCtx?.searchResults?.length) continue;
-
-      // Fetch context for ALL matches that aren't the navigated node
-      for (const match of navCtx.searchResults) {
-        if (seenIds.has(match.id)) continue;
-        seenIds.add(match.id);
-
-        const ctx = await getContextForAi(match.id, {
-          includeChildren: true,
-          includeParentChain: true,
-          includeNotes: false,
-          userId,
-        });
-        results.push(ctx);
-      }
-    } catch (err) {
- log.error("Tree Orchestrator", 
-        `⚠️ Move counterpart lookup failed for "${name}":`,
-        err.message,
-      );
-    }
-  }
-
-  return results;
-}

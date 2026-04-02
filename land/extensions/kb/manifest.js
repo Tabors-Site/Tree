@@ -1,6 +1,6 @@
 export default {
   name: "kb",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Knowledge base. Tell it things. Ask it things. One person maintains, " +
@@ -13,10 +13,9 @@ export default {
     "and the coworker who always gets interrupted.",
 
   classifierHints: [
-    /\b(what do i do|how do i|where is|who handles|what's the)\b/i,
+    /\b(kb|knowledge base|tell kb|save to kb|add to kb|store in kb|ask kb)\b/i,
     /\b(procedure|protocol|policy|process|steps for)\b/i,
-    /\b(contact|phone|email|vendor|supplier)\b/i,
-    /\b(remember|note that|fyi|heads up|update:|changed to)\b/i,
+    /\b(remember this|note that|fyi|heads up|update:|changed to)\b/i,
   ],
 
   needs: {

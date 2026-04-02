@@ -218,7 +218,7 @@ export async function synthesize(rootId) {
         // Decay old signals
         const fresh = signals.filter(s => new Date(s.date).getTime() > decayCutoff);
         if (fresh.length < signals.length) {
-          await _metadata.mergeExtMeta(node._id, "taste", { signals: fresh });
+          await _metadata.mergeExtMeta(node, "taste", { signals: fresh });
         }
 
         log.verbose("Taste", `Synthesized for ${node.name || node._id}: "${learned.slice(0, 80)}"`);

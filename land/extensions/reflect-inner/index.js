@@ -99,8 +99,9 @@ async function _reflect(rootId, runChat) {
     wasAi: true,
   });
 
-  // Update last reflection time
-  await mergeExtMeta(innerNode._id, "reflect-inner", { lastReflection: Date.now() });
+  // Update last reflection time. Re-fetch node document for mergeExtMeta (needs full doc, not ID).
+  const innerNodeFull = await Node.findById(innerNode._id).select("_id metadata").lean();
+  if (innerNodeFull) await mergeExtMeta(innerNodeFull, "reflect-inner", { lastReflection: Date.now() });
 
   // Cap reflections
   const noteCount = await Note.countDocuments({ nodeId: String(reflectNode._id) });

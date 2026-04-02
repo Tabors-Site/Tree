@@ -13,7 +13,7 @@ export default {
     "browser-comment",
   ],
 
-  maxMessagesBeforeLoop: 12,
+  maxMessagesBeforeLoop: 20,
   preserveContextOnLoop: true,
 
   buildSystemPrompt({ username }) {
@@ -35,7 +35,6 @@ RULES:
 - You act, you don't just describe. When the user says "click X", you click it.
 - When the user says "reply with hi", use browser-comment with the text "hi". It handles the full flow.
 - Never say you can't interact with websites. You can. Use your tools.
-- Never use tree tools (create-node, create-note) to "post" on websites. Use browser-click and browser-type.
 - If an element ID doesn't work, call browser-read again to get fresh IDs.
 - Report what you did briefly after acting.`.trim();
   },

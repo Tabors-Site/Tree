@@ -14,13 +14,10 @@ export default {
     "builds, recovery heals, study grows.",
 
   classifierHints: [
-    /\b(study|learn|teach me|explain|understand|how does|what is)\b/i,
-    /\b(needlearn|need to learn|want to learn|should learn|add to queue)\b/i,
-    /\b(mastery|practice|quiz|test me|exercise|drill)\b/i,
-    /\b(curriculum|lesson|course|tutorial|concept|topic)\b/i,
-    /\b(review|progress|gaps?|streak|studied)\b/i,
-    /\b(what do i have|what's in|show me|status|queue|active|so far)\b/i,
-    /\b(start|begin|continue|next|session|be)\b/i,
+    /\b(study|teach me|quiz me|test me|drill me)\b/i,
+    /\b(need to learn|want to learn|should learn|add to queue)\b/i,
+    /\b(mastery|flashcard|curriculum|lesson|course|tutorial)\b/i,
+    /\b(studied|study session|study plan|study streak)\b/i,
   ],
 
   needs: {
