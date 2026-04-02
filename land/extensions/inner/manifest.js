@@ -1,6 +1,6 @@
 export default {
   name: "inner",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-intelligence",
   description:
     "The tree thinks to itself. One random thought per breath. " +

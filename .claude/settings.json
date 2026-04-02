@@ -609,7 +609,9 @@
       "Bash(grep -n router.get.*node.*:nodeId land/routes/api/node.js)",
       "Bash(grep -rn _scope cli/ --include=*.js)",
       "Bash(grep -n atHome cli/ -r --include=*.js)",
-      "Bash(grep -rn \"socket\\\\|WebSocket\\\\|io\\(\" cli/ --include=*.js)"
+      "Bash(grep -rn \"socket\\\\|WebSocket\\\\|io\\(\" cli/ --include=*.js)",
+      "Bash(sed -i 's/\"\"1.0.0\"\"/\"\"1.0.2\"\"/' land/extensions/$ext/manifest.js)",
+      "Bash(echo \"Bumped $ext to 1.0.2\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
@@ -635,7 +637,8 @@
       "/home/tabor/github/Tree/land/extensions/peer-review",
       "/home/tabor/github/Tree/land/extensions/explore",
       "/home/tabor/github/Tree/land/seed",
-      "/home/tabor/github/Tree/land/extensions/recovery"
+      "/home/tabor/github/Tree/land/extensions/recovery",
+      "/home/tabor/github/Tree/land/extensions/$ext"
     ]
   }
 }

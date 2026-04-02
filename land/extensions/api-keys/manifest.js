@@ -1,6 +1,6 @@
 export default {
   name: "api-keys",
-  version: "1.0.0",
+  version: "1.0.2",
   builtFor: "TreeOS",
   description:
     "Every interaction with TreeOS normally goes through a browser session or a WebSocket " +
