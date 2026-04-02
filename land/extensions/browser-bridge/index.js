@@ -2,9 +2,8 @@
  * Browser Bridge
  *
  * The AI sees and acts through the user's browser.
- * Chrome extension connects via a separate Socket.IO namespace (/browser-bridge).
- * Server-side tools bridge AI calls to browser actions.
- * Confined scope. Site-scoped. Approve-gated. Logged.
+ * Chrome extension connects via Socket.IO. Server-side tools bridge AI calls
+ * to browser actions. Confined scope. Site-scoped. Approve-gated. Logged.
  */
 
 import log from "../../seed/log.js";
@@ -34,107 +33,113 @@ export async function init(core) {
     Node: core.models.Node,
   });
 
-  // ── Separate Socket.IO namespace for browser bridge ───────────────
-  // Keeps browser-bridge traffic isolated from the main dashboard WebSocket.
-  const io = core.websocket.getIO?.();
-  if (io) {
-    const ns = io.of("/browser-bridge");
+  // ── Socket.IO event handlers for Chrome extension ──────────────────
 
-    // Auth middleware: validate API key or username+password on connect
-    ns.use(async (socket, next) => {
-      try {
-        const auth = socket.handshake.auth || {};
-        const { apiKey, username, password } = auth;
+  // Auth: Chrome extension sends API key after connecting
+  core.websocket.registerSocketHandler("browserAuth", async ({ socket, data }) => {
+    try {
+      const apiKey = data?.apiKey;
+      if (!apiKey && !(data.username && data.password)) {
+        socket.emit("browserAuthResult", { success: false, error: "API key or username + password required" });
+        return;
+      }
 
-        if (!apiKey && !(username && password)) {
-          return next(new Error("API key or username + password required"));
-        }
+      let userId = null;
+      const { username, password } = data;
 
-        let userId = null;
+      // Method 1: API key (if api-keys extension data exists)
+      if (apiKey) {
+        try {
+          // User imported at top of file
+          const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
+          const { default: bcryptMod } = await import("bcrypt");
 
-        // Method 1: API key
-        if (apiKey) {
-          try {
-            const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
-            const { default: bcryptMod } = await import("bcrypt");
-            const prefix = apiKey.slice(0, 8);
-            const candidates = await User.find({
-              "metadata.apiKeys": { $elemMatch: { keyPrefix: prefix, revoked: { $ne: true } } },
-            }).select("_id username metadata");
+          const prefix = apiKey.slice(0, 8);
+          log.debug("BrowserBridge", `API key auth attempt, prefix: ${prefix}`);
+          const candidates = await User.find({
+            "metadata.apiKeys": {
+              $elemMatch: { keyPrefix: prefix, revoked: { $ne: true } },
+            },
+          }).select("_id username metadata");
 
-            for (const user of candidates) {
-              const keys = getUserMeta(user, "apiKeys");
-              if (!Array.isArray(keys)) continue;
-              for (const key of keys) {
-                if (key.revoked || key.keyPrefix !== prefix) continue;
-                if (await bcryptMod.compare(apiKey, key.keyHash)) {
-                  userId = String(user._id);
-                  socket.username = user.username;
-                  break;
-                }
+          log.debug("BrowserBridge", `Found ${candidates.length} candidates for prefix ${prefix}`);
+
+          for (const user of candidates) {
+            const keys = getUserMeta(user, "apiKeys");
+            if (!Array.isArray(keys)) continue;
+            for (const key of keys) {
+              if (key.revoked || key.keyPrefix !== prefix) continue;
+              const match = await bcryptMod.compare(apiKey, key.keyHash);
+              if (match) {
+                userId = String(user._id);
+                socket.username = user.username;
+                break;
               }
-              if (userId) break;
             }
-          } catch (err) {
-            log.warn("BrowserBridge", `API key auth error: ${err.message}`);
+            if (userId) break;
           }
+        } catch (err) {
+          log.warn("BrowserBridge", `API key auth error: ${err.message}`);
         }
+      }
 
-        // Method 2: username + password
-        if (!userId && username && password) {
-          try {
-            const { default: bcryptMod } = await import("bcrypt");
-            const user = await User.findOne({ username }).select("_id username password");
-            if (user && await bcryptMod.compare(password, user.password)) {
+      // Method 2: username + password (always available, no extension needed)
+      if (!userId && username && password) {
+        try {
+          // User imported at top of file
+          const { default: bcryptMod } = await import("bcrypt");
+          log.debug("BrowserBridge", `Password auth attempt for user: ${username}`);
+          const user = await User.findOne({ username }).select("_id username password");
+          if (user) {
+            const match = await bcryptMod.compare(password, user.password);
+            log.debug("BrowserBridge", `Password match for ${username}: ${match}`);
+            if (match) {
               userId = String(user._id);
               socket.username = user.username;
             }
-          } catch (err) {
-            log.warn("BrowserBridge", `Password auth error: ${err.message}`);
+          } else {
+            log.debug("BrowserBridge", `User not found: ${username}`);
           }
+        } catch (err) {
+          log.warn("BrowserBridge", `Password auth error: ${err.message}`);
         }
-
-        if (!userId) return next(new Error("Authentication failed"));
-
-        socket.userId = userId;
-        socket._browserBridge = true;
-        next();
-      } catch (err) {
-        next(new Error("Auth error: " + err.message));
       }
-    });
 
-    // Connection handler
-    ns.on("connection", (socket) => {
-      const userId = socket.userId;
-      log.info("BrowserBridge", `Namespace connection from ${userId}`);
+      if (!userId) {
+        socket.emit("browserAuthResult", { success: false, error: "Invalid API key" });
+        return;
+      }
+
+      // Set userId on socket (doesn't affect authSessions since it was null on connect)
+      socket.userId = userId;
+      socket._browserBridge = true;
 
       registerConnection(userId, socket);
       socket.emit("browserAuthResult", { success: true });
+    } catch (err) {
+      socket.emit("browserAuthResult", { success: false, error: err.message });
+    }
+  });
 
-      // Response handlers: resolve pending requests from AI tool calls
-      const responseEvents = ["pageState", "actionResult", "screenshot", "networkLog", "tabsList"];
-      for (const event of responseEvents) {
-        socket.on(event, (data) => {
-          if (data?.requestId) {
-            resolveRequest(data.requestId, data.data || data);
-          }
-        });
+  // Response handlers: resolve pending requests from AI tool calls
+  const responseEvents = ["pageState", "actionResult", "screenshot", "networkLog", "tabsList"];
+  for (const event of responseEvents) {
+    core.websocket.registerSocketHandler(event, ({ data }) => {
+      if (data?.requestId) {
+        resolveRequest(data.requestId, data.data || data);
       }
-
-      // Unprompted: user navigated to a new page
-      socket.on("pageNavigated", (data) => {
-        if (data?.url) {
-          setCurrentUrl(userId, data.url);
-          log.verbose("BrowserBridge", `${userId} navigated to ${data.url}`);
-        }
-      });
     });
-
-    log.info("BrowserBridge", "Socket.IO namespace /browser-bridge created");
-  } else {
-    log.warn("BrowserBridge", "WebSocket server not available. Chrome extension will not work.");
   }
+
+  // Unprompted: user navigated to a new page
+  core.websocket.registerSocketHandler("pageNavigated", ({ socket, data }) => {
+    const userId = socket.userId;
+    if (!userId || !socket._browserBridge) return;
+    if (data?.url) {
+      setCurrentUrl(userId, data.url);
+      log.verbose("BrowserBridge", `${userId} navigated to ${data.url}`);
+    }
+  });
 
   // ── beforeToolCall: site scoping guard ─────────────────────────────
 
@@ -164,6 +169,7 @@ export async function init(core) {
       const node = await core.models.Node.findById(nodeId);
       if (!node) return;
       const modes = node.metadata instanceof Map ? node.metadata.get("modes") : node.metadata?.modes;
+      // Only set if no respond mode already set
       if (!modes?.respond) {
         await setExtMeta(node, "modes", { ...(modes || {}), respond: "tree:browser-agent" });
         log.info("BrowserBridge", `Auto-set browser-agent mode on ${nodeId}`);
@@ -175,6 +181,8 @@ export async function init(core) {
 
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
     const bbMeta = meta?.["browser-bridge"];
+    // Only inject if the extension is active at this position
+    // (spatial scoping already filters hooks, so if we're here, it's allowed)
     context.browserBridge = {
       available: true,
       note: "BROWSER BRIDGE IS ACTIVE. You control the user's REAL browser. " +

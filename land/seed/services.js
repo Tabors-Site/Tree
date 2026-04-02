@@ -90,6 +90,7 @@ const NOOP_WEBSOCKET = {
   emitToUser: () => {},
   registerSocketHandler: () => {},
   unregisterSocketHandler: () => {},
+  getIO: () => null,
 };
 
 // ---------------------------------------------------------------------------
