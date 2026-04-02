@@ -1,6 +1,6 @@
 export default {
   name: "fitness",
-  version: "3.0.0",
+  version: "3.0.1",
   builtFor: "TreeOS",
   description:
     "Multi-modality workout tracking. Three languages: gym (weight x reps x sets), " +

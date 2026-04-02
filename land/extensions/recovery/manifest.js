@@ -1,6 +1,6 @@
 export default {
   name: "recovery",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "The tree that grows toward health. Track substances, feelings, cravings, " +

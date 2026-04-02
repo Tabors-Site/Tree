@@ -1,6 +1,6 @@
 export default {
   name: "study",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "The tree that teaches you. Queue topics. Build curricula. Study through conversation. " +
