@@ -1,6 +1,6 @@
 export default {
   name: "energy",
-  version: "1.0.0",
+  version: "1.0.3",
   builtFor: "TreeOS",
   description:
     "Every action in TreeOS costs energy. Creating a node costs 3. Writing a note costs " +

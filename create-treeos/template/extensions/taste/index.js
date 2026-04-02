@@ -11,12 +11,10 @@ import {
 export async function init(core) {
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
 
+  const { runChat: _runChatDirect } = await import("../../seed/llm/conversation.js");
   configure({
     metadata: core.metadata,
-    runChat: async (opts) => {
-      if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
-      return core.llm.runChat({ ...opts, llmPriority: BG });
-    },
+    runChat: async (opts) => _runChatDirect({ ...opts, llmPriority: BG }),
     Contribution: core.models.Contribution,
     Node: core.models.Node,
   });

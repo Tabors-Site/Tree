@@ -25,22 +25,15 @@ export default {
     "\n\n" +
     "Install: treeos ext install treeos-intelligence",
 
+  includes: [
+    "tree-compress", "contradiction", "inverse-tree", "evolution", "intent", "embed",
+    "scout", "explore", "trace", "boundary", "competence", "reflect", "evolve", "rings",
+  ],
+
   needs: {
     extensions: [
-      "tree-compress",
-      "contradiction",
-      "inverse-tree",
-      "evolution",
-      "intent",
-      "embed",
-      "scout",
-      "explore",
-      "trace",
-      "boundary",
-      "competence",
-      "reflect",
-      "evolve",
-      "rings",
+      "tree-compress", "contradiction", "inverse-tree", "evolution", "intent", "embed",
+      "scout", "explore", "trace", "boundary", "competence", "reflect", "evolve", "rings",
     ],
   },
 

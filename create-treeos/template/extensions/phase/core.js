@@ -86,8 +86,9 @@ export async function recordSignal(userId, type, nodeId) {
     recordTransition(phaseMeta, previousPhase, detected.phase);
   }
 
-  setUserMeta(user, "phase", phaseMeta);
-  await user.save();
+  // Atomic write to avoid clobbering other metadata namespaces
+  const { batchSetUserMeta } = await import("../../seed/tree/userMetadata.js");
+  await batchSetUserMeta(userId, "phase", phaseMeta);
 
   // Feed inverse-tree if installed
   if (previousPhase !== detected.phase) {

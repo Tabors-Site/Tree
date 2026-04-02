@@ -14,9 +14,9 @@ export async function init(core) {
   // When a user creates a tree root, add it to their navigation list.
   core.hooks.register("afterNodeCreate", async ({ node, userId }) => {
     if (!node || !userId) return;
-    // Only tree roots (node.rootOwner is the creating user)
-    if (node.rootOwner && node.rootOwner.toString() === String(userId)) {
-      await addRoot(userId, node._id.toString());
+    if (node.rootOwner && String(node.rootOwner) === String(userId)) {
+      log.info("Navigation", `Adding root "${node.name || node._id}" to user ${userId}`);
+      await addRoot(String(userId), String(node._id));
     }
   }, "navigation");
 

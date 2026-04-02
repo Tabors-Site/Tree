@@ -49,8 +49,9 @@ import { OrchestratorRuntime } from "./orchestrators/runtime.js";
 import { acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks } from "./orchestrators/locks.js";
 import { ok, error, sendOk, sendError, ERR, WS, CASCADE } from "./protocol.js";
 import { getExtMeta, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, batchSetExtMeta, unsetExtMeta } from "./tree/extensionMetadata.js";
-import { getUserMeta, setUserMeta, incUserMeta, pushUserMeta, batchSetUserMeta, unsetUserMeta } from "./tree/userMetadata.js";
+import { getUserMeta, setUserMeta, incUserMeta, pushUserMeta, batchSetUserMeta, unsetUserMeta, addToUserMetaSet } from "./tree/userMetadata.js";
 import { deliverCascade } from "./tree/cascade.js";
+import { isUserRoot, getLandRootId } from "./landRoot.js";
 import { createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType } from "./tree/treeManagement.js";
 import { createNote, editNote, deleteNoteAndFile, transferNote, getNotes } from "./tree/notes.js";
 import { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, isToolReadOnly, getToolOwner, getModeOwner, getModesOwnedBy } from "./tree/extensionScope.js";
@@ -175,6 +176,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       checkIntegrity,
       checkTreeHealth, tripTree, reviveTree, isTreeAlive,
       createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType,
+      isUserRoot, getLandRootId,
     },
 
     // --- Notes (programmatic note CRUD) ---
@@ -187,7 +189,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     metadata: { getExtMeta, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, batchSetExtMeta, unsetExtMeta },
 
     // --- User metadata (namespace-enforced read/write for extension data on users) ---
-    userMetadata: { getUserMeta, setUserMeta, incUserMeta, pushUserMeta, batchSetUserMeta, unsetUserMeta },
+    userMetadata: { getUserMeta, setUserMeta, incUserMeta, pushUserMeta, batchSetUserMeta, unsetUserMeta, addToUserMetaSet },
 
     // --- Extension scope (check blocked/allowed status at positions) ---
     scope: { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, isToolReadOnly, getToolOwner, getModeOwner, getModesOwnedBy },

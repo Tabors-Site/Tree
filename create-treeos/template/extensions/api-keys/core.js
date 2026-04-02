@@ -3,7 +3,7 @@ import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import User from "../../seed/models/user.js";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { getUserMeta, batchSetUserMeta } from "../../seed/tree/userMetadata.js";
 
 const MAX_API_KEYS_PER_USER = 10;
 
@@ -60,8 +60,7 @@ export const createApiKey = async (req, res) => {
 
     const { rawKey, keyHash, keyPrefix } = await generateApiKey();
     keys = [...keys, { _id: crypto.randomUUID(), keyHash, keyPrefix, name: safeName, createdAt: new Date() }];
-    setUserMeta(user, "apiKeys", keys);
-    await user.save();
+    await batchSetUserMeta(userId, "apiKeys", keys);
 
     return sendOk(res, {
       apiKey: rawKey,
@@ -109,8 +108,7 @@ export const deleteApiKey = async (req, res) => {
     const key = keys.find((k) => k._id === keyId);
     if (!key) return sendError(res, 404, ERR.NODE_NOT_FOUND, "API key not found");
     key.revoked = true;
-    setUserMeta(user, "apiKeys", keys);
-    await user.save();
+    await batchSetUserMeta(req.userId, "apiKeys", keys);
 
     return sendOk(res, { message: "API key revoked" });
   } catch (err) {
@@ -170,8 +168,7 @@ export async function apiKeyAuthStrategy(req) {
 
       key.usageCount = (key.usageCount || 0) + 1;
       key.lastUsedAt = new Date();
-      setUserMeta(user, "apiKeys", keys);
-      await user.save();
+      await batchSetUserMeta(String(user._id), "apiKeys", keys);
 
       return { userId: user._id, username: user.username, extra: { apiKeyId: key._id } };
     }

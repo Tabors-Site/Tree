@@ -6,7 +6,6 @@ import { getContextForAi } from "../../seed/tree/treeFetch.js";
 import { createNote } from "../../seed/tree/notes.js";
 
 const MAX_THOUGHTS = 200;
-const SYSTEM_USER = "SYSTEM";
 
 // Track consecutive idle exhales per tree to avoid thinking when quiet
 const _idleCount = new Map();
@@ -16,9 +15,11 @@ export async function init(core) {
 
   core.llm.registerRootLlmSlot?.("inner");
 
-  const runChat = async (opts) => {
-    return core.llm.runChat({ ...opts, llmPriority: BG });
-  };
+  // Direct import like rings. core.llm.runChat guards with userHasLlm
+  // which fails for background jobs. Direct import uses the full
+  // LLM resolution chain: tree slot -> tree default -> user slot -> user default.
+  const { runChat: _runChatDirect } = await import("../../seed/llm/conversation.js");
+  const runChat = async (opts) => _runChatDirect({ ...opts, llmPriority: BG });
 
   // ── breath:exhale: one random thought ──────────────────────────────
   core.hooks.register("breath:exhale", async ({ rootId, breathRate, activityLevel }) => {
@@ -35,7 +36,37 @@ export async function init(core) {
       _idleCount.set(rid, 0);
     }
 
+    // Fire and forget. Don't block the breath hook with an LLM call.
+    think(rootId, runChat).catch(err => log.debug("Inner", `Thought failed: ${err.message}`));
+  }, "inner");
+
+  // Register HTML page and tree quick link
+  try {
+    const { getExtension } = await import("../loader.js");
+    const htmlExt = getExtension("html-rendering");
+    if (htmlExt) {
+      const { default: buildHtmlRoutes } = await import("./htmlRoutes.js");
+      htmlExt.router.use("/", buildHtmlRoutes());
+    }
+    const base = getExtension("treeos-base");
+    base?.exports?.registerSlot?.("tree-quick-links", "inner", ({ rootId, queryString }) =>
+      `<a href="/api/v1/root/${rootId}/consciousness${queryString}" class="back-link">Consciousness</a>`,
+      { priority: 45 }
+    );
+  } catch {}
+
+  log.info("Inner", "Loaded. The tree thinks to itself.");
+  return {};
+}
+
+async function think(rootId, runChat) {
     try {
+      // Get tree owner for LLM access
+      const { isUserRoot } = await import("../../seed/landRoot.js");
+      const rootNode = await Node.findById(rootId).select("rootOwner systemRole parent").lean();
+      if (!isUserRoot(rootNode)) return;
+      const ownerId = String(rootNode.rootOwner);
+
       // Find or create .inner node under tree root
       const innerNode = await getOrCreateInnerNode(rootId);
       if (!innerNode) return;
@@ -61,7 +92,7 @@ export async function init(core) {
 
       // One thought
       const { answer } = await runChat({
-        userId: SYSTEM_USER,
+        userId: ownerId,
         username: "inner",
         message:
           `You are the tree's internal monologue. You are looking at the node "${randomNode.name}" ` +
@@ -70,7 +101,8 @@ export async function init(core) {
           `this node and what you know about the tree, a question about something missing, ` +
           `a noticed imbalance, or just noise. Keep it to one sentence. ` +
           `Don't be helpful. Don't suggest actions. Just think.`,
-        mode: "home:default",
+        mode: "tree:respond",
+        rootId,
         slot: "inner",
       });
 
@@ -80,7 +112,7 @@ export async function init(core) {
       await createNote({
         contentType: "text",
         content: answer.trim(),
-        userId: SYSTEM_USER,
+        userId: ownerId,
         nodeId: String(innerNode._id),
         wasAi: true,
       });
@@ -102,10 +134,6 @@ export async function init(core) {
     } catch (err) {
       log.debug("Inner", `Thought failed: ${err.message}`);
     }
-  }, "inner");
-
-  log.info("Inner", "Loaded. The tree thinks to itself.");
-  return {};
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -165,7 +193,7 @@ async function pickRandomNode(rootId, innerNodeId) {
     }).select("_id name children").lean();
 
     for (const node of level1) {
-      if (String(node._id) !== innerIdStr) candidates.push(node);
+      if (String(node._id) !== innerIdStr && !node.name?.startsWith(".")) candidates.push(node);
     }
 
     // Level 2: grandchildren
@@ -178,7 +206,7 @@ async function pickRandomNode(rootId, innerNodeId) {
       }).select("_id name children").lean();
 
       for (const node of level2) {
-        candidates.push(node);
+        if (!node.name?.startsWith(".")) candidates.push(node);
       }
 
       // Level 3: great-grandchildren
@@ -191,7 +219,7 @@ async function pickRandomNode(rootId, innerNodeId) {
         }).select("_id name").lean();
 
         for (const node of level3) {
-          candidates.push(node);
+          if (!node.name?.startsWith(".")) candidates.push(node);
         }
       }
     }

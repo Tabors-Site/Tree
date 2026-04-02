@@ -158,7 +158,14 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
 
   io = new Server(httpServer, {
     cors: {
-      origin: allowedOrigins,
+      origin: (origin, cb) => {
+        // Allow configured origins, Chrome extensions, and null origin (same-origin)
+        if (!origin || (allowedOrigins && allowedOrigins.includes(origin)) || origin?.startsWith("chrome-extension://")) {
+          cb(null, true);
+        } else {
+          cb(null, false);
+        }
+      },
       methods: ["GET", "POST"],
       credentials: true,
     },

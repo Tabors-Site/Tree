@@ -1,6 +1,6 @@
 export default {
   name: "go",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos",
   description:
     "Navigate by intent. Say where, not how. " +

@@ -60,12 +60,26 @@ Full reference: `extensions/EXTENSION_FORMAT.md`
 - **Jobs** (background tasks with start/stop)
 - **Orchestrator** (replace the entire conversation flow)
 - **CLI commands** (auto-generated from manifest declarations)
+- **UI Slots** (HTML fragments injected into pages: app cards, quick links, profile sections, dashboard panels)
+- **HTML Pages** (server-rendered pages registered via html-rendering extension)
 
 ### Key patterns
 
 **enrichContext** is how you speak to the AI. The kernel builds the prompt. Your extension injects context through this hook. Always guard: check if relevant data exists before injecting. Never run expensive queries unconditionally.
 
 **setExtMeta** is how you write data. Each extension gets its own namespace in the metadata Map. `setExtMeta(node, "my-extension", data)` writes atomically. You can only write to your own namespace.
+
+**registerSlot** is how you add UI to pages. Extensions register HTML fragments for named slots (e.g. `apps-grid`, `user-quick-links`, `user-profile-sections`, `node-detail-sections`). Pages resolve slots by name. Whatever's installed appears. Whatever's not doesn't. Same pattern as hooks, modes, tools. Spatial scoping filters slots per position. Get it from treeos-base exports:
+```js
+const treeos = getExtension("treeos-base");
+treeos?.exports?.registerSlot?.("apps-grid", "my-ext", (ctx) => {
+  return `<div class="app-card">...</div>`;
+}, { priority: 50 });
+```
+
+**emitSlotUpdate** pushes live UI updates via WebSocket. After data changes (afterNote, afterMetadataWrite hooks), call `emitSlotUpdate(core, userId, slotName, extName, context)` to re-render a slot fragment and push it to the client without a page refresh.
+
+**inApp query param** is set when pages load inside the app shell iframe. Dashboard pages should skip their own chatbar when `inApp` is truthy because the app shell provides the chat panel. Pass `inApp: !!req.query.inApp` to your renderer and conditionally exclude chatbar HTML/CSS/JS.
 
 **OrchestratorRuntime** is how you run multi-step AI pipelines. Single LLM call: use `core.llm.runChat()`. Multi-step background pipeline: use `new OrchestratorRuntime()` with init, runStep, trackStep, cleanup.
 

@@ -287,8 +287,13 @@ export async function useEnergy({
     remainingCost = 0;
   }
 
-  setUserMeta(user, "energy", energy);
-  await user.save();
+  // Use atomic $set to avoid clobbering other metadata namespaces
+  // that may have been modified concurrently (e.g. navigation adding roots).
+  const { batchSetUserMeta } = await import("../../seed/tree/userMetadata.js");
+  await batchSetUserMeta(userId, "energy", {
+    available: energy.available,
+    additional: energy.additional,
+  });
 
   return {
     energyUsed: cost,

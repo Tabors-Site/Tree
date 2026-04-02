@@ -1,6 +1,6 @@
 export default {
   name: "treeos-base",
-  version: "1.0.0",
+  version: "1.0.2",
   builtFor: "TreeOS",
   description:
     "The reference implementation of how the AI thinks inside a tree. Ten modes, thirty-plus " +

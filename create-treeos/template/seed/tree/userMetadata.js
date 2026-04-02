@@ -142,6 +142,24 @@ export async function pushUserMeta(user, key, field, item, maxLength = 100) {
 }
 
 /**
+ * Atomic add-to-set within a user's metadata namespace.
+ * Uses MongoDB $addToSet. No duplicates. No read-modify-write.
+ *
+ *   await addToUserMetaSet(userId, "nav", "roots", rootId);
+ */
+export async function addToUserMetaSet(user, key, field, item) {
+  if (!user || !key || !field) return false;
+  if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
+  if (DANGEROUS_KEYS.has(field)) return false;
+  const userId = String(user._id || user);
+  await User.updateOne(
+    { _id: userId },
+    { $addToSet: { [`metadata.${key}.${field}`]: item } },
+  );
+  return true;
+}
+
+/**
  * Atomic multi-field set within a user's metadata namespace.
  * Uses MongoDB $set on individual keys. No read-modify-write.
  *

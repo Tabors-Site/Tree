@@ -46,12 +46,7 @@ export async function hasAccess(userId, feature) {
  * Set a user's tier. Called by billing or admin.
  */
 export async function setUserTier(userId, tier) {
-  const user = await User.findById(userId);
-  if (!user) throw new Error("User not found");
-
-  const tiers = getUserMeta(user, "tiers");
-  tiers.plan = tier;
-  setUserMeta(user, "tiers", tiers);
-  await user.save();
+  const { batchSetUserMeta } = await import("../../seed/tree/userMetadata.js");
+  await batchSetUserMeta(userId, "tiers", { plan: tier });
   return tier;
 }

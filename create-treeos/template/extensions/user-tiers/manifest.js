@@ -1,6 +1,6 @@
 export default {
   name: "user-tiers",
-  version: "1.0.0",
+  version: "1.0.2",
   builtFor: "TreeOS",
   description:
     "The access control layer between users and features. Every user has a tier stored " +

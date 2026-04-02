@@ -31,10 +31,13 @@ export default {
     "\n\n" +
     "Install: treeos ext install treeos-cascade",
 
+  includes: [
+    "propagation", "perspective-filter", "sealed-transport", "codebook",
+    "gap-detection", "long-memory", "pulse", "flow",
+  ],
+
   needs: {
-    extensions: [
-      "propagation",
-    ],
+    extensions: ["propagation"],
   },
 
   optional: {
