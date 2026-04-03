@@ -256,6 +256,32 @@ async function executeActionInTab(action, tabId) {
   const id = await getActiveTabId(tabId);
   if (!id) return { success: false, error: 'No active tab' };
 
+  // Navigate uses Chrome tab API directly. Bypasses hostile SPA routers (x.com, etc.)
+  // that intercept window.location changes inside the content script.
+  if (action.type === 'navigate' && action.url) {
+    try {
+      await chrome.tabs.update(id, { url: action.url });
+      // Wait for page to load
+      await new Promise(resolve => {
+        const listener = (tabId2, changeInfo) => {
+          if (tabId2 === id && changeInfo.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        };
+        chrome.tabs.onUpdated.addListener(listener);
+        // Timeout after 10s
+        setTimeout(() => {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }, 10000);
+      });
+      return { success: true, action: 'navigated', url: action.url };
+    } catch (err) {
+      return { success: false, error: `Navigate failed: ${err.message}` };
+    }
+  }
+
   await ensureContentScript(id);
 
   try {
