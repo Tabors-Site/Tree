@@ -430,10 +430,29 @@ async function executeActionInTab(action, tabId) {
               const buttons = document.querySelectorAll('button');
               const submitWords = ['post', 'tweet', 'reply', 'send', 'submit', 'comment', 'save'];
               let submitBtn = null;
-              for (const btn of buttons) {
-                const t = (btn.textContent || btn.ariaLabel || '').trim().toLowerCase();
-                if (submitWords.some(w => t.includes(w))) {
-                  if (btn.offsetParent !== null) { submitBtn = btn; break; }
+
+              // Try data-testid first (X.com uses tweetButton, tweetButtonInline)
+              submitBtn = document.querySelector('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
+
+              // Try finding a button containing a span with submit text
+              if (!submitBtn) {
+                const spans = document.querySelectorAll('button span');
+                for (const span of spans) {
+                  const t = span.textContent.trim().toLowerCase();
+                  if (submitWords.some(w => t === w)) {
+                    const btn = span.closest('button');
+                    if (btn && btn.offsetParent !== null) { submitBtn = btn; break; }
+                  }
+                }
+              }
+
+              // Fall back to button text/aria-label search
+              if (!submitBtn) {
+                for (const btn of buttons) {
+                  const t = (btn.textContent || btn.getAttribute('aria-label') || '').trim().toLowerCase();
+                  if (submitWords.some(w => t.includes(w))) {
+                    if (btn.offsetParent !== null) { submitBtn = btn; break; }
+                  }
                 }
               }
 

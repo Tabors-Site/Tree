@@ -497,6 +497,38 @@ export async function orchestrateTreeRequest({
   }
 
   // ────────────────────────────────────────────────────────
+  // CONTINUATION CHECK — short replies continue the previous mode
+  // "ok", "yes", "do it", "go ahead" etc. continue the conversation
+  // instead of re-classifying and switching modes.
+  // ────────────────────────────────────────────────────────
+
+  const CONTINUE_WORDS = /^(ok|okay|yes|yeah|yep|y|go|do it|go ahead|sure|continue|proceed|next|keep going|and|then)\s*[.!?]?$/i;
+  if (CONTINUE_WORDS.test(message.trim())) {
+    // Check if there's a recent mode we should continue in
+    const { getCurrentMode } = await import("../../seed/llm/conversation.js");
+    const currentMode = getCurrentMode(visitorId);
+    if (currentMode && currentMode !== "tree:converse" && currentMode !== "tree:fallback") {
+      log.verbose("Tree Orchestrator", `  Continuation in ${currentMode}: "${message}"`);
+      modesUsed.push(currentMode);
+      emitStatus(socket, "intent", "");
+
+      const result = await processMessage(visitorId, message, {
+        username, userId, rootId, signal, slot,
+        onToolLoopCheckpoint,
+        onToolResults(results) {
+          if (signal?.aborted) return;
+          for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+        },
+      });
+
+      emitStatus(socket, "done", "");
+      const answer = result?.content || result?.answer || null;
+      if (answer) pushMemory(visitorId, message, answer);
+      return { success: true, answer, modeKey: currentMode, modesUsed, rootId };
+    }
+  }
+
+  // ────────────────────────────────────────────────────────
   // STEP 1: CLASSIFY (lightweight intent detection)
   // ────────────────────────────────────────────────────────
 
