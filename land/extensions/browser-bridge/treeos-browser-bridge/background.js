@@ -330,9 +330,11 @@ async function executeActionInTab(action, tabId) {
       action,
       recapture: true,
     });
+    // If content script returned failure, try the fallback path
+    if (response && response.success === false) throw new Error(response.error || 'action failed');
     return response;
   } catch (err) {
-    // Content script failed. Fall back to chrome.scripting for hostile sites.
+    // Content script failed or returned error. Fall back to chrome.scripting for hostile sites.
     try {
       const [result] = await chrome.scripting.executeScript({
         target: { tabId: id },
