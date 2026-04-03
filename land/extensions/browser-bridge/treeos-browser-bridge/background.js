@@ -340,7 +340,7 @@ async function executeActionInTab(action, tabId) {
         target: { tabId: id },
         world: 'ISOLATED',
         args: [action],
-        func: (action) => {
+        func: async (action) => {
           function findEl(id) {
             if (!id) return null;
             // Try by our assigned IDs from the fallback page state
@@ -405,25 +405,90 @@ async function executeActionInTab(action, tabId) {
               const text = action.text;
               if (!text) return { success: false, error: 'text required' };
 
-              // Find compose box
-              const all = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
+              // Step 1: Click a reply button to open the compose box
+              // Reddit, forums, etc. hide the textbox until you click reply
               let textbox = null;
+
+              // Look for existing open compose box first
+              let all = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
               for (const el of all) {
                 const r = el.getBoundingClientRect();
                 if (r.height > 20 && r.width > 50) { textbox = el; break; }
               }
-              if (!textbox) return { success: false, error: 'No compose box found' };
+
+              // No open box? Click a reply button
+              if (!textbox) {
+                // New Reddit: shreddit-comment-action-row buttons
+                const actionRow = document.querySelector('shreddit-comment-action-row');
+                if (actionRow) {
+                  const btns = actionRow.querySelectorAll('button');
+                  if (btns.length >= 1) btns[0].click();
+                }
+
+                // Old Reddit / generic: find a "reply" link or button
+                if (!actionRow) {
+                  const replyLinks = document.querySelectorAll('a, button');
+                  for (const el of replyLinks) {
+                    const t = (el.textContent || '').trim().toLowerCase();
+                    if (t === 'reply' || t === 'comment') {
+                      el.click();
+                      break;
+                    }
+                  }
+                }
+
+                // Wait for compose box to appear
+                await new Promise(r => setTimeout(r, 1500));
+
+                // Try again
+                all = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
+                for (const el of all) {
+                  const r = el.getBoundingClientRect();
+                  if (r.height > 20 && r.width > 50) { textbox = el; break; }
+                }
+                // Last resort: any visible input
+                if (!textbox && all.length) textbox = all[all.length - 1];
+              }
+
+              if (!textbox) return { success: false, error: 'No compose box found after clicking reply' };
 
               textbox.focus();
-              // Paste simulation
-              const dt = new DataTransfer();
-              dt.setData('text/plain', text);
-              textbox.dispatchEvent(new ClipboardEvent('paste', {
-                bubbles: true, cancelable: true, clipboardData: dt,
-              }));
+              await new Promise(r => setTimeout(r, 300));
+
+              // Method 1: execCommand insertText (works on many sites)
+              let typed = false;
+              try {
+                document.execCommand('selectAll', false, null);
+                typed = document.execCommand('insertText', false, text);
+              } catch {}
+
+              // Method 2: Paste simulation via ClipboardEvent
+              if (!typed || !textbox.textContent?.includes(text)) {
+                const dt = new DataTransfer();
+                dt.setData('text/plain', text);
+                textbox.dispatchEvent(new ClipboardEvent('paste', {
+                  bubbles: true, cancelable: true, clipboardData: dt,
+                }));
+              }
+
+              // Method 3: Direct content set + input event
               if (!textbox.textContent?.includes(text)) {
-                textbox.textContent = text;
+                if (textbox.contentEditable === 'true') {
+                  textbox.innerHTML = '<p>' + text + '</p>';
+                } else {
+                  textbox.value = text;
+                }
                 textbox.dispatchEvent(new Event('input', { bubbles: true }));
+                textbox.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+
+              // Wait for React/framework to process
+              await new Promise(r => setTimeout(r, 1000));
+
+              // Verify text landed
+              const hasText = textbox.textContent?.includes(text) || textbox.value?.includes?.(text);
+              if (!hasText) {
+                return { success: false, error: 'Text did not register in compose box', typed: false };
               }
 
               // Find and click post/submit button
