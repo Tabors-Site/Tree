@@ -332,7 +332,136 @@ async function executeActionInTab(action, tabId) {
     });
     return response;
   } catch (err) {
-    return { success: false, error: `Failed to execute action: ${err.message}` };
+    // Content script failed. Fall back to chrome.scripting for hostile sites.
+    try {
+      const [result] = await chrome.scripting.executeScript({
+        target: { tabId: id },
+        world: 'ISOLATED',
+        args: [action],
+        func: (action) => {
+          function findEl(id) {
+            if (!id) return null;
+            // Try by our assigned IDs from the fallback page state
+            const prefix = id.charAt(0);
+            const idx = parseInt(id.slice(1)) - 1;
+            if (prefix === 'e') return document.querySelectorAll('a[href]')[idx];
+            if (prefix === 'b') return document.querySelectorAll('button')[idx];
+            if (prefix === 'i') return document.querySelectorAll('input, textarea, [contenteditable="true"]')[idx];
+            return null;
+          }
+
+          switch (action.type) {
+            case 'click': {
+              const el = findEl(action.elementId);
+              if (!el) return { success: false, error: 'Element not found: ' + action.elementId };
+              el.scrollIntoView({ behavior: 'instant', block: 'center' });
+              el.focus();
+              el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+              return { success: true, action: 'clicked', elementId: action.elementId };
+            }
+
+            case 'type': {
+              // Find contenteditable or textarea
+              let el = findEl(action.elementId);
+              if (!el) {
+                // Try to find any visible contenteditable or textarea
+                const all = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
+                for (const candidate of all) {
+                  const r = candidate.getBoundingClientRect();
+                  if (r.height > 20 && r.width > 50) { el = candidate; break; }
+                }
+              }
+              if (!el) return { success: false, error: 'No text input found' };
+
+              el.scrollIntoView({ behavior: 'instant', block: 'center' });
+              el.focus();
+
+              // Clear and type
+              if (el.contentEditable === 'true' || el.getAttribute('role') === 'textbox') {
+                el.textContent = '';
+                // Use DataTransfer for paste simulation (bypasses React interception)
+                const dt = new DataTransfer();
+                dt.setData('text/plain', action.text);
+                const pasteEvent = new ClipboardEvent('paste', {
+                  bubbles: true, cancelable: true, clipboardData: dt,
+                });
+                el.dispatchEvent(pasteEvent);
+                // Fallback: direct insert
+                if (!el.textContent.includes(action.text)) {
+                  el.textContent = action.text;
+                  el.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+              } else {
+                el.value = action.text;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+              return { success: true, action: 'typed', text: action.text };
+            }
+
+            case 'comment': {
+              const text = action.text;
+              if (!text) return { success: false, error: 'text required' };
+
+              // Find compose box
+              const all = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
+              let textbox = null;
+              for (const el of all) {
+                const r = el.getBoundingClientRect();
+                if (r.height > 20 && r.width > 50) { textbox = el; break; }
+              }
+              if (!textbox) return { success: false, error: 'No compose box found' };
+
+              textbox.focus();
+              // Paste simulation
+              const dt = new DataTransfer();
+              dt.setData('text/plain', text);
+              textbox.dispatchEvent(new ClipboardEvent('paste', {
+                bubbles: true, cancelable: true, clipboardData: dt,
+              }));
+              if (!textbox.textContent?.includes(text)) {
+                textbox.textContent = text;
+                textbox.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+
+              // Find and click post/submit button
+              const buttons = document.querySelectorAll('button');
+              const submitWords = ['post', 'tweet', 'reply', 'send', 'submit', 'comment', 'save'];
+              let submitBtn = null;
+              for (const btn of buttons) {
+                const t = (btn.textContent || btn.ariaLabel || '').trim().toLowerCase();
+                if (submitWords.some(w => t.includes(w))) {
+                  if (btn.offsetParent !== null) { submitBtn = btn; break; }
+                }
+              }
+
+              if (submitBtn) {
+                // Wait for React to process the input
+                return new Promise(resolve => {
+                  setTimeout(() => {
+                    submitBtn.click();
+                    resolve({ success: true, action: 'commented', submitted: true, text });
+                  }, 500);
+                });
+              }
+
+              return { success: true, action: 'typed', submitted: false, text, error: 'Typed but could not find submit button' };
+            }
+
+            case 'extract': {
+              const el = action.elementId ? findEl(action.elementId) : document.body;
+              return { success: true, text: (el?.innerText || '').slice(0, 8000) };
+            }
+
+            default:
+              return { success: false, error: 'Unsupported fallback action: ' + action.type };
+          }
+        },
+      });
+      return result?.result || { success: false, error: 'Fallback action failed' };
+    } catch (err2) {
+      return { success: false, error: `Action failed: ${err2.message}` };
+    }
   }
 }
 
