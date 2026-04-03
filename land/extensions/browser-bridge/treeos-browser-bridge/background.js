@@ -248,7 +248,47 @@ async function getPageStateFromTab(tabId) {
     });
     return response;
   } catch (err) {
-    return { error: `Failed to get page state: ${err.message}` };
+    // Content script failed (hostile site like x.com). Fall back to
+    // chrome.scripting.executeScript which runs in the isolated world.
+    try {
+      const [result] = await chrome.scripting.executeScript({
+        target: { tabId: id },
+        world: 'ISOLATED',
+        func: () => {
+          // Minimal page state capture without full tree builder
+          const getText = (el, max) => (el?.textContent || '').trim().slice(0, max);
+          const links = [...document.querySelectorAll('a[href]')].slice(0, 50).map((a, i) => ({
+            role: 'link', name: getText(a, 100), id: 'e' + (i + 1), href: a.href,
+          }));
+          const buttons = [...document.querySelectorAll('button')].slice(0, 30).map((b, i) => ({
+            role: 'button', name: getText(b, 100), id: 'b' + (i + 1),
+          }));
+          const inputs = [...document.querySelectorAll('input, textarea, [contenteditable="true"]')].slice(0, 20).map((el, i) => ({
+            role: el.tagName === 'TEXTAREA' ? 'textbox' : (el.type || 'input'),
+            name: el.placeholder || el.name || '',
+            id: 'i' + (i + 1),
+          }));
+          const bodyText = document.body?.innerText?.slice(0, 8000) || '';
+          return {
+            url: location.href,
+            title: document.title,
+            tree: [...links, ...buttons, ...inputs],
+            text: bodyText,
+            viewport: {
+              width: window.innerWidth,
+              height: window.innerHeight,
+              scrollY: window.scrollY,
+              scrollHeight: document.documentElement.scrollHeight,
+            },
+            timestamp: Date.now(),
+            fallback: true,
+          };
+        },
+      });
+      return result?.result || { error: 'Fallback capture failed' };
+    } catch (err2) {
+      return { error: `Page state failed: ${err2.message}` };
+    }
   }
 }
 
