@@ -20,15 +20,22 @@ export async function init(core) {
   core.llm.registerRootLlmSlot?.("automate");
 
   // Keep trees with enabled flows alive. Poke breath so it never goes dormant.
+  // Resolved in afterBoot when all extensions are guaranteed loaded.
   let _recordActivity = null;
-  try {
-    const { getExtension } = await import("../loader.js");
-    const breathExt = getExtension("breath");
-    if (breathExt?.exports?.recordActivity) _recordActivity = breathExt.exports.recordActivity;
-  } catch {}
 
-  // On boot, wake any tree that has enabled flows so breathing starts immediately.
+  // On boot, resolve breath's recordActivity and wake trees with enabled flows.
   core.hooks.register("afterBoot", async () => {
+    try {
+      const { getExtension } = await import("../loader.js");
+      const breathExt = getExtension("breath");
+      if (breathExt?.exports?.recordActivity) {
+        _recordActivity = breathExt.exports.recordActivity;
+        log.verbose("Automate", "Linked to breath.recordActivity");
+      } else {
+        log.warn("Automate", "Breath extension not found. Trees with flows may go dormant.");
+      }
+    } catch {}
+
     if (!_recordActivity) return;
     try {
       const { getLandRootId } = await import("../../seed/landRoot.js");
@@ -87,6 +94,10 @@ async function runFlows(rootId, runChat, core, recordActivity) {
       const meta = getExtMeta(child, "automate");
       if (!meta?.enabled) continue;
 
+      // This tree has an enabled flow. Keep it alive regardless of whether
+      // the flow runs this cycle. The tree has work to do.
+      if (recordActivity) recordActivity(rootId);
+
       const flowId = String(child._id);
       const cadence = meta.cadenceMs || DEFAULT_CADENCE_MS;
       const lastTime = _lastRun.get(flowId) || 0;
@@ -99,10 +110,6 @@ async function runFlows(rootId, runChat, core, recordActivity) {
       } catch (err) {
         log.debug("Automate", `Flow "${child.name}" failed: ${err.message}`);
       }
-
-      // Poke breath after each flow. The flow is the activity.
-      // This prevents dormancy between cadence gaps.
-      if (recordActivity) recordActivity(rootId);
     }
   } finally {
     _running.delete(rid);
@@ -132,7 +139,7 @@ async function runFlow(flowNode, rootId, ownerId, runChat, core) {
 
   log.verbose("Automate", `Running flow "${flowName}": ${stepNodes.length} steps`);
 
-  let context = "";
+  const stepResults = []; // accumulate ALL step results
   const results = [];
 
   for (const step of stepNodes) {
@@ -145,10 +152,15 @@ async function runFlow(flowNode, rootId, ownerId, runChat, core) {
       continue;
     }
 
-    // Build the message for this step
-    const message = context
-      ? `${prompt}\n\nContext from previous step:\n${context}`
-      : prompt;
+    // Build the message with accumulated context from ALL previous steps.
+    // Each step sees the full chain, not just the previous step.
+    let message = prompt;
+    if (stepResults.length > 0) {
+      const contextBlock = stepResults
+        .map(r => `[${r.step}]\n${r.result}`)
+        .join("\n\n");
+      message = `${prompt}\n\nContext from previous steps:\n${contextBlock}`;
+    }
 
     try {
       const { answer } = await runChat({
@@ -161,8 +173,9 @@ async function runFlow(flowNode, rootId, ownerId, runChat, core) {
       });
 
       const result = answer || "";
+      // Keep results capped so context doesn't explode
+      stepResults.push({ step: step.name, result: result.slice(0, 1000) });
       results.push({ step: step.name, result: result.slice(0, 500) });
-      context = result;
 
       log.verbose("Automate", `  Step "${step.name}" (${mode}): "${result.slice(0, 80)}"`);
     } catch (err) {

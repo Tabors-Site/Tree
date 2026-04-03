@@ -473,7 +473,7 @@
           // Find the submit button near the textbox (not just any button on the page)
 
           let submitBtn = null;
-          const submitWords = ['comment', 'reply', 'post', 'submit', 'send'];
+          const submitWords = ['comment', 'reply', 'post', 'submit', 'send', 'save'];
 
           // Search near the textbox first (parent, siblings, nearby containers)
           let searchScope = textbox.parentElement;
@@ -565,6 +565,10 @@
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     (async () => {
       switch (msg.type) {
+        case 'ping': {
+          sendResponse({ alive: true });
+          break;
+        }
         case 'getPageState': {
           const state = capturePageState();
           // Include intercepted network calls if requested

@@ -23,8 +23,7 @@ import getTools from "./tools.js";
 const WRITE_TOOLS = new Set([
   "browser-click",
   "browser-type",
-  "browser-navigate",
-  "browser-scroll",
+  "browser-comment",
 ]);
 
 export async function init(core) {

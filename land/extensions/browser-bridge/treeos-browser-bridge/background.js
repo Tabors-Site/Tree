@@ -212,9 +212,34 @@ async function getActiveTabId(preferredTabId) {
   return tab?.id;
 }
 
+/**
+ * Ensure content script is injected in the tab.
+ * SPAs (x.com, reddit) destroy the content script context on navigation.
+ * Re-inject before every message to handle this.
+ */
+async function ensureContentScript(tabId) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: 'ping' });
+  } catch {
+    // Content script not responding. Re-inject.
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['scripts/content.js'],
+      });
+      // Give it a moment to initialize
+      await new Promise(r => setTimeout(r, 200));
+    } catch (err) {
+      console.warn('[TreeOS Bridge] Cannot inject content script:', err.message);
+    }
+  }
+}
+
 async function getPageStateFromTab(tabId) {
   const id = await getActiveTabId(tabId);
   if (!id) return { error: 'No active tab' };
+
+  await ensureContentScript(id);
 
   try {
     const response = await chrome.tabs.sendMessage(id, {
@@ -230,6 +255,8 @@ async function getPageStateFromTab(tabId) {
 async function executeActionInTab(action, tabId) {
   const id = await getActiveTabId(tabId);
   if (!id) return { success: false, error: 'No active tab' };
+
+  await ensureContentScript(id);
 
   try {
     const response = await chrome.tabs.sendMessage(id, {
