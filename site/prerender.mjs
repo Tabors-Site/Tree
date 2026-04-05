@@ -51,6 +51,7 @@ const STATIC_ROUTES = [
   "/app",
   "/start",
   "/what",
+  "/use",
 ];
 
 const BLOG_API = (process.env.VITE_LAND_URL || "https://treeos.ai") + "/api/v1";
@@ -140,6 +141,10 @@ const PAGE_META = {
   "/kb": {
     title: "KB . The Tree That Remembers Everything",
     description: "Tell it things. Ask it things. One person maintains, everyone benefits. Knowledge base with citations, staleness detection, and guided review. The coworker who never forgets.",
+  },
+  "/use": {
+    title: "TreeOS . One Life, One Tree",
+    description: "You don't use five apps to live one life. Fitness, food, recovery, study, knowledge. All branches of the same tree. All aware of each other. One conversation with something that holds your whole picture.",
   },
   "/what": {
     title: "What Is TreeOS? . Apps and a Filesystem",

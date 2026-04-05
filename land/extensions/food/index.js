@@ -226,6 +226,38 @@ export async function init(core) {
         goal: goals?.today || 0,
       };
     }
+
+    // Cross-domain: fitness and recovery state (coach-level nodes only)
+    if (role === "log" || role === "daily") {
+      try {
+        const { getExtension } = await import("../loader.js");
+        const life = getExtension("life");
+        if (life?.exports?.getDomainNodes) {
+          const treeRoot = node.rootOwner || String(node._id);
+          const domains = await life.exports.getDomainNodes(treeRoot);
+
+          if (domains.fitness?.id) {
+            const fitness = getExtension("fitness");
+            if (fitness?.exports?.getWeeklyStats) {
+              const stats = await fitness.exports.getWeeklyStats(domains.fitness.id);
+              if (stats?.workoutsThisWeek > 0) {
+                context.fitnessThisWeek = { workouts: stats.workoutsThisWeek, lastWorkout: stats.lastWorkoutDate };
+              }
+            }
+          }
+
+          if (domains.recovery?.id) {
+            const recovery = getExtension("recovery");
+            if (recovery?.exports?.getStatus) {
+              const status = await recovery.exports.getStatus(domains.recovery.id);
+              if (status?.feelings) {
+                context.recoveryToday = { mood: status.feelings.mood, energy: status.feelings.energy };
+              }
+            }
+          }
+        }
+      } catch {}
+    }
   }, "food");
 
   // ── Live dashboard updates ──

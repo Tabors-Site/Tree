@@ -2,7 +2,7 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import log from "../../seed/log.js";
-import { getAvailableDomains, scaffold, addDomain } from "./core.js";
+import { getAvailableDomains, scaffold, addDomain, findLifeRoot } from "./core.js";
 
 const router = express.Router();
 
@@ -25,11 +25,11 @@ router.post("/life/setup", authenticate, async (req, res) => {
       if (!resolvedRootId) {
         const Node = (await import("../../seed/models/node.js")).default;
         const lifeRoot = await Node.findOne({
-          rootOwner: userId, parent: { $ne: "deleted" },
+          rootOwner: userId, parent: { $nin: ["deleted", null] },
           "metadata.life": { $exists: true },
         }).select("_id").lean()
           || await Node.findOne({
-            rootOwner: userId, name: "Life", parent: { $ne: "deleted" },
+            rootOwner: userId, name: "Life", parent: { $nin: ["deleted", null] },
           }).select("_id").lean();
         if (!lifeRoot) return sendError(res, 404, ERR.TREE_NOT_FOUND, "No Life tree found. Run 'life' first.");
         resolvedRootId = String(lifeRoot._id);
@@ -57,27 +57,26 @@ router.post("/life/setup", authenticate, async (req, res) => {
       });
     }
 
-    // Check if user already has a Life tree
-    const Node = (await import("../../seed/models/node.js")).default;
-    const existingLife = await Node.findOne({
-      rootOwner: userId,
-      name: "Life",
-      parent: { $ne: "deleted" },
-    }).select("_id").lean();
-
-    if (existingLife) {
-      return sendOk(res, {
-        exists: true,
-        rootId: String(existingLife._id),
-        message: "You already have a Life tree. Use 'life add <domain>' to add more domains.",
-      });
-    }
-
     // Validate selections
     const available = new Set(getAvailableDomains());
     const valid = picks.map(s => s.toLowerCase()).filter(s => available.has(s));
     if (valid.length === 0) {
       return sendError(res, 400, ERR.INVALID_INPUT, "No valid domains selected. Available: " + [...available].join(", "));
+    }
+
+    // If Life tree already exists, add the selected domains to it
+    const existingRootId = await findLifeRoot(userId);
+    if (existingRootId) {
+      const results = [];
+      for (const sel of valid) {
+        try {
+          const result = await addDomain({ rootId: existingRootId, domain: sel, userId });
+          results.push(result);
+        } catch (err) {
+          results.push({ name: sel, status: "error", error: err.message });
+        }
+      }
+      return sendOk(res, { rootId: existingRootId, type: "added", results });
     }
 
     const UserModel = (await import("../../seed/models/user.js")).default;
@@ -95,6 +94,22 @@ router.post("/life/setup", authenticate, async (req, res) => {
     log.error("Life", "Setup error:", err.message);
     sendError(res, 500, ERR.INTERNAL, err.message);
   }
+});
+
+/**
+ * GET /life/setup
+ * Show available domains and current Life tree status.
+ */
+router.get("/life/setup", authenticate, async (req, res) => {
+  const available = getAvailableDomains();
+  const rootId = await findLifeRoot(req.userId);
+  sendOk(res, {
+    available,
+    rootId: rootId || null,
+    message: rootId
+      ? "Life tree exists. Use 'life add <domain>' to add more."
+      : "Usage: life food fitness study",
+  });
 });
 
 /**

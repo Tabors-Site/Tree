@@ -623,7 +623,8 @@
       "Bash(grep -l \"file\\\\|code\\\\|parse\\\\|syntax\" /home/tabor/github/Tree/land/extensions/*/index.js)",
       "Bash(grep -E \"name|description\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
       "Bash(wc -l /home/tabor/github/Tree/land/extensions/*/index.js)",
-      "Bash(MONGODB_URI=mongodb://localhost:27017 node --input-type=module -e \":*)"
+      "Bash(MONGODB_URI=mongodb://localhost:27017 node --input-type=module -e \":*)",
+      "Bash(find land/extensions/finance land/extensions/investor land/extensions/market-researcher -name \"*.js\" -exec sed -i 's/set-node-value/edit-node-value/g; s/inc-node-value/edit-node-value/g' {} +)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

@@ -83,7 +83,7 @@ export async function scaffold(foodRootId, userId) {
   }
 
   // Set mode overrides
-  await setNodeMode(foodRootId, "respond", "tree:food-log");
+  await setNodeMode(foodRootId, "respond", "tree:food-coach");
   await setNodeMode(logNode._id, "respond", "tree:food-log");
   await setNodeMode(dailyNode._id, "respond", "tree:food-review");
 
@@ -107,7 +107,7 @@ export async function scaffold(foodRootId, userId) {
   // Mark root as initialized (base phase: scaffold done, profile not yet set)
   const rootNode = await _Node.findById(foodRootId);
   if (rootNode) {
-    await _metadata.setExtMeta(rootNode, "food", { initialized: true, setupPhase: "base" });
+    await _metadata.setExtMeta(rootNode, "food", { initialized: true, setupPhase: "complete" });
   }
 
   const ids = {
@@ -654,7 +654,7 @@ export async function getDailyPicture(foodRootId) {
 /**
  * Save the user's food profile and set goals on macro nodes.
  */
-export async function saveProfile(foodRootId, profile, foodNodes) {
+export async function saveProfile(foodRootId, profile, foodNodes, userId) {
   if (!_Node) return;
 
   // Write profile as a note on the Profile node
@@ -665,7 +665,7 @@ export async function saveProfile(foodRootId, profile, foodNodes) {
         nodeId: foodNodes.profile.id,
         content: JSON.stringify(profile),
         contentType: "text",
-        userId: "SYSTEM",
+        userId: userId || "SYSTEM",
       });
     } catch (err) {
       log.debug("Food", `Profile note write failed: ${err.message}`);

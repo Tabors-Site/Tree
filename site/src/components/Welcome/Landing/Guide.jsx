@@ -46,7 +46,7 @@ const Guide = () => {
             that everything builds on.
           </P>
           <P>
-            TreeOS is one operating system built on the seed. It ships with 95 extensions across
+            TreeOS is one operating system built on the seed. It ships with 114 extensions across
             four bundles: cascade network, intelligence, external channels, maintenance, plus
             the base OS, developer tools, data, content, and gateways. But TreeOS is just one interpretation. A medical
             platform, a code review pipeline, a research assistant could all be built on the same kernel.
@@ -296,7 +296,7 @@ You are tabor's personal fitness coach...`}</Code>
             session types, LLM assignment slots, and exported functions for other extensions.
           </P>
           <P>
-            Five registries, same pattern: <strong>Hooks</strong> (29 lifecycle events),
+            Five registries, same pattern: <strong>Hooks</strong> (30 lifecycle events),
             <strong> Modes</strong> (AI behavior per position), <strong>Orchestrators</strong> (conversation flow),
             <strong> Socket Handlers</strong> (real-time events), <strong>Auth Strategies</strong> (authentication methods).
             Extensions register. The kernel resolves.
@@ -1136,7 +1136,7 @@ treeos ext install scheduler`}</Code>
           <P>
             It provides structure, intelligence, extensibility, and communication.
             Extensions provide meaning. The kernel is 12 fields on a node, 7 fields on a user,
-            a conversation loop, 29 hooks, 5 registries, a cascade engine, and a response protocol.
+            a conversation loop, 30 hooks, 5 registries, a cascade engine, and a response protocol.
             Everything else is an extension someone built.
           </P>
           <P>

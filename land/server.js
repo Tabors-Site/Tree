@@ -85,26 +85,28 @@ const PORT = process.env.PORT || 80;
 server.listen(PORT, "0.0.0.0", () => onListen());
 
 // Graceful shutdown
-const SHUTDOWN_TIMEOUT_MS = 15000;
-
 async function shutdown(signal) {
   log.info("Seed", `${signal} received. Shutting down...`);
 
-  // Stop accepting new connections
-  server.close(async () => {
-    try {
-      await mongoose.connection.close();
-      log.info("Seed", "Database connection closed.");
-    } catch {}
-    log.info("Seed", "Server closed.");
-    process.exit(0);
-  });
+  // Close all MCP clients (these hold connections open)
+  try {
+    const { mcpClients, closeMCPClient } = await import("./seed/ws/mcp.js");
+    for (const [visitorId] of mcpClients) {
+      try { closeMCPClient(visitorId); } catch {}
+    }
+  } catch {}
 
-  // Force exit if graceful shutdown hangs
-  setTimeout(() => {
-    log.warn("Seed", "Forced exit after timeout.");
-    process.exit(1);
-  }, SHUTDOWN_TIMEOUT_MS).unref();
+  // Close WebSocket server (disconnects all clients)
+  try {
+    wsServer?.close?.();
+  } catch {}
+
+  // Remove disconnect listener so it doesn't log after the shell prompt returns
+  mongoose.connection.removeAllListeners("disconnected");
+  try { await mongoose.connection.close(); } catch {}
+  server.close(() => {});
+  log.info("Seed", "Shutdown complete.");
+  process.exit(0);
 }
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));

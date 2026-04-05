@@ -6,7 +6,7 @@ const StartPage = () => {
 
       {/* ── HERO ── */}
       <section className="lp-hero" style={{minHeight: "45vh"}}>
-        <div className="lp-hero-inner">
+        <div style={{position: "relative", zIndex: 1}}>
           <h1 className="lp-title">Get Started</h1>
           <p className="lp-subtitle">Your own AI. Your own system. Free.</p>
           <p className="lp-tagline">
@@ -14,6 +14,9 @@ const StartPage = () => {
             connect an LLM, and start building. The only cost is the hardware you run it on
             and whatever LLM provider you choose.
           </p>
+          <div className="lp-hero-ctas" style={{marginTop: 24}}>
+            <a className="lp-btn lp-btn-secondary" href="/use">See what it's like</a>
+          </div>
         </div>
       </section>
 
@@ -97,8 +100,8 @@ const StartPage = () => {
           <div style={{maxWidth: 500, margin: "0 auto 20px"}}>
             {[
               ["Minimal", "8 extensions. The kernel and navigation. Zero LLM usage when idle. For builders and testing."],
-              ["Standard", "50+ extensions. Personal use. Cascade, intelligence, apps. Moderate LLM usage."],
-              ["Full", "Everything. All 95 extensions. All gateways. All bundles. Recommended."],
+              ["Standard", "80+ extensions. Personal use. Cascade, intelligence, apps. Moderate LLM usage."],
+              ["Full", "Everything. All 114 extensions. All gateways. All bundles. Recommended."],
             ].map(([name, desc]) => (
               <div key={name} style={{padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.04)"}}>
                 <strong style={{color: "#fff"}}>{name}</strong>

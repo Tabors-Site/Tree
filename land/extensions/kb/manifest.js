@@ -12,6 +12,7 @@ export default {
     "of stale notes. The tree that replaces wikis, training manuals, " +
     "and the coworker who always gets interrupted.",
 
+  territory: "storing and retrieving knowledge, references, notes",
   classifierHints: [
     /\b(kb|knowledge base|tell kb|save to kb|add to kb|store in kb|ask kb)\b/i,
     /\b(procedure|protocol|policy|process|steps for)\b/i,

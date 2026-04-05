@@ -38,7 +38,7 @@ export default function getTools() {
           const { rootId, userId, chatId, sessionId, ...profile } = args;
           const foodNodes = await findFoodNodes(rootId);
           if (!foodNodes) return { content: [{ type: "text", text: "Food tree not found." }] };
-          await saveProfile(rootId, profile, foodNodes);
+          await saveProfile(rootId, profile, foodNodes, userId);
           const goalSummary = Object.entries(profile)
             .filter(([k, v]) => k.endsWith("Goal") && v)
             .map(([k, v]) => `${k.replace("Goal", "")}: ${v}`)

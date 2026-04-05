@@ -161,8 +161,13 @@ function registerDynamic(program, cfgOverride) {
 
             // Handle subcommands pattern: wallet [action] [args...]
             if (decl.subcommands) {
-              const action = args[0];
-              const subArgs = args[1] || [];
+              let action = args[0];
+              let subArgs = args[1] || [];
+              // Variadic commands: action is an array like ["add", "recovery"]
+              if (Array.isArray(action)) {
+                subArgs = action.slice(1);
+                action = action[0];
+              }
 
               // No action = default (GET the base endpoint)
               if (!action) {

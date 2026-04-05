@@ -716,7 +716,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             if (safeChatMode === "place") {
               socket.emit(WS.PLACE_RESULT, { success: response.success, stepSummaries: response.stepSummaries || [], targetPath: response.lastTargetPath || null, generation });
             } else {
-              socket.emit(WS.CHAT_RESPONSE, { success: response.success, answer: finalContent, generation });
+              socket.emit(WS.CHAT_RESPONSE, { success: response.success, answer: finalContent, generation, targetNodeId: response.targetNodeId || null });
             }
 
             const internal = response._internal || {};

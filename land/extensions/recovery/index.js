@@ -159,26 +159,41 @@ export async function init(core) {
       }));
     }
 
-    // Fitness channel data
+    // Cross-domain awareness: find sibling extensions and read their state
     try {
       const { getExtension } = await import("../loader.js");
-      const ch = getExtension("channels");
-      if (ch?.exports?.getChannelData) {
-        const fitnessData = await ch.exports.getChannelData(rootId, "fitness");
-        if (fitnessData?.lastWorkout) {
-          context.recovery.lastWorkout = fitnessData.lastWorkout;
-        }
-      }
-    } catch {}
+      const life = getExtension("life");
+      if (life?.exports?.getDomainNodes) {
+        // Walk up to find the tree root for domain lookup
+        const treeRoot = node.rootOwner || rootId;
+        const domains = await life.exports.getDomainNodes(treeRoot);
 
-    // Food channel data
-    try {
-      const { getExtension } = await import("../loader.js");
-      const ch = getExtension("channels");
-      if (ch?.exports?.getChannelData) {
-        const foodData = await ch.exports.getChannelData(rootId, "food");
-        if (foodData?.calories) {
-          context.recovery.caloriestoday = foodData.calories;
+        // Food: what did the user eat today?
+        if (domains.food?.id) {
+          const food = getExtension("food");
+          if (food?.exports?.getDailyPicture) {
+            const picture = await food.exports.getDailyPicture(domains.food.id);
+            if (picture?.calories) {
+              context.recovery.foodToday = {
+                calories: picture.calories.today,
+                calorieGoal: picture.calories.goal,
+              };
+            }
+          }
+        }
+
+        // Fitness: recent workout activity
+        if (domains.fitness?.id) {
+          const fitness = getExtension("fitness");
+          if (fitness?.exports?.getWeeklyStats) {
+            const stats = await fitness.exports.getWeeklyStats(domains.fitness.id);
+            if (stats?.workoutsThisWeek > 0) {
+              context.recovery.fitnessThisWeek = {
+                workouts: stats.workoutsThisWeek,
+                lastWorkout: stats.lastWorkoutDate,
+              };
+            }
+          }
         }
       }
     } catch {}

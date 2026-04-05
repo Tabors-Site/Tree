@@ -394,6 +394,7 @@ class TreeAPI {
   chat(rootId, message, opts) {
     const body = { message };
     if (opts?.sessionHandle) body.sessionHandle = opts.sessionHandle;
+    if (opts?.currentNodeId) body.currentNodeId = opts.currentNodeId;
     return this.post(`/root/${rootId}/chat`, body, opts);
   }
   place(rootId, message, opts) { return this.post(`/root/${rootId}/place`, { message }, opts); }

@@ -24,6 +24,7 @@ export default {
     "Automate flows run CI, code review, and documentation generation on schedule. " +
     "The tree watches its own codebase while you sleep.",
 
+  territory: "source code, programming, bugs, refactoring, repositories",
   classifierHints: [
     /\b(code|codebase|repository|repo|source code|source file)\b/i,
     /\b(function|class|module|import|export|require)\b/i,

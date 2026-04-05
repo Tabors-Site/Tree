@@ -106,6 +106,7 @@ const LandingPage = () => {
           </p>
           <div className="lp-hero-ctas">
             <a className="lp-btn lp-btn-primary" href="/start">Start</a>
+            <a className="lp-btn lp-btn-secondary" href="/use">See what it's like</a>
             <a className="lp-btn lp-btn-secondary" href="/kernel">Inside the Seed</a>
             <a className="lp-btn lp-btn-secondary" href="/treeos">TreeOS</a>
           </div>
@@ -120,15 +121,36 @@ const LandingPage = () => {
         <cite className="lp-quote-author">SAM</cite>
       </section>
 
-      {/* ── FOUR LAYERS ── */}
+      {/* ── WHAT IT FEELS LIKE ── */}
       <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 700, textAlign: "center"}}>
+          <h2 className="lp-section-title">One Tree. Your Whole Life.</h2>
+          <p className="lp-section-sub" style={{fontSize: "1.05rem", lineHeight: 1.8, color: "rgba(255,255,255,0.6)"}}>
+            You talk to it. It understands. "I ate eggs for breakfast" goes to your nutrition tracker.
+            "Bench 225 for 5" goes to your workout log. "I'm tired of studying" goes to your recovery journal.
+            You don't pick the app. You just say what happened. The tree knows where it goes because
+            you're standing in your life, not in someone else's interface.
+          </p>
+          <p className="lp-section-sub" style={{fontSize: "0.9rem", lineHeight: 1.8, color: "rgba(255,255,255,0.35)", marginTop: 8}}>
+            Extensions add capabilities. Fitness tracks progressive overload. Food parses macros.
+            Study builds curricula. KB stores knowledge. Each one is an app that lives in the tree.
+            Install what you need. Remove what you don't. The kernel doesn't care.
+          </p>
+          <div style={{marginTop: 24}}>
+            <a className="lp-btn lp-btn-secondary" href="/use">See what it's like</a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FOUR LAYERS ── */}
+      <section className="lp-section">
         <div className="lp-container">
           <h2 className="lp-section-title">Four Layers</h2>
           <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
             <div className="lp-card" style={{display: "flex", flexDirection: "column"}}>
               <h3 style={{color: "#f97316"}}>The Seed</h3>
               <p style={{flex: 1}}>
-                Two schemas. 27 lifecycle hooks. Five registries. A cascade engine.
+                Two schemas. 30 lifecycle hooks. Five registries. A cascade engine.
                 A response protocol. The contract that never changes.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
@@ -140,7 +162,7 @@ const LandingPage = () => {
               <p style={{flex: 1}}>
                 Twenty base extensions ship with every land. Four bundles add depth:
                 Cascade (8, the nervous system). Intelligence (14, self-awareness).
-                Connect (8, external channels). Maintenance (5, hygiene). 95 extensions total.
+                Connect (11, external channels). Maintenance (5, hygiene). 114 extensions total.
               </p>
               <div style={{textAlign: "center", marginTop: 16}}>
                 <a href="/extensions" style={{color: "#a78bfa", fontSize: "0.9rem", fontWeight: 600, textDecoration: "none", borderBottom: "1px solid rgba(167, 139, 250, 0.3)", paddingBottom: 2}}>How extensions work</a>
@@ -175,7 +197,7 @@ const LandingPage = () => {
       <section className="lp-section">
         <div className="lp-container">
           <h2 className="lp-section-title">Go Deeper</h2>
-          <p className="lp-section-sub">Eleven pages. Each one answers one question.</p>
+          <p className="lp-section-sub">Twelve pages. Each one answers one question.</p>
           <div className="lp-cards-3" style={{gridTemplateColumns: "repeat(4, 1fr)"}}>
             {[
               { href: "/seed", title: "The Seed", desc: "What is the contract?" },
@@ -185,6 +207,7 @@ const LandingPage = () => {
               { href: "/extensions", title: "Extensions", desc: "How does the tree grow?" },
               { href: "/network", title: "The Network", desc: "How do trees connect?" },
               { href: "/mycelium", title: "Mycelium", desc: "The forest underground." },
+              { href: "/use", title: "Use TreeOS", desc: "One life, one tree." },
               { href: "/what", title: "What Is TreeOS?", desc: "Apps + filesystem." },
               { href: "/html", title: "HTML System", desc: "Three interfaces, one tree." },
               { href: "/start", title: "Get Started", desc: "Join or run your own." },
@@ -370,8 +393,8 @@ const LandingPage = () => {
             <div className="lp-card" style={{borderLeft: "3px solid rgba(74, 222, 128, 0.5)"}}>
               <h3 style={{color: "#4ade80", fontSize: "1rem"}}>treeos-connect</h3>
               <p style={{fontSize: "0.85rem", color: "#888", marginBottom: 8}}>
-                External channels. 8 extensions. Gateway core with type registry plus telegram, discord,
-                webhook, email, sms, slack, matrix. Each channel registers and gets the full pipeline.
+                External channels. 11 extensions. Gateway core with type registry plus telegram, discord,
+                webhook, email, sms, slack, matrix, reddit, X, tree-to-tree. Each channel registers and gets the full pipeline.
               </p>
               <code style={{fontSize: "0.75rem", color: "rgba(255,255,255,0.3)"}}>treeos ext install treeos-connect</code>
             </div>

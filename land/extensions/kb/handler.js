@@ -1,8 +1,14 @@
 /**
- * KB handler
+ * KB Handler
  *
- * Pure message handler. No Express, no HTTP. Returns objects.
- * Routes.js wraps this in sendOk/sendError.
+ * Decides which mode to use. Does NOT call runChat.
+ * The orchestrator executes on its own session.
+ *
+ * Returns { mode, message?, answer?, setup? }
+ *   - mode: which mode the orchestrator should switch to
+ *   - message: override message for the AI (optional)
+ *   - answer: direct response, skip AI call (optional)
+ *   - setup: true if this is a first-time scaffold
  */
 
 import { createNote } from "../../seed/tree/notes.js";
@@ -10,107 +16,67 @@ import {
   scaffold,
   isInitialized,
   getSetupPhase,
+  completeSetup,
   findKbNodes,
   routeKbIntent,
   isMaintainer,
 } from "./core.js";
 
-/**
- * Handle a KB message. Returns { answer, chatId?, mode, setup? }
- * or { error: true, status, code, message } on failure.
- */
-export async function handleMessage(message, { userId, username, rootId, targetNodeId, res }) {
-  const { runChat } = await import("../../seed/llm/conversation.js");
-
-  // The KB node is the target from the routing index.
-  // Scaffold and metadata live on this node, not the tree root.
+export async function handleMessage(message, { userId, username, rootId, targetNodeId }) {
   const kbRoot = targetNodeId || rootId;
 
-  // ── PATH 1: First use ──
-  if (!(await isInitialized(kbRoot))) {
-    await scaffold(kbRoot, userId);
-    try {
-      const { answer, chatId } = await runChat({
-        userId, username,
-        message: `Knowledge base just created. The user said: "${message}".\n\nIf they're telling you something, organize it into the Topics tree. If they're asking, explain the kb is empty and invite them to start adding knowledge.`,
-        mode: "tree:kb-tell",
-        rootId: kbRoot, res, slot: "kb",
-      });
-      return { answer, chatId, mode: "tree:kb-tell", setup: true };
-    } catch (llmErr) {
-      return { answer: "Knowledge base created. Set up an LLM connection to start.", mode: "tree:kb-tell", setup: true };
+  // ── First use: scaffold if this is the extension's own node (not tree root) ──
+  const initialized = await isInitialized(kbRoot);
+  if (!initialized) {
+    if (String(kbRoot) !== String(rootId)) {
+      await scaffold(kbRoot, userId);
     }
+    return { mode: "tree:kb-tell", setup: true };
   }
 
-  // ── PATH 1b: Setup incomplete ──
+  // ── Auto-complete setup if structural nodes exist ──
   const phase = await getSetupPhase(kbRoot);
   if (phase === "base") {
-    try {
-      const { answer, chatId } = await runChat({
-        userId, username, message,
-        mode: "tree:kb-tell",
-        rootId: kbRoot, res, slot: "kb",
-      });
-      return { answer, chatId, mode: "tree:kb-tell", setup: true };
-    } catch (llmErr) {
-      return { answer: "Set up an LLM connection to use the knowledge base.", mode: "tree:kb-tell", setup: true };
+    const kbNodes = await findKbNodes(kbRoot);
+    if (kbNodes && Object.keys(kbNodes).length > 0) {
+      await completeSetup(kbRoot);
     }
   }
 
-  // ── Review: start guided review mode ──
-  if (message.trim().toLowerCase() === "review") {
+  // ── "be" / "begin" command ──
+  const lower = message.trim().toLowerCase();
+  if (lower === "be" || lower === "begin") {
+    return { mode: "tree:kb-tell" };
+  }
+
+  // ── Review: maintenance mode (maintainers only) ──
+  if (/\b(stale|orphan|unplaced|maintain|review|cleanup)\b/i.test(lower)) {
     const maintainer = await isMaintainer(kbRoot, userId);
     if (!maintainer) {
-      return { error: true, status: 403, message: "Only maintainers can review." };
+      return { answer: "Only maintainers can review.", mode: "tree:kb-ask" };
     }
-    try {
-      const { answer, chatId } = await runChat({
-        userId, username,
-        message: "Start a guided review of stale notes in this knowledge base.",
-        mode: "tree:kb-review",
-        rootId: kbRoot, res, slot: "kb",
-      });
-      return { answer, chatId, mode: "tree:kb-review" };
-    } catch (llmErr) {
-      return { answer: "Failed to start review. Check LLM connection.", mode: "tree:kb-review" };
-    }
+    return { mode: "tree:kb-review" };
   }
 
+  // ── Route by intent ──
   const intent = routeKbIntent(message);
 
-  // ── Tell: only maintainers ──
+  // Tell: only maintainers can add knowledge
   if (intent === "tell") {
     const maintainer = await isMaintainer(kbRoot, userId);
     if (!maintainer) {
-      return { error: true, status: 403, message: "Only maintainers can add knowledge. You can ask questions." };
+      return { answer: "Only maintainers can add knowledge. You can ask questions.", mode: "tree:kb-ask" };
     }
 
+    // Write to log node
     const nodes = await findKbNodes(kbRoot);
     if (nodes?.log) {
       try { await createNote({ nodeId: nodes.log.id, content: message, contentType: "text", userId }); } catch {}
     }
 
-    try {
-      const { answer, chatId } = await runChat({
-        userId, username, message,
-        mode: "tree:kb-tell",
-        rootId: kbRoot, res, slot: "kb",
-      });
-      return { answer, chatId, mode: "tree:kb-tell" };
-    } catch (llmErr) {
-      return { answer: "Failed to process. Check LLM connection.", mode: "tree:kb-tell" };
-    }
+    return { mode: "tree:kb-tell" };
   }
 
-  // ── Ask: everyone ──
-  try {
-    const { answer, chatId } = await runChat({
-      userId, username, message,
-      mode: "tree:kb-ask",
-      rootId: kbRoot, res, slot: "kb",
-    });
-    return { answer, chatId, mode: "tree:kb-ask" };
-  } catch (llmErr) {
-    return { answer: "Failed to search. Check LLM connection.", mode: "tree:kb-ask" };
-  }
+  // Ask: everyone
+  return { mode: "tree:kb-ask" };
 }

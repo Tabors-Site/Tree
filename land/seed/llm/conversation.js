@@ -649,6 +649,7 @@ export async function switchMode(visitorId, newModeKey, ctx) {
   const systemPrompt = await buildPromptForMode(newModeKey, {
     ...ctx,
     rootId: session.rootId || ctx.rootId,
+    currentNodeId: ctx.currentNodeId || session.currentNodeId,
   });
 
   // Reset conversation with new system prompt + carried context
@@ -658,8 +659,10 @@ export async function switchMode(visitorId, newModeKey, ctx) {
   ];
   session.modeKey = newModeKey;
   session.bigMode = mode.bigMode;
+  // Persist currentNodeId so position hold works on the next request
+  if (ctx.currentNodeId) session.currentNodeId = ctx.currentNodeId;
 
-  log.debug("LLM", 
+  log.debug("LLM",
     `🔄 Mode switch for ${visitorId}: ${oldModeKey || "none"} → ${newModeKey} (carried ${recentMessages.length} messages)`,
   );
 
@@ -826,6 +829,7 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
       username: ctx.username,
       userId: ctx.userId,
       rootId: session.rootId,
+      currentNodeId: session.currentNodeId,
     });
 
     session.messages = [
@@ -844,6 +848,7 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
       username: ctx.username,
       userId: ctx.userId,
       rootId: session.rootId,
+      currentNodeId: session.currentNodeId,
     });
     if (session.messages.length === 0) {
       session.messages = [{ role: "system", content: systemPrompt }];
@@ -1744,6 +1749,7 @@ export async function resetConversation(visitorId, ctx) {
     username: ctx.username,
     userId: ctx.userId,
     rootId: session.rootId,
+    currentNodeId: session.currentNodeId,
   });
 
   session.messages = [{ role: "system", content: systemPrompt }];
@@ -1768,7 +1774,7 @@ export function sessionCount() {
  *     nodeId: null,  // optional, for per-node context
  *   });
  */
-export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null, llmPriority = null, onToolResults = null }) {
+export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null, llmPriority = null, onToolResults = null, visitorId: callerVisitorId = null }) {
   if (!userId || !message || !mode) {
     throw new Error("runChat requires userId, message, and mode");
   }
@@ -1795,7 +1801,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   // tree:{rootId}:{userId} - tree zone (new session per tree, persistent within tree)
   const bigMode = mode.split(":")[0];
   const contextKey = bigMode === "tree" && rootId ? rootId : bigMode;
-  const visitorId = `${contextKey}:${userId}`;
+  const visitorId = callerVisitorId || `${contextKey}:${userId}`;
 
   // Persistent sessionId per zone (chains Chats together)
   if (!_runChatSessions.has(visitorId)) {
@@ -1808,14 +1814,16 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   const sessionId = _runChatSessions.get(visitorId);
 
   // Abort controller for cancellation (Ctrl+C, timeout, etc.)
-  const abort = signal ? { signal } : new AbortController();
+  const abort = signal ? null : new AbortController();
   const abortSignal = signal || abort.signal;
 
   // Register abort so external callers can cancel via sessionRegistry
-  setSessionAbort(visitorId, abort);
+  // Skip if caller provided a signal (the caller already registered their own abort)
+  if (abort) setSessionAbort(visitorId, abort);
 
   // 1. Connect MCP (reuse if already connected)
-  if (!getMCPClient(visitorId)) {
+  // Skip if caller provided visitorId (they already connected MCP for this session)
+  if (!callerVisitorId && !getMCPClient(visitorId)) {
     const internalJwt = jwt.sign(
       { userId: userId.toString(), username: username || "unknown", visitorId },
       JWT_SECRET,
@@ -1836,7 +1844,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   const currentMode = getCurrentMode(visitorId);
   if (currentMode !== mode) {
     try {
-      await switchMode(visitorId, mode, { username, userId });
+      await switchMode(visitorId, mode, { username, userId, currentNodeId: getCurrentNodeId(visitorId) });
     } catch (err) {
       log.warn("RunChat", `Mode switch to ${mode} failed: ${err.message}`);
     }
@@ -1870,6 +1878,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
       username,
       userId,
       rootId,
+      currentNodeId: getCurrentNodeId(visitorId),
       signal: abortSignal,
       llmPriority,
       onToolResults,
@@ -1879,7 +1888,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
       const stopped = abortSignal.aborted;
       try { await finalizeChat({ chatId: chat._id, content: stopped ? null : `Error: ${err.message}`, stopped }); } catch {}
     }
-    clearSessionAbort(visitorId);
+    if (abort) clearSessionAbort(visitorId);
     throw err;
   }
 
@@ -1895,7 +1904,8 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   }
 
   // 7. Clear abort (keep session + MCP alive for next message in same mode)
-  clearSessionAbort(visitorId);
+  // Only clear if we created our own abort controller
+  if (abort) clearSessionAbort(visitorId);
 
   return {
     answer,

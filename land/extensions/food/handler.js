@@ -1,13 +1,19 @@
 /**
  * Food Handler
  *
- * Extracted POST logic. Returns result objects instead of sending HTTP responses.
- * Used by both the route (HTTP) and index.js (programmatic/gateway).
+ * Decides which mode to use. Does NOT call runChat.
+ * The orchestrator executes on its own session.
+ *
+ * Returns { mode, message?, answer?, setup? }
+ *   - mode: which mode the orchestrator should switch to
+ *   - message: override message for the AI (optional)
+ *   - answer: direct response, skip AI call (optional, for parsed food)
+ *   - setup: true if this is a first-time scaffold
  */
 
 import log from "../../seed/log.js";
 import { createNote } from "../../seed/tree/notes.js";
-import NodeModel from "../../seed/models/node.js";
+
 import {
   scaffold,
   isInitialized,
@@ -21,135 +27,50 @@ import {
   saveProfile,
 } from "./core.js";
 
-/**
- * Handle a food message for a given tree.
- *
- * @param {string} message - User input (already validated non-empty by caller)
- * @param {object} opts
- * @param {string} opts.userId
- * @param {string} opts.username
- * @param {string} opts.rootId
- * @param {object|null} opts.res - Express response for auto-abort, or null
- * @returns {Promise<{answer: string, mode: string, chatId?: string, setup?: boolean, parsed?: object}>}
- */
-export async function handleMessage(message, { userId, username, rootId, res }) {
-  const { runChat } = await import("../../seed/llm/conversation.js");
+export async function handleMessage(message, { userId, username, rootId, targetNodeId }) {
+  const foodRoot = targetNodeId || rootId;
 
-  // ── PATH 1: First use. Scaffold and run setup conversation. ──
-  const initialized = await isInitialized(rootId);
+  // ── First use: scaffold if this is the extension's own node (not tree root) ──
+  const initialized = await isInitialized(foodRoot);
   if (!initialized) {
-    await scaffold(rootId, userId);
-
-    try {
-      const { answer, chatId } = await runChat({
-        userId, username,
-        message: `First time setup. The user said: "${message}". Ask them about their calorie target, macro goals, and dietary restrictions. If they already provided info in their message, use it.`,
-        mode: "tree:food-coach",
-        rootId, res: res || undefined, slot: "food",
-      });
-      return { answer, chatId, mode: "tree:food-coach", setup: true };
-    } catch (llmErr) {
-      return { answer: "Tree created. Set up an LLM connection to start the conversation.", mode: "tree:food-coach", setup: true };
+    if (String(foodRoot) !== String(rootId)) {
+      await scaffold(foodRoot, userId);
     }
+    return { mode: "tree:food-coach", setup: true };
   }
 
-  // ── PATH 1b: Setup incomplete (scaffold done, profile not yet saved). ──
-  const phase = await getSetupPhase(rootId);
+  // ── Auto-complete setup if structural nodes exist ──
+  const phase = await getSetupPhase(foodRoot);
   if (phase === "base") {
-    // Check if AI already set goals on ANY metric node (not just protein)
-    const foodNodes = await findFoodNodes(rootId);
-    let hasGoals = false;
-    const { STRUCTURAL_ROLES } = await import("./core.js");
-    for (const [role, info] of Object.entries(foodNodes)) {
-      if (STRUCTURAL_ROLES.includes(role) || !info?.id) continue;
-      const mNode = await NodeModel.findById(info.id).select("metadata").lean();
-      const goals = mNode?.metadata instanceof Map ? mNode.metadata.get("goals") : mNode?.metadata?.goals;
-      if (goals?.today > 0) { hasGoals = true; break; }
-    }
-
-    if (hasGoals) {
-      // Goals set but complete not called. Auto-complete.
-      await saveProfile(rootId, {}, foodNodes);
-    } else {
-      // No goals yet. Continue setup.
-      try {
-        const { answer, chatId } = await runChat({
-          userId, username, message,
-          mode: "tree:food-coach",
-          rootId, res: res || undefined, slot: "food",
-        });
-        return { answer, chatId, mode: "tree:food-coach", setup: true };
-      } catch (llmErr) {
-        return { answer: "Tell me your calorie target and macro goals.", mode: "tree:food-coach", setup: true };
-      }
+    const foodNodes = await findFoodNodes(foodRoot);
+    if (foodNodes && Object.keys(foodNodes).length > 0) {
+      await saveProfile(foodRoot, {}, foodNodes, userId);
     }
   }
 
-  const foodNodes = await findFoodNodes(rootId);
-  // Only log is truly required (where food input gets written as notes)
-  if (!foodNodes?.log) {
-    const { answer, chatId } = await runChat({
-      userId, username,
-      message: `The user said: "${message}". But this food tree is missing its Log node. Create one under root ${rootId} with create-new-node and set metadata.food.role to "log".`,
-      mode: "tree:food-coach",
-      rootId, res: res || undefined, slot: "food",
-    });
-    return { answer, chatId, mode: "tree:food-coach" };
+  // ── "be" command ──
+  if (message.trim().toLowerCase() === "be" || message.trim().toLowerCase() === "begin") {
+    return { mode: "tree:food-coach" };
   }
 
-  // ── Unadopted nodes: new children the user created without food metadata ──
-  if (foodNodes._unadopted?.length > 0) {
-    const nodes = foodNodes._unadopted.map(u => `"${u.name}" (id: ${u.id})`).join(", ");
-    const { answer, chatId } = await runChat({
-      userId, username,
-      message: `New nodes detected that aren't tracked yet: ${nodes}. For each one, call food-adopt-node with the node ID and a role (lowercase name). Ask the user what daily goal they want for each. Do NOT re-run setup or ask about calories/protein/carbs/fats. The profile is already configured. Just adopt these new nodes and confirm. The user's original message was: "${message}"`,
-      mode: "tree:food-coach",
-      rootId, res: res || undefined, slot: "food",
-    });
-    return { answer, chatId, mode: "tree:food-coach" };
+  // ── Questions, advice, planning, general conversation ──
+  if (/\b(what should|how am i|how's my|suggest|recommend|plan|advice|help|adjust|change.*goal|set.*goal|update.*goal|week|daily|review|progress)\b/i.test(message)) {
+    return { mode: "tree:food-review" };
+  }
+  // Questions that aren't food input
+  if (/\b(do you know|tell me about|who is|what is|have you heard)\b/i.test(message) || /\?$/.test(message.trim())) {
+    return { mode: "tree:food-coach" };
   }
 
-  // ── PATH: "be" command: guided log mode ──
-  if (message.trim().toLowerCase() === "be") {
-    try {
-      const { answer, chatId } = await runChat({
-        userId, username, message: "The user said 'be'. Guide them through logging their current meal or snack. Ask what they're eating.",
-        mode: "tree:food-log", rootId, res: res || undefined, slot: "food",
-      });
-      return { answer, chatId, mode: "tree:food-log" };
-    } catch (llmErr) {
-      return { answer: "What did you eat?", mode: "tree:food-log" };
-    }
-  }
-
-  // ── PATH 3: Questions, advice, planning. Route to coach/daily mode. ──
-  const isQuestion = /\b(what should|how am i|how's my|suggest|recommend|plan|advice|help|adjust|change.*goal|set.*goal|update.*goal)\b/i.test(message);
-  if (isQuestion) {
-    const { answer, chatId } = await runChat({
-      userId,
-      username,
-      message,
-      mode: "tree:food-review",
-      rootId,
-      res: res || undefined,
-      slot: "food",
-    });
-    return { answer, chatId, mode: "tree:food-review" };
-  }
-
-  // ── PATH 2: Food input. Parse, cascade, respond. ──
-
-  // One LLM call: parse food into structured macros
-  const parsed = await parseFood(message, userId, username, rootId);
+  // ── Food input: parse, write data, return response directly ──
+  const foodNodes = await findFoodNodes(foodRoot);
+  const parsed = await parseFood(message, userId, username, foodRoot);
   if (!parsed) {
-    return {
-      answer: "Could not parse that as food. Try something like: 'chicken breast and rice for lunch'.",
-      mode: "tree:food-log",
-    };
+    // Not food input. Let the coach handle conversationally.
+    return { mode: "tree:food-coach" };
   }
 
-  // Write note to Log node with structured data (enables undo on delete)
-  let logNoteId = null;
+  // Write note to Log node
   try {
     const logEntry = {
       meal: parsed.meal,
@@ -157,34 +78,33 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
       totals: parsed.totals,
       items: parsed.items,
     };
-    const note = await createNote({
+    await createNote({
       nodeId: foodNodes.log.id,
       content: JSON.stringify(logEntry),
       contentType: "text",
       userId,
     });
-    logNoteId = note?._id || note?.id || null;
   } catch (err) {
     log.warn("Food", `Note creation failed: ${err.message}`);
   }
 
-  // Write to appropriate Meals slot with display text + reference to log note
+  // Write to meal slot
   const mealSlot = detectMealSlot(message, parsed.when);
-  const mealDisplay = JSON.stringify({
-    text: `${parsed.meal} (${parsed.totals.calories || 0}cal)`,
-    logNoteId: logNoteId ? String(logNoteId) : null,
-    totals: parsed.totals,
-  });
-  writeMealNote(foodNodes, mealSlot, mealDisplay, userId).catch(() => {});
+  if (foodNodes[mealSlot] || foodNodes.meals) {
+    const mealDisplay = JSON.stringify({
+      text: `${parsed.meal} (${parsed.totals.calories || 0}cal)`,
+      totals: parsed.totals,
+    });
+    writeMealNote(foodNodes, mealSlot, mealDisplay, userId).catch(() => {});
+  }
 
-  // Fire cascade signals to macro nodes
+  // Deliver macros to metric nodes
   await deliverMacros(foodNodes.log.id, foodNodes, parsed);
 
-  // Small delay for $inc to settle, then read fresh totals
+  // Build response
   await new Promise(r => setTimeout(r, 50));
-  const picture = await getDailyPicture(rootId);
+  const picture = await getDailyPicture(foodRoot);
 
-  // Build natural language response
   const itemList = parsed.items.map(i => {
     const parts = Object.entries(i)
       .filter(([k, v]) => k !== "name" && k !== "calories" && typeof v === "number")
@@ -216,5 +136,6 @@ export async function handleMessage(message, { userId, username, rootId, res }) 
     }
   }
 
+  // Direct answer. Orchestrator skips AI call, delivers this response.
   return { answer: response, parsed, mode: "tree:food-log" };
 }

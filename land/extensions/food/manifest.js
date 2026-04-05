@@ -11,8 +11,9 @@ export default {
     "food-coach (setup and goal setting). Fitness channel carries workout data both ways. " +
     "Type 'be' at the Food tree to start logging: just say what you ate. The tree IS the app.",
 
+  territory: "food, meals, eat, eating, ate, hungry, nutrition, cooking, calories, protein, carbs, diet, snack, breakfast, lunch, dinner",
   classifierHints: [
-    /\b(ate|had|eaten|drank|breakfast|lunch|dinner|snack|calories|protein|carbs|fats|macro)\b/i,
+    /\b(ate|eaten|drank|breakfast|lunch|dinner|snack|calories|protein|carbs|fats|macro)\b/i,
     /\b(egg|chicken|rice|bread|salmon|banana|oat|milk|cheese|beef|pork|tofu|yogurt)\b/i,
     /\b(meal|food|nutrition|diet|eat|hungry|cook)\b/i,
   ],

@@ -90,15 +90,15 @@ export async function checkIntegrity({ repair = true, silent = false } = {}) {
       const parent = nodeMap.get(node.parent);
 
       if (!parent) {
-        // Parent doesn't exist. Orphaned reference.
+        // Parent doesn't exist. Soft-delete immediately (don't leave as orphan for next boot).
         report.issues++;
+        report.orphans.push(nodeId);
         addDetail(`${node.name} (${nodeId}): parent ${node.parent} does not exist`);
 
         if (repair) {
-          await Node.updateOne({ _id: nodeId }, { $set: { parent: null } });
+          await Node.updateOne({ _id: nodeId }, { $set: { parent: DELETED } });
           report.repaired++;
-          report.orphans.push(nodeId);
-          if (!silent) log.warn("Integrity", `Repaired: cleared dangling parent on ${node.name}`);
+          if (!silent) log.warn("Integrity", `Repaired: soft-deleted orphan ${node.name} (dangling parent ${node.parent})`);
         }
       } else if (!parent.children.has(nodeId)) {
         // Parent exists but doesn't list this node as a child

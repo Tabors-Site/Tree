@@ -191,6 +191,7 @@ Heartbeats exchange extension lists and health. Not user data. Cascade signals f
 - The Flow: https://treeos.ai/flow
 - Extensions: https://treeos.ai/extensions
 - The Network: https://treeos.ai/network
+- Use TreeOS: https://treeos.ai/use
 - What Is TreeOS: https://treeos.ai/what
 - Get Started: https://treeos.ai/start
 - HTML System: https://treeos.ai/html

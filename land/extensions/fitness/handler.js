@@ -1,16 +1,20 @@
 /**
  * Fitness Handler
  *
- * Extracted POST logic. Returns result objects instead of sending HTTP responses.
- * Used by both the route (HTTP) and index.js (programmatic/gateway).
+ * Decides which mode to use. Does NOT call runChat.
+ * The orchestrator executes on its own session.
+ *
+ * Returns { mode, message?, answer?, setup? }
+ *   - mode: which mode the orchestrator should switch to
+ *   - message: override message for the AI (optional)
+ *   - answer: direct response, skip AI call (optional, for parsed workouts)
+ *   - setup: true if this is a first-time scaffold
  */
 
-import log from "../../seed/log.js";
 import { createNote } from "../../seed/tree/notes.js";
 import {
   isInitialized,
   getSetupPhase,
-  getExerciseState,
   findFitnessNodes,
   parseWorkout,
   deliverToExerciseNodes,
@@ -19,115 +23,50 @@ import {
 } from "./core.js";
 import { scaffoldFitnessBase } from "./setup.js";
 
-// ── Intent detection ──
+export async function handleMessage(message, { userId, username, rootId, targetNodeId }) {
+  const fitnessRoot = targetNodeId || rootId;
 
-function detectIntent(message) {
-  const lower = message.toLowerCase().trim();
-  if (lower === "be") return "coach";
-  if (/\b(go|workout|start session|let's go|ready|begin|next set)\b/.test(lower)) return "coach";
-  if (/\b(how am i|progress|show.*history|review|stats|prs?|personal record|missed)\b/.test(lower)) return "review";
-  if (/\b(plan|program|build|create.*plan|restructure|add.*exercise|remove|modify|change.*program)\b/.test(lower)) return "plan";
-  return "log";
-}
-
-/**
- * Handle a fitness message for a given tree.
- *
- * @param {string} message - User input (already validated non-empty by caller)
- * @param {object} opts
- * @param {string} opts.userId
- * @param {string} opts.username
- * @param {string} opts.rootId
- * @param {object|null} opts.res - Express response for auto-abort, or null
- * @returns {Promise<{answer: string, mode: string, chatId?: string, setup?: boolean, parsed?: object, delivered?: number}>}
- */
-export async function handleMessage(message, { userId, username, rootId, res }) {
-  const { runChat } = await import("../../seed/llm/conversation.js");
-
-  // ── PATH 1: First use. Scaffold base, enter plan mode. ──
-  const initialized = await isInitialized(rootId);
+  // ── First use: scaffold if this is the extension's own node (not tree root) ──
+  const initialized = await isInitialized(fitnessRoot);
   if (!initialized) {
-    await scaffoldFitnessBase(rootId, userId);
-
-    try {
-      const { answer, chatId } = await runChat({
-        userId, username,
-        message: `New fitness tree. The user said: "${message}". Help them set up their training program. Ask what modalities they train (gym, running, bodyweight, or mix) and build the tree with tools.`,
-        mode: "tree:fitness-plan",
-        rootId, res: res || undefined, slot: "fitness",
-      });
-      return { answer, chatId, mode: "tree:fitness-plan", setup: true };
-    } catch (llmErr) {
-      return { answer: "Tree created. Set up an LLM connection to start the conversation.", mode: "tree:fitness-plan", setup: true };
+    if (String(fitnessRoot) !== String(rootId)) {
+      await scaffoldFitnessBase(fitnessRoot, userId);
     }
+    return { mode: "tree:fitness-plan", setup: true };
   }
 
-  // ── PATH 2: Setup incomplete. Auto-complete if exercises exist. ──
-  const phase = await getSetupPhase(rootId);
+  // ── Auto-complete setup if structural nodes exist ──
+  const phase = await getSetupPhase(fitnessRoot);
   if (phase === "base") {
-    // Check if AI already created exercises (even if it forgot to call complete)
-    const state = await getExerciseState(rootId);
-    const hasExercises = state && Object.values(state.groups || {}).some(g => g.exercises?.length > 0);
-
-    if (hasExercises) {
-      // AI built the tree but forgot to complete. Auto-complete.
+    const fitnessNodes = await findFitnessNodes(fitnessRoot);
+    if (fitnessNodes && Object.keys(fitnessNodes).length > 0) {
       const { completeSetup } = await import("./setup.js");
-      await completeSetup(rootId);
-      // Fall through to normal intent routing
-    } else {
-      // No exercises yet. Continue setup conversation.
-      try {
-        const { answer, chatId } = await runChat({
-          userId, username, message,
-          mode: "tree:fitness-plan",
-          rootId, res: res || undefined, slot: "fitness",
-        });
-        return { answer, chatId, mode: "tree:fitness-plan", setup: true };
-      } catch (llmErr) {
-        return { answer: "Setup in progress. Tell me what you train.", mode: "tree:fitness-plan", setup: true };
-      }
+      await completeSetup(fitnessRoot);
     }
   }
 
-  // ── PATH 3: Intent-based routing. ──
-  const intent = detectIntent(message);
-
-  if (intent === "coach") {
-    const { answer, chatId } = await runChat({
-      userId, username, message,
-      mode: "tree:fitness-coach",
-      rootId, res: res || undefined, slot: "fitness",
-    });
-    return { answer, chatId, mode: "tree:fitness-coach" };
+  // ── "be" / "begin" command ──
+  const lower = message.trim().toLowerCase();
+  if (lower === "be" || lower === "begin") {
+    return { mode: "tree:fitness-coach" };
   }
 
-  if (intent === "review") {
-    const { answer, chatId } = await runChat({
-      userId, username, message,
-      mode: "tree:fitness-review",
-      rootId, res: res || undefined, slot: "fitness",
-    });
-    return { answer, chatId, mode: "tree:fitness-review" };
+  // ── Progress, stats, review ──
+  if (/\b(how am i|progress|status|review|daily|stats|streak|history|so far|pattern|doing)\b/i.test(message)) {
+    return { mode: "tree:fitness-review" };
   }
 
-  if (intent === "plan") {
-    const { answer, chatId } = await runChat({
-      userId, username, message,
-      mode: "tree:fitness-plan",
-      rootId, res: res || undefined, slot: "fitness",
-    });
-    return { answer, chatId, mode: "tree:fitness-plan" };
+  // ── Planning, programming, structure ──
+  if (/\b(plan|build|create|structure|organize|add|modify|remove|restructure|program|taper|schedule|adjust|set.*goal|change|curriculum)\b/i.test(message)) {
+    return { mode: "tree:fitness-plan" };
   }
 
-  // ── PATH 4: Workout logging. Parse, route, record. ──
-  const fitnessNodes = await findFitnessNodes(rootId);
+  // ── Workout logging: parse, route, record ──
+  const fitnessNodes = await findFitnessNodes(fitnessRoot);
 
-  const parsed = await parseWorkout(message, userId, username, rootId);
+  const parsed = await parseWorkout(message, userId, username, fitnessRoot);
   if (!parsed) {
-    return {
-      answer: "Could not parse that as a workout. Try: 'bench 135x10,10,8' or 'ran 3 miles in 24 min' or '50 pushups'",
-      mode: "tree:fitness-log",
-    };
+    return { mode: "tree:fitness-coach" };
   }
 
   // Route parsed data to exercise nodes

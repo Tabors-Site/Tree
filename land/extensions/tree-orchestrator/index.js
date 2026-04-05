@@ -1,6 +1,6 @@
 import { orchestrateTreeRequest, clearMemory } from "./orchestrator.js";
 import { setClearMemoryFn } from "../../seed/ws/websocket.js";
-import { rebuildAll, rebuildIndexForRoot, invalidateRoot, queryIndex, getIndexForRoot, getAllIndexedRoots } from "./routingIndex.js";
+import { rebuildAll, rebuildIndexForRoot, invalidateRoot, getIndexForRoot, getAllIndexedRoots } from "./routingIndex.js";
 import { resolveRootNode } from "../../seed/tree/treeFetch.js";
 import log from "../../seed/log.js";
 
@@ -62,6 +62,11 @@ export async function init(core) {
     } catch {}
   }, "tree-orchestrator");
 
+  // Register LLM slots for semantic routing
+  // Operators assign cheap/fast models to these for routing decisions
+  core.llm.registerRootLlmSlot?.("departure");
+  core.llm.registerRootLlmSlot?.("territory");
+
   return {
     orchestrator: {
       bigMode: "tree",
@@ -69,7 +74,6 @@ export async function init(core) {
     },
     exports: {
       orchestrateTreeRequest,
-      queryIndex,
       getIndexForRoot,
       getAllIndexedRoots,
       rebuildIndexForRoot,

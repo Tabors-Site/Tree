@@ -167,6 +167,20 @@ async function runTreeOrchestration(opts, res) {
       await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
       setRootId(visitorId, rootId);
 
+      // If client sent currentNodeId, update session. Clear if returned to tree root.
+      if (opts.currentNodeId) {
+        const { setCurrentNodeId, getCurrentNodeId, clearSession } = await import("../../seed/llm/conversation.js");
+        const previousNodeId = getCurrentNodeId(visitorId);
+        const backToRoot = String(opts.currentNodeId) === String(rootId)
+          && previousNodeId && String(previousNodeId) !== String(rootId);
+        if (backToRoot) {
+          // User navigated back to tree root. Fresh conversation.
+          clearSession(visitorId);
+          setRootId(visitorId, rootId);
+        }
+        setCurrentNodeId(visitorId, opts.currentNodeId);
+      }
+
       const orchArgs = {
         visitorId,
         message: message.trim(),
@@ -229,6 +243,7 @@ async function runTreeOrchestration(opts, res) {
 
       return sendOk(res, {
         answer: hookData.content,
+        targetNodeId: result.targetNodeId || null,
       });
     } catch (err) {
       clearTimeout(timer);
@@ -263,8 +278,6 @@ async function runTreeOrchestration(opts, res) {
       clearChatContext(visitorId);
       clearSessionAbort(sessionId);
       endSession(sessionId);
-      if (!timedOut) closeMCPClient(visitorId);
-      clearSession(visitorId);
     }
   });
 }
@@ -340,7 +353,7 @@ router.post("/home/chat", authenticate, async (req, res) => {
 
 router.post("/root/:rootId/chat", authenticate, async (req, res) => {
   const { rootId } = req.params;
-  const { message, sessionHandle } = req.body;
+  const { message, sessionHandle, currentNodeId } = req.body;
 
   if (!validateMessage(message, res)) return;
   if (!(await checkTreeAccess(rootId, req.userId, res))) return;
@@ -354,6 +367,7 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
     username: req.username,
     sessionType: SESSION_TYPES.API_TREE_CHAT,
     sessionHandle: sessionHandle || null,
+    currentNodeId: currentNodeId || null,
   }, res);
 });
 

@@ -223,7 +223,7 @@ const ExtensionsPage = () => {
           </p>
           <div style={{maxWidth: 700, margin: "0 auto"}}>
             {[
-              ["Hooks", "Lifecycle event handlers. 27 kernel hooks. Extensions fire their own with extName:hookName convention. before hooks cancel. after hooks react. Sequential hooks build on each other."],
+              ["Hooks", "Lifecycle event handlers. 30 kernel hooks. Extensions fire their own with extName:hookName convention. before hooks cancel. after hooks react. Sequential hooks build on each other."],
               ["Modes", "AI conversation modes. How the AI thinks at each position. Extensions register modes during init(). The kernel resolves which mode fires based on position, intent, and per-node overrides."],
               ["Orchestrators", "Conversation flow replacements. The entire chat/place/query pipeline is an orchestrator. Replace it and you control every AI interaction on the land."],
               ["Socket Handlers", "WebSocket event handlers. Extensions add real-time features without touching the kernel's websocket code. The dashboard, recent-roots, and notification extensions all use this."],
@@ -361,7 +361,7 @@ const ExtensionsPage = () => {
             A coding OS with architect and review modes. A research OS with citation and synthesis modes.
           </p>
           <p className="lp-section-sub" style={{fontStyle: "italic", color: "rgba(255,255,255,0.3)"}}>
-            95 extensions across four bundles plus standalone. All growing from twelve schema
+            114 extensions across four bundles plus standalone. All growing from twelve schema
             fields and a metadata Map. Enough extensions built on a kernel form an operating system.
             Operating systems are good starting grounds for people to build off of.
           </p>

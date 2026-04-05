@@ -36,7 +36,7 @@ const WhatPage = () => {
               <h3><a href="/seed" style={{color: "#fff", textDecoration: "none"}}>The Kernel</a></h3>
               <p>
                 Twelve fields on a node. Seven fields on a user. A metadata Map that grows anything.
-                A conversation loop. 29 hooks. A cascade engine. This is the filesystem.
+                A conversation loop. 30 hooks. A cascade engine. This is the filesystem.
                 It doesn't know what a workout is. It knows what a node is.
               </p>
             </div>

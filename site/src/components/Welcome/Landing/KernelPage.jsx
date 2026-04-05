@@ -77,7 +77,7 @@ const KernelPage = () => {
                 os: "System Call Hooking",
                 osDesc: "Intercepts kernel operations. Powerful and dangerous. Used in security tools and rootkits.",
                 seed: "Hook System",
-                seedDesc: "27 lifecycle hooks. before hooks intercept and cancel. after hooks react in parallel. Any extension can hook any operation. beforeToolCall rewrites arguments. beforeNote blocks writes. Orchestrator replacement swaps the entire conversation flow. 5s timeout, circuit breaker, spatial filtering. Power with guardrails.",
+                seedDesc: "30 lifecycle hooks. before hooks intercept and cancel. after hooks react in parallel. Any extension can hook any operation. beforeToolCall rewrites arguments. beforeNote blocks writes. Orchestrator replacement swaps the entire conversation flow. 5s timeout, circuit breaker, spatial filtering. Power with guardrails.",
               },
               {
                 os: "Inter-Process Communication",
@@ -335,7 +335,7 @@ const KernelPage = () => {
           </p>
           <div style={{maxWidth: 600, margin: "0 auto"}}>
             {[
-              ["Hooks", "Lifecycle event handlers. 27 kernel hooks. Extensions fire their own."],
+              ["Hooks", "Lifecycle event handlers. 30 kernel hooks. Extensions fire their own."],
               ["Modes", "AI conversation modes. How the AI thinks at each position."],
               ["Orchestrators", "Conversation flow replacements. Swap the entire chat/place/query pipeline."],
               ["Socket Handlers", "WebSocket event handlers. Extensions add real-time features."],

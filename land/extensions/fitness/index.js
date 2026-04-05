@@ -157,6 +157,42 @@ export async function init(core) {
         };
       });
     }
+
+    // Cross-domain: food and recovery state (coach-level nodes only)
+    if (role === "log" || role === "program") {
+      try {
+        const { getExtension } = await import("../loader.js");
+        const life = getExtension("life");
+        if (life?.exports?.getDomainNodes) {
+          const treeRoot = node.rootOwner || String(node._id);
+          const domains = await life.exports.getDomainNodes(treeRoot);
+
+          if (domains.food?.id) {
+            const food = getExtension("food");
+            if (food?.exports?.getDailyPicture) {
+              const picture = await food.exports.getDailyPicture(domains.food.id);
+              if (picture?.calories) {
+                context.foodToday = { calories: picture.calories.today, goal: picture.calories.goal };
+              }
+            }
+          }
+
+          if (domains.recovery?.id) {
+            const recovery = getExtension("recovery");
+            if (recovery?.exports?.getStatus) {
+              const status = await recovery.exports.getStatus(domains.recovery.id);
+              if (status) {
+                context.recoveryToday = {
+                  substances: status.substances,
+                  mood: status.feelings?.mood,
+                  energy: status.feelings?.energy,
+                };
+              }
+            }
+          }
+        }
+      } catch {}
+    }
   }, "fitness");
 
   // ── Live dashboard updates: push to client when data changes ──
@@ -245,6 +281,7 @@ export async function init(core) {
       getExerciseState,
       getWeeklyStats,
       handleMessage,
+      scaffold: (await import("./setup.js")).scaffoldFitnessBase,
     },
   };
 }

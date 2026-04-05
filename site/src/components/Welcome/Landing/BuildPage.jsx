@@ -214,7 +214,7 @@ await user.save();`}</Code>
         <div className="lp-container" style={{maxWidth: 800}}>
           <h2 className="lp-section-title">Hooks</h2>
           <P>
-            27 kernel hooks. <code>before</code> hooks run sequentially and can cancel.
+            30 kernel hooks. <code>before</code> hooks run sequentially and can cancel.
             <code> after</code> hooks run in parallel. 5s timeout per handler.
             Circuit breaker auto-disables after 5 failures (half-open recovery after 5 minutes).
           </P>

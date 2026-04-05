@@ -161,6 +161,11 @@ export async function setNodeMode(nodeId, intent, modeKey) {
     { _id: String(nodeId) },
     { $set: { [`metadata.modes.${intent}`]: modeKey } }
   );
+  // Fire afterMetadataWrite so the routing index rebuilds
+  try {
+    const { hooks } = await import("../hooks.js");
+    hooks.run("afterMetadataWrite", { nodeId: String(nodeId), extName: "modes", data: { [intent]: modeKey } }).catch(() => {});
+  } catch {}
   return true;
 }
 

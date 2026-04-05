@@ -233,6 +233,7 @@ export async function init(core) {
       getQueue,
       getGaps,
       handleMessage,
+      scaffold: (await import("./setup.js")).scaffold,
     },
   };
 }

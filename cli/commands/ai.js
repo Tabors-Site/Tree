@@ -137,11 +137,36 @@ module.exports = (program) => {
           console.log(chalk.bold("\nHome:") + " " + (data.answer || "No response."));
         } else {
           console.log(chalk.dim("Thinking…"));
+          // Send currentNodeId so the server knows position even after restart
+          const currentNode = cfg.pathStack?.length > 0
+            ? cfg.pathStack[cfg.pathStack.length - 1].id
+            : target.rootId;
           const data = await api.chat(target.rootId, message, {
             signal,
             sessionHandle: handle || undefined,
+            currentNodeId: currentNode,
           });
           console.log(`\n${label}: ` + (data.answer || "No response."));
+
+          // Auto-navigate CLI when territory match routed to a different node
+          if (data.targetNodeId && String(data.targetNodeId) !== String(target.rootId) && !handle) {
+            try {
+              const pathParts = [];
+              let id = String(data.targetNodeId);
+              const rootStr = String(target.rootId);
+              for (let i = 0; i < 20 && id && id !== rootStr; i++) {
+                const raw = await api.getNode(id);
+                const n = raw?.node || raw; // API wraps in { node: {...} }
+                if (!n || !n._id) break;
+                pathParts.unshift({ id: String(n._id), name: n.name || "?" });
+                id = n.parent ? String(n.parent) : null;
+              }
+              if (pathParts.length) {
+                cfg.pathStack = pathParts;
+                save(cfg);
+              }
+            } catch {}
+          }
         }
       } catch (e) {
         if (e.name === "AbortError") return console.log(chalk.dim("Cancelled."));
