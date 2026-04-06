@@ -265,23 +265,40 @@ export async function init(core) {
   }, "food");
 
   // ── Live dashboard updates ──
+  // Walk up to find the food root (node with metadata.food.initialized)
+  async function findFoodRootFromNode(nodeId) {
+    let current = await core.models.Node.findById(nodeId).select("metadata parent rootOwner").lean();
+    let depth = 0;
+    while (current && depth < 10) {
+      const fm = current.metadata instanceof Map ? current.metadata.get("food") : current.metadata?.food;
+      if (fm?.initialized) return { foodRootId: String(current._id), ownerId: current.rootOwner ? String(current.rootOwner) : null };
+      if (!current.parent || current.rootOwner) break;
+      current = await core.models.Node.findById(current.parent).select("metadata parent rootOwner").lean();
+      depth++;
+    }
+    return current?.rootOwner ? { foodRootId: null, ownerId: String(current.rootOwner) } : null;
+  }
+
   core.hooks.register("afterNote", async ({ nodeId }) => {
     if (!nodeId) return;
     try {
-      const node = await core.models.Node.findById(nodeId).select("rootOwner metadata").lean();
-      if (!node?.rootOwner) return;
-      const fm = node.metadata instanceof Map ? node.metadata.get("food") : node.metadata?.food;
+      const node = await core.models.Node.findById(nodeId).select("metadata").lean();
+      const fm = node?.metadata instanceof Map ? node.metadata.get("food") : node?.metadata?.food;
       if (!fm?.role) return;
-      core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+      const info = await findFoodRootFromNode(nodeId);
+      if (!info?.ownerId) return;
+      if (info.foodRootId) core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.foodRootId });
+      core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.ownerId });
     } catch {}
   }, "food");
 
   core.hooks.register("afterMetadataWrite", async ({ nodeId, extName }) => {
     if (extName !== "values" && extName !== "food" && extName !== "goals") return;
     try {
-      const node = await core.models.Node.findById(nodeId).select("rootOwner").lean();
-      if (!node?.rootOwner) return;
-      core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+      const info = await findFoodRootFromNode(nodeId);
+      if (!info?.ownerId) return;
+      if (info.foodRootId) core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.foodRootId });
+      core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.ownerId });
     } catch {}
   }, "food");
 

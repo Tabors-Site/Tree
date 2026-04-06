@@ -81,15 +81,16 @@ BODYWEIGHT:
 
   If all goals met: "All 20s. Time for diamond push-ups."
 
-AFTER SESSION:
-Call fitness-log-workout ONCE with rootId ${fitRoot} and all exercises from the session.
-The tool records everything: exercise values, session history, PRs, and progression.
-Then summarize using the tool's output. Total volume for gym. Miles and pace for running. Total reps for bodyweight. Note any PRs or progression triggers.
+AFTER EACH EXERCISE (when all sets are done):
+Call fitness-log-workout IMMEDIATELY with rootId ${fitRoot} and that exercise's data.
+Do not wait until the end of the session. Log each exercise as it's completed.
+The user might leave at any time. Every completed exercise must be saved.
+Then report the tool's response (volume, progression) and move to the next exercise.
 
 STYLE:
 - Talk like a training partner. Short messages between sets.
 - Use actual numbers. No filler. No motivational speeches.
-- One line per set response. Save the summary for the end.
+- One line per set response. Log the exercise after the last set.
 - Never mention node IDs, metadata, or tools.`.trim();
   },
 };

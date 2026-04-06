@@ -200,18 +200,38 @@ export async function init(core) {
   }, "fitness");
 
   // ── Live dashboard updates: push to client when data changes ──
+  // Walk up to find the fitness root (node with metadata.fitness.initialized),
+  // not just rootOwner (which is the Life root in organized trees).
+  async function findFitnessRootFromNode(nodeId) {
+    let current = await core.models.Node.findById(nodeId).select("metadata parent rootOwner").lean();
+    let depth = 0;
+    while (current && depth < 10) {
+      const fm = current.metadata instanceof Map ? current.metadata.get("fitness") : current.metadata?.fitness;
+      if (fm?.initialized) return { fitnessRootId: String(current._id), ownerId: current.rootOwner ? String(current.rootOwner) : null };
+      if (!current.parent || current.rootOwner) break;
+      current = await core.models.Node.findById(current.parent).select("metadata parent rootOwner").lean();
+      depth++;
+    }
+    return current?.rootOwner ? { fitnessRootId: null, ownerId: String(current.rootOwner) } : null;
+  }
+
   core.hooks.register("afterNote", async ({ node }) => {
-    if (!node?.rootOwner) return;
+    if (!node) return;
     const fm = node.metadata instanceof Map ? node.metadata.get("fitness") : node.metadata?.fitness;
     if (!fm?.role) return;
-    core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+    const info = await findFitnessRootFromNode(node._id);
+    if (!info?.ownerId) return;
+    // Emit with both the fitness root ID and the tree root ID so both dashboard URLs match
+    if (info.fitnessRootId) core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.fitnessRootId });
+    core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.ownerId });
   }, "fitness");
 
   core.hooks.register("afterMetadataWrite", async ({ nodeId, extName }) => {
     if (extName !== "values" && extName !== "fitness" && extName !== "goals") return;
-    const node = await core.models.Node.findById(nodeId).select("rootOwner").lean();
-    if (!node?.rootOwner) return;
-    core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+    const info = await findFitnessRootFromNode(nodeId);
+    if (!info?.ownerId) return;
+    if (info.fitnessRootId) core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.fitnessRootId });
+    core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.ownerId });
   }, "fitness");
 
   // HTML dashboard is now inline in routes.js (GET with ?html check)
