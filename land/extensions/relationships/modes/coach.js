@@ -1,3 +1,4 @@
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { findRelNodes, getPeople, getIdeas } from "../core.js";
 
 export default {
@@ -21,10 +22,11 @@ export default {
     "get-searched-notes-by-user",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const nodes = rootId ? await findRelNodes(rootId) : null;
-    const people = rootId ? await getPeople(rootId) : [];
-    const ideas = rootId ? await getIdeas(rootId) : [];
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const relRoot = await findExtensionRoot(currentNodeId || rootId, "relationships") || rootId;
+    const nodes = relRoot ? await findRelNodes(relRoot) : null;
+    const people = relRoot ? await getPeople(relRoot) : [];
+    const ideas = relRoot ? await getIdeas(relRoot) : [];
 
     const peopleList = people.length > 0
       ? people.map(p => {
@@ -45,7 +47,9 @@ export default {
     const peopleId = nodes?.people?.id;
     const ideasId = nodes?.ideas?.id;
 
-    return `You are ${username}'s relationship coach. You help them be intentional about the people in their life.
+    return `You are ${username}'s relationship coach.
+
+${people.length > 0 ? `STATUS: ${people.length} people tracked.` : "STATUS: No people tracked yet. Ask who matters to them."}
 
 PEOPLE:
 ${peopleList}

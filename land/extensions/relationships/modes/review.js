@@ -1,3 +1,4 @@
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { findRelNodes, getPeople, getRecentInteractions } from "../core.js";
 
 export default {
@@ -18,9 +19,10 @@ export default {
     "get-searched-notes-by-user",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const people = rootId ? await getPeople(rootId) : [];
-    const recent = rootId ? await getRecentInteractions(rootId, 15) : [];
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const relRoot = await findExtensionRoot(currentNodeId || rootId, "relationships") || rootId;
+    const people = relRoot ? await getPeople(relRoot) : [];
+    const recent = relRoot ? await getRecentInteractions(relRoot, 15) : [];
 
     // Sort by lastContact, oldest first (people to reach out to)
     const sorted = [...people].sort((a, b) => {

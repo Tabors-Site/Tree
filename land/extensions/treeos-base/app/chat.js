@@ -78,6 +78,35 @@ router.get("/chat", authenticateLite, async (req, res) => {
       })),
     );
 
+    // Load app data for hotbar (life domains)
+    let appsJSON = "[]";
+    try {
+      const life = getExtension("life");
+      if (life?.exports?.findLifeRoot && life?.exports?.getDomainNodes) {
+        const lifeRootId = await life.exports.findLifeRoot(req.userId);
+        if (lifeRootId) {
+          const domains = await life.exports.getDomainNodes(lifeRootId);
+          const APP_META = {
+            food: { emoji: "🍎", name: "Food", path: "food" },
+            fitness: { emoji: "💪", name: "Fitness", path: "fitness" },
+            recovery: { emoji: "🌿", name: "Recovery", path: "recovery" },
+            study: { emoji: "📚", name: "Study", path: "study" },
+            kb: { emoji: "📖", name: "KB", path: "kb" },
+            relationships: { emoji: "👥", name: "Relationships", path: "relationships" },
+            finance: { emoji: "💰", name: "Finance", path: "finance" },
+            investor: { emoji: "📈", name: "Investor", path: "investor" },
+            "market-researcher": { emoji: "🔬", name: "Research", path: "market-researcher" },
+          };
+          const apps = [];
+          for (const [key, info] of Object.entries(domains)) {
+            const meta = APP_META[key];
+            if (meta) apps.push({ key, id: info.id, name: info.name, emoji: meta.emoji, label: meta.name, path: meta.path, treeRootId: lifeRootId });
+          }
+          appsJSON = JSON.stringify(apps);
+        }
+      }
+    } catch {}
+
     const landName = getLandIdentity()?.name || "TreeOS";
 
     return res.send(`<!DOCTYPE html>
@@ -639,6 +668,71 @@ router.get("/chat", authenticateLite, async (req, res) => {
       .chat-area.empty .chat-messages { position: static; flex: 0; padding-top: 0; transform: none; overflow: visible; }
       .chat-area.empty .chat-input-area { position: static; transform: none; width: 100%; max-width: 100%; margin: 0; }
     }
+
+    /* App dashboard panel (slide-out drawer from right, like notifications) */
+    .app-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+      z-index: 9996; display: none;
+    }
+    .app-overlay.open { display: block; }
+    .app-panel {
+      position: fixed; top: 0; right: -500px; bottom: 0;
+      width: 480px; max-width: 95vw;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      z-index: 9997;
+      display: flex; flex-direction: column;
+      transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: -8px 0 32px rgba(0,0,0,0.3);
+    }
+    .app-panel.visible { right: 0; }
+    .app-panel iframe {
+      flex: 1; width: 100%; border: none;
+      background: transparent;
+    }
+    .app-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; flex-shrink: 0;
+      border-bottom: 1px solid var(--glass-border-light);
+    }
+    .app-panel-title {
+      font-size: 15px; font-weight: 600; color: white;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .app-panel-close {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border-light);
+      color: white; cursor: pointer; font-size: 16px; display: flex;
+      align-items: center; justify-content: center; transition: all var(--transition-fast);
+    }
+    .app-panel-close:hover { background: rgba(255,255,255,0.2); }
+
+    /* App hotbar */
+    .app-hotbar {
+      display: none; flex-shrink: 0;
+      border-top: 1px solid var(--glass-border-light);
+      padding: 6px 12px;
+      overflow-x: auto;
+    }
+    .app-hotbar.visible { display: flex; }
+    .app-hotbar-inner {
+      display: flex; gap: 2px; margin: 0 auto;
+      justify-content: center;
+    }
+    .app-hotbar-item {
+      display: flex; flex-direction: column; align-items: center; gap: 1px;
+      padding: 4px 10px; border-radius: 8px;
+      background: none; border: 1px solid transparent;
+      color: var(--text-muted); font-size: 9px;
+      cursor: pointer; transition: all var(--transition-fast);
+      font-family: inherit; min-width: 48px;
+    }
+    .app-hotbar-item:hover { background: rgba(255,255,255,0.06); color: var(--text-secondary); }
+    .app-hotbar-item.active {
+      background: rgba(var(--glass-rgb), 0.3);
+      border-color: var(--glass-border-light);
+      color: white;
+    }
+    .app-hotbar-emoji { font-size: 18px; }
   </style>
 </head>
 <body>
@@ -733,6 +827,14 @@ router.get("/chat", authenticateLite, async (req, res) => {
       </div>
     </div>
 
+    <div class="app-overlay" id="appOverlay" onclick="closeAppPanel()"></div>
+    <div class="app-panel" id="appPanel">
+      <div class="app-panel-header">
+        <span class="app-panel-title" id="appPanelTitle"></span>
+        <button class="app-panel-close" onclick="closeAppPanel()">x</button>
+      </div>
+      <iframe id="appPanelFrame" sandbox="allow-same-origin allow-scripts allow-forms"></iframe>
+    </div>
     <div class="chat-area empty" id="chatArea">
       <div class="chat-messages" id="messages">
         <div class="welcome-message" id="welcomeMsg">
@@ -755,6 +857,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
           </button>
         </div>
       </div>
+      <div class="app-hotbar" id="appHotbar"><div class="app-hotbar-inner" id="appHotbarInner"></div></div>
     </div>
   </div>
 
@@ -764,6 +867,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       username: "${escapeHtml(username)}",
       userId: "${req.userId}",
       trees: ${treesJSON},
+      apps: ${appsJSON},
       landName: "${landName.replace(/"/g, '\\"')}",
     };
 
@@ -927,12 +1031,17 @@ router.get("/chat", authenticateLite, async (req, res) => {
       }
     });
 
-    socket.on("chatResponse", ({ answer, generation }) => {
+    socket.on("chatResponse", ({ answer, generation, targetNodeId }) => {
       if (generation !== undefined && generation < requestGeneration) return;
       removeTyping();
       addMessage(answer, "assistant");
       isSending = false;
       updateSendBtn();
+
+      // Surface app dashboard if the response routed to an extension node
+      if (targetNodeId && targetNodeId !== activeRootId) {
+        surfaceApp(targetNodeId);
+      }
     });
 
     socket.on("placeResult", ({ stepSummaries, targetPath, generation }) => {
@@ -1064,6 +1173,9 @@ router.get("/chat", authenticateLite, async (req, res) => {
       socket.emit("setActiveRoot", { rootId });
       socket.emit("urlChanged", { url: "/api/v1/root/" + rootId, rootId });
 
+      // Build app hotbar for this tree
+      buildHotbar(rootId);
+
       // Refresh menu panel for this tree
       dreamsLoaded = false;
       invitesLoaded = false;
@@ -1163,6 +1275,98 @@ router.get("/chat", authenticateLite, async (req, res) => {
     function removeTyping() {
       const el = document.getElementById("typingIndicator");
       if (el) el.remove();
+    }
+
+    // ── App Dashboard Panel ──────────────────────────────────────────
+
+    const APP_META = {
+      food: { emoji: "🍎", name: "Food", path: "food" },
+      fitness: { emoji: "💪", name: "Fitness", path: "fitness" },
+      recovery: { emoji: "🌿", name: "Recovery", path: "recovery" },
+      study: { emoji: "📚", name: "Study", path: "study" },
+      kb: { emoji: "📖", name: "KB", path: "kb" },
+      relationships: { emoji: "👥", name: "Relationships", path: "relationships" },
+      finance: { emoji: "💰", name: "Finance", path: "finance" },
+      investor: { emoji: "📈", name: "Investor", path: "investor" },
+      "market-researcher": { emoji: "🔬", name: "Research", path: "market-researcher" },
+    };
+
+    let currentAppNodeId = null;
+    let hotbarBuilt = false;
+
+    function surfaceApp(nodeId) {
+      const apps = CONFIG.apps || [];
+      const match = apps.find(a => a.id === nodeId);
+      if (match) {
+        showAppPanel(nodeId, match.key);
+        highlightHotbarItem(match.key);
+      }
+    }
+
+    function showAppPanel(nodeId, appKey) {
+      // Navigate the session to this app's node
+      if (typeof socket !== "undefined" && socket.connected) {
+        socket.emit("urlChanged", { url: "/api/v1/node/" + nodeId, nodeId });
+      }
+
+      const panel = document.getElementById("appPanel");
+      const frame = document.getElementById("appPanelFrame");
+      const title = document.getElementById("appPanelTitle");
+      const meta = APP_META[appKey];
+      if (!meta) return;
+
+      currentAppNodeId = nodeId;
+      title.innerHTML = meta.emoji + " " + meta.name;
+      frame.src = "/api/v1/root/" + nodeId + "/" + meta.path + "?html&inApp=1";
+
+      // Update header to show active app
+      const rn = document.getElementById("rootName");
+      if (rn) rn.textContent = meta.name;
+      panel.classList.add("visible");
+      document.getElementById("appOverlay").classList.add("open");
+
+    }
+
+    function closeAppPanel() {
+      document.getElementById("appPanel").classList.remove("visible");
+      document.getElementById("appOverlay").classList.remove("open");
+      document.getElementById("appPanelFrame").src = "";
+      currentAppNodeId = null;
+      highlightHotbarItem(null);
+      // Navigate back to tree root and restore header
+      if (activeRootId && typeof socket !== "undefined" && socket.connected) {
+        socket.emit("urlChanged", { url: "/api/v1/root/" + activeRootId, rootId: activeRootId });
+      }
+      const tree = CONFIG.trees.find(t => t.id === activeRootId);
+      const rn = document.getElementById("rootName");
+      if (rn && tree) rn.textContent = tree.name;
+    }
+
+    function buildHotbar(treeId) {
+      if (hotbarBuilt) return;
+      const apps = CONFIG.apps || [];
+      if (apps.length === 0) return;
+
+      // Check if this tree is the Life tree (apps are under it)
+      const isLifeTree = apps.some(a => a.treeRootId === treeId);
+      if (!isLifeTree) return;
+
+      const hotbar = document.getElementById("appHotbar");
+      const inner = document.getElementById("appHotbarInner");
+      inner.innerHTML = apps.map(a =>
+        '<button class="app-hotbar-item" data-app="' + a.key + '" data-node-id="' + a.id + '" onclick="showAppPanel(\\'' + a.id + '\\',\\'' + a.key + '\\');highlightHotbarItem(\\'' + a.key + '\\')">' +
+          '<span class="app-hotbar-emoji">' + a.emoji + '</span>' +
+          '<span>' + a.label + '</span>' +
+        '</button>'
+      ).join("");
+      hotbar.classList.add("visible");
+      hotbarBuilt = true;
+    }
+
+    function highlightHotbarItem(appKey) {
+      document.querySelectorAll(".app-hotbar-item").forEach(el => {
+        el.classList.toggle("active", el.dataset.app === appKey);
+      });
     }
 
     // ── Send ──────────────────────────────────────────────────────────

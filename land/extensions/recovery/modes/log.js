@@ -22,6 +22,7 @@ HARD RULES:
 - Track honestly. Never minimize or inflate numbers.
 `.trim();
 
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { findRecoveryNodes, getStatus } from "../core.js";
 
 export default {
@@ -36,13 +37,14 @@ export default {
 
   toolNames: [],
 
-  async buildSystemPrompt({ username, rootId }) {
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const recRoot = await findExtensionRoot(currentNodeId || rootId, "recovery") || rootId;
     // Read tracked substances so the LLM knows what names to use
     let substanceList = "";
     try {
-      const nodes = await findRecoveryNodes(rootId);
+      const nodes = await findRecoveryNodes(recRoot);
       if (nodes?.substances && Object.keys(nodes.substances).length > 0) {
-        const status = await getStatus(rootId);
+        const status = await getStatus(recRoot);
         const subs = Object.entries(nodes.substances).map(([name]) => {
           const s = status?.substances?.[name] || {};
           return `  ${name} (today: ${s.today || 0}, target: ${s.target || 0})`;

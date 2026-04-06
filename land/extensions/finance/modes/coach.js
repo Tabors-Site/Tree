@@ -1,3 +1,4 @@
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { findFinanceNodes, getAccounts, getCategories, getMonthSummary } from "../core.js";
 
 export default {
@@ -22,8 +23,9 @@ export default {
     "get-searched-notes-by-user",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const summary = rootId ? await getMonthSummary(rootId) : null;
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const finRoot = await findExtensionRoot(currentNodeId || rootId, "finance") || rootId;
+    const summary = finRoot ? await getMonthSummary(finRoot) : null;
 
     const accountList = summary?.accounts?.length > 0
       ? summary.accounts.map(a => `- ${a.name} (${a.accountType}): $${a.balance}`).join("\n")
@@ -40,7 +42,11 @@ export default {
       ? `Total balance: $${summary.totalBalance}\nSpent this month: $${summary.totalSpent}${summary.totalBudget > 0 ? `\nBudget remaining: $${summary.budgetRemaining}` : ""}`
       : "";
 
-    return `You are ${username}'s financial coach. You help them understand their money, set goals, and make better decisions.
+    const hasActivity = summary && (summary.totalBalance > 0 || summary.totalSpent > 0 || summary.totalBudget > 0);
+
+    return `You are ${username}'s financial coach.
+
+${hasActivity ? "STATUS: Accounts active." : "STATUS: Fresh start. Help them set up accounts and budgets."}
 
 ${totalsBlock ? `FINANCIAL SNAPSHOT:\n${totalsBlock}\n` : ""}
 ${accountList ? `ACCOUNTS:\n${accountList}\n` : ""}

@@ -1,3 +1,4 @@
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { findFinanceNodes, getAccounts, getCategories } from "../core.js";
 
 export default {
@@ -22,10 +23,11 @@ export default {
     "edit-node-goal",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const nodes = rootId ? await findFinanceNodes(rootId) : null;
-    const accounts = rootId ? await getAccounts(rootId) : [];
-    const categories = rootId ? await getCategories(rootId) : [];
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const finRoot = await findExtensionRoot(currentNodeId || rootId, "finance") || rootId;
+    const nodes = finRoot ? await findFinanceNodes(finRoot) : null;
+    const accounts = finRoot ? await getAccounts(finRoot) : [];
+    const categories = finRoot ? await getCategories(finRoot) : [];
 
     const accountList = accounts.length > 0
       ? accounts.map(a => `- ${a.name} (${a.accountType}): $${a.balance}`).join("\n")

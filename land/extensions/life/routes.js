@@ -53,8 +53,13 @@ router.post("/life/setup", authenticate, async (req, res) => {
       const available = getAvailableDomains();
       return sendOk(res, {
         available,
-        message: "Usage: life food fitness study",
+        message: "Usage: life food fitness study (or: life --all)",
       });
+    }
+
+    // --all: scaffold all available domains
+    if (picks.includes("--all") || picks.includes("all")) {
+      picks = getAvailableDomains();
     }
 
     // Validate selections

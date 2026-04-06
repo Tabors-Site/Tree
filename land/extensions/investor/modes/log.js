@@ -1,3 +1,4 @@
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { findInvestorNodes, getHoldings, getWatchlist } from "../core.js";
 
 export default {
@@ -22,10 +23,11 @@ export default {
     "edit-node-goal",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const nodes = rootId ? await findInvestorNodes(rootId) : null;
-    const holdings = rootId ? await getHoldings(rootId) : [];
-    const watchlist = rootId ? await getWatchlist(rootId) : [];
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const invRoot = await findExtensionRoot(currentNodeId || rootId, "investor") || rootId;
+    const nodes = invRoot ? await findInvestorNodes(invRoot) : null;
+    const holdings = invRoot ? await getHoldings(invRoot) : [];
+    const watchlist = invRoot ? await getWatchlist(invRoot) : [];
 
     const holdingList = holdings.length > 0
       ? holdings.map(h => {

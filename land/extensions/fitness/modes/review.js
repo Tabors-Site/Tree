@@ -5,6 +5,7 @@
  * PR detection, consistency patterns, overdue exercises, nutrition correlation.
  */
 
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { getExerciseState, getProfile, getWeeklyStats } from "../core.js";
 
 export default {
@@ -21,10 +22,11 @@ export default {
     "get-node-notes",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const state = await getExerciseState(rootId);
-    const profile = await getProfile(rootId);
-    const weekly = await getWeeklyStats(rootId);
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const fitRoot = await findExtensionRoot(currentNodeId || rootId, "fitness") || rootId;
+    const state = await getExerciseState(fitRoot);
+    const profile = await getProfile(fitRoot);
+    const weekly = await getWeeklyStats(fitRoot);
 
     const exerciseSummary = state ? Object.entries(state.groups).map(([group, data]) => {
       const exs = data.exercises.map(e => {

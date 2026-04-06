@@ -168,10 +168,16 @@ export function buildTreeosHtmlRoutes() {
           const meta = r.metadata instanceof Map ? Object.fromEntries(r.metadata) : (r.metadata || {});
           for (const ext of EXTENSIONS) {
             if (meta[ext]?.initialized) {
-              addToMap(NAME_MAP[ext], String(r._id), r.name, meta[ext].setupPhase === "complete");
+              addToMap(NAME_MAP[ext], String(r._id), r.name, true);
             }
           }
         }
+      }
+
+      // Find Life root ID for chat routing (reuse from discovery if available)
+      let chatRootId = null;
+      if (life?.exports?.findLifeRoot) {
+        try { chatRootId = await life.exports.findLifeRoot(userId); } catch {}
       }
 
       const { renderAppsPage } = await import("./pages/appsPage.js");
@@ -179,6 +185,7 @@ export function buildTreeosHtmlRoutes() {
         userId,
         username: user.username,
         rootMap,
+        lifeRootId: chatRootId,
         qs: req.query,
       }));
     } catch (err) {
@@ -237,7 +244,6 @@ export function buildTreeosHtmlRoutes() {
         const existing = await Node.findOne({
           parent: { $ne: DELETED },
           [`metadata.${appKey}.initialized`]: true,
-          [`metadata.${appKey}.setupPhase`]: "base",
         }).select("_id").lean();
         if (existing) {
           return res.redirect(`/api/v1/root/${existing._id}/${appDef.dashboardPath}${qs}${msgParam}`);

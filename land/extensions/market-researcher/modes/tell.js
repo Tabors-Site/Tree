@@ -1,3 +1,4 @@
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { findResearchNodes, getSectors, getRecentFindings } from "../core.js";
 
 export default {
@@ -24,10 +25,11 @@ export default {
     "browser-click",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const nodes = rootId ? await findResearchNodes(rootId) : null;
-    const sectors = rootId ? await getSectors(rootId) : [];
-    const findings = rootId ? await getRecentFindings(rootId, 10) : [];
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const resRoot = await findExtensionRoot(currentNodeId || rootId, "market-researcher") || rootId;
+    const nodes = resRoot ? await findResearchNodes(resRoot) : null;
+    const sectors = resRoot ? await getSectors(resRoot) : [];
+    const findings = resRoot ? await getRecentFindings(resRoot, 10) : [];
 
     const sectorList = sectors.length > 0
       ? sectors.map(s => `- ${s.name}`).join("\n")

@@ -5,6 +5,7 @@
  * Different coaching style per modality. Reads program from tree state.
  */
 
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { getExerciseState, getProfile } from "../core.js";
 
 export default {
@@ -23,9 +24,10 @@ export default {
     "fitness-adopt-exercise",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const state = await getExerciseState(rootId);
-    const profile = await getProfile(rootId);
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const fitRoot = await findExtensionRoot(currentNodeId || rootId, "fitness") || rootId;
+    const state = await getExerciseState(fitRoot);
+    const profile = await getProfile(fitRoot);
 
     const exerciseSummary = state ? Object.entries(state.groups).map(([group, data]) => {
       const exs = data.exercises.map(e => {
@@ -44,14 +46,22 @@ export default {
       ? `\nUNADOPTED NODES (new children without fitness tracking):\n${unadopted.map(u => `- "${u.name}" (id: ${u.id})`).join("\n")}\nIf the user wants to track these, use fitness-adopt-exercise to set them up. Ask what type of exercise and how to track it.`
       : "";
 
-    return `You are ${username}'s training partner. Walk them through today's workout.
+    const hasExercises = state && Object.values(state.groups).some(g => g.exercises?.length > 0);
 
-CURRENT STATE:
+    return `You are ${username}'s training partner.
+
+${hasExercises ? "STATUS: Program configured. Coach mode." : "STATUS: No exercises configured. Help them build their program first."}
+
+CURRENT PROGRAM:
 ${exerciseSummary}${unadoptedBlock}
 
 Profile: ${profile?.sessionsPerWeek || "?"} days/week, ${profile?.weightUnit || "lb"}, ${profile?.distanceUnit || "miles"}
 
-GUIDED WORKOUT (the main job):
+${!hasExercises ? `SETUP (no program yet):
+Ask what they train (gym/running/bodyweight/mix), how many days per week, preferred units.
+Then help them add exercises to build their program.
+
+` : ""}GUIDED WORKOUT (the main job when program exists):
 Walk through exercises one at a time, set by set.
 
 GYM EXERCISES:

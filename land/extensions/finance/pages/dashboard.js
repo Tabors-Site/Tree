@@ -77,7 +77,7 @@ export function renderFinanceDashboard({ rootId, rootName, summary, recentTransa
       title: "Accounts",
       items: accounts.map(a => ({
         text: `${a.name} (${a.accountType})`,
-        detail: `$${a.balance.toLocaleString()}`,
+        detail: [`$${a.balance.toLocaleString()}`],
       })),
     });
   }

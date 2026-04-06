@@ -5,6 +5,7 @@
  * The handler sends raw messages. The AI decides what to do.
  */
 
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { getActiveTopics, getQueue, getProfile, getGaps } from "../core.js";
 
 export default {
@@ -24,11 +25,12 @@ export default {
     "get-tree-context",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const topics = await getActiveTopics(rootId);
-    const queue = await getQueue(rootId);
-    const profile = await getProfile(rootId);
-    const gaps = await getGaps(rootId);
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const studyRoot = await findExtensionRoot(currentNodeId || rootId, "study") || rootId;
+    const topics = await getActiveTopics(studyRoot);
+    const queue = await getQueue(studyRoot);
+    const profile = await getProfile(studyRoot);
+    const gaps = await getGaps(studyRoot);
 
     // Current topic: most recently studied
     let currentTopic = null;

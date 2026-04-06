@@ -1,3 +1,4 @@
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { findResearchNodes, getSectors, getRecentFindings, getWatchlist } from "../core.js";
 
 export default {
@@ -18,11 +19,12 @@ export default {
     "get-searched-notes-by-user",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const nodes = rootId ? await findResearchNodes(rootId) : null;
-    const sectors = rootId ? await getSectors(rootId) : [];
-    const findings = rootId ? await getRecentFindings(rootId, 20) : [];
-    const watchlist = rootId ? await getWatchlist(rootId) : [];
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const resRoot = await findExtensionRoot(currentNodeId || rootId, "market-researcher") || rootId;
+    const nodes = resRoot ? await findResearchNodes(resRoot) : null;
+    const sectors = resRoot ? await getSectors(resRoot) : [];
+    const findings = resRoot ? await getRecentFindings(resRoot, 20) : [];
+    const watchlist = resRoot ? await getWatchlist(resRoot) : [];
 
     const sectorList = sectors.length > 0
       ? sectors.map(s => `- ${s.name}`).join("\n")

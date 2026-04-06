@@ -1,21 +1,13 @@
 /**
  * Study Handler
  *
- * KB-style. Route by simplest signal. Let the mode prompt carry intelligence.
- * Explicit commands are mechanical (no LLM). Everything else goes to session.
- * Does NOT call runChat. The orchestrator executes on its own session.
- *
- * Returns { mode, message?, answer?, setup? }
- *   - mode: which mode the orchestrator should switch to
- *   - message: override message for the AI (optional)
- *   - answer: direct response, skip AI call (optional)
- *   - setup: true if this is a first-time scaffold
+ * Only does data work: mechanical commands (switch, remove, add, deactivate).
+ * Returns { answer } for commands that were executed.
+ * Returns null for everything else (AI handles it).
  */
 
 import { createNote } from "../../seed/tree/notes.js";
 import {
-  isInitialized,
-  getSetupPhase,
   findStudyNodes,
   getActiveTopics,
   getQueue,
@@ -24,37 +16,10 @@ import {
   deactivateTopic,
   removeFromQueue,
 } from "./core.js";
-import { scaffold } from "./setup.js";
 
 export async function handleMessage(message, { userId, username, rootId, targetNodeId }) {
   const studyRoot = targetNodeId || rootId;
-
-  // ── First use: scaffold if this is the extension's own node (not tree root) ──
-  const initialized = await isInitialized(studyRoot);
-  if (!initialized) {
-    if (String(studyRoot) !== String(rootId)) {
-      await scaffold(studyRoot, userId);
-    }
-    return { mode: "tree:study-plan", setup: true };
-  }
-
-  // ── Auto-complete setup if structural nodes exist ──
-  const phase = await getSetupPhase(studyRoot);
-  if (phase === "base") {
-    const studyNodes = await findStudyNodes(studyRoot);
-    if (studyNodes && Object.keys(studyNodes).length > 0) {
-      const { completeSetup } = await import("./setup.js");
-      await completeSetup(studyRoot);
-    }
-  }
-
-  // ── "be" / "begin" command ──
   const lower = message.trim().toLowerCase();
-  if (lower === "be" || lower === "begin") {
-    return { mode: "tree:study-coach" };
-  }
-
-  // ── Explicit commands: mechanical, no LLM ──
 
   // switch / activate <topic>
   if (/^(switch|activate)\b/i.test(lower)) {
@@ -108,11 +73,6 @@ export async function handleMessage(message, { userId, username, rootId, targetN
     }
   }
 
-  // ── Plan / curriculum / progress / review ──
-  if (/^(plan|curriculum|progress|status|review|gaps)\b/i.test(lower)) {
-    return { mode: "tree:study-plan" };
-  }
-
-  // ── Everything else: session mode ──
-  return { mode: "tree:study-coach" };
+  // Not a command. Let the AI handle it.
+  return null;
 }

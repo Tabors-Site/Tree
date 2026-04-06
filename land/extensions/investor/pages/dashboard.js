@@ -72,7 +72,7 @@ export function renderInvestorDashboard({ rootId, rootName, summary, watchlist, 
           const gs = h.gain >= 0 ? "+" : "";
           return {
             text: `${h.ticker} . ${h.shares} ${h.assetType === "crypto" ? "units" : "shares"} @ $${h.entryPrice}`,
-            detail: `$${h.value.toFixed(2)} (${gs}$${h.gain.toFixed(2)}, ${gs}${h.gainPercent.toFixed(1)}%)`,
+            detail: [`$${h.value.toFixed(2)}`, `${gs}$${h.gain.toFixed(2)}`, `${gs}${h.gainPercent.toFixed(1)}%`],
             sub: h.assetType,
           };
         }),

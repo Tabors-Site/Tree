@@ -624,7 +624,11 @@
       "Bash(grep -E \"name|description\" /home/tabor/github/Tree/land/extensions/*/manifest.js)",
       "Bash(wc -l /home/tabor/github/Tree/land/extensions/*/index.js)",
       "Bash(MONGODB_URI=mongodb://localhost:27017 node --input-type=module -e \":*)",
-      "Bash(find land/extensions/finance land/extensions/investor land/extensions/market-researcher -name \"*.js\" -exec sed -i 's/set-node-value/edit-node-value/g; s/inc-node-value/edit-node-value/g' {} +)"
+      "Bash(find land/extensions/finance land/extensions/investor land/extensions/market-researcher -name \"*.js\" -exec sed -i 's/set-node-value/edit-node-value/g; s/inc-node-value/edit-node-value/g' {} +)",
+      "Bash(sed -i '/setupPhase: \"complete\",$/d' land/extensions/food/core.js land/extensions/fitness/setup.js land/extensions/recovery/core.js land/extensions/study/setup.js land/extensions/kb/core.js land/extensions/relationships/core.js land/extensions/finance/core.js land/extensions/investor/core.js land/extensions/market-researcher/core.js)",
+      "Bash(sed -i 's/{ ...existing, setupPhase: \"complete\" }/{ ...existing }/g' land/extensions/food/core.js land/extensions/fitness/setup.js land/extensions/recovery/core.js land/extensions/study/setup.js land/extensions/kb/core.js land/extensions/relationships/core.js land/extensions/finance/core.js land/extensions/investor/core.js land/extensions/market-researcher/core.js)",
+      "Bash(grep -rn \"async buildSystemPrompt.*rootId\" land/extensions/fitness/modes/*.js land/extensions/recovery/modes/*.js land/extensions/study/modes/*.js land/extensions/kb/modes/*.js land/extensions/relationships/modes/*.js land/extensions/finance/modes/*.js land/extensions/investor/modes/*.js land/extensions/market-researcher/modes/*.js)",
+      "Bash(grep -rn \"await.*rootId\\)\" land/extensions/fitness/modes/*.js land/extensions/recovery/modes/log.js land/extensions/recovery/modes/plan.js land/extensions/study/modes/*.js land/extensions/kb/modes/ask.js land/extensions/kb/modes/tell.js land/extensions/relationships/modes/*.js land/extensions/finance/modes/*.js land/extensions/investor/modes/*.js land/extensions/market-researcher/modes/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

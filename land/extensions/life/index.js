@@ -21,13 +21,21 @@ export async function init(core) {
   core.hooks.register("afterRegister", async ({ userId }) => {
     try {
       const existing = await findLifeRoot(userId);
-      if (!existing) await scaffoldRoot(userId);
+      if (!existing) {
+        // Scaffold the full Life tree with all available domains
+        const domains = getAvailableDomains();
+        if (domains.length > 0) {
+          await scaffold({ selections: domains, singleTree: true, userId });
+        } else {
+          await scaffoldRoot(userId);
+        }
+      }
     } catch (err) {
-      log.warn("Life", `Failed to scaffold Life root on register: ${err.message}`);
+      log.warn("Life", `Failed to scaffold Life tree on register: ${err.message}`);
     }
   }, "life");
 
-  log.info("Life", "Loaded. Life root scaffolds on registration. Domains scaffold on first use.");
+  log.info("Life", "Loaded. Full Life tree scaffolds on registration.");
 
   return {
     router,

@@ -8,6 +8,7 @@
  * Handles gym, running, bodyweight, and mixed workouts.
  */
 
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { findFitnessNodes, buildExerciseListForPrompt } from "../core.js";
 
 export default {
@@ -19,9 +20,10 @@ export default {
   preserveContextOnLoop: false,
   toolNames: [],
 
-  async buildSystemPrompt({ rootId }) {
+  async buildSystemPrompt({ rootId, currentNodeId }) {
+    const fitRoot = await findExtensionRoot(currentNodeId || rootId, "fitness") || rootId;
     // Read the tree to know what exercises exist
-    const nodes = await findFitnessNodes(rootId);
+    const nodes = await findFitnessNodes(fitRoot);
     const exerciseList = buildExerciseListForPrompt(nodes);
 
     return `You are a multi-modality workout parser. Detect the workout type and parse into structured JSON.

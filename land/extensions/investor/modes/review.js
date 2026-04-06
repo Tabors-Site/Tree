@@ -1,3 +1,4 @@
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { getPortfolioSummary, getWatchlist } from "../core.js";
 
 export default {
@@ -18,9 +19,10 @@ export default {
     "get-searched-notes-by-user",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const summary = rootId ? await getPortfolioSummary(rootId) : null;
-    const watchlist = rootId ? await getWatchlist(rootId) : [];
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const invRoot = await findExtensionRoot(currentNodeId || rootId, "investor") || rootId;
+    const summary = invRoot ? await getPortfolioSummary(invRoot) : null;
+    const watchlist = invRoot ? await getWatchlist(invRoot) : [];
 
     const holdingList = summary?.holdings?.length > 0
       ? summary.holdings

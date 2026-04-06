@@ -1,3 +1,4 @@
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { findRelNodes, getPeople } from "../core.js";
 
 export default {
@@ -22,9 +23,10 @@ export default {
     "get-searched-notes-by-user",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const nodes = rootId ? await findRelNodes(rootId) : null;
-    const people = rootId ? await getPeople(rootId) : [];
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const relRoot = await findExtensionRoot(currentNodeId || rootId, "relationships") || rootId;
+    const nodes = relRoot ? await findRelNodes(relRoot) : null;
+    const people = relRoot ? await getPeople(relRoot) : [];
 
     const peopleList = people.length > 0
       ? people.map(p => {

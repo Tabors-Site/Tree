@@ -1,3 +1,4 @@
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { getMonthSummary, getRecentTransactions } from "../core.js";
 
 export default {
@@ -18,9 +19,10 @@ export default {
     "get-searched-notes-by-user",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const summary = rootId ? await getMonthSummary(rootId) : null;
-    const recent = rootId ? await getRecentTransactions(rootId, 20) : [];
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const finRoot = await findExtensionRoot(currentNodeId || rootId, "finance") || rootId;
+    const summary = finRoot ? await getMonthSummary(finRoot) : null;
+    const recent = finRoot ? await getRecentTransactions(finRoot, 20) : [];
 
     const accountList = summary?.accounts?.length > 0
       ? summary.accounts.map(a => `- ${a.name} (${a.accountType}): $${a.balance}`).join("\n")

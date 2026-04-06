@@ -1018,52 +1018,27 @@ export async function orchestrateTreeRequest({
     log.verbose("Tree Orchestrator",
       `  Extension route: ${classification.mode} (ext: ${extName || "?"}, behavioral: ${behavioral})`);
 
-    // ── Tier 1: handleMessage override ──
-    // Handler returns { mode, message?, answer? }. Orchestrator executes.
+    // ── Data handler: extension does pre-processing (parse food, parse workout) ──
+    // Handler returns { answer } if it claimed the message (data written, direct response).
+    // Handler returns null if the message isn't data input (orchestrator uses default mode + AI).
     if (ext?.exports?.handleMessage) {
-      emitStatus(socket, "intent", "");
       if (classification.targetNodeId) setCurrentNodeId(visitorId, classification.targetNodeId);
       try {
         const decision = await ext.exports.handleMessage(message, {
           userId, username, rootId, targetNodeId: classification.targetNodeId,
         });
-        const resolvedMode = decision?.mode || classification.mode;
-        modesUsed.push(resolvedMode);
 
-        // Direct answer (e.g. food parsing). Skip AI call.
+        // Handler claimed it: direct answer, skip AI.
         if (decision?.answer) {
           emitStatus(socket, "done", "");
           pushMemory(visitorId, message, decision.answer);
-          return { success: true, answer: decision.answer, modeKey: resolvedMode, modesUsed, rootId, targetNodeId: classification.targetNodeId };
+          modesUsed.push(decision.mode || classification.mode);
+          return { success: true, answer: decision.answer, modeKey: decision.mode || classification.mode, modesUsed, rootId, targetNodeId: classification.targetNodeId };
         }
 
-        // Handler decided mode. Orchestrator executes on its session.
-        await switchMode(visitorId, resolvedMode, {
-          username, userId, rootId,
-          currentNodeId: classification.targetNodeId || currentNodeId,
-          conversationMemory: formatMemoryContext(visitorId),
-          clearHistory: decision?.setup || false,
-        });
-
-        const aiMessage = decision?.message || message;
-        const result = await processMessage(visitorId, aiMessage, {
-          username, userId, rootId, signal, slot,
-          readOnly: behavioral === "query",
-          onToolLoopCheckpoint,
-          onToolResults(results) {
-            if (signal?.aborted) return;
-            for (const r of results) socket.emit(WS.TOOL_RESULT, r);
-          },
-        });
-
-        emitStatus(socket, "done", "");
-        const answer = result?.content || result?.answer || null;
-        if (answer) pushMemory(visitorId, message, answer);
-        return { success: true, answer, modeKey: resolvedMode, modesUsed, rootId, targetNodeId: classification.targetNodeId };
+        // Handler returned null or no answer: not data input. Fall through to mode routing.
       } catch (err) {
         log.error("Tree Orchestrator", `Extension handleMessage failed: ${err.message}`);
-        emitStatus(socket, "done", "");
-        return { success: false, answer: "Extension request failed.", modeKey: classification.mode, modesUsed, rootId };
       }
     }
 
@@ -1089,8 +1064,10 @@ export async function orchestrateTreeRequest({
         resolvedMode = find("review", "ask") || resolvedMode;
       } else if (/\b(plan|build|create|structure|organize|add|modify|remove|restructure|program|taper|schedule|adjust|set.*goal|change|curriculum)\b/.test(lower)) {
         resolvedMode = find("plan") || resolvedMode;
+      } else {
+        // Default: action mode (log/tell). This is where data gets written.
+        resolvedMode = find("log", "tell") || resolvedMode;
       }
-      // else: stays on classification.mode (modes.respond, usually :log or :tell)
     }
 
     modesUsed.push(resolvedMode);
@@ -1098,9 +1075,7 @@ export async function orchestrateTreeRequest({
 
     await switchMode(visitorId, resolvedMode, {
       username, userId, rootId,
-      currentNodeId: classification.targetNodeId || rootId,
-      conversationMemory: formatMemoryContext(visitorId),
-      clearHistory: true,
+      currentNodeId: classification.targetNodeId || currentNodeId,
     });
 
     const result = await processMessage(visitorId, message, {

@@ -31,6 +31,8 @@ router.get("/root/:rootId/finance", urlAuth, htmlOnly, async (req, res) => {
       inApp: !!req.query.inApp,
     }));
   } catch (err) {
+    const log = (await import("../../seed/log.js")).default;
+    log.error("Finance", `Dashboard error: ${err.message}`);
     sendError(res, 500, ERR.INTERNAL, "Finance dashboard failed");
   }
 });

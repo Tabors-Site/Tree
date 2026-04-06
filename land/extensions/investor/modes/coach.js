@@ -1,3 +1,4 @@
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { findInvestorNodes, getPortfolioSummary, getWatchlist } from "../core.js";
 
 export default {
@@ -22,10 +23,11 @@ export default {
     "get-searched-notes-by-user",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const summary = rootId ? await getPortfolioSummary(rootId) : null;
-    const watchlist = rootId ? await getWatchlist(rootId) : [];
-    const nodes = rootId ? await findInvestorNodes(rootId) : null;
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const invRoot = await findExtensionRoot(currentNodeId || rootId, "investor") || rootId;
+    const summary = invRoot ? await getPortfolioSummary(invRoot) : null;
+    const watchlist = invRoot ? await getWatchlist(invRoot) : [];
+    const nodes = invRoot ? await findInvestorNodes(invRoot) : null;
 
     const holdingList = summary?.holdings?.length > 0
       ? summary.holdings.map(h => {
@@ -61,7 +63,11 @@ export default {
 
     const watchlistId = nodes?.watchlist?.id;
 
-    return `You are ${username}'s investment coach. You help them think through portfolio decisions, manage risk, and stay disciplined.
+    const hasHoldings = summary?.holdings?.length > 0;
+
+    return `You are ${username}'s investment coach.
+
+${hasHoldings ? `STATUS: ${summary.holdings.length} holdings tracked.` : "STATUS: No holdings yet. Help them log their first investment."}
 
 ${totalsBlock ? `PORTFOLIO SNAPSHOT:\n${totalsBlock}\n` : ""}
 ${holdingList ? `HOLDINGS:\n${holdingList}\n` : ""}

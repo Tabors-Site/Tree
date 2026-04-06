@@ -5,6 +5,7 @@
  * "needlearn X" adds to queue. URLs trigger learn extension. Questions answered.
  */
 
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { getQueue, getActiveTopics, getStudyProgress } from "../core.js";
 
 export default {
@@ -20,9 +21,10 @@ export default {
     "navigate-tree",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const queue = await getQueue(rootId);
-    const progress = await getStudyProgress(rootId);
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const studyRoot = await findExtensionRoot(currentNodeId || rootId, "study") || rootId;
+    const queue = await getQueue(studyRoot);
+    const progress = await getStudyProgress(studyRoot);
 
     const queueStr = queue.length > 0
       ? queue.slice(0, 10).map((q, i) => `  ${i + 1}. ${q.name}${q.url ? " (URL)" : ""}${q.status === "active" ? " [active]" : ""}`).join("\n")
