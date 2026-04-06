@@ -16,9 +16,9 @@ export default {
   label: "Fitness Log",
   bigMode: "tree",
   hidden: true,
-  maxMessagesBeforeLoop: 2,
-  preserveContextOnLoop: false,
-  toolNames: [],
+  maxMessagesBeforeLoop: 4,
+  preserveContextOnLoop: true,
+  toolNames: ["fitness-log-workout"],
 
   async buildSystemPrompt({ rootId, currentNodeId }) {
     const fitRoot = await findExtensionRoot(currentNodeId || rootId, "fitness") || rootId;
@@ -88,6 +88,10 @@ PARSING RULES:
 - Default weight unit: lb. Default distance: miles. Override if user says kg or km.
 - Date defaults to today if not specified.
 - If exercise not in known list, use best standard name and mark group as "unknown".
-- Return ONLY JSON. No explanation. No markdown fences.`.trim();
+
+AFTER PARSING:
+Call fitness-log-workout ONCE with rootId ${fitRoot} and the exercises array from your parsed output.
+Include the date field. The tool handles everything: delivering to exercise nodes, recording session history, tracking PRs, and detecting progression.
+Confirm naturally using the summary returned by the tool. Do not return raw JSON to the user.`.trim();
   },
 };

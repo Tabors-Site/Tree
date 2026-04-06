@@ -17,6 +17,7 @@ export default {
   preserveContextOnLoop: true,
 
   toolNames: [
+    "fitness-log-workout",
     "navigate-tree",
     "get-tree-context",
     "create-node-note",
@@ -46,22 +47,14 @@ export default {
       ? `\nUNADOPTED NODES (new children without fitness tracking):\n${unadopted.map(u => `- "${u.name}" (id: ${u.id})`).join("\n")}\nIf the user wants to track these, use fitness-adopt-exercise to set them up. Ask what type of exercise and how to track it.`
       : "";
 
-    const hasExercises = state && Object.values(state.groups).some(g => g.exercises?.length > 0);
-
     return `You are ${username}'s training partner.
-
-${hasExercises ? "STATUS: Program configured. Coach mode." : "STATUS: No exercises configured. Help them build their program first."}
 
 CURRENT PROGRAM:
 ${exerciseSummary}${unadoptedBlock}
 
 Profile: ${profile?.sessionsPerWeek || "?"} days/week, ${profile?.weightUnit || "lb"}, ${profile?.distanceUnit || "miles"}
 
-${!hasExercises ? `SETUP (no program yet):
-Ask what they train (gym/running/bodyweight/mix), how many days per week, preferred units.
-Then help them add exercises to build their program.
-
-` : ""}GUIDED WORKOUT (the main job when program exists):
+GUIDED WORKOUT:
 Walk through exercises one at a time, set by set.
 
 GYM EXERCISES:
@@ -89,7 +82,9 @@ BODYWEIGHT:
   If all goals met: "All 20s. Time for diamond push-ups."
 
 AFTER SESSION:
-Summarize everything. Total volume for gym. Miles and pace for running. Total reps for bodyweight. Note any PRs or progression triggers.
+Call fitness-log-workout ONCE with rootId ${fitRoot} and all exercises from the session.
+The tool records everything: exercise values, session history, PRs, and progression.
+Then summarize using the tool's output. Total volume for gym. Miles and pace for running. Total reps for bodyweight. Note any PRs or progression triggers.
 
 STYLE:
 - Talk like a training partner. Short messages between sets.

@@ -669,12 +669,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       .chat-area.empty .chat-input-area { position: static; transform: none; width: 100%; max-width: 100%; margin: 0; }
     }
 
-    /* App dashboard panel (slide-out drawer from right, like notifications) */
-    .app-overlay {
-      position: fixed; inset: 0; background: rgba(0,0,0,0.4);
-      z-index: 9996; display: none;
-    }
-    .app-overlay.open { display: block; }
+    /* App dashboard panel (slide-out drawer from right) */
     .app-panel {
       position: fixed; top: 0; right: -500px; bottom: 0;
       width: 480px; max-width: 95vw;
@@ -827,7 +822,6 @@ router.get("/chat", authenticateLite, async (req, res) => {
       </div>
     </div>
 
-    <div class="app-overlay" id="appOverlay" onclick="closeAppPanel()"></div>
     <div class="app-panel" id="appPanel">
       <div class="app-panel-header">
         <span class="app-panel-title" id="appPanelTitle"></span>
@@ -1323,20 +1317,15 @@ router.get("/chat", authenticateLite, async (req, res) => {
       const rn = document.getElementById("rootName");
       if (rn) rn.textContent = meta.name;
       panel.classList.add("visible");
-      document.getElementById("appOverlay").classList.add("open");
 
     }
 
     function closeAppPanel() {
       document.getElementById("appPanel").classList.remove("visible");
-      document.getElementById("appOverlay").classList.remove("open");
       document.getElementById("appPanelFrame").src = "";
       currentAppNodeId = null;
       highlightHotbarItem(null);
-      // Navigate back to tree root and restore header
-      if (activeRootId && typeof socket !== "undefined" && socket.connected) {
-        socket.emit("urlChanged", { url: "/api/v1/root/" + activeRootId, rootId: activeRootId });
-      }
+      // Restore header to tree name
       const tree = CONFIG.trees.find(t => t.id === activeRootId);
       const rn = document.getElementById("rootName");
       if (rn && tree) rn.textContent = tree.name;

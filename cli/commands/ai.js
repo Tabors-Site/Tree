@@ -231,7 +231,10 @@ module.exports = (program) => {
       console.log(chalk.dim("Starting guided session..."));
       const api = getApi(cfg);
       try {
-        const data = await api.be(cfg.activeRootId, message);
+        const currentNode = cfg.pathStack?.length > 0
+          ? cfg.pathStack[cfg.pathStack.length - 1].id
+          : cfg.activeRootId;
+        const data = await api.be(cfg.activeRootId, message, { currentNodeId: currentNode });
         console.log(
           chalk.bold("\nTree:") + " " + (data.answer || "No response."),
         );

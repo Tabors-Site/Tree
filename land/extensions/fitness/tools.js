@@ -11,7 +11,10 @@ import {
   completeSetup, scaffoldGym, scaffoldRunning, scaffoldHome,
   saveProfile,
 } from "./setup.js";
-import { adoptExercise } from "./core.js";
+import {
+  adoptExercise, findFitnessNodes, deliverToExerciseNodes,
+  recordSessionHistory, buildWorkoutSummary, checkProgression,
+} from "./core.js";
 
 export default function getTools() {
   return [
@@ -184,6 +187,89 @@ export default function getTools() {
         try {
           await adoptExercise(nodeId, { exerciseType, unit, goals });
           return { content: [{ type: "text", text: `Adopted as ${exerciseType} exercise.${unit ? ` Unit: ${unit}.` : ""} It will now appear in workout tracking and the dashboard.` }] };
+        } catch (err) {
+          return { content: [{ type: "text", text: `Failed: ${err.message}` }] };
+        }
+      },
+    },
+    {
+      name: "fitness-log-workout",
+      description:
+        "Log a workout. Delivers data to exercise nodes, records session history, tracks PRs, " +
+        "and detects progression. Call this ONCE after parsing the workout into structured data. " +
+        "Pass the exercises array from your parsed JSON output.",
+      schema: {
+        rootId: z.string().describe("Fitness root node ID."),
+        exercises: z.array(z.object({
+          modality: z.enum(["gym", "running", "home"]).describe("Exercise modality."),
+          name: z.string().describe("Exercise name."),
+          group: z.string().optional().describe("Muscle group (gym exercises)."),
+          sets: z.array(z.object({
+            weight: z.number().optional(),
+            reps: z.number().optional(),
+            duration: z.number().optional(),
+            unit: z.string().optional(),
+          }).passthrough()).optional().describe("Sets data for gym/home exercises."),
+          distance: z.number().optional().describe("Distance for running."),
+          distanceUnit: z.string().optional().describe("Distance unit (miles/km)."),
+          duration: z.number().optional().describe("Duration in seconds for running or holds."),
+          pace: z.number().optional().describe("Pace in seconds per unit for running."),
+          type: z.string().optional().describe("Run type: easy, tempo, intervals, race."),
+          variation: z.string().optional().describe("Bodyweight variation name."),
+        }).passthrough()).describe("Parsed exercises from workout input."),
+        date: z.string().optional().describe("Workout date (YYYY-MM-DD). Defaults to today."),
+        userId: z.string().describe("Injected by server. Ignore."),
+        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      handler: async (args) => {
+        try {
+          const { rootId, exercises, date, userId } = args;
+          const fitnessNodes = await findFitnessNodes(rootId);
+          if (!fitnessNodes) return { content: [{ type: "text", text: "Fitness tree not found." }] };
+
+          const parsed = {
+            exercises,
+            date: date || new Date().toISOString().slice(0, 10),
+          };
+
+          // Deliver to exercise nodes (updates values, history, PRs)
+          const delivered = await deliverToExerciseNodes(fitnessNodes, parsed);
+
+          // Record session to History node
+          const historyNodeId = fitnessNodes.history?.id;
+          const record = await recordSessionHistory(historyNodeId, parsed, delivered, userId);
+
+          // Build human-readable summary
+          const { lines, summary } = buildWorkoutSummary(parsed, delivered);
+
+          // Check progression on each delivered exercise
+          const progressionAlerts = [];
+          if (delivered?.length > 0) {
+            const Node = (await import("../../seed/models/node.js")).default;
+            for (const d of delivered) {
+              if (!d.nodeId) continue;
+              try {
+                const node = await Node.findById(d.nodeId).select("metadata").lean();
+                if (!node) continue;
+                const prog = checkProgression(node);
+                if (prog?.allGoalsMet && prog.suggestion) {
+                  progressionAlerts.push(`${d.exercise.name}: All goals met. ${prog.suggestion}`);
+                }
+              } catch {}
+            }
+          }
+
+          const parts = [summary];
+          if (progressionAlerts.length > 0) {
+            parts.push("PROGRESSION: " + progressionAlerts.join(". "));
+          }
+          if (delivered?.length === 0) {
+            parts.push("No matching exercises found in tree. Exercises may need to be added via setup first.");
+          }
+
+          return { content: [{ type: "text", text: parts.join("\n") }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Failed: ${err.message}` }] };
         }

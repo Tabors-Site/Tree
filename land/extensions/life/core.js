@@ -191,7 +191,7 @@ export async function scaffold({ selections, singleTree, userId, username }) {
 
           // Set modes.respond so the routing index finds this node
           const DOMAIN_MODES = {
-            food: "tree:food-coach", fitness: "tree:fitness-coach",
+            food: "tree:food-coach", fitness: "tree:fitness-plan",
             recovery: "tree:recovery-plan", study: "tree:study-coach", kb: "tree:kb-tell",
             relationships: "tree:relationships-coach",
             finance: "tree:finance-coach",
@@ -297,7 +297,7 @@ export async function addDomain({ rootId, domain, userId }) {
     await ext.exports.scaffold(domainId, userId);
 
     const DOMAIN_MODES = {
-      food: "tree:food-coach", fitness: "tree:fitness-coach",
+      food: "tree:food-coach", fitness: "tree:fitness-plan",
       recovery: "tree:recovery-plan", study: "tree:study-coach", kb: "tree:kb-tell",
     };
     if (DOMAIN_MODES[domain]) {

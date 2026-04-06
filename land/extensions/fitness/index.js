@@ -73,8 +73,12 @@ export async function init(core) {
           ? root.metadata.get("modes")
           : root.metadata?.modes;
         if (!modes?.respond) {
-          await core.modes.setNodeMode(root._id, "respond", "tree:fitness-log");
-          log.verbose("Fitness", `Self-healed mode override on ${String(root._id).slice(0, 8)}...`);
+          const fitMeta = root.metadata instanceof Map
+            ? root.metadata.get("fitness")
+            : root.metadata?.fitness;
+          const mode = fitMeta?.setupPhase === "complete" ? "tree:fitness-coach" : "tree:fitness-plan";
+          await core.modes.setNodeMode(root._id, "respond", mode);
+          log.verbose("Fitness", `Self-healed mode override on ${String(root._id).slice(0, 8)} -> ${mode}`);
         }
       }
     } catch {}
@@ -265,12 +269,13 @@ export async function init(core) {
     router,
     tools,
     modeTools: [
+      { modeKey: "tree:fitness-log", toolNames: ["fitness-log-workout"] },
       { modeKey: "tree:fitness-plan", toolNames: [
         "fitness-add-modality", "fitness-add-group", "fitness-add-exercise",
         "fitness-remove-exercise", "fitness-adopt-exercise", "fitness-complete-setup", "fitness-save-profile",
       ]},
       { modeKey: "tree:fitness-coach", toolNames: [
-        "fitness-add-exercise", "fitness-adopt-exercise", "fitness-save-profile",
+        "fitness-log-workout", "fitness-adopt-exercise",
       ]},
       { modeKey: "tree:edit", toolNames: ["fitness-adopt-exercise", "fitness-add-exercise", "fitness-add-group"] },
     ],

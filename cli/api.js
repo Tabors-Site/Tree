@@ -399,7 +399,11 @@ class TreeAPI {
   }
   place(rootId, message, opts) { return this.post(`/root/${rootId}/place`, { message }, opts); }
   query(rootId, message, opts) { return this.post(`/root/${rootId}/query`, { message }, opts); }
-  be(rootId, message, opts) { return this.post(`/root/${rootId}/be`, { message }, opts); }
+  be(rootId, message, opts) {
+    const body = { message };
+    if (opts?.currentNodeId) body.currentNodeId = opts.currentNodeId;
+    return this.post(`/root/${rootId}/be`, body, opts);
+  }
 
   // ── Raw Ideas ─────────────────────────────────────────────────────────
   listRawIdeas(userId, opts = {}) {

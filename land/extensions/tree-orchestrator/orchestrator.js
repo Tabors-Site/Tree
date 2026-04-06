@@ -576,9 +576,43 @@ export async function orchestrateTreeRequest({
 
       if (!isDeparture) {
         // Stay at this extension node. No tree summary needed.
+        // Apply suffix convention here so position hold resolves the right mode
+        // (e.g. food-log for "banana", food-review for "how am i doing")
+        // instead of always using the node's modes.respond (food-coach).
+        let resolvedMode = posModes.respond;
+        try {
+          const { getModeOwner, getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
+          const holdExt = getModeOwner(posModes.respond);
+          if (holdExt) {
+            const extModes = getModesOwnedBy(holdExt);
+            if (extModes.length > 1) {
+              const find = (...suffixes) => {
+                for (const s of suffixes) {
+                  const m = extModes.find(k => k.endsWith(`-${s}`));
+                  if (m) return m;
+                }
+                return null;
+              };
+              const lower = message.toLowerCase().trim();
+              if (behavioral === "be" || lower === "be") {
+                resolvedMode = find("coach") || resolvedMode;
+              } else if (/\b(how am i|progress|status|review|daily|stats|streak|history|so far|pattern|doing)\b/.test(lower)) {
+                resolvedMode = find("review", "ask") || resolvedMode;
+              } else if (/\b(plan|build|create|structure|organize|add|modify|remove|restructure|program|taper|schedule|adjust|set.*goal|change|curriculum)\b/.test(lower)) {
+                resolvedMode = find("plan") || resolvedMode;
+              } else if (posModes.respond.endsWith("-plan") || posModes.respond.endsWith("-coach")) {
+                // Node is explicitly set to plan or coach mode (e.g. during setup).
+                // Don't override with log/tell on generic messages. Respect the node's intent.
+              } else {
+                resolvedMode = find("log", "tell") || resolvedMode;
+              }
+            }
+          }
+        } catch {}
+
         classification = {
           intent: "extension",
-          mode: posModes.respond,
+          mode: resolvedMode,
           targetNodeId: String(currentNodeId),
           confidence: 0.95,
           summary: message.slice(0, 100),
@@ -1064,6 +1098,9 @@ export async function orchestrateTreeRequest({
         resolvedMode = find("review", "ask") || resolvedMode;
       } else if (/\b(plan|build|create|structure|organize|add|modify|remove|restructure|program|taper|schedule|adjust|set.*goal|change|curriculum)\b/.test(lower)) {
         resolvedMode = find("plan") || resolvedMode;
+      } else if (classification.mode.endsWith("-plan") || classification.mode.endsWith("-coach")) {
+        // Classification already specifies plan or coach (e.g. setup phase, guided session).
+        // Don't override with log/tell on generic messages. Respect the intent.
       } else {
         // Default: action mode (log/tell). This is where data gets written.
         resolvedMode = find("log", "tell") || resolvedMode;

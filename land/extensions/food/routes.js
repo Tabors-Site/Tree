@@ -4,7 +4,7 @@ import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import log from "../../seed/log.js";
 import NodeModel from "../../seed/models/node.js";
 import UserModel from "../../seed/models/user.js";
-import { isInitialized, findFoodNodes, getDailyPicture } from "./core.js";
+import { isInitialized, findFoodNodes, getDailyPicture, getHistory } from "./core.js";
 import { handleMessage } from "./handler.js";
 
 let Node = NodeModel;
@@ -32,12 +32,14 @@ router.get("/root/:rootId/food", async (req, res, next) => {
       const root = await Node.findById(rootId).select("name metadata").lean();
       if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Not found");
       let picture = null;
+      let weeklySummaries = [];
       if (await isInitialized(rootId)) {
-        const { getDailyPicture } = await import("./core.js");
+        const { getDailyPicture, getHistory } = await import("./core.js");
         picture = await getDailyPicture(rootId);
+        weeklySummaries = await getHistory(rootId, { limit: 8, type: "weekly" });
       }
       const { renderFoodDashboard } = await import("./pages/dashboard.js");
-      res.send(renderFoodDashboard({ rootId, rootName: root.name, picture, token: req.query.token || null, userId: req.userId, inApp: !!req.query.inApp }));
+      res.send(renderFoodDashboard({ rootId, rootName: root.name, picture, weeklySummaries, token: req.query.token || null, userId: req.userId, inApp: !!req.query.inApp }));
     });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, "Dashboard failed");
@@ -121,6 +123,37 @@ router.get("/root/:rootId/food/week", authenticate, async (req, res) => {
       .filter(Boolean);
 
     sendOk(res, { days, count: days.length });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * GET /root/:rootId/food/history
+ * Long-range history. ?days=90 (default 90), ?type=daily|weekly (optional filter).
+ */
+router.get("/root/:rootId/food/history", authenticate, async (req, res) => {
+  try {
+    const days = Math.min(Number(req.query.days) || 90, 365);
+    const type = ["daily", "weekly"].includes(req.query.type) ? req.query.type : null;
+    const entries = await getHistory(req.params.rootId, { limit: days, type });
+    if (!entries) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Food tree not found");
+    sendOk(res, { entries, count: entries.length });
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+/**
+ * GET /root/:rootId/food/weekly
+ * Weekly summary notes only.
+ */
+router.get("/root/:rootId/food/weekly", authenticate, async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 12, 52);
+    const entries = await getHistory(req.params.rootId, { limit, type: "weekly" });
+    if (!entries) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Food tree not found");
+    sendOk(res, { weeks: entries, count: entries.length });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
   }

@@ -11,6 +11,7 @@ import log from "../../seed/log.js";
 import logMode from "./modes/log.js";
 import reviewMode from "./modes/review.js";
 import coachMode from "./modes/coach.js";
+import dailyMode from "./modes/daily.js";
 import {
   configure,
   scaffold,
@@ -20,6 +21,7 @@ import {
   handleMacroCascade,
   checkDailyReset,
   getDailyPicture,
+  getHistory,
 } from "./core.js";
 import { handleMessage } from "./handler.js";
 
@@ -50,11 +52,13 @@ export async function init(core) {
   core.modes.registerMode("tree:food-log", logMode, "food");
   core.modes.registerMode("tree:food-review", reviewMode, "food");
   core.modes.registerMode("tree:food-coach", coachMode, "food");
+  core.modes.registerMode("tree:food-daily", dailyMode, "food");
 
   if (core.llm?.registerModeAssignment) {
     core.llm.registerModeAssignment("tree:food-log", "foodLog");
     core.llm.registerModeAssignment("tree:food-review", "foodReview");
     core.llm.registerModeAssignment("tree:food-coach", "foodCoach");
+    core.llm.registerModeAssignment("tree:food-daily", "foodDaily");
   }
 
   // ── onCascade: macro accumulation ──
@@ -318,6 +322,7 @@ export async function init(core) {
     router,
     tools,
     modeTools: [
+      { modeKey: "tree:food-log", toolNames: ["food-log-entry"] },
       { modeKey: "tree:food-coach", toolNames: ["food-save-profile", "food-adopt-node"] },
       { modeKey: "tree:edit", toolNames: ["food-adopt-node"] },
     ],
@@ -326,6 +331,7 @@ export async function init(core) {
       isInitialized,
       findFoodNodes,
       getDailyPicture,
+      getHistory,
       handleMessage,
     },
     jobs: [

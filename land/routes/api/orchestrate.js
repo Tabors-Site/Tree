@@ -527,7 +527,7 @@ router.get("/root/:rootId/query", authenticateOptional, handleQuery);
 
 router.post("/root/:rootId/be", authenticate, async (req, res) => {
   const { rootId } = req.params;
-  const { message } = req.body;
+  const { message, currentNodeId } = req.body;
 
   if (!validateMessage(message, res)) return;
   if (!(await checkTreeAccess(rootId, req.userId, res))) return;
@@ -540,6 +540,7 @@ router.post("/root/:rootId/be", authenticate, async (req, res) => {
     userId: req.userId,
     username: req.username,
     sessionType: SESSION_TYPES.API_TREE_CHAT,
+    currentNodeId: currentNodeId || null,
   }, res);
 });
 

@@ -17,12 +17,10 @@ export default {
   preserveContextOnLoop: true,
 
   toolNames: [
+    "food-log-entry",
     "navigate-tree",
     "get-tree-context",
     "get-node-notes",
-    "create-node-note",
-    "edit-node-value",
-    "edit-node-goal",
     "food-save-profile",
     "food-adopt-node",
   ],
@@ -87,9 +85,9 @@ Ask their daily calorie target, macro goals, and dietary restrictions.
 Use food-save-profile with rootId ${foodRootId} to save goals.
 ` : ""}WHEN THE USER TELLS YOU WHAT THEY ATE:
 1. Estimate macros for the food items (use common knowledge for portions).
-2. Write a note to Log (${logId || "find it"}) with the food entry.
-3. Update each metric node using edit-node-value: key "today", value = current + new amount.
-4. Respond naturally: "Logged: chicken and rice. Protein: 65/200g, Carbs: 90/300g."
+2. Call food-log-entry ONCE with rootId ${foodRootId}, the items array, totals, and a summary.
+   The tool handles everything: writes to Log, updates all metrics, places in the right meal slot.
+3. Confirm naturally using the running totals returned by the tool.
 
 WHEN THE USER ASKS QUESTIONS:
 Respond conversationally. You know their daily totals, goals, and what they've eaten.
@@ -99,6 +97,7 @@ RULES:
 - Use actual numbers from the metrics above. Don't make up totals.
 - For food estimates: egg = 6p/0c/5f/70cal, chicken 4oz = 35p/0c/4f/185cal, rice 1cup = 4p/45c/0f/200cal.
 - Never expose node IDs or metadata to the user.
-- If the message isn't about food, respond conversationally anyway. You live here.`.trim();
+- If the message isn't about food, respond conversationally anyway. You live here.
+- ALWAYS use food-log-entry for logging. Never manually call edit-node-value or create-node-note for food entries.`.trim();
   },
 };
