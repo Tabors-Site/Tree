@@ -1,49 +1,17 @@
-import log from "../../seed/log.js";
-import { sendOk, sendError, ERR, ProtocolError, sendCaughtError } from "../../seed/protocol.js";
-import { hooks } from "../../seed/hooks.js";
-// LLM orchestration routes: tree chat/place/query, raw idea chat/place, understanding.
+// LLM orchestration routes: tree chat/place/query/be, home chat.
+// All routes are thin wrappers around runOrchestration() in seed/llm/conversation.js.
+// They handle validation, auth, and translating the result into HTTP responses.
 
+import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import express from "express";
-import jwt from "jsonwebtoken";
-
-// .env loaded by boot.js before any imports.
-if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
-const JWT_SECRET = process.env.JWT_SECRET;
 
 import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
-import { getExtension } from "../../extensions/loader.js";
 import { createCanopyLlmProxyClient } from "../../canopy/llmProxy.js";
-// orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
-import { getOrchestrator } from "../../seed/orchestrators/registry.js";
-import {
-  setRootId,
-  getClientForUser,
-  clearSession,
-  userHasLlm,
-} from "../../seed/llm/conversation.js";
-import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../../seed/ws/mcp.js";
-import {
-  startChat,
-  finalizeChat,
-  setChatContext,
-  clearChatContext,
-} from "../../seed/llm/chatTracker.js";
-import { enqueue } from "../../seed/ws/requestQueue.js";
-import {
-  createSession,
-  endSession,
-  getSessionsForUser,
-  setSessionAbort,
-  clearSessionAbort,
-  SESSION_TYPES,
-  registerSessionType,
-} from "../../seed/ws/sessionRegistry.js";
+import { userHasLlm } from "../../seed/llm/conversation.js";
+import { registerSessionType } from "../../seed/ws/sessionRegistry.js";
 import User from "../../seed/models/user.js";
 import Node from "../../seed/models/node.js";
 import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
-import { nullSocket } from "../../seed/orchestrators/helpers.js";
-
-import { getLandConfigValue } from "../../seed/landConfig.js";
 
 // Register API transport session types
 registerSessionType("API_TREE_CHAT", "api-tree-chat");
@@ -51,236 +19,6 @@ registerSessionType("API_TREE_PLACE", "api-tree-place");
 registerSessionType("API_TREE_QUERY", "api-tree-query");
 
 const router = express.Router();
-const DEFAULT_TIMEOUT_MS = 19 * 60 * 1000;
-
-// ─────────────────────────────────────────────────────────────────────────
-// Shared orchestration runner
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Handles all the plumbing for a tree orchestration request:
- * session lifecycle, MCP connect, JWT, timeout, Chat tracking,
- * request queuing, and cleanup.
- *
- * @param {object} opts
- * @param {string} opts.mode        - "chat" | "place" | "query"
- * @param {string} opts.rootId
- * @param {string} opts.message
- * @param {string} opts.userId
- * @param {string} opts.username
- * @param {string} opts.sessionType - SESSION_TYPES value
- * @param {object} opts.orchestrateFlags - { skipRespond, forceQueryOnly }
- * @param {object} [opts.clientOverride] - override LLM client (canopy proxy)
- * @param {boolean} [opts.isPublicQuery]
- * @param {Express.Response} res
- */
-async function runTreeOrchestration(opts, res) {
-  const {
-    mode,
-    rootId,
-    message,
-    userId,
-    username,
-    sessionType,
-    orchestrateFlags = {},
-    clientOverride = null,
-    isPublicQuery = false,
-  } = opts;
-
-  const handle = opts.sessionHandle;
-  // Stable visitorId per user+tree. Matches runChat's pattern (${rootId}:${userId})
-  // so extension commands and orchestrator commands share the same session.
-  const visitorId = handle
-    ? `${rootId}:${userId}:${handle}`
-    : `${rootId}:${userId}`;
-  const scopeKey = handle
-    ? `${userId}:${rootId}:${handle}`
-    : `${userId}:${rootId}`;
-  const { sessionId } = createSession({
-    userId,
-    type: sessionType,
-    scopeKey,
-    description: `API tree ${mode} on root ${rootId}${handle ? ` [${handle}]` : ""}${isPublicQuery ? " (public)" : ""}`,
-    meta: { rootId, visitorId, isPublicQuery, sessionHandle: handle },
-  });
-  const abort = new AbortController();
-  setSessionAbort(sessionId, abort);
-
-  // Abort when client disconnects (Ctrl+C in CLI, browser close)
-  res.on("close", () => {
-    if (!res.writableEnded) abort.abort();
-  });
-
-  let timedOut = false;
-  let chat = null;
-
-  const TIMEOUT_MS = Number(getLandConfigValue("apiOrchestrationTimeout")) || DEFAULT_TIMEOUT_MS;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    log.error("API", `Tree ${mode} timed out after ${TIMEOUT_MS / 1000}s: ${visitorId}`);
-    closeMCPClient(visitorId);
-    clearChatContext(visitorId);
-    if (chat) {
-      finalizeChat({
-        chatId: chat._id,
-        content: "Error: Request timed out",
-        stopped: false,
-      }).catch(() => {});
-    }
-    if (!res.headersSent) {
-      const msg = mode === "place"
-        ? "Request timed out."
-        : "Request timed out. The tree took too long to respond.";
-      sendError(res, 500, ERR.TIMEOUT, msg);
-    }
-  }, TIMEOUT_MS);
-
-  // Chat tracking
-  try {
-    const clientInfo = clientOverride || await getClientForUser(userId);
-    chat = await startChat({
-      userId,
-      sessionId,
-      message: message.slice(0, 5000),
-      source: isPublicQuery ? "public-query" : "api",
-      modeKey: `tree:${mode}`,
-      llmProvider: {
-        isCustom: clientInfo.isCustom,
-        model: clientInfo.model,
-        connectionId: clientInfo.connectionId || null,
-      },
-      treeContext: { targetNodeId: rootId },
-    });
-    if (chat) setChatContext(visitorId, sessionId, chat._id);
-  } catch (err) {
-    log.error("API", "Failed to create Chat:", err.message);
-  }
-
-  // Enqueue to serialize per user+tree
-  await enqueue(sessionId, async () => {
-    try {
-      const internalJwt = jwt.sign(
-        { userId: userId.toString(), username, visitorId },
-        JWT_SECRET,
-        { expiresIn: "1h" },
-      );
-      await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
-      setRootId(visitorId, rootId);
-
-      // If client sent currentNodeId, update session. Clear if returned to tree root.
-      if (opts.currentNodeId) {
-        const { setCurrentNodeId, getCurrentNodeId, clearSession } = await import("../../seed/llm/conversation.js");
-        const previousNodeId = getCurrentNodeId(visitorId);
-        const backToRoot = String(opts.currentNodeId) === String(rootId)
-          && previousNodeId && String(previousNodeId) !== String(rootId);
-        if (backToRoot) {
-          // User navigated back to tree root. Fresh conversation.
-          clearSession(visitorId);
-          setRootId(visitorId, rootId);
-        }
-        setCurrentNodeId(visitorId, opts.currentNodeId);
-      }
-
-      const orchArgs = {
-        visitorId,
-        message: message.trim(),
-        socket: nullSocket,
-        username,
-        userId,
-        signal: abort.signal,
-        sessionId,
-        rootId,
-        rootChatId: chat?._id || null,
-        sourceType: `tree-${mode}`,
-        ...orchestrateFlags,
-      };
-
-      const orch = getOrchestrator("tree");
-      if (!orch) throw new ProtocolError(404, ERR.ORCHESTRATOR_NOT_FOUND, "No tree orchestrator installed.");
-      const result = await orch.handle(orchArgs);
-
-      clearTimeout(timer);
-      if (timedOut) return;
-
-      // Finalize Chat
-      if (chat) {
-        const summary = mode === "place"
-          ? (result?.stepSummaries?.length ? `Placed: ${result.stepSummaries.length} step(s)` : null)
-          : (result?.answer || result?.reason || null);
-        finalizeChat({
-          chatId: chat._id,
-          content: summary,
-          stopped: false,
-          modeKey: result?.modeKey || "tree:orchestrator",
-        }).catch((err) => log.error("API", "Chat finalize failed:", err.message));
-      }
-
-      // Format response based on mode
-      if (!result || !result.success) {
-        const msg = mode === "place"
-          ? (result?.reason || "Could not place content.")
-          : (result?.answer || "Could not process your message.");
-        const detail = mode === "place" ? { stepSummaries: result?.stepSummaries || [] } : undefined;
-        return sendError(res, 503, ERR.LLM_FAILED, msg, detail);
-      }
-
-      if (mode === "place") {
-        return sendOk(res, {
-          stepSummaries: result.stepSummaries || [],
-          targetNodeId: result.lastTargetNodeId || null,
-          targetPath: result.lastTargetPath || null,
-        });
-      }
-
-      // beforeResponse hook: extensions can modify content before client receives it
-      const hookData = {
-        content: result.answer,
-        userId,
-        rootId,
-        mode,
-      };
-      await hooks.run("beforeResponse", hookData);
-
-      return sendOk(res, {
-        answer: hookData.content,
-        targetNodeId: result.targetNodeId || null,
-      });
-    } catch (err) {
-      clearTimeout(timer);
-      if (timedOut) return;
-      log.error("API", `Tree ${mode} error:`, err.message);
-
-      if (chat) {
-        finalizeChat({
-          chatId: chat._id,
-          content: abort.signal.aborted ? null : `Error: ${err.message}`,
-          stopped: abort.signal.aborted,
-        }).catch((e) => log.error("API", "Chat error finalize failed:", e.message));
-      }
-
-      if (!res.headersSent) {
-        if (err.errCode) {
-          return sendError(res, err.httpStatus, err.errCode, err.message);
-        }
-        if (err.message?.includes("No LLM connection")) {
-          const msg = isPublicQuery
-            ? "This tree has no AI configured for public queries."
-            : err.message;
-          return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, msg);
-        }
-        if (err.message?.includes("timed out") || err.message?.includes("All LLM connections failed")) {
-          return sendError(res, 503, ERR.LLM_TIMEOUT, err.message);
-        }
-        return sendError(res, 500, ERR.INTERNAL, err.message || "Something went wrong.");
-      }
-    } finally {
-      clearTimeout(timer);
-      clearChatContext(visitorId);
-      clearSessionAbort(sessionId);
-      endSession(sessionId);
-    }
-  });
-}
 
 // ─────────────────────────────────────────────────────────────────────────
 // Shared validation helpers
@@ -331,17 +69,19 @@ router.post("/home/chat", authenticate, async (req, res) => {
   if (!validateMessage(message, res)) return;
 
   try {
-    const { runChat } = await import("../../seed/llm/conversation.js");
-    const { answer, chatId } = await runChat({
+    const { runOrchestration } = await import("../../seed/llm/conversation.js");
+    const result = await runOrchestration({
+      zone: "home",
       userId: req.userId,
       username: req.username,
       message: message.trim(),
-      mode: "home:default",
       res,
+      sourceType: "api-home",
     });
-    sendOk(res, { answer, chatId });
+    sendOk(res, { answer: result.answer, chatId: result.chatId });
   } catch (err) {
     if (!res.headersSent) {
+      if (err.errCode) return sendError(res, err.httpStatus, err.errCode, err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   }
@@ -359,16 +99,35 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
   if (!(await checkTreeAccess(rootId, req.userId, res))) return;
   if (!(await checkLlmAccess(rootId, req.userId, res))) return;
 
-  await runTreeOrchestration({
-    mode: "chat",
-    rootId,
-    message: message.trim(),
-    userId: req.userId,
-    username: req.username,
-    sessionType: SESSION_TYPES.API_TREE_CHAT,
-    sessionHandle: sessionHandle || null,
-    currentNodeId: currentNodeId || null,
-  }, res);
+  try {
+    const { runOrchestration } = await import("../../seed/llm/conversation.js");
+    const result = await runOrchestration({
+      zone: "tree",
+      userId: req.userId,
+      username: req.username,
+      message: message.trim(),
+      rootId,
+      currentNodeId: currentNodeId || null,
+      sessionHandle: sessionHandle || null,
+      res,
+      sourceType: "tree-chat",
+    });
+
+    if (!result.success) {
+      return sendError(res, 503, ERR.LLM_FAILED, result.answer || result.reason || "Could not process your message.");
+    }
+    sendOk(res, { answer: result.answer, targetNodeId: result.targetNodeId });
+  } catch (err) {
+    if (res.headersSent) return;
+    if (err.errCode) return sendError(res, err.httpStatus, err.errCode, err.message);
+    if (err.message?.includes("No LLM connection")) {
+      return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, err.message);
+    }
+    if (err.message?.includes("timed out") || err.message?.includes("All LLM connections failed")) {
+      return sendError(res, 503, ERR.LLM_TIMEOUT, err.message);
+    }
+    sendError(res, 500, ERR.INTERNAL, err.message || "Something went wrong.");
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -377,21 +136,39 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
 
 router.post("/root/:rootId/place", authenticate, async (req, res) => {
   const { rootId } = req.params;
-  const { message } = req.body;
+  const { message, currentNodeId } = req.body;
 
   if (!validateMessage(message, res)) return;
   if (!(await checkTreeAccess(rootId, req.userId, res))) return;
   if (!(await checkLlmAccess(rootId, req.userId, res))) return;
 
-  await runTreeOrchestration({
-    mode: "place",
-    rootId,
-    message: message.trim(),
-    userId: req.userId,
-    username: req.username,
-    sessionType: SESSION_TYPES.API_TREE_PLACE,
-    orchestrateFlags: { skipRespond: true },
-  }, res);
+  try {
+    const { runOrchestration } = await import("../../seed/llm/conversation.js");
+    const result = await runOrchestration({
+      zone: "tree",
+      userId: req.userId,
+      username: req.username,
+      message: message.trim(),
+      rootId,
+      currentNodeId: currentNodeId || null,
+      res,
+      sourceType: "tree-place",
+      orchestrateFlags: { skipRespond: true },
+    });
+
+    if (!result.success) {
+      return sendError(res, 503, ERR.LLM_FAILED, result.reason || "Could not place content.", { stepSummaries: result.stepSummaries || [] });
+    }
+    sendOk(res, {
+      stepSummaries: result.stepSummaries,
+      targetNodeId: result.lastTargetNodeId,
+      targetPath: result.lastTargetPath,
+    });
+  } catch (err) {
+    if (res.headersSent) return;
+    if (err.errCode) return sendError(res, err.httpStatus, err.errCode, err.message);
+    sendError(res, 500, ERR.INTERNAL, err.message || "Something went wrong.");
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -402,6 +179,7 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
 async function handleQuery(req, res) {
   const { rootId } = req.params;
   const message = req.body?.message || req.query?.message || req.query?.q;
+  const currentNodeId = req.body?.currentNodeId || req.query?.currentNodeId || null;
   const isPublicAccess = !!req.isPublicAccess;
 
   if (!validateMessage(message, res)) return;
@@ -481,17 +259,40 @@ async function handleQuery(req, res) {
     }
   }
 
-  await runTreeOrchestration({
-    mode: "query",
-    rootId,
-    message: (message || "").trim(),
-    userId: effectiveUserId,
-    username: effectiveUsername,
-    sessionType: SESSION_TYPES.API_TREE_QUERY,
-    orchestrateFlags: { forceQueryOnly: true },
-    clientOverride,
-    isPublicQuery,
-  }, res);
+  try {
+    const { runOrchestration } = await import("../../seed/llm/conversation.js");
+    const result = await runOrchestration({
+      zone: "tree",
+      userId: effectiveUserId,
+      username: effectiveUsername,
+      message: (message || "").trim(),
+      rootId,
+      currentNodeId,
+      res,
+      sourceType: "tree-query",
+      orchestrateFlags: { forceQueryOnly: true },
+      clientOverride,
+      isPublicQuery,
+    });
+
+    if (!result.success) {
+      return sendError(res, 503, ERR.LLM_FAILED, result.answer || result.reason || "Could not process your message.");
+    }
+    sendOk(res, { answer: result.answer, targetNodeId: result.targetNodeId });
+  } catch (err) {
+    if (res.headersSent) return;
+    if (err.errCode) return sendError(res, err.httpStatus, err.errCode, err.message);
+    if (err.message?.includes("No LLM connection")) {
+      const msg = isPublicAccess
+        ? "This tree has no AI configured for public queries."
+        : err.message;
+      return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, msg);
+    }
+    if (err.message?.includes("timed out")) {
+      return sendError(res, 503, ERR.LLM_TIMEOUT, err.message);
+    }
+    sendError(res, 500, ERR.INTERNAL, err.message || "Something went wrong.");
+  }
 }
 
 // Rate limit public queries: 10 per 15 min per IP
@@ -533,15 +334,29 @@ router.post("/root/:rootId/be", authenticate, async (req, res) => {
   if (!(await checkTreeAccess(rootId, req.userId, res))) return;
   if (!(await checkLlmAccess(rootId, req.userId, res))) return;
 
-  await runTreeOrchestration({
-    mode: "be",
-    rootId,
-    message: message.trim(),
-    userId: req.userId,
-    username: req.username,
-    sessionType: SESSION_TYPES.API_TREE_CHAT,
-    currentNodeId: currentNodeId || null,
-  }, res);
+  try {
+    const { runOrchestration } = await import("../../seed/llm/conversation.js");
+    const result = await runOrchestration({
+      zone: "tree",
+      userId: req.userId,
+      username: req.username,
+      message: message.trim(),
+      rootId,
+      currentNodeId: currentNodeId || null,
+      res,
+      sourceType: "tree-be",
+      orchestrateFlags: { behavioral: true },
+    });
+
+    if (!result.success) {
+      return sendError(res, 503, ERR.LLM_FAILED, result.answer || result.reason || "Could not process your message.");
+    }
+    sendOk(res, { answer: result.answer, targetNodeId: result.targetNodeId });
+  } catch (err) {
+    if (res.headersSent) return;
+    if (err.errCode) return sendError(res, err.httpStatus, err.errCode, err.message);
+    sendError(res, 500, ERR.INTERNAL, err.message || "Something went wrong.");
+  }
 });
 
 // Raw idea and understanding orchestration endpoints moved to their extensions.

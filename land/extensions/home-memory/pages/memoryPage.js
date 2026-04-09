@@ -94,7 +94,7 @@ export function renderMemoryPage({ username, memories, reminders, qs }) {
   const body = `
     <div class="container" style="max-width: 700px;">
       <div class="back-nav">
-        <a href="/dashboard${qs}" class="back-link">Home</a>
+        <a href="/dashboard${qs}" class="back-link" onclick="event.preventDefault();try{window.top.location.href='/dashboard${qs}'}catch(e){window.location.href='/dashboard${qs}'}">Home</a>
       </div>
 
       <div class="header">

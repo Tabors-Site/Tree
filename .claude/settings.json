@@ -629,7 +629,10 @@
       "Bash(sed -i 's/{ ...existing, setupPhase: \"complete\" }/{ ...existing }/g' land/extensions/food/core.js land/extensions/fitness/setup.js land/extensions/recovery/core.js land/extensions/study/setup.js land/extensions/kb/core.js land/extensions/relationships/core.js land/extensions/finance/core.js land/extensions/investor/core.js land/extensions/market-researcher/core.js)",
       "Bash(grep -rn \"async buildSystemPrompt.*rootId\" land/extensions/fitness/modes/*.js land/extensions/recovery/modes/*.js land/extensions/study/modes/*.js land/extensions/kb/modes/*.js land/extensions/relationships/modes/*.js land/extensions/finance/modes/*.js land/extensions/investor/modes/*.js land/extensions/market-researcher/modes/*.js)",
       "Bash(grep -rn \"await.*rootId\\)\" land/extensions/fitness/modes/*.js land/extensions/recovery/modes/log.js land/extensions/recovery/modes/plan.js land/extensions/study/modes/*.js land/extensions/kb/modes/ask.js land/extensions/kb/modes/tell.js land/extensions/relationships/modes/*.js land/extensions/finance/modes/*.js land/extensions/investor/modes/*.js land/extensions/market-researcher/modes/*.js)",
-      "Bash(grep -rn '\"home:\\\\|'\\\\''home:\\\\|`home:' /home/tabor/github/Tree/land --include=\"*.js\")"
+      "Bash(grep -rn '\"home:\\\\|'\\\\''home:\\\\|`home:' /home/tabor/github/Tree/land --include=\"*.js\")",
+      "Bash(wait)",
+      "Bash(pkill -f \"test-imports.mjs\")",
+      "Bash(xargs -r kill -9)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
