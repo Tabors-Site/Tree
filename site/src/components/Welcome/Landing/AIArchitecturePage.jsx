@@ -238,59 +238,183 @@ const AIArchitecturePage = () => {
       {/* ── TWO ENTRY POINTS ── */}
       <section className="lp-section">
         <div className="lp-container">
-          <h2 className="lp-section-title">Two Ways to Talk to AI</h2>
+          <h2 className="lp-section-title">Two Primitives</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            Whether you are building a chat interface or a background pipeline, the kernel
-            gives you one function call. No MCP wiring. No session management. No cleanup code.
+            Whether you are building a chat interface or a background job, the kernel gives
+            you one function call. No MCP wiring. No session management. No hook firing.
+            No cleanup code. Pick the primitive that matches your need.
           </p>
           <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
             <div className="lp-card">
               <h3 style={{color: "#4ade80"}}>runChat</h3>
               <p>
-                Single message, persistent session. For user-facing conversations in any mode.
-                Same tree keeps the same conversation. Switch trees, start fresh.
+                One LLM call, one explicit mode. For background work in extensions:
+                summarize, classify, enrich. The caller knows exactly which mode to use
+                and just wants an answer.
               </p>
               <div style={{background: "rgba(0,0,0,0.3)", borderRadius: 8, padding: "12px 16px", marginTop: 12, fontSize: "0.8rem", color: "#999", fontFamily: "monospace"}}>
                 const {"{"} answer {"}"} = await core.llm.runChat({"{"}<br/>
                 {"  "}userId, username, message,<br/>
                 {"  "}mode: "tree:structure",<br/>
-                {"  "}res, <span style={{color: "#555"}}>// auto-abort on disconnect</span><br/>
+                {"  "}llmPriority: BACKGROUND,<br/>
                 {"}"});
               </div>
             </div>
             <div className="lp-card">
-              <h3 style={{color: "#a78bfa"}}>OrchestratorRuntime</h3>
+              <h3 style={{color: "#a78bfa"}}>runOrchestration</h3>
               <p>
-                Multi-step pipeline with managed lifecycle. For background jobs: dream cycles,
-                understanding runs, cleanup passes. Each step switches mode, calls the LLM,
-                and tracks the chain.
+                Full chat flow. Classification, routing, mode chains, tool loops. For
+                anything where a real user is waiting. Used by every HTTP route, the
+                websocket handler, and gateway extensions. One function. Every entry point.
               </p>
               <div style={{background: "rgba(0,0,0,0.3)", borderRadius: 8, padding: "12px 16px", marginTop: 12, fontSize: "0.8rem", color: "#999", fontFamily: "monospace"}}>
-                const rt = new OrchestratorRuntime({"{"} ... {"}"});<br/>
-                await rt.init("Starting pipeline");<br/>
-                const {"{"} parsed {"}"} = await rt.runStep(mode, {"{"}<br/>
-                {"  "}prompt: "Analyze this tree"<br/>
-                {"}"});<br/>
-                await rt.cleanup();
+                const result = await core.llm.runOrchestration({"{"}<br/>
+                {"  "}zone: "tree", userId, message,<br/>
+                {"  "}rootId, currentNodeId,<br/>
+                {"  "}res, <span style={{color: "#555"}}>// auto-abort on disconnect</span><br/>
+                {"}"});
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── LLM FAILOVER ── */}
+      {/* ── THE PIPELINE ── */}
       <section className="lp-section lp-section-alt">
+        <div className="lp-container">
+          <h2 className="lp-section-title">One Function in the Middle</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Every chat path on the system converges on the same kernel function. CLI,
+            dashboard, gateway extensions, scheduled jobs. Different transports, different
+            wire formats, same pipeline. Three layers, blind to each other.
+          </p>
+
+          <div style={{
+            maxWidth: 760, margin: "32px auto", display: "flex", flexDirection: "column", gap: 0,
+          }}>
+            {/* Entry points */}
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 4,
+            }}>
+              <div style={{
+                background: "rgba(74, 222, 128, 0.08)",
+                border: "1px solid rgba(74, 222, 128, 0.3)",
+                borderRadius: 8, padding: "14px 16px", textAlign: "center",
+              }}>
+                <div style={{color: "#4ade80", fontWeight: 600, fontSize: "0.9rem"}}>CLI</div>
+                <div style={{color: "#888", fontSize: "0.7rem", marginTop: 4}}>HTTP</div>
+              </div>
+              <div style={{
+                background: "rgba(74, 222, 128, 0.08)",
+                border: "1px solid rgba(74, 222, 128, 0.3)",
+                borderRadius: 8, padding: "14px 16px", textAlign: "center",
+              }}>
+                <div style={{color: "#4ade80", fontWeight: 600, fontSize: "0.9rem"}}>Dashboard</div>
+                <div style={{color: "#888", fontSize: "0.7rem", marginTop: 4}}>WebSocket</div>
+              </div>
+              <div style={{
+                background: "rgba(74, 222, 128, 0.08)",
+                border: "1px solid rgba(74, 222, 128, 0.3)",
+                borderRadius: 8, padding: "14px 16px", textAlign: "center",
+              }}>
+                <div style={{color: "#4ade80", fontWeight: 600, fontSize: "0.9rem"}}>Gateway</div>
+                <div style={{color: "#888", fontSize: "0.7rem", marginTop: 4}}>Telegram, Email, etc.</div>
+              </div>
+            </div>
+
+            {/* Arrow */}
+            <div style={{textAlign: "center", color: "#444", fontSize: "1.2rem", lineHeight: 1}}>↓</div>
+
+            {/* Transport adapters */}
+            <div style={{
+              background: "rgba(255, 255, 255, 0.03)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: 8, padding: "14px 18px", textAlign: "center",
+            }}>
+              <div style={{color: "#999", fontWeight: 600, fontSize: "0.9rem"}}>
+                Thin transport adapters
+              </div>
+              <div style={{color: "#666", fontSize: "0.75rem", marginTop: 4}}>
+                validate, auth, translate to and from the wire
+              </div>
+            </div>
+
+            <div style={{textAlign: "center", color: "#444", fontSize: "1.2rem", lineHeight: 1}}>↓</div>
+
+            {/* The kernel primitive */}
+            <div style={{
+              background: "rgba(167, 139, 250, 0.1)",
+              border: "2px solid rgba(167, 139, 250, 0.5)",
+              borderRadius: 10, padding: "20px 24px", textAlign: "center",
+              boxShadow: "0 0 30px rgba(167, 139, 250, 0.15)",
+            }}>
+              <div style={{color: "#a78bfa", fontWeight: 700, fontSize: "1.1rem", letterSpacing: "0.02em"}}>
+                runOrchestration
+              </div>
+              <div style={{color: "#888", fontSize: "0.7rem", marginTop: 4, fontFamily: "monospace"}}>
+                seed/llm/conversation.js
+              </div>
+              <div style={{
+                color: "#aaa", fontSize: "0.78rem", marginTop: 12, lineHeight: 1.7,
+                display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px 16px",
+                textAlign: "left", maxWidth: 480, margin: "12px auto 0",
+              }}>
+                <div>· session identity</div>
+                <div>· abort handling</div>
+                <div>· MCP connect</div>
+                <div>· dispatch</div>
+                <div>· Chat record</div>
+                <div>· beforeResponse hook</div>
+                <div>· enqueue serialize</div>
+                <div>· cleanup</div>
+              </div>
+            </div>
+
+            <div style={{textAlign: "center", color: "#444", fontSize: "1.2rem", lineHeight: 1}}>↓</div>
+
+            {/* The orchestrator extension */}
+            <div style={{
+              background: "rgba(249, 115, 22, 0.08)",
+              border: "1px solid rgba(249, 115, 22, 0.3)",
+              borderRadius: 8, padding: "14px 18px", textAlign: "center",
+            }}>
+              <div style={{color: "#f97316", fontWeight: 600, fontSize: "0.9rem"}}>
+                Orchestrator extension for the zone
+              </div>
+              <div style={{color: "#888", fontSize: "0.75rem", marginTop: 4}}>
+                tree-orchestrator (built in), or your own. Replaceable.
+              </div>
+            </div>
+          </div>
+
+          <p className="lp-section-sub" style={{marginTop: 32, maxWidth: 720}}>
+            The kernel owns the pipeline. Extensions own the routing. Transport adapters own
+            the wire format. Each layer is blind to the others. The kernel does not know
+            fitness exists. The extension does not know HTTP exists. The transport does not
+            know modes exist. <code>beforeResponse</code> fires in exactly one place per
+            primitive, never in routes, never in handlers. The middle never changes.
+          </p>
+        </div>
+      </section>
+
+      {/* ── LLM FAILOVER ── */}
+      <section className="lp-section">
         <div className="lp-container">
           <h2 className="lp-section-title">Reliability Built In</h2>
           <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr 1fr"}}>
             <div className="lp-card lp-card-sm">
-              <h4>Position Injection</h4>
-              <p>Every prompt starts with a [Position] block. The AI always knows where it is. Extension modes cannot exclude it.</p>
+              <h4>Position and Time Injection</h4>
+              <p>Every prompt starts with a [Position] block and ends with the current time in the land's timezone. The AI always knows where it is and when it is. Extension modes cannot exclude either.</p>
               <div style={{background: "rgba(0,0,0,0.3)", borderRadius: 6, padding: "8px 12px", marginTop: 8, fontFamily: "monospace", fontSize: "0.75rem", color: "#888", lineHeight: 1.6}}>
                 [Position]<br/>
                 User: tabor<br/>
                 Tree: My Fitness (abc-123)<br/>
-                Current node: Push Day (xyz-456)
+                Current node: Push Day (xyz-456)<br/>
+                <br/>
+                {"<mode system prompt>"}<br/>
+                <br/>
+                Current time: Thursday, April 9,<br/>
+                2026, 7:23 PM PDT
               </div>
             </div>
             <div className="lp-card lp-card-sm">
@@ -318,7 +442,7 @@ const AIArchitecturePage = () => {
       </section>
 
       {/* ── HOOKS ── */}
-      <section className="lp-section">
+      <section className="lp-section lp-section-alt">
         <div className="lp-container">
           <h2 className="lp-section-title">27 Lifecycle Hooks</h2>
           <p className="lp-section-sub lp-section-sub-wide">
@@ -374,7 +498,7 @@ const AIArchitecturePage = () => {
       </section>
 
       {/* ── CLOSING ── */}
-      <section className="lp-section lp-section-alt" style={{paddingBottom: 60}}>
+      <section className="lp-section" style={{paddingBottom: 60}}>
         <div className="lp-container" style={{textAlign: "center"}}>
           <p style={{
             fontSize: "1.3rem", fontWeight: 700, color: "#e5e5e5", marginBottom: 12,

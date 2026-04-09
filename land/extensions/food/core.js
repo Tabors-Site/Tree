@@ -263,7 +263,7 @@ export function detectMealSlot(message, when) {
 /**
  * Write a meal note to the appropriate Meals/{slot} child node.
  */
-export async function writeMealNote(foodNodes, mealSlot, summary, userId) {
+export async function writeMealNote(foodNodes, mealSlot, summary, userId, ctx = {}) {
   if (!foodNodes?.mealSlots?.[mealSlot]) return;
   try {
     const { createNote } = await import("../../seed/tree/notes.js");
@@ -272,6 +272,9 @@ export async function writeMealNote(foodNodes, mealSlot, summary, userId) {
       content: summary,
       contentType: "text",
       userId,
+      wasAi: ctx.chatId != null || ctx.wasAi === true,
+      chatId: ctx.chatId ?? null,
+      sessionId: ctx.sessionId ?? null,
     });
   } catch (err) {
     log.debug("Food", `Meal note write failed: ${err.message}`);

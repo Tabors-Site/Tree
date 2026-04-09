@@ -451,9 +451,10 @@ async function resolveSuffixMode(baseMode, message, behavioral) {
     if (REVIEW_PATTERN.test(lower)) return find("review", "ask") || baseMode;
     if (PLAN_PATTERN.test(lower)) return find("plan") || baseMode;
 
-    // Don't override plan/coach with log/tell on generic messages
-    if (baseMode.endsWith("-plan") || baseMode.endsWith("-coach")) return baseMode;
-
+    // Default: route to the action receiver. The extension is the territory,
+    // the mode is the intent. Setup-locked extensions should override via
+    // their handleMessage export, not by relying on the orchestrator to
+    // respect the locked mode.
     return find("log", "tell") || baseMode;
   } catch {
     return baseMode;
@@ -1091,6 +1092,12 @@ export async function orchestrateTreeRequest({
       `  Extension route: ${classification.mode} (ext: ${extName || "?"}, behavioral: ${behavioral})`);
 
     // ── Data handler: extension pre-processing ──
+    // Extensions can return:
+    //   { answer }       - short-circuit, send this answer directly
+    //   { mode }         - force a specific mode, skip suffix routing
+    //   { answer, mode } - short-circuit with mode tagging
+    //   null/undefined   - proceed to normal suffix routing
+    let forcedMode = null;
     if (ext?.exports?.handleMessage) {
       if (classification.targetNodeId) setCurrentNodeId(visitorId, classification.targetNodeId);
       try {
@@ -1103,13 +1110,20 @@ export async function orchestrateTreeRequest({
           modesUsed.push(decision.mode || classification.mode);
           return { success: true, answer: decision.answer, modeKey: decision.mode || classification.mode, modesUsed, rootId, targetNodeId: classification.targetNodeId };
         }
+        if (decision?.mode) {
+          forcedMode = decision.mode;
+          log.verbose("Tree Orchestrator", `  handleMessage forced mode: ${forcedMode}`);
+        }
       } catch (err) {
         log.error("Tree Orchestrator", `Extension handleMessage failed: ${err.message}`);
       }
     }
 
-    // ── Suffix convention routing (ONE call) ──
-    const resolvedMode = await resolveSuffixMode(classification.mode, message, behavioral);
+    // ── Suffix convention routing (ONE call), unless extension forced a mode ──
+    const resolvedMode = forcedMode || await resolveSuffixMode(classification.mode, message, behavioral);
+    if (resolvedMode !== classification.mode) {
+      log.verbose("Tree Orchestrator", `  Suffix routed: ${classification.mode} -> ${resolvedMode}`);
+    }
 
     return runModeAndReturn(visitorId, resolvedMode, message, {
       socket, username, userId, rootId, signal, slot,

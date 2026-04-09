@@ -113,7 +113,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
   <meta charset="UTF-8" />
   <title>Chat - ${landName}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#736fe6" />
+  <meta name="theme-color" content="#0d1117" />
   <link rel="icon" href="/tree.png" />
   <link rel="canonical" href="${getLandUrl()}/chat" />
   <meta name="robots" content="noindex, nofollow" />
@@ -129,26 +129,37 @@ router.get("/chat", authenticateLite, async (req, res) => {
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --glass-rgb: 115, 111, 230;
-      --glass-alpha: 0.28;
-      --glass-blur: 22px;
-      --glass-border: rgba(255, 255, 255, 0.28);
-      --glass-border-light: rgba(255, 255, 255, 0.15);
-      --glass-highlight: rgba(255, 255, 255, 0.25);
-      --text-primary: #ffffff;
-      --text-secondary: rgba(255, 255, 255, 0.9);
-      --text-muted: rgba(255, 255, 255, 0.6);
-      --accent: #10b981;
-      --accent-glow: rgba(16, 185, 129, 0.6);
-      --error: #ef4444;
+      /* Nightfall theme */
+      --bg:           #0d1117;
+      --bg-elevated:  #161b24;
+      --bg-hover:     #1c222e;
+      --border:       #232a38;
+      --border-strong:#2f3849;
+
+      --text-primary:   #e6e8eb;
+      --text-secondary: #c4c8d0;
+      --text-muted:     #9ba1ad;
+
+      --accent:      #7dd385;
+      --accent-glow: rgba(125, 211, 133, 0.5);
+      --error:       #c97e6a;
+
+      /* Legacy aliases */
+      --glass-rgb:          22, 27, 36;
+      --glass-alpha:        1;
+      --glass-blur:         0px;
+      --glass-border:       #232a38;
+      --glass-border-light: #232a38;
+      --glass-highlight:    #2f3849;
+
       --header-height: 56px;
       --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'DM Sans', -apple-system, sans-serif; color: var(--text-primary); }
-    html { background: #736fe6; }
-    body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); background-attachment: fixed; }
+    html { background: var(--bg); }
+    body { background: var(--bg); }
 
     /* Layout */
     .container {
@@ -430,7 +441,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .notif-panel {
       position: fixed; top: 0; right: -400px; bottom: 0;
       width: 380px; max-width: 90vw;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: var(--bg-elevated);
       z-index: 9999;
       display: flex; flex-direction: column;
       transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -671,7 +682,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .app-panel {
       position: fixed; top: 0; right: -500px; bottom: 0;
       width: 480px; max-width: 95vw;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: var(--bg-elevated);
       z-index: 9997;
       display: flex; flex-direction: column;
       transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);

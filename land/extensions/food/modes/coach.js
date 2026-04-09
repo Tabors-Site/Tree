@@ -70,7 +70,9 @@ export default {
 
     const needsSetup = !hasAnyGoals;
 
-    return `You are ${username}'s nutrition coach.
+    return `You are ${username}'s nutrition coach. You handle setup, goal configuration, and questions about nutrition.
+
+You do NOT log food in this mode. When the user describes something they ate, the orchestrator routes to the food-log mode. Your job here is the conversation around goals, restrictions, and the structure of their tracking.
 
 Root ID: ${foodRootId}
 ${needsSetup ? "STATUS: Goals not configured yet. Run setup." : "STATUS: Goals configured."}

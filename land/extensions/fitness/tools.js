@@ -225,7 +225,7 @@ export default function getTools() {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       handler: async (args) => {
         try {
-          const { rootId, exercises, date, userId } = args;
+          const { rootId, exercises, date, userId, chatId, sessionId } = args;
           const fitnessNodes = await findFitnessNodes(rootId);
           if (!fitnessNodes) return { content: [{ type: "text", text: "Fitness tree not found." }] };
 
@@ -239,7 +239,7 @@ export default function getTools() {
 
           // Record session to History node
           const historyNodeId = fitnessNodes.history?.id;
-          const record = await recordSessionHistory(historyNodeId, parsed, delivered, userId);
+          const record = await recordSessionHistory(historyNodeId, parsed, delivered, userId, { chatId, sessionId });
 
           // Build human-readable summary
           const { lines, summary } = buildWorkoutSummary(parsed, delivered);

@@ -249,7 +249,7 @@ const LandingPage = () => {
               <div className="lp-term-line lp-term-output lp-term-dim">  ├─ Leg Day  (completed)</div>
               <div className="lp-term-line lp-term-output lp-term-green">  └─ Cardio</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Goals/Fitness</span> <span className="lp-term-caret">› </span>chat "add a back and biceps routine"</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Goals/Fitness</span> <span className="lp-term-caret">› </span>add a back and biceps routine</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line lp-term-output">  Created: Back and Biceps</div>
               <div className="lp-term-line lp-term-output">    Pull-ups 4x8, Rows 3x10, Curls 3x12</div>
@@ -259,7 +259,7 @@ const LandingPage = () => {
             <div className="lp-cli-feat"><strong>Navigate</strong> cd, ls, pwd, tree</div>
             <div className="lp-cli-feat"><strong>Build</strong> mkdir, rm, mv, rename, type</div>
             <div className="lp-cli-feat"><strong>Content</strong> note, notes, value, goal</div>
-            <div className="lp-cli-feat"><strong>AI</strong> chat, place, query, @sessions</div>
+            <div className="lp-cli-feat"><strong>AI</strong> just talk, @sessions</div>
             <div className="lp-cli-feat"><strong>Cascade</strong> cascade, perspective, codebook, flow, water</div>
             <div className="lp-cli-feat"><strong>Intelligence</strong> compress, contradictions, inverse, evolution, intent</div>
             <div className="lp-cli-feat"><strong>Extensions</strong> ext install, ext-allow, ext-scope</div>
@@ -477,27 +477,27 @@ const LandingPage = () => {
               <span className="lp-term-title">treeos</span>
             </div>
             <div className="lp-term-body">
-              <div className="lp-term-line lp-term-output lp-term-dim">  # A Health tree with two branches, two extensions</div>
+              <div className="lp-term-line lp-term-output lp-term-dim">  # A Life tree with Health and Finance branches</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health</span> <span className="lp-term-caret">› </span>cd Fitness</div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>ext-restrict food read</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Life/Health</span> <span className="lp-term-caret">› </span>cd Fitness</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Life/Health/Fitness</span> <span className="lp-term-caret">› </span>ext-restrict food read</div>
               <div className="lp-term-line lp-term-output lp-term-green">  Restricted food to read at this node.</div>
               <div className="lp-term-line lp-term-output lp-term-dim">  Its write tools are filtered. Read tools and hooks still work.</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>fitness "bench 135x10x10x8"</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Life/Health/Fitness</span> <span className="lp-term-caret">› </span>bench 135x10x10x8</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line lp-term-output">  Got it. Bench: 135x10/10/8. Archived.</div>
-              <div className="lp-term-line lp-term-output">  You're up from 130 last session. Nice progression.</div>
+              <div className="lp-term-line lp-term-output">  Got it. Bench: 135x10/10/8. Logged.</div>
+              <div className="lp-term-line lp-term-output">  Up from 130 last session. Nice progression.</div>
               <div className="lp-term-line lp-term-output">  Next up: Overhead Press.</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line lp-term-output lp-term-dim">  # Allow a confined extension at a specific branch</div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Fitness</span> <span className="lp-term-caret">› </span>cd /Finance</div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Finance</span> <span className="lp-term-caret">› </span>ext-allow solana</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Life/Health/Fitness</span> <span className="lp-term-caret">› </span>cd /Life/Finance</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Life/Finance</span> <span className="lp-term-caret">› </span>ext-allow solana</div>
               <div className="lp-term-line lp-term-output lp-term-green">  Allowed: solana</div>
               <div className="lp-term-line lp-term-output lp-term-dim">  Confined extension activated at this position and all children.</div>
               <div className="lp-term-line lp-term-output"></div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Finance</span> <span className="lp-term-caret">› </span>cd /Health/Food</div>
-              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Health/Food</span> <span className="lp-term-caret">› </span>food "i had eggs and toast for breakfast"</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Life/Finance</span> <span className="lp-term-caret">› </span>cd /Life/Health/Food</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">tabor@treeos.ai</span><span className="lp-term-path">/Life/Health/Food</span> <span className="lp-term-caret">› </span>i had eggs and toast for breakfast</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line lp-term-output">  Logged. Eggs (2): 144 cal, 12g protein. Toast: 80 cal, 3g protein.</div>
               <div className="lp-term-line lp-term-output">  Today so far: 224 / 2,000 cal. 15g protein. You've got room.</div>

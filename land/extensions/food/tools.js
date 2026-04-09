@@ -98,7 +98,7 @@ export default function getTools() {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       handler: async (args) => {
         try {
-          const { rootId, items, totals, meal, summary, userId } = args;
+          const { rootId, items, totals, meal, summary, userId, chatId, sessionId } = args;
           const foodNodes = await findFoodNodes(rootId);
           if (!foodNodes) return { content: [{ type: "text", text: "Food tree not found." }] };
 
@@ -113,6 +113,9 @@ export default function getTools() {
             content: logContent,
             contentType: "text",
             userId: userId || "SYSTEM",
+            wasAi: true,
+            chatId: chatId ?? null,
+            sessionId: sessionId ?? null,
           });
           const logNoteId = logNote?._id ? String(logNote._id) : null;
 
@@ -122,7 +125,7 @@ export default function getTools() {
           // Write to meal slot
           const slot = detectMealSlot(summary, meal);
           const mealNoteContent = JSON.stringify({ text: summary, totals, logNoteId });
-          await writeMealNote(foodNodes, slot, mealNoteContent, userId || "SYSTEM");
+          await writeMealNote(foodNodes, slot, mealNoteContent, userId || "SYSTEM", { chatId, sessionId });
 
           // Build running totals for confirmation
           const picture = await getDailyPicture(rootId);

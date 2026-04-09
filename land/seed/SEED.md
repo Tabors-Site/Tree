@@ -19,7 +19,7 @@ Everything in the seed serves one of four primitives. Everything else is emergen
 | Primitive | What it is | Key files |
 |-----------|-----------|-----------|
 | **Structure** | Six models. Node and User carry extensible metadata Maps. Note, Contribution, Chat, LlmConnection are fixed. | models/*.js |
-| **Intelligence** | Conversation loop, LLM/tool/mode/position resolution, time and position injection | llm/conversation.js, modes/registry.js, ws/mcp.js |
+| **Intelligence** | Conversation loop, two entry points (`runChat`, `runOrchestration`), LLM/tool/mode/position resolution, time and position injection | llm/conversation.js, modes/registry.js, ws/mcp.js |
 | **Extensibility** | Extension loader, open hook system, pub/sub, spatial scoping, five registries | hooks.js, extensions/loader.js, tree/extensionScope.js |
 | **Communication** | Cascade signals, .flow system node, visible results, response protocol | tree/cascade.js, protocol.js |
 
@@ -102,9 +102,9 @@ Same pattern. Extensions register. The kernel resolves. Failure falls back to th
 
 **Never block inbound.** Cascade signals always accepted. Always produce a result. No configuration can prevent a signal from arriving.
 
-**Position injection.** Every AI prompt receives a `[Position]` block before the mode prompt. Tree modes get User, Tree (name + ID), Current node, Target node. Home modes get Zone: Home. Land modes get Zone: Land. The AI always knows where it is. Extension modes cannot exclude it.
+**Position injection.** Every AI prompt receives a `[Position]` block before the mode prompt. Tree modes get User, Tree (name + ID), Current node, Target node (only when different from current). Home modes get Zone: Home. Land modes get Zone: Land. The AI always knows where it is. Extension modes cannot exclude it.
 
-**Time injection.** Every AI prompt receives the current time in the land's timezone. Cannot be turned off.
+**Time injection.** Every AI prompt is appended with `Current time: <weekday>, <date>, <time> <timezone>` in the land's configured timezone (falls back to ISO if the timezone string is invalid). Cannot be turned off. Three-layer prompt structure is always: position block, mode prompt, time line.
 
 **Extension router timeout.** Extension page routes (mounted at /) wrapped with 5-second timeout. If an extension page route hangs, the kernel handles the request. API routes (/api/v1) are not wrapped because AI chat routes can take 30+ seconds.
 
@@ -182,6 +182,21 @@ Same pattern as node metadata, applied to users. Six functions.
 `core.modes.registerMode(key, config, extName)` registers a custom mode. `core.modes.setDefaultMode(bigMode, key)` sets the default for a zone. `core.modes.setNodeMode(nodeId, intent, modeKey)` sets a per-node mode override atomically. Extensions use this to assign custom modes to specific nodes without direct MongoDB calls.
 
 **Mode naming convention.** Extensions should name modes as `tree:{ext}-{suffix}` where suffix encodes intent: `:log` (default receiver), `:coach` (guided, "be" command), `:review` (backward-looking analysis), `:plan` (forward-looking, builds structure), `:ask` (read-only query), `:tell` (write knowledge). The tree-orchestrator uses `getModesOwnedBy(extName)` to discover an extension's modes and matches suffixes to route messages automatically. Extensions with complex routing can export `handleMessage` to override suffix-based routing.
+
+### Conversation Entry Points (core.llm)
+
+Two primitives. Every chat path on the system uses one of them. Extensions, routes, websocket handlers, gateway extensions, and scheduled jobs all call these. No extension should call `processMessage` directly or duplicate session/MCP/Chat plumbing.
+
+| Function | What it does | When to use |
+|----------|--------------|-------------|
+| `core.llm.runChat({ userId, username, message, mode, ... })` | One LLM call in one explicit mode. Returns `{ answer, chatId, modeKey, visitorId }`. Handles session, MCP, Chat record, beforeResponse hook, abort. | Background work where the caller already knows the mode: summarize, classify, enrich. |
+| `core.llm.runOrchestration({ zone, userId, message, rootId, currentNodeId, ... })` | Full chat flow. Dispatches to the orchestrator registered for the zone, falling back to `processMessage` if none. Returns `{ answer, success, stepSummaries, targetNodeId, ... }`. Same Chat/session/abort/hook plumbing as `runChat` plus orchestrator dispatch and result normalization. | Anything where a real user is waiting. Used by HTTP routes (`/home/chat`, `/root/:rootId/chat`, `/place`, `/query`, `/be`), the websocket chat handler, and gateway extensions. |
+
+**One function in the middle.** Every user-facing chat path converges on `runOrchestration`. Transport adapters (HTTP routes, websocket handlers) handle wire format only. The kernel owns session, MCP, Chat, abort, hook firing, and dispatch. Extensions own routing logic via the orchestrator they register for the zone. Each layer is blind to the others. The kernel does not know any extension exists. The orchestrator extension does not know HTTP exists. The transport does not know modes exist.
+
+**`beforeResponse` fires in exactly two places.** Once inside `runChat` (background work), once inside `runOrchestration` (user-facing). Never in routes, never in handlers, never in extensions. Adding a new transport or entry point cannot accidentally bypass response formatting hooks because the hook firing is not the route's responsibility.
+
+**Session identity.** `visitorId` is built from zone and context: `tree:{rootId}:{userId}` for tree zone (with optional `:{handle}` for browser tabs), `home:{userId}` for home, `land:{userId}` for land. Same zone keeps the same conversation. Switch zones, fresh conversation. The `meta.visitorId` field on the sessionRegistry session carries this so the `afterSessionEnd` hook can identify which zone the session belonged to.
 
 ### New Hooks
 

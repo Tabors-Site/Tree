@@ -632,7 +632,12 @@
       "Bash(grep -rn '\"home:\\\\|'\\\\''home:\\\\|`home:' /home/tabor/github/Tree/land --include=\"*.js\")",
       "Bash(wait)",
       "Bash(pkill -f \"test-imports.mjs\")",
-      "Bash(xargs -r kill -9)"
+      "Bash(xargs -r kill -9)",
+      "Bash(find /home/tabor/github/Tree/land -name \"*.js\" -exec grep -l \"router.post.*chat\\\\|router.post.*orchestrate\" {} \\\\;)",
+      "Bash(grep -n \"const css = \\\\`\\\\|^\\\\`;\" land/extensions/raw-ideas/pages/rawIdeas.js)",
+      "Bash(grep -n \"^\\\\`;\\\\|^  \\\\`;\\\\|^ \\\\`;\" land/extensions/raw-ideas/pages/rawIdeas.js)",
+      "Bash(grep -l \"#667eea\\\\|#764ba2\\\\|#736fe6\\\\|linear-gradient\\\\|backdrop-filter\" horizon/views/*.js)",
+      "Bash(grep -l \"#667eea\\\\|#764ba2\\\\|linear-gradient.*135deg\\\\|backdrop-filter\\\\|rgba\\(255, 255, 255, 0\\\\.\" horizon/views/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

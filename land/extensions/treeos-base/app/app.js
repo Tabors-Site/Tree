@@ -71,7 +71,7 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
   <meta charset="UTF-8" />
   <title>${landName}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#667eea" />
+  <meta name="theme-color" content="#0d1117" />
   <link rel="icon" href="/tree.png" />
   <link rel="canonical" href="${getLandUrl()}/app" />
   <meta name="robots" content="noindex, nofollow" />
@@ -87,44 +87,49 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --glass-rgb: 115, 111, 230;
-      --glass-alpha: 0.28;
-      --glass-blur: 22px;
-      --glass-border: rgba(255, 255, 255, 0.28);
-      --glass-border-light: rgba(255, 255, 255, 0.15);
-      --glass-highlight: rgba(255, 255, 255, 0.25);
-      --text-primary: #ffffff;
-      --text-secondary: rgba(255, 255, 255, 0.9);
-      --text-muted: rgba(255, 255, 255, 0.6);
-      --accent: #10b981;
-      --accent-glow: rgba(16, 185, 129, 0.6);
-      --error: #ef4444;
+      /* Nightfall theme */
+      --bg:           #0d1117;
+      --bg-elevated:  #161b24;
+      --bg-hover:     #1c222e;
+      --border:       #232a38;
+      --border-strong:#2f3849;
+
+      --text-primary:   #e6e8eb;
+      --text-secondary: #c4c8d0;
+      --text-muted:     #9ba1ad;
+      --text-dim:       #5d6371;
+
+      --accent:      #7dd385;
+      --accent-glow: rgba(125, 211, 133, 0.5);
+      --error:       #c97e6a;
+
+      /* Legacy aliases (some code still references these) */
+      --glass-rgb:          22, 27, 36;
+      --glass-alpha:        1;
+      --glass-blur:         0px;
+      --glass-border:       #232a38;
+      --glass-border-light: #232a38;
+      --glass-highlight:    #2f3849;
+
       --header-height: 56px;
       --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
       --mobile-input-height: 70px;
       --min-panel-width: 280px;
     }
-      
+
 
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-    html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'DM Sans', -apple-system, sans-serif; color: var(--text-primary); background: #736fe6; }
+    html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'DM Sans', -apple-system, sans-serif; color: var(--text-primary); background: var(--bg); }
 
-    .app-bg { position: fixed; inset: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: -2; }
-    .app-bg::before, .app-bg::after { content: ''; position: fixed; border-radius: 50%; opacity: 0.08; animation: float 20s infinite ease-in-out; pointer-events: none; }
-    .app-bg::before { width: 600px; height: 600px; top: -300px; right: -200px; animation-delay: -5s; }
-    .app-bg::after { width: 400px; height: 400px; bottom: -200px; left: -100px; animation-delay: -10s; }
-    @keyframes float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-30px) rotate(5deg); } }
+    .app-bg { position: fixed; inset: 0; background: var(--bg); z-index: -2; }
 
     .app-container { display: flex; height: 100%; width: 100%; padding: 0px; gap: 0px; }
     .glass-panel {
-      background: rgba(var(--glass-rgb), var(--glass-alpha));
-      backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+      background: var(--bg-elevated);
       border-radius: 0;
       border: none;
       box-shadow: none;
     }
-    .glass-panel::before { content: ""; position: absolute; inset: -40%; background: radial-gradient(120% 60% at 0% 0%, rgba(255, 255, 255, 0.2), transparent 60%); pointer-events: none; z-index: 0; }
 
     .chat-panel { width: 400px; min-width: 0; height: 100%; display: flex; flex-direction: column; z-index: 10; flex-shrink: 0; position: relative; }
     .chat-header { height: var(--header-height); padding: 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--glass-border-light); flex-shrink: 0; position: relative; z-index: 1; }
@@ -214,6 +219,19 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
 body.show-bg-messages .message.orchestrator-step,
 body.show-bg-messages .chat-message.system {
   display: flex;
+}
+/* Mode picker is an advanced override. Sprout + the routing index pick the
+   right mode automatically. Hide the picker unless the user opts into the
+   advanced/system view (same toggle as background messages). */
+.mode-bar,
+.mobile-mode-bar {
+  display: none !important;
+}
+body.show-bg-messages .mode-bar {
+  display: flex !important;
+}
+body.show-bg-messages .mobile-mode-bar {
+  display: flex !important;
 }
 .message.orchestrator-step .message-content {
   background: rgba(255, 255, 255, 0.06);
@@ -462,9 +480,9 @@ body.show-bg-messages .chat-message.system {
     @keyframes messageIn { from { opacity: 0; transform: translateY(10px); } }
     .message.user { flex-direction: row-reverse; }
     .message-avatar { width: 36px; height: 36px; border-radius: 12px; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border: 1px solid var(--glass-border-light); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-    .message.user .message-avatar { background: linear-gradient(135deg, rgba(99, 102, 241, 0.6) 0%, rgba(139, 92, 246, 0.6) 100%); }
-    .message-content { max-width: 85%; min-width: 0; padding: 14px 18px; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border: 1px solid var(--glass-border-light); border-radius: 18px; font-size: 14px; line-height: 1.6; word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; }
-    .message.user .message-content { background: linear-gradient(135deg, rgba(99, 102, 241, 0.5) 0%, rgba(139, 92, 246, 0.5) 100%); border-radius: 18px 18px 6px 18px; }
+    .message.user .message-avatar { background: rgba(125, 211, 133, 0.18); border-color: rgba(125, 211, 133, 0.4); }
+    .message-content { max-width: 85%; min-width: 0; padding: 14px 18px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 18px; font-size: 14px; line-height: 1.6; word-wrap: break-word; overflow-wrap: break-word; word-break: break-word; }
+    .message.user .message-content { background: rgba(125, 211, 133, 0.08); border-color: rgba(125, 211, 133, 0.25); border-radius: 18px 18px 6px 18px; }
     .message.assistant .message-content { border-radius: 18px 18px 18px 6px; }
     .message.error .message-content { background: rgba(239, 68, 68, 0.3); border-color: rgba(239, 68, 68, 0.5); }
 
@@ -644,7 +662,7 @@ body.show-bg-messages .chat-message.system {
     }
 
     .typing-indicator { display: flex; gap: 4px; padding: 14px 18px; }
-    .typing-dot { width: 8px; height: 8px; background: rgba(255, 255, 255, 0.6); border-radius: 50%; animation: typing 1.4s infinite; }
+    .typing-dot { width: 8px; height: 8px; background: #ffffff; border-radius: 50%; animation: typing 1.4s infinite; }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
     @keyframes typing { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-8px); } }
@@ -2077,8 +2095,9 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
   renderModeDropdown();
   renderMobileModeBar();
 
-  $("modeBar").style.display = '';
-  $("mobileModeBar").style.display = '';
+  // Visibility is controlled by CSS (gated behind body.show-bg-messages).
+  // The mode picker is an advanced override; sprout + the routing index
+  // pick the right mode automatically.
   updateRootName(rootName);
 });
 
