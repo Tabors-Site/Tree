@@ -3,14 +3,13 @@ export default {
   version: "1.0.0",
   builtFor: "TreeOS",
   description:
-    "Choose your domains. The tree builds itself. A one-time scaffolder that asks " +
-    "what you care about, creates the tree structure, sets goals, wires channels " +
-    "between related domains, and hands off. Life doesn't manage extensions after " +
-    "setup. It plants the seeds. The extensions are the trees.",
+    "Scaffolding library for domain trees. Creates Life roots, group nodes, " +
+    "and domain scaffolds. Pure machinery. Sprout is the user-facing entry point. " +
+    "Operators can use `life add <domain>` as an admin shortcut.",
 
   needs: {
     models: ["Node"],
-    services: ["hooks", "llm", "metadata"],
+    services: ["hooks", "metadata"],
   },
 
   optional: {
@@ -25,18 +24,22 @@ export default {
 
     cli: [
       {
-        command: "life [domains...]",
+        command: "life",
         scope: ["home"],
-        description: "Set up your life tree. e.g. life food fitness study",
-        method: "POST",
-        endpoint: "/life/setup",
-        body: ["domains"],
+        description: "Life tree management. Use: life add <domain>, life domains",
+        method: "GET",
+        endpoint: "/life/domains",
         subcommands: {
           add: {
             method: "POST",
-            endpoint: "/life/setup",
-            description: "Add a domain to your Life tree. e.g. life add recovery",
+            endpoint: "/life/add",
+            description: "Add a domain to your Life tree. e.g. life add food",
             args: ["domain"],
+          },
+          domains: {
+            method: "GET",
+            endpoint: "/life/domains",
+            description: "List available and scaffolded domains",
           },
         },
       },

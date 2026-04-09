@@ -28,9 +28,10 @@ router.get("/user/:userId/custom-llm", authenticate, async (req, res) => {
 
 router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
   try {
-    const { name, baseUrl, apiKey, model } = req.body;
-    if (!name || !baseUrl || !apiKey || !model) {
-      return sendError(res, 400, ERR.INVALID_INPUT, "Missing required fields: name, baseUrl, apiKey, model");
+    const { name, baseUrl, model } = req.body;
+    const apiKey = req.body.apiKey || "none";
+    if (!name || !baseUrl || !model) {
+      return sendError(res, 400, ERR.INVALID_INPUT, "Missing required fields: name, baseUrl, model");
     }
     const result = await addLlmConnection(req.params.userId, {
       name,

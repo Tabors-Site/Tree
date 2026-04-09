@@ -45,10 +45,12 @@ export async function init(core) {
     } catch {}
   }, "home-memory");
 
-  // ── afterSessionEnd: summarize home conversations ─────────────────
-  core.hooks.register("afterSessionEnd", async ({ sessionId, userId, type }) => {
-    // Only care about home sessions. Session IDs follow the pattern home:{userId}.
-    if (!sessionId || !sessionId.startsWith("home:")) return;
+  // ── afterSessionEnd: summarize home conversations ────────────────���
+  core.hooks.register("afterSessionEnd", async ({ sessionId, userId, type, meta }) => {
+    // Only care about home sessions. The visitorId (stored in session meta
+    // by websocket.js syncRegistrySession) follows the pattern "home:{userId}".
+    const visitorId = meta?.visitorId || "";
+    if (!visitorId.startsWith("home:")) return;
     if (!userId) return;
 
     // Cooldown: don't summarize too frequently

@@ -107,8 +107,8 @@ async function printLoginSuccess(me, api) {
     } else {
       console.log(chalk.dim("\n  No trees yet. Get started:"));
       console.log(chalk.dim("    llm add             Add an LLM connection (required for AI)"));
-      console.log(chalk.dim("    life food fitness    Set up domains (food, fitness, study, recovery, kb)"));
-      console.log(chalk.dim("    mkroot \"My Tree\"     Or create a blank tree"));
+      console.log(chalk.dim("    chat \"hello\"         Start talking. The tree grows from conversation."));
+      console.log(chalk.dim("    life add food        Or add a domain directly (operator shortcut)"));
     }
   } catch (_) {}
 }
@@ -234,48 +234,10 @@ module.exports = (program) => {
             }
           }
 
-          // Create first tree
-          console.log(chalk.bold("\n  Plant Your First Tree\n"));
-          console.log(chalk.dim("  A tree organizes one area of your life or work."));
-          console.log(chalk.dim("  Name it after what it holds, not who you are."));
-          console.log(chalk.dim("  Examples: Health, Career, Side Project, Learning Rust\n"));
-
-          const treeName = await prompt("  Tree name: ");
-          if (treeName) {
-            console.log(chalk.dim("\n  What kind of tree is this?\n"));
-            console.log("    1. " + chalk.cyan("goal") + chalk.dim("       . a desired outcome"));
-            console.log("    2. " + chalk.cyan("plan") + chalk.dim("       . a strategy or sequence of steps"));
-            console.log("    3. " + chalk.cyan("task") + chalk.dim("       . a discrete piece of work"));
-            console.log("    4. " + chalk.cyan("knowledge") + chalk.dim("  . stored information or understanding"));
-            console.log("    5. " + chalk.cyan("resource") + chalk.dim("   . tools, skills, capabilities"));
-            console.log("    6. " + chalk.cyan("identity") + chalk.dim("   . who or what this tree represents"));
-            console.log("    7. " + chalk.dim("(none)") + chalk.dim("     . no type, just a tree"));
-            console.log();
-
-            const typeInput = await prompt("  Type (1-7 or name): ");
-            const typeMap = { "1": "goal", "2": "plan", "3": "task", "4": "knowledge", "5": "resource", "6": "identity" };
-            const treeType = typeMap[typeInput] || (typeInput === "7" || !typeInput ? null : typeInput);
-
-            try {
-              const rootData = await api.createRoot(me.userId, treeName, treeType);
-              const rootId = rootData.rootId || rootData.root?._id;
-              console.log(chalk.green(`\n  Planted: ${treeName}`) + (treeType ? chalk.dim(` (${treeType})`) : ""));
-
-              // Auto-select the new tree
-              if (rootId) {
-                const cfg2 = load();
-                cfg2.activeRootId = rootId;
-                cfg2.activeRootName = treeName;
-                cfg2.pathStack = [];
-                save(cfg2);
-                console.log(chalk.dim(`  You're in. Start chatting or run 'mkdir' to add branches.\n`));
-              }
-            } catch (e) {
-              console.log(chalk.dim(`  Skipped: ${e.message}. Run 'mkroot <name>' to create one later.`));
-            }
-          } else {
-            console.log(chalk.dim("  Skipped. Run 'mkroot <name>' to plant your first tree.\n"));
-          }
+          // No tree wizard. Sprout handles it from conversation.
+          console.log(chalk.bold("\n  You're ready.\n"));
+          console.log(chalk.dim("  Just start talking. Say what's on your mind."));
+          console.log(chalk.dim("  The tree will grow around what you care about.\n"));
 
           const { startShell } = require("../index");
           await startShell();

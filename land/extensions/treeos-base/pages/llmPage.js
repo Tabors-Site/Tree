@@ -77,7 +77,7 @@ export function renderLlmPage({ userId, username, connections, mainAssignment, u
               style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px 14px;color:white;font-size:14px;">
             <input type="text" name="model" placeholder="Model (e.g. qwen3:32b)" required
               style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px 14px;color:white;font-size:14px;">
-            <input type="text" name="apiKey" placeholder="API Key (press enter for none)"
+            <input type="text" name="apiKey" placeholder="API Key (not required for Ollama/local)"
               style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px 14px;color:white;font-size:14px;">
             <button type="submit" class="action-btn" style="width:100%;">Add Connection</button>
           </div>

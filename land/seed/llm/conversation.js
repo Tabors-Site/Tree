@@ -1893,9 +1893,20 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   }
 
   const stopped = abortSignal.aborted;
-  const answer = stopped ? null : (result?.content || result?.answer || "No response.");
+  let answer = stopped ? null : (result?.content || result?.answer || "No response.");
 
-  // 6. Finalize Chat
+  // 6. beforeResponse hook: extensions clean/modify the response before delivery.
+  // Centralized here so every caller (CLI /home/chat, websocket, scheduled jobs)
+  // gets the same treatment without each route having to remember to fire it.
+  if (answer && !stopped) {
+    try {
+      const hookData = { content: answer, userId, rootId, mode };
+      await hooks.run("beforeResponse", hookData);
+      answer = hookData.content;
+    } catch {}
+  }
+
+  // 7. Finalize Chat
   if (chat) {
     try {
       const internal = result?._internal || {};
@@ -1903,7 +1914,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
     } catch {}
   }
 
-  // 7. Clear abort (keep session + MCP alive for next message in same mode)
+  // 8. Clear abort (keep session + MCP alive for next message in same mode)
   // Only clear if we created our own abort controller
   if (abort) clearSessionAbort(visitorId);
 

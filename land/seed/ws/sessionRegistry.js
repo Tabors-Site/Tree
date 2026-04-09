@@ -201,7 +201,10 @@ export function endSession(sessionId) {
     sessionAbortControllers.delete(sessionId);
   }
 
+  // Capture session data before deletion so the hook gets full context
   const uid = session.userId;
+  const { type, meta, description } = session;
+
   sessions.delete(sessionId);
 
   const userSet = userSessionIndex.get(uid);
@@ -214,7 +217,7 @@ export function endSession(sessionId) {
     promoteNavigator(uid);
   }
 
-  hooks.run("afterSessionEnd", { sessionId, userId: uid, type: session.type }).catch(() => {});
+  hooks.run("afterSessionEnd", { sessionId, userId: uid, type, meta, description }).catch(() => {});
 }
 
 /**
@@ -237,7 +240,7 @@ export function clearUserSessions(userId) {
     sessions.delete(sid);
     // Fire hook so extensions know the session ended
     if (session) {
-      hooks.run("afterSessionEnd", { sessionId: sid, userId: uid, type: session.type }).catch(() => {});
+      hooks.run("afterSessionEnd", { sessionId: sid, userId: uid, type: session.type, meta: session.meta, description: session.description }).catch(() => {});
     }
   }
   userSessionIndex.delete(uid);

@@ -43,16 +43,14 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
     const nav = userMetaModule.getUserMeta(user, "nav");
     const userRoots = Array.isArray(nav.roots) ? nav.roots : [];
 
-    // Redirect to setup if user needs LLM or first tree (unless they skipped recently)
+    // Redirect to setup if user needs LLM (unless they skipped recently).
+    // No tree is fine. Sprout creates trees from conversation.
     const setupSkipped = req.cookies?.setupSkipped === "1";
     if (!setupSkipped) {
       const hasMainLlm = !!user.llmDefault;
-      const hasTree = userRoots.length > 0;
-      if (!hasMainLlm || !hasTree) {
-        const connCount = hasMainLlm
-          ? 1
-          : await LlmConnection.countDocuments({ userId: req.userId });
-        if (connCount === 0 || !hasTree) {
+      if (!hasMainLlm) {
+        const connCount = await LlmConnection.countDocuments({ userId: req.userId });
+        if (connCount === 0) {
           return res.redirect("/setup");
         }
       }

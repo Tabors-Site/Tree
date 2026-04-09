@@ -66,6 +66,12 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
       validatedUser: req.user,
     });
 
+    // HTML form submission: redirect back to user page
+    if ("html" in req.query) {
+      const token = req.query.token ? `&token=${req.query.token}` : "";
+      return res.redirect(`/api/v1/user/${userId}?html${token}`);
+    }
+
     sendOk(res, {
       rootId: rootNode._id,
       root: rootNode,

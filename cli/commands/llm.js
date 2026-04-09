@@ -115,7 +115,7 @@ module.exports = (program) => {
           const model = opts.model || await ask(rl, chalk.cyan("  Model (e.g. qwen3:32b): "));
           if (!model.trim()) { rl.close(); return console.log(chalk.yellow("Cancelled.")); }
 
-          const apiKey = opts.key || await ask(rl, chalk.cyan("  API Key (press enter for none): "));
+          const apiKey = opts.key || await ask(rl, chalk.cyan("  API Key (not required for Ollama/local, press enter to skip): "));
 
           rl.close();
 

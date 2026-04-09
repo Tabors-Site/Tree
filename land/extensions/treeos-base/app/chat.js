@@ -44,16 +44,14 @@ router.get("/chat", authenticateLite, async (req, res) => {
     const nav = getUserMeta(user, "nav");
     const userRoots = Array.isArray(nav.roots) ? nav.roots : [];
 
-    // Redirect to setup if user needs LLM or first tree (unless they skipped recently)
+    // Redirect to setup if user needs LLM (unless they skipped recently).
+    // No tree is fine. Sprout creates trees from conversation.
     const setupSkipped = req.cookies?.setupSkipped === "1";
     if (!setupSkipped) {
       const hasMainLlm = !!user.llmDefault;
-      const hasTree = userRoots.length > 0;
-      if (!hasMainLlm || !hasTree) {
-        const connCount = hasMainLlm
-          ? 1
-          : await LlmConnection.countDocuments({ userId: req.userId });
-        if (connCount === 0 || !hasTree) {
+      if (!hasMainLlm) {
+        const connCount = await LlmConnection.countDocuments({ userId: req.userId });
+        if (connCount === 0) {
           return res.redirect("/setup");
         }
       }
@@ -783,16 +781,6 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
     <div class="tree-picker" id="treePicker">
 
-      <!-- Apps: the recommended way to start -->
-      <div style="text-align:center;margin-bottom:24px;">
-        <a href="#" onclick="window.location='/api/v1/user/'+CONFIG.userId+'/apps?html';return false;"
-           style="display:inline-block;padding:14px 32px;background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.35);border-radius:12px;color:#fff;font-size:1rem;font-weight:600;text-decoration:none;transition:all 0.2s;">
-          Start with Apps
-        </a>
-        <p style="color:rgba(255,255,255,0.35);font-size:0.8rem;margin-top:10px;">
-          Fitness, Food, Recovery, Study, KB. Guided setup.
-        </p>
-      </div>
 
       ${
         trees.length > 0
