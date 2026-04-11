@@ -17,9 +17,6 @@ export default {
   preserveContextOnLoop: true,
 
   toolNames: [
-    "navigate-tree",
-    "get-tree-context",
-    "get-node-notes",
   ],
 
   async buildSystemPrompt({ username, rootId, currentNodeId }) {

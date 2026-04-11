@@ -187,6 +187,96 @@ export async function init(core) {
     } catch {}
   }, "food");
 
+  // ── Data integrity check: validate metric totals match log notes ──
+  // Runs every breath cycle. If the sum of today's Log notes diverges from
+  // the metric node values (double increment, missed delivery, stale cache),
+  // correct the metrics. Also caps old data to prevent unbounded growth.
+  const _lastIntegrityCheck = new Map();
+  const INTEGRITY_INTERVAL_MS = 10 * 60 * 1000; // every 10 minutes max per root
+
+  core.hooks.register("breath:exhale", async ({ rootId }) => {
+    if (!rootId) return;
+    try {
+      const foodRootId = await findFoodRootInTree(rootId);
+      if (!foodRootId) return;
+
+      const last = _lastIntegrityCheck.get(foodRootId) || 0;
+      if (Date.now() - last < INTEGRITY_INTERVAL_MS) return;
+      _lastIntegrityCheck.set(foodRootId, Date.now());
+
+      const foodNodes = await findFoodNodes(foodRootId);
+      if (!foodNodes?.log?.id) return;
+
+      const Note = core.models.Node.db.model("Note");
+      const Node = core.models.Node;
+      const today = new Date().toISOString().slice(0, 10);
+      const todayStart = new Date(today + "T00:00:00.000Z");
+
+      // Sum today's log notes
+      const logNotes = await Note.find({
+        nodeId: foodNodes.log.id,
+        createdAt: { $gte: todayStart },
+      }).select("content").lean();
+
+      const logTotals = {};
+      for (const note of logNotes) {
+        try {
+          const parsed = JSON.parse(note.content);
+          if (parsed?.totals) {
+            for (const [key, val] of Object.entries(parsed.totals)) {
+              if (typeof val === "number") logTotals[key] = (logTotals[key] || 0) + val;
+            }
+          }
+        } catch {}
+      }
+
+      // Compare with metric node values
+      let corrected = 0;
+      for (const [role, info] of Object.entries(foodNodes)) {
+        if (STRUCTURAL_ROLES.includes(role) || !info?.id) continue;
+        const node = await Node.findById(info.id).select("metadata").lean();
+        if (!node) continue;
+        const values = node.metadata instanceof Map ? node.metadata.get("values") : node.metadata?.values;
+        const current = values?.today || 0;
+        const expected = logTotals[role] || 0;
+
+        if (current !== expected) {
+          await core.metadata.batchSetExtMeta(info.id, "values", { today: expected });
+          corrected++;
+          log.verbose("Food", `  Integrity fix: ${role} was ${current}, should be ${expected}`);
+        }
+      }
+
+      if (corrected > 0) {
+        log.info("Food", `Integrity check fixed ${corrected} metrics for ${String(foodRootId).slice(0, 8)}`);
+      }
+
+      // Cap old log notes (keep last 500)
+      const logCount = await Note.countDocuments({ nodeId: foodNodes.log.id });
+      if (logCount > 500) {
+        const oldest = await Note.find({ nodeId: foodNodes.log.id })
+          .sort({ createdAt: 1 }).limit(logCount - 500).select("_id").lean();
+        if (oldest.length > 0) {
+          await Note.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
+          log.verbose("Food", `  Capped log notes: deleted ${oldest.length} old entries`);
+        }
+      }
+
+      // Cap history notes (keep last 365)
+      if (foodNodes.history?.id) {
+        const histCount = await Note.countDocuments({ nodeId: foodNodes.history.id });
+        if (histCount > 365) {
+          const oldHist = await Note.find({ nodeId: foodNodes.history.id })
+            .sort({ createdAt: 1 }).limit(histCount - 365).select("_id").lean();
+          if (oldHist.length > 0) {
+            await Note.deleteMany({ _id: { $in: oldHist.map(n => n._id) } });
+            log.verbose("Food", `  Capped history notes: deleted ${oldHist.length} old entries`);
+          }
+        }
+      }
+    } catch {}
+  }, "food-integrity");
+
   // Track food roots from navigation
   core.hooks.register("afterNavigate", async ({ rootId }) => {
     if (!rootId) return;

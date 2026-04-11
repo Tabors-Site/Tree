@@ -93,7 +93,7 @@ export async function getProfile(rootId) {
 export async function findFitnessNodes(rootId) {
   if (!_Node) return null;
   const children = await _Node.find({ parent: rootId }).select("_id name metadata").lean();
-  const result = { groups: [], exercises: {}, modalities: [] };
+  const result = { groups: [], exercises: {}, modalities: [], _rootId: String(rootId) };
 
   for (const child of children) {
     const meta = child.metadata instanceof Map
@@ -264,8 +264,54 @@ export async function deliverToExerciseNodes(fitnessNodes, parsed) {
     }
 
     if (!match) {
-      log.verbose("Fitness", `No node for "${exercise.name}". Skipping.`);
-      continue;
+      // Auto-create the exercise node. Find or create the group, then create the exercise.
+      try {
+        const { addGroupNode, addExerciseNode } = await import("./setup.js");
+        const group = exercise.group || "General";
+
+        // Find the modality node (gym or home)
+        let modalityNodeId = null;
+        for (const [, info] of Object.entries(fitnessNodes.modalities || {})) {
+          if (info.modality === modality || info.name?.toLowerCase() === modality) {
+            modalityNodeId = info.id;
+            break;
+          }
+        }
+        if (!modalityNodeId) {
+          log.verbose("Fitness", `No ${modality} modality node for "${exercise.name}". Skipping.`);
+          continue;
+        }
+
+        // Find or create the group
+        let groupNode = null;
+        const groupChildren = await _Node.find({ parent: modalityNodeId }).select("_id name").lean();
+        groupNode = groupChildren.find(c => c.name.toLowerCase() === group.toLowerCase());
+        if (!groupNode) {
+          const created = await addGroupNode({ parentId: modalityNodeId, name: group, userId: parsed._userId || "SYSTEM" });
+          groupNode = { _id: created.id, name: created.name };
+          log.info("Fitness", `Auto-created group "${group}" under ${modality}`);
+        }
+
+        // Create the exercise
+        const schemaType = modality === "home" ? "reps" : "weight-reps";
+        const sets = exercise.sets?.length || 3;
+        const created = await addExerciseNode({
+          groupId: String(groupNode._id),
+          name: exercise.name,
+          exerciseType: schemaType,
+          unit: modality === "home" ? "bodyweight" : (parsed._weightUnit || "lb"),
+          sets,
+          rootId: fitnessNodes._rootId,
+          userId: parsed._userId || "SYSTEM",
+        });
+        log.info("Fitness", `Auto-created exercise "${exercise.name}" under ${group}`);
+
+        // Now deliver data to the new node
+        match = { id: created.id, name: created.name, meta: { fitness: { valueSchema: { type: schemaType, sets } } } };
+      } catch (err) {
+        log.warn("Fitness", `Auto-create failed for "${exercise.name}": ${err.message}`);
+        continue;
+      }
     }
 
     const schema = match.meta?.fitness?.valueSchema;
@@ -597,6 +643,7 @@ export async function getExerciseState(rootId) {
           goals,
           lastWorked: values.lastWorked || null,
           historyCount: fitMeta.history?.length || 0,
+          recentHistory: (fitMeta.history || []).slice(-5),
         };
       }),
     };

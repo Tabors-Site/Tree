@@ -41,7 +41,7 @@ export async function scaffoldFitnessBase(rootId, userId) {
   if (rootNode) {
     await _metadata.setExtMeta(rootNode, "fitness", {
       initialized: true,
-      setupPhase: "complete",
+      setupPhase: "scaffolded",
     });
   }
 

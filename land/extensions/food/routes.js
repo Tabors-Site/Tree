@@ -96,7 +96,24 @@ router.get("/root/:rootId/food/daily", authenticate, async (req, res) => {
   try {
     const picture = await getDailyPicture(req.params.rootId);
     if (!picture) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Food tree not found or not initialized");
-    sendOk(res, picture);
+
+    // Format for CLI readability
+    const lines = [];
+    const cal = picture.calories || {};
+    lines.push(`Calories: ${cal.today || 0}${cal.goal ? " / " + cal.goal : ""}`);
+    for (const role of (picture._valueRoles || [])) {
+      const m = picture[role];
+      if (m) lines.push(`${m.name || role}: ${m.today || 0}g${m.goal ? " / " + m.goal + "g" : ""}`);
+    }
+    if (picture.recentMeals?.length > 0) {
+      lines.push("");
+      lines.push("Today's meals:");
+      for (const m of picture.recentMeals.slice(0, 10)) {
+        lines.push(`  ${m.text || m.summary || "?"}`);
+      }
+    }
+
+    sendOk(res, { answer: lines.join("\n"), raw: picture });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
   }
@@ -122,7 +139,20 @@ router.get("/root/:rootId/food/week", authenticate, async (req, res) => {
       .map(n => { try { return JSON.parse(n.content); } catch { return null; } })
       .filter(Boolean);
 
-    sendOk(res, { days, count: days.length });
+    // Format for CLI readability
+    const lines = [];
+    if (days.length === 0) {
+      lines.push("No history yet. Log meals daily and the weekly picture builds.");
+    } else {
+      for (const d of days) {
+        if (d.type === "weekly") continue;
+        const cal = d.calories || Math.round((d.protein || 0) * 4 + (d.carbs || 0) * 4 + (d.fats || 0) * 9);
+        const parts = [`P:${d.protein || 0}g`, `C:${d.carbs || 0}g`, `F:${d.fats || 0}g`];
+        lines.push(`${d.date || "?"}: ${cal} cal (${parts.join(", ")})`);
+      }
+    }
+
+    sendOk(res, { answer: lines.join("\n"), days, count: days.length });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
   }

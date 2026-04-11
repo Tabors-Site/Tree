@@ -84,6 +84,53 @@ export async function init(core) {
     } catch {}
   }, "fitness");
 
+  // ── Data integrity: cap History notes, validate exercise history arrays ──
+  const _lastIntegrity = new Map();
+  core.hooks.register("breath:exhale", async ({ rootId }) => {
+    if (!rootId) return;
+    try {
+      // Find fitness root in this tree (may be under Life)
+      const fitnessRoots = await core.models.Node.find({
+        $or: [{ _id: rootId }, { rootOwner: { $exists: true } }],
+        "metadata.fitness.initialized": true,
+      }).select("_id").lean();
+      // Also search children up to depth 3
+      let candidates = [rootId];
+      for (let d = 0; d < 3; d++) {
+        const children = await core.models.Node.find({ parent: { $in: candidates } })
+          .select("_id metadata").lean();
+        for (const c of children) {
+          const fm = c.metadata instanceof Map ? c.metadata.get("fitness") : c.metadata?.fitness;
+          if (fm?.initialized) fitnessRoots.push(c);
+        }
+        candidates = children.map(c => String(c._id));
+        if (candidates.length === 0) break;
+      }
+
+      for (const fr of fitnessRoots) {
+        const fid = String(fr._id);
+        const last = _lastIntegrity.get(fid) || 0;
+        if (Date.now() - last < 600000) continue; // 10 min cooldown
+        _lastIntegrity.set(fid, Date.now());
+
+        const nodes = await findFitnessNodes(fid);
+        if (!nodes?.history?.id) continue;
+
+        // Cap History notes at 365
+        const Note = core.models.Node.db.model("Note");
+        const count = await Note.countDocuments({ nodeId: nodes.history.id });
+        if (count > 365) {
+          const old = await Note.find({ nodeId: nodes.history.id })
+            .sort({ createdAt: 1 }).limit(count - 365).select("_id").lean();
+          if (old.length > 0) {
+            await Note.deleteMany({ _id: { $in: old.map(n => n._id) } });
+            log.verbose("Fitness", `Capped history: deleted ${old.length} old entries`);
+          }
+        }
+      }
+    } catch {}
+  }, "fitness-integrity");
+
   // ── onCascade: exercise data accumulation ──
   core.hooks.register("onCascade", async (hookData) => {
     const { node } = hookData;
@@ -296,9 +343,8 @@ export async function init(core) {
         "fitness-remove-exercise", "fitness-adopt-exercise", "fitness-complete-setup", "fitness-save-profile",
       ]},
       { modeKey: "tree:fitness-coach", toolNames: [
-        "fitness-log-workout", "fitness-adopt-exercise",
+        "fitness-log-workout", "fitness-add-exercise", "fitness-add-group", "fitness-adopt-exercise",
       ]},
-      { modeKey: "tree:edit", toolNames: ["fitness-adopt-exercise", "fitness-add-exercise", "fitness-add-group"] },
     ],
     exports: {
       isInitialized,

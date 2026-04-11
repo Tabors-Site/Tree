@@ -17,10 +17,6 @@ export default {
   maxMessagesBeforeLoop: 25,
   preserveContextOnLoop: true,
   toolNames: [
-    "navigate-tree",
-    "get-tree-context",
-    "create-new-node",
-    "create-node-note",
     "fitness-add-modality",
     "fitness-add-group",
     "fitness-add-exercise",
@@ -28,7 +24,6 @@ export default {
     "fitness-adopt-exercise",
     "fitness-complete-setup",
     "fitness-save-profile",
-    "edit-node-schedule",
   ],
 
   async buildSystemPrompt({ username, rootId, currentNodeId }) {
@@ -80,6 +75,13 @@ DEFAULTS (if user says "just set me up" or gives minimal info):
 - Running: Runs + PRs + Plan. Weekly mileage goal based on current level.
 - Home: Push-ups, Pull-ups, Dips, Squats, Plank. Standard variations.
 
-Be conversational. Don't overwhelm with questions. If they say "hypertrophy 4 days", infer the rest from sensible defaults and confirm. Create everything with tools. Call fitness-complete-setup when done.`;
+CRITICAL RULES:
+- NEVER say you created an exercise without calling fitness-add-exercise first. The tool creates the node. Without the tool call, nothing exists.
+- NEVER describe a program without building it. When the user gives you exercises, IMMEDIATELY call the tools. Tools first, summary after.
+- Call fitness-add-modality FIRST (gym/running/home), then fitness-add-group for muscle groups, then fitness-add-exercise for each exercise. Do them in order. Do them NOW, not after more conversation.
+- Call fitness-save-profile with their units and weekly goal.
+- Call fitness-complete-setup LAST after all exercises are created.
+- If the user gives you 8 exercises, make 8 fitness-add-exercise calls. No shortcuts. No "I'll set those up." Actually call the tool for each one.
+- Be concise in your response AFTER the tools run. Confirm what was created. Don't repeat what they told you.`;
   },
 };

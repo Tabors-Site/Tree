@@ -63,13 +63,18 @@ export function renderFitnessDashboard({ rootId, rootName, state, weekly, profil
     .group-card { margin-bottom: 16px; padding: 16px; }
     .group-name { font-size: 1rem; font-weight: 600; color: #fff; margin-bottom: 10px; }
 
-    .ex-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.9rem; }
+    .ex-row { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.9rem; cursor: pointer; }
     .ex-row:last-child { border-bottom: none; }
+    .ex-header { display: flex; align-items: center; gap: 10px; }
+    .ex-detail { display: none; padding: 6px 0 2px; }
+    .ex-row.expanded .ex-detail { display: block; }
+    .ex-session-row { font-size: 0.78rem; color: rgba(255,255,255,0.45); padding: 2px 0; font-family: 'JetBrains Mono', monospace; }
+    .ex-weight-prog { font-size: 0.7rem; color: rgba(255,255,255,0.3); font-family: 'JetBrains Mono', monospace; }
     .ex-name { flex: 1; color: rgba(255,255,255,0.8); }
     .ex-weight { color: rgba(255,255,255,0.6); font-size: 0.85rem; min-width: 50px; }
     .ex-sets { display: flex; gap: 4px; }
     .ex-set { min-width: 26px; height: 20px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; color: rgba(255,255,255,0.7); }
-    .ex-meta { display: flex; flex-direction: column; align-items: flex-end; min-width: 65px; }
+    .ex-meta { display: flex; gap: 8px; align-items: center; font-size: 0.78rem; color: rgba(255,255,255,0.35); flex-wrap: wrap; }
     .ex-last { font-size: 0.75rem; color: rgba(255,255,255,0.3); }
     .ex-sessions { font-size: 0.7rem; color: rgba(255,255,255,0.2); }
     .ex-progression { font-size: 0.75rem; color: #48bb78; padding: 2px 8px; background: rgba(72,187,120,0.1); border-radius: 10px; }
@@ -149,16 +154,35 @@ export function renderFitnessDashboard({ rootId, rootName, state, weekly, profil
 
       const lastStr = vals.lastWorked ? timeAgo(new Date(vals.lastWorked)) : "";
 
+      // Weight progression from recent history
+      const recentHist = ex.recentHistory || [];
+      const weightProgression = recentHist
+        .filter(h => h.weight)
+        .map(h => h.weight)
+        .join(" > ");
+
+      // Recent sessions detail (expandable)
+      const sessionDetail = recentHist.length > 0
+        ? recentHist.map(h => {
+            const setStr = (h.sets || []).map(s => `${s.weight || ""}x${s.reps || "?"}`).join(", ");
+            return `<div class="ex-session-row">${h.date || "?"}: ${setStr || `${h.weight || "?"}x${Object.keys(h).filter(k => /^set\d/.test(k)).map(k => h[k]).join("/")}`}</div>`;
+          }).join("")
+        : "";
+
       return `
-        <div class="ex-row">
-          <span class="ex-name">${esc(ex.name)}</span>
-          ${weight ? `<span class="ex-weight">${weight}${profile?.weightUnit || "lb"}</span>` : ""}
-          <div class="ex-sets">${setsHtml || '<span style="color:rgba(255,255,255,0.2);font-size:0.8rem">no sets</span>'}</div>
-          ${allMet && setKeys.length > 0 ? '<span class="ex-progression">ready</span>' : ""}
+        <div class="ex-row" onclick="this.classList.toggle('expanded')">
+          <div class="ex-header">
+            <span class="ex-name">${esc(ex.name)}</span>
+            ${weight ? `<span class="ex-weight">${weight}${profile?.weightUnit || "lb"}</span>` : ""}
+            <div class="ex-sets">${setsHtml || '<span style="color:rgba(255,255,255,0.2);font-size:0.8rem">no sets</span>'}</div>
+            ${allMet && setKeys.length > 0 ? '<span class="ex-progression">ready</span>' : ""}
+          </div>
           <div class="ex-meta">
             <span class="ex-last">${lastStr}</span>
             ${ex.historyCount ? `<span class="ex-sessions">${ex.historyCount} sessions</span>` : ""}
+            ${weightProgression ? `<span class="ex-weight-prog">${weightProgression}</span>` : ""}
           </div>
+          ${sessionDetail ? `<div class="ex-detail">${sessionDetail}</div>` : ""}
         </div>`;
     }).join("");
 

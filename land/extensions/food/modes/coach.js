@@ -20,11 +20,6 @@ export default {
   toolNames: [
     "food-save-profile",
     "food-adopt-node",
-    "navigate-tree",
-    "get-tree-context",
-    "create-node-note",
-    "edit-node-schedule",
-    "create-new-node",
   ],
 
   async buildSystemPrompt({ username, rootId, currentNodeId }) {
@@ -36,7 +31,6 @@ export default {
     const metrics = [];
     const structural = [];
     let hasLog = false;
-    let hasAnyGoals = false;
     if (nodes) {
       for (const [role, info] of Object.entries(nodes)) {
         if (role === "mealSlots" || role === "_unadopted" || !info?.id) continue;
@@ -48,7 +42,7 @@ export default {
           try {
             const n = await Node.findById(info.id).select("metadata").lean();
             const goals = n?.metadata instanceof Map ? n.metadata.get("goals") : n?.metadata?.goals;
-            if (goals?.today > 0) { goalStr = `goal: ${goals.today}g`; hasAnyGoals = true; }
+            if (goals?.today > 0) goalStr = `goal: ${goals.today}g`;
           } catch {}
           metrics.push(`${info.name} (role: ${role}, id: ${info.id}, ${goalStr})`);
         }
@@ -68,7 +62,14 @@ export default {
       ? `\nUNADOPTED NODES (new children without a food role):\n${unadopted.map(u => `- "${u.name}" (id: ${u.id})`).join("\n")}\nThese were created by the user but not yet adopted into the food system. Use food-adopt-node to assign each a role (lowercase name, e.g. "sugar", "fiber"). Ask the user if they want to track these and what their daily goals should be.`
       : "";
 
-    const needsSetup = !hasAnyGoals;
+    // Check actual setupPhase from the food root, not just goal presence
+    let setupPhase = "scaffolded";
+    try {
+      const rootNode = await Node.findById(foodRootId).select("metadata").lean();
+      const fm = rootNode?.metadata instanceof Map ? rootNode.metadata.get("food") : rootNode?.metadata?.food;
+      if (fm?.setupPhase) setupPhase = fm.setupPhase;
+    } catch {}
+    const needsSetup = setupPhase !== "complete";
 
     return `You are ${username}'s nutrition coach. You handle setup, goal configuration, and questions about nutrition.
 
@@ -86,7 +87,7 @@ Ask these things naturally:
 3. Any dietary restrictions or preferences?
 
 AFTER THEY ANSWER
-Call food-save-profile with the rootId and goal keys matching the metric nodes that exist (e.g. proteinGoal, sugarGoal, fiberGoal). Only set goals for nodes that are in the tree. Do not create or suggest nodes that the user hasn't added.
+IMMEDIATELY call food-save-profile with the rootId and goal keys. Do NOT say "I've saved your goals" without calling the tool first. The tool saves the data. Without the tool call, nothing is saved. Tool first, confirmation after.
 
 ADAPTING TO CUSTOM STRUCTURE
 The tree structure above is the truth. Only those metrics exist. Do not assume protein, carbs, or fats should exist if they are not listed. The user controls which metrics they track. If someone only tracks sugar and fiber, that is correct. Do not suggest adding missing macros unless asked.

@@ -480,10 +480,39 @@ async function runModeAndReturn(visitorId, mode, message, {
   modesUsed.push(mode);
   emitStatus(socket, "intent", "");
 
+  // Build conversation memory + extension boundary injection.
+  // When routing to an extension-owned mode, tell the AI its scope so it
+  // doesn't improvise capabilities it doesn't have. The boundary includes
+  // what other domains exist so the AI can redirect the user.
+  let memory = formatMemoryContext(visitorId);
+  try {
+    const { getModeOwner } = await import("../../seed/tree/extensionScope.js");
+    const extOwner = getModeOwner(mode);
+    // Only inject boundary for extension-owned modes (not kernel modes like tree:converse)
+    if (extOwner && !mode.startsWith("tree:converse") && !mode.startsWith("tree:fallback")) {
+      const { getIndexForRoot } = await import("./routingIndex.js");
+      const index = rootId ? getIndexForRoot(rootId) : null;
+      const otherDomains = [];
+      if (index) {
+        for (const [ext, entry] of index) {
+          if (ext !== extOwner) otherDomains.push(`${ext} (${entry.path})`);
+        }
+      }
+      const boundary = `[Boundary] You are the ${extOwner} extension. You ONLY handle ${extOwner}. ` +
+        `Do not offer to set up, manage, or advise on other domains. ` +
+        `You have only ${extOwner}-specific tools.` +
+        (otherDomains.length > 0
+          ? ` Other domains in this tree: ${otherDomains.join(", ")}. ` +
+            `For those, tell the user to navigate there or talk about it at the tree root.`
+          : "");
+      memory = (memory ? memory + "\n\n" : "") + boundary;
+    }
+  } catch {}
+
   await switchMode(visitorId, mode, {
     username, userId, rootId,
     currentNodeId: currentNodeId || targetNodeId,
-    conversationMemory: formatMemoryContext(visitorId),
+    conversationMemory: memory,
     clearHistory,
     treeCapabilities,
   });

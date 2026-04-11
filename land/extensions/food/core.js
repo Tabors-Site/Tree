@@ -107,7 +107,7 @@ export async function scaffold(foodRootId, userId) {
   // Mark root as initialized (base phase: scaffold done, profile not yet set)
   const rootNode = await _Node.findById(foodRootId);
   if (rootNode) {
-    await _metadata.setExtMeta(rootNode, "food", { initialized: true, setupPhase: "complete" });
+    await _metadata.setExtMeta(rootNode, "food", { initialized: true, setupPhase: "scaffolded" });
   }
 
   const ids = {
@@ -228,7 +228,7 @@ export async function getSetupPhase(foodRootId) {
   const meta = root.metadata instanceof Map
     ? root.metadata.get("food")
     : root.metadata?.food;
-  return meta?.setupPhase || (meta?.initialized ? "complete" : null);
+  return meta?.setupPhase || (meta?.initialized ? "scaffolded" : null);
 }
 
 // ── Food parsing ──
@@ -321,42 +321,18 @@ export async function parseFood(message, userId, username, rootId) {
 // ── Cascade delivery ──
 
 /**
- * Deliver macro signals to tracking nodes via channels or direct cascade.
+ * Deliver macro totals to tracking nodes. Direct atomic increment only.
+ * One path, one write per metric, no double-counting.
  */
 export async function deliverMacros(logNodeId, foodNodes, parsed) {
-  const { totals, meal, when } = parsed;
+  const { totals } = parsed;
+  if (!foodNodes || !totals) return;
 
-  // Try channels first
-  let usedChannels = false;
-  try {
-    const { getExtension } = await import("../loader.js");
-    const channelsExt = getExtension("channels");
-    if (channelsExt?.exports?.deliverToChannels) {
-      const { v4: uuid } = await import("uuid");
-      const signalId = uuid();
-
-      const payload = { meal: when || meal, source: meal, tags: [] };
-      for (const [key, val] of Object.entries(totals)) {
-        if (typeof val === "number") { payload[key] = val; payload.tags.push(key); }
-      }
-      await channelsExt.exports.deliverToChannels(logNodeId, payload, signalId, 0);
-
-      usedChannels = true;
-    }
-  } catch (err) {
-    log.warn("Food", `Channel delivery failed: ${err.message}`);
-  }
-
-  // Always do direct increment as well (channels may not have routes set up yet)
-  // Route to ALL metric nodes dynamically (protein, carbs, fats, sugar, fiber, etc.)
-  if (foodNodes) {
-    const STRUCTURAL = STRUCTURAL_ROLES;
-    for (const [role, info] of Object.entries(foodNodes)) {
-      if (STRUCTURAL.includes(role) || !info?.id) continue;
-      const amount = totals[role] || 0;
-      if (amount > 0) {
-        await _metadata.incExtMeta(info.id, "values", "today", amount);
-      }
+  for (const [role, info] of Object.entries(foodNodes)) {
+    if (STRUCTURAL_ROLES.includes(role) || !info?.id) continue;
+    const amount = totals[role] || 0;
+    if (amount > 0) {
+      await _metadata.incExtMeta(info.id, "values", "today", amount);
     }
   }
 }
@@ -488,6 +464,21 @@ export async function checkDailyReset(rootId) {
     }
   } else {
     await resetMetrics(false);
+  }
+
+  // Clear meal slot notes (Breakfast, Lunch, Dinner, Snacks).
+  // These are ephemeral "today's meals" buckets. The data is already archived
+  // in the History node and the Log node. Meal slots empty each day.
+  if (foodNodes.mealSlots && _Note) {
+    for (const [slot, info] of Object.entries(foodNodes.mealSlots)) {
+      if (!info?.id) continue;
+      try {
+        await _Note.deleteMany({ nodeId: info.id });
+        log.verbose("Food", `  Cleared meal slot: ${slot}`);
+      } catch (err) {
+        log.debug("Food", `  Failed to clear ${slot}: ${err.message}`);
+      }
+    }
   }
 
   lastReset.set(rootId, today);

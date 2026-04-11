@@ -309,8 +309,9 @@ const NetworkPage = () => {
               <span className="lp-term-title">Terminal</span>
             </div>
             <div className="lp-term-body">
-              <div className="lp-term-line"><span className="lp-term-prompt">$</span> npm install -g treeos</div>
-              <div className="lp-term-line"><span className="lp-term-prompt">$</span> treeos land</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">$</span> npx create-treeos my-land</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">$</span> cd my-land</div>
+              <div className="lp-term-line"><span className="lp-term-prompt">$</span> node boot.js</div>
               <div className="lp-term-line lp-term-output"></div>
               <div className="lp-term-line lp-term-output">  Welcome to TreeOS.</div>
               <div className="lp-term-line lp-term-output">  Your land is ready.</div>

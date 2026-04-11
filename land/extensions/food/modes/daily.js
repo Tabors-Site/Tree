@@ -16,7 +16,7 @@ export default {
   maxMessagesBeforeLoop: 6,
   preserveContextOnLoop: true,
 
-  toolNames: ["navigate-tree", "get-tree-context", "get-node-notes"],
+  toolNames: [],
 
   async buildSystemPrompt({ username, rootId, currentNodeId }) {
     const Node = (await import("../../../seed/models/node.js")).default;

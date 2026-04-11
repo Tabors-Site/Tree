@@ -15,7 +15,7 @@ export default {
   maxMessagesBeforeLoop: 8,
   preserveContextOnLoop: true,
 
-  toolNames: ["navigate-tree", "get-tree-context", "get-node-notes"],
+  toolNames: [],
 
   async buildSystemPrompt({ username, rootId, currentNodeId }) {
     const foodRootId = await findExtensionRoot(currentNodeId || rootId, "food") || rootId;

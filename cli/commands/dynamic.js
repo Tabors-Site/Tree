@@ -55,6 +55,11 @@ function resolveEndpoint(endpoint, args, cfg) {
  * Pretty-print a JSON response.
  */
 function printResponse(data) {
+  if (data == null) {
+    console.log(chalk.dim("No data returned."));
+    return;
+  }
+
   if (typeof data === "string") {
     console.log(data);
     return;

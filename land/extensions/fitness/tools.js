@@ -232,6 +232,8 @@ export default function getTools() {
           const parsed = {
             exercises,
             date: date || new Date().toISOString().slice(0, 10),
+            _userId: userId,
+            _rootId: rootId,
           };
 
           // Deliver to exercise nodes (updates values, history, PRs)

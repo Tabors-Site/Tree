@@ -18,10 +18,8 @@ export default {
 
   toolNames: [
     "fitness-log-workout",
-    "navigate-tree",
-    "get-tree-context",
-    "create-node-note",
-    "edit-node-schedule",
+    "fitness-add-exercise",
+    "fitness-add-group",
     "fitness-adopt-exercise",
   ],
 
@@ -86,6 +84,13 @@ Call fitness-log-workout IMMEDIATELY with rootId ${fitRoot} and that exercise's 
 Do not wait until the end of the session. Log each exercise as it's completed.
 The user might leave at any time. Every completed exercise must be saved.
 Then report the tool's response (volume, progression) and move to the next exercise.
+
+GUIDING VS ADAPTING:
+- By default, guide: suggest what to do next based on what's been neglected, what's due for progression, what the program says. "Legs are due. Squats at 155. Ready?"
+- But when the user overrides, adapt instantly. No pushback. They know their body. "I want to bench instead" means log bench. Their legs might be tired. That's valid information, not a failure.
+- If they do something not in the program, log it anyway (fitness-log-workout auto-creates exercises). Then fold it into future guidance.
+- After logging, one line about the bigger picture: "Bench logged. 3rd time this week. Legs haven't been hit since Tuesday." Observation, not instruction.
+- Some users will ask "what should I do today?" Guide them fully. Others will say "did bench 160x5x5." Just log it and observe. Match their energy.
 
 STYLE:
 - Talk like a training partner. Short messages between sets.

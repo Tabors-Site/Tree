@@ -18,11 +18,7 @@ export default {
 
   toolNames: [
     "food-log-entry",
-    "navigate-tree",
-    "get-tree-context",
-    "get-node-notes",
     "food-save-profile",
-    "food-adopt-node",
   ],
 
   async buildSystemPrompt({ username, rootId, currentNodeId }) {
@@ -33,7 +29,6 @@ export default {
 
     // Discover tracked metrics with current values
     const metrics = [];
-    let hasAnyGoals = false;
     if (nodes) {
       for (const [role, info] of Object.entries(nodes)) {
         if (role === "mealSlots" || role === "_unadopted" || !info?.id || STRUCTURAL_ROLES.includes(role)) continue;
@@ -43,7 +38,7 @@ export default {
           const n = await Node.findById(info.id).select("metadata").lean();
           const goals = n?.metadata instanceof Map ? n.metadata.get("goals") : n?.metadata?.goals;
           const values = n?.metadata instanceof Map ? n.metadata.get("values") : n?.metadata?.values;
-          if (goals?.today > 0) { goalStr = `goal: ${goals.today}g`; hasAnyGoals = true; }
+          if (goals?.today > 0) goalStr = `goal: ${goals.today}g`;
           if (values?.today > 0) todayStr = String(values.today);
         } catch {}
         metrics.push({ role, name: info.name, id: info.id, goalStr, todayStr });
@@ -54,9 +49,14 @@ export default {
       ? metrics.map(m => `- ${m.name} (id: ${m.id}): ${m.todayStr}g today, ${m.goalStr}`).join("\n")
       : "No metrics tracked yet.";
 
-    const needsSetup = !hasAnyGoals;
-    const logId = nodes?.log?.id;
-
+    // Check actual setupPhase, not just whether goals exist. Goals can be zero.
+    let setupPhase = "scaffolded";
+    try {
+      const rootNode = await Node.findById(foodRootId).select("metadata").lean();
+      const fm = rootNode?.metadata instanceof Map ? rootNode.metadata.get("food") : rootNode?.metadata?.food;
+      if (fm?.setupPhase) setupPhase = fm.setupPhase;
+    } catch {}
+    const needsSetup = setupPhase !== "complete";
     // Get today's picture for context
     let todaySummary = "";
     try {
@@ -97,7 +97,7 @@ RULES:
 - Use actual numbers from the metrics above. Don't make up totals.
 - For food estimates: egg = 6p/0c/5f/70cal, chicken 4oz = 35p/0c/4f/185cal, rice 1cup = 4p/45c/0f/200cal.
 - Never expose node IDs or metadata to the user.
-- If the message isn't about food, respond conversationally anyway. You live here.
+- If the message isn't about food, respond briefly. You live here but your tools are food-specific.
 - ALWAYS use food-log-entry for logging. Never manually call edit-node-value or create-node-note for food entries.`.trim();
   },
 };
