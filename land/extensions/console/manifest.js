@@ -1,6 +1,6 @@
 export default {
   name: "console",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Replaces the kernel's default log output with color-coded, timestamped, human-readable " +

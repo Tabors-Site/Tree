@@ -71,6 +71,21 @@ export async function getUnscaffoldedDomains(userId) {
   return unscaffolded;
 }
 
+/**
+ * Get domains the user HAS scaffolded (the inverse of getUnscaffoldedDomains).
+ * Uses the same cache window so both calls in the same message are free.
+ */
+export async function getScaffoldedDomains(userId) {
+  const life = getExtension("life");
+  if (!life?.exports) return [];
+
+  const rootId = await life.exports.findLifeRoot(userId);
+  if (!rootId) return [];
+
+  const domainNodes = await life.exports.getDomainNodes(rootId);
+  return Object.keys(domainNodes);
+}
+
 /** Invalidate cache for a user after scaffolding changes. */
 export function invalidateCache(userId) {
   _domainCache.delete(userId);

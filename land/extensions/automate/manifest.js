@@ -1,6 +1,6 @@
 export default {
   name: "automate",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "seed",
   description:
     "Flows. The tree acts on its own. " +

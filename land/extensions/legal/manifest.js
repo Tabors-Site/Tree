@@ -1,6 +1,6 @@
 export default {
   name: "legal",
-  version: "1.0.2",
+  version: "1.0.3",
   builtFor: "TreeOS",
   description:
     "Terms of Service and Privacy Policy pages. Renders on /terms and /privacy. " +

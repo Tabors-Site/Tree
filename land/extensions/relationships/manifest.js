@@ -1,6 +1,6 @@
 export default {
   name: "relationships",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "People in your life. Track who matters, what you did for them, what you " +

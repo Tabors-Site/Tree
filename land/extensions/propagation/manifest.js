@@ -1,6 +1,6 @@
 export default {
   name: "propagation",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-cascade",
   description:
     "The foundation of the cascade network. Nothing else works without it. Listens to onCascade " +

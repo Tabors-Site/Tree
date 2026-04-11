@@ -194,12 +194,13 @@ export async function init(core) {
       return `<div class="app-card">
         <div class="app-header"><span class="app-emoji">📚</span><span class="app-name">Study</span></div>
         <div class="app-desc">Queue topics, track mastery, detect gaps. The tree manages your curriculum.</div>
-        ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
-        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
-          ${tokenField}<input type="hidden" name="app" value="study" />
-          <input class="app-input" name="message" placeholder="What do you want to learn? (e.g. distributed systems, react hooks)" required />
-          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} Study</button>
-        </form>
+        ${entries.length > 0
+          ? `<div style="display:flex;flex-wrap:wrap;">${existing}</div>`
+          : `<form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+              ${tokenField}<input type="hidden" name="app" value="study" />
+              <input class="app-input" name="message" placeholder="What do you want to learn? (e.g. distributed systems, react hooks)" required />
+              <button class="app-start" type="submit">Start Study</button>
+            </form>`}
       </div>`;
     }, { priority: 40 });
   } catch {}

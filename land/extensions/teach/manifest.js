@@ -1,6 +1,6 @@
 export default {
   name: "teach",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "seed",
   description:
     "When a tree has been alive long enough, it accumulates wisdom that is not " +

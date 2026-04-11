@@ -1,6 +1,6 @@
 export default {
   name: "values",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Not everything in a tree is text. Some things are numbers. Revenue, hours logged, calories, " +

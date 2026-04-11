@@ -2850,6 +2850,32 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
     }
 
     setChatWidth(getAvailable() / 2.5);
+
+    // Resize handling: keep panel widths sane AND keep mobile sheet state in
+    // sync with the CSS breakpoint. Without the breakpoint sync, the mobile
+    // backdrop's .visible class can survive a desktop->mobile resize and end
+    // up blocking all clicks on the iframe (full-viewport pointer-events:auto
+    // overlay). The .open class on the sheet would also leave it slid up over
+    // the viewport. Reset to peeked when entering mobile, closed when leaving.
+    const mobileMql = window.matchMedia("(max-width: 768px)");
+    function onBreakpointChange(e) {
+      if (e.matches) {
+        // Just entered mobile. Make sure the sheet starts in peeked state and
+        // the backdrop is hidden so the iframe is interactive.
+        setMobileSheetState('peeked', true);
+      } else {
+        // Just left mobile. Clear all mobile state so the desktop layout has
+        // no leftover transforms or backdrop overlays.
+        setMobileSheetState('closed', true);
+      }
+    }
+    if (typeof mobileMql.addEventListener === "function") {
+      mobileMql.addEventListener("change", onBreakpointChange);
+    } else if (typeof mobileMql.addListener === "function") {
+      // Older Safari
+      mobileMql.addListener(onBreakpointChange);
+    }
+
     window.addEventListener("resize", () => setChatWidth(currentChatWidth));
 
     panelDivider.addEventListener("mousedown", (e) => {

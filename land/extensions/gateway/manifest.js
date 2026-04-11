@@ -1,6 +1,6 @@
 export default {
   name: "gateway",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-connect",
   description:
     "A tree is not limited to the TreeOS interface. The gateway extension is the core " +

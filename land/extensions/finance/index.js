@@ -88,12 +88,13 @@ export async function init(core) {
       return `<div class="app-card">
         <div class="app-header"><span class="app-emoji">💰</span><span class="app-name">Finance</span></div>
         <div class="app-desc">Track accounts, log spending in natural language. Budget goals per category. The AI reflects on patterns and helps you think about money.</div>
-        ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
-        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
-          ${tokenField}<input type="hidden" name="app" value="finance" />
-          <input class="app-input" name="message" placeholder="How much did you spend today?" required />
-          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} Finance</button>
-        </form>
+        ${entries.length > 0
+          ? `<div style="display:flex;flex-wrap:wrap;">${existing}</div>`
+          : `<form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+              ${tokenField}<input type="hidden" name="app" value="finance" />
+              <input class="app-input" name="message" placeholder="How much did you spend today?" required />
+              <button class="app-start" type="submit">Start Finance</button>
+            </form>`}
       </div>`;
     }, { priority: 60 });
   } catch {}

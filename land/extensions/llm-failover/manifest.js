@@ -1,6 +1,6 @@
 export default {
   name: "llm-failover",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Failover stack management for LLM connections. Push backup connections " +

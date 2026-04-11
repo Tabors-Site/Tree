@@ -316,12 +316,13 @@ export async function init(core) {
       return `<div class="app-card">
         <div class="app-header"><span class="app-emoji">🍎</span><span class="app-name">Food</span></div>
         <div class="app-desc">Say what you ate. One LLM call parses macros. Daily totals tracked. History archives daily summaries.</div>
-        ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
-        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
-          ${tokenField}<input type="hidden" name="app" value="food" />
-          <input class="app-input" name="message" placeholder="What did you eat? (or just say hi to set up your goals)" required />
-          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} Food</button>
-        </form>
+        ${entries.length > 0
+          ? `<div style="display:flex;flex-wrap:wrap;">${existing}</div>`
+          : `<form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+              ${tokenField}<input type="hidden" name="app" value="food" />
+              <input class="app-input" name="message" placeholder="What did you eat? (or just say hi to set up your goals)" required />
+              <button class="app-start" type="submit">Start Food</button>
+            </form>`}
       </div>`;
     }, { priority: 20 });
   } catch {}

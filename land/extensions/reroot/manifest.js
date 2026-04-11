@@ -1,6 +1,6 @@
 export default {
   name: "reroot",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-maintenance",
   description:
     "The tree reorganizes itself. Nodes end up in the wrong place over time. " +

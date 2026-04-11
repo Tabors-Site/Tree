@@ -1,6 +1,6 @@
 export default {
   name: "gateway-x",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-connect",
   description:
     "X (Twitter) channel type for the gateway. Three modes: output-only post generation " +

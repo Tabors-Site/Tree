@@ -1,6 +1,6 @@
 export default {
   name: "browser-bridge",
-  version: "1.0.2",
+  version: "1.0.3",
   scope: "confined",
   builtFor: "treeos-connect",
   description:

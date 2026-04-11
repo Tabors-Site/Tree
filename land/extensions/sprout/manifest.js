@@ -1,6 +1,6 @@
 export default {
   name: "sprout",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Auto-detects when a message implies a capability the tree doesn't have. " +

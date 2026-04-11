@@ -1,6 +1,6 @@
 export default {
   name: "contradiction",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-intelligence",
   description:
     "The tree's immune system. Notes on different nodes might contradict each other. Both valid " +

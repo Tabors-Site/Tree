@@ -1,6 +1,6 @@
 export default {
   name: "kb",
-  version: "1.0.1",
+  version: "1.0.2",
   builtFor: "TreeOS",
   description:
     "Knowledge base. Tell it things. Ask it things. One person maintains, " +

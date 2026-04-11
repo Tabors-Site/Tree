@@ -1,6 +1,6 @@
 export default {
   name: "purpose",
-  version: "1.0.1",
+  version: "1.0.2",
   builtFor: "TreeOS",
   description:
     "Holds the root purpose of the tree and measures everything against it. Every other " +

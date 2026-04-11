@@ -1,6 +1,6 @@
 export default {
   name: "digest",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-maintenance",
   description:
     "The tree's daily newspaper. Written by the tree about itself. Runs once daily, reads " +

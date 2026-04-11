@@ -1,6 +1,6 @@
 export default {
   name: "delegate",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-maintenance",
   description:
     "The tree's social intelligence. Intent generates actions for the tree to do itself. " +

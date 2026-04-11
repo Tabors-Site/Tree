@@ -1,6 +1,6 @@
 export default {
   name: "prediction",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-intelligence",
   description:
     "Layer 7 of the inner monologue. The narrative plus rings gives the tree temporal depth. " +

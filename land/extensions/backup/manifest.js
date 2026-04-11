@@ -1,6 +1,6 @@
 export default {
   name: "backup",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Two backup modes. Full backup serializes every document in the database to a " +

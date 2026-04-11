@@ -1,6 +1,6 @@
 export default {
   name: "finance",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Personal finance. Track accounts, log transactions in natural language, " +
@@ -16,7 +16,8 @@ export default {
     /\$\d+/,                                                      // "$45", "$1200"
     /\b\d+\s*(dollars?|bucks?|usd|eur|gbp)\b/i,                  // "45 dollars"
     /\b(spent|paid|bought|cost|earned|received|deposited|withdrew|transferred|owe|owes)\b/i,
-    /\b(rent|mortgage|groceries|subscription|bill|paycheck|salary|income|savings?|budget|invest|crypto|stock)\b/i,
+    /\b(rent|mortgage|groceries|subscription|paycheck|salary|income|savings?|budget|invest|crypto|stock)\b/i,
+    /\b(electric|phone|water|internet|gas|utility|medical|cable)\s*bill\b/i,
     /\b(bank|checking|credit card|debit|account|balance|net worth)\b/i,
   ],
 

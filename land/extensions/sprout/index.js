@@ -19,6 +19,7 @@ import log from "../../seed/log.js";
 import { z } from "zod";
 import {
   getUnscaffoldedDomains,
+  getScaffoldedDomains,
   getPending,
   setPending,
   clearPending,
@@ -137,14 +138,30 @@ export async function init(core) {
     const isConverse = mode === "tree:converse";
     if (!isHome && !isConverse) return;
 
+    // In tree:converse, only inject if we're inside the Life tree.
+    // Other trees (KB, projects, etc.) don't need domain awareness or sprout offers.
+    if (isConverse && hookData.rootId) {
+      const { getExtension } = await import("../loader.js");
+      const lifeExt = getExtension("life");
+      if (lifeExt?.exports?.findLifeRoot) {
+        const lifeRootId = await lifeExt.exports.findLifeRoot(userId);
+        if (!lifeRootId || String(hookData.rootId) !== String(lifeRootId)) return;
+      }
+    }
+
     try {
-      const unscaffolded = await getUnscaffoldedDomains(userId);
+      const [unscaffolded, scaffolded] = await Promise.all([
+        getUnscaffoldedDomains(userId),
+        getScaffoldedDomains(userId),
+      ]);
       const pending = getPending(userId);
 
-      // Nothing to inject
-      if (unscaffolded.length === 0 && !pending) return;
-
       const sections = [];
+
+      // Tell the AI what the user already has (for scoping instructions, general awareness)
+      if (scaffolded.length > 0) {
+        sections.push(`[User domains: ${scaffolded.join(", ")}]`);
+      }
 
       // Pending confirmation takes priority
       if (pending) {
@@ -178,6 +195,7 @@ export async function init(core) {
       if (sections.length > 0) {
         const block = sections.join("\n\n") + "\n\n";
         messages[0].content = block + messages[0].content;
+        log.verbose("Sprout", `beforeLLMCall injected: ${sections.map(s => s.split("\n")[0]).join(" | ")}`);
       }
     } catch (err) {
       log.debug("Sprout", `beforeLLMCall failed: ${err.message}`);

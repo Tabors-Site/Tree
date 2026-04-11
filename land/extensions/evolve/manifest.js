@@ -1,6 +1,6 @@
 export default {
   name: "evolve",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-intelligence",
   description:
     "The tree imagines what it could become. Watches the gap between what users do and " +

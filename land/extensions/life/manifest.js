@@ -1,6 +1,6 @@
 export default {
   name: "life",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Scaffolding library for domain trees. Creates Life roots, group nodes, " +

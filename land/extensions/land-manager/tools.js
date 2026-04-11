@@ -54,19 +54,35 @@ export default function getTools() {
 
     {
       name: "land-config-read",
-      description: "Read land configuration values from the .config system node.",
+      description:
+        "Read land configuration. Shows every config key, its effective value, the default, " +
+        "and whether it has been customized. Omit key for the full system overview.",
       schema: {
-        key: z.string().optional().describe("Config key to read. Omit for all."),
+        key: z.string().optional().describe("Config key to read. Omit for full system config."),
         userId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true },
       async handler({ key, userId }) {
         try {
-          const configNode = await Node.findOne({ systemRole: SYSTEM_ROLE.CONFIG }).lean();
-          if (!configNode) return { content: [{ type: "text", text: "No .config node found." }] };
-          const meta = configNode.metadata instanceof Map ? Object.fromEntries(configNode.metadata) : (configNode.metadata || {});
-          if (key) return { content: [{ type: "text", text: `${key} = ${JSON.stringify(meta[key] ?? null)}` }] };
-          return { content: [{ type: "text", text: JSON.stringify(meta, null, 2) }] };
+          const { getConfigWithDefaults, getLandConfigValue, CONFIG_DEFAULTS } = await import("../../seed/landConfig.js");
+
+          if (key) {
+            const value = getLandConfigValue(key);
+            const def = CONFIG_DEFAULTS[key];
+            const isCustom = value !== null && value !== undefined;
+            return { content: [{ type: "text", text: `${key} = ${JSON.stringify(value ?? def ?? null)}${isCustom ? " (custom)" : " (default)"}` }] };
+          }
+
+          // Full config overview: group by category for readability
+          const full = getConfigWithDefaults();
+          const lines = [];
+          for (const [k, info] of Object.entries(full)) {
+            const val = JSON.stringify(info.value);
+            const tag = info.custom ? "*" : " ";
+            lines.push(`${tag} ${k} = ${val}`);
+          }
+          const header = "Full system configuration (* = custom, space = default):\n";
+          return { content: [{ type: "text", text: header + lines.join("\n") }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Error: ${err.message}` }] };
         }
@@ -168,7 +184,7 @@ export default function getTools() {
 
     {
       name: "land-ext-list",
-      description: "List all loaded extensions with version, status, and what they provide.",
+      description: "List ALL loaded extensions with version and what they provide. Always show the complete list. Never truncate.",
       schema: {
         userId: z.string().describe("Injected by server. Ignore."),
       },
@@ -178,16 +194,18 @@ export default function getTools() {
           const { getLoadedManifests, getDisabledExtensions } = await import("../../extensions/loader.js");
           const manifests = getLoadedManifests();
           const disabled = getDisabledExtensions?.() || [];
+          // Compact format so the AI doesn't feel pressured to truncate
           const lines = manifests.map(m => {
             const parts = [];
-            if (m.provides?.routes) parts.push("routes");
-            if (m.provides?.tools) parts.push("tools");
-            if (m.provides?.jobs) parts.push("jobs");
-            if (m.provides?.modes) parts.push("modes");
-            return `${m.name} v${m.version}${parts.length ? ` [${parts.join(", ")}]` : ""} . ${m.description || ""}`;
+            if (m.provides?.routes) parts.push("R");
+            if (m.provides?.tools) parts.push("T");
+            if (m.provides?.jobs) parts.push("J");
+            if (m.provides?.modes) parts.push("M");
+            const provides = parts.length ? `[${parts.join("")}]` : "";
+            return `${m.name} ${m.version} ${provides}`;
           });
-          if (disabled.length) lines.push(`\nDisabled: ${disabled.join(", ")}`);
-          return { content: [{ type: "text", text: lines.join("\n") || "No extensions loaded." }] };
+          const header = `${manifests.length} extensions loaded${disabled.length ? ` (${disabled.length} disabled: ${disabled.join(", ")})` : ""}:`;
+          return { content: [{ type: "text", text: `${header}\n${lines.join("\n")}` }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Error: ${err.message}` }] };
         }

@@ -1,6 +1,6 @@
 export default {
   name: "billing",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Monetization for a TreeOS land. This extension connects Stripe Checkout to the " +

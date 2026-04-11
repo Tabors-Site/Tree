@@ -1,6 +1,6 @@
 export default {
   name: "stream",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Send multiple messages while the AI is working. Corrections, additions, " +

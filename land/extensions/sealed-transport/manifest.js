@@ -1,6 +1,6 @@
 export default {
   name: "sealed-transport",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-cascade",
   description:
     "Handles the pass-through mode for signals that should arrive unchanged. When a cascade " +

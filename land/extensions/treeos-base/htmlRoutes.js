@@ -608,7 +608,10 @@ export function buildTreeosHtmlRoutes() {
   // NODE CHATS
   // ===================================================================
 
-  router.get("/node/:nodeId/chats", urlAuth, htmlOnly, async (req, res) => {
+  // Shared handler for both /node/:nodeId/chats and /node/:nodeId/:version/chats
+  // Chats are not version-scoped (they reference nodes by meta.nodeId), so the
+  // version segment is cosmetic for URL consistency with notes/contributions.
+  async function renderNodeChatsHandler(req, res) {
     try {
       const { nodeId } = req.params;
       const node = await Node.findById(nodeId).select("name rootOwner").lean();
@@ -642,7 +645,10 @@ export function buildTreeosHtmlRoutes() {
       log.error("HTML", "Node chats render error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
-  });
+  }
+
+  router.get("/node/:nodeId/chats", urlAuth, htmlOnly, renderNodeChatsHandler);
+  router.get("/node/:nodeId/:version/chats", urlAuth, htmlOnly, renderNodeChatsHandler);
 
   // ===================================================================
   // ROOT OVERVIEW

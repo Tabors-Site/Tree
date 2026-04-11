@@ -10,7 +10,7 @@ import { getLandRootId } from "../../seed/landRoot.js";
 
 const MAX_MEMORIES = 200;
 const MAX_REMINDERS = 50;
-const SUMMARY_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours between summaries
+const SUMMARY_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes between summaries
 
 // Track last summary time per user so we don't summarize every session end
 const _lastSummary = new Map();

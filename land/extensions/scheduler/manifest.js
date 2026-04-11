@@ -1,6 +1,6 @@
 export default {
   name: "scheduler",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "The clock that watches the calendar. Reads schedule data from nodes, builds " +

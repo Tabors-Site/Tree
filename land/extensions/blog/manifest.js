@@ -1,6 +1,6 @@
 export default {
   name: "blog",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "A land-level blog for publishing long-form content outside the tree structure. Trees " +

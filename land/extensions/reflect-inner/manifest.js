@@ -1,6 +1,6 @@
 export default {
   name: "reflect-inner",
-  version: "1.0.1",
+  version: "1.0.2",
   builtFor: "treeos-intelligence",
   description:
     "Layer 2 of the inner monologue. Every 24 hours, compresses the tree's raw thoughts " +

@@ -1116,6 +1116,18 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
     throw new Error(llmHookResult.reason || "LLM call rejected");
   }
 
+  // Log the final system prompt preamble (everything hooks injected before the mode prompt).
+  // Shows [User Instructions], [Instructions], [Sprout], [Memories], etc. all stacked.
+  if (session.messages[0]?.role === "system") {
+    const sys = session.messages[0].content;
+    // Extract injected blocks: everything before the first non-bracket line or mode content.
+    // Look for lines starting with [ which indicate hook-injected sections.
+    const prelude = sys.split("\n").filter(l => l.startsWith("[") || l.startsWith("  ")).slice(0, 15);
+    if (prelude.length > 0) {
+      log.verbose("LLM", `[${session.modeKey}] Preamble: ${prelude.join(" | ").slice(0, 300)}`);
+    }
+  }
+
   let response;
 
   // Acquire semaphore slot before LLM call. Prevents thundering herd.

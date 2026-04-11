@@ -1,6 +1,6 @@
 export default {
   name: "taste",
-  version: "1.0.3",
+  version: "1.0.4",
   builtFor: "treeos-intelligence",
   description:
     "The tree learns what you like. Not from settings. From watching. " +

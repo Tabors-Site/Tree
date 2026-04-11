@@ -1,6 +1,6 @@
 export default {
   name: "learn",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Information intake and decomposition. Paste in 50,000 words. The extension scans through, " +

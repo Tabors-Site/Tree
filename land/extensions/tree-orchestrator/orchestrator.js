@@ -475,6 +475,7 @@ async function runModeAndReturn(visitorId, mode, message, {
   currentNodeId, readOnly = false, clearHistory = false,
   onToolLoopCheckpoint, modesUsed,
   targetNodeId = null,
+  treeCapabilities = null,
 }) {
   modesUsed.push(mode);
   emitStatus(socket, "intent", "");
@@ -484,6 +485,7 @@ async function runModeAndReturn(visitorId, mode, message, {
     currentNodeId: currentNodeId || targetNodeId,
     conversationMemory: formatMemoryContext(visitorId),
     clearHistory,
+    treeCapabilities,
   });
 
   const result = await processMessage(visitorId, message, {
@@ -1168,12 +1170,33 @@ export async function orchestrateTreeRequest({
 
   // ────────────────────────────────────────────────────────
   // FALLBACK — tree:converse
+  // Build tree capabilities from the routing index so converse
+  // knows what extensions exist in this tree even when nothing matched.
   // ────────────────────────────────────────────────────────
+
+  let treeCapabilities = null;
+  if (rootId) {
+    try {
+      const { getIndexForRoot } = await import("./routingIndex.js");
+      const { getExtensionManifest } = await import("../loader.js");
+      const index = getIndexForRoot(rootId);
+      if (index && index.size > 0) {
+        const lines = [];
+        for (const [extName, entry] of index) {
+          const manifest = getExtensionManifest(extName);
+          const territory = manifest?.territory || extName;
+          lines.push(`  ${extName}: ${entry.path} (${territory})`);
+        }
+        treeCapabilities = lines.join("\n");
+      }
+    } catch {}
+  }
 
   return runModeAndReturn(visitorId, "tree:converse", message, {
     socket, username, userId, rootId, signal, slot,
     currentNodeId, clearHistory: true,
     onToolLoopCheckpoint, modesUsed,
+    treeCapabilities,
   });
 }
 // ─────────────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 export default {
   name: "split",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "seed",
   description:
     "The tree detects when a branch has outgrown its parent. Evolution metrics show " +

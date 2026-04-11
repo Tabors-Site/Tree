@@ -1,6 +1,6 @@
 export default {
   name: "changelog",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-maintenance",
   description:
     "What changed since you last looked. Reads contributions (the kernel's audit trail) " +

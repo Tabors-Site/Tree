@@ -1,6 +1,6 @@
 export default {
   name: "tree-orchestrator",
-  version: "1.0.3",
+  version: "1.0.4",
   builtFor: "TreeOS",
   description:
     "Position determines reality. Every message that enters a tree passes through this " +

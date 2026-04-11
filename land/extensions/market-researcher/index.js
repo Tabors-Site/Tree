@@ -86,12 +86,13 @@ export async function init(core) {
       return `<div class="app-card">
         <div class="app-header"><span class="app-emoji">🔬</span><span class="app-name">Market Research</span></div>
         <div class="app-desc">Research agent. Uses browser to visit financial sites, pull data, and surface opportunities. Feeds findings to your investor and finance branches.</div>
-        ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
-        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
-          ${tokenField}<input type="hidden" name="app" value="market-researcher" />
-          <input class="app-input" name="message" placeholder="Research current crypto market" required />
-          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} Research</button>
-        </form>
+        ${entries.length > 0
+          ? `<div style="display:flex;flex-wrap:wrap;">${existing}</div>`
+          : `<form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+              ${tokenField}<input type="hidden" name="app" value="market-researcher" />
+              <input class="app-input" name="message" placeholder="Research current crypto market" required />
+              <button class="app-start" type="submit">Start Research</button>
+            </form>`}
       </div>`;
     }, { priority: 70 });
   } catch {}

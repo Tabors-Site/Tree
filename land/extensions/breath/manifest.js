@@ -1,6 +1,6 @@
 export default {
   name: "breath",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "The tree breathes. A single adaptive rhythm replaces every extension's individual " +

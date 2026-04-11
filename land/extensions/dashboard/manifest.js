@@ -1,6 +1,6 @@
 export default {
   name: "dashboard",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "The real-time operations panel for TreeOS. Every active session, every tree, every " +

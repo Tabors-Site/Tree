@@ -1,6 +1,6 @@
 export default {
   name: "land-manager",
-  version: "1.0.1",
+  version: "1.0.2",
   builtFor: "TreeOS",
   description:
     "The administrative AI for the entire land. Registers the land:manager mode, which is the " +

@@ -86,12 +86,13 @@ export async function init(core) {
       return `<div class="app-card">
         <div class="app-header"><span class="app-emoji">📈</span><span class="app-name">Investor</span></div>
         <div class="app-desc">Track holdings, cost basis, gains and losses. Portfolio allocation. The AI helps you think through decisions without predicting.</div>
-        ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
-        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
-          ${tokenField}<input type="hidden" name="app" value="investor" />
-          <input class="app-input" name="message" placeholder="What did you buy or sell?" required />
-          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} Investor</button>
-        </form>
+        ${entries.length > 0
+          ? `<div style="display:flex;flex-wrap:wrap;">${existing}</div>`
+          : `<form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+              ${tokenField}<input type="hidden" name="app" value="investor" />
+              <input class="app-input" name="message" placeholder="What did you buy or sell?" required />
+              <button class="app-start" type="submit">Start Investor</button>
+            </form>`}
       </div>`;
     }, { priority: 65 });
   } catch {}

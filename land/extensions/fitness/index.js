@@ -267,12 +267,13 @@ export async function init(core) {
       return `<div class="app-card">
         <div class="app-header"><span class="app-emoji">💪</span><span class="app-name">Fitness</span></div>
         <div class="app-desc">Three languages: gym (weight x reps x sets), running (distance x time x pace), bodyweight (reps x sets or duration). Progressive overload tracked per modality.</div>
-        ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
-        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
-          ${tokenField}<input type="hidden" name="app" value="fitness" />
-          <input class="app-input" name="message" placeholder="What do you train? (e.g. hypertrophy 4 days, running, bodyweight)" required />
-          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} Fitness</button>
-        </form>
+        ${entries.length > 0
+          ? `<div style="display:flex;flex-wrap:wrap;">${existing}</div>`
+          : `<form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+              ${tokenField}<input type="hidden" name="app" value="fitness" />
+              <input class="app-input" name="message" placeholder="What do you train? (e.g. hypertrophy 4 days, running, bodyweight)" required />
+              <button class="app-start" type="submit">Start Fitness</button>
+            </form>`}
       </div>`;
     }, { priority: 10 });
   } catch {}

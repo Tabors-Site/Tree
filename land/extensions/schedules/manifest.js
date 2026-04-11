@@ -1,6 +1,6 @@
 export default {
   name: "schedules",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Nodes exist in time, not just in space. A task has a due date. A goal has a review " +
