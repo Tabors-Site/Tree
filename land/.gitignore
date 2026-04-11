@@ -1,0 +1,7 @@
+node_modules
+.env
+.land/
+uploads
+extensions/.disabled
+extensions/.treeos-profile
+extensions/.staging-*
