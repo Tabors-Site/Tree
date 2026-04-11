@@ -641,7 +641,8 @@
       "Bash(find /home/tabor/github/Tree/land -name \"htmlRoutes.js\" -type f -exec grep -l \"node/:nodeId/:version\" {} \\\\;)",
       "Bash(grep -n \"registerSlot.*version-quick-links\" /home/tabor/github/Tree/land/extensions/*/index.js)",
       "Bash(find /home/tabor/github/Tree/land/extensions -name \"htmlRoutes.js\" -exec grep -l \":version/values\" {} \\\\;)",
-      "Bash(grep -r \"version:\" */manifest.js)"
+      "Bash(grep -r \"version:\" */manifest.js)",
+      "Bash(grep -r 'version:' */manifest.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
