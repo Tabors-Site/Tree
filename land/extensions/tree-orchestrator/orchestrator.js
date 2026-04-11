@@ -416,27 +416,67 @@ async function resolveLlmProvider(userId, rootId, modeKey, slot) {
 // SUFFIX CONVENTION ROUTING (one function, one place)
 // ─────────────────────────────────────────────────────────────────────────
 
-const REVIEW_PATTERN = /\b(how am i|progress|status|review|daily|stats|streak|history|so far|pattern|doing)\b/;
-const PLAN_PATTERN = /\b(plan|build|create|structure|organize|add|modify|remove|restructure|program|taper|schedule|adjust|set.*goal|change|curriculum)\b/;
+// ─────────────────────────────────────────────────────────────────────────
+// THE GRAMMAR
+//
+// The tree has a grammar. You speak naturally. The system parses.
+//
+//   Nouns        = Nodes (things with identity, position, relationships)
+//   Verbs        = Extensions (ways of acting: food tracks, fitness logs)
+//   Tense        = Modes (how the verb conjugates for this message)
+//   Adjectives   = Metadata (values, goals, status that describe nouns)
+//   Adverbs      = Instructions (modify how the verb behaves)
+//   Prepositions = Tree structure + scoping (under, above, blocked at)
+//   Pronouns     = Position (currentNodeId, rootId, "here", "this")
+//   Articles     = Existence (THE bench press = route, A bench press = create)
+//
+// The pipeline parses every message in 4 steps:
+//   1. Parse noun    — routing index identifies territory (which extension)
+//   2. Parse tense   — suffix patterns identify conjugation (which mode)
+//   3. Inject mods   — beforeLLMCall layers adverbs, pronouns, prepositions
+//   4. Dispatch      — the right verb in the right tense handles the sentence
+// ─────────────────────────────────────────────────────────────────────────
+
+// Tense patterns. These conjugate the verb (extension) into the right mode.
+// Past tense (review):           reflecting on what happened
+// Future/subjunctive (coach):    guidance, questions, corrections, conversation
+// Imperative (plan):             structural commands, building, modifying
+// Present tense (log):           recording facts, stating actions (default)
+
+const TENSE_PAST = /\b(how am i|how did i|how have i|progress|status|review|daily|weekly|stats|streak|history|trend|so far|pattern|doing|summary|recap|compare|average|report|results|track record)\b/i;
+
+const TENSE_FUTURE = new RegExp([
+  // Asking for guidance
+  "what should i", "should i", "help me", "recommend", "suggest",
+  "advice", "advise", "guide", "what do i", "what can i", "tell me what",
+  "coach", "what next", "whats next", "next up", "ready for",
+  "prepare", "warm up", "ideas?", "options?", "thoughts?", "opinion",
+  // Corrections and clarifications (not data, just conversation)
+  "supposed to be", "should be", "actually is", "i meant", "correction",
+  "wrong", "mistake", "fix that", "update that", "not right", "oops",
+  // Conversational (not logging, just talking)
+  "why", "explain", "tell me about", "what is", "what are", "how does",
+  "can you", "do you", "is it", "are there", "would it",
+  // Greetings and small talk (stay in coach, don't try to log "hi")
+  "^hi$", "^hey$", "^hello$", "^yo$", "^sup$", "^whats up$",
+].map(p => `(?:${p})`).join("|"), "i");
+
+const TENSE_IMPERATIVE = /\b(plan|build|create|setup|set up|structure|organize|add|modify|remove|delete|restructure|program|taper|schedule|adjust|set.*goal|change|curriculum|configure|redesign|rebuild|swap|replace|rename)\b/i;
 
 /**
- * Resolve which of an extension's modes to use based on message content
- * and behavioral constraint. Called ONCE per message after classification.
+ * Parse tense: which conjugation of the verb (extension) handles this message.
  *
- * :coach = guided (be), :review/:ask = backward analysis,
- * :plan = forward building, :log/:tell = default action.
- *
- * If baseMode is already plan or coach (e.g. setup phase, guided session),
- * don't override with log/tell on generic messages.
+ * Called ONCE per message after the noun (extension territory) is identified.
+ * Returns the resolved mode key for the identified tense.
  */
-async function resolveSuffixMode(baseMode, message, behavioral) {
+async function parseTense(baseMode, message, behavioral) {
   try {
     const { getModeOwner, getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
     const extName = getModeOwner(baseMode);
-    if (!extName) return baseMode;
+    if (!extName) return { mode: baseMode, tense: "present", pattern: "none" };
 
     const extModes = getModesOwnedBy(extName);
-    if (extModes.length <= 1) return baseMode;
+    if (extModes.length <= 1) return { mode: baseMode, tense: "present", pattern: "single-mode" };
 
     const find = (...suffixes) => {
       for (const s of suffixes) {
@@ -447,19 +487,29 @@ async function resolveSuffixMode(baseMode, message, behavioral) {
     };
     const lower = message.toLowerCase().trim();
 
-    if (behavioral === "be" || lower === "be") return find("coach") || baseMode;
-    if (REVIEW_PATTERN.test(lower)) return find("review", "ask") || baseMode;
-    if (PLAN_PATTERN.test(lower)) return find("plan") || baseMode;
+    if (behavioral === "be" || lower === "be") {
+      return { mode: find("coach") || baseMode, tense: "imperative-guided", pattern: "be" };
+    }
+    if (TENSE_PAST.test(lower)) {
+      return { mode: find("review", "ask") || baseMode, tense: "past", pattern: "review" };
+    }
+    if (TENSE_FUTURE.test(lower)) {
+      return { mode: find("coach") || baseMode, tense: "future", pattern: "coach" };
+    }
+    if (TENSE_IMPERATIVE.test(lower)) {
+      return { mode: find("plan") || baseMode, tense: "imperative", pattern: "plan" };
+    }
 
-    // Default: route to the action receiver. The extension is the territory,
-    // the mode is the intent. Setup-locked extensions should override via
-    // their handleMessage export, not by relying on the orchestrator to
-    // respect the locked mode.
-    return find("log", "tell") || baseMode;
+    return { mode: find("log", "tell") || baseMode, tense: "present", pattern: "default" };
   } catch {
-    return baseMode;
+    return { mode: baseMode, tense: "present", pattern: "error" };
   }
 }
+
+// Backward-compat aliases (extensions or tests that import these names)
+const REVIEW_PATTERN = TENSE_PAST;
+const COACH_PATTERN = TENSE_FUTURE;
+const PLAN_PATTERN = TENSE_IMPERATIVE;
 
 // ─────────────────────────────────────────────────────────────────────────
 // RUN MODE AND RETURN (eliminates copy-pasted switchMode/processMessage)
@@ -738,8 +788,9 @@ export async function orchestrateTreeRequest({
           summary: message.slice(0, 100),
           responseHint: "",
         };
-        log.verbose("Tree Orchestrator",
-          `🎯 Position hold: ${classification.mode} | "${classification.summary}"`);
+        const holdExt = typeof getModeOwner === "function" ? getModeOwner(classification.mode) : "?";
+        log.verbose("Grammar",
+          `🎯 Parse noun: ${holdExt || "?"} (position hold) | "${classification.summary}"`);
       }
     }
   }
@@ -807,7 +858,7 @@ export async function orchestrateTreeRequest({
   const confidence = classification.confidence ?? 0.5;
 
  log.verbose("Tree Orchestrator", 
-    `🎯 Classified: ${classification.intent} | confidence: ${confidence} | "${classification.summary}"`,
+    `🎯 Parse noun: ${classification.intent} | confidence: ${confidence} | "${classification.summary}"`,
   );
   emitModeResult(socket, "intent", {
     intent: classification.intent,
@@ -1120,7 +1171,7 @@ export async function orchestrateTreeRequest({
     const ext = extName ? getExtension(extName) : null;
 
     log.verbose("Tree Orchestrator",
-      `  Extension route: ${classification.mode} (ext: ${extName || "?"}, behavioral: ${behavioral})`);
+      `  Verb: ${extName || "?"} (mode: ${classification.mode}, behavioral: ${behavioral})`);
 
     // ── Data handler: extension pre-processing ──
     // Extensions can return:
@@ -1150,10 +1201,20 @@ export async function orchestrateTreeRequest({
       }
     }
 
-    // ── Suffix convention routing (ONE call), unless extension forced a mode ──
-    const resolvedMode = forcedMode || await resolveSuffixMode(classification.mode, message, behavioral);
+    // ── Step 2: Parse tense (which conjugation of this verb?) ──
+    let resolvedMode;
+    let tenseInfo = { tense: "present", pattern: "forced" };
+    if (forcedMode) {
+      resolvedMode = forcedMode;
+    } else {
+      tenseInfo = await parseTense(classification.mode, message, behavioral);
+      resolvedMode = tenseInfo.mode;
+    }
+    const noun = getModeOwner(classification.mode) || "converse";
     if (resolvedMode !== classification.mode) {
-      log.verbose("Tree Orchestrator", `  Suffix routed: ${classification.mode} -> ${resolvedMode}`);
+      log.verbose("Grammar", `noun=${noun} tense=${tenseInfo.tense} (${tenseInfo.pattern}) -> ${resolvedMode}`);
+    } else {
+      log.verbose("Grammar", `noun=${noun} tense=${tenseInfo.tense} (${tenseInfo.pattern})`);
     }
 
     return runModeAndReturn(visitorId, resolvedMode, message, {
@@ -1179,9 +1240,9 @@ export async function orchestrateTreeRequest({
 
       if (indexMatches.length === 1) {
         const single = indexMatches[0];
-        log.verbose("Tree Orchestrator", `  Single extension in converse: routing to ${single.extName}`);
-        const resolvedMode = await resolveSuffixMode(single.mode, message, behavioral);
-        return runModeAndReturn(visitorId, resolvedMode, message, {
+        const singleTense = await parseTense(single.mode, message, behavioral);
+        log.verbose("Grammar", `noun=${single.extName} tense=${singleTense.tense} (implicit from converse)`);
+        return runModeAndReturn(visitorId, singleTense.mode, message, {
           socket, username, userId, rootId, signal, slot,
           currentNodeId: single.targetNodeId, clearHistory: true,
           onToolLoopCheckpoint, modesUsed, targetNodeId: single.targetNodeId,

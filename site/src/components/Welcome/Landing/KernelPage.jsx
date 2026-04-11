@@ -1213,7 +1213,7 @@ const KernelPage = () => {
             </div>
             <div className="lp-footer-col">
               <h4>TreeOS</h4>
-              <a href="/app">Site</a>
+              <a href="/use">Use</a>
               <a href="/about/api">API</a>
               <a href="/about/gateway">Gateway</a>
               <a href="/about/energy">Energy</a>

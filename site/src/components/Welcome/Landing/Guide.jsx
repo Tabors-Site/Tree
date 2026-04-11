@@ -30,9 +30,55 @@ const Guide = () => {
       </section>
 
       {/* ══════════════════════════════════════════════════════════════ */}
-      {/* 1. THE IDEA */}
+      {/* 0. THE INSIGHT */}
       {/* ══════════════════════════════════════════════════════════════ */}
       <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 700, textAlign: "center"}}>
+          <div style={{
+            padding: "32px 28px", borderLeft: "3px solid rgba(167, 139, 250, 0.4)",
+            background: "rgba(167, 139, 250, 0.03)", borderRadius: "0 12px 12px 0",
+            textAlign: "left", marginBottom: 24,
+          }}>
+            <p style={{color: "#e5e5e5", fontSize: "1.15rem", lineHeight: 1.7, fontStyle: "italic", marginBottom: 0}}>
+              Human thought is structured like a tree.
+              Language reflects that structure.
+              So if you build a system as a tree,
+              you can use language directly as the interface.
+            </p>
+          </div>
+          <P>
+            Every AI framework starts from code: "How do I chain LLM calls? How do I manage
+            context? How do I route between agents?" They build plumbing and hope meaning emerges.
+            The language and the system are separate things with a translation layer between them.
+            That translation layer is always the weak point.
+          </P>
+          <P>
+            TreeOS noticed that concepts already branch like a tree. "Health" divides into "Fitness"
+            and "Food." "Fitness" divides into exercises. That's not a database schema someone
+            designed. That's how concepts actually relate. The hierarchy is natural. So TreeOS
+            structured its translation layer to mirror that hierarchy. The routing feels invisible
+            because it follows the same shape as the concepts it routes.
+          </P>
+          <P>
+            The AI doesn't execute your intent through a foreign layer. It inhabits the node
+            you're standing at. At a fitness node its tools are workout-specific, its context is
+            sets and reps, its mode determines coaching vs logging. At a food node everything
+            shifts to macros and meals. Same AI, different environment, shaped entirely by position.
+          </P>
+          <P style={{color: "rgba(255,255,255,0.4)"}}>
+            Most AI frameworks are imperative: you tell the system what to do. In TreeOS, the
+            routing is declarative: you tell it where you are, and the doing follows. The tools,
+            context, and constraints change based on position. The architecture does the work that
+            prompt engineering usually does. The AI has genuine situational awareness through
+            structure, not through one giant system prompt.
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 1. THE IDEA */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
         <div className="lp-container" style={{maxWidth: 800}}>
           <h2 className="lp-section-title">The Idea</h2>
           <P>
@@ -227,6 +273,91 @@ Current time: Friday, April 11, 2026, 7:42 AM EDT`}</Code>
           </P>
           <P>
             <a href="/ai" style={{color: "#7dd385"}}>Deep dive: The AI</a>
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 6b. HOW INTENT IS CHANNELED */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">How Intent Is Channeled</h2>
+          <P>
+            The tree has a grammar. You speak naturally. The system parses.
+          </P>
+          <P>
+            <strong>Nodes are nouns.</strong> Bench Press. Protein. Chapter 3. They are things with identity,
+            position, and relationships. They sit in the tree and hold meaning.
+          </P>
+          <P>
+            <strong>Extensions are verbs.</strong> Food tracks. Fitness logs. Recovery reflects. Study teaches.
+            They are ways of being at a position. Install an extension and the tree gains a new capability,
+            a new way to act on its nouns.
+          </P>
+          <P>
+            <strong>Routing is parsing.</strong> "Ate eggs" contains food nouns. "Bench 135" contains fitness
+            nouns. The routing index is a vocabulary list: which nouns belong to which verb. It maps territory.
+            This noun-space belongs to this verb.
+          </P>
+          <P>
+            <strong>Modes are conjugation.</strong> Once the territory is identified, the intent determines the tense:
+          </P>
+          <Code>{`Review  (past tense)        "how did I do"    "my progress"
+Coach   (future/subjunctive) "what should I"   "help me"
+Plan    (imperative)         "build"           "create"    "add"
+Log     (present tense)      "ate eggs"        "bench 135x10"`}</Code>
+          <P>
+            A message flows through three stages. <strong>What noun?</strong> The routing index identifies
+            the territory (food, fitness, study). <strong>What tense?</strong> The suffix pattern identifies
+            the conjugation (review, coach, plan, log). <strong>Dispatch.</strong> The right verb in the
+            right tense handles the sentence.
+          </P>
+          <P>
+            The user speaks natural language. The tree parses it into noun + verb + tense. The node receives it.
+            The extension acts on it. The mode thinks in the right frame. That is the grammar of TreeOS.
+          </P>
+
+          <h3 style={{color: "#fff", marginTop: 32, marginBottom: 12}}>The Full Grammar</h3>
+
+          <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12}}>
+            <div style={{background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "14px 16px"}}>
+              <div style={{color: "#a78bfa", fontWeight: 600, fontSize: "0.9rem", marginBottom: 6}}>Nouns = Nodes</div>
+              <div style={{color: "#999", fontSize: "0.85rem", lineHeight: 1.6}}>Bench Press. Protein. Chapter 3. Things with identity, position, relationships.</div>
+            </div>
+            <div style={{background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "14px 16px"}}>
+              <div style={{color: "#4ade80", fontWeight: 600, fontSize: "0.9rem", marginBottom: 6}}>Verbs = Extensions</div>
+              <div style={{color: "#999", fontSize: "0.85rem", lineHeight: 1.6}}>Food tracks. Fitness logs. Study teaches. Ways of acting on nouns.</div>
+            </div>
+            <div style={{background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "14px 16px"}}>
+              <div style={{color: "#ecc94b", fontWeight: 600, fontSize: "0.9rem", marginBottom: 6}}>Tense = Modes</div>
+              <div style={{color: "#999", fontSize: "0.85rem", lineHeight: 1.6}}>Review (past). Coach (future). Plan (imperative). Log (present).</div>
+            </div>
+            <div style={{background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "14px 16px"}}>
+              <div style={{color: "#f97316", fontWeight: 600, fontSize: "0.9rem", marginBottom: 6}}>Adjectives = Metadata</div>
+              <div style={{color: "#999", fontSize: "0.85rem", lineHeight: 1.6}}>135lb. 5x5. Ready for progression. Values, goals, status that describe each noun.</div>
+            </div>
+            <div style={{background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "14px 16px"}}>
+              <div style={{color: "#7dd385", fontWeight: 600, fontSize: "0.9rem", marginBottom: 6}}>Adverbs = Instructions</div>
+              <div style={{color: "#999", fontSize: "0.85rem", lineHeight: 1.6}}>"Be concise." "Use kg." "Never suggest meat." They modify how the verb behaves.</div>
+            </div>
+            <div style={{background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "14px 16px"}}>
+              <div style={{color: "#c4c8d0", fontWeight: 600, fontSize: "0.9rem", marginBottom: 6}}>Prepositions = Tree Structure</div>
+              <div style={{color: "#999", fontSize: "0.85rem", lineHeight: 1.6}}>Under, above, next to. Parent, ancestor, sibling. Spatial scoping is prepositional.</div>
+            </div>
+            <div style={{background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "14px 16px"}}>
+              <div style={{color: "#60a5fa", fontWeight: 600, fontSize: "0.9rem", marginBottom: 6}}>Pronouns = Position</div>
+              <div style={{color: "#999", fontSize: "0.85rem", lineHeight: 1.6}}>"It" = currentNodeId. "Here" = where you are. "This tree" = rootId. Position resolves reference.</div>
+            </div>
+            <div style={{background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "14px 16px"}}>
+              <div style={{color: "#f472b6", fontWeight: 600, fontSize: "0.9rem", marginBottom: 6}}>Articles = Existence</div>
+              <div style={{color: "#999", fontSize: "0.85rem", lineHeight: 1.6}}>"THE bench press" = a node that exists (routing index). "A bench press" = something to create (sprout).</div>
+            </div>
+          </div>
+
+          <P>
+            The system is a natural language computer. The seed is the parser. Extensions are the vocabulary.
+            The tree is the syntax tree. The user just talks.
           </P>
         </div>
       </section>

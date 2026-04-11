@@ -1,6 +1,6 @@
 export default {
   name: "food",
-  version: "2.1.1",
+  version: "2.1.2",
   builtFor: "TreeOS",
   description:
     "Nutrition tracking through tree structure. Log node receives food input. One LLM " +

@@ -161,8 +161,75 @@ const TreeOSPage = () => {
         </div>
       </section>
 
-      {/* ── THE DEEPER LAYERS ── */}
+      {/* ── HOW INTENT IS CHANNELED ── */}
       <section className="lp-section">
+        <div className="lp-container">
+          <h2 className="lp-section-title">How Intent Is Channeled</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            The tree has a grammar. You speak naturally. The system parses.
+          </p>
+
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
+            <div className="lp-card">
+              <h3 style={{color: "#a78bfa"}}>Nodes are nouns</h3>
+              <p>
+                Bench Press. Protein. Chapter 3. They are things with identity,
+                position, and relationships. They sit in the tree and hold meaning.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#4ade80"}}>Extensions are verbs</h3>
+              <p>
+                Food tracks. Fitness logs. Recovery reflects. Study teaches.
+                Install an extension and the tree gains a new way to act on its nouns.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#f97316"}}>Routing is parsing</h3>
+              <p>
+                "Ate eggs" has food nouns. "Bench 135" has fitness nouns. The routing
+                index maps territory: which noun-space belongs to which verb.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#ecc94b"}}>Modes are conjugation</h3>
+              <p>
+                <strong>Review</strong> (past): "how did I do."
+                <strong> Coach</strong> (future): "what should I."
+                <strong> Plan</strong> (imperative): "build", "create."
+                <strong> Log</strong> (present): "ate eggs", "bench 135x10."
+              </p>
+            </div>
+          </div>
+
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr", marginTop: 12}}>
+            <div className="lp-card" style={{padding: "14px 16px"}}>
+              <h3 style={{color: "#f97316", fontSize: "0.95rem"}}>Adjectives = Metadata</h3>
+              <p style={{fontSize: "0.85rem"}}>135lb. 5x5. Ready for progression. Values, goals, and status describe each noun.</p>
+            </div>
+            <div className="lp-card" style={{padding: "14px 16px"}}>
+              <h3 style={{color: "#7dd385", fontSize: "0.95rem"}}>Adverbs = Instructions</h3>
+              <p style={{fontSize: "0.85rem"}}>"Be concise." "Use kg." They modify how the verb behaves without changing the verb.</p>
+            </div>
+            <div className="lp-card" style={{padding: "14px 16px"}}>
+              <h3 style={{color: "#c4c8d0", fontSize: "0.95rem"}}>Prepositions = Tree Structure</h3>
+              <p style={{fontSize: "0.85rem"}}>Under, above, next to. Parent, ancestor, sibling. Spatial scoping is prepositional.</p>
+            </div>
+            <div className="lp-card" style={{padding: "14px 16px"}}>
+              <h3 style={{color: "#f472b6", fontSize: "0.95rem"}}>Articles = Existence</h3>
+              <p style={{fontSize: "0.85rem"}}>"THE bench press" routes to a node that exists. "A bench press" triggers sprout to create it.</p>
+            </div>
+          </div>
+
+          <p className="lp-section-sub" style={{marginTop: 24, maxWidth: 620}}>
+            The system is a natural language computer. The seed is the parser.
+            Extensions are the vocabulary. The tree is the syntax tree. The user just talks.
+          </p>
+        </div>
+      </section>
+
+      {/* ── THE DEEPER LAYERS ── */}
+      <section className="lp-section lp-section-alt">
         <div className="lp-container">
           <h2 className="lp-section-title">The Deeper Layers</h2>
           <p className="lp-section-sub lp-section-sub-wide">
@@ -382,6 +449,49 @@ const TreeOSPage = () => {
           </div>
         </div>
       </section>
+
+      {/* ── FOOTER ── */}
+      <footer className="lp-footer">
+        <div className="lp-container">
+          <div className="lp-footer-grid">
+            <div className="lp-footer-col">
+              <h4>Docs</h4>
+              <a href="/guide">Guide</a>
+              <a href="/seed">The Seed</a>
+              <a href="/ai">The AI</a>
+              <a href="/cascade">Cascade</a>
+              <a href="/flow">The Flow</a>
+              <a href="/extensions">Extensions</a>
+              <a href="/build">Build</a>
+              <a href="/network">The Network</a>
+              <a href="/mycelium">Mycelium</a>
+              <a href="/land">Start a Land</a>
+              <a href="/cli">CLI</a>
+            </div>
+            <div className="lp-footer-col">
+              <h4>TreeOS</h4>
+              <a href="/treeos">Overview</a>
+              <a href="/use">Use</a>
+              <a href="/about/api">API</a>
+              <a href="/about/gateway">Gateway</a>
+              <a href="/about/energy">Energy</a>
+            </div>
+            <div className="lp-footer-col">
+              <h4>Community</h4>
+              <a href="https://horizon.treeos.ai">Horizon</a>
+              <a href="/blog">Blog</a>
+            </div>
+            <div className="lp-footer-col">
+              <h4>Source</h4>
+              <a href="https://github.com/taborgreat/create-treeos">GitHub</a>
+              <a href="https://github.com/taborgreat/TreeOS/blob/main/LICENSE">AGPL-3.0 License</a>
+            </div>
+          </div>
+          <div className="lp-footer-bottom">
+            TreeOS . AGPL-3.0 . <a href="https://tabors.site" style={{color: "inherit", textDecoration: "none"}}>Tabor Holly</a>
+          </div>
+        </div>
+      </footer>
 
     </div>
   );

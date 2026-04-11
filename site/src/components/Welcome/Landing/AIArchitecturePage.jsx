@@ -27,8 +27,32 @@ const AIArchitecturePage = () => {
         </div>
       </section>
 
-      {/* ── THREE ZONES ── */}
+      {/* ── THE INVERSION ── */}
       <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 700}}>
+          <div style={{
+            padding: "24px 28px", borderLeft: "3px solid rgba(167, 139, 250, 0.4)",
+            background: "rgba(167, 139, 250, 0.03)", borderRadius: "0 12px 12px 0",
+            marginBottom: 8,
+          }}>
+            <p style={{color: "#e5e5e5", fontSize: "1.05rem", lineHeight: 1.7, fontStyle: "italic"}}>
+              Human thought is structured like a tree. Language reflects that structure.
+              So if you build a system as a tree, you can use language directly as the interface.
+            </p>
+          </div>
+          <p style={{color: "#999", fontSize: "0.9rem", lineHeight: 1.7, textAlign: "center", padding: "0 20px"}}>
+            Most AI systems ask "how do I get the AI to do the right thing?" TreeOS asks "how do
+            I build an environment where the right thing is the only thing the AI can say?" The
+            tools, the context, and the constraints change based on where you are. The structure
+            constrains the output before the AI speaks. Position gives the AI genuine situational
+            awareness, not through one giant prompt, but through architecture that mirrors how
+            concepts actually relate to each other.
+          </p>
+        </div>
+      </section>
+
+      {/* ── THREE ZONES ── */}
+      <section className="lp-section lp-section-alt">
         <div className="lp-container">
           <h2 className="lp-section-title">Three Zones</h2>
           <p className="lp-section-sub lp-section-sub-wide">
@@ -497,6 +521,221 @@ const AIArchitecturePage = () => {
         </div>
       </section>
 
+      {/* ── THE GRAMMAR ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container">
+          <h2 className="lp-section-title">The Grammar</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            The tree doesn't translate natural language into code. It translates natural
+            language into more natural language at a lower level. The user says a sentence.
+            The tree diagrams it. Each part of the diagram maps to an architectural primitive.
+            The execution IS the parse tree.
+          </p>
+
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
+            <div className="lp-card">
+              <h3 style={{color: "#a78bfa"}}>Nouns = Nodes</h3>
+              <p>
+                Bench Press. Protein. Chapter 3. Things with identity, position, and
+                relationships. They sit in the tree and hold meaning. The routing index
+                is the vocabulary list: which nouns belong to which verb.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#4ade80"}}>Verbs = Extensions</h3>
+              <p>
+                Food tracks. Fitness logs. Recovery reflects. Study teaches. Ways of being
+                at a position. Install an extension and the tree gains a new capability,
+                a new way to act on its nouns.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#ecc94b"}}>Tense = Modes</h3>
+              <p>
+                Once the territory is identified, the intent determines the tense. Four
+                conjugations for every verb:
+              </p>
+              <div style={{background: "rgba(0,0,0,0.3)", borderRadius: 8, padding: "12px 16px", marginTop: 12, fontSize: "0.85rem", color: "#999", lineHeight: 1.8}}>
+                <strong style={{color: "#a78bfa"}}>Review</strong> (past): "how did I do" "my progress"<br/>
+                <strong style={{color: "#4ade80"}}>Coach</strong> (future): "what should I" "help me"<br/>
+                <strong style={{color: "#f97316"}}>Plan</strong> (imperative): "build" "create" "add"<br/>
+                <strong style={{color: "#ecc94b"}}>Log</strong> (present): "ate eggs" "bench 135x10"
+              </div>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#f97316"}}>Routing = Parsing</h3>
+              <p>
+                "Ate eggs" contains food nouns. "Bench 135" contains fitness nouns.
+                The classifier hints are vocabulary lists. The routing index maps
+                territory. This noun-space belongs to this verb.
+              </p>
+            </div>
+          </div>
+
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr", marginTop: 12}}>
+            <div className="lp-card">
+              <h3 style={{color: "#f97316"}}>Adjectives = Metadata</h3>
+              <p>
+                135lb. 5x5. Ready for progression. Values, goals, and status describe
+                each noun. The <code>enrichContext</code> hook injects adjectives into
+                the AI's view of a position.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#7dd385"}}>Adverbs = Instructions</h3>
+              <p>
+                "Be concise." "Use kg." "Never suggest meat." They modify how the verb
+                behaves without changing the verb. Food still logs. It just logs concisely.
+                The <code>beforeLLMCall</code> prepend is the adverbial layer.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#c4c8d0"}}>Prepositions = Tree Structure</h3>
+              <p>
+                Under Health. Next to Food. Above Bench Press. Spatial scoping IS
+                prepositional. <code>ext-block shell UNDER DevOps</code>.{" "}
+                <code>ext-allow solana AT Finance</code>. The spatial commands
+                are literally prepositions applied to the tree.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#60a5fa"}}>Pronouns = Position</h3>
+              <p>
+                "It" = currentNodeId. "Here" = where you are. "This tree" = rootId.
+                The position system resolves pronouns. When you say "log this" the
+                system knows what "this" means because of where you're standing.
+              </p>
+            </div>
+          </div>
+
+          <div style={{maxWidth: 700, margin: "24px auto 0"}}>
+            <div className="lp-card" style={{textAlign: "center"}}>
+              <h3 style={{color: "#f472b6"}}>Articles = Existence</h3>
+              <p>
+                "THE bench press" means the routing index found it. It exists. Route to it.
+                "A bench press" means it doesn't exist yet. Sprout activates. Creates it.
+                Definite versus indefinite. Existing versus potential.
+              </p>
+            </div>
+          </div>
+
+          {/* The Pipeline */}
+          <div style={{
+            maxWidth: 760, margin: "32px auto", display: "flex", flexDirection: "column", gap: 0,
+          }}>
+            <p style={{color: "#999", fontSize: "0.9rem", textAlign: "center", marginBottom: 16}}>
+              Every message flows through four steps:
+            </p>
+
+            <div style={{display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8}}>
+              {[
+                { step: "1", label: "Parse Noun", desc: "Which extension?", color: "#a78bfa" },
+                { step: "2", label: "Parse Tense", desc: "Which mode?", color: "#ecc94b" },
+                { step: "3", label: "Inject Modifiers", desc: "Instructions, persona, boundaries", color: "#7dd385" },
+                { step: "4", label: "Dispatch", desc: "Right verb, right tense", color: "#f97316" },
+              ].map(s => (
+                <div key={s.step} style={{
+                  background: "rgba(255,255,255,0.03)", border: `1px solid ${s.color}33`,
+                  borderRadius: 8, padding: "12px 10px", textAlign: "center",
+                }}>
+                  <div style={{color: s.color, fontWeight: 700, fontSize: "0.8rem", marginBottom: 4}}>{s.step}. {s.label}</div>
+                  <div style={{color: "#888", fontSize: "0.75rem"}}>{s.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{
+            maxWidth: 700, margin: "24px auto 0", textAlign: "center",
+            background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
+            borderRadius: 12, padding: "28px 32px",
+          }}>
+            <p style={{color: "#e5e5e5", fontSize: "1.1rem", fontWeight: 600, lineHeight: 1.7, marginBottom: 16}}>
+              The system is a natural language computer.<br/>
+              The seed is the parser. Extensions are the vocabulary.<br/>
+              The tree is the syntax tree. The user just talks.
+            </p>
+            <p style={{color: "#666", fontSize: "0.85rem", lineHeight: 1.6, maxWidth: 580, margin: "0 auto"}}>
+              In most AI frameworks, functions are the primary architectural unit. You explicitly
+              wire them together: call this, route to that, handle this output. The developer thinks
+              in functions. The system is organized around functions. TreeOS inverts this. Functions
+              are downstream consequences of grammar, not the organizing principle. You don't call
+              a logging function. You stand at a food node and speak in present tense, and logging
+              is just what that means. The function fires, but nobody explicitly orchestrated it.
+              The grammar did.
+            </p>
+            <p style={{color: "#555", fontSize: "0.8rem", lineHeight: 1.6, maxWidth: 520, margin: "12px auto 0", fontStyle: "italic"}}>
+              When you speak, your mouth calls functions: muscle contractions, air pressure, phoneme
+              production. But you don't think in those functions. You think in words. The functions
+              are real but they're not where the meaning lives. TreeOS claims the same thing for AI
+              systems. Functions exist. They fire. They're just not the level of abstraction that matters.
+            </p>
+          </div>
+
+          <div style={{
+            maxWidth: 700, margin: "32px auto 0", textAlign: "center",
+            background: "rgba(167, 139, 250, 0.04)", border: "1px solid rgba(167, 139, 250, 0.12)",
+            borderRadius: 12, padding: "28px 32px",
+          }}>
+            <h3 style={{color: "#a78bfa", fontSize: "1rem", marginBottom: 12}}>Two Languages, One Tree</h3>
+            <p style={{color: "#ccc", fontSize: "0.9rem", lineHeight: 1.7, marginBottom: 16}}>
+              The grammar works in both directions. The user's intent flows in: parsed into
+              noun, verb, tense, routed to the right extension in the right mode. But the AI
+              also operates through this grammar. Its tools, its context, and its constraints
+              are all shaped by where it lives in the tree.
+            </p>
+            <p style={{color: "#999", fontSize: "0.85rem", lineHeight: 1.7, marginBottom: 16}}>
+              At a food node, the AI's context is macros and calories. Its tools are food-specific.
+              Its mode determines whether it's logging or reviewing. Move to fitness and everything
+              shifts: context becomes sets and reps, tools become workout-specific, the mode
+              determines coaching vs planning. Same AI. Different environment. The tree shapes
+              what the AI can see, say, and do at every position.
+            </p>
+            <p style={{color: "#999", fontSize: "0.85rem", lineHeight: 1.7, marginBottom: 16}}>
+              This structure mirrors how human concepts actually branch from each other. "Health"
+              divides into "Fitness" and "Food." "Fitness" divides into exercises. That's not a
+              database schema. That's how concepts relate. The tree structure matches the conceptual
+              structure, which is why natural language maps to it without a heavy translation layer.
+            </p>
+            <p style={{color: "#666", fontSize: "0.85rem", lineHeight: 1.7}}>
+              The tree channels the user's intent into extensions, amplifying one sentence into
+              mechanical actions across domains. And it gives the AI an environment to inhabit,
+              a structure to operate through, a grammar that constrains and guides. The user
+              talks to the tree. The tree shapes the AI's response. Both use the same structure.
+            </p>
+          </div>
+
+          <div style={{
+            maxWidth: 700, margin: "24px auto 0",
+            background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
+            borderRadius: 12, padding: "28px 32px",
+          }}>
+            <h3 style={{color: "#e5e5e5", fontSize: "1rem", marginBottom: 16, textAlign: "center"}}>The AI Operates Through the Tree</h3>
+            <p style={{color: "#ccc", fontSize: "0.9rem", lineHeight: 1.8, marginBottom: 14}}>
+              The AI at <code>/Health/Fitness</code> reads the tree to know what exercises exist, what
+              weights were lifted, what progressive overload is due. It writes a note to the History
+              node. Creates a child under Gym. Updates values on Bench Press. Cascade carries the
+              workout signal to the Food branch. The tree is not a database the AI queries. It is
+              the environment the AI inhabits and operates through.
+            </p>
+            <p style={{color: "#999", fontSize: "0.85rem", lineHeight: 1.8, marginBottom: 14}}>
+              The human speaks in sentences. "Ate chicken for lunch." The tree parses it. Noun: food.
+              Verb: log. Tense: present. The AI receives this through its position-shaped context and
+              responds with tree operations: create note, update value, cascade signal. Every memory
+              the AI holds is a node with notes. Every communication between domains is a cascade
+              signal between branches.
+            </p>
+            <p style={{color: "#a78bfa", fontSize: "0.9rem", lineHeight: 1.8, textAlign: "center"}}>
+              TreeOS was built from studying how concepts branch from each other in natural language.
+              The same branching structure that organizes human concepts organizes the AI's environment.
+              Most systems translate between human language and machine operations through a fragile
+              middle layer. TreeOS structured the translation layer to mirror how concepts actually
+              relate. The tree is the shared structure. That's why natural language works as the interface.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ── CLOSING ── */}
       <section className="lp-section" style={{paddingBottom: 60}}>
         <div className="lp-container" style={{textAlign: "center"}}>
@@ -537,7 +776,7 @@ const AIArchitecturePage = () => {
             </div>
             <div className="lp-footer-col">
               <h4>TreeOS</h4>
-              <a href="/app">Site</a>
+              <a href="/use">Use</a>
               <a href="/about/api">API</a>
               <a href="/about/gateway">Gateway</a>
               <a href="/about/energy">Energy</a>

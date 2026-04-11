@@ -2,6 +2,20 @@
 
 > **WARNING:** This is a new community and we are developing extensions together. There may be bad actors, and while the kernel is safe, extensions can reach into your filesystem and much more. Review all extension code yourself if it's unknown. Extensions have full access to the Node.js process. The blocklist on shell is defense in depth, not a sandbox. The real security boundary is the operator's judgment. Install what you trust. Review what you don't.
 
+## The Grammar
+
+Your extension is a **verb**. It gives the tree a new way to act. Food tracks. Fitness logs. Study teaches.
+
+Your **modes are conjugations**. Each mode is a tense of your verb: `:log` (present tense, recording facts), `:coach` (future, guiding), `:review` (past, analyzing), `:plan` (imperative, building structure).
+
+Your **classifierHints** define your **noun territory**. They are the vocabulary list that tells the routing index which messages belong to your verb. "ate", "eggs", "breakfast" belong to food. "bench", "squat", "reps" belong to fitness.
+
+Your **enrichContext** handler injects **adjectives**. Values, goals, status, today's totals. Data that describes the nouns at this position so the AI can see them.
+
+Your **tools** are the **actions your verb can perform**. `food-log-entry` is food's write action. `fitness-add-exercise` is fitness's creation action. Keep tools specific to your domain. Never give modes generic tree tools that could write outside your territory.
+
+The routing pipeline parses every message: noun (whose territory?) then tense (what conjugation?) then modifiers (instructions, boundaries) then dispatch (your mode runs). Your extension plugs into this grammar by registering modes and declaring hints. The tree does the rest.
+
 ## Directory Structure
 
 ```

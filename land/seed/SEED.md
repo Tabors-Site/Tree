@@ -98,6 +98,30 @@ Same pattern. Extensions register. The kernel resolves. Failure falls back to th
 5. Seed schemas never change.
 6. Zero `getExtension()` calls in seed.
 
+## The Grammar
+
+The tree has a grammar. Users speak naturally. The system parses.
+
+| Part of Speech | System Component | Role in Pipeline |
+|---|---|---|
+| **Nouns** | Nodes | Things with identity, position, relationships. The routing index maps noun-territory. |
+| **Verbs** | Extensions | Ways of acting: food tracks, fitness logs, study teaches. Install an extension, gain a verb. |
+| **Tense** | Modes | Conjugation of the verb. Past (review), future (coach), imperative (plan), present (log). |
+| **Adjectives** | Metadata | Values, goals, status that describe nouns. Injected via enrichContext. |
+| **Adverbs** | Instructions | Modify how verbs behave. "Be concise." "Use kg." User-level and node-level. |
+| **Prepositions** | Tree structure + scoping | Under, above, blocked at. Spatial scoping is prepositional. Boundaries are prepositions of exclusion. |
+| **Pronouns** | Position | currentNodeId, rootId. "Here", "this tree", "it". Position resolves reference. |
+| **Articles** | Existence | "THE bench press" routes to an existing node. "A bench press" triggers creation (sprout). |
+
+Every message parses in four steps:
+
+1. **Parse noun**: the routing index identifies territory (which extension claims this message)
+2. **Parse tense**: suffix patterns identify conjugation (review, coach, plan, or log)
+3. **Inject modifiers**: beforeLLMCall hooks layer adverbs (instructions), pronouns (persona), articles (sprout), prepositions (boundary)
+4. **Dispatch**: the right verb in the right tense handles the sentence
+
+The seed is the parser. Extensions are the vocabulary. The tree is the syntax tree.
+
 ## Guarantees
 
 **Never block inbound.** Cascade signals always accepted. Always produce a result. No configuration can prevent a signal from arriving.

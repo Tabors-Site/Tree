@@ -4,6 +4,32 @@ const UsePage = () => {
   return (
     <div className="lp">
 
+      {/* ── NAV BAR ── */}
+      <div style={{
+        display: "flex", gap: 12, justifyContent: "center", padding: "16px 20px",
+        flexWrap: "wrap", position: "relative", zIndex: 2,
+      }}>
+        {[
+          { href: "/", label: "Home" },
+          { href: "/treeos", label: "TreeOS" },
+          { href: "/seed", label: "Seed" },
+          { href: "/ai", label: "AI" },
+          { href: "/guide", label: "Guide" },
+          { href: "/cascade", label: "Cascade" },
+          { href: "/extensions", label: "Extensions" },
+          { href: "/network", label: "Network" },
+          { href: "/land", label: "Start a Land" },
+          { href: "/cli", label: "CLI" },
+        ].map(l => (
+          <a key={l.href} href={l.href} style={{
+            padding: "6px 14px", borderRadius: 6, fontSize: "0.8rem", fontWeight: 500,
+            color: "rgba(255,255,255,0.5)", textDecoration: "none",
+            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+            transition: "all 0.15s",
+          }}>{l.label}</a>
+        ))}
+      </div>
+
       {/* ── HERO ── */}
       <section className="lp-hero" style={{minHeight: "60vh"}}>
         <div style={{position: "relative", zIndex: 1}}>
@@ -145,9 +171,42 @@ const UsePage = () => {
         </div>
       </section>
 
-      {/* ── FOOTER ── */}
       <footer className="lp-footer">
         <div className="lp-container">
+          <div className="lp-footer-grid">
+            <div className="lp-footer-col">
+              <h4>Docs</h4>
+              <a href="/guide">Guide</a>
+              <a href="/seed">The Seed</a>
+              <a href="/ai">The AI</a>
+              <a href="/cascade">Cascade</a>
+              <a href="/flow">The Flow</a>
+              <a href="/extensions">Extensions</a>
+              <a href="/build">Build</a>
+              <a href="/network">The Network</a>
+              <a href="/mycelium">Mycelium</a>
+              <a href="/land">Start a Land</a>
+              <a href="/cli">CLI</a>
+            </div>
+            <div className="lp-footer-col">
+              <h4>TreeOS</h4>
+              <a href="/treeos">Overview</a>
+              <a href="/use">Use</a>
+              <a href="/about/api">API</a>
+              <a href="/about/gateway">Gateway</a>
+              <a href="/about/energy">Energy</a>
+            </div>
+            <div className="lp-footer-col">
+              <h4>Community</h4>
+              <a href="https://horizon.treeos.ai">Horizon</a>
+              <a href="/blog">Blog</a>
+            </div>
+            <div className="lp-footer-col">
+              <h4>Source</h4>
+              <a href="https://github.com/taborgreat/create-treeos">GitHub</a>
+              <a href="https://github.com/taborgreat/TreeOS/blob/main/LICENSE">AGPL-3.0 License</a>
+            </div>
+          </div>
           <div className="lp-footer-bottom">
             TreeOS . AGPL-3.0 . <a href="https://tabors.site" style={{color: "inherit", textDecoration: "none"}}>Tabor Holly</a>
           </div>

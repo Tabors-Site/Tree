@@ -653,7 +653,8 @@
       "Bash(sed -i 's/version: \"1.0.2\"/version: \"1.0.3\"/' treeos-connect/manifest.js)",
       "Bash(grep -r \"POST.*food\\\\|POST.*root.*food\" /home/tabor/github/Tree/land/extensions/*/routes.js)",
       "Bash(grep -A 20 \"name: \\\\\"navigate-tree\\\\\"\" /home/tabor/github/Tree/land/extensions/treeos-base/tools/*.js)",
-      "Bash(find /home/tabor/github/Tree/land/extensions -name \"*.js\" -exec grep -l \"navigate-tree\" {} \\\\;)"
+      "Bash(find /home/tabor/github/Tree/land/extensions -name \"*.js\" -exec grep -l \"navigate-tree\" {} \\\\;)",
+      "Bash(grep -l '/app\">Site' *.jsx)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

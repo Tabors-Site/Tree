@@ -1118,13 +1118,13 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
 
   // Log the final system prompt preamble (everything hooks injected before the mode prompt).
   // Shows [User Instructions], [Instructions], [Sprout], [Memories], etc. all stacked.
+  // Log grammar modifiers injected by beforeLLMCall hooks.
+  // Each [Block] maps to a part of speech: adverbs, pronouns, articles, prepositions.
   if (session.messages[0]?.role === "system") {
     const sys = session.messages[0].content;
-    // Extract injected blocks: everything before the first non-bracket line or mode content.
-    // Look for lines starting with [ which indicate hook-injected sections.
-    const prelude = sys.split("\n").filter(l => l.startsWith("[") || l.startsWith("  ")).slice(0, 15);
-    if (prelude.length > 0) {
-      log.verbose("LLM", `[${session.modeKey}] Preamble: ${prelude.join(" | ").slice(0, 300)}`);
+    const blocks = sys.split("\n").filter(l => l.startsWith("[")).map(l => l.split("]")[0] + "]").slice(0, 10);
+    if (blocks.length > 0) {
+      log.verbose("Grammar", `[${session.modeKey}] modifiers: ${blocks.join(" ")}`);
     }
   }
 
