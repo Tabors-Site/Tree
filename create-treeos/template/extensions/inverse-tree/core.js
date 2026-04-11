@@ -18,7 +18,7 @@ export function setRunChat(fn) { _runChat = fn; }
 // ─────────────────────────────────────────────────────────────────────────
 
 const DEFAULTS = {
-  compressionInterval: 50,     // interactions between compression passes
+  compressionInterval: 200,    // interactions between compression passes
   maxSignals: 200,             // rolling buffer cap before forced compression
   maxProfileBytes: 8192,       // cap on the compressed profile
   profileZones: ["home", "tree"],  // zones where profile injects. "land" excluded by default.

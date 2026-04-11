@@ -176,18 +176,25 @@ const PROFILES = {
       // Intelligence
       "tree-compress", "contradiction", "inverse-tree", "evolution", "intent", "embed",
       "scout", "explore", "trace", "boundary", "competence", "reflect", "evolve",
-      "inner", "reflect-inner", "compare-inner", "narrative", "prediction",
+      "narrative", "prediction",
       // Maintenance
       "prune", "reroot", "changelog", "digest", "delegate",
       // Infrastructure
-      "breath", "scheduler", "schedules", "prestige",
+      "breath", "scheduler", "schedules",
       "persona", "peer-review", "channels", "taste", "home-memory",
       // Proficiency apps
-      "food", "fitness", "recovery", "study", "kb", "life",
+      "food", "fitness", "recovery", "study", "kb", "life", "sprout",
+      "finance", "investor", "market-researcher", "relationships",
       // Core gateways
       "gateway", "gateway-discord", "gateway-telegram", "gateway-reddit",
       // User features
-      "instructions", "rings", "dynamic-rename", "stream", "learn", "go", "legal",
+      "instructions", "rings", "dynamic-rename", "stream", "learn", "go",
+      "automate", "codebase", "api-keys", "treeos",
+      // Bundle meta-extensions
+      "treeos-cascade", "treeos-connect", "treeos-intelligence", "treeos-maintenance",
+      // Advanced
+      "dreams", "browser-bridge", "mycelium", "seed-export", "split", "teach",
+      "governance", "backup",
     ],
   },
 

@@ -73,8 +73,12 @@ export async function init(core) {
           ? root.metadata.get("modes")
           : root.metadata?.modes;
         if (!modes?.respond) {
-          await core.modes.setNodeMode(root._id, "respond", "tree:fitness-log");
-          log.verbose("Fitness", `Self-healed mode override on ${String(root._id).slice(0, 8)}...`);
+          const fitMeta = root.metadata instanceof Map
+            ? root.metadata.get("fitness")
+            : root.metadata?.fitness;
+          const mode = fitMeta?.setupPhase === "complete" ? "tree:fitness-coach" : "tree:fitness-plan";
+          await core.modes.setNodeMode(root._id, "respond", mode);
+          log.verbose("Fitness", `Self-healed mode override on ${String(root._id).slice(0, 8)} -> ${mode}`);
         }
       }
     } catch {}
@@ -157,21 +161,77 @@ export async function init(core) {
         };
       });
     }
+
+    // Cross-domain: food and recovery state (coach-level nodes only)
+    if (role === "log" || role === "program") {
+      try {
+        const { getExtension } = await import("../loader.js");
+        const life = getExtension("life");
+        if (life?.exports?.getDomainNodes) {
+          const treeRoot = node.rootOwner || String(node._id);
+          const domains = await life.exports.getDomainNodes(treeRoot);
+
+          if (domains.food?.id) {
+            const food = getExtension("food");
+            if (food?.exports?.getDailyPicture) {
+              const picture = await food.exports.getDailyPicture(domains.food.id);
+              if (picture?.calories) {
+                context.foodToday = { calories: picture.calories.today, goal: picture.calories.goal };
+              }
+            }
+          }
+
+          if (domains.recovery?.id) {
+            const recovery = getExtension("recovery");
+            if (recovery?.exports?.getStatus) {
+              const status = await recovery.exports.getStatus(domains.recovery.id);
+              if (status) {
+                context.recoveryToday = {
+                  substances: status.substances,
+                  mood: status.feelings?.mood,
+                  energy: status.feelings?.energy,
+                };
+              }
+            }
+          }
+        }
+      } catch {}
+    }
   }, "fitness");
 
   // ── Live dashboard updates: push to client when data changes ──
+  // Walk up to find the fitness root (node with metadata.fitness.initialized),
+  // not just rootOwner (which is the Life root in organized trees).
+  async function findFitnessRootFromNode(nodeId) {
+    let current = await core.models.Node.findById(nodeId).select("metadata parent rootOwner").lean();
+    let depth = 0;
+    while (current && depth < 10) {
+      const fm = current.metadata instanceof Map ? current.metadata.get("fitness") : current.metadata?.fitness;
+      if (fm?.initialized) return { fitnessRootId: String(current._id), ownerId: current.rootOwner ? String(current.rootOwner) : null };
+      if (!current.parent || current.rootOwner) break;
+      current = await core.models.Node.findById(current.parent).select("metadata parent rootOwner").lean();
+      depth++;
+    }
+    return current?.rootOwner ? { fitnessRootId: null, ownerId: String(current.rootOwner) } : null;
+  }
+
   core.hooks.register("afterNote", async ({ node }) => {
-    if (!node?.rootOwner) return;
+    if (!node) return;
     const fm = node.metadata instanceof Map ? node.metadata.get("fitness") : node.metadata?.fitness;
     if (!fm?.role) return;
-    core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+    const info = await findFitnessRootFromNode(node._id);
+    if (!info?.ownerId) return;
+    // Emit with both the fitness root ID and the tree root ID so both dashboard URLs match
+    if (info.fitnessRootId) core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.fitnessRootId });
+    core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.ownerId });
   }, "fitness");
 
   core.hooks.register("afterMetadataWrite", async ({ nodeId, extName }) => {
     if (extName !== "values" && extName !== "fitness" && extName !== "goals") return;
-    const node = await core.models.Node.findById(nodeId).select("rootOwner").lean();
-    if (!node?.rootOwner) return;
-    core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+    const info = await findFitnessRootFromNode(nodeId);
+    if (!info?.ownerId) return;
+    if (info.fitnessRootId) core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.fitnessRootId });
+    core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.ownerId });
   }, "fitness");
 
   // HTML dashboard is now inline in routes.js (GET with ?html check)
@@ -207,12 +267,13 @@ export async function init(core) {
       return `<div class="app-card">
         <div class="app-header"><span class="app-emoji">💪</span><span class="app-name">Fitness</span></div>
         <div class="app-desc">Three languages: gym (weight x reps x sets), running (distance x time x pace), bodyweight (reps x sets or duration). Progressive overload tracked per modality.</div>
-        ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
-        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
-          ${tokenField}<input type="hidden" name="app" value="fitness" />
-          <input class="app-input" name="message" placeholder="What do you train? (e.g. hypertrophy 4 days, running, bodyweight)" required />
-          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} Fitness</button>
-        </form>
+        ${entries.length > 0
+          ? `<div style="display:flex;flex-wrap:wrap;">${existing}</div>`
+          : `<form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+              ${tokenField}<input type="hidden" name="app" value="fitness" />
+              <input class="app-input" name="message" placeholder="What do you train? (e.g. hypertrophy 4 days, running, bodyweight)" required />
+              <button class="app-start" type="submit">Start Fitness</button>
+            </form>`}
       </div>`;
     }, { priority: 10 });
   } catch {}
@@ -229,12 +290,13 @@ export async function init(core) {
     router,
     tools,
     modeTools: [
+      { modeKey: "tree:fitness-log", toolNames: ["fitness-log-workout"] },
       { modeKey: "tree:fitness-plan", toolNames: [
         "fitness-add-modality", "fitness-add-group", "fitness-add-exercise",
         "fitness-remove-exercise", "fitness-adopt-exercise", "fitness-complete-setup", "fitness-save-profile",
       ]},
       { modeKey: "tree:fitness-coach", toolNames: [
-        "fitness-add-exercise", "fitness-adopt-exercise", "fitness-save-profile",
+        "fitness-log-workout", "fitness-adopt-exercise",
       ]},
       { modeKey: "tree:edit", toolNames: ["fitness-adopt-exercise", "fitness-add-exercise", "fitness-add-group"] },
     ],
@@ -245,6 +307,7 @@ export async function init(core) {
       getExerciseState,
       getWeeklyStats,
       handleMessage,
+      scaffold: (await import("./setup.js")).scaffoldFitnessBase,
     },
   };
 }

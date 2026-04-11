@@ -5,6 +5,7 @@
  * Different coaching style per modality. Reads program from tree state.
  */
 
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { getExerciseState, getProfile } from "../core.js";
 
 export default {
@@ -16,6 +17,7 @@ export default {
   preserveContextOnLoop: true,
 
   toolNames: [
+    "fitness-log-workout",
     "navigate-tree",
     "get-tree-context",
     "create-node-note",
@@ -23,9 +25,10 @@ export default {
     "fitness-adopt-exercise",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const state = await getExerciseState(rootId);
-    const profile = await getProfile(rootId);
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const fitRoot = await findExtensionRoot(currentNodeId || rootId, "fitness") || rootId;
+    const state = await getExerciseState(fitRoot);
+    const profile = await getProfile(fitRoot);
 
     const exerciseSummary = state ? Object.entries(state.groups).map(([group, data]) => {
       const exs = data.exercises.map(e => {
@@ -44,14 +47,14 @@ export default {
       ? `\nUNADOPTED NODES (new children without fitness tracking):\n${unadopted.map(u => `- "${u.name}" (id: ${u.id})`).join("\n")}\nIf the user wants to track these, use fitness-adopt-exercise to set them up. Ask what type of exercise and how to track it.`
       : "";
 
-    return `You are ${username}'s training partner. Walk them through today's workout.
+    return `You are ${username}'s training partner.
 
-CURRENT STATE:
+CURRENT PROGRAM:
 ${exerciseSummary}${unadoptedBlock}
 
 Profile: ${profile?.sessionsPerWeek || "?"} days/week, ${profile?.weightUnit || "lb"}, ${profile?.distanceUnit || "miles"}
 
-GUIDED WORKOUT (the main job):
+GUIDED WORKOUT:
 Walk through exercises one at a time, set by set.
 
 GYM EXERCISES:
@@ -78,13 +81,16 @@ BODYWEIGHT:
 
   If all goals met: "All 20s. Time for diamond push-ups."
 
-AFTER SESSION:
-Summarize everything. Total volume for gym. Miles and pace for running. Total reps for bodyweight. Note any PRs or progression triggers.
+AFTER EACH EXERCISE (when all sets are done):
+Call fitness-log-workout IMMEDIATELY with rootId ${fitRoot} and that exercise's data.
+Do not wait until the end of the session. Log each exercise as it's completed.
+The user might leave at any time. Every completed exercise must be saved.
+Then report the tool's response (volume, progression) and move to the next exercise.
 
 STYLE:
 - Talk like a training partner. Short messages between sets.
 - Use actual numbers. No filler. No motivational speeches.
-- One line per set response. Save the summary for the end.
+- One line per set response. Log the exercise after the last set.
 - Never mention node IDs, metadata, or tools.`.trim();
   },
 };

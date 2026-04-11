@@ -212,9 +212,34 @@ async function getActiveTabId(preferredTabId) {
   return tab?.id;
 }
 
+/**
+ * Ensure content script is injected in the tab.
+ * SPAs (x.com, reddit) destroy the content script context on navigation.
+ * Re-inject before every message to handle this.
+ */
+async function ensureContentScript(tabId) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: 'ping' });
+  } catch {
+    // Content script not responding. Re-inject.
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['scripts/content.js'],
+      });
+      // Give it a moment to initialize
+      await new Promise(r => setTimeout(r, 200));
+    } catch (err) {
+      console.warn('[TreeOS Bridge] Cannot inject content script:', err.message);
+    }
+  }
+}
+
 async function getPageStateFromTab(tabId) {
   const id = await getActiveTabId(tabId);
   if (!id) return { error: 'No active tab' };
+
+  await ensureContentScript(id);
 
   try {
     const response = await chrome.tabs.sendMessage(id, {
@@ -223,7 +248,47 @@ async function getPageStateFromTab(tabId) {
     });
     return response;
   } catch (err) {
-    return { error: `Failed to get page state: ${err.message}` };
+    // Content script failed (hostile site like x.com). Fall back to
+    // chrome.scripting.executeScript which runs in the isolated world.
+    try {
+      const [result] = await chrome.scripting.executeScript({
+        target: { tabId: id },
+        world: 'ISOLATED',
+        func: () => {
+          // Minimal page state capture without full tree builder
+          const getText = (el, max) => (el?.textContent || '').trim().slice(0, max);
+          const links = [...document.querySelectorAll('a[href]')].slice(0, 50).map((a, i) => ({
+            role: 'link', name: getText(a, 100), id: 'e' + (i + 1), href: a.href,
+          }));
+          const buttons = [...document.querySelectorAll('button')].slice(0, 30).map((b, i) => ({
+            role: 'button', name: getText(b, 100), id: 'b' + (i + 1),
+          }));
+          const inputs = [...document.querySelectorAll('input, textarea, [contenteditable="true"]')].slice(0, 20).map((el, i) => ({
+            role: el.tagName === 'TEXTAREA' ? 'textbox' : (el.type || 'input'),
+            name: el.placeholder || el.name || '',
+            id: 'i' + (i + 1),
+          }));
+          const bodyText = document.body?.innerText?.slice(0, 8000) || '';
+          return {
+            url: location.href,
+            title: document.title,
+            tree: [...links, ...buttons, ...inputs],
+            text: bodyText,
+            viewport: {
+              width: window.innerWidth,
+              height: window.innerHeight,
+              scrollY: window.scrollY,
+              scrollHeight: document.documentElement.scrollHeight,
+            },
+            timestamp: Date.now(),
+            fallback: true,
+          };
+        },
+      });
+      return result?.result || { error: 'Fallback capture failed' };
+    } catch (err2) {
+      return { error: `Page state failed: ${err2.message}` };
+    }
   }
 }
 
@@ -231,15 +296,258 @@ async function executeActionInTab(action, tabId) {
   const id = await getActiveTabId(tabId);
   if (!id) return { success: false, error: 'No active tab' };
 
+  // Navigate uses Chrome tab API directly. Bypasses hostile SPA routers (x.com, etc.)
+  // that intercept window.location changes inside the content script.
+  if (action.type === 'navigate' && action.url) {
+    try {
+      await chrome.tabs.update(id, { url: action.url });
+      // Wait for page to load
+      await new Promise(resolve => {
+        const listener = (tabId2, changeInfo) => {
+          if (tabId2 === id && changeInfo.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        };
+        chrome.tabs.onUpdated.addListener(listener);
+        // Timeout after 10s
+        setTimeout(() => {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }, 10000);
+      });
+      return { success: true, action: 'navigated', url: action.url };
+    } catch (err) {
+      return { success: false, error: `Navigate failed: ${err.message}` };
+    }
+  }
+
+  await ensureContentScript(id);
+
   try {
     const response = await chrome.tabs.sendMessage(id, {
       type: 'executeAction',
       action,
       recapture: true,
     });
+    // If content script returned failure, try the fallback path
+    if (response && response.success === false) throw new Error(response.error || 'action failed');
     return response;
   } catch (err) {
-    return { success: false, error: `Failed to execute action: ${err.message}` };
+    // Content script failed or returned error. Fall back to chrome.scripting for hostile sites.
+    try {
+      const [result] = await chrome.scripting.executeScript({
+        target: { tabId: id },
+        world: 'ISOLATED',
+        args: [action],
+        func: async (action) => {
+          function findEl(id) {
+            if (!id) return null;
+            // Try by our assigned IDs from the fallback page state
+            const prefix = id.charAt(0);
+            const idx = parseInt(id.slice(1)) - 1;
+            if (prefix === 'e') return document.querySelectorAll('a[href]')[idx];
+            if (prefix === 'b') return document.querySelectorAll('button')[idx];
+            if (prefix === 'i') return document.querySelectorAll('input, textarea, [contenteditable="true"]')[idx];
+            return null;
+          }
+
+          switch (action.type) {
+            case 'click': {
+              const el = findEl(action.elementId);
+              if (!el) return { success: false, error: 'Element not found: ' + action.elementId };
+              el.scrollIntoView({ behavior: 'instant', block: 'center' });
+              el.focus();
+              el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+              return { success: true, action: 'clicked', elementId: action.elementId };
+            }
+
+            case 'type': {
+              // Find contenteditable or textarea
+              let el = findEl(action.elementId);
+              if (!el) {
+                // Try to find any visible contenteditable or textarea
+                const all = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
+                for (const candidate of all) {
+                  const r = candidate.getBoundingClientRect();
+                  if (r.height > 20 && r.width > 50) { el = candidate; break; }
+                }
+              }
+              if (!el) return { success: false, error: 'No text input found' };
+
+              el.scrollIntoView({ behavior: 'instant', block: 'center' });
+              el.focus();
+
+              // Clear and type
+              if (el.contentEditable === 'true' || el.getAttribute('role') === 'textbox') {
+                el.textContent = '';
+                // Use DataTransfer for paste simulation (bypasses React interception)
+                const dt = new DataTransfer();
+                dt.setData('text/plain', action.text);
+                const pasteEvent = new ClipboardEvent('paste', {
+                  bubbles: true, cancelable: true, clipboardData: dt,
+                });
+                el.dispatchEvent(pasteEvent);
+                // Fallback: direct insert
+                if (!el.textContent.includes(action.text)) {
+                  el.textContent = action.text;
+                  el.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+              } else {
+                el.value = action.text;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+              return { success: true, action: 'typed', text: action.text };
+            }
+
+            case 'comment': {
+              const text = action.text;
+              if (!text) return { success: false, error: 'text required' };
+
+              // Step 1: Click a reply button to open the compose box
+              // Reddit, forums, etc. hide the textbox until you click reply
+              let textbox = null;
+
+              // Look for existing open compose box first
+              let all = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
+              for (const el of all) {
+                const r = el.getBoundingClientRect();
+                if (r.height > 20 && r.width > 50) { textbox = el; break; }
+              }
+
+              // No open box? Click a reply button
+              if (!textbox) {
+                // New Reddit: shreddit-comment-action-row buttons
+                const actionRow = document.querySelector('shreddit-comment-action-row');
+                if (actionRow) {
+                  const btns = actionRow.querySelectorAll('button');
+                  if (btns.length >= 1) btns[0].click();
+                }
+
+                // Old Reddit / generic: find a "reply" link or button
+                if (!actionRow) {
+                  const replyLinks = document.querySelectorAll('a, button');
+                  for (const el of replyLinks) {
+                    const t = (el.textContent || '').trim().toLowerCase();
+                    if (t === 'reply' || t === 'comment') {
+                      el.click();
+                      break;
+                    }
+                  }
+                }
+
+                // Wait for compose box to appear
+                await new Promise(r => setTimeout(r, 1500));
+
+                // Try again
+                all = document.querySelectorAll('[contenteditable="true"], textarea, [role="textbox"]');
+                for (const el of all) {
+                  const r = el.getBoundingClientRect();
+                  if (r.height > 20 && r.width > 50) { textbox = el; break; }
+                }
+                // Last resort: any visible input
+                if (!textbox && all.length) textbox = all[all.length - 1];
+              }
+
+              if (!textbox) return { success: false, error: 'No compose box found after clicking reply' };
+
+              textbox.focus();
+              await new Promise(r => setTimeout(r, 300));
+
+              // Method 1: execCommand insertText (works on many sites)
+              let typed = false;
+              try {
+                document.execCommand('selectAll', false, null);
+                typed = document.execCommand('insertText', false, text);
+              } catch {}
+
+              // Method 2: Paste simulation via ClipboardEvent
+              if (!typed || !textbox.textContent?.includes(text)) {
+                const dt = new DataTransfer();
+                dt.setData('text/plain', text);
+                textbox.dispatchEvent(new ClipboardEvent('paste', {
+                  bubbles: true, cancelable: true, clipboardData: dt,
+                }));
+              }
+
+              // Method 3: Direct content set + input event
+              if (!textbox.textContent?.includes(text)) {
+                if (textbox.contentEditable === 'true') {
+                  textbox.innerHTML = '<p>' + text + '</p>';
+                } else {
+                  textbox.value = text;
+                }
+                textbox.dispatchEvent(new Event('input', { bubbles: true }));
+                textbox.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+
+              // Wait for React/framework to process
+              await new Promise(r => setTimeout(r, 1000));
+
+              // Verify text landed
+              const hasText = textbox.textContent?.includes(text) || textbox.value?.includes?.(text);
+              if (!hasText) {
+                return { success: false, error: 'Text did not register in compose box', typed: false };
+              }
+
+              // Find and click post/submit button
+              const buttons = document.querySelectorAll('button');
+              const submitWords = ['post', 'tweet', 'reply', 'send', 'submit', 'comment', 'save'];
+              let submitBtn = null;
+
+              // Try data-testid first (X.com uses tweetButton, tweetButtonInline)
+              submitBtn = document.querySelector('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
+
+              // Try finding a button containing a span with submit text
+              if (!submitBtn) {
+                const spans = document.querySelectorAll('button span');
+                for (const span of spans) {
+                  const t = span.textContent.trim().toLowerCase();
+                  if (submitWords.some(w => t === w)) {
+                    const btn = span.closest('button');
+                    if (btn && btn.offsetParent !== null) { submitBtn = btn; break; }
+                  }
+                }
+              }
+
+              // Fall back to button text/aria-label search
+              if (!submitBtn) {
+                for (const btn of buttons) {
+                  const t = (btn.textContent || btn.getAttribute('aria-label') || '').trim().toLowerCase();
+                  if (submitWords.some(w => t.includes(w))) {
+                    if (btn.offsetParent !== null) { submitBtn = btn; break; }
+                  }
+                }
+              }
+
+              if (submitBtn) {
+                // Wait for React to process the input
+                return new Promise(resolve => {
+                  setTimeout(() => {
+                    submitBtn.click();
+                    resolve({ success: true, action: 'commented', submitted: true, text });
+                  }, 500);
+                });
+              }
+
+              return { success: true, action: 'typed', submitted: false, text, error: 'Typed but could not find submit button' };
+            }
+
+            case 'extract': {
+              const el = action.elementId ? findEl(action.elementId) : document.body;
+              return { success: true, text: (el?.innerText || '').slice(0, 8000) };
+            }
+
+            default:
+              return { success: false, error: 'Unsupported fallback action: ' + action.type };
+          }
+        },
+      });
+      return result?.result || { success: false, error: 'Fallback action failed' };
+    } catch (err2) {
+      return { success: false, error: `Action failed: ${err2.message}` };
+    }
   }
 }
 

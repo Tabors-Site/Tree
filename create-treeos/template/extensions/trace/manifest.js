@@ -1,6 +1,6 @@
 export default {
   name: "trace",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-intelligence",
   description:
     "Follow one thread through the entire tree. Every node it touched, in order. " +

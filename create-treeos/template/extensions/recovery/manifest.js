@@ -1,6 +1,6 @@
 export default {
   name: "recovery",
-  version: "1.0.1",
+  version: "1.0.2",
   builtFor: "TreeOS",
   description:
     "The tree that grows toward health. Track substances, feelings, cravings, " +
@@ -12,6 +12,7 @@ export default {
     "and crisis situations. Type 'be' at the Recovery tree to check in: the AI asks " +
     "how you're doing today. The person is always the agent.",
 
+  territory: "rest, healing, soreness, sleep, substances, sobriety",
   classifierHints: [
     /\b(craving|crave|urge|tempt|slip|relapse|sober|clean days|quit)\b/i,
     /\b(taper|taper plan|cut down|cut back|wean|withdraw)\b/i,

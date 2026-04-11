@@ -52,9 +52,14 @@ router.post("/node/:nodeId/goal", authenticate, async (req, res) => {
   }
 });
 
-router.get("/node/:nodeId/values", htmlAuth, async (req, res) => {
+// Shared handler for both /node/:nodeId/values and /node/:nodeId/:version/values.
+// Values/goals are stored on the node itself, not version-snapshotted, so the
+// version segment is consumed but unused. It exists for URL consistency with
+// notes/contributions on the version detail page.
+async function nodeValuesHandler(req, res) {
   try {
     const { nodeId } = req.params;
+    const version = req.params.version ?? 0;
 
     const node = await findNodeById(nodeId);
     if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
@@ -77,9 +82,9 @@ router.get("/node/:nodeId/values", htmlAuth, async (req, res) => {
 
     return res.send(renderValues({
       nodeId,
-      version: 0,
+      version,
       nodeName: node.name || nodeId,
-      nodeVersion: 0,
+      nodeVersion: version,
       allKeys,
       values,
       goals,
@@ -87,10 +92,13 @@ router.get("/node/:nodeId/values", htmlAuth, async (req, res) => {
       token: req.query.token ?? "",
     }));
   } catch (err) {
- log.error("Values", "Error in /node/:nodeId/values:", err);
+    log.error("Values", "Error in node values handler:", err);
     sendError(res, 500, ERR.INTERNAL, err.message);
   }
-});
+}
+
+router.get("/node/:nodeId/values", htmlAuth, nodeValuesHandler);
+router.get("/node/:nodeId/:version/values", htmlAuth, nodeValuesHandler);
 
 router.get("/root/:rootId/values", authenticate, async (req, res) => {
   try {

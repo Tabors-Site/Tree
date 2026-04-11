@@ -2,6 +2,7 @@
 // Parse statements into knowledge. Find or create the right location.
 // Write notes. Detect updates to existing notes.
 
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { findKbNodes } from "../core.js";
 
 export default {
@@ -26,8 +27,9 @@ export default {
     "get-searched-notes-by-user",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const nodes = rootId ? await findKbNodes(rootId) : null;
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const kbRoot = await findExtensionRoot(currentNodeId || rootId, "kb") || rootId;
+    const nodes = kbRoot ? await findKbNodes(kbRoot) : null;
 
     const EXPECTED = ["topics", "unplaced"];
     const found = [];
@@ -52,7 +54,7 @@ export default {
       : "TREE STRUCTURE: not yet discovered.";
 
     const missingBlock = missing.length > 0
-      ? `\nMISSING STRUCTURAL NODES: ${missing.join(", ")}\nUse create-new-node to recreate them under root ${rootId} with the correct metadata.kb.role.`
+      ? `\nMISSING STRUCTURAL NODES: ${missing.join(", ")}\nUse create-new-node to recreate them under root ${kbRoot} with the correct metadata.kb.role.`
       : "";
 
     return `You are maintaining a knowledge base for ${username}.

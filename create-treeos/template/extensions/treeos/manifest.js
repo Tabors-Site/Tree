@@ -1,7 +1,7 @@
 export default {
   name: "treeos",
   type: "os",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "seed",
   description:
     "The first operating system built on the seed. " +

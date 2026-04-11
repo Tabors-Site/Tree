@@ -32,8 +32,8 @@ export async function scaffoldFitnessBase(rootId, userId) {
   await _metadata.setExtMeta(programNode, "fitness", { role: "program" });
   await _metadata.setExtMeta(historyNode, "fitness", { role: "history" });
 
-  // Mode overrides: fitness-log on root and Log node
-  await setNodeMode(rootId, "respond", "tree:fitness-log");
+  // Mode overrides: plan on root until setup complete, log on Log node
+  await setNodeMode(rootId, "respond", "tree:fitness-plan");
   await setNodeMode(logNode._id, "respond", "tree:fitness-log");
 
   // Mark as initialized with base phase
@@ -41,7 +41,7 @@ export async function scaffoldFitnessBase(rootId, userId) {
   if (rootNode) {
     await _metadata.setExtMeta(rootNode, "fitness", {
       initialized: true,
-      setupPhase: "base",
+      setupPhase: "complete",
     });
   }
 
@@ -172,7 +172,9 @@ export async function completeSetup(rootId) {
   if (!rootNode) return;
   const existing = _metadata.getExtMeta(rootNode, "fitness") || {};
   await _metadata.setExtMeta(rootNode, "fitness", { ...existing, setupPhase: "complete" });
-  log.info("Fitness", "Setup phase complete");
+  // Switch from plan mode to coach mode now that setup is done
+  await setNodeMode(rootId, "respond", "tree:fitness-coach");
+  log.info("Fitness", "Setup phase complete, switched to coach mode");
 }
 
 export async function saveProfile(rootId, profile) {

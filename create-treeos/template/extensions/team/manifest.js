@@ -1,6 +1,6 @@
 export default {
   name: "team",
-  version: "1.0.1",
+  version: "1.0.2",
   builtFor: "TreeOS",
   description:
     "How people work together on trees. Trees start with one owner. Team adds the ability " +

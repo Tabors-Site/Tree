@@ -86,14 +86,14 @@ export async function scaffold(rootId, userId) {
   }
 
   // Mode overrides
-  await setNodeMode(rootId, "respond", "tree:recovery-log");
+  await setNodeMode(rootId, "respond", "tree:recovery-plan");
   await setNodeMode(logNode._id, "respond", "tree:recovery-log");
   await setNodeMode(journalNode._id, "respond", "tree:recovery-journal");
   await setNodeMode(patternsNode._id, "respond", "tree:recovery-review");
 
   // Mark initialized (base phase: scaffold done, substances not yet configured)
   const root = await _Node.findById(rootId);
-  if (root) await _metadata.setExtMeta(root, "recovery", { initialized: true, setupPhase: "base" });
+  if (root) await _metadata.setExtMeta(root, "recovery", { initialized: true, setupPhase: "complete" });
 
   const ids = {};
   for (const [node, role] of tags) ids[role] = String(node._id);

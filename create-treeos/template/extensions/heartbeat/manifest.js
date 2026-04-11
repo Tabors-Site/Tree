@@ -1,6 +1,6 @@
 export default {
   name: "heartbeat",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "The tree knows it's alive. Pure in-memory presence detection. No database writes. " +

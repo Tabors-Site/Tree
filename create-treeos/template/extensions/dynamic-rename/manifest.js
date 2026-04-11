@@ -1,6 +1,6 @@
 export default {
   name: "dynamic-rename",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Renames tree roots after setup completes. Reads the tree content and generates " +

@@ -1,6 +1,6 @@
 export default {
   name: "prestige",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Nodes do not just accumulate forever. At some point the current phase of work is done. The " +

@@ -1,6 +1,6 @@
 export default {
   name: "gap-detection",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-cascade",
   description:
     "Makes the tree know what it does not know. When cascade delivers a signal to a node, the " +

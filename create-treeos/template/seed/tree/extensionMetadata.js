@@ -370,3 +370,42 @@ export async function unsetExtMeta(node, extName) {
   invalidateNode(nodeId);
   return true;
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// EXTENSION ROOT RESOLUTION
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Find the extension's root node by walking up from any position.
+ * Returns the node ID (string) of the nearest ancestor with
+ * metadata[extName].initialized === true, or null.
+ *
+ * Walks up the parent chain. Stops at the tree root (rootOwner set)
+ * or after 20 levels. Checks the starting node first.
+ *
+ * @param {string} nodeId - Starting node
+ * @param {string} extName - Extension name (e.g. "food", "fitness")
+ * @returns {Promise<string|null>}
+ */
+export async function findExtensionRoot(nodeId, extName) {
+  if (!nodeId || !extName) return null;
+
+  let current = await Node.findById(nodeId).select("_id metadata parent rootOwner").lean();
+  let depth = 0;
+
+  while (current && depth < 20) {
+    const meta = current.metadata instanceof Map
+      ? current.metadata.get(extName)
+      : current.metadata?.[extName];
+    if (meta?.initialized) return String(current._id);
+
+    // Stop at tree root
+    if (current.rootOwner) return null;
+    if (!current.parent) return null;
+
+    current = await Node.findById(current.parent).select("_id metadata parent rootOwner").lean();
+    depth++;
+  }
+
+  return null;
+}

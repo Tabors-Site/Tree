@@ -126,27 +126,58 @@ export function buildTreeosHtmlRoutes() {
       const user = await User.findById(userId).select("username").lean();
       if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
-      const roots = await Node.find({
-        rootOwner: userId,
-        parent: { $ne: DELETED },
-      }).select("_id name metadata").lean();
-      // Match by checking the extension metadata (fitness.initialized, food.initialized, etc.)
-      // not just the tree name, to avoid false matches with user-created trees
-      // rootMap: appKey -> [{ id, name, ready }] (array, supports multiple per type)
+      // rootMap: appKey -> [{ id, name, ready }]
       const rootMap = new Map();
       function addToMap(key, id, name, ready) {
         if (!rootMap.has(key)) rootMap.set(key, []);
+        // Deduplicate
+        if (rootMap.get(key).some(e => e.id === id)) return;
         rootMap.get(key).push({ id, name, ready });
       }
-      for (const r of roots) {
-        const meta = r.metadata instanceof Map ? Object.fromEntries(r.metadata) : (r.metadata || {});
-        const id = String(r._id);
-        const name = r.name;
-        if (meta.fitness?.initialized) addToMap("Fitness", id, name, meta.fitness.setupPhase === "complete");
-        else if (meta.food?.initialized) addToMap("Food", id, name, meta.food.setupPhase === "complete");
-        else if (meta.recovery?.initialized) addToMap("Recovery", id, name, meta.recovery.setupPhase === "complete");
-        else if (meta.study?.initialized) addToMap("Study", id, name, meta.study.setupPhase === "complete");
-        else if (meta.kb?.initialized) addToMap("KB", id, name, meta.kb.setupPhase === "complete");
+
+      const NAME_MAP = {
+        food: "Food", fitness: "Fitness", recovery: "Recovery",
+        study: "Study", kb: "KB", relationships: "Relationships",
+        finance: "Finance", investor: "Investor", "market-researcher": "Market Researcher",
+      };
+
+      // Prefer life domains (organized under one tree)
+      const life = getExtension("life");
+      let foundViaLife = false;
+      if (life?.exports?.getDomainNodes && life?.exports?.findLifeRoot) {
+        try {
+          const lifeRootId = await life.exports.findLifeRoot(userId);
+          if (lifeRootId) {
+            const domainNodes = await life.exports.getDomainNodes(lifeRootId);
+            for (const [key, info] of Object.entries(domainNodes)) {
+              addToMap(NAME_MAP[key] || key, info.id, info.name, info.ready);
+              foundViaLife = true;
+            }
+          }
+        } catch {}
+      }
+
+      // Fallback: scan all roots only if life didn't find anything
+      if (!foundViaLife) {
+        const roots = await Node.find({
+          rootOwner: userId,
+          parent: { $ne: DELETED },
+        }).select("_id name metadata").lean();
+        const EXTENSIONS = Object.keys(NAME_MAP);
+        for (const r of roots) {
+          const meta = r.metadata instanceof Map ? Object.fromEntries(r.metadata) : (r.metadata || {});
+          for (const ext of EXTENSIONS) {
+            if (meta[ext]?.initialized) {
+              addToMap(NAME_MAP[ext], String(r._id), r.name, true);
+            }
+          }
+        }
+      }
+
+      // Find Life root ID for chat routing (reuse from discovery if available)
+      let chatRootId = null;
+      if (life?.exports?.findLifeRoot) {
+        try { chatRootId = await life.exports.findLifeRoot(userId); } catch {}
       }
 
       const { renderAppsPage } = await import("./pages/appsPage.js");
@@ -154,6 +185,7 @@ export function buildTreeosHtmlRoutes() {
         userId,
         username: user.username,
         rootMap,
+        lifeRootId: chatRootId,
         qs: req.query,
       }));
     } catch (err) {
@@ -171,45 +203,57 @@ export function buildTreeosHtmlRoutes() {
       if (!appKey || !message) return sendError(res, 400, ERR.INVALID_INPUT, "app and message required");
 
       // App definitions: key -> { treeName, dashboardPath, multiInstance }
-      // Extensions register UI cards via slots, but creation metadata lives here.
       const APP_DEFS = {
         fitness:  { treeName: "Fitness",  dashboardPath: "fitness",  multiInstance: false },
         food:     { treeName: "Food",     dashboardPath: "food",     multiInstance: false },
         recovery: { treeName: "Recovery", dashboardPath: "recovery", multiInstance: false },
         study:    { treeName: "Study",    dashboardPath: "study",    multiInstance: false },
         kb:       { treeName: "Knowledge Base", dashboardPath: "kb", multiInstance: true },
+        relationships: { treeName: "Relationships", dashboardPath: "relationships", multiInstance: false },
+        finance:  { treeName: "Finance",  dashboardPath: "finance",  multiInstance: false },
+        investor: { treeName: "Investor", dashboardPath: "investor", multiInstance: false },
+        "market-researcher": { treeName: "Market Researcher", dashboardPath: "market-researcher", multiInstance: false },
       };
       const appDef = APP_DEFS[appKey];
       if (!appDef) return sendError(res, 400, ERR.INVALID_INPUT, "Unknown app");
 
+      const qs = req.body.token ? `?html&token=${req.body.token}` : "?html";
+      const msgParam = `&startMsg=${encodeURIComponent(message)}`;
+
+      // Try life extension for organized scaffolding under Life tree
+      const life = getExtension("life");
+      if (life?.exports?.addDomain && !appDef.multiInstance) {
+        let lifeRootId = await life.exports.findLifeRoot(userId);
+        if (!lifeRootId) {
+          const result = await life.exports.scaffoldRoot(userId);
+          lifeRootId = result.rootId;
+        }
+
+        // Check if domain already exists under Life
+        const domains = await life.exports.getDomainNodes(lifeRootId);
+        if (domains[appKey]) {
+          return res.redirect(`/api/v1/root/${domains[appKey].id}/${appDef.dashboardPath}${qs}${msgParam}`);
+        }
+
+        const { id: domainId } = await life.exports.addDomain({ rootId: lifeRootId, domain: appKey, userId });
+        return res.redirect(`/api/v1/root/${domainId}/${appDef.dashboardPath}${qs}${msgParam}`);
+      }
+
+      // Fallback: no life extension or multi-instance. Create standalone root.
       if (!appDef.multiInstance) {
         const existing = await Node.findOne({
-          rootOwner: userId, parent: { $ne: DELETED },
+          parent: { $ne: DELETED },
           [`metadata.${appKey}.initialized`]: true,
-          [`metadata.${appKey}.setupPhase`]: "base",
         }).select("_id").lean();
         if (existing) {
-          const qs = req.body.token ? `?html&token=${req.body.token}` : "?html";
-          const msgParam = `&startMsg=${encodeURIComponent(message)}`;
           return res.redirect(`/api/v1/root/${existing._id}/${appDef.dashboardPath}${qs}${msgParam}`);
         }
       }
 
       const treeName = appDef.multiInstance ? (message.slice(0, 80) || appDef.treeName) : appDef.treeName;
-
       const { createNode } = await import("../../seed/tree/treeManagement.js");
-      const rootNode = await createNode({
-        name: treeName,
-        isRoot: true,
-        userId,
-      });
-      const rootId = String(rootNode._id);
-
-      // Redirect to dashboard with the initial message as a query param.
-      // The dashboard chat bar will auto-send it on load.
-      const qs = req.body.token ? `?html&token=${req.body.token}` : "?html";
-      const msgParam = `&startMsg=${encodeURIComponent(message)}`;
-      return res.redirect(`/api/v1/root/${rootId}/${appDef.dashboardPath}${qs}${msgParam}`);
+      const rootNode = await createNode({ name: treeName, isRoot: true, userId });
+      return res.redirect(`/api/v1/root/${rootNode._id}/${appDef.dashboardPath}${qs}${msgParam}`);
     } catch (err) {
       log.error("HTML", "App create error:", err.message);
       sendError(res, 500, ERR.INTERNAL, "App creation failed");
@@ -564,7 +608,10 @@ export function buildTreeosHtmlRoutes() {
   // NODE CHATS
   // ===================================================================
 
-  router.get("/node/:nodeId/chats", urlAuth, htmlOnly, async (req, res) => {
+  // Shared handler for both /node/:nodeId/chats and /node/:nodeId/:version/chats
+  // Chats are not version-scoped (they reference nodes by meta.nodeId), so the
+  // version segment is cosmetic for URL consistency with notes/contributions.
+  async function renderNodeChatsHandler(req, res) {
     try {
       const { nodeId } = req.params;
       const node = await Node.findById(nodeId).select("name rootOwner").lean();
@@ -598,7 +645,10 @@ export function buildTreeosHtmlRoutes() {
       log.error("HTML", "Node chats render error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
-  });
+  }
+
+  router.get("/node/:nodeId/chats", urlAuth, htmlOnly, renderNodeChatsHandler);
+  router.get("/node/:nodeId/:version/chats", urlAuth, htmlOnly, renderNodeChatsHandler);
 
   // ===================================================================
   // ROOT OVERVIEW

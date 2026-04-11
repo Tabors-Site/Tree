@@ -1,25 +1,24 @@
 /**
  * Apps Page
  *
- * Launchpad for the proficiency stack. Four app cards.
- * Active apps link to their dashboard. Inactive apps show an input to start.
+ * Compact grid of installed apps. Links to dashboards.
+ * "Open Chat" button goes to /chat where apps surface inline.
  */
 
 import { page } from "../../html-rendering/html/layout.js";
 import { esc } from "../../html-rendering/html/utils.js";
-import { glassCardStyles, glassHeaderStyles, responsiveBase } from "../../html-rendering/html/baseStyles.js";
+import { glassCardStyles, responsiveBase } from "../../html-rendering/html/baseStyles.js";
 import { resolveSlots } from "../slots.js";
 
-// Legacy export for backward compat. Extensions should use registerSlot("apps-grid", ...) instead.
+// Legacy export for backward compat.
 const APPS = [];
 export { APPS };
 
-export function renderAppsPage({ userId, username, rootMap, qs }) {
+export function renderAppsPage({ userId, username, rootMap, lifeRootId, qs }) {
   const tokenParam = qs?.token ? `&token=${esc(qs.token)}` : "";
   const tokenField = qs?.token ? `<input type="hidden" name="token" value="${esc(qs.token)}" />` : "";
 
   const css = `
-    ${glassHeaderStyles}
     ${glassCardStyles}
     ${responsiveBase}
 
@@ -98,15 +97,29 @@ export function renderAppsPage({ userId, username, rootMap, qs }) {
     }
     .page-title { font-size: 1.6rem; color: #fff; margin-bottom: 8px; }
     .page-subtitle { color: rgba(255,255,255,0.45); font-size: 0.95rem; }
+
+    .chat-cta {
+      display: block;
+      max-width: 900px;
+      margin: 0 auto 2rem;
+      padding: 16px 24px;
+      background: rgba(102, 126, 234, 0.15);
+      border: 1px solid rgba(102, 126, 234, 0.25);
+      border-radius: 14px;
+      text-align: center;
+      text-decoration: none;
+      color: rgba(255,255,255,0.8);
+      font-size: 1rem;
+      transition: all 0.2s;
+    }
+    .chat-cta:hover { background: rgba(102, 126, 234, 0.25); border-color: rgba(102, 126, 234, 0.4); }
   `;
 
-  // Extensions register app cards via the "apps-grid" slot.
-  // Each card receives { userId, rootMap, tokenParam, tokenField, esc } context.
   const cards = resolveSlots("apps-grid", { userId, rootMap, tokenParam, tokenField, esc });
 
   const body = `
     <div style="max-width: 960px; margin: 0 auto; padding: 12px 20px 0; display: flex; justify-content: space-between; align-items: center;">
-      <div style="display:flex;flex-direction:column;gap:4px;">
+      <div style="display:flex;gap:16px;">
         <a href="/dashboard" target="_top" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">Home</a>
         <a href="/chat" target="_top" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">Chat</a>
       </div>
@@ -117,6 +130,7 @@ export function renderAppsPage({ userId, username, rootMap, qs }) {
       <div class="page-subtitle">${esc(username || "")}'s proficiency stack</div>
     </div>
     <div style="max-width: 960px; margin: 0 auto; padding: 0 20px 60px;">
+      <a href="/chat" class="chat-cta">Open Chat. Apps surface as you talk.</a>
       <div class="apps-grid">
         ${cards}
       </div>

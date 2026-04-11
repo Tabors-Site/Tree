@@ -392,7 +392,7 @@ async function updateRunPRs(prsNode, exercise) {
 
 // ── Write session to History node ──
 
-export async function recordSessionHistory(historyNodeId, parsed, delivered, userId) {
+export async function recordSessionHistory(historyNodeId, parsed, delivered, userId, ctx = {}) {
   if (!historyNodeId) return null;
 
   const modalities = [...new Set(delivered.map(d => d.modality))];
@@ -445,7 +445,15 @@ export async function recordSessionHistory(historyNodeId, parsed, delivered, use
 
   try {
     const { createNote } = await import("../../seed/tree/notes.js");
-    await createNote({ nodeId: historyNodeId, content: JSON.stringify(record), contentType: "text", userId });
+    await createNote({
+      nodeId: historyNodeId,
+      content: JSON.stringify(record),
+      contentType: "text",
+      userId,
+      wasAi: ctx.chatId != null || ctx.wasAi === true,
+      chatId: ctx.chatId ?? null,
+      sessionId: ctx.sessionId ?? null,
+    });
   } catch (err) {
     log.warn("Fitness", `History note failed: ${err.message}`);
   }

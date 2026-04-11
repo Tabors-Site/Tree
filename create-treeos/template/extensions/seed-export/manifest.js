@@ -1,6 +1,6 @@
 export default {
   name: "seed-export",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "seed",
   description:
     "Export a tree's form without its content. The skeleton: node hierarchy, cascade " +

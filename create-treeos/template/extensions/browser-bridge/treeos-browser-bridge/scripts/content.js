@@ -469,11 +469,30 @@
           textbox.dispatchEvent(new Event('input', { bubbles: true }));
           await new Promise(r => setTimeout(r, 500));
 
+          // ── VERIFY TEXT LANDED ──
+          const hasText = (textbox.textContent || '').includes(text) || (textbox.value || '').includes(text);
+          if (!hasText) {
+            // Text didn't register. Try direct content set as last resort.
+            if (textbox.contentEditable === 'true') {
+              textbox.innerHTML = '<p>' + text + '</p>';
+            } else {
+              textbox.value = text;
+            }
+            textbox.dispatchEvent(new Event('input', { bubbles: true }));
+            await new Promise(r => setTimeout(r, 1000));
+
+            // Check again
+            const hasTextRetry = (textbox.textContent || '').includes(text) || (textbox.value || '').includes(text);
+            if (!hasTextRetry) {
+              return { success: false, typed: false, submitted: false, error: 'Text did not register in comment box.' };
+            }
+          }
+
           // ── CLICK SUBMIT ──
           // Find the submit button near the textbox (not just any button on the page)
 
           let submitBtn = null;
-          const submitWords = ['comment', 'reply', 'post', 'submit', 'send'];
+          const submitWords = ['comment', 'reply', 'post', 'submit', 'send', 'save'];
 
           // Search near the textbox first (parent, siblings, nearby containers)
           let searchScope = textbox.parentElement;
@@ -565,6 +584,10 @@
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     (async () => {
       switch (msg.type) {
+        case 'ping': {
+          sendResponse({ alive: true });
+          break;
+        }
         case 'getPageState': {
           const state = capturePageState();
           // Include intercepted network calls if requested

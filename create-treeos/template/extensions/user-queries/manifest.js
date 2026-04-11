@@ -1,6 +1,6 @@
 export default {
   name: "user-queries",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Cross-tree queries scoped to a single user. The kernel stores notes, contributions, " +

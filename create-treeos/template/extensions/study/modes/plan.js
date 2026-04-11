@@ -5,6 +5,7 @@
  * Scaffolds the Active tree with study tools. Handles first-time setup.
  */
 
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { getActiveTopics, getQueue, getStudyProgress, findStudyNodes } from "../core.js";
 
 export default {
@@ -28,11 +29,12 @@ export default {
     "edit-node-schedule",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const nodes = await findStudyNodes(rootId);
-    const queue = await getQueue(rootId);
-    const topics = await getActiveTopics(rootId);
-    const progress = await getStudyProgress(rootId);
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const studyRoot = await findExtensionRoot(currentNodeId || rootId, "study") || rootId;
+    const nodes = await findStudyNodes(studyRoot);
+    const queue = await getQueue(studyRoot);
+    const topics = await getActiveTopics(studyRoot);
+    const progress = await getStudyProgress(studyRoot);
 
     const activeNodeId = nodes?.active?.id || "unknown";
 
@@ -45,12 +47,12 @@ export default {
       : "  (none yet)";
 
     if (!progress?.active && queue.length === 0 && topics.length === 0) {
-      // First time: help them get started
-      return `You are ${username}'s curriculum builder. This is a fresh study tree.
+      return `You are ${username}'s curriculum builder.
 
+STATUS: No topics yet. Help them get started.
 Active node ID: ${activeNodeId}
 
-FIRST TIME SETUP:
+SETUP:
 1. Ask what they want to learn. Could be a technology, a subject, a skill.
 2. Ask about their learning style: theory-first, examples-first, or challenge-first.
 3. Ask about daily study time goal (in minutes).
@@ -79,9 +81,9 @@ Example: "React Hooks" breaks into:
 Be conversational. Don't dump a list. Ask what they know, then build from there.`;
     }
 
-    // Existing setup: modify curriculum
-    return `You are ${username}'s curriculum builder. Help them organize their studies.
+    return `You are ${username}'s curriculum builder.
 
+STATUS: ${topics.length} active topic${topics.length !== 1 ? "s" : ""}, ${queue.length} queued.
 Active node ID: ${activeNodeId}
 
 QUEUE:

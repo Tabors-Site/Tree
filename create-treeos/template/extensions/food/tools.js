@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import { saveProfile, findFoodNodes, adoptNode } from "./core.js";
+import { saveProfile, findFoodNodes, adoptNode, deliverMacros, detectMealSlot, writeMealNote, getDailyPicture, STRUCTURAL_ROLES } from "./core.js";
 
 export default function getTools() {
   return [
@@ -38,7 +38,7 @@ export default function getTools() {
           const { rootId, userId, chatId, sessionId, ...profile } = args;
           const foodNodes = await findFoodNodes(rootId);
           if (!foodNodes) return { content: [{ type: "text", text: "Food tree not found." }] };
-          await saveProfile(rootId, profile, foodNodes);
+          await saveProfile(rootId, profile, foodNodes, userId);
           const goalSummary = Object.entries(profile)
             .filter(([k, v]) => k.endsWith("Goal") && v)
             .map(([k, v]) => `${k.replace("Goal", "")}: ${v}`)
@@ -68,6 +68,81 @@ export default function getTools() {
         try {
           await adoptNode(nodeId, role, goal);
           return { content: [{ type: "text", text: `Adopted as "${role}".${goal ? ` Goal: ${goal}g/day.` : ""} It will now appear in tracking, dashboard, and daily resets.` }] };
+        } catch (err) {
+          return { content: [{ type: "text", text: `Failed: ${err.message}` }] };
+        }
+      },
+    },
+    {
+      name: "food-log-entry",
+      description:
+        "Log a food entry. Updates all tracked metrics atomically, writes to the correct meal slot, " +
+        "and creates a structured log note. Call this ONCE after estimating macros for what the user ate. " +
+        "Pass the items with their macro breakdown and the totals. The tool handles everything else.",
+      schema: {
+        rootId: z.string().describe("Food root node ID."),
+        items: z.array(z.object({
+          name: z.string().describe("Food item name."),
+          protein: z.number().optional().describe("Protein in grams."),
+          carbs: z.number().optional().describe("Carbs in grams."),
+          fats: z.number().optional().describe("Fats in grams."),
+          calories: z.number().optional().describe("Calories."),
+        }).passthrough()).describe("Parsed food items with macro estimates."),
+        totals: z.record(z.number()).describe("Sum of all items. Keys match metric roles: protein, carbs, fats, etc."),
+        meal: z.string().optional().describe("Meal slot: breakfast, lunch, dinner, snack. Auto-detected from time if omitted."),
+        summary: z.string().describe("Readable food description for the log note. e.g. '2 eggs and a cup of rice'"),
+        userId: z.string().describe("Injected by server. Ignore."),
+        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      handler: async (args) => {
+        try {
+          const { rootId, items, totals, meal, summary, userId, chatId, sessionId } = args;
+          const foodNodes = await findFoodNodes(rootId);
+          if (!foodNodes) return { content: [{ type: "text", text: "Food tree not found." }] };
+
+          const logNodeId = foodNodes.log?.id;
+          if (!logNodeId) return { content: [{ type: "text", text: "Log node not found in food tree." }] };
+
+          // Write structured note to Log node
+          const { createNote } = await import("../../seed/tree/notes.js");
+          const logContent = JSON.stringify({ items, totals, meal: meal || null, summary });
+          const logNote = await createNote({
+            nodeId: logNodeId,
+            content: logContent,
+            contentType: "text",
+            userId: userId || "SYSTEM",
+            wasAi: true,
+            chatId: chatId ?? null,
+            sessionId: sessionId ?? null,
+          });
+          const logNoteId = logNote?._id ? String(logNote._id) : null;
+
+          // Deliver macros to all metric nodes atomically
+          await deliverMacros(logNodeId, foodNodes, { totals, meal, when: meal });
+
+          // Write to meal slot
+          const slot = detectMealSlot(summary, meal);
+          const mealNoteContent = JSON.stringify({ text: summary, totals, logNoteId });
+          await writeMealNote(foodNodes, slot, mealNoteContent, userId || "SYSTEM", { chatId, sessionId });
+
+          // Build running totals for confirmation
+          const picture = await getDailyPicture(rootId);
+          const runningTotals = [];
+          for (const role of (picture?._valueRoles || [])) {
+            const m = picture[role];
+            if (!m) continue;
+            const goalStr = m.goal > 0 ? `/${m.goal}g` : "g";
+            runningTotals.push(`${m.name || role}: ${m.today}${goalStr}`);
+          }
+          const calStr = picture?.calories
+            ? `${picture.calories.today}${picture.calories.goal > 0 ? `/${picture.calories.goal}` : ""} cal`
+            : null;
+          if (calStr) runningTotals.push(calStr);
+
+          const result = `Logged to ${slot}. ${runningTotals.join(", ")}.`;
+          return { content: [{ type: "text", text: result }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Failed: ${err.message}` }] };
         }

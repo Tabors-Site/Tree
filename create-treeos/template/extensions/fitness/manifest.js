@@ -1,6 +1,6 @@
 export default {
   name: "fitness",
-  version: "3.0.1",
+  version: "3.0.2",
   builtFor: "TreeOS",
   description:
     "Multi-modality workout tracking. Three languages: gym (weight x reps x sets), " +
@@ -14,12 +14,13 @@ export default {
     "integrates nutrition awareness. Type 'be' at the Fitness tree to start a guided " +
     "workout: the coach walks you through today's program set by set.",
 
+  territory: "physical movement, training, exercise, how your body performs",
   classifierHints: [
     /\b\d+\s*x\s*\d+/i,                                        // "135x10"
     /\b(bench|squat|deadlift|press|curl|row|pull-?up|dip)\b/i,  // gym exercises
     /\b(push-?ups?|sit-?ups?|burpees?|plank|lunges?)\b/i,       // bodyweight
     /\b(ran|run|jog|sprint|mile|marathon|pace|tempo|5k|10k)\b/i, // running
-    /\b(workout|exercise|training|sets|reps|weight)\b/i,         // fitness-specific
+    /\b(workouts?|exercises?|training|sets|reps)\b/i,               // fitness-specific
     /\b(chest|back|legs|shoulders|core|calves|bicep|tricep)\b/i, // muscle groups
     /\b(yoga|stretching|plank|hold.*seconds|pose)\b/i,           // flexibility
     /\b(pr|personal record|fastest|heaviest|longest)\b/i,        // records

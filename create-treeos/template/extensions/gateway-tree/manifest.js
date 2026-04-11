@@ -1,6 +1,6 @@
 export default {
   name: "gateway-tree",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-connect",
   description:
     "Tree-to-tree gateway channel. Connects a tree on this land to a tree on " +

@@ -1,6 +1,6 @@
 export default {
   name: "embed",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-intelligence",
   description:
     "Every note gets a vector embedding when written. The tree structure is the skeleton. The " +

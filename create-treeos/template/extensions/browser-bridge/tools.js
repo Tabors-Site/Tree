@@ -199,5 +199,46 @@ export default function getTools() {
       },
     },
 
+    {
+      name: "browser-fetch",
+      description:
+        "Fetch a URL and return the raw response. Works with JSON APIs, RSS feeds, or any URL. " +
+        "Server-side fetch, no browser needed. Use this for structured data instead of browser-read.",
+      annotations: { readOnlyHint: true },
+      schema: {
+        url: z.string().describe("URL to fetch"),
+        userId: z.string().describe("Injected by server. Ignore."),
+      },
+      handler: async ({ url, userId }) => {
+        if (!url) return text("URL required.");
+
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 15000);
+
+          const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+              "User-Agent": "TreeOS/1.0",
+              "Accept": "application/json, text/html, */*",
+            },
+          });
+          clearTimeout(timeout);
+
+          const contentType = response.headers.get("content-type") || "";
+          const body = await response.text();
+
+          // Cap at 16KB
+          const capped = body.length > 16384
+            ? body.slice(0, 16384) + "\n... (truncated)"
+            : body;
+
+          return text(`[${response.status}] ${contentType}\n\n${capped}`);
+        } catch (err) {
+          return text(`Fetch failed: ${err.message}`);
+        }
+      },
+    },
+
   ];
 }

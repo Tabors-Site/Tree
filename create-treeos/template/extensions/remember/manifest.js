@@ -1,6 +1,6 @@
 export default {
   name: "remember",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "The tree remembers what it lost. When a child is pruned, split off, or retired, " +

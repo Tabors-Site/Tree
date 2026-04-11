@@ -1,6 +1,6 @@
 export default {
   name: "rings",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "The tree remembers every age it has been. Once per month, rings takes a cross-section " +

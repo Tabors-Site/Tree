@@ -1,6 +1,6 @@
 export default {
   name: "water",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "The full picture at any position. Combines perspective, codebook stats, memory, gaps, " +

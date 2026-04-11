@@ -46,13 +46,13 @@ export async function scaffold(rootId, userId) {
   }
 
   // Mode overrides
-  await setNodeMode(rootId, "respond", "tree:study-log");
+  await setNodeMode(rootId, "respond", "tree:study-coach");
   await setNodeMode(logNode._id, "respond", "tree:study-log");
 
   // Mark initialized with base phase
   const root = await _Node.findById(rootId);
   if (root) {
-    await _metadata.setExtMeta(root, "study", { initialized: true, setupPhase: "base" });
+    await _metadata.setExtMeta(root, "study", { initialized: true, setupPhase: "complete" });
   }
 
   log.info("Study", "Scaffolded: Log, Queue, Active, Completed, Gaps, Profile, History");

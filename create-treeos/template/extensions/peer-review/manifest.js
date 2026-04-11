@@ -1,6 +1,6 @@
 export default {
   name: "peer-review",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "seed",
   description:
     "Structured AI-to-AI peer review between nodes. Set a review partner on any node. " +

@@ -1,6 +1,6 @@
 export default {
   name: "book",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Trees store knowledge as scattered notes across dozens or hundreds of nodes. Reading " +

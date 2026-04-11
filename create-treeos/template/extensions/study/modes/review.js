@@ -4,6 +4,7 @@
  * Progress analysis. Mastery across topics, gaps, streaks, time spent.
  */
 
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { getActiveTopics, getStudyProgress, getGaps, getProfile } from "../core.js";
 
 export default {
@@ -20,11 +21,12 @@ export default {
     "get-node-notes",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const topics = await getActiveTopics(rootId);
-    const progress = await getStudyProgress(rootId);
-    const gaps = await getGaps(rootId);
-    const profile = await getProfile(rootId);
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const studyRoot = await findExtensionRoot(currentNodeId || rootId, "study") || rootId;
+    const topics = await getActiveTopics(studyRoot);
+    const progress = await getStudyProgress(studyRoot);
+    const gaps = await getGaps(studyRoot);
+    const profile = await getProfile(studyRoot);
 
     const topicsStr = topics.length > 0
       ? topics.map(t => {

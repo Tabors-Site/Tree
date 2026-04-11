@@ -3,7 +3,7 @@ import { sendError, ERR } from "../../seed/protocol.js";
 import urlAuth from "../html-rendering/urlAuth.js";
 import { htmlOnly } from "../html-rendering/htmlHelpers.js";
 import Node from "../../seed/models/node.js";
-import { isInitialized, getDailyPicture } from "./core.js";
+import { isInitialized, getDailyPicture, getHistory } from "./core.js";
 import { renderFoodDashboard } from "./pages/dashboard.js";
 
 const router = express.Router();
@@ -19,11 +19,13 @@ router.get("/root/:rootId/food", urlAuth, htmlOnly, async (req, res) => {
     }
 
     const picture = await getDailyPicture(rootId);
+    const weeklySummaries = await getHistory(rootId, { limit: 8, type: "weekly" });
 
     res.send(renderFoodDashboard({
       rootId,
       rootName: root.name,
       picture,
+      weeklySummaries,
       token: req.query.token || null,
       userId: req.user?._id?.toString() || req.user?.id || null,
     }));

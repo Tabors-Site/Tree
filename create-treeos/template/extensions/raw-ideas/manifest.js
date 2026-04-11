@@ -1,6 +1,6 @@
 export default {
   name: "raw-ideas",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Thoughts do not arrive organized. They arrive in the shower, on a walk, in the middle of " +

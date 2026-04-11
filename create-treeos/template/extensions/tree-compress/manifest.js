@@ -1,6 +1,6 @@
 export default {
   name: "tree-compress",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-intelligence",
   description:
     "A tree outgrows its usefulness. Too many nodes. Too much metadata. The AI context window " +

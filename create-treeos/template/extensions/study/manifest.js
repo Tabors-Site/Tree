@@ -1,6 +1,6 @@
 export default {
   name: "study",
-  version: "1.0.1",
+  version: "1.0.2",
   builtFor: "TreeOS",
   description:
     "The tree that teaches you. Queue topics. Build curricula. Study through conversation. " +
@@ -13,6 +13,7 @@ export default {
     "and begins teaching immediately. Part of the proficiency stack: food fuels, fitness " +
     "builds, recovery heals, study grows.",
 
+  territory: "learning, teaching, quizzes, curriculum, mastery tracking",
   classifierHints: [
     /\b(study|teach me|quiz me|test me|drill me)\b/i,
     /\b(need to learn|want to learn|should learn|add to queue)\b/i,

@@ -1,6 +1,6 @@
 export default {
   name: "pulse",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-cascade",
   description:
     "How the land knows its own health. Reads .flow on a timer, counts results by status, " +

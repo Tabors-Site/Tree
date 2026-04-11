@@ -11,6 +11,7 @@ import log from "../../seed/log.js";
 import logMode from "./modes/log.js";
 import reviewMode from "./modes/review.js";
 import coachMode from "./modes/coach.js";
+import dailyMode from "./modes/daily.js";
 import {
   configure,
   scaffold,
@@ -20,6 +21,7 @@ import {
   handleMacroCascade,
   checkDailyReset,
   getDailyPicture,
+  getHistory,
 } from "./core.js";
 import { handleMessage } from "./handler.js";
 
@@ -50,11 +52,13 @@ export async function init(core) {
   core.modes.registerMode("tree:food-log", logMode, "food");
   core.modes.registerMode("tree:food-review", reviewMode, "food");
   core.modes.registerMode("tree:food-coach", coachMode, "food");
+  core.modes.registerMode("tree:food-daily", dailyMode, "food");
 
   if (core.llm?.registerModeAssignment) {
     core.llm.registerModeAssignment("tree:food-log", "foodLog");
     core.llm.registerModeAssignment("tree:food-review", "foodReview");
     core.llm.registerModeAssignment("tree:food-coach", "foodCoach");
+    core.llm.registerModeAssignment("tree:food-daily", "foodDaily");
   }
 
   // ── onCascade: macro accumulation ──
@@ -226,26 +230,75 @@ export async function init(core) {
         goal: goals?.today || 0,
       };
     }
+
+    // Cross-domain: fitness and recovery state (coach-level nodes only)
+    if (role === "log" || role === "daily") {
+      try {
+        const { getExtension } = await import("../loader.js");
+        const life = getExtension("life");
+        if (life?.exports?.getDomainNodes) {
+          const treeRoot = node.rootOwner || String(node._id);
+          const domains = await life.exports.getDomainNodes(treeRoot);
+
+          if (domains.fitness?.id) {
+            const fitness = getExtension("fitness");
+            if (fitness?.exports?.getWeeklyStats) {
+              const stats = await fitness.exports.getWeeklyStats(domains.fitness.id);
+              if (stats?.workoutsThisWeek > 0) {
+                context.fitnessThisWeek = { workouts: stats.workoutsThisWeek, lastWorkout: stats.lastWorkoutDate };
+              }
+            }
+          }
+
+          if (domains.recovery?.id) {
+            const recovery = getExtension("recovery");
+            if (recovery?.exports?.getStatus) {
+              const status = await recovery.exports.getStatus(domains.recovery.id);
+              if (status?.feelings) {
+                context.recoveryToday = { mood: status.feelings.mood, energy: status.feelings.energy };
+              }
+            }
+          }
+        }
+      } catch {}
+    }
   }, "food");
 
   // ── Live dashboard updates ──
+  // Walk up to find the food root (node with metadata.food.initialized)
+  async function findFoodRootFromNode(nodeId) {
+    let current = await core.models.Node.findById(nodeId).select("metadata parent rootOwner").lean();
+    let depth = 0;
+    while (current && depth < 10) {
+      const fm = current.metadata instanceof Map ? current.metadata.get("food") : current.metadata?.food;
+      if (fm?.initialized) return { foodRootId: String(current._id), ownerId: current.rootOwner ? String(current.rootOwner) : null };
+      if (!current.parent || current.rootOwner) break;
+      current = await core.models.Node.findById(current.parent).select("metadata parent rootOwner").lean();
+      depth++;
+    }
+    return current?.rootOwner ? { foodRootId: null, ownerId: String(current.rootOwner) } : null;
+  }
+
   core.hooks.register("afterNote", async ({ nodeId }) => {
     if (!nodeId) return;
     try {
-      const node = await core.models.Node.findById(nodeId).select("rootOwner metadata").lean();
-      if (!node?.rootOwner) return;
-      const fm = node.metadata instanceof Map ? node.metadata.get("food") : node.metadata?.food;
+      const node = await core.models.Node.findById(nodeId).select("metadata").lean();
+      const fm = node?.metadata instanceof Map ? node.metadata.get("food") : node?.metadata?.food;
       if (!fm?.role) return;
-      core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+      const info = await findFoodRootFromNode(nodeId);
+      if (!info?.ownerId) return;
+      if (info.foodRootId) core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.foodRootId });
+      core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.ownerId });
     } catch {}
   }, "food");
 
   core.hooks.register("afterMetadataWrite", async ({ nodeId, extName }) => {
     if (extName !== "values" && extName !== "food" && extName !== "goals") return;
     try {
-      const node = await core.models.Node.findById(nodeId).select("rootOwner").lean();
-      if (!node?.rootOwner) return;
-      core.websocket?.emitToUser?.(String(node.rootOwner), "dashboardUpdate", { rootId: String(node.rootOwner) });
+      const info = await findFoodRootFromNode(nodeId);
+      if (!info?.ownerId) return;
+      if (info.foodRootId) core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.foodRootId });
+      core.websocket?.emitToUser?.(info.ownerId, "dashboardUpdate", { rootId: info.ownerId });
     } catch {}
   }, "food");
 
@@ -263,12 +316,13 @@ export async function init(core) {
       return `<div class="app-card">
         <div class="app-header"><span class="app-emoji">🍎</span><span class="app-name">Food</span></div>
         <div class="app-desc">Say what you ate. One LLM call parses macros. Daily totals tracked. History archives daily summaries.</div>
-        ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
-        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
-          ${tokenField}<input type="hidden" name="app" value="food" />
-          <input class="app-input" name="message" placeholder="What did you eat? (or just say hi to set up your goals)" required />
-          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} Food</button>
-        </form>
+        ${entries.length > 0
+          ? `<div style="display:flex;flex-wrap:wrap;">${existing}</div>`
+          : `<form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+              ${tokenField}<input type="hidden" name="app" value="food" />
+              <input class="app-input" name="message" placeholder="What did you eat? (or just say hi to set up your goals)" required />
+              <button class="app-start" type="submit">Start Food</button>
+            </form>`}
       </div>`;
     }, { priority: 20 });
   } catch {}
@@ -286,6 +340,7 @@ export async function init(core) {
     router,
     tools,
     modeTools: [
+      { modeKey: "tree:food-log", toolNames: ["food-log-entry"] },
       { modeKey: "tree:food-coach", toolNames: ["food-save-profile", "food-adopt-node"] },
       { modeKey: "tree:edit", toolNames: ["food-adopt-node"] },
     ],
@@ -294,6 +349,7 @@ export async function init(core) {
       isInitialized,
       findFoodNodes,
       getDailyPicture,
+      getHistory,
       handleMessage,
     },
     jobs: [

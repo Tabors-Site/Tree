@@ -1,6 +1,6 @@
 export default {
   name: "scout",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-intelligence",
   description:
     "Triangulate across the tree. Five search strategies run in parallel: semantic, structural, " +

@@ -1,6 +1,6 @@
 export default {
   name: "inverse-tree",
-  version: "1.0.2",
+  version: "1.0.3",
   builtFor: "treeos-intelligence",
   description:
     "The AI builds a tree OF the user. Not the trees the user built. A tree the AI constructs " +

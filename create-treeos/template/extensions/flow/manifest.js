@@ -1,6 +1,6 @@
 export default {
   name: "flow",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-cascade",
   description:
     "Cascade is the kernel's nervous system. When content is written at a cascade-enabled " +

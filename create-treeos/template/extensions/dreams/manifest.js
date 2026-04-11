@@ -1,6 +1,6 @@
 export default {
   name: "dreams",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Trees accumulate entropy. Nodes end up under the wrong parent. Dense notes pile up " +

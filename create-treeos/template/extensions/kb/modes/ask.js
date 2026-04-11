@@ -20,9 +20,10 @@ export default {
     "get-tree",
   ],
 
-  async buildSystemPrompt({ username, rootId }) {
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const kbRoot = await findExtensionRoot(currentNodeId || rootId, "kb") || rootId;
     const { findKbNodes } = await import("../core.js");
-    const nodes = await findKbNodes(rootId);
+    const nodes = await findKbNodes(kbRoot);
     const topicsId = nodes?.topics?.id || "unknown";
 
     return `You are answering questions from ${username} using a knowledge base.

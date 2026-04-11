@@ -18,6 +18,19 @@ import {
 export async function init(core) {
   const { default: router } = await import("./routes.js");
 
+  // Create a bare Life root on registration. No domains scaffolded.
+  // Sprout handles domain creation from conversation.
+  core.hooks.register("afterRegister", async ({ userId }) => {
+    try {
+      const existing = await findLifeRoot(userId);
+      if (!existing) {
+        await scaffoldRoot(userId);
+      }
+    } catch (err) {
+      log.warn("Life", `Failed to create Life root on register: ${err.message}`);
+    }
+  }, "life");
+
   log.info("Life", "Loaded. Scaffolding library ready.");
 
   return {

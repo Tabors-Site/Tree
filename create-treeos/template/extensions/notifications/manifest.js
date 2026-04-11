@@ -1,6 +1,6 @@
 export default {
   name: "notifications",
-  version: "1.0.1",
+  version: "1.0.2",
   builtFor: "TreeOS",
   description:
     "The notification infrastructure for the entire extension ecosystem. Owns the Notification " +

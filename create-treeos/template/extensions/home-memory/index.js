@@ -10,10 +10,14 @@ import { getLandRootId } from "../../seed/landRoot.js";
 
 const MAX_MEMORIES = 200;
 const MAX_REMINDERS = 50;
-const SUMMARY_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours between summaries
+const SUMMARY_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes between summaries
 
 // Track last summary time per user so we don't summarize every session end
 const _lastSummary = new Map();
+
+// Track in-flight summary runs per user so we don't stack overlapping calls
+// (multiple session ends in quick succession all firing summarizeSession).
+const _inFlight = new Set();
 
 // Track navigation patterns per user (in-memory, compressed on breath)
 const _navTracking = new Map(); // userId -> { trees: Map<rootId, { name, count, lastVisit }> }
@@ -46,19 +50,36 @@ export async function init(core) {
   }, "home-memory");
 
   // ── afterSessionEnd: summarize home conversations ─────────────────
-  core.hooks.register("afterSessionEnd", async ({ sessionId, userId, type }) => {
-    // Only care about home sessions
-    if (!type || !type.startsWith("home")) return;
+  core.hooks.register("afterSessionEnd", async ({ sessionId, userId, type, meta }) => {
+    // Only care about home sessions. The visitorId (stored in session meta
+    // by runOrchestration / websocket.js syncRegistrySession) follows the
+    // pattern "home:{userId}".
+    const visitorId = meta?.visitorId || "";
+    if (!visitorId.startsWith("home:")) return;
     if (!userId) return;
 
-    // Cooldown: don't summarize too frequently
-    const lastTime = _lastSummary.get(userId) || 0;
-    if (Date.now() - lastTime < SUMMARY_COOLDOWN_MS) return;
+    // Single in-flight run per user. Prevents stacking when multiple home
+    // chats end in quick succession (each session-end fires this hook).
+    if (_inFlight.has(userId)) {
+      log.verbose("HomeMemory", `  skipping: summary already in flight for user ${userId.slice(0, 8)}`);
+      return;
+    }
 
-    // Fire and forget
-    summarizeSession(userId, sessionId, runChat).catch(err =>
-      log.debug("HomeMemory", `Summary failed: ${err.message}`)
-    );
+    // Cooldown: don't summarize too frequently. Set on success only (see end
+    // of summarizeSession), so failed runs can be retried on the next session.
+    const lastTime = _lastSummary.get(userId) || 0;
+    const elapsed = Date.now() - lastTime;
+    if (elapsed < SUMMARY_COOLDOWN_MS) {
+      log.verbose("HomeMemory", `  skipping: cooldown active (${Math.round(elapsed / 1000)}s of ${SUMMARY_COOLDOWN_MS / 1000}s)`);
+      return;
+    }
+
+    log.info("HomeMemory", `Summarizing home session for user ${userId.slice(0, 8)}`);
+    _inFlight.add(userId);
+    // Fire and forget. Always release the in-flight flag.
+    summarizeSession(userId, sessionId, runChat)
+      .catch(err => log.warn("HomeMemory", `Summary failed: ${err.message}`))
+      .finally(() => _inFlight.delete(userId));
   }, "home-memory");
 
   // ── beforeLLMCall: inject memories into home-zone system prompt ─────
@@ -249,23 +270,34 @@ async function createHomeTree(userId) {
   return home;
 }
 
+// How far back to look for chats to summarize. A session ending after a long
+// gap should only summarize what's actually fresh, not chats from days ago.
+const SUMMARY_WINDOW_MS = 12 * 60 * 60 * 1000; // 12 hours
+
 /**
  * Summarize a home session into a one-sentence memory.
- * Reads the last few home-zone chats and compresses into a single observation.
+ * Reads home-zone chats since the last summary (capped at the window) and
+ * compresses them into a single observation. Old chats are ignored. Already
+ * summarized chats are ignored.
  */
 async function summarizeSession(userId, sessionId, runChat) {
-  _lastSummary.set(userId, Date.now());
+  // Build the time floor: chats must be newer than the most recent summary
+  // AND newer than the rolling window. Whichever is later wins.
+  const lastTime = _lastSummary.get(userId) || 0;
+  const windowFloor = Date.now() - SUMMARY_WINDOW_MS;
+  const sinceTime = Math.max(lastTime, windowFloor);
 
-  // Get recent home chats for this user (last session)
   const chats = await Chat.find({
     userId,
     "aiContext.zone": "home",
+    "startMessage.time": { $gt: new Date(sinceTime) },
   })
     .sort({ "startMessage.time": -1 })
-    .limit(6)
+    .limit(20)
     .select("startMessage.content endMessage.content")
     .lean();
 
+  log.verbose("HomeMemory", `  found ${chats.length} fresh home chats since ${new Date(sinceTime).toISOString()}`);
   if (chats.length === 0) return;
 
   // Build conversation excerpt
@@ -293,29 +325,43 @@ async function summarizeSession(userId, sessionId, runChat) {
   const reminderPatterns = /\b(remember|remind me|don't forget|keep in mind|note that)\b/i;
   const hasReminder = chats.some(c => reminderPatterns.test(c.startMessage?.content || ""));
 
+  log.verbose("HomeMemory", `  calling LLM to summarize ${chats.length} chats (${excerpt.length} chars)`);
+
   // One LLM call: summarize into a memory
   // Use a land-level LLM since there's no tree context
-  const { answer } = await runChat({
-    userId,
-    username: user?.username || "user",
-    message:
-      `You are summarizing a home-zone conversation for future reference. ` +
-      `This is NOT a response to the user. This is a private memory note.\n\n` +
-      `Conversation:\n${excerpt}\n\n` +
-      `Write ONE sentence capturing what this conversation was about and anything ` +
-      `worth remembering (what the user cared about, their mood, what they asked for, ` +
-      `any personal details they shared). Be specific, not generic. ` +
-      `If nothing interesting happened, write "routine check-in."` +
-      (hasReminder
-        ? `\n\nThe user also explicitly asked to remember something. After your summary sentence, ` +
-          `write a second line starting with "REMINDER:" containing exactly what they asked to remember.`
-        : ""),
-    mode: "tree:respond",
-    rootId: String(homeTree._id),
-    slot: "homeMemory",
-  });
+  let answer;
+  try {
+    const result = await runChat({
+      userId,
+      username: user?.username || "user",
+      message:
+        `You are summarizing a home-zone conversation for future reference. ` +
+        `This is NOT a response to the user. This is a private memory note.\n\n` +
+        `Conversation:\n${excerpt}\n\n` +
+        `Write ONE sentence capturing what this conversation was about and anything ` +
+        `worth remembering (what the user cared about, their mood, what they asked for, ` +
+        `any personal details they shared). Be specific, not generic. ` +
+        `If nothing interesting happened, write "routine check-in."` +
+        (hasReminder
+          ? `\n\nThe user also explicitly asked to remember something. After your summary sentence, ` +
+            `write a second line starting with "REMINDER:" containing exactly what they asked to remember.`
+          : ""),
+      mode: "tree:respond",
+      rootId: String(homeTree._id),
+      slot: "homeMemory",
+    });
+    answer = result?.answer;
+  } catch (err) {
+    log.warn("HomeMemory", `runChat failed: ${err.message}`);
+    return;
+  }
 
-  if (!answer || answer.length < 5) return;
+  log.verbose("HomeMemory", `  LLM returned ${answer ? answer.length + " chars" : "null"}: "${(answer || "").slice(0, 100)}"`);
+
+  if (!answer || answer.length < 5) {
+    log.verbose("HomeMemory", `  skipping: answer too short or empty`);
+    return;
+  }
 
   // Parse reminder if present
   const lines = answer.trim().split("\n").filter(l => l.trim());
@@ -324,13 +370,21 @@ async function summarizeSession(userId, sessionId, runChat) {
 
   // Write memory
   if (memoryText && memoryText !== "routine check-in.") {
-    await createNote({
-      contentType: "text",
-      content: memoryText.trim(),
-      userId,
-      nodeId: String(memoriesNode._id),
-      wasAi: true,
-    });
+    try {
+      await createNote({
+        contentType: "text",
+        content: memoryText.trim(),
+        userId,
+        nodeId: String(memoriesNode._id),
+        wasAi: true,
+      });
+      log.verbose("HomeMemory", `  wrote memory note to ${memoriesNode._id}`);
+    } catch (err) {
+      log.warn("HomeMemory", `createNote failed: ${err.message}`);
+      return;
+    }
+  } else {
+    log.verbose("HomeMemory", `  skipping: routine check-in (no memory worth saving)`);
   }
 
   // Write reminder if found
@@ -351,7 +405,10 @@ async function summarizeSession(userId, sessionId, runChat) {
     }
   }
 
-  log.verbose("HomeMemory", `Saved memory for ${user?.username || userId.slice(0, 8)}: "${memoryText?.slice(0, 60)}"`);
+  // Only set cooldown after successful write so failed runs can be retried
+  // immediately on the next session end instead of locking the user out for 4 hours.
+  _lastSummary.set(userId, Date.now());
+  log.info("HomeMemory", `Saved memory for ${user?.username || userId.slice(0, 8)}: "${memoryText?.slice(0, 60)}"`);
 }
 
 /**

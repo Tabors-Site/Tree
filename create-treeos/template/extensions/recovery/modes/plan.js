@@ -2,6 +2,7 @@
 // Taper scheduling. Creates or adjusts plans that bend around the person.
 // Prompt is async: reads the live tree so the AI adapts to custom structures.
 
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 import { findRecoveryNodes } from "../core.js";
 
 const SAFETY = `
@@ -28,8 +29,9 @@ export default {
 
   toolNames: ["navigate-tree", "get-tree-context", "create-node-note", "create-new-node", "edit-node-schedule"],
 
-  async buildSystemPrompt({ username, rootId }) {
-    const nodes = rootId ? await findRecoveryNodes(rootId) : null;
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const recRoot = await findExtensionRoot(currentNodeId || rootId, "recovery") || rootId;
+    const nodes = recRoot ? await findRecoveryNodes(recRoot) : null;
 
     const EXPECTED = ["log", "feelings", "milestones", "profile", "substance"];
     const found = [];
@@ -61,18 +63,22 @@ export default {
       : "TREE STRUCTURE: not yet discovered.";
 
     const missingBlock = missing.length > 0
-      ? `\nMISSING STRUCTURAL NODES: ${missing.join(", ")}\nUse create-node to recreate them under root ${rootId} with the correct metadata.recovery.role.`
+      ? `\nMISSING STRUCTURAL NODES: ${missing.join(", ")}\nUse create-node to recreate them under root ${recRoot} with the correct metadata.recovery.role.`
       : "";
 
+    const hasSubstances = nodes?.substances && Object.keys(nodes.substances).length > 0;
+
     return `You are ${username}'s recovery plan assistant.
-Root ID: ${rootId}
+Root ID: ${recRoot}
+
+${hasSubstances ? "STATUS: Substances being tracked. Plan mode." : "STATUS: No substances configured. Help them set up what they're tracking."}
 
 ${structureBlock}${missingBlock}
 
 You help set up substance tracking and create reduction schedules. The person
 tells you where they are and where they want to be. You build a gradual plan.
 
-SETUP (first use)
+${!hasSubstances ? "SETUP (no substances yet)" : "SETUP (for adding new substances)"}
 - When the user tells you what they want to track, use recovery-add-substance to create it.
 - Pass rootId, substanceName, startingTarget (current daily amount), finalTarget (goal, 0 for quit).
 - Ask about each substance separately. Add each one with the tool.

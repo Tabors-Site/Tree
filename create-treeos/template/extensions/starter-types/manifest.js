@@ -1,6 +1,6 @@
 export default {
   name: "starter-types",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "When the AI creates a node it needs to assign a type. Without guidance it guesses, and " +

@@ -1,11 +1,10 @@
 // food/modes/log.js
-// The receiver. One job: parse food input into structured metrics.
-// No tools. Returns JSON. One LLM call.
-// Prompt is async: discovers what metrics the tree tracks (protein, carbs, fats, sugar, fiber, etc.)
+// The default mode at the food node. Handles food logging AND conversation.
+// When the user says food: parse it, log it with tools, confirm with totals.
+// When the user says anything else: respond conversationally with food awareness.
 
-import { findFoodNodes } from "../core.js";
-
-import { STRUCTURAL_ROLES } from "../core.js";
+import { findFoodNodes, getDailyPicture, STRUCTURAL_ROLES } from "../core.js";
+import { findExtensionRoot } from "../../../seed/tree/extensionMetadata.js";
 
 export default {
   name: "tree:food-log",
@@ -14,49 +13,91 @@ export default {
   bigMode: "tree",
   hidden: true,
 
-  maxMessagesBeforeLoop: 2,
-  preserveContextOnLoop: false,
+  maxMessagesBeforeLoop: 10,
+  preserveContextOnLoop: true,
 
-  toolNames: [],
+  toolNames: [
+    "food-log-entry",
+    "navigate-tree",
+    "get-tree-context",
+    "get-node-notes",
+    "food-save-profile",
+    "food-adopt-node",
+  ],
 
-  async buildSystemPrompt({ rootId }) {
-    // Discover what metrics this tree tracks
-    const nodes = rootId ? await findFoodNodes(rootId) : null;
+  async buildSystemPrompt({ username, rootId, currentNodeId }) {
+    const Node = (await import("../../../seed/models/node.js")).default;
+    // Find the food extension root from wherever we are in the tree
+    const foodRootId = await findExtensionRoot(currentNodeId || rootId, "food") || rootId;
+    const nodes = foodRootId ? await findFoodNodes(foodRootId) : null;
+
+    // Discover tracked metrics with current values
     const metrics = [];
+    let hasAnyGoals = false;
     if (nodes) {
       for (const [role, info] of Object.entries(nodes)) {
-        if (role === "mealSlots" || !info?.id || STRUCTURAL_ROLES.includes(role)) continue;
-        metrics.push(role);
+        if (role === "mealSlots" || role === "_unadopted" || !info?.id || STRUCTURAL_ROLES.includes(role)) continue;
+        let goalStr = "no goal";
+        let todayStr = "0";
+        try {
+          const n = await Node.findById(info.id).select("metadata").lean();
+          const goals = n?.metadata instanceof Map ? n.metadata.get("goals") : n?.metadata?.goals;
+          const values = n?.metadata instanceof Map ? n.metadata.get("values") : n?.metadata?.values;
+          if (goals?.today > 0) { goalStr = `goal: ${goals.today}g`; hasAnyGoals = true; }
+          if (values?.today > 0) todayStr = String(values.today);
+        } catch {}
+        metrics.push({ role, name: info.name, id: info.id, goalStr, todayStr });
       }
     }
-    // Fallback to core macros if nothing found
-    if (metrics.length === 0) metrics.push("protein", "carbs", "fats");
 
-    const itemFields = metrics.map(m => `"${m}": grams`).join(", ");
-    const totalsFields = metrics.map(m => `"${m}": grams`).join(", ");
+    const metricList = metrics.length > 0
+      ? metrics.map(m => `- ${m.name} (id: ${m.id}): ${m.todayStr}g today, ${m.goalStr}`).join("\n")
+      : "No metrics tracked yet.";
 
-    return `You are a food intake parser. Parse the user's food input into structured metrics.
+    const needsSetup = !hasAnyGoals;
+    const logId = nodes?.log?.id;
 
-This tree tracks: ${metrics.join(", ")}, calories
+    // Get today's picture for context
+    let todaySummary = "";
+    try {
+      const picture = await getDailyPicture(foodRootId);
+      if (picture?.calories) {
+        const parts = [];
+        for (const role of (picture._valueRoles || [])) {
+          const m = picture[role];
+          if (m) parts.push(`${m.name || role}: ${m.today}${m.goal > 0 ? `/${m.goal}g` : "g"}`);
+        }
+        if (picture.calories) parts.push(`cal: ${picture.calories.today}${picture.calories.goal > 0 ? `/${picture.calories.goal}` : ""}`);
+        if (parts.length > 0) todaySummary = `Today so far: ${parts.join(", ")}`;
+      }
+    } catch {}
 
-Return ONLY JSON:
-{
-  "meal": "short description of what was eaten",
-  "when": "breakfast" | "lunch" | "dinner" | "snack",
-  "items": [
-    { "name": "food name", ${itemFields}, "calories": number }
-  ],
-  "totals": { ${totalsFields}, "calories": number }
-}
+    return `You are ${username}'s food tracker.
 
-Rules:
-- Estimate nutritional values for common foods. Use typical serving sizes unless the user specifies.
-- If the user gives a quantity (2 eggs, 1 cup rice, 4oz chicken), use that.
-- Round to whole numbers.
-- "when" defaults to the most likely meal based on context. If unclear, use "snack".
-- Keep item names short. "Chicken breast" not "Grilled boneless skinless chicken breast fillet".
-- Common estimates: egg = 70cal/6p/0c/5f, chicken breast 4oz = 185cal/35p/0c/4f, rice 1cup = 200cal/4p/45c/0f, bread 1slice = 80cal/3p/15c/1f, banana = 105cal/1p/27c/0f.
-- Return ONLY the JSON object. No explanation. No markdown fences.
-- Include ALL tracked metrics (${metrics.join(", ")}) for every item, even if 0.`.trim();
+${needsSetup ? "STATUS: Goals not configured. Ask about calorie target and macro goals." : "STATUS: Tracking active."}
+
+METRICS:
+${metricList}
+${todaySummary ? `\n${todaySummary}` : ""}
+
+${needsSetup ? `SETUP (no goals yet):
+Ask their daily calorie target, macro goals, and dietary restrictions.
+Use food-save-profile with rootId ${foodRootId} to save goals.
+` : ""}WHEN THE USER TELLS YOU WHAT THEY ATE:
+1. Estimate macros for the food items (use common knowledge for portions).
+2. Call food-log-entry ONCE with rootId ${foodRootId}, the items array, totals, and a summary.
+   The tool handles everything: writes to Log, updates all metrics, places in the right meal slot.
+3. Confirm naturally using the running totals returned by the tool.
+
+WHEN THE USER ASKS QUESTIONS:
+Respond conversationally. You know their daily totals, goals, and what they've eaten.
+
+RULES:
+- Be concise. One line for logging confirmation with running totals.
+- Use actual numbers from the metrics above. Don't make up totals.
+- For food estimates: egg = 6p/0c/5f/70cal, chicken 4oz = 35p/0c/4f/185cal, rice 1cup = 4p/45c/0f/200cal.
+- Never expose node IDs or metadata to the user.
+- If the message isn't about food, respond conversationally anyway. You live here.
+- ALWAYS use food-log-entry for logging. Never manually call edit-node-value or create-node-note for food entries.`.trim();
   },
 };

@@ -62,7 +62,7 @@ export async function scaffold(rootId, userId) {
   if (root) {
     await _metadata.setExtMeta(root, "kb", {
       initialized: true,
-      setupPhase: "base",
+      setupPhase: "complete",
       profile: {
         name: root.name || "Knowledge Base",
         maintainers: [userId],

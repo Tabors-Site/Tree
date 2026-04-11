@@ -1,6 +1,6 @@
 export default {
   name: "boundary",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-intelligence",
   description:
     "The tree knows where one concern ends and another begins. Branches grow " +

@@ -1,6 +1,6 @@
 export default {
   name: "competence",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-intelligence",
   description:
     "The tree knows where its knowledge ends. Tracks which queries found answers " +

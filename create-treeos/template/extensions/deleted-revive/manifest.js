@@ -1,6 +1,6 @@
 export default {
   name: "deleted-revive",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "TreeOS",
   description:
     "Deletion in TreeOS is permanent by default. When a branch is deleted, its nodes are " +

@@ -9,34 +9,28 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
   const css = `
     html { overflow-y: auto; height: 100%; }
 
-    /* Glass Card Base */
+    /* Card Base */
     .glass-card {
-      background: rgba(var(--glass-water-rgb), var(--glass-alpha));
-      backdrop-filter: blur(22px) saturate(140%);
-      -webkit-backdrop-filter: blur(22px) saturate(140%);
-      border-radius: 16px;
-      padding: 32px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
-      border: 1px solid rgba(255, 255, 255, 0.28);
+      background: #161b24;
+      border-radius: 12px;
+      padding: 24px 28px;
+      margin-bottom: 16px;
+      border: 1px solid #232a38;
       position: relative;
-      overflow: hidden;
-      animation: fadeInUp 0.6s ease-out both;
+      animation: fadeInUp 0.35s ease-out both;
     }
 
     /* Header Section */
     .header {
-      animation-delay: 0.1s;
+      animation-delay: 0.05s;
     }
 
     .user-info h1 {
-      font-size: 32px;
-      font-weight: 700;
-      color: white;
-      margin-bottom: 16px;
-      letter-spacing: -0.5px;
-      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      font-size: 22px;
+      font-weight: 600;
+      color: #e6e8eb;
+      margin-bottom: 14px;
+      letter-spacing: -0.3px;
     }
 
     .user-info h1::before {
@@ -74,96 +68,91 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
 }
 
     .plan-badge {
-      padding: 8px 16px;
+      padding: 5px 12px;
       border-radius: 980px;
       font-weight: 600;
-      font-size: 13px;
+      font-size: 12px;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: rgba(255, 255, 255, 0.9);
-      color: #667eea;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      background: #161b24;
+      color: #9ba1ad;
+      border: 1px solid #232a38;
+      letter-spacing: 0.3px;
     }
 .plan-basic {
-  background: rgba(255, 255, 255, 0.9);
-  color: #64748b;
+  background: #161b24;
+  color: #9ba1ad;
+  border: 1px solid #232a38;
 }
 
 /* STANDARD */
 .plan-standard {
-  background: linear-gradient(135deg, #60a5fa, #2563eb);
-  color: white;
+  background: rgba(122, 146, 184, 0.12);
+  color: #a8c0e0;
+  border: 1px solid rgba(122, 146, 184, 0.35);
 }
 
 /* PREMIUM */
 .plan-premium {
-  background: linear-gradient(135deg, #a855f7, #7c3aed);
-  color: white;
+  background: rgba(158, 130, 196, 0.12);
+  color: #c4afde;
+  border: 1px solid rgba(158, 130, 196, 0.35);
 }
 
 /* GOD */
 .plan-god {
-  background: linear-gradient(
-    135deg,
-    #facc15,
-    #f59e0b,
-    #eab308
-  );
-  color: #3a2e00;
-  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.6);
-  box-shadow:
-    0 0 20px rgba(250, 204, 21, 0.6),
-    0 6px 24px rgba(234, 179, 8, 0.5);
-  border: 1px solid rgba(255, 215, 0, 0.9);
+  background: rgba(212, 165, 116, 0.12);
+  color: #e0c290;
+  border: 1px solid rgba(212, 165, 116, 0.45);
 }
     .meta-item {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 8px 14px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
+      padding: 6px 12px;
+      background: #161b24;
       border-radius: 980px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 500;
-      color: white;
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #9ba1ad;
+      border: 1px solid #232a38;
     }
 
     .storage-toggle-btn {
       padding: 2px 8px;
       margin-left: 4px;
       border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid #232a38;
+      background: #161b24;
       font-size: 11px;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.2s;
-      color: white;
+      transition: background 150ms ease, border-color 150ms ease;
+      color: #9ba1ad;
     }
 
     .storage-toggle-btn:hover {
-      background: rgba(255, 255, 255, 0.3);
-      transform: scale(1.05);
+      background: #1c222e;
+      border-color: #2f3849;
+      color: #e6e8eb;
     }
 
     .logout-btn {
-      padding: 8px 16px;
-      border-radius: 980px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      background: rgba(239, 68, 68, 0.3);
-      backdrop-filter: blur(10px);
-      color: white;
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(201, 126, 106, 0.35);
+      background: rgba(201, 126, 106, 0.1);
+      color: #c97e6a;
       font-weight: 600;
-      font-size: 13px;
+      font-size: 12px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: background 150ms ease, border-color 150ms ease;
     }
 
     .logout-btn:hover {
-      background: rgba(239, 68, 68, 0.5);
+      background: rgba(201, 126, 106, 0.18);
+      border-color: rgba(201, 126, 106, 0.55);
     }
 
     .header { position: relative; }
@@ -172,21 +161,21 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
       position: absolute;
       top: 16px;
       right: 16px;
-      padding: 8px 16px;
-      border-radius: 980px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      background: rgba(16, 185, 129, 0.3);
-      backdrop-filter: blur(10px);
-      color: white;
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(125, 211, 133, 0.4);
+      background: rgba(125, 211, 133, 0.12);
+      color: #9ce0a2;
       font-weight: 600;
-      font-size: 13px;
+      font-size: 12px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: background 150ms ease, border-color 150ms ease;
       text-decoration: none;
     }
 
     .basic-btn:hover {
-      background: rgba(16, 185, 129, 0.5);
+      background: rgba(125, 211, 133, 0.2);
+      border-color: #7dd385;
     }
 
     /* User ID */
@@ -194,86 +183,55 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 12px 16px;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      border-radius: 10px;
+      padding: 10px 14px;
+      background: #0d1117;
+      border-radius: 8px;
       margin-top: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
+      border: 1px solid #232a38;
     }
 
     .user-id-container code {
       flex: 1;
       background: transparent;
       padding: 0;
-      font-size: 13px;
+      font-size: 12px;
       font-family: 'SF Mono', Monaco, monospace;
-      color: white;
-      font-weight: 600;
+      color: #c4c8d0;
+      font-weight: 500;
       word-break: break-all;
     }
 
     #copyNodeIdBtn {
-      background: rgba(255, 255, 255, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: #161b24;
+      border: 1px solid #232a38;
       cursor: pointer;
-      padding: 6px 10px;
+      padding: 5px 9px;
       border-radius: 6px;
-      font-size: 16px;
-      transition: all 0.2s;
+      font-size: 14px;
+      transition: background 150ms ease, border-color 150ms ease;
       flex-shrink: 0;
+      color: #9ba1ad;
     }
 
     #copyNodeIdBtn:hover {
-      background: rgba(255, 255, 255, 0.3);
-      transform: scale(1.1);
+      background: #1c222e;
+      border-color: #2f3849;
     }
 
-    /* Raw Ideas Capture - Enhanced with glow */
+    /* Raw Ideas Capture - subtle accent border, no glow */
     .raw-ideas-section {
-      animation-delay: 0.2s;
-      box-shadow:
-        0 20px 60px rgba(16, 185, 129, 0.3),
-        0 0 40px rgba(16, 185, 129, 0.2),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
-    }
-
-    .raw-ideas-section::after {
-      content: '';
-      position: absolute;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: radial-gradient(
-        circle,
-        rgba(16, 185, 129, 0.15) 0%,
-        transparent 70%
-      );
-      animation: pulse 8s ease-in-out infinite;
-      pointer-events: none;
-    }
-
-    @keyframes pulse {
-      0%, 100% {
-        transform: scale(1) rotate(0deg);
-        opacity: 0.5;
-      }
-      50% {
-        transform: scale(1.1) rotate(180deg);
-        opacity: 0.8;
-      }
+      animation-delay: 0.15s;
+      border: 1px solid rgba(125, 211, 133, 0.25);
     }
 
     .raw-ideas-section h2 {
-      font-size: 20px;
+      font-size: 16px;
       font-weight: 600;
-      color: white;
-      margin-bottom: 20px;
+      color: #e6e8eb;
+      margin-bottom: 14px;
       position: relative;
       z-index: 1;
-      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2),
-        0 0 20px rgba(16, 185, 129, 0.4);
+      letter-spacing: -0.2px;
     }
 
     .raw-ideas-section h2::before {
@@ -294,11 +252,9 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
       padding: 16px 20px;
       font-size: 16px;
       line-height: 1.6;
-      border-radius: 12px;
-      border: 2px solid rgba(255, 255, 255, 0.4);
-      background: rgba(255, 255, 255, 0.25);
-      backdrop-filter: blur(20px) saturate(150%);
-      -webkit-backdrop-filter: blur(20px) saturate(150%);
+      border-radius: 10px;
+      border: 1px solid #232a38;
+      background: #0d1117;
       font-family: inherit;
       resize: vertical;
       min-height: 80px;
@@ -307,48 +263,35 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
       box-shadow:
         0 4px 20px rgba(0, 0, 0, 0.15),
         inset 0 1px 0 rgba(255, 255, 255, 0.4);
-      color: #5044c9;
-      font-weight: 600;
-      text-shadow:
-        0 0 12px rgba(102, 126, 234, 0.7),
-        0 0 20px rgba(102, 126, 234, 0.4),
-        0 1px 3px rgba(255, 255, 255, 1),
-        0 2px 8px rgba(80, 68, 201, 0.5);
-      letter-spacing: 0.3px;
+      color: #e6e8eb;
+      font-weight: 500;
+      letter-spacing: 0;
     }
 
     #rawIdeaInput:focus {
       outline: none;
-      border-color: rgba(102, 126, 234, 0.6);
-      backdrop-filter: blur(28px) saturate(170%);
-      -webkit-backdrop-filter: blur(28px) saturate(170%);
+      border-color: rgba(125, 211, 133, 0.5);
       box-shadow:
-        0 0 0 4px rgba(102, 126, 234, 0.25),
-        0 0 40px rgba(102, 126, 234, 0.5),
-        0 8px 30px rgba(102, 126, 234, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.6);
-      transform: translateY(-2px);
+        0 0 0 3px rgba(125, 211, 133, 0.15);
     }
 
     #rawIdeaInput:focus::placeholder {
-      color: rgba(80, 68, 201, 0.4);
+      color: rgba(155, 161, 173, 0.6);
     }
 
     #rawIdeaInput::placeholder {
-      color: rgba(80, 68, 201, 0.4);
+      color: rgba(155, 161, 173, 0.6);
       font-weight: 400;
-      text-shadow: 0 0 6px rgba(102, 126, 234, 0.25);
     }
 
     #rawIdeaInput:disabled {
       opacity: 0.4;
       cursor: not-allowed;
-      background: rgba(255, 255, 255, 0.1);
-      transform: none;
+      background: rgba(255, 255, 255, 0.04);
     }
 
     #rawIdeaInput:disabled::placeholder {
-      color: rgba(80, 68, 201, 0.25);
+      color: rgba(155, 161, 173, 0.3);
     }
 
     /* Character counter */
@@ -384,12 +327,12 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
       gap: 4px;
       margin-left: 10px;
       padding: 2px 8px;
-      background: rgba(255, 215, 79, 0.2);
-      border: 1px solid rgba(255, 215, 79, 0.3);
+      background: rgba(212, 165, 116, 0.12);
+      border: 1px solid rgba(212, 165, 116, 0.4);
       border-radius: 10px;
       font-size: 11px;
       font-weight: 600;
-      color: rgba(255, 215, 79, 1);
+      color: #d4a574;
       transition: all 0.2s;
     }
 
@@ -398,13 +341,12 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
     }
 
     .energy-display.file-energy {
-      background: rgba(255, 220, 100, 0.9);
-      border-color: rgba(255, 200, 50, 1);
-      color: #1a1a1a;
-      font-size: 13px;
+      background: rgba(212, 165, 116, 0.18);
+      border-color: rgba(212, 165, 116, 0.55);
+      color: #e0c290;
+      font-size: 12px;
       font-weight: 700;
       padding: 4px 12px;
-      box-shadow: 0 2px 8px rgba(255, 200, 50, 0.4);
     }
 
     /* File selected badge */
@@ -497,45 +439,35 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
     }
 
     .send-button {
-      padding: 14px 32px;
-      font-size: 16px;
+      padding: 12px 28px;
+      font-size: 14px;
       font-weight: 600;
-      border-radius: 980px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      background: rgba(16, 185, 129, 0.9);
-      backdrop-filter: blur(10px);
-      color: white;
+      border-radius: 10px;
+      border: 1px solid #7dd385;
+      background: #7dd385;
+      color: #0d1117;
       cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+      transition: background 200ms ease, box-shadow 200ms ease, transform 150ms ease;
+      box-shadow: 0 0 20px rgba(125, 211, 133, 0.35);
       white-space: nowrap;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .send-button::before {
-      content: "";
-      position: absolute;
-      inset: -40%;
-      background: radial-gradient(
-        120% 60% at 0% 0%,
-        rgba(255, 255, 255, 0.35),
-        transparent 60%
-      );
-      opacity: 0;
-      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-      pointer-events: none;
     }
 
     .send-button:hover {
-      background: rgba(16, 185, 129, 1);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 25px rgba(16, 185, 129, 0.5);
+      background: #9ce0a2;
+      border-color: #9ce0a2;
+      box-shadow: 0 0 28px rgba(125, 211, 133, 0.55);
+      transform: translateY(-1px);
     }
 
-    .send-button:hover::before {
-      opacity: 1;
-      transform: translateX(30%) translateY(10%);
+    .send-button:active {
+      transform: translateY(0);
+    }
+
+    .send-button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
     }
 
     /* Navigation Section */
@@ -544,11 +476,11 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
     }
 
     .nav-section h2 {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 600;
-      color: white;
-      margin-bottom: 20px;
-      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      color: #e6e8eb;
+      margin-bottom: 14px;
+      letter-spacing: -0.2px;
     }
 
     .nav-links {
@@ -566,45 +498,22 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
 
     .nav-links a {
       display: block;
-      padding: 14px 18px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 980px;
-      color: white;
+      padding: 10px 14px;
+      background: #161b24;
+      border-radius: 8px;
+      color: #c4c8d0;
       text-decoration: none;
-      font-weight: 600;
-      font-size: 14px;
-      transition: all 0.3s;
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      font-weight: 500;
+      font-size: 13px;
+      transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+      border: 1px solid #232a38;
       text-align: center;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .nav-links a::before {
-      content: "";
-      position: absolute;
-      inset: -40%;
-      background: linear-gradient(
-        120deg,
-        transparent 40%,
-        rgba(255, 255, 255, 0.25),
-        transparent 60%
-      );
-      opacity: 0;
-      transform: translateX(-100%);
-      transition: opacity 0.3s, transform 0.6s;
     }
 
     .nav-links a:hover {
-      background: rgba(255, 255, 255, 0.3);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    .nav-links a:hover::before {
-      opacity: 1;
-      transform: translateX(100%);
+      background: #1c222e;
+      border-color: #2f3849;
+      color: #e6e8eb;
     }
 
     /* Roots Section */
@@ -613,11 +522,11 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
     }
 
     .roots-section h2 {
-      font-size: 20px;
+      font-size: 16px;
       font-weight: 600;
-      color: white;
-      margin-bottom: 20px;
-      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      color: #e6e8eb;
+      margin-bottom: 14px;
+      letter-spacing: -0.2px;
     }
 
     .roots-section h2::before {
@@ -636,48 +545,27 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
 
     .roots-list a {
       display: block;
-      padding: 14px 18px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      color: white;
+      padding: 12px 16px;
+      background: #161b24;
+      border-radius: 10px;
+      color: #c4c8d0;
       text-decoration: none;
       font-weight: 500;
-      font-size: 15px;
-      transition: all 0.3s;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .roots-list a::before {
-      content: "";
-      position: absolute;
-      inset: -40%;
-      background: linear-gradient(
-        120deg,
-        transparent 40%,
-        rgba(255, 255, 255, 0.25),
-        transparent 60%
-      );
-      opacity: 0;
-      transform: translateX(-100%);
-      transition: opacity 0.3s, transform 0.6s;
+      font-size: 14px;
+      transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+      border: 1px solid #232a38;
+      border-left: 3px solid #232a38;
     }
 
     .roots-list a:hover {
-      background: rgba(255, 255, 255, 0.3);
-      transform: translateX(4px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    .roots-list a:hover::before {
-      opacity: 1;
-      transform: translateX(100%);
+      background: #1c222e;
+      border-color: #2f3849;
+      border-left-color: #7dd385;
+      color: #e6e8eb;
     }
 
     .roots-list em {
-      color: rgba(255, 255, 255, 0.7);
+      color: #5d6371;
       font-style: italic;
       display: block;
       padding: 20px;
@@ -693,63 +581,44 @@ export function renderUserProfile({ userId, user, roots, queryString, storageUse
 
     .create-root-form input[type="text"] {
       flex: 1;
-      padding: 14px 18px;
-      font-size: 15px;
-      border-radius: 12px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      background: rgba(255, 255, 255, 0.9);
+      padding: 12px 16px;
+      font-size: 14px;
+      border-radius: 10px;
+      border: 1px solid #232a38;
+      background: #0d1117;
+      color: #e6e8eb;
       font-family: inherit;
-      transition: all 0.2s;
+      transition: border-color 150ms ease, background 150ms ease;
+    }
+
+    .create-root-form input[type="text"]::placeholder {
+      color: #5d6371;
     }
 
     .create-root-form input[type="text"]:focus {
       outline: none;
-      border-color: white;
-      background: white;
-      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.2),
-        0 4px 20px rgba(0, 0, 0, 0.1);
+      border-color: rgba(125, 211, 133, 0.5);
+      background: #0d1117;
+      box-shadow: 0 0 0 3px rgba(125, 211, 133, 0.15);
     }
 
     .create-root-button {
-      padding: 14px 20px;
-      font-size: 24px;
+      padding: 12px 18px;
+      font-size: 20px;
       line-height: 1;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      background: rgba(255, 255, 255, 0.25);
-      backdrop-filter: blur(10px);
-      color: white;
+      border-radius: 10px;
+      border: 1px solid #232a38;
+      background: #161b24;
+      color: #9ba1ad;
       cursor: pointer;
-      transition: all 0.3s;
+      transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
       font-weight: 300;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .create-root-button::before {
-      content: "";
-      position: absolute;
-      inset: -40%;
-      background: radial-gradient(
-        120% 60% at 0% 0%,
-        rgba(255, 255, 255, 0.35),
-        transparent 60%
-      );
-      opacity: 0;
-      transition: opacity 0.35s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-      pointer-events: none;
     }
 
     .create-root-button:hover {
-      background: rgba(255, 255, 255, 0.35);
-      transform: scale(1.05) translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-    }
-
-    .create-root-button:hover::before {
-      opacity: 1;
-      transform: translateX(30%) translateY(10%);
+      background: #1c222e;
+      border-color: #2f3849;
+      color: #e6e8eb;
     }
 
     /* Responsive Design */

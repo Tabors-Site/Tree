@@ -22,12 +22,10 @@ import { getModeOwner, getBlockedExtensionsAtNode } from "../tree/extensionScope
 import Node from "../models/node.js";
 import { resolveTreeAccess } from "../tree/treeAccess.js";
 // orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
-import { getOrchestrator } from "../orchestrators/registry.js";
 import { enqueue } from "./requestQueue.js";
 import {
   switchMode,
   switchBigMode,
-  processMessage,
   injectContext,
   setRootId,
   getRootId,
@@ -47,12 +45,9 @@ import {
 import {
   ensureSession,
   rotateSession,
-  startChat,
-  finalizeChat,
   setActiveChat,
   clearActiveChat,
   finalizeOpenChat,
-  setChatContext,
   clearChatContext,
 } from "../llm/chatTracker.js";
 // Provided by tree-orchestrator extension if installed. No-op without it.
@@ -82,6 +77,13 @@ if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the se
 const JWT_SECRET = process.env.JWT_SECRET;
 
 let io;
+
+/**
+ * Get the socket.io server instance.
+ * Extensions use this to create separate namespaces (e.g. browser-bridge).
+ * Returns null if WebSocket server hasn't been initialized yet.
+ */
+export function getIO() { return io || null; }
 
 // Socket tracking
 const userSockets = new Map(); // visitorId → socket.id
@@ -561,17 +563,6 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         && rootNode.llmDefault && rootNode.llmDefault !== "none";
     }
 
-    /** Finalize a Chat record and clear tracking state. Single path for all outcomes. */
-    function finishChat(chatId, content, stopped, modeKey) {
-      if (chatId) {
-        finalizeChat({ chatId, content, stopped, modeKey }).catch(e =>
-          log.warn("WS", `Chat finalize failed: ${e.message}`)
-        );
-      }
-      clearChatContext(socket.visitorId);
-      clearActiveChat(socket);
-    }
-
     // ── Per-socket message rate limiter ──────────────────────────────────
     const CHAT_RATE_LIMIT = Number(getLandConfigValue("chatRateLimit")) || 10; // msgs per window
     const CHAT_RATE_WINDOW_MS = Number(getLandConfigValue("chatRateWindowMs")) || 60000; // 1 min
@@ -632,97 +623,89 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         const abort = new AbortController();
         socket._chatAbort = abort;
 
+        // Finalize any leftover in-flight chat from a previous interrupted message
         await finalizeOpenChat(socket);
 
-        const sessionId = ensureSession(socket);
+        // Make sure the websocket has its persistent session
+        ensureSession(socket);
         syncRegistrySession(socket);
-        const preMode = getCurrentMode(visitorId) || "home:default";
+        const sessionId = socket._registrySessionId;
 
-        // Resolve LLM client for tracking
-        const trackingRootId = getRootId(visitorId);
-        let rootLlmOverride = null;
-        if (trackingRootId) {
-          const rn = await Node.findById(trackingRootId).select("llmDefault").lean();
-          rootLlmOverride = (rn?.llmDefault && rn.llmDefault !== "none") ? rn.llmDefault : null;
-        }
-        const clientInfo = await getClientForUser(socket.userId, undefined, rootLlmOverride);
-
-        // Start Chat record
-        let chat = null;
-        try {
-          chat = await startChat({
-            userId: socket.userId, sessionId,
-            message: message.slice(0, 5000), source: "user", modeKey: preMode,
-            llmProvider: { isCustom: clientInfo.isCustom, model: clientInfo.model, connectionId: clientInfo.connectionId || null },
-            ...(trackingRootId ? { treeContext: { targetNodeId: trackingRootId } } : {}),
-          });
-          setActiveChat(socket, chat._id, chat.startMessage.time);
-          setChatContext(socket.visitorId, sessionId, chat._id);
-        } catch (err) {
-          log.warn("WS", `Failed to create Chat: ${err.message}`);
-        }
+        // Determine zone from the current conversation mode (defaults to home)
+        const currentMode = getCurrentMode(visitorId);
+        const bigMode = currentMode?.split(":")[0] || "home";
 
         try {
-          const currentMode = getCurrentMode(visitorId);
-          const bigMode = currentMode?.split(":")[0] || null;
-          let response;
-
-          // Stream checkpoint: if the stream extension registered a callback, pass it through
-          const onToolLoopCheckpoint = socket._streamCheckpoint || null;
-
-          if (bigMode === "tree") {
-            const orch = getOrchestrator("tree");
-            if (!orch) throw new Error("No tree orchestrator installed. Install the tree-orchestrator extension.");
-            response = await orch.handle({
-              visitorId, message, socket, username,
-              userId: socket.userId, signal: abort.signal, sessionId,
+          const { runOrchestration } = await import("../llm/conversation.js");
+          const result = await runOrchestration({
+            zone: bigMode,
+            userId: socket.userId,
+            username,
+            message,
+            rootId: getRootId(visitorId),
+            currentNodeId: getCurrentNodeId(visitorId),
+            visitorId,
+            sessionId,
+            socket,
+            signal: abort.signal,
+            chatSource: "user",
+            sourceType: safeChatMode === "place"
+              ? "ws-tree-place"
+              : safeChatMode === "query"
+                ? "ws-tree-query"
+                : safeChatMode === "be"
+                  ? "ws-tree-be"
+                  : "tree-chat",
+            orchestrateFlags: {
               skipRespond: safeChatMode === "place",
               forceQueryOnly: safeChatMode === "query",
-              rootChatId: chat?._id || null,
-              sourceType: safeChatMode === "place" ? "ws-tree-place" : safeChatMode === "query" ? "ws-tree-query" : safeChatMode === "be" ? "ws-tree-be" : "tree-chat",
-              onToolLoopCheckpoint,
-            });
-          } else {
-            response = await processMessage(visitorId, message, {
-              username, userId: socket.userId, rootId: getRootId(visitorId), signal: abort.signal,
-              onToolLoopCheckpoint,
-              onToolResults(results) {
-                if (!abort.signal.aborted) for (const r of results) socket.emit(WS.TOOL_RESULT, r);
-              },
-            });
-          }
+              behavioral: safeChatMode === "be",
+            },
+            onChatCreated: (chat) => {
+              setActiveChat(socket, chat._id, chat.startMessage.time);
+            },
+            onToolResults: (results) => {
+              if (!abort.signal.aborted) for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+            },
+            onToolLoopCheckpoint: socket._streamCheckpoint || null,
+          });
 
           if (abort.signal.aborted) {
-            finishChat(chat?._id, null, true);
+            clearActiveChat(socket);
             return;
           }
 
-          if (response) {
-            // beforeResponse hook
-            let finalContent = response.content || response.answer || null;
-            if (finalContent && safeChatMode !== "place") {
-              const hookData = { content: finalContent, userId: socket.userId, rootId: getRootId(visitorId), mode: getCurrentMode(visitorId) };
-              await hooks.run("beforeResponse", hookData);
-              finalContent = hookData.content;
-            }
-
-            if (safeChatMode === "place") {
-              socket.emit(WS.PLACE_RESULT, { success: response.success, stepSummaries: response.stepSummaries || [], targetPath: response.lastTargetPath || null, generation });
-            } else {
-              socket.emit(WS.CHAT_RESPONSE, { success: response.success, answer: finalContent, generation });
-            }
-
-            const internal = response._internal || {};
-            finishChat(chat?._id, response.content || response.answer || null, false, internal.modeKey || getCurrentMode(visitorId));
+          if (safeChatMode === "place") {
+            socket.emit(WS.PLACE_RESULT, {
+              success: result.success,
+              stepSummaries: result.stepSummaries || [],
+              targetPath: result.lastTargetPath || null,
+              generation,
+            });
+          } else {
+            socket.emit(WS.CHAT_RESPONSE, {
+              success: result.success,
+              answer: result.answer,
+              generation,
+              targetNodeId: result.targetNodeId || null,
+            });
           }
+
+          // runOrchestration already finalized the Chat record. Just clear the
+          // socket-level marker so finalizeOpenChat doesn't double-finalize.
+          clearActiveChat(socket);
+          clearChatContext(socket.visitorId);
         } catch (err) {
           if (abort.signal.aborted) {
-            finishChat(chat?._id, null, true);
+            clearActiveChat(socket);
+            clearChatContext(socket.visitorId);
             return;
           }
           log.error("WS", `Chat error: ${err.message}`);
           socket.emit(WS.CHAT_ERROR, { error: err.message, generation });
-          finishChat(chat?._id, `Error: ${err.message}`, false);
+          // runOrchestration handles finalization on error too
+          clearActiveChat(socket);
+          clearChatContext(socket.visitorId);
         } finally {
           if (socket._chatAbort === abort) socket._chatAbort = null;
         }

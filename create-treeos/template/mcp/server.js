@@ -215,6 +215,20 @@ async function handleMcpRequest(req, res) {
       requestArgs.chatId = aiCtx.chatId;
       requestArgs.sessionId = aiCtx.sessionId;
 
+      // Inject position context from the conversation session.
+      // These are primitives: where the action is coming from.
+      // Tools can override nodeId for specific actions (navigate elsewhere),
+      // but the default is always the current position.
+      if (req.visitorId) {
+        try {
+          const { getCurrentNodeId, getRootId } = await import("../seed/llm/conversation.js");
+          const sessionRootId = getRootId(req.visitorId);
+          const sessionNodeId = getCurrentNodeId(req.visitorId);
+          if (!requestArgs.rootId && sessionRootId) requestArgs.rootId = sessionRootId;
+          if (!requestArgs.nodeId && sessionNodeId) requestArgs.nodeId = sessionNodeId;
+        } catch {}
+      }
+
       const nodeId = requestArgs.nodeId ?? requestArgs.rootId ?? requestArgs.parentNodeID ?? requestArgs.parentId ?? requestArgs.rootNodeId;
 
       // Tree access check

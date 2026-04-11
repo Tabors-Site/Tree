@@ -1,6 +1,6 @@
 export default {
   name: "browser-bridge",
-  version: "1.0.2",
+  version: "1.0.3",
   scope: "confined",
   builtFor: "treeos-connect",
   description:
@@ -12,6 +12,7 @@ export default {
     "Every browser action is logged as a note. The most powerful and most dangerous extension " +
     "in the ecosystem. All safety layers active by default.",
 
+  territory: "reading and interacting with web pages through the browser",
   classifierHints: [
     /\b(click|type|navigate|browse|open|visit|go to|read.*page|what.*page|this site|this page|webpage|website)\b/i,
     /\b(post|comment|reply|submit|login|sign in|search.*web|fill.*form|enter.*field)\b/i,

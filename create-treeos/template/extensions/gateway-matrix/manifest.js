@@ -1,6 +1,6 @@
 export default {
   name: "gateway-matrix",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-connect",
   description:
     "Registers the Matrix channel type with the gateway core, enabling trees to communicate " +

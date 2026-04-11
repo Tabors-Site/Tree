@@ -1,6 +1,6 @@
 export default {
   name: "gateway-telegram",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-connect",
   description:
     "Telegram channel type for the gateway extension. Registers the telegram channel type at boot, " +

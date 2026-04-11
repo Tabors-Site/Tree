@@ -877,7 +877,7 @@ export function renderVersionDetail({
       <div class="nav-links">
         <a href="/api/v1/node/${nodeId}/${version}/notes${qs}">Notes</a>
         <a href="/api/v1/node/${nodeId}/${version}/contributions${qs}">Contributions</a>
-        <a href="/api/v1/node/${nodeId}/chats${qs}">AI Chats</a>
+        <a href="/api/v1/node/${nodeId}/${version}/chats${qs}">AI Chats</a>
         ${resolveSlots("version-quick-links", { nodeId, version, qs })}
       </div>
     </div>

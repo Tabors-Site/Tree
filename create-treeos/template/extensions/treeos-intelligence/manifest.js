@@ -1,6 +1,6 @@
 export default {
   name: "treeos-intelligence",
-  version: "1.0.1",
+  version: "1.0.2",
   type: "bundle",
   builtFor: "seed",
   description:

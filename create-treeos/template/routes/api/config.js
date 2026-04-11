@@ -9,6 +9,7 @@ import {
   getAllLandConfig,
   getLandConfigValue,
   setLandConfigValue,
+  getConfigWithDefaults,
 } from "../../seed/landConfig.js";
 import {
   getLoadedExtensionNames,
@@ -23,10 +24,14 @@ const router = express.Router();
 
 /**
  * GET /api/v1/land/config
- * Returns all runtime config values from the .config node.
+ * Returns config values. Add ?full for every key with defaults and override status.
  */
 router.get("/land/config", authenticate, async (req, res) => {
   try {
+    if ("full" in req.query) {
+      const config = getConfigWithDefaults();
+      return sendOk(res, { config });
+    }
     const config = getAllLandConfig();
     sendOk(res, { config });
   } catch (err) {

@@ -32,7 +32,7 @@ const ROLES = {
 };
 
 // Roles that are structural (not metrics). Used everywhere to distinguish trackable nodes.
-export const STRUCTURAL_ROLES = ["log", "daily", "meals", "profile", "history", "mealSlots", "_unadopted"];
+export const STRUCTURAL_ROLES = ["log", "daily", "meals", "profile", "history", "archive", "mealSlots", "_unadopted"];
 
 // ── Tree scaffold ──
 
@@ -83,7 +83,7 @@ export async function scaffold(foodRootId, userId) {
   }
 
   // Set mode overrides
-  await setNodeMode(foodRootId, "respond", "tree:food-log");
+  await setNodeMode(foodRootId, "respond", "tree:food-coach");
   await setNodeMode(logNode._id, "respond", "tree:food-log");
   await setNodeMode(dailyNode._id, "respond", "tree:food-review");
 
@@ -107,7 +107,7 @@ export async function scaffold(foodRootId, userId) {
   // Mark root as initialized (base phase: scaffold done, profile not yet set)
   const rootNode = await _Node.findById(foodRootId);
   if (rootNode) {
-    await _metadata.setExtMeta(rootNode, "food", { initialized: true, setupPhase: "base" });
+    await _metadata.setExtMeta(rootNode, "food", { initialized: true, setupPhase: "complete" });
   }
 
   const ids = {
@@ -263,7 +263,7 @@ export function detectMealSlot(message, when) {
 /**
  * Write a meal note to the appropriate Meals/{slot} child node.
  */
-export async function writeMealNote(foodNodes, mealSlot, summary, userId) {
+export async function writeMealNote(foodNodes, mealSlot, summary, userId, ctx = {}) {
   if (!foodNodes?.mealSlots?.[mealSlot]) return;
   try {
     const { createNote } = await import("../../seed/tree/notes.js");
@@ -272,6 +272,9 @@ export async function writeMealNote(foodNodes, mealSlot, summary, userId) {
       content: summary,
       contentType: "text",
       userId,
+      wasAi: ctx.chatId != null || ctx.wasAi === true,
+      chatId: ctx.chatId ?? null,
+      sessionId: ctx.sessionId ?? null,
     });
   } catch (err) {
     log.debug("Food", `Meal note write failed: ${err.message}`);
@@ -437,7 +440,7 @@ export async function checkDailyReset(rootId) {
       const date = lastReset.get(rootId) || new Date(Date.now() - 86400000).toISOString().slice(0, 10);
       const p = macros.protein || 0, c = macros.carbs || 0, f = macros.fats || 0;
       const calories = (p * 4) + (c * 4) + (f * 9);
-      const summary = { date, calories };
+      const summary = { type: "daily", date, calories };
       // Include all tracked metrics and their hit status
       for (const role of metricRoles) {
         summary[role] = macros[role] || 0;
@@ -496,6 +499,57 @@ export async function checkDailyReset(rootId) {
       const existing = _metadata.getExtMeta(rootNode, "food") || {};
       await _metadata.setExtMeta(rootNode, "food", { ...existing, lastResetDate: today });
       log.verbose("Food", `Persisted lastResetDate=${today} for ${String(rootId).slice(0, 8)}`);
+
+      // Weekly summary: write a rollup note every 7 days
+      const lastWeekly = existing.lastWeeklySummaryDate || null;
+      const daysSinceWeekly = lastWeekly
+        ? Math.floor((new Date(today) - new Date(lastWeekly)) / 86400000)
+        : 8; // force first weekly if never written
+      if (daysSinceWeekly >= 7 && foodNodes.history && _Note) {
+        try {
+          const weekNotes = await _Note.find({ nodeId: foodNodes.history.id })
+            .sort({ createdAt: -1 }).limit(7).select("content").lean();
+          const weekDays = weekNotes
+            .map(n => { try { return JSON.parse(n.content); } catch { return null; } })
+            .filter(d => d && d.type !== "weekly");
+          if (weekDays.length >= 3) {
+            const count = weekDays.length;
+            const averages = {};
+            const hitRates = {};
+            for (const role of metricRoles) {
+              const sum = weekDays.reduce((s, d) => s + (d[role] || 0), 0);
+              averages[role] = Math.round(sum / count);
+              const hitKey = `hit${role.charAt(0).toUpperCase() + role.slice(1)}Goal`;
+              const hitCount = weekDays.filter(d => d[hitKey]).length;
+              hitRates[role] = Math.round((hitCount / count) * 100) / 100;
+            }
+            const avgP = averages.protein || 0, avgC = averages.carbs || 0, avgF = averages.fats || 0;
+            const avgCal = (avgP * 4) + (avgC * 4) + (avgF * 9);
+            const totalCal = weekDays.reduce((s, d) => s + (d.calories || 0), 0);
+            const weekStart = weekDays[weekDays.length - 1]?.date || lastWeekly || today;
+            const weekEnd = weekDays[0]?.date || today;
+            const weeklySummary = {
+              type: "weekly", weekStart, weekEnd,
+              daysTracked: count,
+              averages, hitRates,
+              calories: { avg: avgCal, total: totalCal },
+            };
+            const { createNote } = await import("../../seed/tree/notes.js");
+            await createNote({
+              nodeId: foodNodes.history.id,
+              content: JSON.stringify(weeklySummary),
+              contentType: "text",
+              userId: "SYSTEM",
+            });
+            await _metadata.setExtMeta(rootNode, "food", {
+              ...existing, lastResetDate: today, lastWeeklySummaryDate: today,
+            });
+            log.verbose("Food", `Weekly summary written for ${String(rootId).slice(0, 8)} (${count} days, avg ${avgCal} cal)`);
+          }
+        } catch (err) {
+          log.debug("Food", `Weekly summary write failed: ${err.message}`);
+        }
+      }
     }
   } catch (err) {
     log.warn("Food", `Failed to persist reset date: ${err.message}`);
@@ -513,7 +567,7 @@ export async function checkDailyReset(rootId) {
  * Read the full daily picture for a food tree.
  * Used by enrichContext on the Daily node and by the daily mode.
  */
-export async function getDailyPicture(foodRootId) {
+export async function getDailyPicture(foodRootId, { historyDays = 7 } = {}) {
   if (!_Node) return null;
 
   const foodNodes = await findFoodNodes(foodRootId);
@@ -579,7 +633,7 @@ export async function getDailyPicture(foodRootId) {
       const Note = _Note || (await import("../../seed/models/note.js")).default;
       const historyNotes = await Note.find({ nodeId: foodNodes.history.id })
         .sort({ createdAt: -1 })
-        .limit(7)
+        .limit(historyDays)
         .select("content")
         .lean();
       picture.recentHistory = historyNotes
@@ -654,7 +708,7 @@ export async function getDailyPicture(foodRootId) {
 /**
  * Save the user's food profile and set goals on macro nodes.
  */
-export async function saveProfile(foodRootId, profile, foodNodes) {
+export async function saveProfile(foodRootId, profile, foodNodes, userId) {
   if (!_Node) return;
 
   // Write profile as a note on the Profile node
@@ -665,7 +719,7 @@ export async function saveProfile(foodRootId, profile, foodNodes) {
         nodeId: foodNodes.profile.id,
         content: JSON.stringify(profile),
         contentType: "text",
-        userId: "SYSTEM",
+        userId: userId || "SYSTEM",
       });
     } catch (err) {
       log.debug("Food", `Profile note write failed: ${err.message}`);
@@ -691,4 +745,38 @@ export async function saveProfile(foodRootId, profile, foodNodes) {
       await _metadata.batchSetExtMeta(info.id, "values", { today: 0 });
     }
   }
+}
+
+// ── History queries ──
+
+/**
+ * Query history notes from the History node with optional type filter.
+ * Returns parsed JSON array sorted newest-first.
+ *   type: "daily" | "weekly" | null (all)
+ *   limit: max entries to return (default 90)
+ */
+export async function getHistory(foodRootId, { limit = 90, type = null } = {}) {
+  if (!_Node) return [];
+  const foodNodes = await findFoodNodes(foodRootId);
+  if (!foodNodes?.history) return [];
+
+  const Note = _Note || (await import("../../seed/models/note.js")).default;
+  const notes = await Note.find({ nodeId: foodNodes.history.id })
+    .sort({ createdAt: -1 })
+    .limit(limit * 2) // over-fetch to account for type filtering
+    .select("content createdAt")
+    .lean();
+
+  let entries = notes
+    .map(n => {
+      try { return JSON.parse(n.content); } catch { return null; }
+    })
+    .filter(Boolean);
+
+  if (type) {
+    // Backwards compat: notes without type field are treated as "daily"
+    entries = entries.filter(e => (e.type || "daily") === type);
+  }
+
+  return entries.slice(0, limit);
 }

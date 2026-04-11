@@ -175,6 +175,109 @@ export async function deleteLandConfigValue(key, { internal } = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// DEFAULTS (every configurable key and its factory value)
+// ─────────────────────────────────────────────────────────────────────────
+
+export const CONFIG_DEFAULTS = {
+  // Identity
+  LAND_NAME: "My Land",
+  landUrl: null,
+  HORIZON_URL: "https://horizon.treeos.ai",
+  timezone: null,
+
+  // LLM
+  llmTimeout: 900,
+  llmMaxRetries: 3,
+  maxToolIterations: 15,
+  maxConversationMessages: 30,
+  toolCallTimeout: 60,
+  toolResultMaxBytes: 50000,
+  llmMaxConcurrent: 20,
+  failoverTimeout: 15,
+  landLlmConnection: null,
+  maxSystemPromptChars: 32000,
+  maxMessageContentBytes: 32768,
+  carryMessages: 4,
+
+  // Sessions and rate limiting
+  sessionTTL: 900,
+  staleSessionTimeout: 1800,
+  maxSessions: 10000,
+  chatRateLimit: 10,
+  chatRateWindowMs: 60000,
+  maxChatMessageChars: 5000,
+  maxConnectionsPerIp: 20,
+  maxConversationSessions: 50000,
+  maxScopedSessions: 20000,
+  maxAiContextEntries: 10000,
+  staleConversationTimeout: 1800,
+  requestQueueMaxDepth: 100,
+
+  // Data limits
+  noteMaxChars: 5000,
+  maxDocumentSizeBytes: 14680064,
+  maxUploadBytes: 104857600,
+  uploadEnabled: true,
+  allowedMimeTypes: null,
+
+  // Tree and navigation
+  treeSummaryMaxDepth: 4,
+  treeSummaryMaxNodes: 60,
+  ancestorCacheTTL: 30000,
+  integrityCheckInterval: 86400000,
+
+  // Cascade
+  cascadeEnabled: false,
+  cascadeMaxDepth: 50,
+  cascadeRateLimit: 60,
+  cascadeMaxDeliveriesPerSignal: 500,
+  cascadeMaxPayloadBytes: 51200,
+  resultTTL: 604800,
+  awaitingTimeout: 300,
+  flowMaxResultsPerDay: 10000,
+
+  // Security
+  jwtExpiryDays: 30,
+  allowedLlmDomains: [],
+  allowedFrameDomains: [],
+
+  // Hooks
+  hookTimeoutMs: 5000,
+  hookMaxHandlers: 100,
+  hookCircuitThreshold: 5,
+  hookCircuitHalfOpenMs: 300000,
+  hookChainTimeoutMs: 15000,
+
+  // Tools and modes
+  toolCircuitThreshold: 5,
+  maxRegisteredTools: 500,
+  maxRegisteredModes: 200,
+  maxOrchestrators: 10,
+  maxExtensionIndexes: 20,
+
+  // Circuit breaker
+  treeCircuitEnabled: false,
+  maxTreeNodes: 10000,
+  maxTreeMetadataBytes: 1073741824,
+  maxTreeErrorRate: 100,
+  circuitNodeWeight: 0.4,
+  circuitDensityWeight: 0.3,
+  circuitErrorWeight: 0.3,
+  circuitCheckInterval: 3600000,
+
+  // Retention
+  chatRetentionDays: 90,
+  contributionRetentionDays: 365,
+
+  // Orchestration
+  apiOrchestrationTimeout: 1140000,
+
+  // Protected (shown but cannot be modified via public API)
+  seedVersion: null,
+  disabledExtensions: [],
+};
+
+// ─────────────────────────────────────────────────────────────────────────
 // QUERY
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -188,6 +291,34 @@ export function getAllLandConfig() {
   } catch {
     return {};
   }
+}
+
+/**
+ * Get the full config picture: every known key with its effective value,
+ * default value, and whether it's been explicitly set in the DB.
+ * Used by the land-manager to show operators the complete state.
+ */
+export function getConfigWithDefaults() {
+  const dbValues = getAllLandConfig();
+  const result = {};
+
+  for (const [key, defaultValue] of Object.entries(CONFIG_DEFAULTS)) {
+    const hasOverride = key in dbValues;
+    result[key] = {
+      value: hasOverride ? dbValues[key] : defaultValue,
+      default: defaultValue,
+      custom: hasOverride,
+    };
+  }
+
+  // Include any DB keys not in CONFIG_DEFAULTS (extension-written config, etc.)
+  for (const [key, value] of Object.entries(dbValues)) {
+    if (!(key in result)) {
+      result[key] = { value, default: null, custom: true };
+    }
+  }
+
+  return result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

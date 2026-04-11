@@ -10,6 +10,7 @@ import {
   processMessage,
   getRootId,
   getCurrentNodeId,
+  setCurrentNodeId,
   getClientForUser,
   resolveRootLlmForMode,
 } from "../../seed/llm/conversation.js";
@@ -59,11 +60,11 @@ async function localClassify(message, currentNodeId, rootId) {
       if (modes?.respond) {
         const hints = getClassifierHintsForMode(modes.respond);
         if (!hints || hints.some(re => re.test(message))) {
-          return { intent: "extension", mode: modes.respond, confidence: 0.95, ...base };
+          return { intent: "extension", mode: modes.respond, targetNodeId: String(currentNodeId), confidence: 0.95, ...base };
         }
         // No hint match but we're at an extension node. Still route here
         // because the librarian doesn't understand extension data models.
-        return { intent: "extension", mode: modes.respond, confidence: 0.8, ...base };
+        return { intent: "extension", mode: modes.respond, targetNodeId: String(currentNodeId), confidence: 0.8, ...base };
       }
 
       // Level 2: direct children (do any of my children claim this message?)
@@ -412,6 +413,155 @@ async function resolveLlmProvider(userId, rootId, modeKey, slot) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// SUFFIX CONVENTION ROUTING (one function, one place)
+// ─────────────────────────────────────────────────────────────────────────
+
+const REVIEW_PATTERN = /\b(how am i|progress|status|review|daily|stats|streak|history|so far|pattern|doing)\b/;
+const PLAN_PATTERN = /\b(plan|build|create|structure|organize|add|modify|remove|restructure|program|taper|schedule|adjust|set.*goal|change|curriculum)\b/;
+
+/**
+ * Resolve which of an extension's modes to use based on message content
+ * and behavioral constraint. Called ONCE per message after classification.
+ *
+ * :coach = guided (be), :review/:ask = backward analysis,
+ * :plan = forward building, :log/:tell = default action.
+ *
+ * If baseMode is already plan or coach (e.g. setup phase, guided session),
+ * don't override with log/tell on generic messages.
+ */
+async function resolveSuffixMode(baseMode, message, behavioral) {
+  try {
+    const { getModeOwner, getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
+    const extName = getModeOwner(baseMode);
+    if (!extName) return baseMode;
+
+    const extModes = getModesOwnedBy(extName);
+    if (extModes.length <= 1) return baseMode;
+
+    const find = (...suffixes) => {
+      for (const s of suffixes) {
+        const match = extModes.find(m => m.endsWith(`-${s}`));
+        if (match) return match;
+      }
+      return null;
+    };
+    const lower = message.toLowerCase().trim();
+
+    if (behavioral === "be" || lower === "be") return find("coach") || baseMode;
+    if (REVIEW_PATTERN.test(lower)) return find("review", "ask") || baseMode;
+    if (PLAN_PATTERN.test(lower)) return find("plan") || baseMode;
+
+    // Default: route to the action receiver. The extension is the territory,
+    // the mode is the intent. Setup-locked extensions should override via
+    // their handleMessage export, not by relying on the orchestrator to
+    // respect the locked mode.
+    return find("log", "tell") || baseMode;
+  } catch {
+    return baseMode;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// RUN MODE AND RETURN (eliminates copy-pasted switchMode/processMessage)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Switch to a mode, run processMessage, handle memory and status events,
+ * return the standard response shape. Every exit path that runs a mode
+ * should call this instead of inlining the same 20 lines.
+ */
+async function runModeAndReturn(visitorId, mode, message, {
+  socket, username, userId, rootId, signal, slot,
+  currentNodeId, readOnly = false, clearHistory = false,
+  onToolLoopCheckpoint, modesUsed,
+  targetNodeId = null,
+  treeCapabilities = null,
+}) {
+  modesUsed.push(mode);
+  emitStatus(socket, "intent", "");
+
+  await switchMode(visitorId, mode, {
+    username, userId, rootId,
+    currentNodeId: currentNodeId || targetNodeId,
+    conversationMemory: formatMemoryContext(visitorId),
+    clearHistory,
+    treeCapabilities,
+  });
+
+  const result = await processMessage(visitorId, message, {
+    username, userId, rootId, signal, slot,
+    readOnly,
+    onToolLoopCheckpoint,
+    meta: { internal: false },
+    onToolResults(results) {
+      if (signal?.aborted) return;
+      for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+    },
+  });
+
+  emitStatus(socket, "done", "");
+  const answer = result?.content || result?.answer || null;
+  if (answer) pushMemory(visitorId, message, answer);
+  return { success: true, answer, modeKey: mode, modesUsed, rootId, targetNodeId: targetNodeId || currentNodeId };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// RUN CHAIN (eliminates duplicated chain execution logic)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Execute a multi-extension chain. Each step runs in its own mode,
+ * results pass forward as context.
+ */
+async function runChain(chain, message, visitorId, {
+  socket, username, userId, rootId, signal, slot,
+  onToolLoopCheckpoint, modesUsed,
+}) {
+  emitStatus(socket, "intent", "Chaining extensions...");
+
+  let context = message;
+  const chainModes = [];
+
+  for (let i = 0; i < chain.length; i++) {
+    const step = chain[i];
+    const isLast = i === chain.length - 1;
+
+    const stepNodeId = step.targetNodeId || getCurrentNodeId(visitorId) || rootId;
+    await switchMode(visitorId, step.mode, {
+      username, userId, rootId,
+      currentNodeId: stepNodeId,
+      conversationMemory: context,
+      clearHistory: true,
+    });
+
+    const stepResult = await processMessage(visitorId,
+      isLast ? context : `${context}\n\nDo this step and return what you produced.`, {
+        username, userId, rootId, signal, slot,
+        onToolLoopCheckpoint,
+        onToolResults(results) {
+          if (signal?.aborted) return;
+          for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+        },
+      });
+
+    if (signal?.aborted) return null;
+
+    const stepAnswer = stepResult?.content || stepResult?.answer || "";
+    chainModes.push(step.mode);
+
+    if (!isLast) {
+      context = `Original request: ${message}\n\nPrevious step (${step.extName}) result:\n${stepAnswer}`;
+    } else {
+      context = stepAnswer;
+    }
+  }
+
+  emitStatus(socket, "done", "");
+  if (context) pushMemory(visitorId, message, context);
+  return { success: true, answer: context, modeKey: chainModes[chainModes.length - 1], modesUsed: [...modesUsed, ...chainModes], rootId };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // ORCHESTRATE TREE REQUEST
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -471,88 +621,155 @@ export async function orchestrateTreeRequest({
   // ────────────────────────────────────────────────────────
 
   if (forceQueryOnly) {
-    modesUsed.push("tree:converse");
-    emitStatus(socket, "intent", "");
-
-    await switchMode(visitorId, "tree:converse", {
-      username, userId, rootId,
-      conversationMemory: formatMemoryContext(visitorId),
-      clearHistory: true,
+    return runModeAndReturn(visitorId, "tree:converse", message, {
+      socket, username, userId, rootId, signal, slot,
+      readOnly: true, clearHistory: true, onToolLoopCheckpoint, modesUsed,
     });
-
-    const result = await processMessage(visitorId, message, {
-      username, userId, rootId, signal, slot,
-      readOnly: true,
-      onToolLoopCheckpoint,
-      onToolResults(results) {
-        if (signal?.aborted) return;
-        for (const r of results) socket.emit(WS.TOOL_RESULT, r);
-      },
-    });
-
-    emitStatus(socket, "done", "");
-    const answer = result?.content || result?.answer || null;
-    if (answer) pushMemory(visitorId, message, answer);
-    return { success: true, answer, modeKey: "tree:converse", modesUsed, rootId };
   }
 
   // ────────────────────────────────────────────────────────
-  // STEP 1: CLASSIFY (lightweight intent detection)
+  // CONTINUATION CHECK — short replies continue the previous mode
+  // "ok", "yes", "do it", "go ahead" etc. continue the conversation
+  // instead of re-classifying and switching modes.
   // ────────────────────────────────────────────────────────
 
-  emitStatus(socket, "intent", "Understanding request…");
-
-  // Pre-fetch full tree shape so classifier and librarian can see what exists
-  let treeSummary = null;
-  if (rootId) {
-    try {
-      let encodingMap = null;
-      try {
-        const { getExtension } = await import("../loader.js");
-        const uExt = getExtension("understanding");
-        if (uExt?.exports?.getEncodingMap) encodingMap = await uExt.exports.getEncodingMap(rootId);
-      } catch {}
-      treeSummary = await buildDeepTreeSummary(rootId, { encodingMap });
-
-      // Append live intelligence signals from installed extensions
-      const brief = await getIntelligenceBrief(rootId, userId);
-      if (brief) treeSummary += "\n\n" + brief;
-
-      log.verbose("Tree Orchestrator", " treeSummary for librarian:\n", treeSummary);
-    } catch (err) {
-      log.error("Tree Orchestrator", " Pre-fetch tree summary failed:", err.message);
-    }
-  }
-
-  let classification;
-  const classifyStart = new Date();
-  const classificationMode = getLandConfigValue("classificationMode") || "local";
-
-  if (classificationMode === "llm") {
-    // Opt-in LLM classification (old behavior)
-    try {
-      classification = await classify({
-        message,
-        userId,
-        conversationMemory: formatMemoryContext(visitorId),
-        treeSummary,
-        signal,
-        slot,
-        rootId,
+  const CONTINUE_WORDS = /^(ok|okay|yes|yeah|yep|y|go|do it|go ahead|sure|continue|proceed|next|keep going|and|then)\s*[.!?]?$/i;
+  if (CONTINUE_WORDS.test(message.trim())) {
+    const { getCurrentMode } = await import("../../seed/llm/conversation.js");
+    const currentMode = getCurrentMode(visitorId);
+    if (currentMode && currentMode !== "tree:converse" && currentMode !== "tree:fallback") {
+      log.verbose("Tree Orchestrator", `  Continuation in ${currentMode}: "${message}"`);
+      // Don't switchMode. Stay in current mode, just process.
+      modesUsed.push(currentMode);
+      emitStatus(socket, "intent", "");
+      const result = await processMessage(visitorId, message, {
+        username, userId, rootId, signal, slot, onToolLoopCheckpoint,
+        onToolResults(results) { if (signal?.aborted) return; for (const r of results) socket.emit(WS.TOOL_RESULT, r); },
       });
-    } catch (err) {
-      if (signal?.aborted) return null;
-      if (err.message === "NO_LLM") {
-        throw new Error(
-          "No LLM connection configured. Set one up at /setup or assign one to this tree.",
-        );
-      }
-      log.error("Tree Orchestrator", " Classification failed:", err.message);
-      classification = await localClassify(message, getCurrentNodeId(visitorId) || rootId, rootId);
+      emitStatus(socket, "done", "");
+      const answer = result?.content || result?.answer || null;
+      if (answer) pushMemory(visitorId, message, answer);
+      return { success: true, answer, modeKey: currentMode, modesUsed, rootId };
     }
-  } else {
-    // Default: local classification. Zero LLM calls.
-    classification = await localClassify(message, getCurrentNodeId(visitorId) || rootId);
+  }
+
+  // ────────────────────────────────────────────────────────
+  // FAST PATH: Position hold. If the current node is an extension node,
+  // route directly. No tree summary, no routing index scan, no classification.
+  // This is the common case for follow-up messages in a conversation.
+  // ────────────────────────────────────────────────────────
+
+  const currentNodeId = getCurrentNodeId(visitorId) || rootId;
+  let classification;
+  let treeSummary = null;
+  let classifyStart = new Date();
+  let departed = false;
+
+  // Check if current position has a mode override (extension node)
+  {
+    const posNode = await Node.findById(currentNodeId).select("metadata").lean();
+    const posModes = posNode?.metadata instanceof Map
+      ? posNode.metadata.get("modes")
+      : posNode?.metadata?.modes;
+    if (posModes?.respond) {
+      // Check for departure: does the message match a DIFFERENT extension's hints
+      // but NOT the current extension's hints? If so, skip position hold.
+      let isDeparture = false;
+      try {
+        const { getClassifierHintsForMode } = await import("../loader.js");
+        const { getModeOwner } = await import("../../seed/tree/extensionScope.js");
+        const currentExt = getModeOwner(posModes.respond);
+        const currentHints = getClassifierHintsForMode(posModes.respond);
+        const matchesCurrent = currentHints?.some(re => re.test(message));
+
+        // Only check departure if the message doesn't match current extension
+        if (!matchesCurrent && rootId) {
+          const { queryAllMatches } = await import("./routingIndex.js");
+          const otherMatches = queryAllMatches(rootId, message, null)
+            .filter(m => m.extName !== currentExt);
+          if (otherMatches.length > 0) {
+            isDeparture = true;
+            departed = true;
+            log.verbose("Tree Orchestrator",
+              `🎯 Departure from ${currentExt}: message matches ${otherMatches.map(m => m.extName).join(", ")}`);
+          }
+        }
+      } catch (err) {
+        log.debug("Tree Orchestrator", `Departure check error: ${err.message}`);
+      }
+
+      if (!isDeparture) {
+        // Stay at this extension node. No suffix routing here.
+        // The extension routing path (below) handles suffix resolution once.
+        classification = {
+          intent: "extension",
+          mode: posModes.respond,
+          targetNodeId: String(currentNodeId),
+          confidence: 0.95,
+          summary: message.slice(0, 100),
+          responseHint: "",
+        };
+        log.verbose("Tree Orchestrator",
+          `🎯 Position hold: ${classification.mode} | "${classification.summary}"`);
+      }
+    }
+  }
+
+  // ────────────────────────────────────────────────────────
+  // STEP 1: CLASSIFY (only if position hold didn't match)
+  // ────────────────────────────────────────────────────────
+
+  if (!classification) {
+    emitStatus(socket, "intent", "Understanding request…");
+
+    const classificationMode = getLandConfigValue("classificationMode") || "local";
+
+    // Only build tree summary for LLM classification (local classification doesn't use it)
+    if (classificationMode === "llm" && rootId) {
+      try {
+        let encodingMap = null;
+        try {
+          const { getExtension } = await import("../loader.js");
+          const uExt = getExtension("understanding");
+          if (uExt?.exports?.getEncodingMap) encodingMap = await uExt.exports.getEncodingMap(rootId);
+        } catch {}
+        treeSummary = await buildDeepTreeSummary(rootId, { encodingMap });
+
+        const brief = await getIntelligenceBrief(rootId, userId);
+        if (brief) treeSummary += "\n\n" + brief;
+
+        log.verbose("Tree Orchestrator", " treeSummary for librarian:\n", treeSummary);
+      } catch (err) {
+        log.error("Tree Orchestrator", " Pre-fetch tree summary failed:", err.message);
+      }
+    }
+
+    if (classificationMode === "llm") {
+      // Opt-in LLM classification (old behavior)
+      try {
+        classification = await classify({
+          message,
+          userId,
+          conversationMemory: formatMemoryContext(visitorId),
+          treeSummary,
+          signal,
+          slot,
+          rootId,
+        });
+      } catch (err) {
+        if (signal?.aborted) return null;
+        if (err.message === "NO_LLM") {
+          throw new Error(
+            "No LLM connection configured. Set one up at /setup or assign one to this tree.",
+          );
+        }
+        log.error("Tree Orchestrator", " Classification failed:", err.message);
+        classification = await localClassify(message, departed ? rootId : (getCurrentNodeId(visitorId) || rootId), rootId);
+      }
+    } else {
+      // Default: local classification. Zero LLM calls.
+      classification = await localClassify(message, departed ? rootId : (getCurrentNodeId(visitorId) || rootId), rootId);
+    }
   }
   const classifyEnd = new Date();
 
@@ -699,12 +916,10 @@ export async function orchestrateTreeRequest({
   // ────────────────────────────────────────────────────────
 
   if (behavioral === "be") {
-    const currentNodeId = getCurrentNodeId(visitorId) || rootId;
-
-    // If the extension at this position exports handleMessage, delegate.
-    // The extension knows how to handle "be" (food logs food, study teaches, etc).
+    // Tier 1: Current node has an extension. Delegate to its handleMessage or coach mode.
+    let beHandled = false;
     try {
-      const { getExtensionManifest, getLoadedExtensionNames, getExtension } = await import("../loader.js");
+      const { getLoadedExtensionNames, getExtension } = await import("../loader.js");
       const { getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
       const nodeDoc = currentNodeId ? await Node.findById(currentNodeId).select("metadata").lean() : null;
       if (nodeDoc) {
@@ -712,62 +927,102 @@ export async function orchestrateTreeRequest({
         for (const extName of getLoadedExtensionNames()) {
           if (meta[extName]?.role || meta[extName]?.initialized) {
             const ext = getExtension(extName);
-
-            // Tier 1: handleMessage override
             if (ext?.exports?.handleMessage) {
               log.verbose("Tree Orchestrator", `  BE mode: delegating to ${extName}.handleMessage`);
               emitStatus(socket, "intent", "");
-              try {
-                const result = await ext.exports.handleMessage(message, {
-                  userId, username, rootId, signal, res: null,
-                });
-                emitStatus(socket, "done", "");
-                const answer = result?.answer || null;
-                const mode = result?.mode || `tree:${extName}-coach`;
-                if (answer) pushMemory(visitorId, message, answer);
-                modesUsed.push(mode);
-                return { success: true, answer, modeKey: mode, modesUsed, rootId };
-              } catch (err) {
-                log.error("Tree Orchestrator", `BE handleMessage failed: ${err.message}`);
-              }
-            }
+              const decision = await ext.exports.handleMessage("be", {
+                userId, username, rootId, targetNodeId: String(currentNodeId),
+              });
+              const resolvedMode = decision?.mode || `tree:${extName}-coach`;
+              modesUsed.push(resolvedMode);
 
-            // Tier 2: manifest guidedMode or :coach suffix
-            const manifest = getExtensionManifest(extName);
-            let guidedMode = manifest?.provides?.guidedMode || null;
-            if (!guidedMode) {
-              const extModes = getModesOwnedBy(extName);
-              guidedMode = extModes.find(m => m.endsWith("-coach")) || null;
+              if (decision?.answer) {
+                emitStatus(socket, "done", "");
+                pushMemory(visitorId, message, decision.answer);
+                return { success: true, answer: decision.answer, modeKey: resolvedMode, modesUsed, rootId, targetNodeId: String(currentNodeId) };
+              }
+
+              await switchMode(visitorId, resolvedMode, { username, userId, rootId, currentNodeId: String(currentNodeId), conversationMemory: formatMemoryContext(visitorId), clearHistory: decision?.setup || false });
+              const result = await processMessage(visitorId, decision?.message || message, { username, userId, rootId, signal, slot, onToolLoopCheckpoint, onToolResults(results) { if (signal?.aborted) return; for (const r of results) socket.emit(WS.TOOL_RESULT, r); } });
+              emitStatus(socket, "done", "");
+              const answer = result?.content || result?.answer || null;
+              if (answer) pushMemory(visitorId, message, answer);
+              return { success: true, answer, modeKey: resolvedMode, modesUsed, rootId, targetNodeId: String(currentNodeId) };
             }
-            if (guidedMode) {
-              log.verbose("Tree Orchestrator", `  BE mode: switching to ${guidedMode}`);
-              await switchMode(visitorId, guidedMode, {
-                username, userId, rootId,
-                conversationMemory: formatMemoryContext(visitorId),
-                clearHistory: true,
-              });
-              const result = await processMessage(visitorId, message, {
-                username, userId, rootId, signal, socket, sessionId,
-              });
-              modesUsed.push(guidedMode);
-              return { success: true, answer: result?.content || "", modeKey: guidedMode, modesUsed, rootId };
+            const extModes = getModesOwnedBy(extName);
+            const coachMode = extModes.find(m => m.endsWith("-coach")) || null;
+            if (coachMode) {
+              log.verbose("Tree Orchestrator", `  BE mode: switching to ${coachMode}`);
+              await switchMode(visitorId, coachMode, { username, userId, rootId, conversationMemory: formatMemoryContext(visitorId), clearHistory: true });
+              const result = await processMessage(visitorId, message, { username, userId, rootId, signal, socket, sessionId });
+              modesUsed.push(coachMode);
+              return { success: true, answer: result?.content || "", modeKey: coachMode, modesUsed, rootId };
             }
             break;
           }
         }
       }
-    } catch {}
+    } catch (err) {
+      log.debug("Tree Orchestrator", `BE Tier 1 failed: ${err.message}`);
+    }
 
-    // Tier 3: generic tree:be fallback
+    // Tier 2: Not at an extension node. Find closest extension via routing index.
+    // If the message matches an extension's hints, route there. Otherwise pick the first.
+    if (!beHandled && rootId) {
+      try {
+        const { getExtension } = await import("../loader.js");
+        const { getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
+        const { queryAllMatches, getIndexForRoot } = await import("./routingIndex.js");
+        const index = getIndexForRoot(rootId);
+        if (index && index.size > 0) {
+          // Check if the message matches any extension's hints
+          const hintMatches = queryAllMatches(rootId, message, null);
+          // Use hint match if found, otherwise fall through to first extension
+          const entries = hintMatches.length > 0
+            ? hintMatches.map(m => [m.extName, index.get(m.extName)]).filter(([, e]) => e)
+            : [...index.entries()];
+
+          for (const [extName, entry] of entries) {
+            const ext = getExtension(extName);
+            if (!ext?.exports?.handleMessage) continue;
+            const extModes = getModesOwnedBy(extName);
+            if (!extModes.some(m => m.endsWith("-coach"))) continue;
+
+            const targetId = entry.nodeId || entry.nodes?.[0]?.nodeId;
+            log.verbose("Tree Orchestrator", `  BE mode: routing to closest extension ${extName} at ${targetId}`);
+            setCurrentNodeId(visitorId, targetId);
+            emitStatus(socket, "intent", "");
+            try {
+              const decision = await ext.exports.handleMessage("be", {
+                userId, username, rootId, targetNodeId: targetId,
+              });
+              const resolvedMode = decision?.mode || `tree:${extName}-coach`;
+              modesUsed.push(resolvedMode);
+
+              if (decision?.answer) {
+                emitStatus(socket, "done", "");
+                pushMemory(visitorId, message, decision.answer);
+                return { success: true, answer: decision.answer, modeKey: resolvedMode, modesUsed, rootId, targetNodeId: targetId };
+              }
+
+              await switchMode(visitorId, resolvedMode, { username, userId, rootId, currentNodeId: targetId, conversationMemory: formatMemoryContext(visitorId), clearHistory: decision?.setup || false });
+              const result = await processMessage(visitorId, decision?.message || message, { username, userId, rootId, signal, slot, onToolLoopCheckpoint, onToolResults(results) { if (signal?.aborted) return; for (const r of results) socket.emit(WS.TOOL_RESULT, r); } });
+              emitStatus(socket, "done", "");
+              const answer = result?.content || result?.answer || null;
+              if (answer) pushMemory(visitorId, message, answer);
+              return { success: true, answer, modeKey: resolvedMode, modesUsed, rootId, targetNodeId: targetId };
+            } catch (err) {
+              log.error("Tree Orchestrator", `BE routing failed for ${extName}: ${err.message}`);
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // Tier 3: No extensions found. Generic tree:be.
     log.verbose("Tree Orchestrator", `  BE mode: switching to tree:be`);
-    await switchMode(visitorId, "tree:be", {
-      username, userId, rootId,
-      conversationMemory: formatMemoryContext(visitorId),
-      clearHistory: true,
-    });
-    const result = await processMessage(visitorId, message, {
-      username, userId, rootId, signal, socket, sessionId,
-    });
+    await switchMode(visitorId, "tree:be", { username, userId, rootId, conversationMemory: formatMemoryContext(visitorId), clearHistory: true });
+    const result = await processMessage(visitorId, message, { username, userId, rootId, signal, socket, sessionId });
     modesUsed.push("tree:be");
     return { success: true, answer: result?.content || "", modeKey: "tree:be", modesUsed, rootId };
   }
@@ -783,17 +1038,17 @@ export async function orchestrateTreeRequest({
   // ────────────────────────────────────────────────────────
 
   if (classification.intent === "extension" && classification.mode) {
-    const { getModeOwner, getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
+    const { getModeOwner } = await import("../../seed/tree/extensionScope.js");
     const { getExtension, getExtensionManifest } = await import("../loader.js");
 
-    // ── Check for multi-extension chain before single routing ──
-    // If the message also matches other extensions, chain them instead.
+    // ── Chain check: does the message match 2+ extensions? ──
     try {
-      const currentNodeId = getCurrentNodeId(visitorId) || rootId;
       const primaryExt = getModeOwner(classification.mode);
+      const { queryAllMatches } = await import("./routingIndex.js");
+      const allTreeMatches = queryAllMatches(rootId, message, null);
+      const seenExts = new Set([primaryExt]);
       const otherMatches = [];
 
-      // Find earliest match position in the message for the primary extension
       let primaryPos = 0;
       const primaryManifest = getExtensionManifest(primaryExt);
       if (Array.isArray(primaryManifest?.classifierHints)) {
@@ -803,17 +1058,9 @@ export async function orchestrateTreeRequest({
         }
       }
 
-      // Two sources of chain candidates, both position-based:
-      // 1. Routing index: extensions with scaffolded nodes in this tree
-      // 2. Confined extensions ext-allowed at this position (e.g. browser-bridge)
-      const { queryAllMatches } = await import("./routingIndex.js");
-      const allTreeMatches = queryAllMatches(rootId, message, null);
-      const seenExts = new Set([primaryExt]);
-
       for (const match of allTreeMatches) {
         if (seenExts.has(match.extName)) continue;
         seenExts.add(match.extName);
-
         const manifest = getExtensionManifest(match.extName);
         let matchPos = -1;
         if (Array.isArray(manifest?.classifierHints)) {
@@ -829,263 +1076,128 @@ export async function orchestrateTreeRequest({
       log.verbose("Tree Orchestrator", `  Chain: ${otherMatches.length} other matches: ${otherMatches.map(m => m.extName).join(", ") || "none"}`);
 
       if (otherMatches.length > 0) {
-        // Build chain ordered by position in the user's message
-        const allSteps = [
+        const chain = [
           { mode: classification.mode, targetNodeId: classification.targetNodeId || currentNodeId, extName: primaryExt, pos: primaryPos },
           ...otherMatches,
-        ];
-        const chain = allSteps.sort((a, b) => a.pos - b.pos);
+        ].sort((a, b) => a.pos - b.pos);
         log.verbose("Tree Orchestrator", `  Chain detected: ${chain.map(m => m.extName).join(" -> ")}`);
-        emitStatus(socket, "intent", "Chaining extensions...");
-
-        let context = message;
-        const chainModes = [];
-
-        for (let i = 0; i < chain.length; i++) {
-          const step = chain[i];
-          const isLast = i === chain.length - 1;
-
-          // Navigate to the extension's node for this step
-          const stepNodeId = step.targetNodeId || getCurrentNodeId(visitorId) || rootId;
-          await switchMode(visitorId, step.mode, {
-            username, userId, rootId,
-            currentNodeId: stepNodeId,
-            conversationMemory: context,
-            clearHistory: true,
-          });
-
-          const stepResult = await processMessage(visitorId, isLast ? context : `${context}\n\nDo this step and return what you produced.`, {
-            username, userId, rootId, signal, slot,
-            onToolLoopCheckpoint,
-            onToolResults(results) {
-              if (signal?.aborted) return;
-              for (const r of results) socket.emit(WS.TOOL_RESULT, r);
-            },
-          });
-
-          if (signal?.aborted) return null;
-
-          const stepAnswer = stepResult?.content || stepResult?.answer || "";
-          chainModes.push(step.mode);
-
-          if (!isLast) {
-            context = `Original request: ${message}\n\nPrevious step (${step.extName}) result:\n${stepAnswer}`;
-          } else {
-            context = stepAnswer;
-          }
-        }
-
-        emitStatus(socket, "done", "");
-        if (context) pushMemory(visitorId, message, context);
-        return { success: true, answer: context, modeKey: chainModes[chainModes.length - 1], modesUsed: [...modesUsed, ...chainModes], rootId };
+        return runChain(chain, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed });
       }
     } catch (err) {
       log.debug("Tree Orchestrator", `Chain check failed: ${err.message}`);
     }
+
     const extName = getModeOwner(classification.mode);
     const ext = extName ? getExtension(extName) : null;
 
     log.verbose("Tree Orchestrator",
       `  Extension route: ${classification.mode} (ext: ${extName || "?"}, behavioral: ${behavioral})`);
 
-    // ── Tier 1: handleMessage override ──
+    // ── Data handler: extension pre-processing ──
+    // Extensions can return:
+    //   { answer }       - short-circuit, send this answer directly
+    //   { mode }         - force a specific mode, skip suffix routing
+    //   { answer, mode } - short-circuit with mode tagging
+    //   null/undefined   - proceed to normal suffix routing
+    let forcedMode = null;
     if (ext?.exports?.handleMessage) {
-      emitStatus(socket, "intent", "");
+      if (classification.targetNodeId) setCurrentNodeId(visitorId, classification.targetNodeId);
       try {
-        const result = await ext.exports.handleMessage(message, {
-          userId, username, rootId, targetNodeId: classification.targetNodeId, signal, res: null,
+        const decision = await ext.exports.handleMessage(message, {
+          userId, username, rootId, targetNodeId: classification.targetNodeId,
         });
-        emitStatus(socket, "done", "");
-        const answer = result?.answer || null;
-        const mode = result?.mode || classification.mode;
-        if (answer) pushMemory(visitorId, message, answer);
-        modesUsed.push(mode);
-        return { success: true, answer, modeKey: mode, modesUsed, rootId };
+        if (decision?.answer) {
+          emitStatus(socket, "done", "");
+          pushMemory(visitorId, message, decision.answer);
+          modesUsed.push(decision.mode || classification.mode);
+          return { success: true, answer: decision.answer, modeKey: decision.mode || classification.mode, modesUsed, rootId, targetNodeId: classification.targetNodeId };
+        }
+        if (decision?.mode) {
+          forcedMode = decision.mode;
+          log.verbose("Tree Orchestrator", `  handleMessage forced mode: ${forcedMode}`);
+        }
       } catch (err) {
         log.error("Tree Orchestrator", `Extension handleMessage failed: ${err.message}`);
-        emitStatus(socket, "done", "");
-        return { success: false, answer: "Extension request failed.", modeKey: classification.mode, modesUsed, rootId };
       }
     }
 
-    // ── Tier 2: suffix convention routing ──
-    // Match against real registered modes, not constructed guesses.
-    // :coach = guided (be), :review/:ask = analysis, :plan = building, :log/:tell = default
-    let resolvedMode = classification.mode;
-    if (extName) {
-      const { getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
-      const extModes = getModesOwnedBy(extName);
-      const find = (...suffixes) => {
-        for (const s of suffixes) {
-          const match = extModes.find(m => m.endsWith(`-${s}`));
-          if (match) return match;
-        }
-        return null;
-      };
-      const lower = message.toLowerCase().trim();
-
-      if (behavioral === "be" || lower === "be") {
-        resolvedMode = find("coach") || resolvedMode;
-      } else if (/\b(how am i|progress|status|review|daily|stats|streak|history|so far|pattern|doing)\b/.test(lower)) {
-        resolvedMode = find("review", "ask") || resolvedMode;
-      } else if (/\b(plan|build|create|structure|organize|add|modify|remove|restructure|program|taper|schedule|adjust|set.*goal|change|curriculum)\b/.test(lower)) {
-        resolvedMode = find("plan") || resolvedMode;
-      }
-      // else: stays on classification.mode (modes.respond, usually :log or :tell)
+    // ── Suffix convention routing (ONE call), unless extension forced a mode ──
+    const resolvedMode = forcedMode || await resolveSuffixMode(classification.mode, message, behavioral);
+    if (resolvedMode !== classification.mode) {
+      log.verbose("Tree Orchestrator", `  Suffix routed: ${classification.mode} -> ${resolvedMode}`);
     }
 
-    modesUsed.push(resolvedMode);
-    emitStatus(socket, "intent", "");
-
-    await switchMode(visitorId, resolvedMode, {
-      username, userId, rootId,
-      currentNodeId: classification.targetNodeId || rootId,
-      conversationMemory: formatMemoryContext(visitorId),
-      clearHistory: true,
-    });
-
-    const result = await processMessage(visitorId, message, {
-      username, userId, rootId, signal, slot,
+    return runModeAndReturn(visitorId, resolvedMode, message, {
+      socket, username, userId, rootId, signal, slot,
+      currentNodeId: classification.targetNodeId || currentNodeId,
       readOnly: behavioral === "query",
-      onToolLoopCheckpoint,
-      meta: { internal: false },
-      onToolResults(results) {
-        if (signal?.aborted) return;
-        for (const r of results) socket.emit(WS.TOOL_RESULT, r);
-      },
+      onToolLoopCheckpoint, modesUsed,
+      targetNodeId: classification.targetNodeId,
     });
-
-    emitStatus(socket, "done", "");
-    const answer = result?.content || result?.answer || null;
-    if (answer) pushMemory(visitorId, message, answer);
-    return { success: true, answer, modeKey: resolvedMode, modesUsed, rootId };
   }
 
 
   // ────────────────────────────────────────────────────────
-  // MULTI-EXTENSION CHAIN — message matches 2+ extensions
-  // Each extension runs as a focused agent with its own tools.
-  // Results pass from one step to the next.
+  // CONVERSE PATH — check routing index for implicit matches
   // ────────────────────────────────────────────────────────
 
   if (rootId && classification.intent === "converse") {
     try {
-      const currentNodeId = getCurrentNodeId(visitorId) || rootId;
-      const currentPath = await _buildCurrentPath(currentNodeId);
-
-      // Routing index now includes both scaffolded and confined ext-allowed extensions.
-      // One path, one query.
       const { queryAllMatches } = await import("./routingIndex.js");
       const indexMatches = queryAllMatches(rootId, message, null);
 
-      log.verbose("Tree Orchestrator", `  Converse chain check: ${indexMatches.length} matches: ${indexMatches.map(m => m.extName).join(", ") || "none"}`);
+      log.verbose("Tree Orchestrator", `  Converse check: ${indexMatches.length} matches: ${indexMatches.map(m => m.extName).join(", ") || "none"}`);
 
-      // Single match from converse path: route to that extension instead of converse
       if (indexMatches.length === 1) {
         const single = indexMatches[0];
         log.verbose("Tree Orchestrator", `  Single extension in converse: routing to ${single.extName}`);
-        modesUsed.push(single.mode);
-        emitStatus(socket, "intent", "");
-
-        await switchMode(visitorId, single.mode, {
-          username, userId, rootId,
-          currentNodeId: single.targetNodeId,
-          conversationMemory: formatMemoryContext(visitorId),
-          clearHistory: true,
+        const resolvedMode = await resolveSuffixMode(single.mode, message, behavioral);
+        return runModeAndReturn(visitorId, resolvedMode, message, {
+          socket, username, userId, rootId, signal, slot,
+          currentNodeId: single.targetNodeId, clearHistory: true,
+          onToolLoopCheckpoint, modesUsed, targetNodeId: single.targetNodeId,
         });
-
-        const singleResult = await processMessage(visitorId, message, {
-          username, userId, rootId, signal, slot,
-          onToolLoopCheckpoint,
-          onToolResults(results) {
-            if (signal?.aborted) return;
-            for (const r of results) socket.emit(WS.TOOL_RESULT, r);
-          },
-        });
-
-        emitStatus(socket, "done", "");
-        const singleAnswer = singleResult?.content || singleResult?.answer || null;
-        if (singleAnswer) pushMemory(visitorId, message, singleAnswer);
-        return { success: true, answer: singleAnswer, modeKey: single.mode, modesUsed, rootId };
       }
 
       if (indexMatches.length > 1) {
         log.verbose("Tree Orchestrator", `  Chain detected: ${indexMatches.map(m => m.extName).join(" -> ")}`);
-        emitStatus(socket, "intent", "Chaining extensions...");
-
-        let context = message;
-        const chainModes = [];
-
-        for (let i = 0; i < indexMatches.length; i++) {
-          const step = indexMatches[i];
-          const isLast = i === indexMatches.length - 1;
-
-          // Navigate to the extension's node for this step
-          const stepNodeId = step.targetNodeId || getCurrentNodeId(visitorId) || rootId;
-          await switchMode(visitorId, step.mode, {
-            username, userId, rootId,
-            currentNodeId: stepNodeId,
-            conversationMemory: context,
-            clearHistory: true,
-          });
-
-          const stepResult = await processMessage(visitorId, isLast ? context : `${context}\n\nDo this step and return what you produced.`, {
-            username, userId, rootId, signal, slot,
-            onToolLoopCheckpoint,
-            onToolResults(results) {
-              if (signal?.aborted) return;
-              for (const r of results) socket.emit(WS.TOOL_RESULT, r);
-            },
-          });
-
-          if (signal?.aborted) return null;
-
-          const stepAnswer = stepResult?.content || stepResult?.answer || "";
-          chainModes.push(step.mode);
-
-          // Pass result to next step as context
-          if (!isLast) {
-            context = `Original request: ${message}\n\nPrevious step (${step.extName}) result:\n${stepAnswer}`;
-          } else {
-            context = stepAnswer;
-          }
-        }
-
-        emitStatus(socket, "done", "");
-        if (context) pushMemory(visitorId, message, context);
-        return { success: true, answer: context, modeKey: chainModes[chainModes.length - 1], modesUsed: [...modesUsed, ...chainModes], rootId };
+        return runChain(indexMatches, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed });
       }
     } catch (err) {
-      log.debug("Tree Orchestrator", `Chain detection failed: ${err.message}`);
+      log.debug("Tree Orchestrator", `Converse check failed: ${err.message}`);
     }
   }
 
   // ────────────────────────────────────────────────────────
-  // FALLBACK — anything not caught above goes to converse
+  // FALLBACK — tree:converse
+  // Build tree capabilities from the routing index so converse
+  // knows what extensions exist in this tree even when nothing matched.
   // ────────────────────────────────────────────────────────
 
-  modesUsed.push("tree:converse");
-  emitStatus(socket, "intent", "");
+  let treeCapabilities = null;
+  if (rootId) {
+    try {
+      const { getIndexForRoot } = await import("./routingIndex.js");
+      const { getExtensionManifest } = await import("../loader.js");
+      const index = getIndexForRoot(rootId);
+      if (index && index.size > 0) {
+        const lines = [];
+        for (const [extName, entry] of index) {
+          const manifest = getExtensionManifest(extName);
+          const territory = manifest?.territory || extName;
+          lines.push(`  ${extName}: ${entry.path} (${territory})`);
+        }
+        treeCapabilities = lines.join("\n");
+      }
+    } catch {}
+  }
 
-  await switchMode(visitorId, "tree:converse", {
-    username, userId, rootId,
-    conversationMemory: formatMemoryContext(visitorId),
-    clearHistory: true,
+  return runModeAndReturn(visitorId, "tree:converse", message, {
+    socket, username, userId, rootId, signal, slot,
+    currentNodeId, clearHistory: true,
+    onToolLoopCheckpoint, modesUsed,
+    treeCapabilities,
   });
-
-  const fallbackResult = await processMessage(visitorId, message, {
-    username, userId, rootId, signal, slot,
-    onToolLoopCheckpoint,
-    onToolResults(results) {
-      if (signal?.aborted) return;
-      for (const r of results) socket.emit(WS.TOOL_RESULT, r);
-    },
-  });
-
-  emitStatus(socket, "done", "");
-  const fallbackAnswer = fallbackResult?.content || fallbackResult?.answer || null;
-  if (fallbackAnswer) pushMemory(visitorId, message, fallbackAnswer);
-  return { success: true, answer: fallbackAnswer, modeKey: "tree:converse", modesUsed, rootId };
 }
 // ─────────────────────────────────────────────────────────────────────────
 // RESPOND (final user-facing output)

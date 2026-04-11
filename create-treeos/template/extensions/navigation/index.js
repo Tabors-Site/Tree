@@ -95,36 +95,19 @@ export async function init(core) {
     }
   });
 
-  // ── Boot: one-time backfill for roots missed by the ObjectId comparison bug ──
-  core.hooks.register("afterBoot", async () => {
-    try {
-      const { SYSTEM_OWNER } = await import("../../seed/protocol.js");
-      const roots = await core.models.Node.find({
-        rootOwner: { $nin: [null, SYSTEM_OWNER] },
-        parent: { $ne: "deleted" },
-      }).select("_id rootOwner").lean();
-
-      const byUser = new Map();
-      for (const r of roots) {
-        const uid = String(r.rootOwner);
-        if (!byUser.has(uid)) byUser.set(uid, []);
-        byUser.get(uid).push(String(r._id));
-      }
-
-      let fixed = 0;
-      for (const [uid, ownedIds] of byUser) {
-        const existing = await getUserRoots(uid);
-        const missing = ownedIds.filter(id => !existing.includes(id));
-        for (const id of missing) {
-          await addRoot(uid, id);
-          fixed++;
-        }
-      }
-      if (fixed > 0) log.info("Navigation", `Backfilled ${fixed} missing root(s) in user nav lists`);
-    } catch (err) {
-      log.warn("Navigation", `Root backfill failed: ${err.message}`);
+  // ── Hook: beforeNodeDelete ──
+  // When a tree is retired, remove it from the owner's nav list.
+  core.hooks.register("beforeNodeDelete", async ({ nodeId, node }) => {
+    if (!node?.rootOwner) return;
+    // Only remove if this is a root being retired (has rootOwner set)
+    const nodeDoc = node.rootOwner ? node : await core.models.Node.findById(nodeId).select("rootOwner").lean();
+    if (nodeDoc?.rootOwner) {
+      await removeRoot(String(nodeDoc.rootOwner), String(nodeId));
     }
   }, "navigation");
+
+  // Root backfill removed. Was a one-time fix for an ObjectId comparison bug
+  // but ran on every boot, re-adding retired trees to nav lists.
 
   log.info("Navigation", "Navigation and recent roots tracking loaded");
 

@@ -1,6 +1,6 @@
 {
   "name": "create-treeos",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Scaffold a TreeOS land server. npx create-treeos my-land",
   "bin": "./index.js",
   "type": "module",

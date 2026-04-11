@@ -1,6 +1,6 @@
 export default {
   name: "reflect",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-intelligence",
   description:
     "The tree notices how the conversation is going. Not sentiment analysis. Not mood " +

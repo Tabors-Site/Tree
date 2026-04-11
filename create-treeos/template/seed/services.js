@@ -44,7 +44,7 @@ import { runPipeline } from "./orchestrators/pipeline.js";
 
 import { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } from "./ws/mcp.js";
 import { registerRootLlmSlot, registerUserLlmSlot } from "./llm/connections.js";
-import { emitNavigate, emitToUser, registerSocketHandler, unregisterSocketHandler } from "./ws/websocket.js";
+import { emitNavigate, emitToUser, registerSocketHandler, unregisterSocketHandler, getIO } from "./ws/websocket.js";
 import { OrchestratorRuntime } from "./orchestrators/runtime.js";
 import { acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks } from "./orchestrators/locks.js";
 import { ok, error, sendOk, sendError, ERR, WS, CASCADE } from "./protocol.js";
@@ -90,6 +90,7 @@ const NOOP_WEBSOCKET = {
   emitToUser: () => {},
   registerSocketHandler: () => {},
   unregisterSocketHandler: () => {},
+  getIO: () => null,
 };
 
 // ---------------------------------------------------------------------------
@@ -154,7 +155,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     mcp: { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL },
 
     websocket: hasWebsocket
-      ? { emitNavigate, emitToUser, registerSocketHandler, unregisterSocketHandler }
+      ? { emitNavigate, emitToUser, registerSocketHandler, unregisterSocketHandler, getIO }
       : NOOP_WEBSOCKET,
 
     orchestrator: { OrchestratorRuntime, acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks },

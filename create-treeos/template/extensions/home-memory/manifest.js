@@ -1,6 +1,6 @@
 export default {
   name: "home-memory",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "seed",
   description:
     "The lobby remembers. Tracks what the user cares about across home-zone conversations. " +

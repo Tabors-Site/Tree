@@ -11,6 +11,7 @@ export default {
     "browser-type",
     "browser-navigate",
     "browser-comment",
+    "browser-fetch",
   ],
 
   maxMessagesBeforeLoop: 20,

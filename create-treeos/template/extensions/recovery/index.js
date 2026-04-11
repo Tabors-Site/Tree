@@ -159,26 +159,41 @@ export async function init(core) {
       }));
     }
 
-    // Fitness channel data
+    // Cross-domain awareness: find sibling extensions and read their state
     try {
       const { getExtension } = await import("../loader.js");
-      const ch = getExtension("channels");
-      if (ch?.exports?.getChannelData) {
-        const fitnessData = await ch.exports.getChannelData(rootId, "fitness");
-        if (fitnessData?.lastWorkout) {
-          context.recovery.lastWorkout = fitnessData.lastWorkout;
-        }
-      }
-    } catch {}
+      const life = getExtension("life");
+      if (life?.exports?.getDomainNodes) {
+        // Walk up to find the tree root for domain lookup
+        const treeRoot = node.rootOwner || rootId;
+        const domains = await life.exports.getDomainNodes(treeRoot);
 
-    // Food channel data
-    try {
-      const { getExtension } = await import("../loader.js");
-      const ch = getExtension("channels");
-      if (ch?.exports?.getChannelData) {
-        const foodData = await ch.exports.getChannelData(rootId, "food");
-        if (foodData?.calories) {
-          context.recovery.caloriestoday = foodData.calories;
+        // Food: what did the user eat today?
+        if (domains.food?.id) {
+          const food = getExtension("food");
+          if (food?.exports?.getDailyPicture) {
+            const picture = await food.exports.getDailyPicture(domains.food.id);
+            if (picture?.calories) {
+              context.recovery.foodToday = {
+                calories: picture.calories.today,
+                calorieGoal: picture.calories.goal,
+              };
+            }
+          }
+        }
+
+        // Fitness: recent workout activity
+        if (domains.fitness?.id) {
+          const fitness = getExtension("fitness");
+          if (fitness?.exports?.getWeeklyStats) {
+            const stats = await fitness.exports.getWeeklyStats(domains.fitness.id);
+            if (stats?.workoutsThisWeek > 0) {
+              context.recovery.fitnessThisWeek = {
+                workouts: stats.workoutsThisWeek,
+                lastWorkout: stats.lastWorkoutDate,
+              };
+            }
+          }
         }
       }
     } catch {}
@@ -219,12 +234,13 @@ export async function init(core) {
       return `<div class="app-card">
         <div class="app-header"><span class="app-emoji">🌿</span><span class="app-name">Recovery</span></div>
         <div class="app-desc">Check in, journal, track patterns. Substance taper plans, mood, cravings, milestones.</div>
-        ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
-        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
-          ${tokenField}<input type="hidden" name="app" value="recovery" />
-          <input class="app-input" name="message" placeholder="What are you working on? (e.g. alcohol, nicotine, general wellness)" required />
-          <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} Recovery</button>
-        </form>
+        ${entries.length > 0
+          ? `<div style="display:flex;flex-wrap:wrap;">${existing}</div>`
+          : `<form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+              ${tokenField}<input type="hidden" name="app" value="recovery" />
+              <input class="app-input" name="message" placeholder="What are you working on? (e.g. alcohol, nicotine, general wellness)" required />
+              <button class="app-start" type="submit">Start Recovery</button>
+            </form>`}
       </div>`;
     }, { priority: 30 });
   } catch {}

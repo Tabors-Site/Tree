@@ -1,6 +1,6 @@
 export default {
   name: "gateway-sms",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "treeos-connect",
   description:
     "SMS channel type for the gateway extension. Registers the sms channel type at boot, enabling " +

@@ -1,6 +1,6 @@
 export default {
   name: "channels",
-  version: "1.0.0",
+  version: "1.0.1",
   builtFor: "seed",
   description:
     "Direct named signal paths between two specific nodes. Bypass the propagation " +

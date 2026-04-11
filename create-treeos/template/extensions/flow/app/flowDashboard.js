@@ -489,12 +489,17 @@ async function loadRoots() {
 async function loadPulseStrip() {
   if (!roots.length) return;
 
-  const flowFetches = roots.slice(0, 10).map(async (root) => {
-    const flow = await fetchJson(API + "/node/" + root.id + "/flow?limit=100");
-    return { rootId: root.id, results: flow?.results || [] };
-  });
+  // Fetch all cascade results globally, then filter by rootId per tree
+  const globalFlow = await fetchJson(API + "/flow?limit=200");
+  // Results come as { signalId: [results...] }. Flatten into a single array.
+  const resultMap = globalFlow?.results || {};
+  const allResults = [];
+  for (const [signalId, signalResults] of Object.entries(resultMap)) {
+    if (Array.isArray(signalResults)) {
+      for (const r of signalResults) allResults.push({ ...r, signalId });
+    }
+  }
 
-  const flowResults = await Promise.allSettled(flowFetches);
   const allSignals = [];
   const now = Date.now();
   const cutoff = now - DAY_MS;
@@ -502,23 +507,19 @@ async function loadPulseStrip() {
   // Reset signal counts for tree cards
   signalCounts = {};
 
-  for (const result of flowResults) {
-    if (result.status !== "fulfilled") continue;
-    const { rootId, results } = result.value;
-    let count = 0;
-    for (const r of results) {
-      const ts = new Date(r.timestamp || r.createdAt).getTime();
-      if (ts > cutoff) {
-        allSignals.push({
-          timestamp: ts,
-          status: r.status || "succeeded",
-          source: r.source,
-          extName: r.extName,
-        });
-        count++;
-      }
+  for (const r of allResults) {
+    const ts = new Date(r.timestamp || r.createdAt).getTime();
+    if (ts > cutoff) {
+      allSignals.push({
+        timestamp: ts,
+        status: r.status || "succeeded",
+        source: r.source,
+        extName: r.extName,
+      });
+      // Count per source node's root (if available)
+      const srcRoot = r.rootId || r.source || "unknown";
+      signalCounts[srcRoot] = (signalCounts[srcRoot] || 0) + 1;
     }
-    signalCounts[rootId] = count;
   }
 
   allSignals.sort((a, b) => a.timestamp - b.timestamp);
@@ -634,16 +635,23 @@ async function toggleTreeLazy(rootId) {
 
   try {
     // GET /root/:rootId -> { _id, name, children: [{_id, name, children, ...}], ... }
-    // GET /node/:nodeId/flow -> { results: [...] }
+    // GET /flow -> { results: { signalId: [...] } }
     var results = await Promise.all([
       fetchJson(API + "/root/" + rootId),
-      fetchJson(API + "/node/" + rootId + "/flow?limit=50")
+      fetchJson(API + "/flow?limit=50")
     ]);
     var tree = results[0];
     var flow = results[1];
 
     var signalMap = {};
-    var flowResults = (flow && flow.results) ? flow.results : [];
+    // Flatten signal map into array
+    var flowResultMap = (flow && flow.results) ? flow.results : {};
+    var flowResults = [];
+    for (var [sid, sResults] of Object.entries(flowResultMap)) {
+      if (Array.isArray(sResults)) {
+        for (var sr of sResults) flowResults.push(sr);
+      }
+    }
     for (var i = 0; i < flowResults.length; i++) {
       var r = flowResults[i];
       var ts = new Date(r.timestamp || r.createdAt).getTime();
@@ -712,14 +720,21 @@ async function selectNode(nodeId, rootId) {
   const content = document.getElementById("panelContent");
 
   const node = await fetchJson(API + "/node/" + nodeId);
-  const flow = await fetchJson(API + "/node/" + nodeId + "/flow?limit=20");
+  const flowRaw = await fetchJson(API + "/flow?limit=50");
+  const flowMap = flowRaw?.results || {};
+  const flowSignals = [];
+  for (const [, sResults] of Object.entries(flowMap)) {
+    if (Array.isArray(sResults)) {
+      for (const sr of sResults) flowSignals.push(sr);
+    }
+  }
+  // Filter to signals involving this node
+  const signals = flowSignals.filter(s => s.source === nodeId || s.nodeId === nodeId);
+
   let channels = null;
   try { channels = await fetchJson(API + "/node/" + nodeId + "/channels"); } catch {}
 
   let html = '<div class="np-path">' + esc(node?.path || node?.name || nodeId) + '</div>';
-
-  // Stats
-  const signals = flow?.results || [];
   const sent = signals.filter(s => s.source === nodeId).length;
   const received = signals.length - sent;
 

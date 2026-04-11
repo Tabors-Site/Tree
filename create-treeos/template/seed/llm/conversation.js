@@ -649,6 +649,7 @@ export async function switchMode(visitorId, newModeKey, ctx) {
   const systemPrompt = await buildPromptForMode(newModeKey, {
     ...ctx,
     rootId: session.rootId || ctx.rootId,
+    currentNodeId: ctx.currentNodeId || session.currentNodeId,
   });
 
   // Reset conversation with new system prompt + carried context
@@ -658,8 +659,10 @@ export async function switchMode(visitorId, newModeKey, ctx) {
   ];
   session.modeKey = newModeKey;
   session.bigMode = mode.bigMode;
+  // Persist currentNodeId so position hold works on the next request
+  if (ctx.currentNodeId) session.currentNodeId = ctx.currentNodeId;
 
-  log.debug("LLM", 
+  log.debug("LLM",
     `🔄 Mode switch for ${visitorId}: ${oldModeKey || "none"} → ${newModeKey} (carried ${recentMessages.length} messages)`,
   );
 
@@ -826,6 +829,7 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
       username: ctx.username,
       userId: ctx.userId,
       rootId: session.rootId,
+      currentNodeId: session.currentNodeId,
     });
 
     session.messages = [
@@ -844,6 +848,7 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
       username: ctx.username,
       userId: ctx.userId,
       rootId: session.rootId,
+      currentNodeId: session.currentNodeId,
     });
     if (session.messages.length === 0) {
       session.messages = [{ role: "system", content: systemPrompt }];
@@ -1109,6 +1114,18 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
   const llmHookResult = await hooks.run("beforeLLMCall", llmHookData);
   if (llmHookResult.cancelled) {
     throw new Error(llmHookResult.reason || "LLM call rejected");
+  }
+
+  // Log the final system prompt preamble (everything hooks injected before the mode prompt).
+  // Shows [User Instructions], [Instructions], [Sprout], [Memories], etc. all stacked.
+  if (session.messages[0]?.role === "system") {
+    const sys = session.messages[0].content;
+    // Extract injected blocks: everything before the first non-bracket line or mode content.
+    // Look for lines starting with [ which indicate hook-injected sections.
+    const prelude = sys.split("\n").filter(l => l.startsWith("[") || l.startsWith("  ")).slice(0, 15);
+    if (prelude.length > 0) {
+      log.verbose("LLM", `[${session.modeKey}] Preamble: ${prelude.join(" | ").slice(0, 300)}`);
+    }
   }
 
   let response;
@@ -1744,6 +1761,7 @@ export async function resetConversation(visitorId, ctx) {
     username: ctx.username,
     userId: ctx.userId,
     rootId: session.rootId,
+    currentNodeId: session.currentNodeId,
   });
 
   session.messages = [{ role: "system", content: systemPrompt }];
@@ -1768,7 +1786,7 @@ export function sessionCount() {
  *     nodeId: null,  // optional, for per-node context
  *   });
  */
-export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null, llmPriority = null, onToolResults = null }) {
+export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null, llmPriority = null, onToolResults = null, visitorId: callerVisitorId = null }) {
   if (!userId || !message || !mode) {
     throw new Error("runChat requires userId, message, and mode");
   }
@@ -1795,7 +1813,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   // tree:{rootId}:{userId} - tree zone (new session per tree, persistent within tree)
   const bigMode = mode.split(":")[0];
   const contextKey = bigMode === "tree" && rootId ? rootId : bigMode;
-  const visitorId = `${contextKey}:${userId}`;
+  const visitorId = callerVisitorId || `${contextKey}:${userId}`;
 
   // Persistent sessionId per zone (chains Chats together)
   if (!_runChatSessions.has(visitorId)) {
@@ -1808,14 +1826,16 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   const sessionId = _runChatSessions.get(visitorId);
 
   // Abort controller for cancellation (Ctrl+C, timeout, etc.)
-  const abort = signal ? { signal } : new AbortController();
+  const abort = signal ? null : new AbortController();
   const abortSignal = signal || abort.signal;
 
   // Register abort so external callers can cancel via sessionRegistry
-  setSessionAbort(visitorId, abort);
+  // Skip if caller provided a signal (the caller already registered their own abort)
+  if (abort) setSessionAbort(visitorId, abort);
 
   // 1. Connect MCP (reuse if already connected)
-  if (!getMCPClient(visitorId)) {
+  // Skip if caller provided visitorId (they already connected MCP for this session)
+  if (!callerVisitorId && !getMCPClient(visitorId)) {
     const internalJwt = jwt.sign(
       { userId: userId.toString(), username: username || "unknown", visitorId },
       JWT_SECRET,
@@ -1836,7 +1856,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   const currentMode = getCurrentMode(visitorId);
   if (currentMode !== mode) {
     try {
-      await switchMode(visitorId, mode, { username, userId });
+      await switchMode(visitorId, mode, { username, userId, currentNodeId: getCurrentNodeId(visitorId) });
     } catch (err) {
       log.warn("RunChat", `Mode switch to ${mode} failed: ${err.message}`);
     }
@@ -1870,6 +1890,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
       username,
       userId,
       rootId,
+      currentNodeId: getCurrentNodeId(visitorId),
       signal: abortSignal,
       llmPriority,
       onToolResults,
@@ -1879,14 +1900,25 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
       const stopped = abortSignal.aborted;
       try { await finalizeChat({ chatId: chat._id, content: stopped ? null : `Error: ${err.message}`, stopped }); } catch {}
     }
-    clearSessionAbort(visitorId);
+    if (abort) clearSessionAbort(visitorId);
     throw err;
   }
 
   const stopped = abortSignal.aborted;
-  const answer = stopped ? null : (result?.content || result?.answer || "No response.");
+  let answer = stopped ? null : (result?.content || result?.answer || "No response.");
 
-  // 6. Finalize Chat
+  // 6. beforeResponse hook: extensions clean/modify the response before delivery.
+  // Centralized here so every caller (CLI /home/chat, websocket, scheduled jobs)
+  // gets the same treatment without each route having to remember to fire it.
+  if (answer && !stopped) {
+    try {
+      const hookData = { content: answer, userId, rootId, mode };
+      await hooks.run("beforeResponse", hookData);
+      answer = hookData.content;
+    } catch {}
+  }
+
+  // 7. Finalize Chat
   if (chat) {
     try {
       const internal = result?._internal || {};
@@ -1894,14 +1926,393 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
     } catch {}
   }
 
-  // 7. Clear abort (keep session + MCP alive for next message in same mode)
-  clearSessionAbort(visitorId);
+  // 8. Clear abort (keep session + MCP alive for next message in same mode)
+  // Only clear if we created our own abort controller
+  if (abort) clearSessionAbort(visitorId);
 
   return {
     answer,
     chatId: chat?._id || null,
     modeKey: mode,
     visitorId,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// runOrchestration: universal entry point for user-facing chat flows.
+//
+// This is the canonical orchestration primitive. Every user-facing entry
+// point (HTTP routes, websocket, gateway extensions) calls this. It handles:
+//   - Transport session lifecycle (sessionRegistry create/end)
+//   - Conversation visitorId building (zone+rootId+userId pattern)
+//   - MCP connection
+//   - Chat record create/finalize
+//   - Request enqueue serialization
+//   - Abort handling (caller signal, res.close, timeout)
+//   - Orchestrator dispatch via registry, with fallback to processMessage
+//   - beforeResponse hook firing (exactly once, except in place mode)
+//   - Cleanup in all paths
+//
+// Use runChat() for background single-LLM-call work in extensions.
+// Use runOrchestration() for anything where a real user is waiting.
+// ─────────────────────────────────────────────────────────────────────────
+export async function runOrchestration({
+  zone,                                  // "tree" | "home" | "land" - required
+  userId,                                // required
+  username = null,
+  message,                               // required
+  rootId = null,                         // required for tree zone
+  currentNodeId = null,
+  sessionHandle = null,                  // HTTP can pass to differentiate browser tabs
+  sessionId: providedSessionId = null,   // Websocket passes its existing session
+  visitorId: providedVisitorId = null,   // Websocket passes socket.visitorId
+  socket = null,                         // Websocket passes the socket for tool emit
+  signal = null,                         // Caller-provided abort signal
+  res = null,                            // For HTTP auto-abort on disconnect
+  llmPriority = null,
+  orchestrateFlags = {},                 // { skipRespond, forceQueryOnly, behavioral }
+  sourceType = null,                     // For Chat record source field (legacy alias)
+  chatSource = "api",                    // Chat record source: "user" | "api" | "public-query" | "background"
+  isPublicQuery = false,
+  clientOverride = null,                 // For canopy proxy public queries
+  onChatCreated = null,                  // Callback fired right after Chat record exists
+  onToolResults = null,
+  onToolLoopCheckpoint = null,
+}) {
+  if (!userId || !message || !zone) {
+    throw new Error("runOrchestration requires zone, userId, and message");
+  }
+  if (zone === "tree" && !rootId) {
+    throw new Error("runOrchestration tree zone requires rootId");
+  }
+
+  // Lazy imports (avoid circular deps and keep boot light)
+  const jwtMod = (await import("jsonwebtoken")).default;
+  const { closeMCPClient, getMCPClient } = await import("../ws/mcp.js");
+  const { startChat, finalizeChat, setChatContext, clearChatContext } = await import("./chatTracker.js");
+  const {
+    createSession,
+    endSession,
+    setSessionAbort,
+    clearSessionAbort,
+    SESSION_TYPES,
+    registerSessionType,
+  } = await import("../ws/sessionRegistry.js");
+  const { enqueue } = await import("../ws/requestQueue.js");
+  const { getOrchestrator } = await import("../orchestrators/registry.js");
+  const { nullSocket } = await import("../orchestrators/helpers.js");
+  const { ProtocolError, ERR } = await import("../protocol.js");
+
+  const JWT_SECRET = process.env.JWT_SECRET;
+  if (!JWT_SECRET) throw new Error("JWT_SECRET not configured");
+
+  // Ensure session types are registered for fallback zones
+  if (!SESSION_TYPES.API_HOME_CHAT) registerSessionType("API_HOME_CHAT", "api-home-chat");
+  if (!SESSION_TYPES.API_LAND_CHAT) registerSessionType("API_LAND_CHAT", "api-land-chat");
+
+  // ── Build visitorId for conversation continuity ───────────────────────
+  // tree: ${rootId}:${userId} (with optional :${handle} for tabs)
+  // home: home:${userId}
+  // land: land:${userId}
+  let visitorId = providedVisitorId;
+  if (!visitorId) {
+    if (zone === "tree") {
+      visitorId = sessionHandle
+        ? `${rootId}:${userId}:${sessionHandle}`
+        : `${rootId}:${userId}`;
+    } else {
+      visitorId = `${zone}:${userId}`;
+    }
+  }
+
+  // ── Build sessionRegistry session for transport tracking ──────────────
+  // If caller provided sessionId (websocket has its own), reuse it.
+  // Otherwise create one via sessionRegistry. scopeKey enables idle reuse
+  // so back-to-back HTTP calls from the same browser tab share a session.
+  let sessionId = providedSessionId;
+  let weCreatedSession = false;
+
+  if (!sessionId) {
+    const scopeKey = sessionHandle
+      ? `${userId}:${zone}:${rootId || ""}:${sessionHandle}`
+      : `${userId}:${zone}:${rootId || ""}`;
+
+    const sessionType =
+      zone === "tree"
+        ? (orchestrateFlags.skipRespond
+            ? SESSION_TYPES.API_TREE_PLACE
+            : orchestrateFlags.forceQueryOnly
+              ? SESSION_TYPES.API_TREE_QUERY
+              : SESSION_TYPES.API_TREE_CHAT)
+        : (zone === "home" ? SESSION_TYPES.API_HOME_CHAT : SESSION_TYPES.API_LAND_CHAT);
+
+    const description = zone === "tree"
+      ? `${zone} ${orchestrateFlags.skipRespond ? "place" : orchestrateFlags.forceQueryOnly ? "query" : "chat"} on root ${rootId}${sessionHandle ? ` [${sessionHandle}]` : ""}${isPublicQuery ? " (public)" : ""}`
+      : `${zone} chat`;
+
+    const created = createSession({
+      userId,
+      type: sessionType,
+      scopeKey,
+      description,
+      meta: { rootId, visitorId, isPublicQuery, sessionHandle, zone },
+    });
+    sessionId = created.sessionId;
+    weCreatedSession = true;
+  }
+
+  // ── Setup abort controller ────────────────────────────────────────────
+  const abort = new AbortController();
+  if (signal) {
+    if (signal.aborted) abort.abort();
+    else signal.addEventListener("abort", () => abort.abort(), { once: true });
+  }
+  if (res) {
+    res.on("close", () => { if (!res.writableEnded) abort.abort(); });
+  }
+  setSessionAbort(sessionId, abort);
+
+  // ── Timeout ────────────────────────────────────────────────────────────
+  const TIMEOUT_MS = Number(getLandConfigValue("apiOrchestrationTimeout")) || (19 * 60 * 1000);
+  let timedOut = false;
+  let chat = null;
+
+  const timer = setTimeout(() => {
+    timedOut = true;
+    log.error("Orchestration", `Zone ${zone} timed out after ${TIMEOUT_MS / 1000}s: ${visitorId}`);
+    abort.abort();
+  }, TIMEOUT_MS);
+
+  // ── Create Chat record ────────────────────────────────────────────────
+  // Use the existing conversation mode if set (preserves websocket behavior
+  // where the Chat is tagged with the actual current mode), otherwise fall
+  // back to a zone+flags default.
+  try {
+    const clientInfo = clientOverride || (await getClientForUser(userId, visitorId)) || {};
+    const existingMode = getCurrentMode(visitorId);
+    const defaultModeKey = zone === "tree"
+      ? `tree:${orchestrateFlags.skipRespond ? "place" : orchestrateFlags.forceQueryOnly ? "query" : "chat"}`
+      : `${zone}:default`;
+    const modeKeyForChat = existingMode || defaultModeKey;
+    const resolvedSource = isPublicQuery ? "public-query" : (chatSource || "api");
+    chat = await startChat({
+      userId,
+      sessionId,
+      message: message.slice(0, 5000),
+      source: resolvedSource,
+      modeKey: modeKeyForChat,
+      llmProvider: {
+        isCustom: clientInfo.isCustom || false,
+        model: clientInfo.model || "unknown",
+        connectionId: clientInfo.connectionId || null,
+      },
+      ...(rootId ? { treeContext: { targetNodeId: rootId } } : {}),
+    });
+    if (chat) {
+      setChatContext(visitorId, sessionId, chat._id);
+      if (typeof onChatCreated === "function") {
+        try { onChatCreated(chat); } catch (e) { log.warn("Orchestration", `onChatCreated failed: ${e.message}`); }
+      }
+    }
+  } catch (err) {
+    log.warn("Orchestration", `Failed to create Chat: ${err.message}`);
+  }
+
+  // ── Centralized cleanup, runs in all exit paths ───────────────────────
+  let cleanedUp = false;
+  const cleanup = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    clearTimeout(timer);
+    clearChatContext(visitorId);
+    clearSessionAbort(sessionId);
+    if (weCreatedSession) {
+      try { endSession(sessionId); } catch {}
+    }
+  };
+
+  // ── Main orchestration body, serialized per session ───────────────────
+  let result = null;
+  let executionError = null;
+
+  try {
+    await enqueue(sessionId, async () => {
+      try {
+        // Connect MCP for this visitor (skip if already connected)
+        if (!getMCPClient(visitorId)) {
+          const internalJwt = jwtMod.sign(
+            { userId: userId.toString(), username: username || "unknown", visitorId },
+            JWT_SECRET,
+            { expiresIn: "1h" },
+          );
+          try {
+            // connectToMCP and MCP_SERVER_URL imported at top of file
+            await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
+          } catch (err) {
+            log.warn("Orchestration", `MCP connect failed: ${err.message}`);
+          }
+        }
+
+        // Set rootId/currentNodeId in conversation session
+        if (rootId) setRootId(visitorId, rootId);
+        if (currentNodeId) {
+          const previousNodeId = getCurrentNodeId(visitorId);
+          const backToRoot = String(currentNodeId) === String(rootId)
+            && previousNodeId && String(previousNodeId) !== String(rootId);
+          if (backToRoot) {
+            // User navigated back to tree root. Fresh conversation.
+            clearSession(visitorId);
+            if (rootId) setRootId(visitorId, rootId);
+          }
+          setCurrentNodeId(visitorId, currentNodeId);
+        }
+
+        // Dispatch: orchestrator if registered for the zone, else processMessage
+        const orch = getOrchestrator(zone);
+
+        if (orch) {
+          result = await orch.handle({
+            visitorId,
+            message: message.trim(),
+            socket: socket || nullSocket,
+            username,
+            userId,
+            signal: abort.signal,
+            sessionId,
+            rootId,
+            rootChatId: chat?._id || null,
+            sourceType: sourceType || `${zone}-chat`,
+            onToolLoopCheckpoint,
+            ...orchestrateFlags,
+          });
+        } else {
+          // No orchestrator: single-mode fallback (home, land currently)
+          const defaultMode = `${zone}:default`;
+          const currentMode = getCurrentMode(visitorId);
+          if (currentMode !== defaultMode) {
+            try {
+              await switchMode(visitorId, defaultMode, {
+                username, userId, currentNodeId: getCurrentNodeId(visitorId),
+              });
+            } catch (err) {
+              log.warn("Orchestration", `Mode switch to ${defaultMode} failed: ${err.message}`);
+            }
+          }
+          result = await processMessage(visitorId, message, {
+            username,
+            userId,
+            rootId,
+            currentNodeId: getCurrentNodeId(visitorId),
+            signal: abort.signal,
+            llmPriority,
+            onToolResults,
+            onToolLoopCheckpoint,
+          });
+        }
+      } catch (err) {
+        executionError = err;
+      }
+    });
+  } catch (err) {
+    executionError = executionError || err;
+  }
+
+  clearTimeout(timer);
+
+  // ── Timeout takes precedence ──────────────────────────────────────────
+  if (timedOut) {
+    closeMCPClient(visitorId);
+    if (chat) {
+      finalizeChat({
+        chatId: chat._id,
+        content: "Error: Request timed out",
+        stopped: false,
+      }).catch(() => {});
+    }
+    cleanup();
+    throw new ProtocolError(500, ERR.TIMEOUT, "Request timed out");
+  }
+
+  // ── Execution error from inside the enqueue body ──────────────────────
+  if (executionError) {
+    if (chat) {
+      const stopped = abort.signal.aborted;
+      finalizeChat({
+        chatId: chat._id,
+        content: stopped ? null : `Error: ${executionError.message}`,
+        stopped,
+      }).catch(() => {});
+    }
+    cleanup();
+    throw executionError;
+  }
+
+  // ── Normalize result shape ────────────────────────────────────────────
+  const stopped = abort.signal.aborted;
+  let answer = null;
+  let success = true;
+  let stepSummaries = [];
+  let lastTargetPath = null;
+  let targetNodeId = null;
+  let lastTargetNodeId = null;
+  let modeKey = null;
+  let reason = null;
+
+  if (result) {
+    answer = stopped ? null : (result.answer ?? result.content ?? null);
+    success = result.success !== false;
+    stepSummaries = result.stepSummaries || [];
+    lastTargetPath = result.lastTargetPath || null;
+    targetNodeId = result.targetNodeId || null;
+    lastTargetNodeId = result.lastTargetNodeId || null;
+    modeKey = result.modeKey || (result._internal && result._internal.modeKey) || null;
+    reason = result.reason || null;
+  }
+
+  // ── beforeResponse hook (skip for place mode) ─────────────────────────
+  if (answer && !stopped && !orchestrateFlags.skipRespond) {
+    try {
+      const hookData = {
+        content: answer,
+        userId,
+        rootId,
+        mode: modeKey || `${zone}:default`,
+      };
+      await hooks.run("beforeResponse", hookData);
+      answer = hookData.content;
+    } catch {}
+  }
+
+  // ── Finalize Chat ─────────────────────────────────────────────────────
+  if (chat) {
+    try {
+      const summary = orchestrateFlags.skipRespond
+        ? (stepSummaries.length ? `Placed: ${stepSummaries.length} step(s)` : null)
+        : (answer || reason || null);
+      finalizeChat({
+        chatId: chat._id,
+        content: stopped ? null : summary,
+        stopped,
+        modeKey: modeKey || (zone === "tree" ? "tree:orchestrator" : `${zone}:default`),
+      }).catch((err) => log.error("Orchestration", `Chat finalize failed: ${err.message}`));
+    } catch {}
+  }
+
+  cleanup();
+
+  return {
+    answer,
+    success,
+    stepSummaries,
+    lastTargetPath,
+    targetNodeId,
+    lastTargetNodeId,
+    modeKey,
+    reason,
+    chatId: chat?._id || null,
+    visitorId,
+    sessionId,
+    stopped,
   };
 }
 
