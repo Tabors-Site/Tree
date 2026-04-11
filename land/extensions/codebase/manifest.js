@@ -1,5 +1,5 @@
 export default {
-  name: "code",
+  name: "codebase",
   version: "1.0.1",
   builtFor: "seed",
   scope: "confined",
