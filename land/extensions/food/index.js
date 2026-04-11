@@ -140,14 +140,49 @@ export async function init(core) {
   let fallbackTimer = null;
   const trackedRoots = new Set();
 
+  // Find the food root within a tree (it may be the tree root itself, or
+  // a descendant like /Life/Health/Food). Caches the mapping.
+  const _foodRootCache = new Map(); // treeRootId -> foodNodeId | null
+  async function findFoodRootInTree(treeRootId) {
+    if (_foodRootCache.has(treeRootId)) return _foodRootCache.get(treeRootId);
+
+    // Is the tree root itself a food root?
+    if (await isInitialized(treeRootId)) {
+      _foodRootCache.set(treeRootId, treeRootId);
+      return treeRootId;
+    }
+
+    // Search descendants (up to depth 4) for a food-initialized node
+    const Node = core.models.Node;
+    const queue = [treeRootId];
+    let depth = 0;
+    while (queue.length > 0 && depth < 4) {
+      const batch = [...queue];
+      queue.length = 0;
+      const children = await Node.find({ parent: { $in: batch } }).select("_id metadata").lean();
+      for (const child of children) {
+        const meta = child.metadata instanceof Map ? child.metadata.get("food") : child.metadata?.food;
+        if (meta?.initialized) {
+          const id = String(child._id);
+          _foodRootCache.set(treeRootId, id);
+          return id;
+        }
+        queue.push(String(child._id));
+      }
+      depth++;
+    }
+
+    _foodRootCache.set(treeRootId, null);
+    return null;
+  }
+
   core.hooks.register("breath:exhale", async ({ rootId }) => {
     if (!rootId) return;
-    // Only check roots that have food trees
     try {
-      const initialized = await isInitialized(rootId);
-      if (initialized) {
-        trackedRoots.add(rootId);
-        await checkDailyReset(rootId);
+      const foodRootId = await findFoodRootInTree(rootId);
+      if (foodRootId) {
+        trackedRoots.add(foodRootId);
+        await checkDailyReset(foodRootId);
       }
     } catch {}
   }, "food");
@@ -156,8 +191,8 @@ export async function init(core) {
   core.hooks.register("afterNavigate", async ({ rootId }) => {
     if (!rootId) return;
     try {
-      const initialized = await isInitialized(rootId);
-      if (initialized) trackedRoots.add(rootId);
+      const foodRootId = await findFoodRootInTree(rootId);
+      if (foodRootId) trackedRoots.add(foodRootId);
     } catch {}
   }, "food");
 

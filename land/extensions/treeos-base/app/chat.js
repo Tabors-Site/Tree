@@ -34,7 +34,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     }
 
     const user = await User.findById(req.userId).select(
-      "username metadata llmDefault",
+      "username metadata llmDefault isAdmin",
     );
     if (!user) {
       return notFoundPage(req, res, "This user doesn't exist.");
@@ -222,15 +222,118 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .root-name-inline.visible { opacity: 1; }
     .root-name-inline::before { content: ' / '; color: var(--glass-border-light); }
 
+    /* Zone sections (home, trees, land) */
+    .zone-section {
+      margin: 0 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .zone-label {
+      padding: 10px 16px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.02em;
+    }
+    .zone-messages {
+      max-height: 350px;
+      overflow-y: auto;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .zone-messages:empty::after {
+      content: "Say something...";
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 24px 0;
+    }
+    .zone-input {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-elevated);
+      align-items: flex-end;
+    }
+    .zone-input textarea {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 0.9rem;
+      resize: none;
+      outline: none;
+      min-height: 36px;
+      max-height: 120px;
+    }
+    .zone-input textarea:focus { border-color: var(--border-strong); }
+    .zone-input textarea::placeholder { color: var(--text-muted); }
+    .zone-input button {
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      font-family: inherit;
+      flex-shrink: 0;
+      height: 36px;
+    }
+    .zone-input button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .zone-input button:not(:disabled):hover { filter: brightness(1.1); }
+    .zone-msg {
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      max-width: 85%;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    .zone-msg.user {
+      align-self: flex-end;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+    .zone-msg.assistant {
+      align-self: flex-start;
+      background: rgba(125, 211, 133, 0.06);
+      border: 1px solid rgba(125, 211, 133, 0.15);
+      color: var(--text-secondary);
+    }
+    .zone-msg.error {
+      align-self: flex-start;
+      background: rgba(201, 126, 106, 0.08);
+      border: 1px solid rgba(201, 126, 106, 0.2);
+      color: var(--error);
+      font-size: 0.85rem;
+    }
+    .zone-msg.thinking {
+      align-self: flex-start;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-style: italic;
+    }
+
     /* Tree picker */
     .tree-picker {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center;
-      padding: 32px 20px 40px; gap: 24px;
-      overflow-y: auto; min-height: 0;
+      display: flex; flex-direction: column;
+      padding: 8px 12px; gap: 8px;
+      overflow-y: auto; max-height: 400px;
     }
-    .tree-picker-title { font-size: 24px; font-weight: 600; margin-bottom: 4px; flex-shrink: 0; }
-    .tree-picker-sub { color: var(--text-muted); font-size: 15px; text-align: center; flex-shrink: 0; }
     .tree-list { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 420px; }
     .tree-item {
       background: rgba(var(--glass-rgb), var(--glass-alpha));
@@ -790,36 +893,55 @@ router.get("/chat", authenticateLite, async (req, res) => {
       </div>
     </div>
 
-    <div class="tree-picker" id="treePicker">
-
-
-      ${
-        trees.length > 0
-          ? `<h2 class="tree-picker-title">Your Trees</h2>
-            <p class="tree-picker-sub">Pick a tree to continue</p>
-            <div class="tree-list" id="treeList">
-              ${trees
-                .map(
-                  (t) => `
-                <div class="tree-item" onclick="selectTree('${t._id}', '${escapeHtml(t.name)}')">
-                  <span class="tree-item-icon">🌳</span>
-                  <span class="tree-item-name">${escapeHtml(t.name)}</span>
-                </div>`,
-                )
-                .join("")}
-            </div>`
-          : ""
-      }
-
-      <!-- Custom tree: below the fold -->
-      <div style="margin-top:${trees.length > 0 ? "24px" : "16px"};padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);">
-        <p style="color:rgba(255,255,255,0.3);font-size:0.75rem;margin-bottom:8px;">Custom tree (advanced)</p>
-        <form class="create-tree-form" id="createTreeForm" onsubmit="createTree(event)">
-          <input type="text" id="newTreeName" placeholder="Tree name..." autocomplete="off" />
-          <button type="submit" title="Create tree">+</button>
-        </form>
+    <!-- Home Zone -->
+    <div class="zone-section" id="zoneHome">
+      <div class="zone-label">~ Home</div>
+      <div class="zone-messages" id="homeMessages"></div>
+      <div class="zone-input">
+        <textarea id="homeInput" placeholder="Talk about anything..." rows="1"></textarea>
+        <button id="homeSendBtn" onclick="sendZoneMessage('home')" disabled>Send</button>
       </div>
     </div>
+
+    <!-- Trees Zone -->
+    <div class="zone-section" id="zoneTrees">
+      <div class="zone-label" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Trees</span>
+        <form style="display:flex;gap:6px;" onsubmit="createTree(event)">
+          <input type="text" id="newTreeName" placeholder="New tree..." autocomplete="off" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text-secondary);font-size:0.8rem;width:120px;outline:none;" />
+          <button type="submit" style="background:var(--border-strong);border:none;color:var(--text-muted);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.8rem;">+</button>
+        </form>
+      </div>
+      <div class="tree-picker" id="treePicker">
+        ${
+          trees.length > 0
+            ? `<div class="tree-list" id="treeList">
+                ${trees
+                  .map(
+                    (t) => `
+                  <div class="tree-item" onclick="selectTree('${t._id}', '${escapeHtml(t.name)}')">
+                    <span class="tree-item-icon">🌳</span>
+                    <span class="tree-item-name">${escapeHtml(t.name)}</span>
+                  </div>`,
+                  )
+                  .join("")}
+              </div>`
+            : `<div style="padding:16px;color:var(--text-muted);font-size:0.85rem;text-align:center;">No trees yet. Just start talking at home and the tree grows.</div>`
+        }
+      </div>
+    </div>
+
+    ${user.isAdmin ? `
+    <!-- Land Zone (admin only) -->
+    <div class="zone-section" id="zoneLand">
+      <div class="zone-label">/ Land</div>
+      <div class="zone-messages" id="landMessages"></div>
+      <div class="zone-input">
+        <textarea id="landInput" placeholder="Manage your land..." rows="1"></textarea>
+        <button id="landSendBtn" onclick="sendZoneMessage('land')" disabled>Send</button>
+      </div>
+    </div>
+    ` : ""}
 
     <div class="app-panel" id="appPanel">
       <div class="app-panel-header">
@@ -862,6 +984,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       trees: ${treesJSON},
       apps: ${appsJSON},
       landName: "${landName.replace(/"/g, '\\"')}",
+      isAdmin: ${!!user.isAdmin},
     };
 
     // State
@@ -1082,6 +1205,78 @@ router.get("/chat", authenticateLite, async (req, res) => {
     // Ignore navigate events — no iframe
     socket.on("navigate", () => {});
 
+    // ── Zone chat (home + land via HTTP) ────────────────────────────
+
+    function addZoneMessage(containerId, text, role) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      const div = document.createElement("div");
+      div.className = "zone-msg " + role;
+      div.textContent = text;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    const ZONE_ENDPOINTS = {
+      home: "/api/v1/home/chat",
+      land: "/api/v1/land/chat",
+    };
+
+    async function sendZoneMessage(zone) {
+      const input = document.getElementById(zone === "home" ? "homeInput" : "landInput");
+      const btn = document.getElementById(zone === "home" ? "homeSendBtn" : "landSendBtn");
+      const msgContainer = zone === "home" ? "homeMessages" : "landMessages";
+      const text = input.value.trim();
+      if (!text) return;
+
+      addZoneMessage(msgContainer, text, "user");
+      input.value = "";
+      btn.disabled = true;
+      addZoneMessage(msgContainer, "Thinking...", "thinking");
+
+      try {
+        const res = await fetch(ZONE_ENDPOINTS[zone], {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ message: text }),
+        });
+        const data = await res.json();
+        // Remove thinking indicator
+        const container = document.getElementById(msgContainer);
+        const thinking = container.querySelector(".zone-msg.thinking:last-child");
+        if (thinking) thinking.remove();
+
+        if (data.status === "ok") {
+          addZoneMessage(msgContainer, data.data.answer || "No response.", "assistant");
+        } else {
+          addZoneMessage(msgContainer, (data.error && data.error.message) || "Something went wrong.", "error");
+        }
+      } catch (err) {
+        const container = document.getElementById(msgContainer);
+        const thinking = container.querySelector(".zone-msg.thinking:last-child");
+        if (thinking) thinking.remove();
+        addZoneMessage(msgContainer, err.message, "error");
+      }
+      btn.disabled = false;
+      input.focus();
+    }
+
+    // Zone input: enter to send, shift+enter for newline
+    for (const id of ["homeInput", "landInput"]) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const zone = id === "homeInput" ? "home" : "land";
+      const btn = document.getElementById(zone === "home" ? "homeSendBtn" : "landSendBtn");
+      el.addEventListener("input", () => { btn.disabled = !el.value.trim(); });
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          if (el.value.trim()) sendZoneMessage(zone);
+        }
+      });
+    }
+
     // ── Create tree ─────────────────────────────────────────────────
     async function createTree(e) {
       e.preventDefault();
@@ -1151,6 +1346,10 @@ router.get("/chat", authenticateLite, async (req, res) => {
       activeRootId = rootId;
       advancedLink.href = "/dashboard?rootId=" + rootId;
       treePicker.style.display = "none";
+      document.getElementById("zoneTrees").style.display = "none";
+      document.getElementById("zoneHome").style.display = "none";
+      var zoneLand = document.getElementById("zoneLand");
+      if (zoneLand) zoneLand.style.display = "none";
       chatArea.classList.add("active");
       rootName.textContent = name;
       rootName.classList.add("visible");
@@ -1191,6 +1390,10 @@ router.get("/chat", authenticateLite, async (req, res) => {
       activeRootId = null;
       advancedLink.href = "/dashboard";
       treePicker.style.display = "";
+      document.getElementById("zoneTrees").style.display = "";
+      document.getElementById("zoneHome").style.display = "";
+      var zoneLand = document.getElementById("zoneLand");
+      if (zoneLand) zoneLand.style.display = "";
       chatArea.classList.remove("active");
       rootName.classList.remove("visible");
       backRow.classList.remove("visible");
