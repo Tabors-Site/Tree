@@ -49,7 +49,7 @@ export default function getTools() {
           // Mark root as code-initialized
           await Node.updateOne({ _id: nodeId }, {
             $set: {
-              "metadata.code": {
+              "metadata.codebase": {
                 initialized: true,
                 ingestedAt: new Date().toISOString(),
                 path: dirPath,
@@ -112,7 +112,7 @@ export default function getTools() {
         // Find the repo path from the code root metadata
         const Node = (await import("../../seed/models/node.js")).default;
         const root = await Node.findById(rootId).select("metadata").lean();
-        const meta = root?.metadata instanceof Map ? root.metadata.get("code") : root?.metadata?.code;
+        const meta = root?.metadata instanceof Map ? root.metadata.get("codebase") : root?.metadata?.code;
         const repoPath = meta?.path;
         if (!repoPath) return { content: [{ type: "text", text: "No code repository ingested at this root." }] };
 
@@ -158,7 +158,7 @@ export default function getTools() {
 
         const Node = (await import("../../seed/models/node.js")).default;
         const root = await Node.findById(rootId).select("metadata").lean();
-        const meta = root?.metadata instanceof Map ? root.metadata.get("code") : root?.metadata?.code;
+        const meta = root?.metadata instanceof Map ? root.metadata.get("codebase") : root?.metadata?.code;
         const repoPath = meta?.path;
         if (!repoPath) return { content: [{ type: "text", text: "No code repository ingested at this root." }] };
 
@@ -190,7 +190,7 @@ export default function getTools() {
 
         const Node = (await import("../../seed/models/node.js")).default;
         const root = rootId ? await Node.findById(rootId).select("metadata").lean() : null;
-        const meta = root?.metadata instanceof Map ? root.metadata.get("code") : root?.metadata?.code;
+        const meta = root?.metadata instanceof Map ? root.metadata.get("codebase") : root?.metadata?.code;
         const cwd = meta?.path || null;
 
         const result = await runSnippet(code, cwd);
@@ -209,7 +209,7 @@ export default function getTools() {
       async handler({ rootId }) {
         const Node = (await import("../../seed/models/node.js")).default;
         const root = await Node.findById(rootId).select("metadata").lean();
-        const meta = root?.metadata instanceof Map ? root.metadata.get("code") : root?.metadata?.code;
+        const meta = root?.metadata instanceof Map ? root.metadata.get("codebase") : root?.metadata?.code;
         const repoPath = meta?.path;
         if (!repoPath) return { content: [{ type: "text", text: "No code repository ingested at this root." }] };
 
@@ -234,7 +234,7 @@ export default function getTools() {
 
         const Node = (await import("../../seed/models/node.js")).default;
         const root = await Node.findById(rootId).select("metadata").lean();
-        const meta = root?.metadata instanceof Map ? root.metadata.get("code") : root?.metadata?.code;
+        const meta = root?.metadata instanceof Map ? root.metadata.get("codebase") : root?.metadata?.code;
         const repoPath = meta?.path;
         if (!repoPath) return { content: [{ type: "text", text: "No code repository ingested at this root." }] };
 

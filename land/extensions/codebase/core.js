@@ -301,6 +301,6 @@ export async function searchCode(rootId, query, type = "text") {
 export async function getStatus(rootId) {
   const root = await Node.findById(rootId).select("metadata").lean();
   if (!root) return null;
-  const meta = root.metadata instanceof Map ? root.metadata.get("code") : root.metadata?.code;
+  const meta = root.metadata instanceof Map ? root.metadata.get("codebase") : root.metadata?.code;
   return meta || null;
 }

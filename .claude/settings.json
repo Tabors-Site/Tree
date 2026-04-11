@@ -645,7 +645,8 @@
       "Bash(grep -r 'version:' */manifest.js)",
       "Bash(ls -d */)",
       "Bash(awk '{print \"treeos ext publish \" $1}')",
-      "Bash(curl -s -X POST http://localhost:3000/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"tabor\",\"password\":\"\"}')"
+      "Bash(curl -s -X POST http://localhost:3000/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"tabor\",\"password\":\"\"}')",
+      "Bash(grep -rn '\"code\"' *.js modes/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

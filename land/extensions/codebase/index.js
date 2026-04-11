@@ -19,11 +19,11 @@ export async function init(core) {
   core.llm.registerRootLlmSlot?.("code-review");
 
   // Register modes
-  core.modes.registerMode("tree:code-analyze", analyzeMode, "code");
-  core.modes.registerMode("tree:code-browse", browseMode, "code");
-  core.modes.registerMode("tree:code-edit", editMode, "code");
-  core.modes.registerMode("tree:code-test", testMode, "code");
-  core.modes.registerMode("tree:code-review", reviewMode, "code");
+  core.modes.registerMode("tree:code-analyze", analyzeMode, "codebase");
+  core.modes.registerMode("tree:code-browse", browseMode, "codebase");
+  core.modes.registerMode("tree:code-edit", editMode, "codebase");
+  core.modes.registerMode("tree:code-test", testMode, "codebase");
+  core.modes.registerMode("tree:code-review", reviewMode, "codebase");
 
   // LLM slot assignments: cheap for search/test, quality for edit/review
   if (core.llm.registerModeAssignment) {
@@ -45,7 +45,7 @@ export async function init(core) {
       fileCount: codeMeta.fileCount || null,
       path: codeMeta.path || null,
     };
-  }, "code");
+  }, "codebase");
 
   // Set modes.respond on code roots so the routing index picks them up
   // This happens at ingest time via the tool, not here.
