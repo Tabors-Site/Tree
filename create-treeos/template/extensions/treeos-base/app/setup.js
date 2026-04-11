@@ -39,7 +39,7 @@ router.get("/setup", authenticateLite, async (req, res) => {
       return res.redirect("/chat");
     }
 
-    return res.send(renderSetup({ userId, username: user.username }));
+    return res.send(renderSetup({ userId: req.userId, username: user.username }));
   } catch (err) {
     log.error("HTML", "Setup page error:", err.message);
     return res.status(500).send("Something went wrong");

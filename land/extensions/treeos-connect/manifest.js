@@ -1,6 +1,6 @@
 export default {
   name: "treeos-connect",
-  version: "1.0.2",
+  version: "1.0.3",
   type: "bundle",
   builtFor: "seed",
   description:
@@ -44,14 +44,16 @@ export default {
   ],
 
   needs: {
+    extensions: ["gateway"],
+  },
+
+  optional: {
     extensions: [
-      "gateway", "gateway-telegram", "gateway-discord", "gateway-webhook",
+      "gateway-telegram", "gateway-discord", "gateway-webhook",
       "gateway-email", "gateway-sms", "gateway-slack", "gateway-matrix",
       "gateway-reddit", "gateway-x", "gateway-tree",
     ],
   },
-
-  optional: {},
 
   provides: {
     models: {},
