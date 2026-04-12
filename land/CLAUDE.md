@@ -27,7 +27,7 @@ startup.js         Boot sequence. Indexes, config, migrations, extensions, jobs.
 
 ## Architectural patterns (read before building anything)
 
-**The tree has a grammar.** Nodes are nouns. Extensions are verbs. Modes are verb conjugation (tense): review=past, coach=future, plan=imperative, log=present. Metadata is adjectives. Instructions are adverbs. Tree structure is prepositions. Position is pronouns. Existence (routing index vs sprout) is articles. Every message parses through: noun (which extension), tense (which mode), modifiers (instructions, persona, boundaries), dispatch. The seed is the parser. Extensions are the vocabulary. The user just talks.
+**The tree has a grammar.** Four layers parse every message. Resolution (where): nouns are nodes, pronouns are position state, prepositions shift target nodes. Intent (what): tenses are modes (review=past, coach=future, plan=imperative, log=present), negation cancels, conjunctions chain, Qualification (how): adjectives focus, voice frames (active=execute, passive=observe), adverbs/instructions modify behavior, boundaries constrain scope. Planning + Execution: single dispatch, sequential chains, or cross-domain causal routing. Three orthogonal axes evolve independently: WHERE (noun+preposition+pronoun), WHAT (tense+negation+compound), HOW (adjectives+adverbs+voice+boundaries). The grammar debugger shows the full parse tree for every message.
 
 **Resolution chains walk the ancestor cache.** Extension scope, tool scope, mode resolution, LLM connection, LLM config, persona resolution, perspective filter resolution. All walk the parent chain from the current node to the root. All use the same cached snapshot per message. One walk serves all chains. The ancestor cache is the performance backbone.
 

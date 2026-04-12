@@ -13,9 +13,9 @@ export default {
 
   territory: "food, meals, eat, eating, ate, hungry, nutrition, cooking, calories, protein, carbs, diet, snack, breakfast, lunch, dinner",
   classifierHints: [
-    /\b(ate|eaten|drank|breakfast|lunch|dinner|snack|calories|protein|carbs|fats|macro)\b/i,
-    /\b(egg|chicken|rice|bread|salmon|banana|oat|milk|cheese|beef|pork|tofu|yogurt)\b/i,
-    /\b(meal|food|nutrition|diet|eat|hungry|cook)\b/i,
+    /\b(ate|eaten|eating|drank|drinking|breakfast|lunch|dinner|snack|calories|protein|carbs|fats|macros?)\b/i,
+    /\b(egg|chicken|rice|bread|salmon|banana|oat|milk|cheese|beef|pork|tofu|yogurt|pizza|pasta)\b/i,
+    /\b(meals?|food|nutrition|diet|dieting|eat|hungry|cook|cooking|appetite|fasting)\b/i,
   ],
 
   needs: {

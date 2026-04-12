@@ -430,11 +430,44 @@ async function resolveLlmProvider(userId, rootId, modeKey, slot) {
 //   Pronouns     = Position (currentNodeId, rootId, "here", "this")
 //   Articles     = Existence (THE bench press = route, A bench press = create)
 //
-// The pipeline parses every message in 4 steps:
-//   1. Parse noun    — routing index identifies territory (which extension)
-//   2. Parse tense   — suffix patterns identify conjugation (which mode)
-//   3. Inject mods   — beforeLLMCall layers adverbs, pronouns, prepositions
-//   4. Dispatch      — the right verb in the right tense handles the sentence
+// The pipeline parses every message through four layers:
+//
+// Layer 1: RESOLUTION (where + domain)
+//   Parse noun        — routing index identifies territory
+//   Parse pronouns    — resolve "it", "that", "same" from state
+//   Parse prepositions — "under recovery" shifts target node
+//   Determines: which extension, which node, which scope.
+//
+// Layer 2: INTENT (what action + control flow)
+//   Parse tense       — review / coach / plan / log
+//   Detect negation   — cancel default, reroute to coach
+//   Detect compound   — sequential chaining via conjunctions
+//   Confidence check  — if grammar uncertain, escalate to LLM
+//   Determines: which mode fires, whether to chain.
+//
+// Layer 3: QUALIFICATION (how to interpret + constrain)
+//   Parse adjectives  — quality/focus ("high protein", "ready for")
+//   Detect voice      — active (execute) vs passive (observe)
+//   Inject adverbs    — instructions ("be concise", "use kg")
+//   Inject boundaries — extension scope limits
+//   Inject persona    — identity and tone
+//   Determines: framing, focus, constraints.
+//
+// Layer 4: PLANNING + EXECUTION
+//   Single            — runModeAndReturn
+//   Chain             — runChain (sequential compound)
+//   Causal            — cross-domain routing (effect from cause)
+//   Determines: what actually runs.
+//
+// Three orthogonal axes, each evolves independently:
+//   WHERE — noun + preposition + pronoun
+//   WHAT  — tense + negation + compound
+//   HOW   — adjectives + adverbs + voice + boundaries
+//
+// Guiding principle: don't ask "what system feature is missing?"
+// Ask "what human expression currently breaks or feels unnatural?"
+// Map it to: noun, verb, tense, modifier, structure.
+// That becomes the roadmap.
 // ─────────────────────────────────────────────────────────────────────────
 
 // Tense patterns. These conjugate the verb (extension) into the right mode.
@@ -682,11 +715,126 @@ function detectCausality(message, matchedExtensions) {
 // ─────────────────────────────────────────────────────────────────────────
 
 // Passive indicators: state changes, observations, third-person descriptions
-const PASSIVE_VOICE = /\b(increased|decreased|went up|went down|dropped|rose|fell|changed|improved|worsened|got better|got worse|was high|was low|is high|is low|seems|feels|been)\b/i;
+const PASSIVE_VOICE = /\b(increased|decreased|went up|went down|dropped|rose|fell|changed|improved|worsened|got better|got worse|was high|was low|is high|is low|seems|feels|been|is affecting|is hurting|is helping|is impacting|is ruining|is improving|has been|have been|getting worse|getting better)\b/i;
 
 function detectVoice(message) {
   if (PASSIVE_VOICE.test(message.toLowerCase())) return "passive";
   return "active";
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// QUANTIFIER / SELECTOR PARSER
+//
+// Quantifiers scope the noun from "one node" to "a set of nodes."
+// They bridge the gap between routing (find one target) and querying
+// (find many targets, filter, compare, aggregate).
+//
+// "All workouts this week" = universal + temporal
+// "Last three meals" = numeric + recency
+// "Top exercises by volume" = superlative + metric
+// "Compare my runs" = comparative (implies set)
+//
+// Without quantifiers: prepositions get overloaded, adjectives get misused.
+// With quantifiers: querying, filtering, grouping, analytics.
+// ─────────────────────────────────────────────────────────────────────────
+
+const QUANTIFIER_UNIVERSAL = /\b(all|every|each|entire|whole)\b/i;
+const QUANTIFIER_NUMERIC = /\b(last|first|past|recent|next)\s+(\d+|three|four|five|six|seven|eight|nine|ten|few|couple)\b/i;
+const QUANTIFIER_SUPERLATIVE = /\b(best|worst|highest|lowest|most|least|top|bottom)\s+(\w+)/i;
+const QUANTIFIER_COMPARATIVE = /\b(compare|versus|vs\.?|between|difference)\b/i;
+const QUANTIFIER_TEMPORAL = /\b(this|last|past|next)\s+(week|month|day|year|session|workout|meal)\b/i;
+
+/**
+ * Parse quantifiers: detect selection scope from the message.
+ * Returns { type, value, scope } or null if no quantifier found.
+ */
+function parseQuantifier(message) {
+  const lower = message.toLowerCase();
+  const quantifiers = [];
+  let match;
+
+  if ((match = QUANTIFIER_NUMERIC.exec(lower))) {
+    const numMap = { three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, few: 3, couple: 2 };
+    const count = numMap[match[2]] || parseInt(match[2]) || 3;
+    quantifiers.push({ type: "numeric", direction: match[1], count });
+  }
+
+  if (QUANTIFIER_UNIVERSAL.test(lower)) {
+    quantifiers.push({ type: "universal" });
+  }
+
+  if ((match = QUANTIFIER_SUPERLATIVE.exec(lower))) {
+    quantifiers.push({ type: "superlative", qualifier: match[1], subject: match[2] });
+  }
+
+  if (QUANTIFIER_COMPARATIVE.test(lower)) {
+    quantifiers.push({ type: "comparative" });
+  }
+
+  if ((match = QUANTIFIER_TEMPORAL.exec(lower))) {
+    quantifiers.push({ type: "temporal", direction: match[1], unit: match[2] });
+  }
+
+  return quantifiers.length > 0 ? quantifiers : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CONDITIONAL PARSER
+//
+// Conditionals are branching logic in natural language.
+// "If protein is low, suggest high-protein foods" = condition -> action.
+// "When I finish this set, log it" = temporal trigger -> action.
+// "Unless I'm fasting, log breakfast" = negated condition -> action.
+//
+// Three types:
+//   if/when    — condition that gates the action (evaluate first, then act)
+//   unless     — negated condition (act UNLESS this is true)
+//   after/once — temporal trigger (act when condition becomes true)
+//
+// Conditionals don't change routing. They inject [Conditional] context
+// so the mode knows to evaluate the condition before executing.
+// The AI checks the condition against current state and decides.
+// ─────────────────────────────────────────────────────────────────────────
+
+const CONDITIONAL_IF = /\b(if|in case|assuming|provided|given that|suppose|supposing)\b\s+(.+?)(?:\s*[,;]\s*|\s+then\s+)/i;
+const CONDITIONAL_WHEN = /\b(when|whenever|once|after|as soon as|the moment|next time)\b\s+(.+?)(?:\s*[,;]\s*|\s+then\s+)/i;
+const CONDITIONAL_UNLESS = /\b(unless|except if|except when|if not|only if not)\b\s+(.+?)(?:\s*[,;]\s*)/i;
+// Fallback: "if X" at the start of the message without a comma (short form)
+const CONDITIONAL_SHORT = /^(if|when|unless|once|after)\s+(.+?)(?:\s*$)/i;
+
+/**
+ * Parse conditionals: detect branching logic in natural language.
+ * Returns { type, keyword, condition, action } or null.
+ *
+ * type:
+ *   "if"      — evaluate condition, then act
+ *   "when"    — temporal trigger, act when condition is met
+ *   "unless"  — act unless condition is true (negated if)
+ */
+function parseConditional(message) {
+  const lower = message.toLowerCase().trim();
+  let match;
+
+  // Try each pattern in priority order
+  if ((match = CONDITIONAL_IF.exec(lower))) {
+    return { type: "if", keyword: match[1], condition: match[2].trim() };
+  }
+  if ((match = CONDITIONAL_UNLESS.exec(lower))) {
+    return { type: "unless", keyword: match[1], condition: match[2].trim() };
+  }
+  if ((match = CONDITIONAL_WHEN.exec(lower))) {
+    return { type: "when", keyword: match[1], condition: match[2].trim() };
+  }
+
+  // Short form: "if protein is low" (no comma, no then)
+  // Only match if the message starts with a conditional keyword
+  if ((match = CONDITIONAL_SHORT.exec(lower))) {
+    const kw = match[1].toLowerCase();
+    const type = kw === "unless" ? "unless" : (kw === "when" || kw === "once" || kw === "after") ? "when" : "if";
+    return { type, keyword: match[1], condition: match[2].trim() };
+  }
+
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -701,8 +849,9 @@ function detectVoice(message) {
 // Injected into the mode context so the AI knows what aspect matters.
 // ─────────────────────────────────────────────────────────────────────────
 
-const QUALITY_ADJ = /\b(high|low|good|bad|poor|strong|weak|heavy|light|best|worst|top|most|least)\s+(\w+)/gi;
-const STATE_ADJ = /\b(ready for|due for|behind on|ahead on|struggling with|improving|declining|stalled|consistent)\s*(\w*)/gi;
+// Pre-noun: "high protein", "bad diet". Post-noun: "eating poorly", "sleeping badly".
+const QUALITY_ADJ = /\b(high|low|good|bad|poor|strong|weak|heavy|light|best|worst|top|most|least)\s+(\w+)|\b(\w+)\s+(poorly|badly|well|terribly|great|consistently|inconsistently)\b/gi;
+const STATE_ADJ = /\b(ready for|due for|behind on|ahead on|struggling with|improving|declining|stalled|consistent|overtrained|undertrained|sore|tired|fatigued|energized)\s*(\w*)/gi;
 const COMPARATIVE_ADJ = /\b(more|less|too much|too little|not enough|enough|plenty of|lacking)\s+(\w+)/gi;
 
 /**
@@ -716,7 +865,13 @@ function parseAdjectives(message) {
 
   QUALITY_ADJ.lastIndex = 0;
   while ((match = QUALITY_ADJ.exec(lower)) !== null) {
-    adjectives.push({ type: "quality", qualifier: match[1], subject: match[2] });
+    if (match[1] && match[2]) {
+      // Pre-noun: "high protein"
+      adjectives.push({ type: "quality", qualifier: match[1], subject: match[2] });
+    } else if (match[3] && match[4]) {
+      // Post-noun: "eating poorly"
+      adjectives.push({ type: "quality", qualifier: match[4], subject: match[3] });
+    }
   }
 
   STATE_ADJ.lastIndex = 0;
@@ -812,6 +967,31 @@ async function parsePreposition(message, rootId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// GRAMMAR DEBUGGER (standalone, called from every path)
+// ─────────────────────────────────────────────────────────────────────────
+
+function logParseTree(message, { noun, nounSource, nounConf, tense, tensePattern, tenseConf, resolvedMode, negated, compound, pronoun, quantifiers, adjectives, voice, preposition, prepTarget, temporal, conditional, forcedMode }) {
+  const debugLines = [];
+  debugLines.push(`📖 Parse: "${(message || "").slice(0, 80)}"`);
+  debugLines.push(`   noun: ${noun || "?"} (${nounSource || "?"}, conf=${(nounConf || 0).toFixed(2)})`);
+  debugLines.push(`   tense: ${tense || "?"} (${tensePattern || "?"}, conf=${(tenseConf || 0).toFixed(2)})`);
+  if (negated) debugLines.push(`   negation: YES`);
+  if (compound) debugLines.push(`   compound: ${compound.join(" -> ")}`);
+  if (pronoun) debugLines.push(`   pronoun: ${pronoun}`);
+  if (quantifiers && quantifiers.length > 0) debugLines.push(`   quantifiers: ${quantifiers.map(q => q.type === "numeric" ? `${q.direction} ${q.count}` : q.type === "temporal" ? `${q.direction} ${q.unit}` : q.type === "superlative" ? `${q.qualifier} ${q.subject}` : q.type).join(", ")}`);
+  if (adjectives && adjectives.length > 0) debugLines.push(`   adjectives: ${adjectives.map(a => `${a.qualifier} ${a.subject || ""}`).join(", ")}`);
+  if (voice === "passive") debugLines.push(`   voice: passive`);
+  if (preposition) debugLines.push(`   preposition: "${preposition}" -> ${prepTarget}`);
+  if (temporal) debugLines.push(`   temporal: ${temporal}`);
+  if (conditional) debugLines.push(`   conditional: ${conditional.type} (${conditional.keyword}) "${conditional.condition}"`);
+  if (forcedMode) debugLines.push(`   forced: ${forcedMode}`);
+  const compositeConf = ((nounConf || 0.5) * 0.6) + ((tenseConf || 0.5) * 0.4);
+  debugLines.push(`   confidence: ${compositeConf.toFixed(2)}${compositeConf < 0.65 ? " (LOW)" : ""}`);
+  debugLines.push(`   dispatch: ${resolvedMode || "?"}`);
+  for (const line of debugLines) log.info("Grammar", line);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // RUN MODE AND RETURN (eliminates copy-pasted switchMode/processMessage)
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -827,6 +1007,8 @@ async function runModeAndReturn(visitorId, mode, message, {
   targetNodeId = null,
   treeCapabilities = null,
   adjectives = null,
+  quantifiers = null,
+  conditional = null,
   voice = "active",
 }) {
   modesUsed.push(mode);
@@ -844,6 +1026,20 @@ async function runModeAndReturn(visitorId, mode, message, {
     memory = (memory ? memory + "\n\n" : "") + voiceBlock;
   }
 
+  // Quantifier injection: tells the AI to query a set, not act on one node.
+  if (quantifiers && quantifiers.length > 0) {
+    const qDescs = quantifiers.map(q => {
+      if (q.type === "numeric") return `${q.direction} ${q.count}`;
+      if (q.type === "temporal") return `${q.direction} ${q.unit}`;
+      if (q.type === "superlative") return `${q.qualifier} ${q.subject}`;
+      if (q.type === "comparative") return "compare/contrast";
+      if (q.type === "universal") return "all/every";
+      return q.type;
+    });
+    const qBlock = `[Selection] The user is asking about a SET, not a single item: ${qDescs.join(", ")}. Query and aggregate across multiple entries. Do not respond about just the current/latest value.`;
+    memory = (memory ? memory + "\n\n" : "") + qBlock;
+  }
+
   // Adjective injection: focus constraints from the parsed message.
   if (adjectives && adjectives.length > 0) {
     const focusLines = adjectives.map(a => {
@@ -852,6 +1048,16 @@ async function runModeAndReturn(visitorId, mode, message, {
     });
     const focusBlock = `[Focus] The user's message emphasizes: ${focusLines.join(", ")}. Prioritize this in your response.`;
     memory = (memory ? memory + "\n\n" : "") + focusBlock;
+  }
+
+  // Conditional injection: tells the AI to evaluate a condition before acting.
+  if (conditional) {
+    const condBlock = conditional.type === "unless"
+      ? `[Conditional: unless] Evaluate this condition: "${conditional.condition}". If the condition is TRUE, do NOT perform the action. If FALSE, proceed normally.`
+      : conditional.type === "when"
+      ? `[Conditional: when] The user wants this to happen when a condition is met: "${conditional.condition}". Check if the condition is currently true. If yes, proceed. If not, acknowledge and explain what needs to happen first.`
+      : `[Conditional: if] Evaluate this condition first: "${conditional.condition}". Check it against current data. If true, proceed with the action. If false, explain why and what the current state is.`;
+    memory = (memory ? memory + "\n\n" : "") + condBlock;
   }
   try {
     const { getModeOwner } = await import("../../seed/tree/extensionScope.js");
@@ -1175,7 +1381,7 @@ export async function orchestrateTreeRequest({
   const confidence = classification.confidence ?? 0.5;
 
  log.verbose("Tree Orchestrator", 
-    `🎯 noun=${classification.intent === "extension" ? getModeOwner(classification.mode) || "?" : classification.intent} source=classify conf=${confidence}`,
+    `🎯 noun=${classification.intent} source=classify conf=${confidence}`,
   );
   emitModeResult(socket, "intent", {
     intent: classification.intent,
@@ -1484,6 +1690,13 @@ export async function orchestrateTreeRequest({
           // Route to the EFFECT domain's coach mode with cause context injected.
           const effectMatch = allMatches.find(m => m.extName === causal.effect);
           if (effectMatch) {
+            logParseTree(message, {
+              noun: `${causal.cause}->${causal.effect}`, nounSource: "causal", nounConf: 0.85,
+              tense: "future", tensePattern: "coach-causal", tenseConf: 0.9,
+              resolvedMode: null, // set below
+              adjectives: parseAdjectives(message), voice: "passive",
+              conditional: parseConditional(message),
+            });
             log.info("Grammar", `📖 CAUSAL: ${causal.cause} -[${causal.connector}]-> ${causal.effect}`);
 
             // Prefer coach mode for causal reasoning (reflective, not logging)
@@ -1557,6 +1770,12 @@ export async function orchestrateTreeRequest({
       setCurrentNodeId(visitorId, pronounInfo.resolvedNode);
     }
 
+    // ── Step 1c: Parse quantifiers (scope from one node to a set) ──
+    const quantifiers = parseQuantifier(message);
+
+    // ── Step 1d: Parse conditionals (if/when/unless branching logic) ──
+    const conditional = parseConditional(message);
+
     // ── Step 1b: Parse preposition (where in the tree?) ──
     let prepInfo = null;
     try {
@@ -1620,42 +1839,18 @@ export async function orchestrateTreeRequest({
     const adjectives = parseAdjectives(message);
     const voice = detectVoice(message);
 
-    // ── GRAMMAR DEBUGGER: unified parse tree ──
-    const parseTree = {
-      input: message.slice(0, 80),
-      noun,
-      nounConfidence: classification.confidence,
-      nounSource: classification.targetNodeId ? "position-hold" : "classification",
-      tense: tenseInfo.tense,
-      tensePattern: tenseInfo.pattern,
-      negated: tenseInfo.tense === "negated",
+    // ── Grammar debugger ──
+    logParseTree(message, {
+      noun, nounSource: classification.targetNodeId ? "position-hold" : "classification",
+      nounConf, tense: tenseInfo.tense, tensePattern: tenseInfo.pattern, tenseConf,
+      resolvedMode, negated: tenseInfo.tense === "negated",
       compound: tenseInfo.compound ? tenseInfo.compound.map(s => s.tense) : null,
-      pronoun: pronounInfo?.pronoun || null,
+      pronoun: pronounInfo?.pronoun || null, quantifiers,
       adjectives: adjectives.length > 0 ? adjectives : null,
-      voice,
-      preposition: prepInfo?.preposition || null,
-      prepTarget: prepInfo?.raw || null,
-      temporal: prepInfo?.temporal || null,
-      forcedMode: forcedMode || null,
-      resolvedMode,
-      targetNodeId: classification.targetNodeId || currentNodeId,
-    };
-
-    const parts = [`noun=${parseTree.noun}`];
-    parts.push(`tense=${parseTree.tense}(${parseTree.tensePattern})`);
-    parts.push(`conf=${compositeConf.toFixed(2)}`);
-    if (parseTree.negated) parts.push("NEGATED");
-    if (parseTree.compound) parts.push(`chain=[${parseTree.compound.join("->")}]`);
-    if (parseTree.pronoun) parts.push(`pronoun=${parseTree.pronoun}`);
-    if (parseTree.adjectives) parts.push(`adj=[${adjectives.map(a => `${a.qualifier} ${a.subject || ""}`).join(", ")}]`);
-    if (voice === "passive") parts.push("PASSIVE");
-    if (parseTree.preposition) parts.push(`prep="${parseTree.preposition}"->${parseTree.prepTarget}`);
-    if (parseTree.temporal) parts.push(`time="${parseTree.temporal}"`);
-    if (parseTree.forcedMode) parts.push(`forced=${parseTree.forcedMode}`);
-    parts.push(`-> ${resolvedMode}`);
-
-    log.info("Grammar", `📖 ${parts.join(" | ")}`);
-    log.verbose("Grammar", `   input: "${parseTree.input}"`);
+      voice, preposition: prepInfo?.preposition || null,
+      prepTarget: prepInfo?.raw || null, temporal: prepInfo?.temporal || null,
+      conditional, forcedMode: forcedMode || null,
+    });
 
     // ── Update pronoun state for next message ──
     updatePronounState(visitorId, {
@@ -1680,6 +1875,8 @@ export async function orchestrateTreeRequest({
       onToolLoopCheckpoint, modesUsed,
       targetNodeId: classification.targetNodeId,
       adjectives: adjectives.length > 0 ? adjectives : null,
+      quantifiers,
+      conditional,
       voice,
     });
   }
@@ -1699,11 +1896,18 @@ export async function orchestrateTreeRequest({
       if (indexMatches.length === 1) {
         const single = indexMatches[0];
         const singleTense = await parseTense(single.mode, message, behavioral);
-        log.info("Grammar", `📖 noun=${single.extName} | tense=${singleTense.tense}(implicit) | -> ${singleTense.mode}`);
+        const singleCond = parseConditional(message);
+        logParseTree(message, {
+          noun: single.extName, nounSource: "converse-implicit", nounConf: 0.75,
+          tense: singleTense.tense, tensePattern: singleTense.pattern, tenseConf: 0.8,
+          resolvedMode: singleTense.mode, adjectives: parseAdjectives(message),
+          voice: detectVoice(message), conditional: singleCond,
+        });
         return runModeAndReturn(visitorId, singleTense.mode, message, {
           socket, username, userId, rootId, signal, slot,
           currentNodeId: single.targetNodeId, clearHistory: true,
           onToolLoopCheckpoint, modesUsed, targetNodeId: single.targetNodeId,
+          conditional: singleCond,
         });
       }
 
@@ -1740,11 +1944,21 @@ export async function orchestrateTreeRequest({
     } catch {}
   }
 
+  const fallbackCond = parseConditional(message);
+  logParseTree(message, {
+    noun: "converse", nounSource: "fallback", nounConf: 0.5,
+    tense: "present", tensePattern: "default", tenseConf: 0.5,
+    resolvedMode: "tree:converse",
+    adjectives: parseAdjectives(message), voice: detectVoice(message),
+    conditional: fallbackCond,
+  });
+
   return runModeAndReturn(visitorId, "tree:converse", message, {
     socket, username, userId, rootId, signal, slot,
     currentNodeId, clearHistory: true,
     onToolLoopCheckpoint, modesUsed,
     treeCapabilities,
+    conditional: fallbackCond,
   });
 }
 // ─────────────────────────────────────────────────────────────────────────

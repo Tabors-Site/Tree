@@ -122,6 +122,12 @@ Every message parses in four steps:
 
 The seed is the parser. Extensions are the vocabulary. The tree is the syntax tree.
 
+The pipeline has four layers. **Resolution** (where): noun, pronouns, prepositions determine extension, node, and scope. **Intent** (what): tense, negation, compound chaining, confidence check determine which mode fires. **Qualification** (how): adjectives, voice, adverbs, boundaries, persona determine framing and constraints. **Planning + Execution**: single dispatch, sequential chains, or cross-domain causal routing.
+
+Three orthogonal axes, each evolves independently: **WHERE** (noun + preposition + pronoun), **WHAT** (tense + negation + compound), **HOW** (adjectives + adverbs + voice + boundaries).
+
+**Guiding principle**: don't ask "what system feature is missing?" Ask "what human expression currently breaks or feels unnatural?" Map it to noun, verb, tense, modifier, or structure. The grammar generates better architectural questions than any feature list.
+
 ## Guarantees
 
 **Never block inbound.** Cascade signals always accepted. Always produce a result. No configuration can prevent a signal from arriving.
