@@ -708,3 +708,151 @@ export async function getWeeklyStats(rootId) {
     return null;
   }
 }
+
+// ── Set resolver for FANOUT ──
+//
+// The extension is the authority on what "all my X" means inside the fitness domain.
+// Dispatches based on keywords in the message to different sub-resolvers:
+//
+//   "exercises" / "lifts" / "movements"  -> every tracked exercise node (leaves)
+//   "workouts" / "sessions" / "trainings" -> session notes from History
+//   "runs" / "running" / "miles"          -> Running modality exercises only
+//   "gym" / "lifts"                       -> Gym modality exercises only
+//   "home"                                -> Home modality exercises only
+//   "groups" / "muscle groups"            -> group nodes (Chest, Back, Legs)
+//   (no match, default)                   -> every tracked exercise
+
+export async function resolveSet({ rootId, quantifier, temporalScope, userId, message }) {
+  if (!_Node) return [];
+
+  const msg = (message || "").toLowerCase();
+
+  // Workouts / sessions: session history notes
+  if (/\b(workouts?|sessions?|trainings?)\b/.test(msg)) {
+    return resolveWorkoutSessions(rootId, temporalScope, userId);
+  }
+
+  // Groups / muscle groups: group nodes (intermediate depth)
+  if (/\b(muscle\s+groups?|groups?)\b/.test(msg)) {
+    return resolveGroups(rootId, userId);
+  }
+
+  // Modality-specific filters
+  if (/\b(runs?|running|miles?|mileage|jogs?)\b/.test(msg)) {
+    return resolveExercisesByModality(rootId, "running", userId, quantifier);
+  }
+  if (/\b(gym|lifts?|lifting|weights?)\b/.test(msg)) {
+    return resolveExercisesByModality(rootId, "gym", userId, quantifier);
+  }
+  if (/\bhome\b/.test(msg)) {
+    return resolveExercisesByModality(rootId, "home", userId, quantifier);
+  }
+
+  // Default: every tracked exercise across all modalities
+  return resolveAllExercises(rootId, userId, quantifier);
+}
+
+async function resolveAllExercises(rootId, userId, quantifier) {
+  const nodes = await findFitnessNodes(rootId);
+  if (!nodes) return [];
+
+  const seen = new Set();
+  const exerciseIds = [];
+  for (const groupName of Object.keys(nodes.exercises)) {
+    for (const ex of nodes.exercises[groupName]) {
+      if (!seen.has(ex.id)) {
+        seen.add(ex.id);
+        exerciseIds.push({ id: ex.id, name: ex.name, modality: ex.modality });
+      }
+    }
+  }
+  return enrichItems(exerciseIds, userId, quantifier);
+}
+
+async function resolveExercisesByModality(rootId, modality, userId, quantifier) {
+  const nodes = await findFitnessNodes(rootId);
+  if (!nodes) return [];
+
+  const seen = new Set();
+  const exerciseIds = [];
+  for (const groupName of Object.keys(nodes.exercises)) {
+    for (const ex of nodes.exercises[groupName]) {
+      if (ex.modality === modality && !seen.has(ex.id)) {
+        seen.add(ex.id);
+        exerciseIds.push({ id: ex.id, name: ex.name, modality });
+      }
+    }
+  }
+  return enrichItems(exerciseIds, userId, quantifier);
+}
+
+async function resolveGroups(rootId, userId) {
+  const nodes = await findFitnessNodes(rootId);
+  if (!nodes?.groups?.length) return [];
+  const items = nodes.groups.map(g => ({ id: g.id, name: g.name, modality: g.modality }));
+  return enrichItems(items, userId, null);
+}
+
+async function resolveWorkoutSessions(rootId, temporalScope, userId) {
+  const nodes = await findFitnessNodes(rootId);
+  if (!nodes?.history) return [];
+
+  const historyId = nodes.history.id;
+
+  // Determine time window from temporalScope
+  const now = new Date();
+  let startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // default: last 7 days
+  if (temporalScope?.type === "relative" && temporalScope.unit) {
+    const unitMs = {
+      day: 86400000, week: 7 * 86400000, month: 30 * 86400000, year: 365 * 86400000,
+    }[temporalScope.unit] || 7 * 86400000;
+    startDate = new Date(now.getTime() - unitMs);
+  } else if (temporalScope?.type === "duration" && temporalScope.count && temporalScope.unit) {
+    const unit = temporalScope.unit.replace(/s$/, "");
+    const unitMs = { day: 86400000, week: 7 * 86400000, month: 30 * 86400000 }[unit] || 86400000;
+    startDate = new Date(now.getTime() - temporalScope.count * unitMs);
+  }
+
+  try {
+    const notes = await _Note.find({
+      nodeId: historyId,
+      createdAt: { $gte: startDate },
+    }).sort({ createdAt: -1 }).select("_id content createdAt").lean();
+
+    return notes.map((n, i) => {
+      let parsed = null;
+      try { parsed = JSON.parse(n.content); } catch {}
+      return {
+        nodeId: String(n._id),
+        name: `Session ${i + 1} (${new Date(n.createdAt).toLocaleDateString()})`,
+        context: {
+          name: `Workout session`,
+          date: n.createdAt,
+          ...parsed,
+        },
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function enrichItems(items, userId, quantifier) {
+  if (items.length === 0) return [];
+
+  const { getContextForAi } = await import("../../seed/tree/treeFetch.js");
+  const enriched = [];
+  for (const item of items) {
+    try {
+      const ctx = await getContextForAi(item.id, { userId });
+      enriched.push({ nodeId: item.id, name: item.name, context: ctx });
+    } catch {
+      enriched.push({ nodeId: item.id, name: item.name, context: { name: item.name, modality: item.modality } });
+    }
+  }
+
+  if (quantifier?.type === "numeric" && quantifier.count > 0) {
+    return enriched.slice(0, quantifier.count);
+  }
+  return enriched;
+}

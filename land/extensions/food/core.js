@@ -771,3 +771,173 @@ export async function getHistory(foodRootId, { limit = 90, type = null } = {}) {
 
   return entries.slice(0, limit);
 }
+
+// ── Set resolver for FANOUT ──
+//
+// Dispatches based on keywords in the message to different sub-resolvers:
+//
+//   "meals" / "what i ate"        -> meal slot nodes (Breakfast, Lunch, Dinner, Snacks)
+//                                    with their notes as the set items
+//   "macros" / "nutrients"        -> macro nodes (Protein, Carbs, Fats, ...)
+//   "foods" / "entries" / "logs"  -> recent Log entries (individual meal notes)
+//   "days" / "history"            -> daily summary notes from History
+//   (no match, default)           -> meal slots (the most common intent)
+
+export async function resolveSet({ rootId, quantifier, temporalScope, userId, message }) {
+  if (!_Node) return [];
+  const msg = (message || "").toLowerCase();
+
+  const foodNodes = await findFoodNodes(rootId);
+  if (!foodNodes) return [];
+
+  // Macros: protein, carbs, fats, etc.
+  if (/\b(macros?|nutrients?|protein|carbs?|fats?|calories?)\b/.test(msg)
+      && !/\b(meal|meals|food|foods|entr)/.test(msg)) {
+    return resolveMacros(foodNodes, userId, quantifier);
+  }
+
+  // History / days: daily summaries
+  if (/\b(days?|history|daily summaries|summaries)\b/.test(msg)) {
+    return resolveDailySummaries(foodNodes, temporalScope, userId, quantifier);
+  }
+
+  // Foods / entries / log items: individual meal entries from Log
+  if (/\b(foods?|entries|entries?|log\s+items?|items?|what\s+i\s+ate)\b/.test(msg)) {
+    return resolveLogEntries(foodNodes, temporalScope, userId, quantifier);
+  }
+
+  // Default: meals (meal slot nodes with their notes)
+  return resolveMealSlots(foodNodes, userId, quantifier);
+}
+
+async function resolveMealSlots(foodNodes, userId, quantifier) {
+  if (!foodNodes.mealSlots) return [];
+  const slots = Object.values(foodNodes.mealSlots);
+  if (slots.length === 0) return [];
+
+  const { getContextForAi } = await import("../../seed/tree/treeFetch.js");
+  const Note = _Note || (await import("../../seed/models/note.js")).default;
+  const items = [];
+  for (const slot of slots) {
+    try {
+      const ctx = await getContextForAi(slot.id, { userId });
+      // Also fetch the notes attached to this meal slot for richer context
+      const notes = await Note.find({ nodeId: slot.id })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .select("content createdAt").lean();
+      const mealEntries = notes.map(n => {
+        try { return JSON.parse(n.content); } catch { return { text: n.content }; }
+      });
+      items.push({
+        nodeId: slot.id,
+        name: slot.name,
+        context: { ...ctx, mealEntries },
+      });
+    } catch {
+      items.push({ nodeId: slot.id, name: slot.name, context: { name: slot.name } });
+    }
+  }
+  return quantifier?.type === "numeric" && quantifier.count > 0
+    ? items.slice(0, quantifier.count)
+    : items;
+}
+
+async function resolveMacros(foodNodes, userId, quantifier) {
+  // Collect all child nodes of food root that have metadata.values (tracked macros)
+  const children = await _Node.find({ parent: foodNodes.protein?.id || foodNodes.carbs?.id }).select("parent").lean().catch(() => []);
+  // Simpler: query food root children directly and filter to value-tracked ones
+  const foodRootId = foodNodes.daily?.id ? (await _Node.findById(foodNodes.daily.id).select("parent").lean())?.parent : null;
+  if (!foodRootId) return [];
+
+  const rootChildren = await _Node.find({ parent: foodRootId }).select("_id name metadata").lean();
+  const macroIds = [];
+  for (const child of rootChildren) {
+    const meta = child.metadata instanceof Map ? Object.fromEntries(child.metadata) : (child.metadata || {});
+    if (meta.values?.today != null || meta.food?.role === "protein" || meta.food?.role === "carbs" || meta.food?.role === "fats") {
+      macroIds.push({ id: String(child._id), name: child.name });
+    }
+  }
+
+  const { getContextForAi } = await import("../../seed/tree/treeFetch.js");
+  const items = [];
+  for (const m of macroIds) {
+    try {
+      const ctx = await getContextForAi(m.id, { userId });
+      items.push({ nodeId: m.id, name: m.name, context: ctx });
+    } catch {
+      items.push({ nodeId: m.id, name: m.name, context: { name: m.name } });
+    }
+  }
+  return quantifier?.type === "numeric" && quantifier.count > 0
+    ? items.slice(0, quantifier.count)
+    : items;
+}
+
+async function resolveDailySummaries(foodNodes, temporalScope, userId, quantifier) {
+  if (!foodNodes.history) return [];
+  const Note = _Note || (await import("../../seed/models/note.js")).default;
+
+  // Determine date range from temporalScope
+  const now = new Date();
+  let startDate = new Date(now.getTime() - 7 * 86400000); // default last 7 days
+  if (temporalScope?.type === "relative" && temporalScope.unit) {
+    const unitMs = { day: 86400000, week: 7 * 86400000, month: 30 * 86400000 }[temporalScope.unit] || 7 * 86400000;
+    startDate = new Date(now.getTime() - unitMs);
+  } else if (temporalScope?.type === "duration" && temporalScope.count && temporalScope.unit) {
+    const unit = temporalScope.unit.replace(/s$/, "");
+    const unitMs = { day: 86400000, week: 7 * 86400000, month: 30 * 86400000 }[unit] || 86400000;
+    startDate = new Date(now.getTime() - temporalScope.count * unitMs);
+  }
+
+  const notes = await Note.find({
+    nodeId: foodNodes.history.id,
+    createdAt: { $gte: startDate },
+  }).sort({ createdAt: -1 }).select("_id content createdAt").lean();
+
+  const items = notes.map(n => {
+    let parsed = null;
+    try { parsed = JSON.parse(n.content); } catch {}
+    return {
+      nodeId: String(n._id),
+      name: `${new Date(n.createdAt).toLocaleDateString()}`,
+      context: { name: "Daily summary", date: n.createdAt, ...(parsed || {}) },
+    };
+  });
+
+  return quantifier?.type === "numeric" && quantifier.count > 0
+    ? items.slice(0, quantifier.count)
+    : items;
+}
+
+async function resolveLogEntries(foodNodes, temporalScope, userId, quantifier) {
+  if (!foodNodes.log) return [];
+  const Note = _Note || (await import("../../seed/models/note.js")).default;
+
+  const now = new Date();
+  let startDate = new Date(now.getTime() - 86400000); // default: today
+  if (temporalScope?.type === "relative" && temporalScope.unit) {
+    const unitMs = { day: 86400000, week: 7 * 86400000, month: 30 * 86400000 }[temporalScope.unit] || 86400000;
+    startDate = new Date(now.getTime() - unitMs);
+  }
+
+  const notes = await Note.find({
+    nodeId: foodNodes.log.id,
+    createdAt: { $gte: startDate },
+  }).sort({ createdAt: -1 }).select("_id content createdAt").lean();
+
+  const items = notes.map((n, i) => {
+    let parsed = null;
+    try { parsed = JSON.parse(n.content); } catch {}
+    const name = parsed?.summary || parsed?.items?.[0]?.name || `Entry ${i + 1}`;
+    return {
+      nodeId: String(n._id),
+      name,
+      context: { name, date: n.createdAt, ...(parsed || {}) },
+    };
+  });
+
+  return quantifier?.type === "numeric" && quantifier.count > 0
+    ? items.slice(0, quantifier.count)
+    : items;
+}

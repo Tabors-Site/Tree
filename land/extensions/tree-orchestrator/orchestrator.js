@@ -494,7 +494,7 @@ const TENSE_FUTURE = new RegExp([
 ].map(p => `(?:${p})`).join("|"), "i");
 
 // Imperative tense (plan): commanding a structural change. Building, creating, modifying.
-const TENSE_IMPERATIVE = /\b(plan|build|create|make|setup|set up|set\s+.*\bgoal|set\s+.*\btarget|structure|organize|define|add|modify|remove|delete|restructure|program|taper|schedule|adjust|change|update(?:\s+my)?|curriculum|configure|redesign|rebuild|swap|replace|rename|initialize|start tracking|stop tracking|enable|disable|turn on|turn off)\b/i;
+const TENSE_IMPERATIVE = /\b(plan|build|create|make|setup|set up|set\s+.*\b(?:goal|target|weight|value)|structure|organize|define|add|modify|remove|delete|restructure|program|taper|schedule|adjust|change|update|curriculum|configure|redesign|rebuild|swap|replace|rename|initialize|start tracking|stop tracking|enable|disable|turn on|turn off|fix|correct|revise|repair|edit)\b/i;
 
 // Negation: cancels the default action. "Don't do the thing."
 // Includes undo intent, course corrections, explicit cancel words.
@@ -1123,30 +1123,7 @@ async function evaluateCondition(conditionText, { rootId, nodeId, userId, signal
   try {
     const { getContextForAi } = await import("../../seed/tree/treeFetch.js");
     const context = await getContextForAi(nodeId, { userId });
-
-    // Also gather enriched context from children, since extension roles
-    // (like "daily" vs "root") fire on different nodes. The food root has
-    // nothing, but its Daily child has the full macro picture.
-    const Node = (await import("../../seed/models/node.js")).default;
-    const parent = await Node.findById(nodeId).select("children").lean();
-    const childContexts = [];
-    if (parent?.children?.length > 0) {
-      const childIds = parent.children.slice(0, 10); // cap at 10 children
-      for (const childId of childIds) {
-        try {
-          const childCtx = await getContextForAi(childId, { userId });
-          childContexts.push(childCtx);
-        } catch {}
-      }
-    }
-
-    let contextStr = serializeContextForEval(context);
-    for (const childCtx of childContexts) {
-      const childStr = serializeContextForEval(childCtx);
-      if (childStr && childStr.length > 10) {
-        contextStr += `\n${childStr}`;
-      }
-    }
+    const contextStr = serializeContextForEval(context);
 
     if (!contextStr || contextStr.length < 10) {
       return { result: "unknown", confidence: 0, reasoning: "no data available at this position" };
@@ -1225,13 +1202,16 @@ function resolveFork(forkNode, evaluation) {
 
 const MAX_FANOUT_ITEMS = 20;
 
-async function resolveSet({ extName, rootId, quantifier, temporalScope, nodeId, userId }) {
+async function resolveSet({ extName, rootId, quantifier, temporalScope, nodeId, userId, message }) {
   try {
-    // Check if extension provides a custom resolver
+    // Check if extension provides a custom resolver.
+    // The extension is the authority on what "all my X" means inside its domain.
+    // We pass the message so the extension can inspect keywords and decide which
+    // subtree, metadata bucket, or note collection represents the set.
     const { getExtension } = await import("../loader.js");
     const ext = extName ? getExtension(extName) : null;
     if (ext?.exports?.resolveSet) {
-      const custom = await ext.exports.resolveSet({ quantifier, temporalScope, rootId, userId });
+      const custom = await ext.exports.resolveSet({ quantifier, temporalScope, rootId, userId, message });
       if (custom?.length > 0) return custom.slice(0, MAX_FANOUT_ITEMS);
     }
 
@@ -1506,6 +1486,7 @@ async function executeGraph(node, message, visitorId, opts) {
       temporalScope: node.itemResolver.temporalScope,
       nodeId: node.targetNodeId || opts.currentNodeId,
       userId: opts.userId,
+      message,
     });
 
     if (items.length === 0) {

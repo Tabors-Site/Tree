@@ -1163,8 +1163,45 @@ export function getLoadedExtensionNames() {
 }
 
 /**
+ * Flatten an extension's vocabulary + classifierHints into a single RegExp list.
+ *
+ * Two declaration forms are supported:
+ *
+ *   // Legacy flat form
+ *   classifierHints: [regex, regex, ...]
+ *
+ *   // Structured form (preferred): explicit parts of speech.
+ *   // Matching behavior is identical to a flat list. The split exists to make
+ *   // extension authorship clearer and to enable richer per-part logging or
+ *   // weighting later.
+ *   vocabulary: {
+ *     verbs:      [regex, ...],  // actions the domain handles (ate, ran, read)
+ *     nouns:      [regex, ...],  // things the domain tracks (eggs, bench, book)
+ *     adjectives: [regex, ...],  // states/qualities (hungry, sore, tired)
+ *   }
+ *
+ * Both forms can coexist. All patterns are merged for matching.
+ */
+export function flattenVocabulary(manifest) {
+  const hints = [];
+  if (Array.isArray(manifest?.classifierHints)) {
+    for (const h of manifest.classifierHints) if (h instanceof RegExp) hints.push(h);
+  }
+  const v = manifest?.vocabulary;
+  if (v && typeof v === "object") {
+    for (const key of ["verbs", "nouns", "adjectives"]) {
+      if (Array.isArray(v[key])) {
+        for (const h of v[key]) if (h instanceof RegExp) hints.push(h);
+      }
+    }
+  }
+  return hints;
+}
+
+/**
  * Get classifier hints for a mode key.
- * Returns array of RegExp from the owning extension's manifest, or null.
+ * Returns array of RegExp from the owning extension's manifest (merged from
+ * legacy classifierHints and structured vocabulary), or null if empty.
  * Used by the tree orchestrator for extension routing (Path 2).
  */
 export function getClassifierHintsForMode(modeKey) {
@@ -1172,7 +1209,34 @@ export function getClassifierHintsForMode(modeKey) {
     const extName = getModeOwner(modeKey);
     if (!extName) return null;
     const manifest = loaded.get(extName)?.manifest;
-    return Array.isArray(manifest?.classifierHints) ? manifest.classifierHints : null;
+    if (!manifest) return null;
+    const hints = flattenVocabulary(manifest);
+    return hints.length > 0 ? hints : null;
+  } catch { return null; }
+}
+
+/**
+ * Get the extension's territory vocabulary split by part of speech.
+ * Returns { verbs, nouns, adjectives } as RegExp arrays, or null if none.
+ * Legacy classifierHints are bucketed as verbs by default since territory
+ * markers are most commonly verb-like action words.
+ */
+export function getVocabularyForExtension(extName) {
+  try {
+    const manifest = loaded.get(extName)?.manifest;
+    if (!manifest) return null;
+    const result = { verbs: [], nouns: [], adjectives: [] };
+    const v = manifest?.vocabulary;
+    if (v && typeof v === "object") {
+      if (Array.isArray(v.verbs)) result.verbs.push(...v.verbs.filter(r => r instanceof RegExp));
+      if (Array.isArray(v.nouns)) result.nouns.push(...v.nouns.filter(r => r instanceof RegExp));
+      if (Array.isArray(v.adjectives)) result.adjectives.push(...v.adjectives.filter(r => r instanceof RegExp));
+    }
+    if (Array.isArray(manifest.classifierHints)) {
+      result.verbs.push(...manifest.classifierHints.filter(r => r instanceof RegExp));
+    }
+    if (result.verbs.length === 0 && result.nouns.length === 0 && result.adjectives.length === 0) return null;
+    return result;
   } catch { return null; }
 }
 

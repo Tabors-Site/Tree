@@ -22,7 +22,7 @@ const TENSE_FUTURE = new RegExp([
   "when should", "where should", "how often", "how much should",
   "^hi$", "^hey$", "^hello$", "^yo$", "^sup$", "^whats up$", "^what's up$",
 ].map(p => `(?:${p})`).join("|"), "i");
-const TENSE_IMPERATIVE = /\b(plan|build|create|make|setup|set up|set\s+.*\bgoal|set\s+.*\btarget|structure|organize|define|add|modify|remove|delete|restructure|program|taper|schedule|adjust|change|update(?:\s+my)?|curriculum|configure|redesign|rebuild|swap|replace|rename|initialize|start tracking|stop tracking|enable|disable|turn on|turn off)\b/i;
+const TENSE_IMPERATIVE = /\b(plan|build|create|make|setup|set up|set\s+.*\b(?:goal|target|weight|value)|structure|organize|define|add|modify|remove|delete|restructure|program|taper|schedule|adjust|change|update|curriculum|configure|redesign|rebuild|swap|replace|rename|initialize|start tracking|stop tracking|enable|disable|turn on|turn off|fix|correct|revise|repair|edit)\b/i;
 const NEGATION = /\b(don'?t|do not|not|no|skip|stop|cancel|ignore|forget it|forget that|never mind|nevermind|undo|take.*back|that'?s wrong|wasn'?t|isn'?t|aren'?t|won'?t|hold on|wait|scratch that|scrap that|disregard)\b/i;
 
 const CONDITIONAL_IF = /\b(if|in case|assuming|provided|given that|suppose|supposing)\b\s+(.+?)(?:\s*[,;]\s*|\s+then\s+)/i;

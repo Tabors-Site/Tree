@@ -623,20 +623,153 @@ const AIArchitecturePage = () => {
             </div>
           </div>
 
+          {/* ── COMPLETING THE GRAMMAR ── */}
+          <div style={{maxWidth: 780, margin: "64px auto 16px", textAlign: "center"}}>
+            <h2 style={{color: "#e5e5e5", fontSize: "1.4rem", marginBottom: 8}}>Completing the Grammar</h2>
+            <p style={{color: "#888", fontSize: "0.9rem", lineHeight: 1.7, maxWidth: 620, margin: "0 auto"}}>
+              Eight parts of speech was the first pass. Standard English has nine, and every sentence the
+              original system couldn't handle was missing one of them. We did not invent new primitives.
+              We finished the set.
+            </p>
+          </div>
+
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr", marginTop: 12}}>
+            <div className="lp-card">
+              <h3 style={{color: "#38bdf8"}}>Conjunctions = Control Flow</h3>
+              <p>
+                The missing ninth part of speech. Subordinating conjunctions ("if", "when", "unless")
+                become branches. Coordinating conjunctions ("and then", "after that") become chains.
+                The original system only did linear routing. Now it handles
+                <strong style={{color: "#cbd5e1"}}> "if protein is low, review my meals"</strong> as a
+                real branch with a condition evaluated against live data, not as a phrase the AI has
+                to interpret.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#fb923c"}}>Determiners = Set Selection</h3>
+              <p>
+                Articles ("the", "a") were part of the original eight. But "all", "every", "top 3"
+                are also determiners, and they select sets, not single items. The original system
+                lumped them into metadata. Now they drive fanout: the kernel resolves the set,
+                gathers each item's real data, and hands everything to the mode at once. No guessing.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#fde047"}}>Adverbials of Time = Data Window</h3>
+              <p>
+                "Last week", "yesterday", "since January", "over the past month". These are not
+                tense. Tense is intent (review vs log vs coach). Time is data scope (which window
+                to look at). The original system conflated them and misrouted messages. Now they
+                are independent axes. "How did I do last week" has tense=review AND scope=last week.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#c084fc"}}>Voice + Negation = Frame</h3>
+              <p>
+                Passive voice ("my bench press has been declining") tells the AI to reflect, not
+                execute. Negation ("don't log that", "skip breakfast") cancels the default action
+                and reroutes to conversation. The original system treated everything as active
+                imperatives. Now it distinguishes describing from commanding, and cancelling from
+                doing.
+              </p>
+            </div>
+          </div>
+
+          {/* ── FIVE ORTHOGONAL AXES ── */}
+          <div style={{maxWidth: 780, margin: "48px auto 16px", textAlign: "center"}}>
+            <h2 style={{color: "#e5e5e5", fontSize: "1.4rem", marginBottom: 8}}>Five Orthogonal Axes</h2>
+            <p style={{color: "#888", fontSize: "0.9rem", lineHeight: 1.7, maxWidth: 620, margin: "0 auto"}}>
+              Every message decomposes into five independent axes. Each one evolves on its own.
+              Any combination is legal. The grammar is compositional, not enumerative.
+            </p>
+          </div>
+
+          <div style={{maxWidth: 780, margin: "16px auto 0", display: "grid", gridTemplateColumns: "1fr", gap: 8}}>
+            {[
+              { label: "DOMAIN", color: "#a78bfa", question: "what thing?", parts: "noun + pronoun + preposition", determines: "Which extension, which node, which scope." },
+              { label: "SCOPE", color: "#fb923c", question: "how much, when?", parts: "quantifier + temporal scope", determines: "Which subset of data is in play." },
+              { label: "INTENT", color: "#ecc94b", question: "what action?", parts: "tense + conditional", determines: "Which mode fires, or whether to branch." },
+              { label: "INTERPRETATION", color: "#c084fc", question: "how to behave?", parts: "adjective + voice + adverb", determines: "How the mode frames its response." },
+              { label: "EXECUTION", color: "#f97316", question: "runtime shape?", parts: "dispatch / sequence / fork / fanout", determines: "How the graph actually runs." },
+            ].map(a => (
+              <div key={a.label} style={{
+                display: "grid", gridTemplateColumns: "160px 1fr", gap: 16, alignItems: "center",
+                padding: "14px 18px", background: "rgba(255,255,255,0.02)",
+                border: `1px solid ${a.color}22`, borderRadius: 8,
+              }}>
+                <div>
+                  <div style={{color: a.color, fontWeight: 700, fontSize: "0.75rem", letterSpacing: 1}}>{a.label}</div>
+                  <div style={{color: "#666", fontSize: "0.7rem", fontStyle: "italic"}}>{a.question}</div>
+                </div>
+                <div>
+                  <div style={{color: "#ccc", fontSize: "0.82rem", marginBottom: 2}}>{a.parts}</div>
+                  <div style={{color: "#888", fontSize: "0.78rem", lineHeight: 1.5}}>{a.determines}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── EXECUTION GRAPH PRIMITIVES ── */}
+          <div style={{maxWidth: 780, margin: "48px auto 16px", textAlign: "center"}}>
+            <h2 style={{color: "#e5e5e5", fontSize: "1.4rem", marginBottom: 8}}>Four Execution Primitives</h2>
+            <p style={{color: "#888", fontSize: "0.9rem", lineHeight: 1.7, maxWidth: 620, margin: "0 auto"}}>
+              After parsing, the grammar compiles every message into an execution graph with four
+              possible shapes. These are not invented primitives. They are the four ways English
+              composes sentences.
+            </p>
+          </div>
+
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr", marginTop: 12}}>
+            <div className="lp-card">
+              <h3 style={{color: "#f97316"}}>Dispatch = Simple Sentence</h3>
+              <p>
+                One clause, one action. "Ate eggs." The runtime switches to the right mode and
+                runs it once. This is the declarative sentence of the grammar. Every message in
+                the original system was a dispatch. It's still the most common shape.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#7dd385"}}>Sequence = Compound Sentence</h3>
+              <p>
+                "Log lunch and then review my day." Two clauses joined by a coordinating conjunction.
+                The runtime executes each step in order, threading the result of one into the context
+                of the next. Compound sentences compile to sequences.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#38bdf8"}}>Fork = Conditional Sentence</h3>
+              <p>
+                "If protein is low, review my meals." The runtime evaluates the condition against
+                live data, gets a three valued result (true / false / unknown), and picks the
+                branch. Unknown is first class. The system does not guess when data is missing.
+                It takes a path that says "I can't determine this yet."
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#f472b6"}}>Fanout = Universal Quantification</h3>
+              <p>
+                "Review all my exercises." The runtime resolves the set, gathers each item's real
+                enriched context, and hands everything to the mode at once. Extensions own their
+                vocabulary and decide what "all my X" means inside their domain.
+              </p>
+            </div>
+          </div>
+
           {/* The Pipeline */}
           <div style={{
             maxWidth: 760, margin: "32px auto", display: "flex", flexDirection: "column", gap: 0,
           }}>
             <p style={{color: "#999", fontSize: "0.9rem", textAlign: "center", marginBottom: 16}}>
-              Every message flows through four steps:
+              Every message flows through five steps:
             </p>
 
-            <div style={{display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8}}>
+            <div style={{display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8}}>
               {[
-                { step: "1", label: "Parse Noun", desc: "Which extension?", color: "#a78bfa" },
-                { step: "2", label: "Parse Tense", desc: "Which mode?", color: "#ecc94b" },
-                { step: "3", label: "Inject Modifiers", desc: "Instructions, persona, boundaries", color: "#7dd385" },
-                { step: "4", label: "Dispatch", desc: "Right verb, right tense", color: "#f97316" },
+                { step: "1", label: "Parse Domain", desc: "Noun, pronoun, preposition", color: "#a78bfa" },
+                { step: "2", label: "Parse Scope", desc: "Quantifier, temporal window", color: "#fb923c" },
+                { step: "3", label: "Parse Intent", desc: "Tense, conditional, negation", color: "#ecc94b" },
+                { step: "4", label: "Parse Frame", desc: "Adjective, voice, adverb", color: "#c084fc" },
+                { step: "5", label: "Compile + Execute", desc: "Build graph, walk it", color: "#f97316" },
               ].map(s => (
                 <div key={s.step} style={{
                   background: "rgba(255,255,255,0.03)", border: `1px solid ${s.color}33`,
@@ -673,6 +806,52 @@ const AIArchitecturePage = () => {
               production. But you don't think in those functions. You think in words. The functions
               are real but they're not where the meaning lives. TreeOS claims the same thing for AI
               systems. Functions exist. They fire. They're just not the level of abstraction that matters.
+            </p>
+          </div>
+
+          {/* ── HONEST COMPLEXITY ── */}
+          <div style={{
+            maxWidth: 700, margin: "32px auto 0",
+            background: "rgba(251, 146, 60, 0.03)", border: "1px solid rgba(251, 146, 60, 0.12)",
+            borderRadius: 12, padding: "24px 28px",
+          }}>
+            <h3 style={{color: "#fb923c", fontSize: "1rem", marginBottom: 12, textAlign: "center"}}>The Honest Complexity</h3>
+            <p style={{color: "#999", fontSize: "0.85rem", lineHeight: 1.7, marginBottom: 14, textAlign: "center"}}>
+              The grammar is clean. Three things in the runtime are messier than the story suggests.
+              Worth naming them directly.
+            </p>
+            <div style={{display: "flex", flexDirection: "column", gap: 12}}>
+              <div style={{padding: "12px 16px", background: "rgba(0,0,0,0.2)", borderRadius: 8}}>
+                <div style={{color: "#fde047", fontSize: "0.82rem", fontWeight: 600, marginBottom: 4}}>Fork evaluation uses an LLM call</div>
+                <div style={{color: "#888", fontSize: "0.78rem", lineHeight: 1.6}}>
+                  The grammar compiles deterministically. But evaluating "is protein low" against
+                  live data needs a small LLM call. Quarantined to one function, three valued result
+                  (true / false / unknown), never hallucinates a branch because unknown is allowed.
+                  The LLM is in the loop, but it is not in charge.
+                </div>
+              </div>
+              <div style={{padding: "12px 16px", background: "rgba(0,0,0,0.2)", borderRadius: 8}}>
+                <div style={{color: "#fde047", fontSize: "0.82rem", fontWeight: 600, marginBottom: 4}}>Extensions own their vocabulary</div>
+                <div style={{color: "#888", fontSize: "0.78rem", lineHeight: 1.6}}>
+                  "All my exercises" vs "all my runs" vs "all my muscle groups" each mean a different
+                  set inside the fitness extension. The kernel stays generic and asks the extension
+                  to map keywords to subsets. This is new surface area, but it matches the existing
+                  pattern of enrichContext and handleMessage. Extensions opt in to precision.
+                </div>
+              </div>
+              <div style={{padding: "12px 16px", background: "rgba(0,0,0,0.2)", borderRadius: 8}}>
+                <div style={{color: "#fde047", fontSize: "0.82rem", fontWeight: 600, marginBottom: 4}}>Condition evaluation walks children</div>
+                <div style={{color: "#888", fontSize: "0.78rem", lineHeight: 1.6}}>
+                  Extension data is distributed across child nodes with different roles. The food
+                  root has no data; its Daily child has it all. So the evaluator walks one level
+                  down, collects enriched contexts from each child, and bundles them before deciding.
+                  One extra query depth, justified by the tree shape.
+                </div>
+              </div>
+            </div>
+            <p style={{color: "#666", fontSize: "0.78rem", lineHeight: 1.6, marginTop: 14, textAlign: "center", fontStyle: "italic"}}>
+              The surface grammar is still parts of speech. The runtime is still four primitives.
+              These are the seams where the story meets the implementation.
             </p>
           </div>
 

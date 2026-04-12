@@ -22,6 +22,7 @@ import {
   checkDailyReset,
   getDailyPicture,
   getHistory,
+  resolveSet,
 } from "./core.js";
 import { handleMessage } from "./handler.js";
 
@@ -305,7 +306,46 @@ export async function init(core) {
     if (!node?._id) return;
 
     const foodMeta = meta?.food;
-    if (!foodMeta?.role) return;
+    if (!foodMeta) return;
+
+    // Root of food subtree: initialized but no role. Plan/coach/review modes
+    // need the tree structure with node IDs to modify specific macros or slots.
+    // Inject the food node map as the equivalent of "get tree" but scoped.
+    if (foodMeta.initialized && !foodMeta.role) {
+      try {
+        const foodNodes = await findFoodNodes(String(node._id));
+        if (foodNodes) {
+          context.foodNodes = foodNodes;
+          // Flatten name -> id for tool calls
+          const idMap = {};
+          for (const [key, entry] of Object.entries(foodNodes)) {
+            if (entry?.id && entry?.name) idMap[entry.name] = entry.id;
+          }
+          if (foodNodes.mealSlots) {
+            for (const [key, slot] of Object.entries(foodNodes.mealSlots)) {
+              if (slot?.id && slot?.name) idMap[slot.name] = slot.id;
+            }
+          }
+          if (Object.keys(idMap).length > 0) context.foodNodeIds = idMap;
+        }
+
+        // Also inject today's picture so the root sees current state
+        const picture = await getDailyPicture(String(node._id));
+        if (picture) {
+          const lines = [];
+          for (const r of (picture._valueRoles || ["protein", "carbs", "fats"])) {
+            const m = picture[r];
+            if (m) lines.push(`${m.name || r}: ${m.today}/${m.goal}g`);
+          }
+          if (picture.calories) lines.push(`calories: ${picture.calories.today}/${picture.calories.goal}`);
+          if (lines.length > 0) context.foodToday = lines.join(", ");
+          if (picture.profile) context.foodProfile = picture.profile;
+        }
+      } catch {}
+      return;
+    }
+
+    if (!foodMeta.role) return;
 
     const role = foodMeta.role;
 
@@ -476,6 +516,7 @@ export async function init(core) {
       getDailyPicture,
       getHistory,
       handleMessage,
+      resolveSet,
     },
     jobs: [
       {

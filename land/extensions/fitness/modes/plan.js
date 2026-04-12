@@ -32,9 +32,18 @@ export default {
     const state = await getExerciseState(fitRoot);
     const hasExercises = state && Object.values(state.groups).some(g => g.exercises?.length > 0);
 
-    const exerciseList = state ? Object.entries(state.groups).map(([group, data]) =>
-      `${group} [${data.modality}]: ${data.exercises.map(e => e.name).join(", ")}`
-    ).join("\n") : "No exercises found";
+    // Include node IDs and current goals so the AI can call fitness-adopt-exercise
+    // to modify existing exercises without guessing at nodeIds.
+    const exerciseList = state ? Object.entries(state.groups).map(([group, data]) => {
+      const exLines = data.exercises.map(e => {
+        const goalStr = e.goals && Object.keys(e.goals).length > 0
+          ? ` goals=${JSON.stringify(e.goals)}`
+          : "";
+        const schemaStr = e.schema ? ` type=${e.schema.type} unit=${e.schema.unit || "lb"}` : "";
+        return `  - ${e.name} (id: ${e.id})${schemaStr}${goalStr}`;
+      }).join("\n");
+      return `${group} [${data.modality}]:\n${exLines}`;
+    }).join("\n") : "No exercises found";
 
     const unadopted = state?._unadopted;
     const unadoptedBlock = unadopted?.length > 0
@@ -76,6 +85,8 @@ DEFAULTS (if user says "just set me up" or gives minimal info):
 - Home: Push-ups, Pull-ups, Dips, Squats, Plank. Standard variations.
 
 CRITICAL RULES:
+- When the user asks to FIX, UPDATE, CHANGE, or CORRECT an existing exercise, use the node id from CURRENT PROGRAM above and call fitness-adopt-exercise with that id to re-set its goals. DO NOT create a new exercise.
+- The node ids in CURRENT PROGRAM are real and usable. Pass them directly to tools. Never say "I don't have access to node ids" when they are listed above.
 - NEVER say you created an exercise without calling fitness-add-exercise first. The tool creates the node. Without the tool call, nothing exists.
 - NEVER describe a program without building it. When the user gives you exercises, IMMEDIATELY call the tools. Tools first, summary after.
 - Call fitness-add-modality FIRST (gym/running/home), then fitness-add-group for muscle groups, then fitness-add-exercise for each exercise. Do them in order. Do them NOW, not after more conversation.

@@ -102,12 +102,12 @@ export async function rebuildIndexForRoot(rootId) {
     // These don't scaffold nodes or set modes.respond, but they're active here.
     try {
       const { getConfinedExtensions, isExtensionBlockedAtNode, getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
-      const { getExtensionManifest } = await import("../loader.js");
+      const { getExtensionManifest, flattenVocabulary } = await import("../loader.js");
       for (const extName of getConfinedExtensions()) {
         if (index.has(extName)) continue;
         if (await isExtensionBlockedAtNode(extName, rid)) continue;
         const manifest = getExtensionManifest(extName);
-        const hints = Array.isArray(manifest?.classifierHints) ? manifest.classifierHints : [];
+        const hints = flattenVocabulary(manifest);
         if (hints.length === 0) continue;
         const modes = getModesOwnedBy(extName);
         const defaultMode = modes.find(m => m.endsWith("-agent") || m.endsWith("-tell") || m.endsWith("-log") || m.endsWith("-browse")) || modes[0];

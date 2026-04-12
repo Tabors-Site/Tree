@@ -12,11 +12,46 @@ export default {
     "Type 'be' at the Food tree to start logging: just say what you ate. The tree IS the app.",
 
   territory: "food, meals, eat, eating, ate, hungry, nutrition, cooking, calories, protein, carbs, diet, snack, breakfast, lunch, dinner",
-  classifierHints: [
-    /\b(ate|eaten|eating|drank|drinking|breakfast|lunch|dinner|snack|calories|protein|carbs|fats|macros?)\b/i,
-    /\b(egg|chicken|rice|bread|salmon|banana|oat|milk|cheese|beef|pork|tofu|yogurt|pizza|pasta)\b/i,
-    /\b(meals?|food|nutrition|diet|dieting|eat|hungry|cook|cooking|appetite|fasting)\b/i,
-  ],
+
+  // Territory vocabulary split by part of speech.
+  //
+  // Philosophy: do not enumerate every food. That's a losing game.
+  // Instead, declare strong domain markers:
+  //   - Verbs of consumption ("ate", "had X", "drank") catch anything followed
+  //     by a food-shaped phrase, no matter what the specific food is.
+  //   - Nouns are domain-category words (meal slots, macros, "food" itself),
+  //     not specific ingredients.
+  //   - Adjectives are hunger/fullness states and diet labels.
+  //
+  // This way "had a dragon fruit" routes to food via the verb without needing
+  // "dragon fruit" in a dictionary.
+  vocabulary: {
+    verbs: [
+      // Direct consumption verbs
+      /\b(ate|eaten|eating|drank|drinking|drink|eat)\b/i,
+      // "had X" where X is something (meal slot, food noun, or anything).
+      // "had a/an/some/my/the X", or "had two/three X", or "had X for breakfast".
+      /\b(had|having)\s+(?:a|an|some|my|the|two|three|four|five|six|seven|eight|nine|ten|\d+)\b/i,
+      /\b(had|having)\s+\w+\s+(?:for\s+(?:breakfast|lunch|dinner|a\s+snack))\b/i,
+      // Preparation verbs
+      /\b(cook|cooking|cooked|prepped|prep|grabbed|made)\s+(?:a|an|some|breakfast|lunch|dinner|snack|meal|food)\b/i,
+      // Explicit logging
+      /\b(log|logged|track|tracking)\s+(?:my\s+)?(?:food|meal|breakfast|lunch|dinner|snack|calories?|macros?)\b/i,
+      // Fasting / skipping
+      /\b(fasting|skipping\s+(?:breakfast|lunch|dinner|a\s+meal))\b/i,
+    ],
+    nouns: [
+      // Meal slots and category words
+      /\b(meals?|food|foods|nutrition|diet|dieting|appetite)\b/i,
+      /\b(breakfast|lunch|dinner|snack|snacks|brunch|supper)\b/i,
+      // Macro tracking terms
+      /\b(calories?|protein|carbs?|fats?|macros?|fiber|sugar|sodium|nutrients?)\b/i,
+    ],
+    adjectives: [
+      /\b(hungry|starving|full|stuffed|famished|peckish|bloated)\b/i,
+      /\b(high[- ]protein|low[- ]carb|keto|vegan|vegetarian|gluten[- ]free|plant[- ]based)\b/i,
+    ],
+  },
 
   needs: {
     models: ["Node"],

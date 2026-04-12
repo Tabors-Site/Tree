@@ -22,6 +22,7 @@ import {
   getWeeklyStats,
   checkProgression,
   buildValueFields,
+  resolveSet,
 } from "./core.js";
 import { setDeps as setSetupDeps } from "./setup.js";
 import { handleMessage } from "./handler.js";
@@ -160,7 +161,31 @@ export async function init(core) {
     if (!node?._id) return;
 
     const fitMeta = meta?.fitness;
-    if (!fitMeta?.role) return;
+    if (!fitMeta) return;
+
+    // Root of fitness subtree: initialized but no role. Plan, coach, and
+    // review modes all need to see the tree structure with node IDs here,
+    // otherwise tools like fitness-adopt-exercise have no way to identify
+    // which exercise to modify. Inject the full exercise state.
+    if (fitMeta.initialized && !fitMeta.role) {
+      try {
+        const state = await getExerciseState(String(node._id));
+        if (state) {
+          context.fitnessState = state;
+          // Flatten to a quick lookup list of exercise name -> nodeId for tool calls
+          const exerciseMap = {};
+          for (const groupName of Object.keys(state.groups || {})) {
+            for (const ex of state.groups[groupName].exercises || []) {
+              if (ex.id && ex.name) exerciseMap[ex.name] = ex.id;
+            }
+          }
+          if (Object.keys(exerciseMap).length > 0) context.fitnessExerciseIds = exerciseMap;
+        }
+      } catch {}
+      return;
+    }
+
+    if (!fitMeta.role) return;
 
     const role = fitMeta.role;
     const values = meta?.values || {};
@@ -353,6 +378,7 @@ export async function init(core) {
       getExerciseState,
       getWeeklyStats,
       handleMessage,
+      resolveSet,
       scaffold: (await import("./setup.js")).scaffoldFitnessBase,
     },
   };
