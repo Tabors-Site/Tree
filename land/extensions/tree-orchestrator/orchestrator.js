@@ -441,6 +441,7 @@ async function resolveLlmProvider(userId, rootId, modeKey, slot) {
 // Past tense (review):           reflecting on what happened
 // Future/subjunctive (coach):    guidance, questions, corrections, conversation
 // Imperative (plan):             structural commands, building, modifying
+// Negation (coach):              cancels the default action, routes to conversation
 // Present tense (log):           recording facts, stating actions (default)
 
 const TENSE_PAST = /\b(how am i|how did i|how have i|progress|status|review|daily|weekly|stats|streak|history|trend|so far|pattern|doing|summary|recap|compare|average|report|results|track record)\b/i;
@@ -462,6 +463,11 @@ const TENSE_FUTURE = new RegExp([
 ].map(p => `(?:${p})`).join("|"), "i");
 
 const TENSE_IMPERATIVE = /\b(plan|build|create|setup|set up|structure|organize|add|modify|remove|delete|restructure|program|taper|schedule|adjust|set.*goal|change|curriculum|configure|redesign|rebuild|swap|replace|rename)\b/i;
+
+// Negation: cancels the default action. The user is saying "don't do the thing."
+// Routes to coach (conversation) instead of log (action).
+// This is the seed of the constraint layer: undo, permissions, conditions.
+const NEGATION = /\b(don'?t|do not|not|no|skip|stop|cancel|ignore|forget it|never mind|undo|that'?s wrong|wasn'?t|isn'?t|aren'?t|won'?t)\b/i;
 
 /**
  * Parse tense: which conjugation of the verb (extension) handles this message.
@@ -490,14 +496,47 @@ async function parseTense(baseMode, message, behavioral) {
     if (behavioral === "be" || lower === "be") {
       return { mode: find("coach") || baseMode, tense: "imperative-guided", pattern: "be" };
     }
-    if (TENSE_PAST.test(lower)) {
-      return { mode: find("review", "ask") || baseMode, tense: "past", pattern: "review" };
+
+    // Detect all matching tenses for compound intent detection
+    const matches = [];
+    if (TENSE_PAST.test(lower)) matches.push({ tense: "past", mode: find("review", "ask"), pattern: "review" });
+    if (TENSE_FUTURE.test(lower)) matches.push({ tense: "future", mode: find("coach"), pattern: "coach" });
+    if (TENSE_IMPERATIVE.test(lower)) matches.push({ tense: "imperative", mode: find("plan"), pattern: "plan" });
+
+    // Compound intent: multiple tenses in one message ("log lunch and then review my week")
+    // Conjunction words signal sequencing: "and then", "then", "after that", "also"
+    const CONJUNCTION = /\b(and then|then|after that|afterwards|also|and also|followed by|next)\b/i;
+    if (matches.length > 1 && CONJUNCTION.test(lower)) {
+      const steps = matches.filter(m => m.mode).map(m => ({
+        mode: m.mode,
+        tense: m.tense,
+        extName: extName,
+        targetNodeId: null,
+      }));
+      // Add the default log tense as the first step if not already present
+      // (user probably wants to DO the thing, then review/plan/coach)
+      const hasPresent = matches.some(m => m.tense === "present");
+      if (!hasPresent && steps.length > 0) {
+        const logMode = find("log", "tell");
+        if (logMode) steps.unshift({ mode: logMode, tense: "present", extName, targetNodeId: null });
+      }
+      return {
+        mode: steps[0].mode || baseMode,
+        tense: steps[0].tense,
+        pattern: "compound",
+        compound: steps,
+      };
     }
-    if (TENSE_FUTURE.test(lower)) {
-      return { mode: find("coach") || baseMode, tense: "future", pattern: "coach" };
+
+    // Single tense match: return the first (highest priority)
+    if (matches.length > 0) {
+      const m = matches[0];
+      return { mode: m.mode || baseMode, tense: m.tense, pattern: m.pattern };
     }
-    if (TENSE_IMPERATIVE.test(lower)) {
-      return { mode: find("plan") || baseMode, tense: "imperative", pattern: "plan" };
+
+    // Negation: cancels the default action. Route to coach for conversation.
+    if (NEGATION.test(lower)) {
+      return { mode: find("coach") || baseMode, tense: "negated", pattern: "negation" };
     }
 
     return { mode: find("log", "tell") || baseMode, tense: "present", pattern: "default" };
@@ -510,6 +549,267 @@ async function parseTense(baseMode, message, behavioral) {
 const REVIEW_PATTERN = TENSE_PAST;
 const COACH_PATTERN = TENSE_FUTURE;
 const PLAN_PATTERN = TENSE_IMPERATIVE;
+
+// ─────────��────────────────────���───────────────────────��──────────────────
+// PRONOUN STATE (reference memory)
+//
+// Pronouns resolve "it", "this", "that", "the same" to concrete nodes.
+// Three slots tracked per visitor:
+//   active    — the node the user is currently at (currentNodeId)
+//   lastMod   — the last node modified by a tool call (updated by afterToolCall)
+//   lastNoun  — the last extension territory the parser resolved
+//
+// "Do that again" → lastMod tells us what "that" was.
+// "Log it" → active tells us what "it" is.
+// "The same" → lastNoun tells us which extension to reuse.
+// ──��──────────────────────────────────────────────────────────────────────
+
+const _pronounState = new Map(); // visitorId -> { active, lastMod, lastNoun, lastMode, lastMessage }
+
+function getPronounState(visitorId) {
+  return _pronounState.get(visitorId) || { active: null, lastMod: null, lastNoun: null, lastMode: null, lastMessage: null };
+}
+
+export function updatePronounState(visitorId, updates) {
+  const current = getPronounState(visitorId);
+  _pronounState.set(visitorId, { ...current, ...updates });
+}
+
+/**
+ * Parse pronouns: detect references in the message and resolve them
+ * using the pronoun state. Returns resolved context or null if no pronouns found.
+ */
+function parsePronouns(message, visitorId) {
+  const lower = message.toLowerCase().trim();
+  const state = getPronounState(visitorId);
+  const result = { resolvedNode: null, resolvedNoun: null, resolvedMode: null, pronoun: null };
+  let found = false;
+
+  // "that", "the same", "again", "repeat", "same thing" → refers to last modified/last action
+  if (/\b(that|the same|same thing|again|repeat|redo|one more|another)\b/i.test(lower)) {
+    if (state.lastMod) {
+      result.resolvedNode = state.lastMod;
+      result.pronoun = "that/same (lastMod)";
+      found = true;
+    }
+    if (state.lastNoun) {
+      result.resolvedNoun = state.lastNoun;
+      found = true;
+    }
+    if (state.lastMode) {
+      result.resolvedMode = state.lastMode;
+      found = true;
+    }
+  }
+
+  // "it", "this" → refers to current active node
+  if (/\b(^it$|^this$|this one|right here)\b/i.test(lower) && state.active) {
+    result.resolvedNode = state.active;
+    result.pronoun = "it/this (active)";
+    found = true;
+  }
+
+  return found ? result : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CAUSAL CONNECTOR (cross-domain grammar)
+//
+// Detects cause → effect relationships between two domains.
+// "Eating poorly is affecting my workouts" = food(cause) → fitness(effect)
+// "Not sleeping enough is hurting my diet" = recovery(cause) → food(effect)
+//
+// Causal messages don't chain sequentially. They gather context from the
+// CAUSE domain and inject it into the EFFECT domain's response. The AI
+// at the effect domain sees what's happening in the cause domain and can
+// reason about the relationship.
+// ──────────────────────────────────────────────────────────��──────────────
+
+const CAUSAL_CONNECTORS = /\b(is affecting|affects|affected|causing|caused|because of|due to|led to|leading to|hurting|helping|impacting|influenced by|thanks to|ruining|improving|messing with)\b/i;
+
+/**
+ * Detect cross-domain causal relationships in a message.
+ * Returns { cause: extName, effect: extName, connector } or null.
+ *
+ * Only fires when 2+ extensions match AND a causal connector is present.
+ * The cause domain is whichever appears BEFORE the connector in the message.
+ * The effect domain is whichever appears AFTER.
+ */
+function detectCausality(message, matchedExtensions) {
+  if (!matchedExtensions || matchedExtensions.length < 2) return null;
+
+  const connectorMatch = CAUSAL_CONNECTORS.exec(message.toLowerCase());
+  if (!connectorMatch) return null;
+
+  const connectorPos = connectorMatch.index;
+
+  // Sort extensions by their position in the message
+  const sorted = [...matchedExtensions].sort((a, b) => {
+    const aPos = a.pos != null ? a.pos : message.length;
+    const bPos = b.pos != null ? b.pos : message.length;
+    return aPos - bPos;
+  });
+
+  // Cause = extension mentioned before the connector, Effect = after
+  let cause = null;
+  let effect = null;
+  for (const ext of sorted) {
+    const extPos = ext.pos != null ? ext.pos : 0;
+    if (extPos < connectorPos && !cause) cause = ext.extName;
+    else if (extPos >= connectorPos || cause) { if (!effect) effect = ext.extName; }
+  }
+
+  // Fallback: first = cause, second = effect
+  if (!cause && sorted.length >= 1) cause = sorted[0].extName;
+  if (!effect && sorted.length >= 2) effect = sorted[1].extName;
+
+  if (cause && effect && cause !== effect) {
+    return { cause, effect, connector: connectorMatch[0] };
+  }
+
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// VOICE DETECTOR
+//
+// Active voice: user commands action. "Log this." "Add exercise." "Review my week."
+// Passive voice: user observes state. "Bench increased." "Protein was low." "Weight went up."
+//
+// Active = default (execute). Passive = observe, acknowledge, suggest.
+// Voice doesn't change routing. It changes response framing.
+// Injected as a modifier so the AI knows whether to act or reflect.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Passive indicators: state changes, observations, third-person descriptions
+const PASSIVE_VOICE = /\b(increased|decreased|went up|went down|dropped|rose|fell|changed|improved|worsened|got better|got worse|was high|was low|is high|is low|seems|feels|been)\b/i;
+
+function detectVoice(message) {
+  if (PASSIVE_VOICE.test(message.toLowerCase())) return "passive";
+  return "active";
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ADJECTIVE PARSER
+//
+// Adjectives modify the noun by describing quality, state, or focus.
+// They don't change routing. They change what the mode pays attention to.
+// "High protein" = focus on protein. "Ready for progression" = evaluate state.
+// "Low calorie" = constrain suggestions. "Best workout" = superlative filter.
+//
+// Adjectives become: filters, evaluators, triggers, focus constraints.
+// Injected into the mode context so the AI knows what aspect matters.
+// ─────────────────────────────────────────────────────────────────────────
+
+const QUALITY_ADJ = /\b(high|low|good|bad|poor|strong|weak|heavy|light|best|worst|top|most|least)\s+(\w+)/gi;
+const STATE_ADJ = /\b(ready for|due for|behind on|ahead on|struggling with|improving|declining|stalled|consistent)\s*(\w*)/gi;
+const COMPARATIVE_ADJ = /\b(more|less|too much|too little|not enough|enough|plenty of|lacking)\s+(\w+)/gi;
+
+/**
+ * Parse adjectives: extract quality modifiers that focus the mode's response.
+ * Returns an array of { type, qualifier, subject } or empty array.
+ */
+function parseAdjectives(message) {
+  const adjectives = [];
+  const lower = message.toLowerCase();
+  let match;
+
+  QUALITY_ADJ.lastIndex = 0;
+  while ((match = QUALITY_ADJ.exec(lower)) !== null) {
+    adjectives.push({ type: "quality", qualifier: match[1], subject: match[2] });
+  }
+
+  STATE_ADJ.lastIndex = 0;
+  while ((match = STATE_ADJ.exec(lower)) !== null) {
+    if (match[2]) adjectives.push({ type: "state", qualifier: match[1], subject: match[2] });
+    else adjectives.push({ type: "state", qualifier: match[1], subject: null });
+  }
+
+  COMPARATIVE_ADJ.lastIndex = 0;
+  while ((match = COMPARATIVE_ADJ.exec(lower)) !== null) {
+    adjectives.push({ type: "comparative", qualifier: match[1], subject: match[2] });
+  }
+
+  return adjectives;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PREPOSITION PARSER
+//
+// Prepositions alter WHERE an action happens without changing WHAT happens.
+// "Log this under recovery" = verb is log, noun shifts to recovery.
+// "Compare this with last week" = verb is review, scope shifts to temporal.
+// "Move this into finance" = verb is plan, target shifts to finance.
+//
+// Prepositions turn the tree into a navigable semantic space.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Spatial prepositions that redirect the target node
+const PREPOSITION_PATTERN = /\b(?:under|in|into|at|to|from|for|on|within)\s+([a-zA-Z][\w\s-]{1,40}?)(?:\s*$|\s*(?:and|then|,|\.))/i;
+
+// Temporal prepositions that modify the query scope
+const TEMPORAL_PREPOSITION = /\b(?:from|since|after|before|during|last|this|past)\s+(week|month|day|yesterday|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d+\s*days?)/i;
+
+/**
+ * Parse prepositions: extract spatial and temporal modifiers from the message.
+ * Returns { targetOverride, temporal, preposition, raw } or null if none found.
+ *
+ * Spatial: "under recovery" -> resolves "recovery" to a node in the routing index
+ * Temporal: "from last week" -> passes time scope to the mode
+ */
+async function parsePreposition(message, rootId) {
+  const lower = message.toLowerCase();
+  const result = { targetOverride: null, temporal: null, preposition: null, raw: null };
+  let found = false;
+
+  // Spatial preposition: resolve the target name to a node via routing index
+  const spatialMatch = PREPOSITION_PATTERN.exec(lower);
+  if (spatialMatch && rootId) {
+    const targetName = spatialMatch[1].trim();
+    try {
+      const { getIndexForRoot } = await import("./routingIndex.js");
+      const index = getIndexForRoot(rootId);
+      if (index) {
+        // Search routing index for a matching extension or node name
+        for (const [extName, entry] of index) {
+          if (extName.toLowerCase() === targetName ||
+              entry.name?.toLowerCase() === targetName ||
+              entry.path?.toLowerCase().includes(targetName)) {
+            result.targetOverride = entry.nodeId;
+            result.preposition = spatialMatch[0].trim();
+            result.raw = targetName;
+            found = true;
+            break;
+          }
+        }
+      }
+      // If not in routing index, search tree children by name
+      if (!result.targetOverride) {
+        const Node = (await import("../../seed/models/node.js")).default;
+        const children = await Node.find({ parent: rootId }).select("_id name").lean();
+        for (const child of children) {
+          if (child.name?.toLowerCase() === targetName ||
+              child.name?.toLowerCase().includes(targetName)) {
+            result.targetOverride = String(child._id);
+            result.preposition = spatialMatch[0].trim();
+            result.raw = targetName;
+            found = true;
+            break;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Temporal preposition: extract time scope
+  const temporalMatch = TEMPORAL_PREPOSITION.exec(lower);
+  if (temporalMatch) {
+    result.temporal = temporalMatch[0].trim();
+    found = true;
+  }
+
+  return found ? result : null;
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // RUN MODE AND RETURN (eliminates copy-pasted switchMode/processMessage)
@@ -526,15 +826,33 @@ async function runModeAndReturn(visitorId, mode, message, {
   onToolLoopCheckpoint, modesUsed,
   targetNodeId = null,
   treeCapabilities = null,
+  adjectives = null,
+  voice = "active",
 }) {
   modesUsed.push(mode);
   emitStatus(socket, "intent", "");
 
-  // Build conversation memory + extension boundary injection.
-  // When routing to an extension-owned mode, tell the AI its scope so it
-  // doesn't improvise capabilities it doesn't have. The boundary includes
-  // what other domains exist so the AI can redirect the user.
+  // Build conversation memory + grammar modifier injections.
   let memory = formatMemoryContext(visitorId);
+
+  // Voice injection: passive voice means the user is observing, not commanding.
+  // The AI should acknowledge, reflect, and suggest rather than execute.
+  if (voice === "passive") {
+    const voiceBlock = `[Voice: passive] The user is describing something that happened or a state they noticed. ` +
+      `Observe and acknowledge. Reflect on what it means. Suggest next steps if relevant. ` +
+      `Do not treat this as a command to log or execute.`;
+    memory = (memory ? memory + "\n\n" : "") + voiceBlock;
+  }
+
+  // Adjective injection: focus constraints from the parsed message.
+  if (adjectives && adjectives.length > 0) {
+    const focusLines = adjectives.map(a => {
+      const subject = a.subject ? ` ${a.subject}` : "";
+      return `${a.qualifier}${subject}`;
+    });
+    const focusBlock = `[Focus] The user's message emphasizes: ${focusLines.join(", ")}. Prioritize this in your response.`;
+    memory = (memory ? memory + "\n\n" : "") + focusBlock;
+  }
   try {
     const { getModeOwner } = await import("../../seed/tree/extensionScope.js");
     const extOwner = getModeOwner(mode);
@@ -789,8 +1107,7 @@ export async function orchestrateTreeRequest({
           responseHint: "",
         };
         const holdExt = typeof getModeOwner === "function" ? getModeOwner(classification.mode) : "?";
-        log.verbose("Grammar",
-          `🎯 Parse noun: ${holdExt || "?"} (position hold) | "${classification.summary}"`);
+        log.verbose("Grammar", `🎯 noun=${holdExt || "?"} source=position-hold conf=0.95`);
       }
     }
   }
@@ -858,7 +1175,7 @@ export async function orchestrateTreeRequest({
   const confidence = classification.confidence ?? 0.5;
 
  log.verbose("Tree Orchestrator", 
-    `🎯 Parse noun: ${classification.intent} | confidence: ${confidence} | "${classification.summary}"`,
+    `🎯 noun=${classification.intent === "extension" ? getModeOwner(classification.mode) || "?" : classification.intent} source=classify conf=${confidence}`,
   );
   emitModeResult(socket, "intent", {
     intent: classification.intent,
@@ -1156,12 +1473,44 @@ export async function orchestrateTreeRequest({
       log.verbose("Tree Orchestrator", `  Chain: ${otherMatches.length} other matches: ${otherMatches.map(m => m.extName).join(", ") || "none"}`);
 
       if (otherMatches.length > 0) {
-        const chain = [
+        const allMatches = [
           { mode: classification.mode, targetNodeId: classification.targetNodeId || currentNodeId, extName: primaryExt, pos: primaryPos },
           ...otherMatches,
         ].sort((a, b) => a.pos - b.pos);
-        log.verbose("Tree Orchestrator", `  Chain detected: ${chain.map(m => m.extName).join(" -> ")}`);
-        return runChain(chain, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed });
+
+        // ── Causality check: is this cause → effect, not sequential chain? ──
+        const causal = detectCausality(message, allMatches);
+        if (causal) {
+          // Route to the EFFECT domain's coach mode with cause context injected.
+          const effectMatch = allMatches.find(m => m.extName === causal.effect);
+          if (effectMatch) {
+            log.info("Grammar", `📖 CAUSAL: ${causal.cause} -[${causal.connector}]-> ${causal.effect}`);
+
+            // Prefer coach mode for causal reasoning (reflective, not logging)
+            const effectMode = await (async () => {
+              const { getModesOwnedBy: gmo } = await import("../../seed/tree/extensionScope.js");
+              const modes = gmo(causal.effect);
+              return modes.find(m => m.endsWith("-coach")) || modes.find(m => m.endsWith("-review")) || effectMatch.mode;
+            })();
+
+            return runModeAndReturn(visitorId, effectMode, message, {
+              socket, username, userId, rootId, signal, slot,
+              currentNodeId: effectMatch.targetNodeId,
+              onToolLoopCheckpoint, modesUsed,
+              targetNodeId: effectMatch.targetNodeId,
+              adjectives: [{
+                type: "causal",
+                qualifier: `${causal.cause} ${causal.connector}`,
+                subject: causal.effect,
+              }],
+              voice: "passive",
+            });
+          }
+        }
+
+        // Not causal: run as sequential chain
+        log.verbose("Tree Orchestrator", `  Chain detected: ${allMatches.map(m => m.extName).join(" -> ")}`);
+        return runChain(allMatches, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed });
       }
     } catch (err) {
       log.debug("Tree Orchestrator", `Chain check failed: ${err.message}`);
@@ -1201,28 +1550,137 @@ export async function orchestrateTreeRequest({
       }
     }
 
+    // ── Step 1a: Parse pronouns (resolve "it", "that", "same") ──
+    const pronounInfo = parsePronouns(message, visitorId);
+    if (pronounInfo?.resolvedNode && !classification.targetNodeId) {
+      classification.targetNodeId = pronounInfo.resolvedNode;
+      setCurrentNodeId(visitorId, pronounInfo.resolvedNode);
+    }
+
+    // ── Step 1b: Parse preposition (where in the tree?) ──
+    let prepInfo = null;
+    try {
+      prepInfo = await parsePreposition(message, rootId);
+      if (prepInfo?.targetOverride) {
+        classification.targetNodeId = prepInfo.targetOverride;
+        setCurrentNodeId(visitorId, prepInfo.targetOverride);
+      }
+    } catch {}
+
     // ── Step 2: Parse tense (which conjugation of this verb?) ──
     let resolvedMode;
     let tenseInfo = { tense: "present", pattern: "forced" };
     if (forcedMode) {
       resolvedMode = forcedMode;
+      tenseInfo.pattern = "forced-by-handler";
     } else {
       tenseInfo = await parseTense(classification.mode, message, behavioral);
       resolvedMode = tenseInfo.mode;
     }
     const noun = getModeOwner(classification.mode) || "converse";
-    if (resolvedMode !== classification.mode) {
-      log.verbose("Grammar", `noun=${noun} tense=${tenseInfo.tense} (${tenseInfo.pattern}) -> ${resolvedMode}`);
-    } else {
-      log.verbose("Grammar", `noun=${noun} tense=${tenseInfo.tense} (${tenseInfo.pattern})`);
+
+    // ── Step 2b: Semantic confidence check ──
+    // Composite confidence from noun + tense. If low, escalate to LLM classifier.
+    // Grammar = fast deterministic layer. LLM = fallback disambiguation.
+    const CONFIDENCE_THRESHOLD = 0.65;
+    const nounConf = classification.confidence || 0.5;
+    const tenseConf = tenseInfo.pattern === "default" ? 0.6 : // fell to log by default
+                      tenseInfo.pattern === "error" ? 0.3 :
+                      tenseInfo.pattern === "single-mode" ? 0.7 :
+                      tenseInfo.pattern === "none" ? 0.4 :
+                      0.9; // explicit pattern match
+    const compositeConf = (nounConf * 0.6) + (tenseConf * 0.4);
+
+    if (compositeConf < CONFIDENCE_THRESHOLD && !forcedMode && rootId) {
+      try {
+        const { classify } = await import("./translator.js");
+        const { buildDeepTreeSummary } = await import("../../seed/tree/treeFetch.js");
+        const treeSummary = await buildDeepTreeSummary(rootId);
+        const llmResult = await classify({
+          message, userId,
+          conversationMemory: formatMemoryContext(visitorId),
+          treeSummary, signal, slot, rootId,
+        });
+        if (llmResult && llmResult.mode && llmResult.confidence > compositeConf) {
+          log.info("Grammar", `📖 LOW CONFIDENCE (${compositeConf.toFixed(2)}) -> LLM escalation -> noun=${llmResult.intent} mode=${llmResult.mode} conf=${llmResult.confidence}`);
+          classification.intent = llmResult.intent;
+          classification.mode = llmResult.mode;
+          classification.confidence = llmResult.confidence;
+          classification.targetNodeId = llmResult.targetNodeId || classification.targetNodeId;
+          // Re-parse tense with the new mode
+          tenseInfo = await parseTense(classification.mode, message, behavioral);
+          resolvedMode = tenseInfo.mode;
+        }
+      } catch (err) {
+        log.debug("Grammar", `LLM escalation failed: ${err.message}`);
+      }
     }
 
+    // ── Step 3: Parse adjectives + voice ──
+    const adjectives = parseAdjectives(message);
+    const voice = detectVoice(message);
+
+    // ── GRAMMAR DEBUGGER: unified parse tree ──
+    const parseTree = {
+      input: message.slice(0, 80),
+      noun,
+      nounConfidence: classification.confidence,
+      nounSource: classification.targetNodeId ? "position-hold" : "classification",
+      tense: tenseInfo.tense,
+      tensePattern: tenseInfo.pattern,
+      negated: tenseInfo.tense === "negated",
+      compound: tenseInfo.compound ? tenseInfo.compound.map(s => s.tense) : null,
+      pronoun: pronounInfo?.pronoun || null,
+      adjectives: adjectives.length > 0 ? adjectives : null,
+      voice,
+      preposition: prepInfo?.preposition || null,
+      prepTarget: prepInfo?.raw || null,
+      temporal: prepInfo?.temporal || null,
+      forcedMode: forcedMode || null,
+      resolvedMode,
+      targetNodeId: classification.targetNodeId || currentNodeId,
+    };
+
+    const parts = [`noun=${parseTree.noun}`];
+    parts.push(`tense=${parseTree.tense}(${parseTree.tensePattern})`);
+    parts.push(`conf=${compositeConf.toFixed(2)}`);
+    if (parseTree.negated) parts.push("NEGATED");
+    if (parseTree.compound) parts.push(`chain=[${parseTree.compound.join("->")}]`);
+    if (parseTree.pronoun) parts.push(`pronoun=${parseTree.pronoun}`);
+    if (parseTree.adjectives) parts.push(`adj=[${adjectives.map(a => `${a.qualifier} ${a.subject || ""}`).join(", ")}]`);
+    if (voice === "passive") parts.push("PASSIVE");
+    if (parseTree.preposition) parts.push(`prep="${parseTree.preposition}"->${parseTree.prepTarget}`);
+    if (parseTree.temporal) parts.push(`time="${parseTree.temporal}"`);
+    if (parseTree.forcedMode) parts.push(`forced=${parseTree.forcedMode}`);
+    parts.push(`-> ${resolvedMode}`);
+
+    log.info("Grammar", `📖 ${parts.join(" | ")}`);
+    log.verbose("Grammar", `   input: "${parseTree.input}"`);
+
+    // ── Update pronoun state for next message ──
+    updatePronounState(visitorId, {
+      active: classification.targetNodeId || currentNodeId,
+      lastNoun: noun,
+      lastMode: resolvedMode,
+      lastMessage: message.slice(0, 200),
+    });
+
+    // ── Compound dispatch: multi-tense chain ──
+    if (tenseInfo.compound && tenseInfo.compound.length > 1) {
+      return runChain(tenseInfo.compound, message, visitorId, {
+        socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed,
+      });
+    }
+
+    // ── Single dispatch ──
     return runModeAndReturn(visitorId, resolvedMode, message, {
       socket, username, userId, rootId, signal, slot,
       currentNodeId: classification.targetNodeId || currentNodeId,
       readOnly: behavioral === "query",
       onToolLoopCheckpoint, modesUsed,
       targetNodeId: classification.targetNodeId,
+      adjectives: adjectives.length > 0 ? adjectives : null,
+      voice,
     });
   }
 
@@ -1241,7 +1699,7 @@ export async function orchestrateTreeRequest({
       if (indexMatches.length === 1) {
         const single = indexMatches[0];
         const singleTense = await parseTense(single.mode, message, behavioral);
-        log.verbose("Grammar", `noun=${single.extName} tense=${singleTense.tense} (implicit from converse)`);
+        log.info("Grammar", `📖 noun=${single.extName} | tense=${singleTense.tense}(implicit) | -> ${singleTense.mode}`);
         return runModeAndReturn(visitorId, singleTense.mode, message, {
           socket, username, userId, rootId, signal, slot,
           currentNodeId: single.targetNodeId, clearHistory: true,

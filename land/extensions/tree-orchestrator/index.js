@@ -62,6 +62,25 @@ export async function init(core) {
     } catch {}
   }, "tree-orchestrator");
 
+  // ── Pronoun state: track last modified node for "that"/"same" resolution ──
+  core.hooks.register("afterToolCall", async ({ toolName, args, success, userId, rootId }) => {
+    if (!success || !userId) return;
+
+    const nodeId = args?.nodeId || args?.parentId || args?.parentNodeID;
+    if (!nodeId) return;
+
+    // Read-only tools don't modify state
+    const readOnly = new Set(["navigate-tree", "get-tree-context", "get-node-notes", "get-root-nodes", "get-tree"]);
+    if (readOnly.has(toolName)) return;
+
+    try {
+      const { updatePronounState } = await import("./orchestrator.js");
+      // Build visitorId from rootId + userId (same pattern as runOrchestration)
+      const visitorId = rootId ? `${rootId}:${userId}` : `user:${userId}`;
+      updatePronounState(visitorId, { lastMod: String(nodeId) });
+    } catch {}
+  }, "tree-orchestrator");
+
   // Register LLM slots for semantic routing
   // Operators assign cheap/fast models to these for routing decisions
   core.llm.registerRootLlmSlot?.("departure");

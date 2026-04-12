@@ -13,9 +13,13 @@ const AIArchitecturePage = () => {
           <h1 className="lp-title">The AI</h1>
           <p className="lp-subtitle">How the tree thinks.</p>
           <p className="lp-tagline">
-            The intelligence primitive. A conversation loop in the seed that resolves which LLM to call,
+            An intent routing system whose most natural developer interface is a linguistic grammar
+            that unifies and clarifies the underlying architecture.
+          </p>
+          <p className="lp-tagline" style={{fontSize: "0.9rem", color: "rgba(255,255,255,0.35)", maxWidth: 480}}>
+            A conversation loop in the seed that resolves which LLM to call,
             which tools to provide, which mode to think in, and which position context to inject.
-            All based on where you are in the tree. Users configure. Builders extend. Developers replace.
+            All based on where you are in the tree.
           </p>
           <div className="lp-hero-ctas lp-hero-ctas-sub">
             <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
