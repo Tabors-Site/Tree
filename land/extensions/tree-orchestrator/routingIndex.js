@@ -184,6 +184,9 @@ export async function rebuildIndexForRoot(rootId) {
 
     // Also include confined extensions that are ext-allowed at the tree root.
     // These don't scaffold nodes or set modes.respond, but they're active here.
+    // Spatial scoping from the kernel already propagates the allow down the
+    // tree, so `ext-allow code-forge` at a root gives every node below it
+    // routing access to forge-ship without per-node markup.
     try {
       const { getConfinedExtensions, isExtensionBlockedAtNode, getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
       const { getExtensionManifest, flattenVocabulary } = await import("../loader.js");
@@ -194,7 +197,7 @@ export async function rebuildIndexForRoot(rootId) {
         const hints = flattenVocabulary(manifest);
         if (hints.length === 0) continue;
         const modes = getModesOwnedBy(extName);
-        const defaultMode = modes.find(m => m.endsWith("-agent") || m.endsWith("-tell") || m.endsWith("-log") || m.endsWith("-browse")) || modes[0];
+        const defaultMode = modes.find(m => m.endsWith("-ship") || m.endsWith("-agent") || m.endsWith("-tell") || m.endsWith("-log") || m.endsWith("-browse")) || modes[0];
         if (!defaultMode) continue;
         const vocab = getVocabularyForExtension(extName);
         index.set(extName, {

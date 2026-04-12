@@ -26,7 +26,12 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 // We intercept those calls and store them. When a new session starts, we
 // create a fresh McpServer and replay all registrations in order.
 
-const _toolRegistrations = []; // [{ name, description, schema, handler }]
+// Registrations are captured as { kind, name, ... } so replay can dispatch
+// to either tool() (shorthand, raw shape) or registerTool() (config form
+// with a pre-built zod schema including passthrough). Callers in the
+// loader use registerTool so context fields like userId/rootId/nodeId
+// survive the MCP SDK's zod strip.
+const _toolRegistrations = []; // [{ kind: "tool"|"registerTool", ...fields }]
 
 /**
  * Proxy McpServer that captures tool registrations for replay.
@@ -43,13 +48,24 @@ class ToolRegistryProxy {
   }
 
   /**
-   * Capture tool registration for replay on per-session servers.
-   * Also registers on the template server so connectMcpTransport works.
+   * Shorthand-form registration. Preserved for backward compatibility;
+   * new code in the loader should prefer registerTool() below.
    */
   tool(name, description, schema, handler) {
-    _toolRegistrations.push({ name, description, schema, handler });
-    // Register on template too (needed for initial connect)
+    _toolRegistrations.push({ kind: "tool", name, description, schema, handler });
     this._templateServer.tool(name, description, schema, handler);
+  }
+
+  /**
+   * Config-form registration. Takes a { description, inputSchema,
+   * annotations } config object and a handler. The inputSchema may be
+   * a pre-built zod object (e.g. passthrough) so unknown fields survive
+   * validation. This is how the loader registers extension tools so
+   * every handler can see its MCP context (userId/rootId/nodeId).
+   */
+  registerTool(name, config, handler) {
+    _toolRegistrations.push({ kind: "registerTool", name, config, handler });
+    this._templateServer.registerTool(name, config, handler);
   }
 
   /**
@@ -101,9 +117,16 @@ function createSessionServer() {
     },
   });
 
-  // Replay all tool registrations in order
+  // Replay all tool registrations in order. Dispatch on kind so tools
+  // registered via registerTool (config + passthrough schema) are re-
+  // attached with the same API they were created with; legacy tool()
+  // registrations still go through the shorthand path.
   for (const reg of _toolRegistrations) {
-    server.tool(reg.name, reg.description, reg.schema, reg.handler);
+    if (reg.kind === "registerTool") {
+      server.registerTool(reg.name, reg.config, reg.handler);
+    } else {
+      server.tool(reg.name, reg.description, reg.schema, reg.handler);
+    }
   }
 
   const transport = new StreamableHTTPServerTransport({

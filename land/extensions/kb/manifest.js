@@ -13,11 +13,52 @@ export default {
     "and the coworker who always gets interrupted.",
 
   territory: "storing and retrieving knowledge, references, notes",
-  classifierHints: [
-    /\b(kb|knowledge base|tell kb|save to kb|add to kb|store in kb|ask kb)\b/i,
-    /\b(procedure|protocol|policy|process|steps for)\b/i,
-    /\b(remember this|note that|fyi|heads up|update:|changed to)\b/i,
-  ],
+
+  // Territory vocabulary split by part of speech.
+  //
+  // Philosophy: KB is unusual because its territory isn't about things in
+  // the world. It's about the ACT of storing and retrieving knowledge.
+  // The vocabulary is mostly meta-actions: "remember this", "what does kb
+  // say", "document this". These are soft signals because phrases like
+  // "remember this moment" aren't KB intent.
+  //
+  // The minimum routing threshold (4) protects against single soft verb
+  // matches. A stray "remember" by itself (score 2) won't commit to KB
+  // unless the user is at a KB tree (locality 4x = 8, passes threshold).
+  //
+  // Strong KB signals are direct references (kb, wiki) and document-type
+  // nouns (procedure, protocol, FAQ, documentation).
+  vocabulary: {
+    verbs: [
+      // Direct KB commands
+      /\b(tell\s+kb|ask\s+kb|save\s+(?:this|that)?\s*to\s+kb|add\s+to\s+kb|store\s+in\s+kb|search\s+kb|query\s+kb)\b/i,
+      // Knowledge capture phrases (soft signals)
+      /\b(remember\s+(?:this|that|the\s+following))\b/i,
+      /\b(note\s+(?:that|this)|write\s+(?:this|that)\s+down|document\s+(?:this|that))\b/i,
+      /\b(record\s+(?:this|that|for\s+future))\b/i,
+      // Knowledge retrieval phrases
+      /\b(look\s+up|search\s+for|find\s+info(?:rmation)?\s+(?:on|about)|what\s+do\s+we\s+know\s+about|what\s+does\s+(?:the\s+)?kb\s+say)\b/i,
+      // Update announcement verbs
+      /\b(fyi|heads\s+up|update:|updated\s+to|changed\s+to|revised\s+to|the\s+procedure\s+changed)\b/i,
+    ],
+    nouns: [
+      // Direct KB references
+      /\b(kb|knowledge\s*base|wiki|wikipedia[- ]style)\b/i,
+      // Document types (strong signals)
+      /\b(procedure|procedures|protocol|protocols|policy|policies|manual|manuals|guide|guides|howto|how[- ]to)\b/i,
+      /\b(documentation|docs|reference\s+(?:doc|material|guide)|faq|faqs)\b/i,
+      /\b(handbook|handbooks|playbook|playbooks|runbook|runbooks|checklist|checklists)\b/i,
+      // Procedural phrases (paired form avoids generic "process" hijack)
+      /\bsteps\s+(?:for|to)\b/i,
+      /\b(process\s+for|process\s+of)\b/i,
+      // Knowledge items
+      /\b(article|articles|entry|entries|topic|topics|knowledge\s+item)\b/i,
+    ],
+    adjectives: [
+      // Knowledge quality states
+      /\b(outdated|stale|out[- ]of[- ]date|up[- ]to[- ]date|current|verified|unverified|canonical|authoritative|deprecated|archived)\b/i,
+    ],
+  },
 
   needs: {
     models: ["Node", "Note"],

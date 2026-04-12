@@ -654,7 +654,11 @@
       "Bash(grep -r \"POST.*food\\\\|POST.*root.*food\" /home/tabor/github/Tree/land/extensions/*/routes.js)",
       "Bash(grep -A 20 \"name: \\\\\"navigate-tree\\\\\"\" /home/tabor/github/Tree/land/extensions/treeos-base/tools/*.js)",
       "Bash(find /home/tabor/github/Tree/land/extensions -name \"*.js\" -exec grep -l \"navigate-tree\" {} \\\\;)",
-      "Bash(grep -l '/app\">Site' *.jsx)"
+      "Bash(grep -l '/app\">Site' *.jsx)",
+      "Bash(git -C /home/tabor/github/Tree status --short land/extensions/vowel-counter)",
+      "Bash(grep -rn \"socket.on\\\\|'orchestratorStep'\\\\|'executionStatus'\\\\|'chatResponse'\\\\|'toolResult'\" /home/tabor/github/Tree/cli/*.js /home/tabor/github/Tree/cli/commands/*.js)",
+      "Bash(find /home/tabor/github/Tree/land -name \"*.js\" -not -path \"*/node_modules/*\" -exec grep -l \"userId.*context\\\\|toolContext\\\\|setToolContext\\\\|mcp.*context\" {} \\\\;)",
+      "Bash(grep -n \"userId\\\\|rootId\\\\|context\" /home/tabor/github/Tree/land/mcp/*.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

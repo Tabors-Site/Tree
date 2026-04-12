@@ -860,12 +860,38 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
           registerToolOwner(tool.name, manifest.name, tool.annotations?.readOnlyHint ?? false);
           try {
             if (tool.handler) {
-              // Full tool with handler: register on MCP server
-              mcpServer.tool(
+              // IMPORTANT: register via registerTool() with a pre-built
+              // passthrough zod object so the SDK does NOT strip context
+              // fields that the MCP HTTP layer injects on every call
+              // (userId, rootId, nodeId, chatId, sessionId). The shorthand
+              // server.tool() wraps raw shapes in a strict z.object which
+              // silently drops unknown fields, leaving every tool handler
+              // blind to its own position in the tree. This broke tools
+              // across every extension, not just code-workspace.
+              //
+              // Accepts both raw shape ({ key: z.string() }) and already-
+              // built zod schemas.
+              const { z } = await import("zod");
+              let inputSchema;
+              if (tool.schema && typeof tool.schema === "object" && !tool.schema._def && !tool.schema._zod) {
+                // raw shape → wrap in passthrough
+                inputSchema = z.object(tool.schema).passthrough();
+              } else if (tool.schema && typeof tool.schema.passthrough === "function") {
+                // already a zod object → ensure passthrough
+                inputSchema = tool.schema.passthrough();
+              } else {
+                // unknown shape — let the SDK deal with it
+                inputSchema = tool.schema;
+              }
+
+              mcpServer.registerTool(
                 tool.name,
-                tool.description,
-                tool.schema,
-                tool.handler
+                {
+                  description: tool.description,
+                  inputSchema,
+                  annotations: tool.annotations || undefined,
+                },
+                tool.handler,
               );
             }
           } catch (toolErr) {
