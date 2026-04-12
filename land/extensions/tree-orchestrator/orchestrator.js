@@ -1,7 +1,7 @@
 // orchestrators/tree.js
-// Position determines reality.
-// Extension at this position? Route to its mode.
-// No extension? tree:converse. The AI reads what's here and talks.
+// A compiler + runtime for executing structured intent across domain state systems.
+// Extensions are state + tools + context. Modes are execution templates inside graph nodes.
+// Natural language compiles into execution graphs. The runtime walks them.
 
 import log from "../../seed/log.js";
 import { WS } from "../../seed/protocol.js";
@@ -430,44 +430,34 @@ async function resolveLlmProvider(userId, rootId, modeKey, slot) {
 //   Pronouns     = Position (currentNodeId, rootId, "here", "this")
 //   Articles     = Existence (THE bench press = route, A bench press = create)
 //
-// The pipeline parses every message through four layers:
+// Five orthogonal axes decompose every message:
 //
-// Layer 1: RESOLUTION (where + domain)
-//   Parse noun        — routing index identifies territory
-//   Parse pronouns    — resolve "it", "that", "same" from state
-//   Parse prepositions — "under recovery" shifts target node
-//   Determines: which extension, which node, which scope.
+//   DOMAIN (what thing)         noun, pronoun, preposition
+//   SCOPE (how much/when)       quantifiers, temporal scope
+//   INTENT (what action)        tense, conditionals
+//   INTERPRETATION (how)        adjectives, voice
+//   EXECUTION (runtime shape)   dispatch, sequence, fork
 //
-// Layer 2: INTENT (what action + control flow)
-//   Parse tense       — review / coach / plan / log
-//   Detect negation   — cancel default, reroute to coach
-//   Detect compound   — sequential chaining via conjunctions
-//   Confidence check  — if grammar uncertain, escalate to LLM
-//   Determines: which mode fires, whether to chain.
+// The pipeline:
 //
-// Layer 3: QUALIFICATION (how to interpret + constrain)
-//   Parse adjectives  — quality/focus ("high protein", "ready for")
-//   Detect voice      — active (execute) vs passive (observe)
-//   Inject adverbs    — instructions ("be concise", "use kg")
-//   Inject boundaries — extension scope limits
-//   Inject persona    — identity and tone
-//   Determines: framing, focus, constraints.
+// 1. Parse noun        — routing index identifies territory
+// 1a Parse pronouns    — resolve "it", "that", "same" from state
+// 1b Parse prepositions — "under recovery" shifts target node
+// 1c Parse quantifiers — "all", "top 3", "this week" set scope
+// 1d Parse conditionals — "if", "when", "unless" branching logic
+// 1e Parse temporal    — "yesterday", "last week", "since January" data window
+// 2. Parse tense       — review / coach / plan / log
+// 2b Confidence check  — if grammar uncertain, escalate to LLM
+// 3. Parse adjectives  — quality/focus ("high protein", "ready for")
+// 3b Detect voice      — active (execute) vs passive (observe)
+// 4. Build graph       — compile intent into dispatch / sequence / fork
+// 5. Execute graph     — walk the graph, evaluate forks, run modes
 //
-// Layer 4: PLANNING + EXECUTION
-//   Single            — runModeAndReturn
-//   Chain             — runChain (sequential compound)
-//   Causal            — cross-domain routing (effect from cause)
-//   Determines: what actually runs.
+// LLM is only used in two places:
+//   1. Semantic evaluation (condition checking in forks)
+//   2. Generation (the actual mode response)
 //
-// Three orthogonal axes, each evolves independently:
-//   WHERE — noun + preposition + pronoun
-//   WHAT  — tense + negation + compound
-//   HOW   — adjectives + adverbs + voice + boundaries
-//
-// Guiding principle: don't ask "what system feature is missing?"
-// Ask "what human expression currently breaks or feels unnatural?"
-// Map it to: noun, verb, tense, modifier, structure.
-// That becomes the roadmap.
+// Everything else is deterministic compilation.
 // ─────────────────────────────────────────────────────────────────────────
 
 // Tense patterns. These conjugate the verb (extension) into the right mode.
@@ -477,30 +467,38 @@ async function resolveLlmProvider(userId, rootId, modeKey, slot) {
 // Negation (coach):              cancels the default action, routes to conversation
 // Present tense (log):           recording facts, stating actions (default)
 
-const TENSE_PAST = /\b(how am i|how did i|how have i|progress|status|review|daily|weekly|stats|streak|history|trend|so far|pattern|doing|summary|recap|compare|average|report|results|track record)\b/i;
+// Past tense (review): looking backwards at what happened.
+// Questions about state, progress, history. "How is" / "show me" phrasings.
+const TENSE_PAST = /\b(how am i|how did i|how have i|how is|how's|how are|how's my|hows my|show me|check my|check on|look at|looking|where am i|where are we|am i on track|on track|update me|catch me up|give me|tell me how|my progress|progress|status|review|daily|weekly|monthly|stats|streak|history|trend|trends|so far|pattern|patterns|doing|summary|recap|compare|average|averages|report|results|track record|overview|breakdown|analytics|performance)\b/i;
 
+// Future tense (coach): asking for guidance, suggestions, opinions.
+// Conditional/subjunctive phrasings. Questions that seek advice, not facts.
 const TENSE_FUTURE = new RegExp([
   // Asking for guidance
-  "what should i", "should i", "help me", "recommend", "suggest",
-  "advice", "advise", "guide", "what do i", "what can i", "tell me what",
-  "coach", "what next", "whats next", "next up", "ready for",
+  "what should i", "should i", "help me", "recommend", "recommendations?",
+  "suggest", "suggestions?", "advice", "advise", "guide", "guidance",
+  "what do i", "what can i", "tell me what", "tell me how to",
+  "coach me", "what next", "whats next", "what'?s next", "next up", "ready for",
   "prepare", "warm up", "ideas?", "options?", "thoughts?", "opinion",
-  // Corrections and clarifications (not data, just conversation)
+  "any tips", "any advice", "walk me through", "what would",
+  // Corrections and clarifications
   "supposed to be", "should be", "actually is", "i meant", "correction",
   "wrong", "mistake", "fix that", "update that", "not right", "oops",
-  // Conversational (not logging, just talking)
+  // Conversational and exploratory
   "why", "explain", "tell me about", "what is", "what are", "how does",
-  "can you", "do you", "is it", "are there", "would it",
-  // Greetings and small talk (stay in coach, don't try to log "hi")
-  "^hi$", "^hey$", "^hello$", "^yo$", "^sup$", "^whats up$",
+  "how do i", "can you", "do you", "is it", "are there", "would it",
+  "could i", "could we", "might i", "is this", "am i ready", "do i need",
+  "when should", "where should", "how often", "how much should",
+  // Greetings and small talk
+  "^hi$", "^hey$", "^hello$", "^yo$", "^sup$", "^whats up$", "^what's up$",
 ].map(p => `(?:${p})`).join("|"), "i");
 
-const TENSE_IMPERATIVE = /\b(plan|build|create|setup|set up|structure|organize|add|modify|remove|delete|restructure|program|taper|schedule|adjust|set.*goal|change|curriculum|configure|redesign|rebuild|swap|replace|rename)\b/i;
+// Imperative tense (plan): commanding a structural change. Building, creating, modifying.
+const TENSE_IMPERATIVE = /\b(plan|build|create|make|setup|set up|set\s+.*\bgoal|set\s+.*\btarget|structure|organize|define|add|modify|remove|delete|restructure|program|taper|schedule|adjust|change|update(?:\s+my)?|curriculum|configure|redesign|rebuild|swap|replace|rename|initialize|start tracking|stop tracking|enable|disable|turn on|turn off)\b/i;
 
-// Negation: cancels the default action. The user is saying "don't do the thing."
-// Routes to coach (conversation) instead of log (action).
-// This is the seed of the constraint layer: undo, permissions, conditions.
-const NEGATION = /\b(don'?t|do not|not|no|skip|stop|cancel|ignore|forget it|never mind|undo|that'?s wrong|wasn'?t|isn'?t|aren'?t|won'?t)\b/i;
+// Negation: cancels the default action. "Don't do the thing."
+// Includes undo intent, course corrections, explicit cancel words.
+const NEGATION = /\b(don'?t|do not|not|no|skip|stop|cancel|ignore|forget it|forget that|never mind|nevermind|undo|take.*back|that'?s wrong|wasn'?t|isn'?t|aren'?t|won'?t|hold on|wait|scratch that|scrap that|disregard)\b/i;
 
 /**
  * Parse tense: which conjugation of the verb (extension) handles this message.
@@ -572,7 +570,26 @@ async function parseTense(baseMode, message, behavioral) {
       return { mode: find("coach") || baseMode, tense: "negated", pattern: "negation" };
     }
 
-    return { mode: find("log", "tell") || baseMode, tense: "present", pattern: "default" };
+    // Default: present tense, route to log/tell. But first check if the message
+    // actually contains domain content. If the user is at a food node but the
+    // message has zero food classifier hints (no ingestion verbs, no food nouns),
+    // it is meta conversation, not a log entry. Route to coach instead.
+    const logMode = find("log", "tell");
+    if (logMode) {
+      try {
+        const { getClassifierHintsForMode } = await import("../loader.js");
+        const hints = getClassifierHintsForMode(logMode);
+        if (hints && hints.length > 0) {
+          const anyHintMatches = hints.some(re => re.test(message));
+          if (!anyHintMatches) {
+            // Message at this position but no domain content. Meta conversation.
+            return { mode: find("coach") || logMode, tense: "present", pattern: "conversational" };
+          }
+        }
+      } catch {}
+      return { mode: logMode, tense: "present", pattern: "default" };
+    }
+    return { mode: baseMode, tense: "present", pattern: "default" };
   } catch {
     return { mode: baseMode, tense: "present", pattern: "error" };
   }
@@ -801,40 +818,56 @@ const CONDITIONAL_WHEN = /\b(when|whenever|once|after|as soon as|the moment|next
 const CONDITIONAL_UNLESS = /\b(unless|except if|except when|if not|only if not)\b\s+(.+?)(?:\s*[,;]\s*)/i;
 // Fallback: "if X" at the start of the message without a comma (short form)
 const CONDITIONAL_SHORT = /^(if|when|unless|once|after)\s+(.+?)(?:\s*$)/i;
+const CONDITIONAL_ELSE = /(?:,?\s*(?:otherwise|else|if not|or else)\s+)(.+)$/i;
 
 /**
  * Parse conditionals: detect branching logic in natural language.
- * Returns { type, keyword, condition, action } or null.
+ * Returns { type, keyword, condition, action, elseAction } or null.
  *
  * type:
  *   "if"      — evaluate condition, then act
  *   "when"    — temporal trigger, act when condition is met
  *   "unless"  — act unless condition is true (negated if)
+ *
+ * action:      the "then" part (text after condition separator)
+ * elseAction:  text after "otherwise"/"else" if present, or null
  */
 function parseConditional(message) {
   const lower = message.toLowerCase().trim();
   let match;
+  let condEnd = 0;
 
   // Try each pattern in priority order
+  let type, keyword, condition;
   if ((match = CONDITIONAL_IF.exec(lower))) {
-    return { type: "if", keyword: match[1], condition: match[2].trim() };
-  }
-  if ((match = CONDITIONAL_UNLESS.exec(lower))) {
-    return { type: "unless", keyword: match[1], condition: match[2].trim() };
-  }
-  if ((match = CONDITIONAL_WHEN.exec(lower))) {
-    return { type: "when", keyword: match[1], condition: match[2].trim() };
-  }
-
-  // Short form: "if protein is low" (no comma, no then)
-  // Only match if the message starts with a conditional keyword
-  if ((match = CONDITIONAL_SHORT.exec(lower))) {
+    type = "if"; keyword = match[1]; condition = match[2].trim();
+    condEnd = match.index + match[0].length;
+  } else if ((match = CONDITIONAL_UNLESS.exec(lower))) {
+    type = "unless"; keyword = match[1]; condition = match[2].trim();
+    condEnd = match.index + match[0].length;
+  } else if ((match = CONDITIONAL_WHEN.exec(lower))) {
+    type = "when"; keyword = match[1]; condition = match[2].trim();
+    condEnd = match.index + match[0].length;
+  } else if ((match = CONDITIONAL_SHORT.exec(lower))) {
     const kw = match[1].toLowerCase();
-    const type = kw === "unless" ? "unless" : (kw === "when" || kw === "once" || kw === "after") ? "when" : "if";
-    return { type, keyword: match[1], condition: match[2].trim() };
+    type = kw === "unless" ? "unless" : (kw === "when" || kw === "once" || kw === "after") ? "when" : "if";
+    keyword = match[1]; condition = match[2].trim();
+    return { type, keyword, condition, action: null, elseAction: null };
   }
 
-  return null;
+  if (!type) return null;
+
+  // Extract action and else clause from remainder
+  const remainder = lower.slice(condEnd).trim();
+  const elseMatch = CONDITIONAL_ELSE.exec(remainder);
+  let action = remainder;
+  let elseAction = null;
+  if (elseMatch) {
+    action = remainder.slice(0, elseMatch.index).trim();
+    elseAction = elseMatch[1].trim();
+  }
+
+  return { type, keyword, condition, action: action || null, elseAction };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -902,19 +935,16 @@ function parseAdjectives(message) {
 // Spatial prepositions that redirect the target node
 const PREPOSITION_PATTERN = /\b(?:under|in|into|at|to|from|for|on|within)\s+([a-zA-Z][\w\s-]{1,40}?)(?:\s*$|\s*(?:and|then|,|\.))/i;
 
-// Temporal prepositions that modify the query scope
-const TEMPORAL_PREPOSITION = /\b(?:from|since|after|before|during|last|this|past)\s+(week|month|day|yesterday|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d+\s*days?)/i;
-
 /**
- * Parse prepositions: extract spatial and temporal modifiers from the message.
- * Returns { targetOverride, temporal, preposition, raw } or null if none found.
+ * Parse prepositions: extract spatial modifiers from the message.
+ * Returns { targetOverride, preposition, raw } or null if none found.
  *
  * Spatial: "under recovery" -> resolves "recovery" to a node in the routing index
- * Temporal: "from last week" -> passes time scope to the mode
+ * Temporal parsing moved to parseTemporalScope (Step 1d).
  */
 async function parsePreposition(message, rootId) {
   const lower = message.toLowerCase();
-  const result = { targetOverride: null, temporal: null, preposition: null, raw: null };
+  const result = { targetOverride: null, preposition: null, raw: null };
   let found = false;
 
   // Spatial preposition: resolve the target name to a node via routing index
@@ -956,21 +986,608 @@ async function parsePreposition(message, rootId) {
     } catch {}
   }
 
-  // Temporal preposition: extract time scope
-  const temporalMatch = TEMPORAL_PREPOSITION.exec(lower);
-  if (temporalMatch) {
-    result.temporal = temporalMatch[0].trim();
-    found = true;
-  }
-
   return found ? result : null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// TEMPORAL SCOPE PARSER (Step 1d)
+//
+// Time is not tense. Tense = intent (review, log, coach, plan).
+// Time = data scope (which window of data the mode operates on).
+//
+// "How did I do last week" has tense=past (review mode) AND time=last week.
+// "Log my meal yesterday" has tense=present (log mode) AND time=yesterday.
+// "Compare January to February" has tense=past (review) AND time=range.
+//
+// Four categories:
+//   relative:  "yesterday", "last week", "3 days ago", "recently"
+//   absolute:  "January", "March 5", "2026-01-15", days of the week
+//   duration:  "over 3 months", "the past 2 weeks", "for a year"
+//   range:     "from Monday to Friday", "between January and March"
+//
+// The parsed scope is injected as [Time Scope] so the AI constrains
+// its data queries to the specified window.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Relative: "yesterday", "last week", "3 days ago", "recently", "lately"
+const TEMPORAL_RELATIVE = /\b(yesterday|today|tonight|this morning|last night|recently|lately|just now)\b|\b(last|past|previous|this|next)\s+(week|month|day|year|session|workout|meal|quarter)\b|\b(\d+)\s+(days?|weeks?|months?|years?|hours?)\s+ago\b/i;
+
+// Absolute: "January", "March 5", "Monday", "the 15th", ISO dates
+const TEMPORAL_ABSOLUTE = /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s*(\d{1,2})?\b|\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|\b(\d{4}-\d{2}-\d{2})\b|\bthe\s+(\d{1,2})(st|nd|rd|th)\b/i;
+
+// Duration: "over 3 months", "for the past 2 weeks", "in the last month"
+const TEMPORAL_DURATION = /\b(?:over|for|during|in|within)\s+(?:the\s+)?(?:past|last|next)?\s*(\d+)?\s*(days?|weeks?|months?|years?|hours?)\b/i;
+
+// Range: "from X to Y", "between X and Y", "X through Y"
+const TEMPORAL_RANGE = /\b(?:from|between)\s+(.+?)\s+(?:to|and|through|until)\s+(.+?)(?:\s*$|\s*[,.])/i;
+
+// "Since": open-ended start point
+const TEMPORAL_SINCE = /\b(?:since|starting|beginning)\s+(.+?)(?:\s*$|\s*[,.])/i;
+
+/**
+ * Parse temporal scope: extract the data window from the message.
+ * Returns { type, raw, ...details } or null.
+ *
+ * type:
+ *   "relative"  — "yesterday", "last week", "3 days ago"
+ *   "absolute"  — "January", "March 5", "Monday"
+ *   "duration"  — "over 3 months", "the past 2 weeks"
+ *   "range"     — "from Monday to Friday"
+ *   "since"     — "since January", open-ended
+ */
+function parseTemporalScope(message) {
+  const lower = message.toLowerCase().trim();
+  let match;
+
+  // Range first (most specific)
+  if ((match = TEMPORAL_RANGE.exec(lower))) {
+    return { type: "range", raw: match[0].trim(), from: match[1].trim(), to: match[2].trim() };
+  }
+
+  // Since (open-ended range)
+  if ((match = TEMPORAL_SINCE.exec(lower))) {
+    return { type: "since", raw: match[0].trim(), from: match[1].trim() };
+  }
+
+  // Duration
+  if ((match = TEMPORAL_DURATION.exec(lower))) {
+    return { type: "duration", raw: match[0].trim(), count: match[1] ? parseInt(match[1]) : 1, unit: match[2] };
+  }
+
+  // Relative (high frequency: "yesterday", "last week", "3 days ago")
+  if ((match = TEMPORAL_RELATIVE.exec(lower))) {
+    const raw = match[0].trim();
+    if (match[4] && match[5]) {
+      // "3 days ago" pattern
+      return { type: "relative", raw, count: parseInt(match[4]), unit: match[5], direction: "ago" };
+    }
+    if (match[2] && match[3]) {
+      // "last week" / "this month" pattern
+      return { type: "relative", raw, direction: match[2], unit: match[3] };
+    }
+    // Simple: "yesterday", "today", "recently"
+    return { type: "relative", raw };
+  }
+
+  // Absolute (named month, day of week, ISO date)
+  if ((match = TEMPORAL_ABSOLUTE.exec(lower))) {
+    return { type: "absolute", raw: match[0].trim() };
+  }
+
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// LAYER 4: EXECUTION GRAPH
+//
+// Three primitives:
+//   DISPATCH  - run one mode (wraps runModeAndReturn)
+//   SEQUENCE  - run steps in order (wraps runChain)
+//   FORK      - evaluate condition, pick path (three-valued: true/false/unknown)
+//   FANOUT    - set expansion (reserved, not built)
+//
+// The grammar compiles intent into graph nodes.
+// The runtime walks the graph and executes.
+
+// -- Phase A: Evaluate condition (pure) --
+// No knowledge of graph nodes, execution, or modes.
+// Returns three-valued result with confidence.
+
+const CONDITION_EVAL_PROMPT = `Evaluate a condition against data. Output ONLY this JSON, nothing else:
+{"result":true,"confidence":0.9,"reasoning":"short sentence"}
+or
+{"result":false,"confidence":0.9,"reasoning":"short sentence"}
+If data is missing, set confidence under 0.5. No thinking, no preamble, just JSON.`;
+
+const CONDITION_CONFIDENCE_THRESHOLD = 0.7;
+
+function serializeContextForEval(context) {
+  const parts = [];
+  if (context.name) parts.push(`Node: ${context.name}`);
+  if (context.status) parts.push(`Status: ${context.status}`);
+
+  // Extension-injected data (enrichContext results)
+  for (const [key, val] of Object.entries(context)) {
+    if (["id", "name", "status", "isRoot", "dateCreated", "type", "noteCount", "notes", "parent", "children", "siblings"].includes(key)) continue;
+    if (val === null || val === undefined) continue;
+    if (typeof val === "object") {
+      try { parts.push(`${key}: ${JSON.stringify(val)}`); } catch {}
+    } else {
+      parts.push(`${key}: ${val}`);
+    }
+  }
+  return parts.join("\n");
+}
+
+async function evaluateCondition(conditionText, { rootId, nodeId, userId, signal, slot }) {
+  try {
+    const { getContextForAi } = await import("../../seed/tree/treeFetch.js");
+    const context = await getContextForAi(nodeId, { userId });
+
+    // Also gather enriched context from children, since extension roles
+    // (like "daily" vs "root") fire on different nodes. The food root has
+    // nothing, but its Daily child has the full macro picture.
+    const Node = (await import("../../seed/models/node.js")).default;
+    const parent = await Node.findById(nodeId).select("children").lean();
+    const childContexts = [];
+    if (parent?.children?.length > 0) {
+      const childIds = parent.children.slice(0, 10); // cap at 10 children
+      for (const childId of childIds) {
+        try {
+          const childCtx = await getContextForAi(childId, { userId });
+          childContexts.push(childCtx);
+        } catch {}
+      }
+    }
+
+    let contextStr = serializeContextForEval(context);
+    for (const childCtx of childContexts) {
+      const childStr = serializeContextForEval(childCtx);
+      if (childStr && childStr.length > 10) {
+        contextStr += `\n${childStr}`;
+      }
+    }
+
+    if (!contextStr || contextStr.length < 10) {
+      return { result: "unknown", confidence: 0, reasoning: "no data available at this position" };
+    }
+
+    const { parseJsonSafe } = await import("../../seed/orchestrators/helpers.js");
+
+    // Get LLM client (reuse existing resolution chain)
+    const modeConnectionId = await resolveRootLlmForMode(rootId, "tree:librarian");
+    const clientInfo = await getClientForUser(userId, slot, modeConnectionId);
+    if (clientInfo.noLlm) {
+      return { result: "unknown", confidence: 0, reasoning: "no LLM configured" };
+    }
+
+    const response = await clientInfo.client.chat.completions.create(
+      {
+        model: clientInfo.model,
+        messages: [
+          { role: "system", content: CONDITION_EVAL_PROMPT },
+          { role: "user", content: `Data:\n${contextStr}\n\nCondition: "${conditionText}"\n\nOutput JSON now.` },
+        ],
+        max_tokens: 4000,
+        response_format: { type: "json_object" },
+      },
+      signal ? { signal } : {},
+    );
+
+    const choice = response.choices?.[0];
+    let raw = choice?.message?.content;
+
+    // Reasoning model fallback: some models (qwen, deepseek-r1) put output in a
+    // separate `reasoning` field if they didn't finish thinking. Try to extract JSON from there.
+    if (!raw && choice?.message?.reasoning) {
+      const reasoningText = choice.message.reasoning;
+      const jsonMatch = reasoningText.match(/\{[^{}]*"result"[^{}]*\}/);
+      if (jsonMatch) raw = jsonMatch[0];
+    }
+
+    if (!raw) {
+      log.info("Grammar", `Condition eval empty. model=${clientInfo.model} finish_reason=${choice?.finish_reason} full_choice=${JSON.stringify(choice || {}).slice(0, 500)}`);
+      return { result: "unknown", confidence: 0, reasoning: "empty LLM response" };
+    }
+
+    const parsed = parseJsonSafe(raw);
+    if (!parsed || typeof parsed.result !== "boolean") {
+      return { result: "unknown", confidence: 0, reasoning: "unparseable evaluation response" };
+    }
+
+    const confidence = Math.max(0, Math.min(1, parsed.confidence ?? 0.5));
+    const reasoning = parsed.reasoning || "";
+
+    // Three-valued: confidence below threshold -> unknown
+    if (confidence < CONDITION_CONFIDENCE_THRESHOLD) {
+      return { result: "unknown", confidence, reasoning: reasoning || "insufficient confidence" };
+    }
+
+    return { result: parsed.result ? "true" : "false", confidence, reasoning };
+  } catch (err) {
+    log.debug("Grammar", `Condition evaluation failed: ${err.message}`);
+    return { result: "unknown", confidence: 0, reasoning: `evaluation error: ${err.message}` };
+  }
+}
+
+// -- Phase B: Resolve fork (pure) --
+// No side effects. Pure branch selection.
+
+function resolveFork(forkNode, evaluation) {
+  if (evaluation.result === "true") return forkNode.truePath;
+  if (evaluation.result === "false") return forkNode.falsePath;
+  return forkNode.unknownPath;
+}
+
+// -- Set resolver (for FANOUT) --
+// Resolves quantifier + domain into concrete items with enriched context.
+// Extensions can override with exports.resolveSet for precision.
+
+const MAX_FANOUT_ITEMS = 20;
+
+async function resolveSet({ extName, rootId, quantifier, temporalScope, nodeId, userId }) {
+  try {
+    // Check if extension provides a custom resolver
+    const { getExtension } = await import("../loader.js");
+    const ext = extName ? getExtension(extName) : null;
+    if (ext?.exports?.resolveSet) {
+      const custom = await ext.exports.resolveSet({ quantifier, temporalScope, rootId, userId });
+      if (custom?.length > 0) return custom.slice(0, MAX_FANOUT_ITEMS);
+    }
+
+    // Generic: get children of the extension's node in this tree
+    const { getIndexForRoot } = await import("./routingIndex.js");
+    const index = rootId ? getIndexForRoot(rootId) : null;
+    const entry = extName && index ? index.get(extName) : null;
+    const targetId = nodeId || entry?.nodeId;
+    if (!targetId) return [];
+
+    const Node = (await import("../../seed/models/node.js")).default;
+    const parent = await Node.findById(targetId).select("children").lean();
+    if (!parent?.children?.length) return [];
+
+    const children = await Node.find({
+      _id: { $in: parent.children },
+      systemRole: null,
+    }).select("_id name metadata").lean();
+
+    if (children.length === 0) return [];
+
+    // Enrich each child's context (runs enrichContext hooks, gets real data)
+    const { getContextForAi } = await import("../../seed/tree/treeFetch.js");
+    const items = [];
+    for (const child of children.slice(0, MAX_FANOUT_ITEMS)) {
+      try {
+        const ctx = await getContextForAi(child._id, { userId });
+        items.push({ nodeId: String(child._id), name: child.name, context: ctx });
+      } catch {
+        // Skip nodes that fail enrichment
+        items.push({ nodeId: String(child._id), name: child.name, context: { name: child.name } });
+      }
+    }
+
+    // Apply quantifier filter
+    if (quantifier?.type === "numeric") {
+      return items.slice(0, quantifier.count);
+    }
+    // universal, superlative, comparative: return all, let synthesis handle ranking
+    return items;
+  } catch (err) {
+    log.debug("Grammar", `Set resolution failed: ${err.message}`);
+    return [];
+  }
+}
+
+// -- Graph builder (pure) --
+// Takes parse results, returns graph node. No side effects, no LLM calls.
+
+function makeDispatch(mode, extName, targetNodeId, modifiers = {}) {
+  return {
+    type: "dispatch",
+    mode: mode || "tree:converse",
+    extName: extName || null,
+    targetNodeId: targetNodeId || null,
+    tense: modifiers.tense || "present",
+    modifiers: {
+      adjectives: modifiers.adjectives || null,
+      quantifiers: modifiers.quantifiers || null,
+      temporalScope: modifiers.temporalScope || null,
+      voice: modifiers.voice || "active",
+      readOnly: modifiers.readOnly || false,
+      treeCapabilities: modifiers.treeCapabilities || null,
+    },
+  };
+}
+
+function makeFanout(mode, extName, targetNodeId, modifiers = {}) {
+  return {
+    type: "fanout",
+    mode: mode || "tree:converse",
+    extName: extName || null,
+    targetNodeId: targetNodeId || null,
+    itemResolver: {
+      extName: extName || null,
+      quantifier: modifiers.quantifiers?.[0] || null,
+      temporalScope: modifiers.temporalScope || null,
+    },
+    modifiers: {
+      adjectives: modifiers.adjectives || null,
+      temporalScope: modifiers.temporalScope || null,
+      voice: modifiers.voice || "active",
+      readOnly: true, // fanout is always read
+      treeCapabilities: modifiers.treeCapabilities || null,
+    },
+  };
+}
+
+function buildExecutionGraph({
+  resolvedMode, tenseInfo, conditional, adjectives, quantifiers,
+  temporalScope, voice, causal, classification, behavioral, currentNodeId, rootId,
+  extName,
+}) {
+  const mods = {
+    adjectives: adjectives?.length > 0 ? adjectives : null,
+    quantifiers,
+    temporalScope,
+    voice,
+    readOnly: behavioral === "query",
+  };
+
+  // Priority 1: Conditional -> FORK
+  if (conditional) {
+    // The action dispatch: what happens when the condition is met (if/when) or not met (unless)
+    const actionDispatch = makeDispatch(resolvedMode, extName, classification?.targetNodeId || currentNodeId, {
+      ...mods, tense: tenseInfo?.tense || "present",
+    });
+
+    // The alternative dispatch: coach mode for graceful handling
+    const altMode = (() => {
+      if (!extName) return resolvedMode;
+      const base = resolvedMode || "";
+      const prefix = base.includes(":") ? base.split(":")[0] : "tree";
+      return `${prefix}:${extName}-coach`;
+    })();
+    const altDispatch = makeDispatch(altMode || resolvedMode, extName, classification?.targetNodeId || currentNodeId, {
+      ...mods, tense: "future",
+    });
+
+    // Unknown path: coach with "couldn't determine" context
+    const unknownDispatch = makeDispatch(altMode || resolvedMode, extName, classification?.targetNodeId || currentNodeId, {
+      ...mods, tense: "future",
+      adjectives: [...(mods.adjectives || []), { type: "condition-unknown", qualifier: "data insufficient to evaluate condition", subject: conditional.condition }],
+    });
+
+    // For "unless": invert. truePath = don't act (condition IS true), falsePath = act.
+    if (conditional.type === "unless") {
+      return {
+        type: "fork",
+        condition: { text: conditional.condition, type: conditional.type, keyword: conditional.keyword },
+        truePath: altDispatch,
+        falsePath: actionDispatch,
+        unknownPath: unknownDispatch,
+        source: "conditional",
+      };
+    }
+
+    // For "if"/"when": truePath = act, falsePath = don't act
+    return {
+      type: "fork",
+      condition: { text: conditional.condition, type: conditional.type, keyword: conditional.keyword },
+      truePath: actionDispatch,
+      falsePath: altDispatch,
+      unknownPath: unknownDispatch,
+      source: "conditional",
+    };
+  }
+
+  // Priority 2: Quantifier + analytical mode -> FANOUT
+  // Quantifiers on review/coach modes mean "resolve the set, bundle context, synthesize."
+  // Quantifiers on log/plan modes stay as annotation (you log ONE thing, not a set).
+  // TEMPORAL quantifiers alone ("this week", "last month") are time windows, not set selectors.
+  // FANOUT only fires when there's a non-temporal quantifier (universal, numeric, superlative, comparative).
+  if (quantifiers?.length > 0 && extName) {
+    const hasSetQuantifier = quantifiers.some(q => q.type !== "temporal");
+    const analyticTenses = ["past", "future", "negated"];
+    const isAnalytic = analyticTenses.includes(tenseInfo?.tense) || behavioral === "query";
+    if (hasSetQuantifier && isAnalytic) {
+      return makeFanout(resolvedMode, extName, classification?.targetNodeId || currentNodeId, mods);
+    }
+  }
+
+  // Priority 3: Compound tense -> SEQUENCE
+  if (tenseInfo?.compound && tenseInfo.compound.length > 1) {
+    return {
+      type: "sequence",
+      steps: tenseInfo.compound.map(step => makeDispatch(step.mode, step.extName, step.targetNodeId, {
+        ...mods, tense: step.tense,
+      })),
+      source: "compound",
+    };
+  }
+
+  // Priority 3: Causal -> single dispatch to effect domain's coach
+  if (causal) {
+    return makeDispatch(causal.effectMode, causal.effect, causal.effectNodeId, {
+      ...mods,
+      adjectives: [...(mods.adjectives || []), {
+        type: "causal",
+        qualifier: `${causal.cause} ${causal.connector}`,
+        subject: causal.effect,
+      }],
+      voice: "passive",
+      tense: "future",
+    });
+  }
+
+  // Priority 4: Single dispatch
+  return makeDispatch(resolvedMode, extName, classification?.targetNodeId || currentNodeId, {
+    ...mods, tense: tenseInfo?.tense || "present",
+  });
+}
+
+// -- Graph executor (runtime) --
+// Recursive walker. The only place with side effects.
+
+async function executeGraph(node, message, visitorId, opts) {
+  if (!node) return { success: false, answer: "No execution path resolved." };
+
+  if (node.type === "dispatch") {
+    return runModeAndReturn(visitorId, node.mode, message, {
+      socket: opts.socket,
+      username: opts.username,
+      userId: opts.userId,
+      rootId: opts.rootId,
+      signal: opts.signal,
+      slot: opts.slot,
+      currentNodeId: node.targetNodeId || opts.currentNodeId,
+      readOnly: node.modifiers.readOnly,
+      clearHistory: opts.clearHistory || false,
+      onToolLoopCheckpoint: opts.onToolLoopCheckpoint,
+      modesUsed: opts.modesUsed,
+      targetNodeId: node.targetNodeId,
+      adjectives: node.modifiers.adjectives,
+      quantifiers: node.modifiers.quantifiers,
+      temporalScope: node.modifiers.temporalScope,
+      voice: node.modifiers.voice,
+      treeCapabilities: node.modifiers.treeCapabilities || null,
+    });
+  }
+
+  if (node.type === "sequence") {
+    const chain = node.steps.map(s => ({
+      mode: s.mode,
+      extName: s.extName,
+      targetNodeId: s.targetNodeId,
+      tense: s.tense || "present",
+    }));
+    return runChain(chain, message, visitorId, {
+      socket: opts.socket,
+      username: opts.username,
+      userId: opts.userId,
+      rootId: opts.rootId,
+      signal: opts.signal,
+      slot: opts.slot,
+      onToolLoopCheckpoint: opts.onToolLoopCheckpoint,
+      modesUsed: opts.modesUsed,
+    });
+  }
+
+  if (node.type === "fork") {
+    emitStatus(opts.socket, "evaluating", node.condition.text);
+    const evaluation = await evaluateCondition(node.condition.text, {
+      rootId: opts.rootId,
+      nodeId: opts.currentNodeId,
+      userId: opts.userId,
+      signal: opts.signal,
+      slot: opts.slot,
+    });
+    const selected = resolveFork(node, evaluation);
+
+    // Inject evaluation reasoning so the AI knows WHY this branch was taken
+    if (selected.type === "dispatch" && evaluation.reasoning) {
+      selected.modifiers.adjectives = [
+        ...(selected.modifiers.adjectives || []),
+        { type: "condition-result", qualifier: evaluation.reasoning, subject: node.condition.text },
+      ];
+    }
+
+    log.info("Grammar", `FORK: "${node.condition.text}" -> ${evaluation.result} (conf=${evaluation.confidence.toFixed(2)}) -> ${selected.mode || selected.type} | ${evaluation.reasoning}`);
+    return executeGraph(selected, message, visitorId, opts);
+  }
+
+  if (node.type === "fanout") {
+    emitStatus(opts.socket, "resolving", "Gathering data...");
+
+    // Phase 1: Resolve the set
+    const items = await resolveSet({
+      extName: node.itemResolver.extName,
+      rootId: opts.rootId,
+      quantifier: node.itemResolver.quantifier,
+      temporalScope: node.itemResolver.temporalScope,
+      nodeId: node.targetNodeId || opts.currentNodeId,
+      userId: opts.userId,
+    });
+
+    if (items.length === 0) {
+      log.info("Grammar", `FANOUT: ${node.extName} -> 0 items resolved, falling back to dispatch`);
+      // No items found: fall back to normal dispatch with quantifier annotation
+      return runModeAndReturn(visitorId, node.mode, message, {
+        socket: opts.socket,
+        username: opts.username,
+        userId: opts.userId,
+        rootId: opts.rootId,
+        signal: opts.signal,
+        slot: opts.slot,
+        currentNodeId: node.targetNodeId || opts.currentNodeId,
+        readOnly: true,
+        clearHistory: opts.clearHistory || false,
+        onToolLoopCheckpoint: opts.onToolLoopCheckpoint,
+        modesUsed: opts.modesUsed,
+        adjectives: node.modifiers.adjectives,
+        voice: node.modifiers.voice,
+        treeCapabilities: node.modifiers.treeCapabilities || null,
+      });
+    }
+
+    // Phase 2: Bundle all item contexts into one prompt
+    const itemLines = items.map((item, i) => {
+      const ctx = item.context || {};
+      // Serialize enriched context per item
+      const dataLines = [];
+      for (const [key, val] of Object.entries(ctx)) {
+        if (["id", "isRoot", "dateCreated", "type", "noteCount", "parent", "siblings"].includes(key)) continue;
+        if (val === null || val === undefined) continue;
+        if (typeof val === "object") {
+          try { dataLines.push(`  ${key}: ${JSON.stringify(val)}`); } catch {}
+        } else {
+          dataLines.push(`  ${key}: ${val}`);
+        }
+      }
+      return `Item ${i + 1} - ${item.name}:\n${dataLines.join("\n")}`;
+    });
+
+    const fanoutBlock = `[Fanout: ${items.length} items resolved]\n${itemLines.join("\n\n")}\n\nThe user asked about ${items.length} items. Analyze each and synthesize a complete response.`;
+
+    log.info("Grammar", `FANOUT: ${node.extName} -> ${items.length} items resolved -> ${node.mode}`);
+
+    // Phase 3: Single dispatch with bundled context (synthesis)
+    return runModeAndReturn(visitorId, node.mode, message, {
+      socket: opts.socket,
+      username: opts.username,
+      userId: opts.userId,
+      rootId: opts.rootId,
+      signal: opts.signal,
+      slot: opts.slot,
+      currentNodeId: node.targetNodeId || opts.currentNodeId,
+      readOnly: true,
+      clearHistory: opts.clearHistory || false,
+      onToolLoopCheckpoint: opts.onToolLoopCheckpoint,
+      modesUsed: opts.modesUsed,
+      targetNodeId: node.targetNodeId,
+      adjectives: node.modifiers.adjectives,
+      temporalScope: node.modifiers.temporalScope,
+      voice: node.modifiers.voice,
+      treeCapabilities: node.modifiers.treeCapabilities || null,
+      fanoutContext: fanoutBlock,
+    });
+  }
+
+  return { success: false, answer: "Unknown graph node type." };
+}
+
+function describeGraph(node) {
+  if (!node) return "null";
+  if (node.type === "dispatch") return `dispatch ${node.mode}`;
+  if (node.type === "sequence") return `sequence ${node.steps.map(s => s.mode).join(" -> ")}`;
+  if (node.type === "fork") return `fork(${node.condition.type} "${node.condition.text}") true=${describeGraph(node.truePath)} / false=${describeGraph(node.falsePath)} / unknown=${describeGraph(node.unknownPath)}`;
+  if (node.type === "fanout") return `fanout ${node.extName} -> ${node.mode}`;
+  return node.type;
+}
+
 // GRAMMAR DEBUGGER (standalone, called from every path)
 // ─────────────────────────────────────────────────────────────────────────
 
-function logParseTree(message, { noun, nounSource, nounConf, tense, tensePattern, tenseConf, resolvedMode, negated, compound, pronoun, quantifiers, adjectives, voice, preposition, prepTarget, temporal, conditional, forcedMode }) {
+function logParseTree(message, { noun, nounSource, nounConf, tense, tensePattern, tenseConf, resolvedMode, negated, compound, pronoun, quantifiers, adjectives, voice, preposition, prepTarget, temporal, conditional, forcedMode, graph }) {
   const debugLines = [];
   debugLines.push(`📖 Parse: "${(message || "").slice(0, 80)}"`);
   debugLines.push(`   noun: ${noun || "?"} (${nounSource || "?"}, conf=${(nounConf || 0).toFixed(2)})`);
@@ -985,6 +1602,7 @@ function logParseTree(message, { noun, nounSource, nounConf, tense, tensePattern
   if (temporal) debugLines.push(`   temporal: ${temporal}`);
   if (conditional) debugLines.push(`   conditional: ${conditional.type} (${conditional.keyword}) "${conditional.condition}"`);
   if (forcedMode) debugLines.push(`   forced: ${forcedMode}`);
+  if (graph) debugLines.push(`   graph: ${describeGraph(graph)}`);
   const compositeConf = ((nounConf || 0.5) * 0.6) + ((tenseConf || 0.5) * 0.4);
   debugLines.push(`   confidence: ${compositeConf.toFixed(2)}${compositeConf < 0.65 ? " (LOW)" : ""}`);
   debugLines.push(`   dispatch: ${resolvedMode || "?"}`);
@@ -1008,7 +1626,8 @@ async function runModeAndReturn(visitorId, mode, message, {
   treeCapabilities = null,
   adjectives = null,
   quantifiers = null,
-  conditional = null,
+  temporalScope = null,
+  fanoutContext = null,
   voice = "active",
 }) {
   modesUsed.push(mode);
@@ -1016,6 +1635,19 @@ async function runModeAndReturn(visitorId, mode, message, {
 
   // Build conversation memory + grammar modifier injections.
   let memory = formatMemoryContext(visitorId);
+
+  // Temporal scope injection: constrains the data window the AI operates on.
+  // Time is not tense. Tense = intent. Time = which data to look at.
+  if (temporalScope) {
+    let timeDesc;
+    if (temporalScope.type === "range") timeDesc = `from ${temporalScope.from} to ${temporalScope.to}`;
+    else if (temporalScope.type === "since") timeDesc = `since ${temporalScope.from}`;
+    else if (temporalScope.type === "duration") timeDesc = `${temporalScope.raw}`;
+    else timeDesc = temporalScope.raw;
+    const timeBlock = `[Time Scope] The user is asking about a specific time window: ${timeDesc}. ` +
+      `Constrain your data queries and analysis to this period. Do not include data outside this window unless comparing.`;
+    memory = (memory ? memory + "\n\n" : "") + timeBlock;
+  }
 
   // Voice injection: passive voice means the user is observing, not commanding.
   // The AI should acknowledge, reflect, and suggest rather than execute.
@@ -1026,8 +1658,12 @@ async function runModeAndReturn(visitorId, mode, message, {
     memory = (memory ? memory + "\n\n" : "") + voiceBlock;
   }
 
-  // Quantifier injection: tells the AI to query a set, not act on one node.
-  if (quantifiers && quantifiers.length > 0) {
+  // Fanout injection: pre-resolved set data replaces generic selection annotation.
+  // When FANOUT executed, items are already resolved with real enriched context.
+  // When no fanout, fall back to annotation telling the AI to query the set itself.
+  if (fanoutContext) {
+    memory = (memory ? memory + "\n\n" : "") + fanoutContext;
+  } else if (quantifiers && quantifiers.length > 0) {
     const qDescs = quantifiers.map(q => {
       if (q.type === "numeric") return `${q.direction} ${q.count}`;
       if (q.type === "temporal") return `${q.direction} ${q.unit}`;
@@ -1050,15 +1686,6 @@ async function runModeAndReturn(visitorId, mode, message, {
     memory = (memory ? memory + "\n\n" : "") + focusBlock;
   }
 
-  // Conditional injection: tells the AI to evaluate a condition before acting.
-  if (conditional) {
-    const condBlock = conditional.type === "unless"
-      ? `[Conditional: unless] Evaluate this condition: "${conditional.condition}". If the condition is TRUE, do NOT perform the action. If FALSE, proceed normally.`
-      : conditional.type === "when"
-      ? `[Conditional: when] The user wants this to happen when a condition is met: "${conditional.condition}". Check if the condition is currently true. If yes, proceed. If not, acknowledge and explain what needs to happen first.`
-      : `[Conditional: if] Evaluate this condition first: "${conditional.condition}". Check it against current data. If true, proceed with the action. If false, explain why and what the current state is.`;
-    memory = (memory ? memory + "\n\n" : "") + condBlock;
-  }
   try {
     const { getModeOwner } = await import("../../seed/tree/extensionScope.js");
     const extOwner = getModeOwner(mode);
@@ -1684,46 +2311,52 @@ export async function orchestrateTreeRequest({
           ...otherMatches,
         ].sort((a, b) => a.pos - b.pos);
 
-        // ── Causality check: is this cause → effect, not sequential chain? ──
+        // ── Causality check: is this cause -> effect, not sequential chain? ──
         const causal = detectCausality(message, allMatches);
         if (causal) {
-          // Route to the EFFECT domain's coach mode with cause context injected.
           const effectMatch = allMatches.find(m => m.extName === causal.effect);
           if (effectMatch) {
-            logParseTree(message, {
-              noun: `${causal.cause}->${causal.effect}`, nounSource: "causal", nounConf: 0.85,
-              tense: "future", tensePattern: "coach-causal", tenseConf: 0.9,
-              resolvedMode: null, // set below
-              adjectives: parseAdjectives(message), voice: "passive",
-              conditional: parseConditional(message),
-            });
-            log.info("Grammar", `📖 CAUSAL: ${causal.cause} -[${causal.connector}]-> ${causal.effect}`);
-
-            // Prefer coach mode for causal reasoning (reflective, not logging)
+            // Resolve the effect domain's coach mode
             const effectMode = await (async () => {
               const { getModesOwnedBy: gmo } = await import("../../seed/tree/extensionScope.js");
               const modes = gmo(causal.effect);
               return modes.find(m => m.endsWith("-coach")) || modes.find(m => m.endsWith("-review")) || effectMatch.mode;
             })();
 
-            return runModeAndReturn(visitorId, effectMode, message, {
+            logParseTree(message, {
+              noun: `${causal.cause}->${causal.effect}`, nounSource: "causal", nounConf: 0.85,
+              tense: "future", tensePattern: "coach-causal", tenseConf: 0.9,
+              resolvedMode: effectMode, adjectives: parseAdjectives(message), voice: "passive",
+              conditional: parseConditional(message),
+            });
+            log.info("Grammar", `CAUSAL: ${causal.cause} -[${causal.connector}]-> ${causal.effect}`);
+
+            const causalGraph = buildExecutionGraph({
+              resolvedMode: effectMode, tenseInfo: { tense: "future", pattern: "coach-causal" },
+              conditional: parseConditional(message),
+              adjectives: parseAdjectives(message), quantifiers: null,
+              temporalScope: parseTemporalScope(message), voice: "passive",
+              causal: { cause: causal.cause, effect: causal.effect, connector: causal.connector, effectMode, effectNodeId: effectMatch.targetNodeId },
+              classification, behavioral, currentNodeId: effectMatch.targetNodeId, rootId,
+              extName: causal.effect,
+            });
+            log.verbose("Grammar", `Graph: ${describeGraph(causalGraph)}`);
+            return executeGraph(causalGraph, message, visitorId, {
               socket, username, userId, rootId, signal, slot,
               currentNodeId: effectMatch.targetNodeId,
               onToolLoopCheckpoint, modesUsed,
-              targetNodeId: effectMatch.targetNodeId,
-              adjectives: [{
-                type: "causal",
-                qualifier: `${causal.cause} ${causal.connector}`,
-                subject: causal.effect,
-              }],
-              voice: "passive",
             });
           }
         }
 
-        // Not causal: run as sequential chain
+        // Not causal: run as sequential chain via graph
         log.verbose("Tree Orchestrator", `  Chain detected: ${allMatches.map(m => m.extName).join(" -> ")}`);
-        return runChain(allMatches, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed });
+        const chainGraph = {
+          type: "sequence",
+          steps: allMatches.map(m => makeDispatch(m.mode, m.extName, m.targetNodeId, { tense: "present" })),
+          source: "multi-extension",
+        };
+        return executeGraph(chainGraph, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed });
       }
     } catch (err) {
       log.debug("Tree Orchestrator", `Chain check failed: ${err.message}`);
@@ -1775,6 +2408,9 @@ export async function orchestrateTreeRequest({
 
     // ── Step 1d: Parse conditionals (if/when/unless branching logic) ──
     const conditional = parseConditional(message);
+
+    // ── Step 1e: Parse temporal scope (data window) ──
+    const temporalScope = parseTemporalScope(message);
 
     // ── Step 1b: Parse preposition (where in the tree?) ──
     let prepInfo = null;
@@ -1839,6 +2475,13 @@ export async function orchestrateTreeRequest({
     const adjectives = parseAdjectives(message);
     const voice = detectVoice(message);
 
+    // ── Layer 4: Build execution graph ──
+    const graph = buildExecutionGraph({
+      resolvedMode, tenseInfo, conditional, adjectives, quantifiers,
+      temporalScope, voice, causal: null, classification, behavioral, currentNodeId, rootId,
+      extName: noun,
+    });
+
     // ── Grammar debugger ──
     logParseTree(message, {
       noun, nounSource: classification.targetNodeId ? "position-hold" : "classification",
@@ -1848,8 +2491,10 @@ export async function orchestrateTreeRequest({
       pronoun: pronounInfo?.pronoun || null, quantifiers,
       adjectives: adjectives.length > 0 ? adjectives : null,
       voice, preposition: prepInfo?.preposition || null,
-      prepTarget: prepInfo?.raw || null, temporal: prepInfo?.temporal || null,
+      prepTarget: prepInfo?.raw || null,
+      temporal: temporalScope ? temporalScope.raw : null,
       conditional, forcedMode: forcedMode || null,
+      graph,
     });
 
     // ── Update pronoun state for next message ──
@@ -1860,24 +2505,11 @@ export async function orchestrateTreeRequest({
       lastMessage: message.slice(0, 200),
     });
 
-    // ── Compound dispatch: multi-tense chain ──
-    if (tenseInfo.compound && tenseInfo.compound.length > 1) {
-      return runChain(tenseInfo.compound, message, visitorId, {
-        socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed,
-      });
-    }
-
-    // ── Single dispatch ──
-    return runModeAndReturn(visitorId, resolvedMode, message, {
+    // ── Execute ──
+    return executeGraph(graph, message, visitorId, {
       socket, username, userId, rootId, signal, slot,
       currentNodeId: classification.targetNodeId || currentNodeId,
-      readOnly: behavioral === "query",
       onToolLoopCheckpoint, modesUsed,
-      targetNodeId: classification.targetNodeId,
-      adjectives: adjectives.length > 0 ? adjectives : null,
-      quantifiers,
-      conditional,
-      voice,
     });
   }
 
@@ -1903,17 +2535,31 @@ export async function orchestrateTreeRequest({
           resolvedMode: singleTense.mode, adjectives: parseAdjectives(message),
           voice: detectVoice(message), conditional: singleCond,
         });
-        return runModeAndReturn(visitorId, singleTense.mode, message, {
+        const converseGraph = buildExecutionGraph({
+          resolvedMode: singleTense.mode, tenseInfo: singleTense,
+          conditional: singleCond, adjectives: parseAdjectives(message),
+          quantifiers: parseQuantifier(message), temporalScope: parseTemporalScope(message),
+          voice: detectVoice(message),
+          causal: null, classification: { targetNodeId: single.targetNodeId },
+          behavioral, currentNodeId: single.targetNodeId, rootId,
+          extName: single.extName,
+        });
+        log.verbose("Grammar", `Graph: ${describeGraph(converseGraph)}`);
+        return executeGraph(converseGraph, message, visitorId, {
           socket, username, userId, rootId, signal, slot,
           currentNodeId: single.targetNodeId, clearHistory: true,
-          onToolLoopCheckpoint, modesUsed, targetNodeId: single.targetNodeId,
-          conditional: singleCond,
+          onToolLoopCheckpoint, modesUsed,
         });
       }
 
       if (indexMatches.length > 1) {
         log.verbose("Tree Orchestrator", `  Chain detected: ${indexMatches.map(m => m.extName).join(" -> ")}`);
-        return runChain(indexMatches, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed });
+        const converseChainGraph = {
+          type: "sequence",
+          steps: indexMatches.map(m => makeDispatch(m.mode, m.extName, m.targetNodeId, { tense: "present" })),
+          source: "converse-multi",
+        };
+        return executeGraph(converseChainGraph, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed });
       }
     } catch (err) {
       log.debug("Tree Orchestrator", `Converse check failed: ${err.message}`);
@@ -1953,12 +2599,37 @@ export async function orchestrateTreeRequest({
     conditional: fallbackCond,
   });
 
+  // Fallback: converse mode. If conditional detected, route through graph for evaluation.
+  // Otherwise direct dispatch (no graph overhead for simple messages).
+  if (fallbackCond) {
+    const fallbackGraph = buildExecutionGraph({
+      resolvedMode: "tree:converse", tenseInfo: { tense: "present", pattern: "default" },
+      conditional: fallbackCond, adjectives: parseAdjectives(message),
+      quantifiers: null, temporalScope: parseTemporalScope(message),
+      voice: detectVoice(message),
+      causal: null, classification: {}, behavioral, currentNodeId, rootId,
+      extName: null,
+    });
+    // Inject treeCapabilities into graph nodes
+    if (fallbackGraph.type === "dispatch") fallbackGraph.modifiers.treeCapabilities = treeCapabilities;
+    else if (fallbackGraph.type === "fork") {
+      fallbackGraph.truePath.modifiers.treeCapabilities = treeCapabilities;
+      fallbackGraph.falsePath.modifiers.treeCapabilities = treeCapabilities;
+      fallbackGraph.unknownPath.modifiers.treeCapabilities = treeCapabilities;
+    }
+    log.verbose("Grammar", `Graph: ${describeGraph(fallbackGraph)}`);
+    return executeGraph(fallbackGraph, message, visitorId, {
+      socket, username, userId, rootId, signal, slot,
+      currentNodeId, clearHistory: true,
+      onToolLoopCheckpoint, modesUsed,
+    });
+  }
+
   return runModeAndReturn(visitorId, "tree:converse", message, {
     socket, username, userId, rootId, signal, slot,
     currentNodeId, clearHistory: true,
     onToolLoopCheckpoint, modesUsed,
     treeCapabilities,
-    conditional: fallbackCond,
   });
 }
 // ─────────────────────────────────────────────────────────────────────────
