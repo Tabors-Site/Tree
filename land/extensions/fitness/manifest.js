@@ -50,6 +50,8 @@ export default {
       /\b(pr|personal\s+record|one\s+rep\s+max|1rm|3rm|5rm|max\s+effort)\b/i,
       // Equipment/modalities
       /\b(barbell|dumbbell|kettlebell|cable|machine|bodyweight|resistance\s+band)\b/i,
+      // Gym environment and gear
+      /\b(gym|studio|treadmill|squat\s*rack|power\s*rack|bench\s*rack|weight\s*room)\b/i,
     ],
     adjectives: [
       // Progression and goal states

@@ -1223,7 +1223,8 @@ export function getClassifierHintsForMode(modeKey) {
  */
 export function getVocabularyForExtension(extName) {
   try {
-    const manifest = loaded.get(extName)?.manifest;
+    const entry = loaded.get(extName);
+    const manifest = entry?.manifest;
     if (!manifest) return null;
     const result = { verbs: [], nouns: [], adjectives: [] };
     const v = manifest?.vocabulary;
@@ -1235,9 +1236,70 @@ export function getVocabularyForExtension(extName) {
     if (Array.isArray(manifest.classifierHints)) {
       result.verbs.push(...manifest.classifierHints.filter(r => r instanceof RegExp));
     }
+    // Merge learned vocabulary from sidecar file (auto-promoted by misroute extension)
+    if (entry?.dir) {
+      const learned = readLearnedVocabularyFile(entry.dir);
+      if (learned) {
+        if (Array.isArray(learned.nouns)) result.nouns.push(...learned.nouns);
+        if (Array.isArray(learned.verbs)) result.verbs.push(...learned.verbs);
+        if (Array.isArray(learned.adjectives)) result.adjectives.push(...learned.adjectives);
+      }
+    }
     if (result.verbs.length === 0 && result.nouns.length === 0 && result.adjectives.length === 0) return null;
     return result;
   } catch { return null; }
+}
+
+/**
+ * Read an extension's learned vocabulary sidecar file if present.
+ *
+ * The file lives at `<extensionDir>/vocabulary.learned.json` and is written
+ * by the misroute extension when a vocabulary suggestion crosses its
+ * promotion threshold. The format is:
+ *
+ *   {
+ *     "$schema": "vocabulary-learned-v1",
+ *     "lastUpdated": "2026-04-12T...",
+ *     "nouns":      [{ "pattern": "\\b(bill)\\b", "addedAt": "...", "trigger": "5 misroutes from finance" }, ...],
+ *     "verbs":      [...],
+ *     "adjectives": [...]
+ *   }
+ *
+ * Each entry stores the raw regex source string, not a RegExp instance,
+ * because JSON can't serialize RegExp. We compile to RegExp on read.
+ *
+ * Returns { verbs, nouns, adjectives } as RegExp arrays, or null if missing/invalid.
+ */
+function readLearnedVocabularyFile(extDir) {
+  try {
+    const learnedPath = path.join(extDir, "vocabulary.learned.json");
+    if (!fs.existsSync(learnedPath)) return null;
+    const raw = fs.readFileSync(learnedPath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const compile = (arr) => {
+      if (!Array.isArray(arr)) return [];
+      const out = [];
+      for (const entry of arr) {
+        if (!entry?.pattern || typeof entry.pattern !== "string") continue;
+        try { out.push(new RegExp(entry.pattern, "i")); } catch {}
+      }
+      return out;
+    };
+    return {
+      nouns: compile(parsed.nouns),
+      verbs: compile(parsed.verbs),
+      adjectives: compile(parsed.adjectives),
+    };
+  } catch { return null; }
+}
+
+/**
+ * Get the absolute directory of a loaded extension.
+ * Used by extensions like misroute that need to write sidecar files.
+ */
+export function getExtensionDir(extName) {
+  return loaded.get(extName)?.dir || null;
 }
 
 export function getBootReport() {

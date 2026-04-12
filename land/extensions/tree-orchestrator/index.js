@@ -1,4 +1,4 @@
-import { orchestrateTreeRequest, clearMemory } from "./orchestrator.js";
+import { orchestrateTreeRequest, clearMemory, getLastRouting, getLastRoutingRing, clearLastRouting, getActiveRequest } from "./orchestrator.js";
 import { setClearMemoryFn } from "../../seed/ws/websocket.js";
 import { rebuildAll, rebuildIndexForRoot, invalidateRoot, getIndexForRoot, getAllIndexedRoots } from "./routingIndex.js";
 import { resolveRootNode } from "../../seed/tree/treeFetch.js";
@@ -96,6 +96,13 @@ export async function init(core) {
       getIndexForRoot,
       getAllIndexedRoots,
       rebuildIndexForRoot,
+      // Routing decision history (used by misroute extension to detect corrections)
+      getLastRouting,
+      getLastRoutingRing,
+      clearLastRouting,
+      // Active request context (used by misroute extension to redispatch on
+      // the same socket without going through the websocket layer).
+      getActiveRequest,
     },
   };
 }

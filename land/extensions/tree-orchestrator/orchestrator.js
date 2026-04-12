@@ -27,19 +27,48 @@ import { getLandConfigValue } from "../../seed/landConfig.js";
  * 2. Intent classification: greetings/questions → query, destructive → destructive,
  *    action commands → place, everything else → place (librarian decides).
  */
-async function localClassify(message, currentNodeId, rootId) {
+async function localClassify(message, currentNodeId, rootId, userId = null) {
   const lower = message.toLowerCase().trim();
   const base = { summary: message.slice(0, 100), responseHint: "" };
 
-  // ── Routing index (fast path) ──
-  // One Map scan. No DB queries. Catches deep extensions that Level 1-3 miss.
+  // ── Personal vocabulary (Layer 3) ──
+  // Per-user vocabulary loaded from misroute extension's personalVocab module.
+  // Cached in-process per user with a 5-minute TTL. Falls back to {} if the
+  // misroute extension isn't loaded or the user has no personal vocab.
+  let personalVocabAll = null;
+  if (userId) {
+    try {
+      const { getExtension } = await import("../loader.js");
+      const misroute = getExtension("misroute");
+      if (misroute?.exports?.getPersonalVocabularyForUser) {
+        personalVocabAll = await misroute.exports.getPersonalVocabularyForUser(userId);
+      }
+    } catch {}
+  }
+
+  // ── Routing index (fast path, scored with locality + personal vocab) ──
+  // One Map scan. Scores every candidate extension by POS (nouns 3x, verbs 2x,
+  // adjectives 1x) with a 4x locality bonus when the user is inside the
+  // extension's subtree. Personal vocab patterns merge in at score time and
+  // contribute to both the score and the locality multiplier. The highest
+  // total score wins.
   if (rootId && currentNodeId) {
     try {
-      const { queryIndex } = await import("./routingIndex.js");
+      const { queryIndexScored } = await import("./routingIndex.js");
       const currentPath = await _buildCurrentPath(currentNodeId);
-      const match = queryIndex(rootId, message, currentPath);
-      if (match) {
-        return { intent: "extension", mode: match.mode, targetNodeId: match.targetNodeId, confidence: match.confidence, ...base };
+      const scored = queryIndexScored(rootId, message, currentPath, personalVocabAll);
+      if (scored?.winner) {
+        return {
+          intent: "extension",
+          mode: scored.winner.mode,
+          targetNodeId: scored.winner.targetNodeId,
+          confidence: scored.winner.confidence,
+          posMatches: scored.winner.matches,
+          posScore: scored.winner.score,
+          posLocality: scored.winner.locality,
+          posAllScores: scored.all.map(s => ({ extName: s.extName, score: s.score, locality: s.locality })),
+          ...base,
+        };
       }
     } catch {}
   }
@@ -623,6 +652,72 @@ function getPronounState(visitorId) {
 export function updatePronounState(visitorId, updates) {
   const current = getPronounState(visitorId);
   _pronounState.set(visitorId, { ...current, ...updates });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// LAST ROUTING STATE (for misroute detection)
+//
+// Stores the most recent routing decision per visitor so that extensions
+// like `misroute` can check whether the NEXT message from the same visitor
+// is a correction of this one. Keyed by visitorId (same as pronoun state).
+//
+// Keeps a tiny ring of the last few decisions so a user correcting two
+// messages back still has something to attach to.
+// ─────────────────────────────────────────────────────────────────────────
+
+const _lastRouting = new Map(); // visitorId -> [{ message, extName, mode, targetNodeId, currentNodeId, rootId, posMatches, posScore, posLocality, ts }, ...]
+const LAST_ROUTING_RING = 3;
+
+// Active request context per visitor. Set on entry to orchestrateTreeRequest,
+// cleared on exit. Lets extensions like misroute look up the websocket and
+// session info needed to fire a follow-up orchestration call on the same
+// channel without going through the websocket layer themselves.
+const _activeRequests = new Map(); // visitorId -> { socket, sessionId, signal, slot, rootChatId, username, userId, rootId }
+
+function recordRoutingDecision(visitorId, decision) {
+  if (!visitorId || !decision) return;
+  const existing = _lastRouting.get(visitorId) || [];
+  existing.unshift({ ...decision, ts: Date.now() });
+  while (existing.length > LAST_ROUTING_RING) existing.pop();
+  _lastRouting.set(visitorId, existing);
+}
+
+export function getLastRouting(visitorId) {
+  const ring = _lastRouting.get(visitorId);
+  return ring?.[0] || null;
+}
+
+export function getLastRoutingRing(visitorId) {
+  return _lastRouting.get(visitorId) || [];
+}
+
+export function clearLastRouting(visitorId) {
+  _lastRouting.delete(visitorId);
+}
+
+// Active request context lifecycle. Used by misroute extension to redispatch
+// the original message at the correct mode after detecting a named correction.
+//
+// Stored with a timestamp. The getter only returns entries within the TTL,
+// which avoids the need for a try/finally wrapper around the entire (very
+// large) orchestrateTreeRequest function. Stale entries get overwritten by
+// the next request from the same visitor or expire on read.
+const ACTIVE_REQUEST_TTL_MS = 30 * 1000;
+
+function setActiveRequest(visitorId, ctx) {
+  if (!visitorId) return;
+  _activeRequests.set(visitorId, { ...ctx, _ts: Date.now() });
+}
+
+export function getActiveRequest(visitorId) {
+  if (!visitorId) return null;
+  const entry = _activeRequests.get(visitorId);
+  if (!entry) return null;
+  if (Date.now() - entry._ts > ACTIVE_REQUEST_TTL_MS) {
+    _activeRequests.delete(visitorId);
+    return null;
+  }
+  return entry;
 }
 
 /**
@@ -1430,6 +1525,7 @@ async function executeGraph(node, message, visitorId, opts) {
       temporalScope: node.modifiers.temporalScope,
       voice: node.modifiers.voice,
       treeCapabilities: node.modifiers.treeCapabilities || null,
+      reroutePrefix: opts.reroutePrefix || null,
     });
   }
 
@@ -1568,7 +1664,7 @@ function describeGraph(node) {
 // GRAMMAR DEBUGGER (standalone, called from every path)
 // ─────────────────────────────────────────────────────────────────────────
 
-function logParseTree(message, { noun, nounSource, nounConf, tense, tensePattern, tenseConf, resolvedMode, negated, compound, pronoun, quantifiers, adjectives, voice, preposition, prepTarget, temporal, conditional, forcedMode, graph }) {
+function logParseTree(message, { noun, nounSource, nounConf, tense, tensePattern, tenseConf, resolvedMode, negated, compound, pronoun, quantifiers, adjectives, voice, preposition, prepTarget, temporal, conditional, forcedMode, graph, posMatches, posScore, posLocality, posAllScores }) {
   const debugLines = [];
   debugLines.push(`📖 Parse: "${(message || "").slice(0, 80)}"`);
   debugLines.push(`   noun: ${noun || "?"} (${nounSource || "?"}, conf=${(nounConf || 0).toFixed(2)})`);
@@ -1584,6 +1680,22 @@ function logParseTree(message, { noun, nounSource, nounConf, tense, tensePattern
   if (conditional) debugLines.push(`   conditional: ${conditional.type} (${conditional.keyword}) "${conditional.condition}"`);
   if (forcedMode) debugLines.push(`   forced: ${forcedMode}`);
   if (graph) debugLines.push(`   graph: ${describeGraph(graph)}`);
+
+  // Per-POS routing matches: which words hit which extension's vocabulary,
+  // including the locality bonus applied to the winner.
+  if (posMatches && (posMatches.verbs.length > 0 || posMatches.nouns.length > 0 || posMatches.adjectives.length > 0)) {
+    const parts = [];
+    if (posMatches.nouns.length > 0) parts.push(`n:${posMatches.nouns.join(",")}`);
+    if (posMatches.verbs.length > 0) parts.push(`v:${posMatches.verbs.join(",")}`);
+    if (posMatches.adjectives.length > 0) parts.push(`a:${posMatches.adjectives.join(",")}`);
+    const locTag = posLocality ? " LOCALITY" : "";
+    debugLines.push(`   matched: score=${posScore || 0}${locTag} [${parts.join(" ")}]`);
+  }
+  if (posAllScores && posAllScores.length > 1) {
+    const rivals = posAllScores.slice(1).map(s => `${s.extName}=${s.score}${s.locality ? "(loc)" : ""}`).join(" ");
+    debugLines.push(`   rivals: ${rivals}`);
+  }
+
   const compositeConf = ((nounConf || 0.5) * 0.6) + ((tenseConf || 0.5) * 0.4);
   debugLines.push(`   confidence: ${compositeConf.toFixed(2)}${compositeConf < 0.65 ? " (LOW)" : ""}`);
   debugLines.push(`   dispatch: ${resolvedMode || "?"}`);
@@ -1609,6 +1721,7 @@ async function runModeAndReturn(visitorId, mode, message, {
   quantifiers = null,
   temporalScope = null,
   fanoutContext = null,
+  reroutePrefix = null,
   voice = "active",
 }) {
   modesUsed.push(mode);
@@ -1616,6 +1729,21 @@ async function runModeAndReturn(visitorId, mode, message, {
 
   // Build conversation memory + grammar modifier injections.
   let memory = formatMemoryContext(visitorId);
+
+  // Reroute prefix injection: when the orchestrator intercepted a correction
+  // and substituted the message, tell the AI to open its response with a
+  // brief note explaining the reroute. This keeps the chat history readable:
+  // the user sees their correction in the history, then the AI's response
+  // starts with "↪ Rerouted your previous message to food: ...". Without
+  // this, the chat looks like the AI ignored the correction and answered a
+  // random question, which is confusing.
+  if (reroutePrefix) {
+    const rerouteBlock = `[Rerouted] This message was rerouted from another extension. ` +
+      `Your response MUST begin with EXACTLY this line on its own, followed by a blank line, ` +
+      `then your normal response to the message:\n\n${reroutePrefix}\n\nDo not paraphrase the ` +
+      `reroute line. Copy it exactly as shown above.`;
+    memory = (memory ? memory + "\n\n" : "") + rerouteBlock;
+  }
 
   // Temporal scope injection: constrains the data window the AI operates on.
   // Time is not tense. Tense = intent. Time = which data to look at.
@@ -1797,10 +1925,60 @@ export async function orchestrateTreeRequest({
   sourceType = null,
   sourceId = null,
   onToolLoopCheckpoint = null,
+  forceMode = null, // misroute reroute uses this to bypass classification
 }) {
   if (signal?.aborted) return null;
 
   const rootId = rootIdParam ?? getRootId(visitorId);
+
+  // Stash the active request context so extensions (like misroute) can
+  // redispatch on the same socket if they detect a correction. Cleared in
+  // a finally below so we never leak state across requests.
+  setActiveRequest(visitorId, {
+    socket, username, userId, signal, sessionId, rootId,
+    rootChatId, slot, sourceType, sourceId, onToolLoopCheckpoint,
+  });
+
+  // ── Early misroute intercept ──
+  // Before classification runs, ask the misroute extension if the current
+  // message is a correction of the previous routing. If yes and the user
+  // named a target, substitute the original message and forceMode the
+  // correct extension. This produces ONE orchestration call (the rerouted
+  // one) instead of two and the user only sees one response.
+  //
+  // Skipped when forceMode is already set (which means we ARE the rerouted
+  // call, prevents loops) or when misroute extension isn't loaded.
+  let reroutePrefix = null;
+  if (!forceMode && message) {
+    try {
+      const { getExtension } = await import("../loader.js");
+      const misroute = getExtension("misroute");
+      if (misroute?.exports?.checkForCorrectionReroute) {
+        const reroute = await misroute.exports.checkForCorrectionReroute({
+          message, visitorId, userId, rootId,
+        });
+        if (reroute) {
+          log.info("Tree Orchestrator",
+            `🔄 Correction intercept: substituting "${reroute.rerouteMessage.slice(0, 50)}" forceMode=${reroute.forceMode}`,
+          );
+          // Substitute message and force mode for the rest of this orchestration
+          message = reroute.rerouteMessage;
+          forceMode = reroute.forceMode;
+          // Build the prefix the AI should use to open its response. Makes
+          // the chat history read clearly: user sees their correction, then
+          // "↪ Rerouted ... : " followed by the actual answer from the
+          // correct extension. Without this prefix the chat looks like the
+          // AI ignored the correction and answered a random question.
+          const origMessage = reroute.rerouteMessage.length > 60
+            ? reroute.rerouteMessage.slice(0, 60) + "…"
+            : reroute.rerouteMessage;
+          reroutePrefix = `↪ Rerouted your previous message to ${reroute.correctExtension}: "${origMessage}"`;
+        }
+      }
+    } catch (err) {
+      log.debug("Tree Orchestrator", `Misroute intercept skipped: ${err.message}`);
+    }
+  }
 
   // Create an attached runtime (reuses the websocket's session, MCP, Chat)
   const rt = new OrchestratorRuntime({
@@ -1876,8 +2054,28 @@ export async function orchestrateTreeRequest({
   let classifyStart = new Date();
   let departed = false;
 
-  // Check if current position has a mode override (extension node)
-  {
+  // ────────────────────────────────────────────────────────
+  // STEP 0: forceMode bypass. When set (by misroute reroute), skip
+  // classification entirely and dispatch directly to the requested mode.
+  // The extension owner is derived from the mode key for downstream noun
+  // resolution. This is the entry point for active rerouting.
+  // ────────────────────────────────────────────────────────
+  if (forceMode) {
+    const forcedExt = (typeof getModeOwner === "function" ? getModeOwner(forceMode) : null) || "?";
+    classification = {
+      intent: "extension",
+      mode: forceMode,
+      targetNodeId: null,
+      confidence: 1.0,
+      summary: message.slice(0, 100),
+      responseHint: "",
+    };
+    log.info("Tree Orchestrator", `🔄 forceMode override: ${forceMode} (ext=${forcedExt})`);
+  }
+
+  // Check if current position has a mode override (extension node).
+  // Skipped entirely when forceMode is set so the override actually wins.
+  if (!forceMode) {
     const posNode = await Node.findById(currentNodeId).select("metadata").lean();
     const posModes = posNode?.metadata instanceof Map
       ? posNode.metadata.get("modes")
@@ -1975,11 +2173,11 @@ export async function orchestrateTreeRequest({
           );
         }
         log.error("Tree Orchestrator", " Classification failed:", err.message);
-        classification = await localClassify(message, departed ? rootId : (getCurrentNodeId(visitorId) || rootId), rootId);
+        classification = await localClassify(message, departed ? rootId : (getCurrentNodeId(visitorId) || rootId), rootId, userId);
       }
     } else {
       // Default: local classification. Zero LLM calls.
-      classification = await localClassify(message, departed ? rootId : (getCurrentNodeId(visitorId) || rootId), rootId);
+      classification = await localClassify(message, departed ? rootId : (getCurrentNodeId(visitorId) || rootId), rootId, userId);
     }
   }
   const classifyEnd = new Date();
@@ -2476,6 +2674,10 @@ export async function orchestrateTreeRequest({
       temporal: temporalScope ? temporalScope.raw : null,
       conditional, forcedMode: forcedMode || null,
       graph,
+      posMatches: classification.posMatches,
+      posScore: classification.posScore,
+      posLocality: classification.posLocality,
+      posAllScores: classification.posAllScores,
     });
 
     // ── Update pronoun state for next message ──
@@ -2486,11 +2688,29 @@ export async function orchestrateTreeRequest({
       lastMessage: message.slice(0, 200),
     });
 
+    // ── Record the routing decision so misroute extension can check
+    //    whether the NEXT message from this visitor is a correction. ──
+    recordRoutingDecision(visitorId, {
+      message: message.slice(0, 500),
+      extName: noun,
+      mode: resolvedMode,
+      targetNodeId: classification.targetNodeId || null,
+      currentNodeId,
+      rootId,
+      posMatches: classification.posMatches || null,
+      posScore: classification.posScore || 0,
+      posLocality: classification.posLocality || false,
+      tense: tenseInfo.tense,
+      tensePattern: tenseInfo.pattern,
+      confidence: classification.confidence || 0,
+    });
+
     // ── Execute ──
     return executeGraph(graph, message, visitorId, {
       socket, username, userId, rootId, signal, slot,
       currentNodeId: classification.targetNodeId || currentNodeId,
       onToolLoopCheckpoint, modesUsed,
+      reroutePrefix, // null unless misroute intercept fired above
     });
   }
 

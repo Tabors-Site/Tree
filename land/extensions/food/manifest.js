@@ -33,6 +33,8 @@ export default {
       // "had a/an/some/my/the X", or "had two/three X", or "had X for breakfast".
       /\b(had|having)\s+(?:a|an|some|my|the|two|three|four|five|six|seven|eight|nine|ten|\d+)\b/i,
       /\b(had|having)\s+\w+\s+(?:for\s+(?:breakfast|lunch|dinner|a\s+snack))\b/i,
+      // "had breakfast/lunch/dinner/a snack" directly
+      /\b(had|having)\s+(?:breakfast|lunch|dinner|brunch|supper|a\s+snack|a\s+meal)\b/i,
       // Preparation verbs
       /\b(cook|cooking|cooked|prepped|prep|grabbed|made)\s+(?:a|an|some|breakfast|lunch|dinner|snack|meal|food)\b/i,
       // Explicit logging
