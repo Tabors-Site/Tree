@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tinder Clone</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .header {
+      padding: 15px;
+      text-align: center;
+      background: rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-around;
+    }
+    
+    .header h1 {
+      color: #fff;
+      font-size: 1.5rem;
+    }
+    
+    .header .matches {
+      color: #fff;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    
+    .header .icon {
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: #fff;
+    }
+    
+    .card-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      position: relative;
+    }
+    
+    .card {
+      background: #fff;
+      border-radius: 15px;
+      width: 100%;
+      max-width: 350px;
+      height: 550px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      position: relative;
+      transform-origin: 50% 100%;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      overflow: hidden;
+    }
+    
+    .card.swiping-left {
+      transform: translate(-100px) rotate(-30deg) !important;
+      opacity: 0;
+    }
+    
+    .card.swiping-right {
+      transform: translate(100px) rotate(30deg) !important;
+      opacity: 0;
+    }
+    
+    .card-photo {
+      width: 100%;
+      height: 400px;
+      object-fit: cover;
+    }
+    
+    .card-info {
+      padding: 15px;
+    }
+    
+    .card-info h2 {
+      font-size: 1.5rem;
+      margin-bottom: 5px;
+      color: #333;
+    }
+    
+    .card-info p {
+      color: #666;
+      font-size: 0.95rem;
+    }
+    
+    .card-overlay {
+      position: absolute;
+      top: 30px;
+      padding: 10px 20px;
+      border: 4px solid;
+      border-radius: 8px;
+      font-size: 2rem;
+      font-weight: bold;
+      text-transform: uppercase;
+      opacity: 0;
+    }
+    
+    .card-overlay.nope {
+      left: 30px;
+      color: #e54245;
+      border-color: #e54245;
+    }
+    
+    .card-overlay.like {
+      right: 30px;
+      color: #4caf50;
+      border-color: #4caf50;
+    }
+    
+    .card.swiping-left .card-overlay.nope,
+    .card.swiping-right .card-overlay.like {
+      opacity: 1;
+    }
+    
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      padding: 20px;
+    }
+    
+    .controls button {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    
+    .controls button:hover {
+      transform: scale(1.1);
+    }
+    
+    .controls .nope {
+      background: #e54245;
+      color: #fff;
+    }
+    
+    .controls .like {
+      background: #4caf50;
+      color: #fff;
+    }
+    
+    .no-cards {
+      text-align: center;
+      color: #fff;
+    }
+    
+    .no-cards h2 {
+      margin-bottom: 15px;
+    }
+    
+    .no-cards button {
+      padding: 12px 30px;
+      background: #fff;
+      border: none;
+      border-radius: 25px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    
+    .match-popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      padding: 30px;
+      border-radius: 15px;
+      text-align: center;
+      color: #fff;
+      z-index: 100;
+      transition: transform 0.3s ease;
+    }
+    
+    .match-popup.show {
+      transform: translate(-50%, -50%) scale(1);
+    }
+    
+    .match-popup h2 {
+      font-size: 2rem;
+      margin-bottom: 10px;
+    }
+    
+    .match-popup button {
+      margin-top: 20px;
+      padding: 12px 30px;
+      background: #fff;
+      border: none;
+      border-radius: 25px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    
+    .matches-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      z-index: 200;
+      display: none;
+      overflow-y: auto;
+    }
+    
+    .matches-modal.show {
+      display: block;
+    }
+    
+    .matches-content {
+      background: #fff;
+      min-height: 100%;
+      border-radius: 20px 20px 0 0;
+      padding: 20px;
+      animation: slideUp 0.3s ease;
+    }
+    
+    @keyframes slideUp {
+      from {
+        transform: translateY(100%);
+      }
+      to {
+        transform: translateY(0);
+      }
+    }
+    
+    .matches-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .matches-header h2 {
+      color: #333;
+    }
+    
+    .matches-header .close-btn {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: #666;
+    }
+    
+    .matches-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 15px;
+    }
+    
+    .match-item {
+      text-align: center;
+      padding: 10px;
+    }
+    
+    .match-item img {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-bottom: 8px;
+      border: 3px solid #f093fb;
+    }
+    
+    .match-item h3 {
+      font-size: 1rem;
+      color: #333;
+      margin-bottom: 2px;
+    }
+    
+    .match-item p {
+      font-size: 0.8rem;
+      color: #666;
+    }
+    
+    .no-matches {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+    
+    .no-matches h3 {
+      margin-bottom: 10px;
+    }
+    
+    .no-matches button {
+      margin-top: 15px;
+      padding: 10px 25px;
+      background: #f093fb;
+      border: none;
+      border-radius: 20px;
+      color: #fff;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span class="icon">🔥</span>
+    <h1>Tinder</h1>
+    <span class="matches" id="match-count" onclick="openMatches()">0 matches</span>
+  </div>
+  
+  <div class="card-container" id="card-container">
+    <div class="no-cards" id="no-cards" style="display: none;">
+      <h2>No more profiles</h2>
+      <button onclick="reset()">Start Over</button>
+    </div>
+  </div>
+  
+  <div class="controls">
+    <button class="nope" onclick="swipe('left')">❌</button>
+    <button class="like" onclick="swipe('right')">❤️</button>
+  </div>
+  
+  <div class="match-popup" id="match-popup">
+    <h2>It's a Match!</h2>
+    <p>You matched with <span id="match-name"></span></p>
+    <button onclick="closePopup()">Keep Swiping</button>
+  </div>
+  
+  <div class="matches-modal" id="matches-modal">
+    <div class="matches-content">
+      <div class="matches-header">
+        <h2>Your Matches</h2>
+        <button class="close-btn" onclick="closeMatches()">×</button>
+      </div>
+      <div id="matches-list">
+        <p>Loading...</p>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    let profiles = [];
+    let currentCard = 0;
+    
+    async function fetchProfiles() {
+      try {
+        const res = await fetch('/api/profiles');
+        profiles = await res.json();
+        currentCard = 0;
+        updateMatchCount();
+        renderCard();
+      } catch (err) {
+        console.error('Error fetching profiles:', err);
+      }
+    }
+    
+    async function updateMatchCount() {
+      try {
+        const res = await fetch('/api/matches');
+        const matches = await res.json();
+        document.getElementById('match-count').textContent = `${matches.length} matches`;
+      } catch (err) {
+        console.error('Error fetching matches:', err);
+      }
+    }
+    
+    function renderCard() {
+      const container = document.getElementById('card-container');
+      const noCards = document.getElementById('no-cards');
+      
+      Array.from(container.children).forEach(child => {
+        if (child !== noCards) {
+          container.removeChild(child);
+        }
+      });
+      
+      if (currentCard >= profiles.length) {
+        noCards.style.display = 'block';
+        return;
+      }
+      
+      noCards.style.display = 'none';
+      const profile = profiles[currentCard];
+      
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.id = 'current-card';
+      card.innerHTML = `
+        <img src="${profile.photo}" alt="${profile.name}" class="card-photo">
+        <div class="card-overlay nope">NOPE</div>
+        <div class="card-overlay like">LIKE</div>
+        <div class="card-info">
+          <h2>${profile.name}, ${profile.age}</h2>
+          <p>${profile.bio}</p>
+        </div>
+      `;
+      
+      container.appendChild(card);
+      
+      let startX, startY;
+      
+      card.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+      });
+      
+      card.addEventListener('touchend', (e) => {
+        const endX = e.changedTouches[0].clientX;
+        const diff = startX - endX;
+        
+        if (Math.abs(diff) > 50) {
+          swipe(diff > 0 ? 'left' : 'right');
+        }
+      });
+      
+      let isDragging = false;
+      let dragStartX;
+      
+      card.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        dragStartX = e.clientX;
+        card.style.cursor = 'grabbing';
+      });
+      
+      document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        const diff = e.clientX - dragStartX;
+        const angle = diff * 0.1;
+        
+        card.style.transform = `translate(${diff}px) rotate(${angle}deg)`;
+        
+        const nope = card.querySelector('.nope');
+        const like = card.querySelector('.like');
+        
+        nope.style.opacity = diff < -50 ? Math.min(Math.abs(diff) / 100, 1) : 0;
+        like.style.opacity = diff > 50 ? Math.min(diff / 100, 1) : 0;
+      });
+      
+      document.addEventListener('mouseup', (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        card.style.cursor = 'grab';
+        
+        const diff = e.clientX - dragStartX;
+        
+        if (Math.abs(diff) > 100) {
+          swipe(diff < 0 ? 'left' : 'right');
+        } else {
+          resetCardStyle();
+        }
+      });
+    }
+    
+    function resetCardStyle() {
+      const card = document.getElementById('current-card');
+      if (card) {
+        card.style.transform = 'translate(0) rotate(0)';
+        card.querySelector('.nope').style.opacity = 0;
+        card.querySelector('.like').style.opacity = 0;
+      }
+    }
+    
+    async function swipe(direction) {
+      const card = document.getElementById('current-card');
+      if (!card) return;
+      
+      const profile = profiles[currentCard];
+      card.classList.add(direction === 'left' ? 'swiping-left' : 'swiping-right');
+      
+      const overlay = card.querySelector(direction === 'left' ? '.nope' : '.like');
+      overlay.style.opacity = 1;
+      
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const result = await fetch('/api/swipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: profile.id, direction })
+      }).then(res => res.json());
+      
+      const container = document.getElementById('card-container');
+      container.removeChild(card);
+      
+      currentCard++;
+      updateMatchCount();
+      
+      // Only show match popup if there's an actual match (~30% rate)
+      if (result.matched && result.otherInfo) {
+        showMatchPopup(result.otherInfo.name);
+      }
+      
+      if (currentCard < profiles.length) {
+        renderCard();
+      } else {
+        document.getElementById('no-cards').style.display = 'block';
+      }
+    }
+    
+    function showMatchPopup(name) {
+      document.getElementById('match-name').textContent = name;
+      document.getElementById('match-popup').classList.add('show');
+      setTimeout(() => {
+        document.getElementById('match-popup').classList.remove('show');
+      }, 2000);
+    }
+    
+    function closePopup() {
+      document.getElementById('match-popup').classList.remove('show');
+    }
+    
+    async function reset() {
+      profiles = [];
+      currentCard = 0;
+      document.getElementById('no-cards').style.display = 'none';
+      await fetchProfiles();
+    }
+    
+    async function openMatches() {
+      try {
+        const res = await fetch('/api/matches');
+        const matches = await res.json();
+        
+        const list = document.getElementById('matches-list');
+        
+        if (matches.length === 0) {
+          list.innerHTML = `
+            <div class="no-matches">
+              <h3>No matches yet</h3>
+              <p>Start swiping to find your matches!</p>
+              <button onclick="closeMatches()">Back to Swiping</button>
+            </div>
+          `;
+        } else {
+          list.innerHTML = `
+            <div class="matches-grid">
+              ${matches.map(match => `
+                <div class="match-item">
+                  <img src="${match.photo}" alt="${match.name}">
+                  <h3>${match.name}</h3>
+                  <p>${match.age} years</p>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+        
+        document.getElementById('matches-modal').classList.add('show');
+      } catch (err) {
+        console.error('Error loading matches:', err);
+        document.getElementById('matches-list').innerHTML = '<p>Error loading matches</p>';
+        document.getElementById('matches-modal').classList.add('show');
+      }
+    }
+    
+    function closeMatches() {
+      document.getElementById('matches-modal').classList.remove('show');
+    }
+    
+    fetchProfiles();
+  </script>
+</body>
+</html>

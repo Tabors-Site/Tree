@@ -43,13 +43,16 @@ export async function resolveRootNode(nodeId) {
   }
 
   let node = await Node.findById(nodeId)
-    .select("parent rootOwner contributors")
+    .select("parent rootOwner contributors systemRole")
     .lean()
     .exec();
 
   if (!node) {
     throw new Error("Node not found");
   }
+
+  // Starting node itself is the .source self-tree root — return it
+  if (node.systemRole === "source") return node;
 
   while (!node.rootOwner || node.rootOwner === SYSTEM_OWNER) {
     if (!node.parent) {
@@ -66,6 +69,10 @@ export async function resolveRootNode(nodeId) {
     }
 
     if (node.systemRole) {
+      // SOURCE is a traversable system tree — its root IS the tree root
+      // for everything under it. See resolveTreeAccessFromChain for the
+      // matching access-layer fix.
+      if (node.systemRole === "source") return node;
       throw new Error("Invalid tree: reached system node boundary");
     }
   }

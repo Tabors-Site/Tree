@@ -264,6 +264,28 @@ export async function resolveOrCreateFile({ projectNodeId, relPath, userId, core
   return { fileNode, created, segments };
 }
 
+/**
+ * Pure lookup: find a file node at a given relative path under a project
+ * without creating anything. Returns the lean node document or null.
+ * Used by read-only code paths (source-read, code review) so a wrong
+ * path doesn't leave orphan nodes in the tree.
+ */
+export async function findFileByPath(projectNodeId, relPath) {
+  let segments;
+  try {
+    segments = splitPath(relPath);
+  } catch {
+    return null;
+  }
+  let cursorId = String(projectNodeId);
+  for (const segment of segments) {
+    const child = await findChildByName(cursorId, segment);
+    if (!child) return null;
+    cursorId = String(child._id);
+  }
+  return Node.findById(cursorId).lean();
+}
+
 async function persistNodeMeta(node, data, core) {
   if (core?.metadata?.setExtMeta) {
     await core.metadata.setExtMeta(node, NS, data);
@@ -300,7 +322,70 @@ export async function readFileContent(fileNodeId) {
 // workspace writes share the same synthetic author.
 const WORKSPACE_SYSTEM_USER = "00000000-0000-0000-0000-code-workspace";
 
+/**
+ * Error thrown when a write to a gated source-tree node is rejected.
+ * The tool handlers catch this and surface the reason to the AI so it
+ * can tell the user why nothing changed (e.g. ".source is read-only —
+ * run source-mode free to enable writes").
+ */
+export class SourceWriteRejected extends Error {
+  constructor(reason) {
+    super(reason);
+    this.name = "SourceWriteRejected";
+    this.code = "SOURCE_WRITE_REJECTED";
+  }
+}
+
+/**
+ * Gate a write against .source-tree policy. Walks the ancestor chain to
+ * find the first project node. If it's marked as a source tree, the
+ * project's writeMode determines whether the write is allowed:
+ *   - disabled (default): rejected
+ *   - approve: rejected in this phase (Phase 2 will wire approve)
+ *   - free: allowed
+ * Additionally, files whose filePath begins with "seed/" are rejected
+ * unconditionally — the kernel is off-limits regardless of mode.
+ */
+async function checkSourceGate(fileNodeId) {
+  let currentId = String(fileNodeId);
+  let guard = 0;
+  let filePath = null;
+  while (currentId && guard < 128) {
+    const node = await Node.findById(currentId).select("_id parent metadata").lean();
+    if (!node) return; // node doesn't exist yet — not a gated path
+    const data = node.metadata instanceof Map ? node.metadata.get(NS) : node.metadata?.[NS];
+    if (data?.filePath && !filePath) filePath = data.filePath;
+    if (data?.isSourceTree) {
+      // Inside the source tree — gate applies.
+      // Seed is always read-only.
+      if (filePath && /^(\/)?seed(\/|$)/i.test(filePath)) {
+        throw new SourceWriteRejected(
+          "seed/ is read-only in .source. The kernel cannot be edited from inside the tree. " +
+          "If you really need to change seed code, edit it on disk and restart the land.",
+        );
+      }
+      const mode = data.writeMode || "disabled";
+      if (mode === "free") return; // allowed
+      if (mode === "approve") {
+        throw new SourceWriteRejected(
+          ".source writeMode is 'approve' but approve-gating isn't wired yet (Phase 2). " +
+          "Use 'source-mode free' to enable direct writes.",
+        );
+      }
+      // disabled (default)
+      throw new SourceWriteRejected(
+        ".source is read-only (writeMode=disabled). Flip it with 'source-mode free' to allow writes.",
+      );
+    }
+    if (!node.parent) return;
+    currentId = String(node.parent);
+    guard++;
+  }
+}
+
 export async function writeFileContent({ fileNodeId, content, userId }) {
+  await checkSourceGate(fileNodeId);
+
   await Note.deleteMany({ nodeId: fileNodeId });
   const note = await Note.create({
     _id: uuidv4(),

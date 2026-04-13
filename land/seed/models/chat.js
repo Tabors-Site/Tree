@@ -163,6 +163,26 @@ const ChatSchema = new mongoose.Schema({
       ref: "Contribution",
     },
   ],
+
+  // -----------------------------------
+  // Tool calls made by the AI during this chat's tool loop.
+  // Each element is a short trace of one MCP tool invocation. The
+  // conversation.js loop appends one entry per call (atomic $push with
+  // a cap) so the chat record holds the full step-by-step of what
+  // the AI did. Rendered in CLI `chats` history and the dashboard
+  // chat view. Capped at 50 per chat to keep document size bounded.
+  // -----------------------------------
+  toolCalls: [
+    {
+      tool: { type: String, required: true },
+      args: { type: mongoose.Schema.Types.Mixed, default: null },
+      success: { type: Boolean, default: true },
+      error: { type: String, default: null },
+      ms: { type: Number, default: 0 },
+      at: { type: Date, default: Date.now },
+      _id: false,
+    },
+  ],
 });
 
 // Query all steps in a chain

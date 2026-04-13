@@ -20,6 +20,7 @@ import {
   findProjectByName,
   initProject,
   resolveOrCreateFile,
+  findFileByPath,
   readFileContent,
   writeFileContent,
   walkProjectFiles,
@@ -28,9 +29,11 @@ import {
   ROLE_FILE,
   ROLE_DIRECTORY,
   DEFAULT_WORKSPACE_ROOT,
+  SourceWriteRejected,
 } from "./workspace.js";
 import { syncUp } from "./sync.js";
 import { runInWorkspace, DEFAULTS } from "./sandbox.js";
+import { setSourceWriteMode, SOURCE_PROJECT_NAME, getSourceProject } from "./source.js";
 
 function text(s) {
   return { content: [{ type: "text", text: String(s) }] };
@@ -209,6 +212,11 @@ export default function getWorkspaceTools(core) {
           trace("workspace-add-file", "OK", `${filePath} scheduled sync`);
           return text(`${created ? "Created" : "Updated"} ${filePath} (${bytes}b) on node ${fileNode._id} in project "${project.name}". Auto-sync scheduled.`);
         } catch (e) {
+          if (e instanceof SourceWriteRejected) {
+            // Clean message for a policy rejection — don't dump a stack.
+            trace("workspace-add-file", "REJECTED", e.message);
+            return text(`workspace-add-file rejected: ${e.message}`);
+          }
           log.error("CodeWorkspace", `workspace-add-file FAILED path=${filePath} err=${e.message}`);
           log.error("CodeWorkspace", e.stack?.split("\n").slice(0, 8).join("\n"));
           return text(`workspace-add-file failed: ${e.message}\n\nStack (first 3 frames):\n${e.stack?.split("\n").slice(0, 3).join("\n")}`);
@@ -410,6 +418,129 @@ export default function getWorkspaceTools(core) {
           return text(parts.join("\n"));
         } catch (e) {
           return text(`workspace-test failed: ${e.message}`);
+        }
+      },
+    },
+
+    // ---------------------------------------------------------------
+    // source-read: read a file from the .source self-tree.
+    // Path is relative to the .source project root and may start with
+    // "extensions/..." or "seed/...". Returns the current note content
+    // of the file node. This is how generator modes pull real TreeOS
+    // code as reference before writing new extensions, tools, modes.
+    // ---------------------------------------------------------------
+    {
+      name: "source-read",
+      description: "Read a file from the .source self-tree (the live TreeOS codebase ingested at boot). Use this to pull real examples from existing extensions before writing new code. Path is relative to .source root, e.g. 'extensions/fitness/manifest.js' or 'seed/protocol.js'.",
+      schema: {
+        filePath: z.string().describe("Path relative to .source root (e.g. 'extensions/fitness/tools.js')."),
+      },
+      annotations: { readOnlyHint: true },
+      async handler({ filePath }) {
+        try {
+          // Normalize: strip any leading /.source/ or .source/ prefix so
+          // the LLM can pass either form.
+          let rel = String(filePath || "").trim();
+          rel = rel.replace(/^\/?\.source\//, "");
+          rel = rel.replace(/^\/+/, "");
+          if (!rel) return text("source-read: filePath required");
+
+          const project = await getSourceProject();
+          if (!project) return text("source-read: .source project not initialized yet.");
+
+          // Pure lookup — never create placeholder nodes for bad paths.
+          const fileNode = await findFileByPath(project._id, rel);
+          if (!fileNode) {
+            return text(
+              `source-read: "${rel}" not found in .source. Try source-list to see what's available, ` +
+              `or check your path (paths are relative to .source root, e.g. 'extensions/fitness/manifest.js').`,
+            );
+          }
+          const content = await readFileContent(fileNode._id);
+          if (!content) return text(`source-read: "${rel}" exists but has no content (may have been pruned or skipped during ingest).`);
+          const trimmed = content.length > 20000 ? content.slice(0, 20000) + "\n... (truncated)" : content;
+          return text(`.source/${rel} (${content.length}b):\n\`\`\`\n${trimmed}\n\`\`\``);
+        } catch (e) {
+          return text(`source-read failed: ${e.message}`);
+        }
+      },
+    },
+
+    // ---------------------------------------------------------------
+    // source-list: list files in a .source subdirectory.
+    // Lets the AI discover what's available before calling source-read.
+    // Path is relative to .source root; empty path lists top-level.
+    // ---------------------------------------------------------------
+    {
+      name: "source-list",
+      description: "List files under a subdirectory of .source (the live TreeOS codebase). Useful for discovering available references. Path is relative to .source root; omit it to list top-level (extensions + seed). For a specific extension, pass e.g. 'extensions/fitness'.",
+      schema: {
+        subdir: z.string().optional().describe("Subdirectory relative to .source root. Empty = top level."),
+      },
+      annotations: { readOnlyHint: true },
+      async handler({ subdir }) {
+        try {
+          const project = await getSourceProject();
+          if (!project) return text("source-list: .source project not initialized yet.");
+
+          let dirPrefix = String(subdir || "").trim();
+          dirPrefix = dirPrefix.replace(/^\/?\.source\//, "");
+          dirPrefix = dirPrefix.replace(/^\/+|\/+$/g, "");
+
+          const allFiles = await walkProjectFiles(project._id);
+          const matching = dirPrefix
+            ? allFiles.filter((f) => f.filePath === dirPrefix || f.filePath.startsWith(dirPrefix + "/"))
+            : allFiles;
+
+          if (matching.length === 0) {
+            return text(`source-list: no files found under .source/${dirPrefix || ""}.`);
+          }
+
+          // Cap output and group by top-level directory for scanability
+          const capped = matching.slice(0, 200);
+          const lines = capped.map((f) => `  ${f.filePath} (${(f.content || "").length}b)`);
+          const more = matching.length > capped.length ? `\n  ... and ${matching.length - capped.length} more` : "";
+          return text(`Files in .source/${dirPrefix || "(root)"}:\n${lines.join("\n")}${more}\n\nTotal: ${matching.length} files.`);
+        } catch (e) {
+          return text(`source-list failed: ${e.message}`);
+        }
+      },
+    },
+
+    // ---------------------------------------------------------------
+    // source-mode: flip the writeMode on the .source self-tree.
+    // .source is the TreeOS codebase reflected as a tree (see source.js).
+    // Default mode is "disabled" — the AI can read land/extensions and
+    // land/seed content freely but cannot write. "free" unlocks writes
+    // to extensions files (seed is always read-only). "approve" is
+    // reserved for Phase 2 when the approve extension gets wired in.
+    // ---------------------------------------------------------------
+    {
+      name: "source-mode",
+      description: "Set the write policy for the .source self-tree (the TreeOS codebase as tree nodes). Modes: disabled (default, read-only), approve (Phase 2, not yet wired), free (writes go through, edits propagate to land/ on disk). Seed is always read-only regardless of mode.",
+      schema: {
+        mode: z.enum(["disabled", "approve", "free"]).describe("disabled | approve | free"),
+      },
+      annotations: { readOnlyHint: false },
+      async handler({ mode }) {
+        try {
+          const { previous, current } = await setSourceWriteMode(mode);
+          trace("source-mode", "SET", `${previous} → ${current}`);
+          if (current === "free") {
+            return text(
+              `.source writeMode: ${previous} → free. ` +
+              `The AI can now edit extension files. land/seed/ remains read-only.`,
+            );
+          }
+          if (current === "approve") {
+            return text(
+              `.source writeMode: ${previous} → approve. ` +
+              `Note: approve-gating is not yet wired (Phase 2). Writes will be rejected with a "not yet wired" message. Use 'free' for now.`,
+            );
+          }
+          return text(`.source writeMode: ${previous} → ${current}. All writes blocked.`);
+        } catch (e) {
+          return text(`source-mode failed: ${e.message}`);
         }
       },
     },

@@ -21,6 +21,8 @@ export default {
     "workspace-list",
     "workspace-test",
     "workspace-run",
+    "source-read",
+    "source-list",
     "get-tree-context",
     "navigate-tree",
   ],
@@ -44,6 +46,16 @@ ABSOLUTE RULES
 
 4. For helper functions: drop them in lib.js (create it if missing).
    For entry-point code: index.js. For tests: test.js.
+
+5. READ .source FOR REFERENCE BEFORE WRITING UNFAMILIAR PATTERNS.
+   Use source-read (not workspace-read-file) to pull real TreeOS code.
+   Examples:
+     source-read extensions/fitness/manifest.js
+     source-read extensions/fitness/tools.js
+     source-read extensions/codebase/index.js
+   For plain JS utility code you don't need the reference. For any
+   TreeOS contract (manifest shape, init() return, tool schema, mode
+   shape), always read a real example first. Don't invent.
 
 =====================================================================
 WORKFLOW

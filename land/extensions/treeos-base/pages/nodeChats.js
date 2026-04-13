@@ -24,6 +24,22 @@ const linkifyNodeIds = (html, token) =>
       `Placed on node <a class="node-link" href="/api/v1/root/${id}${token ? `?token=${encodeURIComponent(token)}&html` : "?html"}">${id}</a>`,
   );
 
+const formatToolArgHint = (args) => {
+  if (!args || typeof args !== "object") return "";
+  if (args._truncated) return "(truncated)";
+  for (const key of ["filePath", "path", "subdir", "name", "query", "command", "binary"]) {
+    if (args[key] != null && typeof args[key] !== "object") {
+      const v = String(args[key]);
+      return v.length > 60 ? v.slice(0, 57) + "..." : v;
+    }
+  }
+  const keys = Object.keys(args).filter(
+    (k) => !["userId", "rootId", "nodeId", "chatId", "sessionId"].includes(k),
+  );
+  if (!keys.length) return "";
+  return "(" + keys.slice(0, 3).join(",") + ")";
+};
+
 const formatContent = (str) => {
   if (!str) return "";
   const s = String(str).trim();
@@ -367,6 +383,30 @@ const renderChain = (chain, tokenQS, token) => {
     })
     .join("");
 
+  const toolCalls = Array.isArray(chat.toolCalls) ? chat.toolCalls : [];
+  const hasToolCalls = toolCalls.length > 0;
+  const toolCallRows = toolCalls
+    .map((tc) => {
+      const ok = tc.success !== false;
+      const icon = ok ? "→" : "✗";
+      const iconClass = ok ? "tc-ok" : "tc-fail";
+      const argHint = formatToolArgHint(tc.args);
+      const ms = tc.ms ? `${tc.ms}ms` : "";
+      const err =
+        !ok && tc.error
+          ? `<div class="tc-error">${esc(String(tc.error).slice(0, 200))}</div>`
+          : "";
+      return `
+        <div class="tc-row">
+          <span class="tc-icon ${iconClass}">${icon}</span>
+          <span class="tc-name">${esc(tc.tool || "?")}</span>
+          ${argHint ? `<span class="tc-args">${esc(argHint)}</span>` : ""}
+          ${ms ? `<span class="tc-ms">${ms}</span>` : ""}
+          ${err}
+        </div>`;
+    })
+    .join("");
+
   const stepsHtml = hasSteps ? renderPhases(steps, tokenQS) : "";
 
   return `
@@ -403,6 +443,18 @@ const renderChain = (chain, tokenQS, token) => {
         </div>
 
         ${stepsHtml}
+
+        ${
+          hasToolCalls
+            ? `
+        <details class="toolcall-dropdown">
+          <summary class="toolcall-summary">
+            ${toolCalls.length} tool call${toolCalls.length !== 1 ? "s" : ""}
+          </summary>
+          <div class="toolcall-list">${toolCallRows}</div>
+        </details>`
+            : ""
+        }
 
         ${
           hasContribs
@@ -633,6 +685,36 @@ details[open] > .chain-substep-summary::before { transform: rotate(90deg); }
   font-style: italic; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; max-width: 300px;
 }
+
+.toolcall-dropdown { margin-bottom: 12px; }
+.toolcall-summary {
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  color: rgba(255,255,255,0.85); padding: 8px 14px;
+  background: rgba(100,200,255,0.08); border-radius: 10px;
+  border: 1px solid rgba(100,200,255,0.2);
+  transition: all 0.2s; list-style: none;
+  display: flex; align-items: center; gap: 6px;
+}
+.toolcall-summary::-webkit-details-marker { display: none; }
+.toolcall-summary::before { content: ">"; font-size: 10px; transition: transform 0.2s; display: inline-block; }
+details[open] .toolcall-summary::before { transform: rotate(90deg); }
+.toolcall-summary:hover { background: rgba(100,200,255,0.15); }
+.toolcall-list {
+  margin-top: 10px; padding: 10px 14px;
+  background: rgba(0,0,0,0.2); border-radius: 8px;
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px;
+}
+.tc-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 4px 0; color: rgba(255,255,255,0.85);
+}
+.tc-icon { font-weight: bold; width: 14px; display: inline-block; }
+.tc-icon.tc-ok { color: rgba(255,255,255,0.5); }
+.tc-icon.tc-fail { color: #ff6b6b; }
+.tc-name { color: #7cc7ff; font-weight: 600; }
+.tc-args { color: rgba(255,255,255,0.6); }
+.tc-ms { color: rgba(255,255,255,0.4); font-size: 11px; }
+.tc-error { flex-basis: 100%; padding-left: 22px; color: #ff9999; font-size: 11px; }
 
 .contrib-dropdown { margin-bottom: 12px; }
 .contrib-summary {

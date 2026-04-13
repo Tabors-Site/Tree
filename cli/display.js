@@ -138,8 +138,50 @@ function printChats(sessions) {
       });
     }
 
+    // Tool calls — the AI's step-by-step tool loop stored per chat.
+    // Flattens across all chats in the session (chainIndex 0 + any
+    // orchestrator sub-steps). Renders terse arrow lines similar to
+    // the live server log but scannable after the fact.
+    const allToolCalls = chats.flatMap((c) => c.toolCalls || []);
+    if (allToolCalls.length) {
+      for (const tc of allToolCalls) {
+        const okMark = tc.success === false
+          ? chalk.red("✗")
+          : chalk.dim("→");
+        const toolName = tc.success === false
+          ? chalk.red(tc.tool)
+          : chalk.cyan(tc.tool);
+        const argHint = formatToolArgs(tc.args);
+        const ms = tc.ms ? chalk.dim(` (${tc.ms}ms)`) : "";
+        const errPart = tc.success === false && tc.error
+          ? chalk.red(" — " + String(tc.error).slice(0, 60))
+          : "";
+        console.log(`     ${okMark} ${toolName}${argHint}${ms}${errPart}`);
+      }
+    }
+
     console.log("");
   });
+}
+
+// Format a short one-line arg hint for display. Pulls the most
+// identifying field (filePath, path, name, query) or falls back to
+// a compact key list.
+function formatToolArgs(args) {
+  if (!args || typeof args !== "object") return "";
+  if (args._truncated) return chalk.dim(" (truncated)");
+  for (const key of ["filePath", "path", "subdir", "name", "query", "command", "binary"]) {
+    if (args[key] != null && typeof args[key] !== "object") {
+      const v = String(args[key]);
+      const short = v.length > 50 ? v.slice(0, 47) + "..." : v;
+      return " " + chalk.dim(short);
+    }
+  }
+  const keys = Object.keys(args).filter(
+    (k) => !["userId", "rootId", "nodeId", "chatId", "sessionId"].includes(k),
+  );
+  if (!keys.length) return "";
+  return " " + chalk.dim("(" + keys.slice(0, 3).join(",") + ")");
 }
 
 function printBook(node, indent = 0) {

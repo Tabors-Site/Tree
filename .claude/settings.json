@@ -658,7 +658,12 @@
       "Bash(git -C /home/tabor/github/Tree status --short land/extensions/vowel-counter)",
       "Bash(grep -rn \"socket.on\\\\|'orchestratorStep'\\\\|'executionStatus'\\\\|'chatResponse'\\\\|'toolResult'\" /home/tabor/github/Tree/cli/*.js /home/tabor/github/Tree/cli/commands/*.js)",
       "Bash(find /home/tabor/github/Tree/land -name \"*.js\" -not -path \"*/node_modules/*\" -exec grep -l \"userId.*context\\\\|toolContext\\\\|setToolContext\\\\|mcp.*context\" {} \\\\;)",
-      "Bash(grep -n \"userId\\\\|rootId\\\\|context\" /home/tabor/github/Tree/land/mcp/*.js)"
+      "Bash(grep -n \"userId\\\\|rootId\\\\|context\" /home/tabor/github/Tree/land/mcp/*.js)",
+      "Bash(treeos --help)",
+      "Bash(treeos whoami:*)",
+      "Bash(treeos chat:*)",
+      "Bash(treeos chats:*)",
+      "Bash(TREEOS_DEBUG=1 timeout 5 bash -c 'echo exit | treeos start')"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

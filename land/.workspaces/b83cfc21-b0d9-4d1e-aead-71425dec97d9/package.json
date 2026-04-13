@@ -1,0 +1,15 @@
+{
+  "name": "tinder-app",
+  "version": "1.0.0",
+  "description": "A rough Tinder-like swiping app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "author": "",
+  "license": "ISC"
+}

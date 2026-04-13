@@ -19,6 +19,7 @@ import ExtensionsPage from "./Landing/ExtensionsPage.jsx";
 import NetworkPage from "./Landing/NetworkPage.jsx";
 import FlowPage from "./Landing/FlowPage.jsx";
 import BuildPage from "./Landing/BuildPage.jsx";
+import CodePage from "./Landing/CodePage.jsx";
 import MyceliumPage from "./Landing/MyceliumPage.jsx";
 import LandPage from "./Landing/LandPage.jsx";
 import TreeOSPage from "./Landing/TreeOSPage.jsx";
@@ -66,6 +67,7 @@ const WelcomeRoutes = () => {
       <Route path="/network" element={<NetworkPage />} />
       <Route path="/flow" element={<FlowPage />} />
       <Route path="/build" element={<BuildPage />} />
+      <Route path="/code" element={<CodePage />} />
       <Route path="/html" element={<HTMLPage />} />
       <Route path="/start" element={<StartPage />} />
       <Route path="/what" element={<WhatPage />} />

@@ -696,6 +696,7 @@ const LandingPage = () => {
               <a href="/guide">Guide</a>
               <a href="/seed">The Seed</a>
               <a href="/ai">The AI</a>
+              <a href="/code">Code</a>
               <a href="/cascade">Cascade</a>
               <a href="/flow">The Flow</a>
               <a href="/extensions">Extensions</a>

@@ -98,6 +98,7 @@ export default {
       { key: "tree:code-log", handler: "./modes/log.js", assignmentSlot: "code-log" },
       { key: "tree:code-coach", handler: "./modes/coach.js", assignmentSlot: "code-coach" },
       { key: "tree:code-ask", handler: "./modes/ask.js", assignmentSlot: "code-ask" },
+      { key: "tree:code-review", handler: "./modes/review.js", assignmentSlot: "code-review" },
     ],
   },
 };

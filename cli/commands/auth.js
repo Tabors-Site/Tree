@@ -50,10 +50,17 @@ function readPassword(label) {
 }
 
 /** Save login state from API key */
-async function saveLogin(cfg, apiKey) {
+async function saveLogin(cfg, apiKey, jwtToken = null) {
   const api = new TreeAPI(apiKey);
   const me = await api.me();
   cfg.apiKey = apiKey;
+  // CRITICAL: refresh jwtToken too if provided. Without this, the CLI
+  // keeps a stale jwt from an earlier login, and anything that auths
+  // via jwt (the websocket session in particular — socket.io cookie
+  // handshake) ends up posting as the previous user. Left this out
+  // once and spent hours debugging "user:tabor222" showing up in
+  // server logs after logging in as tabor.
+  if (jwtToken) cfg.jwtToken = jwtToken;
   cfg.userId = me.userId;
   cfg.username = me.username;
   cfg.plan = me.plan || null;
@@ -75,7 +82,10 @@ async function saveLogin(cfg, apiKey) {
 async function createCliApiKey(cfg, token, userId, username) {
   try {
     const keyData = await jwtPost(token, `/user/${userId}/api-keys`, { name: "treeos-cli", revokeOld: true });
-    return await saveLogin(cfg, keyData.apiKey);
+    // Pass the fresh jwt alongside the apiKey so saveLogin refreshes
+    // BOTH credentials in cfg. The socket session uses jwt; HTTP uses
+    // apiKey. Missing one leaves a stale identity for one path.
+    return await saveLogin(cfg, keyData.apiKey, token);
   } catch (e) {
     // api-keys extension not loaded, or key creation failed. Use JWT directly.
     cfg.apiKey = null;
@@ -317,6 +327,7 @@ module.exports = (program) => {
     .action(() => {
       const cfg = load();
       cfg.apiKey = null;
+      cfg.jwtToken = null; // MUST clear both auth methods or the next login inherits stale jwt
       cfg.userId = null;
       cfg.username = null;
       cfg.pathStack = [];

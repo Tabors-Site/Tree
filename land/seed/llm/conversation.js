@@ -21,6 +21,7 @@ import {
 import { mcpClients, connectToMCP, MCP_SERVER_URL } from "../ws/mcp.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { SYSTEM_OWNER } from "../protocol.js";
+import { appendToolCall, getChatContext } from "./chatTracker.js";
 
 import { resolveAndValidateHost, getEncryptionKey } from "./connections.js";
 
@@ -1660,8 +1661,27 @@ export async function processMessage(visitorId, message, ctx) {
     const toolResults = [];
     for (const toolCall of assistantMessage.tool_calls) {
       if (ctx.signal?.aborted) throw new Error("Request cancelled");
+      const _toolStart = Date.now();
       const toolResult = await executeTool(toolCall, session, ctx, client);
+      const _toolMs = Date.now() - _toolStart;
       toolResults.push(toolResult);
+
+      // Persist the tool call on the active Chat record so the step
+      // trace is visible in chat history (CLI `chats` and dashboard).
+      // Fire-and-forget: the user already got the tool result via the
+      // tool_result message, this is just audit/history logging.
+      try {
+        const chatCtx = getChatContext(visitorId);
+        if (chatCtx?.chatId) {
+          appendToolCall(chatCtx.chatId, {
+            tool: toolResult.tool,
+            args: toolResult.args,
+            success: toolResult.success,
+            error: toolResult.error,
+            ms: _toolMs,
+          });
+        }
+      } catch {}
     }
 
     // Yield tool results for real-time frontend updates

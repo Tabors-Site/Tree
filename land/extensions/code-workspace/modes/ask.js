@@ -20,6 +20,8 @@ export default {
   toolNames: [
     "workspace-list",
     "workspace-read-file",
+    "source-read",
+    "source-list",
     "get-tree-context",
     "navigate-tree",
     "get-node-notes",
@@ -37,6 +39,16 @@ RULES:
 - For "how does X work" questions, trace from entry point forward.
 - For "where is X defined" questions, name the file and function.
 - Never describe code you haven't read.
+- For questions about TreeOS itself — any extension, any kernel file,
+  "how does fitness route messages", "what does the grammar pipeline
+  look like", "show me an example of X" — use source-read and
+  source-list to pull real content from the live codebase:
+     source-list extensions              — see every installed extension
+     source-list extensions/fitness      — see fitness's files
+     source-read extensions/fitness/manifest.js
+     source-read seed/protocol.js
+  Read the file before explaining it. Never describe TreeOS code from
+  memory when you can call source-read and quote the real content.
 
 OUTPUT:
 - Direct. Answer the question; don't narrate your exploration.

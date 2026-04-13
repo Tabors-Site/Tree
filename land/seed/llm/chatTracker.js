@@ -258,6 +258,64 @@ export async function finalizeChat({
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// TOOL CALL TRACKING (per-chat step log)
+// ─────────────────────────────────────────────────────────────────────────
+
+// Keep chat documents bounded. 50 tool calls is plenty for normal sessions
+// and collapses gracefully for tool-heavy runs (fanout, multi-file edits).
+const MAX_TOOL_CALLS_PER_CHAT = 50;
+
+// Args can be large (full file content). Cap the stored version so chat
+// docs don't balloon. The full args are already in the server log; the
+// chat record holds a summary for UX display.
+function MAX_TOOL_ARG_BYTES() { return Math.max(200, Math.min(Number(getLandConfigValue("chatToolArgBytes")) || 2000, 20000)); }
+
+function summarizeArgs(args) {
+  if (args == null || typeof args !== "object") return args ?? null;
+  try {
+    const serialized = JSON.stringify(args);
+    const max = MAX_TOOL_ARG_BYTES();
+    if (serialized.length <= max) return args;
+    // Truncated form: keep structure but mark as truncated
+    return { _truncated: true, _bytes: serialized.length, preview: serialized.slice(0, max) };
+  } catch {
+    return { _unserializable: true };
+  }
+}
+
+/**
+ * Push a single tool call entry onto a Chat record's toolCalls array.
+ * Atomic — uses $push + $slice to keep the cap enforced without a race.
+ * Fire-and-forget: every call the tool loop makes gets logged, but a
+ * failure here never blocks the conversation.
+ */
+export async function appendToolCall(chatId, { tool, args, success, error, ms }) {
+  if (!chatId || !tool) return;
+  try {
+    await Chat.updateOne(
+      { _id: chatId },
+      {
+        $push: {
+          toolCalls: {
+            $each: [{
+              tool,
+              args: summarizeArgs(args),
+              success: success !== false,
+              error: error ? String(error).slice(0, 500) : null,
+              ms: Number(ms) || 0,
+              at: new Date(),
+            }],
+            $slice: -MAX_TOOL_CALLS_PER_CHAT,
+          },
+        },
+      },
+    );
+  } catch (err) {
+    log.debug("ChatTracker", `appendToolCall failed for ${chatId}: ${err.message}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // CHAIN STEP TRACKING (orchestrator internal calls)
 // ─────────────────────────────────────────────────────────────────────────
 

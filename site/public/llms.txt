@@ -182,11 +182,29 @@ Heartbeats exchange extension lists and health. Not user data. Cascade signals f
 12. Canopy peering
 13. afterBoot hook
 
+## Writing Code Inside the Tree
+
+TreeOS authors JavaScript projects from inside itself. A tree becomes a project: every file is a node, every directory is a node, content lives in notes on file nodes. The AI never touches disk directly — it writes nodes and notes, and a depth-first walker compiles the subtree to real files automatically (the same walker the `book` extension uses to turn a subtree into a document).
+
+At boot, TreeOS ingests its own codebase (land/extensions/ + land/seed/) into a system tree called `.source`. Every installed extension becomes a navigable branch. The kernel becomes a navigable branch. When the AI writes a new extension, its mode prompts tell it to `source-read extensions/fitness/manifest.js` first — it copies the shape from real working code, not from training-set memory. A 27B local model (Qwen 3.5) produces shipping code from one sentence because the tree carries the context.
+
+The `code-workspace` extension provides 5 modes, one per tense: `tree:code-plan` (imperative: build/refactor), `tree:code-log` (present: small adds), `tree:code-coach` (future: guidance), `tree:code-ask` (query: read-only), `tree:code-review` (past: audit + refine with .source references). The grammar pipeline routes every message to the right mode automatically — "write me a function" → code-log, "review this" → code-review, "refactor it" → code-plan.
+
+The `code-forge` extension ships what the tree built as a real TreeOS extension. Its `forge-init` tool can *adopt* an existing workspace project, repointing its sync target at `land/extensions/<name>/`. forge-validate mirrors Horizon's publish checks locally. forge-install-local stages the extension on the running land. forge-publish-horizon dry-runs or live-publishes to the federated registry.
+
+The loop closes in three directions:
+- **Inside out**: a user says "build me a tinder app", the tree writes a working Express backend + HTML frontend, reviews its own code against .source patterns, proposes fixes, and can ship the result as a real TreeOS extension.
+- **Outside in**: TreeOS uses the same mechanism to build itself. Gap-detection hooks notice missing capabilities. Evolve proposes specs. The AI, reading .source for reference, writes new extensions that install on the land. Operators approve each change via the approve extension. The system grows itself through conversation, gated by humans.
+- **Across lands**: mycelium routes "write me a finance tool" to a peer land that already has one. Horizon holds the canonical registry of shipped extensions. Any land can publish. Any land can install. The network of lands becomes a network of co-evolving operating systems — each tree building code, reviewing code, publishing code, and pulling each other's code over the federation.
+
+A snake eating its own tail. Claude Code, but operated from inside the system it's modifying.
+
 ## Key URLs
 
 - Landing: https://treeos.ai
 - The Seed: https://treeos.ai/seed
 - The AI: https://treeos.ai/ai
+- Code: https://treeos.ai/code
 - Cascade: https://treeos.ai/cascade
 - The Flow: https://treeos.ai/flow
 - Extensions: https://treeos.ai/extensions

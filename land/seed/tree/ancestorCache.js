@@ -259,6 +259,17 @@ export function resolveTreeAccessFromChain(startNodeId, userId, ancestors) {
 
   for (const node of ancestors) {
     if (node.systemRole) {
+      // SOURCE is a traversable system tree (live mirror of
+      // land/extensions + land/seed, see code-workspace/source.js).
+      // Treat .source itself as the root of its subtree so everything
+      // beneath it is navigable. Read-only by default — canWrite is
+      // gated on the code-workspace writeMode metadata at the tool
+      // handler level, not here.
+      if (node.systemRole === "source") {
+        ownerNode = node;
+        break;
+      }
+      // Every other system role is an impassable boundary.
       return { ok: false, error: ERR.INVALID_TREE, message: "Invalid tree: reached system node boundary" };
     }
 
@@ -276,6 +287,20 @@ export function resolveTreeAccessFromChain(startNodeId, userId, ancestors) {
 
   if (!ownerNode) {
     return { ok: false, error: ERR.INVALID_TREE, message: "Invalid tree: no rootOwner found" };
+  }
+
+  // .source is a land-owned system tree. Everyone on the land can read it.
+  // Writes are gated elsewhere (code-workspace write-mode check).
+  if (ownerNode.systemRole === "source") {
+    return {
+      ok: true,
+      rootId: ownerNode._id,
+      isRoot: ownerNode._id === startNodeId,
+      isOwner: false,
+      isContributor: false,
+      isTripped: false,
+      canWrite: false,
+    };
   }
 
   const isOwner = !!(userId && ownerNode.rootOwner === userId);

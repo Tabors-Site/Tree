@@ -37,6 +37,7 @@ const STATIC_ROUTES = [
   "/flow",
   "/network",
   "/build",
+  "/code",
   "/html",
   "/cli",
   "/mycelium",
@@ -101,6 +102,10 @@ const PAGE_META = {
   "/build": {
     title: "Build Extensions . Developer Reference",
     description: "Everything you need to build extensions for the seed. Manifest, init, hooks, modes, tools, routes, CLI commands, migrations, publishing. Code-first.",
+  },
+  "/code": {
+    title: "The tree writes code . TreeOS coding environment",
+    description: "TreeOS writes JavaScript projects from one sentence. A local 27B model produces shipping code because the tree carries the context: position, grammar, and a live mirror of the system's own source. A snake eating its own tail. Claude Code but from inside the operating system.",
   },
   "/cli": {
     title: "The CLI . Terminal Native",

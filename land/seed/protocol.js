@@ -205,6 +205,10 @@ export const SYSTEM_ROLE = Object.freeze({
   PEERS:      "peers",
   EXTENSIONS: "extensions",
   FLOW:       "flow",
+  // The .source self-tree: a live mirror of land/extensions and land/seed
+  // ingested at boot. First-class system node so the AI running inside
+  // the land can read its own substrate. Owned by code-workspace.
+  SOURCE:     "source",
 });
 
 // ============================================================================
