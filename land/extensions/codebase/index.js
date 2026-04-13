@@ -6,7 +6,11 @@ import analyzeMode from "./modes/analyze.js";
 import browseMode from "./modes/browse.js";
 import editMode from "./modes/edit.js";
 import testMode from "./modes/test.js";
-import reviewMode from "./modes/review.js";
+// reviewMode intentionally not imported: code-workspace owns tree:code-review
+// now. codebase still ships its reviewMode file for future reintroduction,
+// but the mode key is reserved for the authoring extension's review+refine
+// loop. Past-tense messages ("how does this look", "review this", "check
+// the project") route through the grammar pipeline to code-workspace.
 
 export async function init(core) {
   configure({ metadata: core.metadata });
@@ -16,22 +20,19 @@ export async function init(core) {
   core.llm.registerRootLlmSlot?.("code-search");
   core.llm.registerRootLlmSlot?.("code-edit");
   core.llm.registerRootLlmSlot?.("code-test");
-  core.llm.registerRootLlmSlot?.("code-review");
 
-  // Register modes
+  // Register modes (code-review deliberately omitted; owned by code-workspace)
   core.modes.registerMode("tree:code-analyze", analyzeMode, "codebase");
   core.modes.registerMode("tree:code-browse", browseMode, "codebase");
   core.modes.registerMode("tree:code-edit", editMode, "codebase");
   core.modes.registerMode("tree:code-test", testMode, "codebase");
-  core.modes.registerMode("tree:code-review", reviewMode, "codebase");
 
-  // LLM slot assignments: cheap for search/test, quality for edit/review
+  // LLM slot assignments: cheap for search/test, quality for edit
   if (core.llm.registerModeAssignment) {
     core.llm.registerModeAssignment("tree:code-analyze", "code-analyze");
     core.llm.registerModeAssignment("tree:code-browse", "code-analyze");
     core.llm.registerModeAssignment("tree:code-edit", "code-edit");
     core.llm.registerModeAssignment("tree:code-test", "code-test");
-    core.llm.registerModeAssignment("tree:code-review", "code-review");
   }
 
   // enrichContext: inject code metadata when at a code node

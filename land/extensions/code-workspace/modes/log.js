@@ -19,6 +19,8 @@ export default {
     "workspace-add-file",
     "workspace-read-file",
     "workspace-list",
+    "workspace-test",
+    "workspace-run",
     "get-tree-context",
     "navigate-tree",
   ],

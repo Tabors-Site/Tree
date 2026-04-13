@@ -274,6 +274,21 @@ function registerDynamic(program, cfgOverride) {
 
             printResponse(data);
           } catch (err) {
+            // Verb-collision fallthrough: a command like "run" is registered
+            // by the scripts extension, but in chat English "run the tests"
+            // is a natural sentence we want routed to the LLM. When the
+            // extension returns not-found (404 or message match), silently
+            // mark this line for chat fallback. The shell's processLine
+            // loop will re-dispatch as `chat <original>` and parseTense
+            // can route it properly. Outside shell we just print the error
+            // so users running a non-interactive command still see it.
+            const looksNotFound =
+              err.status === 404 ||
+              /\b(not found|unknown|no such|does not exist)\b/i.test(err.message || "");
+            if (looksNotFound && global._treeosInShell) {
+              global._treeosChatFallback = true;
+              return;
+            }
             console.error(chalk.red("Error:"), err.message);
           }
         });

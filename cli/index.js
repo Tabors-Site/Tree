@@ -295,6 +295,10 @@ function shellSplit(input) {
 
 const startShell = module.exports.startShell = async () => {
     _shellMode = true;
+    // Public flag dynamic commands read to know they should fall through
+    // to chat on soft failures (404, "not found") instead of printing an
+    // error. Set/cleared here so commands outside shell keep crashing loud.
+    global._treeosInShell = true;
     const readline = require("readline");
     const fs = require("fs");
     const path = require("path");
@@ -685,15 +689,25 @@ const startShell = module.exports.startShell = async () => {
       rl.close();
       try {
         _shellChatFallback = cleanInput;
+        global._treeosChatFallback = false;
         await program.parseAsync(["node", "tree", ...shellSplit(cleanInput)]);
-        // If command:* set the fallback marker, re-dispatch as chat and await it
-        if (_shellChatFallback === "__fallback__") {
+        // Two fallback paths to the same place:
+        //   1. __fallback__  — Commander couldn't find the command at all
+        //      (command:* fired). The whole line is unknown vocabulary.
+        //   2. global._treeosChatFallback — a command was found and ran, but
+        //      the extension behind it returned not-found (verb collision:
+        //      `run the tests` matched scripts `run <id>` and the script
+        //      named "the" doesn't exist). The dynamic command handler sets
+        //      this flag instead of printing the error.
+        if (_shellChatFallback === "__fallback__" || global._treeosChatFallback) {
           _shellChatFallback = null;
+          global._treeosChatFallback = false;
           await program.parseAsync(["node", "tree", "chat", cleanInput]);
         }
         _shellChatFallback = null;
       } catch (e) {
         _shellChatFallback = null;
+        global._treeosChatFallback = false;
         if (!e.code?.startsWith("commander.")) {
           console.error(chalk.red(e.message));
         }
