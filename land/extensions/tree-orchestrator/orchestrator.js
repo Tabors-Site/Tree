@@ -193,152 +193,17 @@ import mongoose from "mongoose";
 import Node from "../../seed/models/node.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 import { resolveMode } from "../../seed/modes/registry.js";
+import {
+  buildCurrentPath as _buildCurrentPath,
+  getIntelligenceBrief,
+  getMemory, pushMemory, clearMemory, formatMemoryContext,
+  getPronounState, updatePronounState,
+  recordRoutingDecision, getLastRouting, getLastRoutingRing, clearLastRouting,
+  setActiveRequest, getActiveRequest,
+} from "./state.js";
 
-// ─────────────────────────────────────────────────────────────────────────
-// PATH RESOLUTION (for routing index scope check)
-// ─────────────────────────────────────────────────────────────────────────
-
-const _pathCache = new Map(); // nodeId -> { path, ts }
-const PATH_TTL = 30000;
-
-async function _buildCurrentPath(nodeId) {
-  const cached = _pathCache.get(String(nodeId));
-  if (cached && Date.now() - cached.ts < PATH_TTL) return cached.path;
-
-  const parts = [];
-  let current = await Node.findById(nodeId).select("name parent rootOwner").lean();
-  let depth = 0;
-  while (current && depth < 20) {
-    parts.unshift(current.name || String(current._id));
-    if (current.rootOwner || !current.parent) break;
-    current = await Node.findById(current.parent).select("name parent rootOwner").lean();
-    depth++;
-  }
-  const path = "/" + parts.join("/");
-
-  _pathCache.set(String(nodeId), { path, ts: Date.now() });
-  // Cap cache
-  if (_pathCache.size > 500) {
-    const oldest = [..._pathCache.entries()].sort((a, b) => a[1].ts - b[1].ts);
-    for (let i = 0; i < 100; i++) _pathCache.delete(oldest[i][0]);
-  }
-  return path;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// INTELLIGENCE BRIEF (cached per tree, 60s TTL)
-// Collects signals from installed extensions so the librarian sees the
-// tree's living state, not just its skeleton.
-// ─────────────────────────────────────────────────────────────────────────
-
-const briefCache = new Map(); // rootId -> { brief, timestamp }
-const BRIEF_TTL = 60000;
-const BRIEF_CACHE_MAX = 100;
-
-async function getIntelligenceBrief(rootId, userId) {
-  const cached = briefCache.get(rootId);
-  if (cached && Date.now() - cached.timestamp < BRIEF_TTL) return cached.brief;
-
-  const brief = await buildIntelligenceBrief(rootId, userId);
-
-  // Evict oldest if at capacity
-  if (briefCache.size >= BRIEF_CACHE_MAX && !briefCache.has(rootId)) {
-    const oldest = briefCache.keys().next().value;
-    briefCache.delete(oldest);
-  }
-  briefCache.set(rootId, { brief, timestamp: Date.now() });
-  return brief;
-}
-
-async function buildIntelligenceBrief(rootId, userId) {
-  let getExtension;
-  try {
-    ({ getExtension } = await import("../loader.js"));
-  } catch { return null; }
-
-  const sections = [];
-
-  // Competence: what the tree knows and doesn't know
-  try {
-    const comp = getExtension("competence");
-    if (comp?.exports?.getCompetence) {
-      const data = await comp.exports.getCompetence(rootId);
-      if (data?.totalQueries >= 10) {
-        const strong = (data.strongTopics || []).slice(0, 5).join(", ");
-        const weak = (data.weakTopics || []).slice(0, 5).join(", ");
-        if (strong || weak) {
-          sections.push(`Competence: answers well on [${strong || "unknown"}]. Weak on [${weak || "unknown"}]. Answer rate: ${Math.round((data.answerRate || 0) * 100)}%.`);
-        }
-      }
-    }
-  } catch {}
-
-  // Explore: last exploration map at root
-  try {
-    const exp = getExtension("explore");
-    if (exp?.exports?.getExploreMap) {
-      const map = await exp.exports.getExploreMap(rootId);
-      if (map && map.confidence > 0) {
-        const findings = (map.map || []).slice(0, 3).map(f => f.nodeName || f.nodeId).join(", ");
-        const gaps = (map.gaps || []).slice(0, 2).join("; ");
-        sections.push(`Explored: ${map.coverage} coverage, ${map.nodesExplored} nodes checked. Key areas: ${findings || "none"}.${gaps ? " Gaps: " + gaps : ""}`);
-      }
-    }
-  } catch {}
-
-  // Contradiction: unresolved conflicts
-  try {
-    const con = getExtension("contradiction");
-    if (con?.exports?.getUnresolved) {
-      const unresolved = await con.exports.getUnresolved(rootId);
-      if (Array.isArray(unresolved) && unresolved.length > 0) {
-        const top = unresolved.slice(0, 2).map(c => `"${c.claim}" vs "${c.conflictsWith}"`).join("; ");
-        sections.push(`Contradictions: ${unresolved.length} unresolved. ${top}`);
-      }
-    }
-  } catch {}
-
-  // Purpose: thesis and coherence
-  try {
-    const pur = getExtension("purpose");
-    if (pur) {
-      const root = await Node.findById(rootId).select("metadata").lean();
-      const meta = root?.metadata instanceof Map ? root.metadata.get("purpose") : root?.metadata?.purpose;
-      if (meta?.thesis) {
-        const coherence = meta.recentCoherence != null ? ` Coherence: ${Math.round(meta.recentCoherence * 100)}%.` : "";
-        sections.push(`Purpose: "${meta.thesis}"${coherence}`);
-      }
-    }
-  } catch {}
-
-  // Evolution: dormant branches
-  try {
-    const evo = getExtension("evolution");
-    if (evo?.exports?.getDormant) {
-      const dormant = await evo.exports.getDormant(rootId);
-      if (Array.isArray(dormant) && dormant.length > 0) {
-        const names = dormant.slice(0, 3).map(d => d.name || d.nodeName).join(", ");
-        sections.push(`Dormant: ${dormant.length} branch${dormant.length > 1 ? "es" : ""}. ${names}.`);
-      }
-    }
-  } catch {}
-
-  // Remember: recent departures
-  try {
-    const rem = getExtension("remember");
-    if (rem) {
-      const root = await Node.findById(rootId).select("metadata").lean();
-      const meta = root?.metadata instanceof Map ? root.metadata.get("remember") : root?.metadata?.remember;
-      if (meta?.departed?.length > 0) {
-        const recent = meta.departed.slice(-3).map(d => `${d.name} (${d.note})`).join("; ");
-        sections.push(`Departed: ${recent}`);
-      }
-    }
-  } catch {}
-
-  if (sections.length === 0) return null;
-  return "Intelligence:\n" + sections.map(s => "  " + s).join("\n");
-}
+// Intelligence brief, path cache, memory, pronoun state, routing state,
+// and active requests all live in ./state.js now.
 
 // ─────────────────────────────────────────────────────────────────────────
 // MODE RESOLUTION HELPER
@@ -358,48 +223,7 @@ async function resolveModeForNode(intent, nodeId) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// PENDING OPERATIONS (confirmation flow)
-// ─────────────────────────────────────────────────────────────────────────
-// CONVERSATION MEMORY (survives mode switches)
-// ─────────────────────────────────────────────────────────────────────────
-
-// visitorId → [{ role: "user"|"assistant", content }]
-const orchestratorMemory = new Map();
-const MAX_MEMORY_TURNS = 10; // 5 exchanges (user + assistant each)
-
-function getMemory(visitorId) {
-  return orchestratorMemory.get(visitorId) || [];
-}
-
-function pushMemory(visitorId, userMessage, assistantResponse) {
-  const mem = getMemory(visitorId);
-  mem.push(
-    { role: "user", content: userMessage },
-    { role: "assistant", content: assistantResponse },
-  );
-  // Keep only the last N turns
-  while (mem.length > MAX_MEMORY_TURNS) mem.shift();
-  orchestratorMemory.set(visitorId, mem);
-}
-
-function clearMemory(visitorId) {
-  orchestratorMemory.delete(visitorId);
-}
-
 export { clearMemory };
-
-/**
- * Format memory as context string for injection into mode messages.
- */
-function formatMemoryContext(visitorId) {
-  const mem = getMemory(visitorId);
-  if (mem.length === 0) return "";
-  const lines = mem.map((m) =>
-    m.role === "user" ? `User: ${m.content}` : `Assistant: ${m.content}`,
-  );
-  return `\n\nRecent conversation:\n${lines.join("\n")}`;
-}
 
 // ─────────────────────────────────────────────────────────────────────────
 // ORCHESTRATOR
@@ -669,82 +493,7 @@ const PLAN_PATTERN = TENSE_IMPERATIVE;
 // "The same" → lastNoun tells us which extension to reuse.
 // ──��──────────────────────────────────────────────────────────────────────
 
-const _pronounState = new Map(); // visitorId -> { active, lastMod, lastNoun, lastMode, lastMessage }
-
-function getPronounState(visitorId) {
-  return _pronounState.get(visitorId) || { active: null, lastMod: null, lastNoun: null, lastMode: null, lastMessage: null };
-}
-
-export function updatePronounState(visitorId, updates) {
-  const current = getPronounState(visitorId);
-  _pronounState.set(visitorId, { ...current, ...updates });
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// LAST ROUTING STATE (for misroute detection)
-//
-// Stores the most recent routing decision per visitor so that extensions
-// like `misroute` can check whether the NEXT message from the same visitor
-// is a correction of this one. Keyed by visitorId (same as pronoun state).
-//
-// Keeps a tiny ring of the last few decisions so a user correcting two
-// messages back still has something to attach to.
-// ─────────────────────────────────────────────────────────────────────────
-
-const _lastRouting = new Map(); // visitorId -> [{ message, extName, mode, targetNodeId, currentNodeId, rootId, posMatches, posScore, posLocality, ts }, ...]
-const LAST_ROUTING_RING = 3;
-
-// Active request context per visitor. Set on entry to orchestrateTreeRequest,
-// cleared on exit. Lets extensions like misroute look up the websocket and
-// session info needed to fire a follow-up orchestration call on the same
-// channel without going through the websocket layer themselves.
-const _activeRequests = new Map(); // visitorId -> { socket, sessionId, signal, slot, rootChatId, username, userId, rootId }
-
-function recordRoutingDecision(visitorId, decision) {
-  if (!visitorId || !decision) return;
-  const existing = _lastRouting.get(visitorId) || [];
-  existing.unshift({ ...decision, ts: Date.now() });
-  while (existing.length > LAST_ROUTING_RING) existing.pop();
-  _lastRouting.set(visitorId, existing);
-}
-
-export function getLastRouting(visitorId) {
-  const ring = _lastRouting.get(visitorId);
-  return ring?.[0] || null;
-}
-
-export function getLastRoutingRing(visitorId) {
-  return _lastRouting.get(visitorId) || [];
-}
-
-export function clearLastRouting(visitorId) {
-  _lastRouting.delete(visitorId);
-}
-
-// Active request context lifecycle. Used by misroute extension to redispatch
-// the original message at the correct mode after detecting a named correction.
-//
-// Stored with a timestamp. The getter only returns entries within the TTL,
-// which avoids the need for a try/finally wrapper around the entire (very
-// large) orchestrateTreeRequest function. Stale entries get overwritten by
-// the next request from the same visitor or expire on read.
-const ACTIVE_REQUEST_TTL_MS = 30 * 1000;
-
-function setActiveRequest(visitorId, ctx) {
-  if (!visitorId) return;
-  _activeRequests.set(visitorId, { ...ctx, _ts: Date.now() });
-}
-
-export function getActiveRequest(visitorId) {
-  if (!visitorId) return null;
-  const entry = _activeRequests.get(visitorId);
-  if (!entry) return null;
-  if (Date.now() - entry._ts > ACTIVE_REQUEST_TTL_MS) {
-    _activeRequests.delete(visitorId);
-    return null;
-  }
-  return entry;
-}
+export { updatePronounState, getLastRouting, getLastRoutingRing, clearLastRouting, getActiveRequest };
 
 /**
  * Parse pronouns: detect references in the message and resolve them
