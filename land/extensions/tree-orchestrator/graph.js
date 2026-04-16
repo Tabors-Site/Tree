@@ -355,16 +355,15 @@ export function buildExecutionGraph({
 // Graph executor (runtime)
 // Recursive walker. The only place with side effects.
 //
-// runModeAndReturn and runChain are resolved via dynamic import from
-// orchestrator.js to avoid circular dependency. They will move to
-// dispatch.js in phase 5.
+// runModeAndReturn, runChain, and emitStatus are resolved via dynamic
+// import from dispatch.js.
 // ─────────────────────────────────────────────────────────────────────────
 
 export async function executeGraph(node, message, visitorId, opts) {
   if (!node) return { success: false, answer: "No execution path resolved." };
 
   if (node.type === "dispatch") {
-    const { runModeAndReturn } = await import("./orchestrator.js");
+    const { runModeAndReturn } = await import("./dispatch.js");
     return runModeAndReturn(visitorId, node.mode, message, {
       socket: opts.socket,
       username: opts.username,
@@ -390,7 +389,7 @@ export async function executeGraph(node, message, visitorId, opts) {
   }
 
   if (node.type === "sequence") {
-    const { runChain } = await import("./orchestrator.js");
+    const { runChain } = await import("./dispatch.js");
     const chain = node.steps.map(s => ({
       mode: s.mode,
       extName: s.extName,
@@ -410,7 +409,7 @@ export async function executeGraph(node, message, visitorId, opts) {
   }
 
   if (node.type === "fork") {
-    const { emitStatus } = await import("./orchestrator.js");
+    const { emitStatus } = await import("./dispatch.js");
     emitStatus(opts.socket, "evaluating", node.condition.text);
     const evaluation = await evaluateCondition(node.condition.text, {
       rootId: opts.rootId,
@@ -434,8 +433,8 @@ export async function executeGraph(node, message, visitorId, opts) {
   }
 
   if (node.type === "fanout") {
-    const { emitStatus } = await import("./orchestrator.js");
-    const { runModeAndReturn } = await import("./orchestrator.js");
+    const { emitStatus } = await import("./dispatch.js");
+    const { runModeAndReturn } = await import("./dispatch.js");
     emitStatus(opts.socket, "resolving", "Gathering data...");
 
     // Phase 1: Resolve the set
