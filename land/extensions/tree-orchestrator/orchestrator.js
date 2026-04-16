@@ -23,7 +23,6 @@ import {
 import { runRespond } from "./respond.js";
 
 import { setChatContext } from "../../seed/llm/chatTracker.js";
-import { getModesOwnedBy as _getModesOwnedBy } from "../../seed/tree/extensionScope.js";
 import {
   executeGraph,
   buildExecutionGraph,
@@ -36,13 +35,8 @@ import {
   isAffirmative,
 } from "./pendingPlan.js";
 import { runBranchSwarm } from "./swarm.js";
-import { isActiveNavigator } from "../../seed/ws/sessionRegistry.js";
 
-import {
-  getContextForAi,
-  getNavigationContext,
-  buildDeepTreeSummary,
-} from "../../seed/tree/treeFetch.js";
+import { buildDeepTreeSummary } from "../../seed/tree/treeFetch.js";
 import mongoose from "mongoose";
 import Node from "../../seed/models/node.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
