@@ -22,6 +22,7 @@ import {
   parseQuantifier, parseConditional, parseAdjectives,
   parsePreposition, parseTemporalScope,
 } from "./classify.js";
+import { runRespond } from "./respond.js";
 
 import { setChatContext, startChainStep, finalizeChat } from "../../seed/llm/chatTracker.js";
 import { getModesOwnedBy as _getModesOwnedBy } from "../../seed/tree/extensionScope.js";
@@ -2657,107 +2658,5 @@ export async function orchestrateTreeRequest({
 // RESPOND (final user-facing output)
 // ─────────────────────────────────────────────────────────────────────────
 
-async function runRespond({
-  visitorId,
-  socket,
-  signal,
-  username,
-  userId,
-  rootId,
-  nodeContext,
-  operationContext,
-  confirmNeeded = false,
-  originalMessage = null,
-  responseHint = "",
-  stepSummaries = [],
-  librarianContext = null,
-  slot,
-}) {
-  emitStatus(socket, "respond", "");
-
-  // Include conversation memory so respond can reference prior exchanges
-  const memCtx = formatMemoryContext(visitorId);
-
-  // Build a combined context: memory + step summaries + operation details
-  const summaryCtx = formatStepSummaries(stepSummaries);
-
-  // Strip librarianContext to only the fields respond needs (skip plan array, nodeIds, etc.)
-  let strippedLibCtx = null;
-  if (librarianContext) {
-    strippedLibCtx = {
-      summary: librarianContext.summary || null,
-      responseHint: librarianContext.responseHint || null,
-      confidence: librarianContext.confidence ?? null,
-    };
-  }
-
-  const respondMode = await resolveModeForNode("respond", getCurrentNodeId(visitorId) || rootId);
-  await switchMode(visitorId, respondMode, {
-    username,
-    userId,
-    rootId,
-    nodeContext: nodeContext || null,
-    operationContext: operationContext || null,
-    conversationMemory: memCtx || null,
-    stepSummaries: !operationContext ? summaryCtx || null : null,
-    responseHint: responseHint || null,
-    confirmNeeded,
-    librarianContext: strippedLibCtx,
-    clearHistory: true,
-  });
-
-  // Build trigger with responseHint for tone/content guidance
-  let trigger;
-  if (confirmNeeded) {
-    trigger = "Present the pending operation and ask for confirmation.";
-  } else if (librarianContext) {
-    trigger = responseHint
-      ? `Respond naturally based on what you know. Guidance: ${responseHint}`
-      : "Respond naturally based on the context provided.";
-  } else if (operationContext) {
-    trigger = responseHint
-      ? `Summarize what was done. Tone guidance: ${responseHint}`
-      : "Summarize what was done.";
-  } else {
-    trigger = responseHint
-      ? `Respond to the user. Guidance: ${responseHint}`
-      : "Respond to the user based on the provided context.";
-  }
-
-  const response = await processMessage(visitorId, trigger, {
-    username,
-    userId,
-    rootId,
-    slot,
-    signal,
-    onToolResults(results) {
-      if (signal?.aborted) return;
-      for (const r of results) {
-        socket.emit(WS.TOOL_RESULT, r);
-      }
-    },
-  });
-
-  emitStatus(socket, "done", "");
-
-  // Save this exchange to memory for future turns
-  if (originalMessage && response?.answer) {
-    pushMemory(visitorId, originalMessage, response.answer);
-  }
-
-  return response;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// SHORT-MEMORY DECISION
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * CURRENTLY UNUSED. No classifier (local or LLM) provides placementAxes.
- * The defer decision is handled inline: only explicit "defer" intent triggers
- * deferral. This function is preserved for a future classifier that returns
- * { placementAxes: { pathConfidence, domainNovelty, relationalComplexity } }.
- * Until then, it always returns { defer: false } and should not be wired in.
- *
- * @returns {{ defer: boolean, reason?: string }}
- */
+// runRespond moved to ./respond.js
+// SHORT-MEMORY DECISION removed (was marked CURRENTLY UNUSED)
