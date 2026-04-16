@@ -21,6 +21,18 @@ import homeReflect from "./modes/home/reflect.js";
 // Tools (OpenAI-format TOOL_DEFS for mode toolNames resolution)
 import TOOL_DEFS from "./tools.js";
 
+// AI forensics — chat observability capture via LLM + tool hooks
+import {
+  onBeforeLLMCall as forensicsBeforeLLM,
+  onBeforeToolCall as forensicsBeforeTool,
+  onAfterToolCall as forensicsAfterTool,
+  onAfterLLMCall as forensicsAfterLLM,
+  recordBranchEvent,
+  recordLLMResponse,
+  startForensicsSweep,
+  pendingCaptureCount,
+} from "./ai-forensics.js";
+
 export async function init(core) {
   const { setModels, setCommandResolver } = await import("./handlers.js");
   setModels(core.models);
@@ -111,6 +123,18 @@ export async function init(core) {
   // Register afterToolCall hook for frontend navigation
   const onAfterToolCall = buildNavigationHandler(core);
   core.hooks.register("afterToolCall", onAfterToolCall, "treeos-base");
+
+  // ── AI Forensics ──
+  // Capture the full "what the AI saw + did" detail for every LLM
+  // call so the session dashboard can show first-person trails.
+  // All handlers are fire-and-forget and guarded; a capture failure
+  // never breaks the LLM call path.
+  core.hooks.register("beforeLLMCall", forensicsBeforeLLM, "treeos-base");
+  core.hooks.register("beforeToolCall", forensicsBeforeTool, "treeos-base");
+  core.hooks.register("afterToolCall", forensicsAfterTool, "treeos-base");
+  core.hooks.register("afterLLMCall", forensicsAfterLLM, "treeos-base");
+  startForensicsSweep();
+  log.verbose("TreeosBase", "AI forensics capture installed (beforeLLMCall + 3 more hooks)");
 
   // ── Register TreeOS HTML pages (if html-rendering is installed) ──
   // html-rendering is infrastructure. TreeOS provides the actual pages.
@@ -260,6 +284,11 @@ export async function init(core) {
     exports: {
       TOOL_DEFS, registerToolNavigation, registerToolNavigations,
       registerSlot, unregisterSlots, resolveSlots, resolveSlotsAsync, listSlots, emitSlotUpdate,
+      // AI Forensics — direct-call API for modules that have data
+      // the hooks don't carry (swarm branch transitions, full LLM
+      // response text). Other extensions reach these via
+      // `getExtension("treeos-base")?.exports?.recordBranchEvent(...)`.
+      recordBranchEvent, recordLLMResponse, pendingCaptureCount,
     },
   };
 }

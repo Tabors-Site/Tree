@@ -46,6 +46,33 @@ const ChatSchema = new mongoose.Schema({
   },
 
   // -----------------------------------
+  // Dispatch lineage
+  // -----------------------------------
+  // Parent chat step id — points to the chat that DISPATCHED this one.
+  // Root user turns have parentChatId === null. Branch dispatches set
+  // it to the orchestrator's root chat step id, so the renderer can
+  // show "dispatched from X" and "dispatched to N branches" links and
+  // the operator can walk the tree as a dispatch lineage.
+  // Optional + indexed + backward-compat (existing docs: null).
+  parentChatId: {
+    type: String,
+    default: null,
+    index: true,
+  },
+
+  // Why this chat was created. Informational; the renderer uses it to
+  // label the "dispatched from" link correctly. Values:
+  //   "user"         — the root turn from a human message
+  //   "continuation" — a continuation step inside the same session
+  //   "branch-swarm" — the start of a branch chain spawned by swarm
+  //   "plan-expand"  — a step of an expanded [[PLAN]] item
+  //   "retry"        — a retry of a previously-failed branch
+  dispatchOrigin: {
+    type: String,
+    default: null,
+  },
+
+  // -----------------------------------
   // Start message
   // -----------------------------------
   startMessage: {

@@ -85,6 +85,15 @@ let io;
  */
 export function getIO() { return io || null; }
 
+// Hold a direct reference to the http.Server instance so extensions can
+// attach their own `upgrade` listeners (e.g. preview proxies that need
+// to tunnel WebSocket connections to spawned child processes). Socket.IO
+// stores it internally via io.httpServer but exposing it through a
+// named helper is cleaner — the extension doesn't need to know about
+// Socket.IO internals.
+let _httpServerRef = null;
+export function getHttpServer() { return _httpServerRef; }
+
 // Socket tracking
 const userSockets = new Map(); // visitorId → socket.id
 const authSessions = new Map(); // userId → socket.id
@@ -157,6 +166,8 @@ function emitNavigatorStatus(socket) {
 export function initWebSocketServer(httpServer, allowedOrigins) {
   // Register transport-layer session types before any connections arrive
   registerSessionType("WEBSOCKET_CHAT", "websocket-chat");
+
+  _httpServerRef = httpServer;
 
   io = new Server(httpServer, {
     cors: {

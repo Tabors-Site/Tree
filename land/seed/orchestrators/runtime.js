@@ -17,7 +17,7 @@ import {
 
 export { LLM_PRIORITY };
 import {
-  trackChainStep, startChat, finalizeChat,
+  trackChainStep, startChat, startChainStep, finalizeChat,
   setChatContext, clearChatContext,
 } from "../llm/chatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../ws/mcp.js";
@@ -252,6 +252,75 @@ export class OrchestratorRuntime {
     });
 
     return { parsed, raw: result, llmProvider: stepLlm };
+  }
+
+  /**
+   * Open a live chain step Chat record BEFORE running the LLM work.
+   *
+   * Use this when you need the chatId up front so you can swap the
+   * active chat context (so tool calls made during processMessage
+   * land on this step's record, not the root). Contrast with
+   * trackStep() which is fire-and-forget after the fact.
+   *
+   * Returns { chatId, chainIndex } or null if cleanup already ran or
+   * the chain-step circuit breaker tripped.
+   *
+   *   const step = await rt.beginChainStep("tree:code-plan", promptText, { treeContext });
+   *   if (step) setChatContext(visitorId, rt.sessionId, step.chatId);
+   *   await processMessage(...);                           // tool calls land on step.chatId
+   *   await rt.finishChainStep(step.chatId, { output: result.content });
+   */
+  async beginChainStep(modeKey, input, {
+    treeContext,
+    llmProvider: stepLlm,
+    parentChatId = null,
+    dispatchOrigin = null,
+  } = {}) {
+    if (this._cleaned) return null;
+    if (this.chainIndex > MAX_CHAIN_STEPS()) return null;
+    if (!this.sessionId || !this.userId) return null;
+
+    const chainIndex = this.chainIndex++;
+    const resolvedTreeContext = typeof treeContext === "function" ? treeContext() : treeContext;
+
+    const chat = await startChainStep({
+      userId: this.userId,
+      sessionId: this.sessionId,
+      rootChatId: this.mainChatId,
+      chainIndex,
+      modeKey,
+      source: this.source,
+      input: input || "",
+      treeContext: resolvedTreeContext,
+      llmProvider: stepLlm || this.llmProvider,
+      parentChatId,
+      dispatchOrigin,
+    });
+
+    if (!chat) return null;
+    return { chatId: chat._id, chainIndex };
+  }
+
+  /**
+   * Finalize a chain step opened via beginChainStep. Writes the OUT
+   * (endMessage.content) via finalizeChat. Safe to call after cleanup
+   * (the finalizeChat no-ops on a missing chatId).
+   *
+   * `stopped: true` marks the step as cancelled/errored in the UI so
+   * failed branches get the Stopped badge.
+   */
+  async finishChainStep(chatId, { output, stopped = false, modeKey } = {}) {
+    if (!chatId) return;
+    try {
+      await finalizeChat({
+        chatId,
+        content: typeof output === "string" ? output : (output == null ? null : JSON.stringify(output)),
+        stopped: !!stopped,
+        modeKey: modeKey || this.modeKeyForLlm || this.source,
+      });
+    } catch (err) {
+      log.debug("Orchestrator", `finishChainStep(${chatId}) failed: ${err.message}`);
+    }
   }
 
   /**

@@ -319,6 +319,35 @@
 <body>
   <div class="header">
     <span class="icon">🔥</span>
+  <!-- Chat Modal -->
+  <div id="chat-modal" class="modal">
+    <div class="modal-content">
+      <button class="close-btn" onclick="closeChat()">×</button>
+      <div id="chat-header">
+        <img id="chat-user-photo" src="" alt="">
+        <div>
+          <h2 id="chat-user-name"></h2>
+          <p id="chat-user-id"></p>
+        </div>
+      </div>
+      <div id="chat-messages" class="chat-messages"></div>
+      <div class="chat-input-container">
+        <input type="text" id="message-input" placeholder="Type a message...">
+        <button onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="match-popup" class="match-popup">
+    <div class="match-content">
+      <p>💚 It's a Match!</p>
+      <h2 id="match-name">Name</h2>
+      <p>You and Name matched</p>
+      <button onclick="openMatches(); closePopup();">View Your Match</button>
+    </div>
+  </div>
+
+You previously produced this plan and the user confirmed it. Make the change now via workspace-edit-file or workspace-add-file. Report one short line when done. Do not ask for confirmation.
     <h1>Tinder</h1>
     <span class="matches" id="match-count" onclick="openMatches()">0 matches</span>
   </div>
@@ -529,6 +558,14 @@
       currentCard = 0;
       document.getElementById('no-cards').style.display = 'none';
       await fetchProfiles();
+                ${matches.map(match => `
+                  <div class="match-item" onclick="openChat(${match.id}, '${match.name}', '${match.age}')">
+                    <img src="${match.photo}" alt="${match.name}">
+                    <h3>${match.name}</h3>
+                    <p>${match.age} years</p>
+                    <span class="chat-icon">💬</span>
+                  </div>
+                `).join('')}
     }
     
     async function openMatches() {

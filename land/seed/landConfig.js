@@ -269,8 +269,13 @@ export const CONFIG_DEFAULTS = {
   chatRetentionDays: 90,
   contributionRetentionDays: 365,
 
-  // Orchestration
-  apiOrchestrationTimeout: 1140000,
+  // Orchestration — 45 min default. Compound code-workspace swarms (full
+  // multi-branch projects) can legitimately run 20-30 min on a 27B local
+  // model; the old 19-min ceiling was killing legitimate work. Individual
+  // CLI calls or quick chats finish in seconds; this only matters for
+  // long builds. Operators can crank higher via:
+  //   treeos config set apiOrchestrationTimeout 3600000
+  apiOrchestrationTimeout: 45 * 60 * 1000,
 
   // Protected (shown but cannot be modified via public API)
   seedVersion: null,

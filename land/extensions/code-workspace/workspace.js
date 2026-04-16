@@ -21,6 +21,7 @@ import Node from "../../seed/models/node.js";
 import Note from "../../seed/models/note.js";
 import { v4 as uuidv4 } from "uuid";
 import log from "../../seed/log.js";
+import { logContribution } from "../../seed/tree/contributions.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -151,21 +152,73 @@ export async function initProject({ projectNodeId, name, description, workspaceP
     ? path.resolve(workspacePath)
     : path.join(DEFAULT_WORKSPACE_ROOT, String(node._id));
 
+  // Merge on top of whatever the node already carries under this
+  // namespace. The AI may have written a plan (subPlan.steps[]) BEFORE
+  // the first file write auto-initialized the project, and a blind
+  // replace would wipe that state. Only fields that initProject
+  // actually owns get overwritten; everything else (subPlan.steps,
+  // subPlan.driftAt, signalInbox entries, swarmEvents) is
+  // preserved from the existing metadata.
+  const existingBase = existing && typeof existing === "object" ? existing : {};
   const data = {
+    ...existingBase,
     role: ROLE_PROJECT,
     initialized: true,
     name: name || node.name,
-    description: description || "",
+    description: description || existingBase.description || "",
     workspacePath: resolvedPath,
-    language: "javascript",
-    createdAt: new Date().toISOString(),
+    language: existingBase.language || "javascript",
+    createdAt: existingBase.createdAt || new Date().toISOString(),
+    // Self-similar state placeholders — populated incrementally by the
+    // swarm runner and the cascade rollup. Preserve any prior subPlan
+    // (including steps and branches the AI may have set before auto-init).
+    subPlan: existingBase.subPlan || { branches: [], createdAt: new Date().toISOString() },
+    aggregatedDetail: existingBase.aggregatedDetail || {
+      filesWritten: 0,
+      contracts: [],
+      statusCounts: { done: 0, running: 0, pending: 0, failed: 0 },
+      lastActivity: null,
+    },
+    signalInbox: Array.isArray(existingBase.signalInbox) ? existingBase.signalInbox : [],
+    swarmEvents: Array.isArray(existingBase.swarmEvents) ? existingBase.swarmEvents : [],
   };
+  // Make sure subPlan has the branches slot even if it was previously
+  // written with only steps[] (workspace-plan action=set does that).
+  if (!Array.isArray(data.subPlan.branches)) data.subPlan.branches = [];
 
   if (core?.metadata) {
     await core.metadata.setExtMeta(node, NS, data);
   } else {
     // Direct write fallback for programmatic use (e.g. offline tests).
     await Node.updateOne({ _id: node._id }, { $set: { [`metadata.${NS}`]: data } });
+  }
+
+  // Enable the kernel cascade system on the project root so file writes
+  // anywhere in the sub-tree automatically fire propagation. Extensions
+  // like code-workspace (here), contradiction, notifications, codebook,
+  // and dashboard pick up the signals without any swarm-specific wiring.
+  try {
+    const existingCascadeMeta = node.metadata instanceof Map
+      ? node.metadata.get("cascade")
+      : node.metadata?.cascade;
+    if (!existingCascadeMeta?.enabled) {
+      const cascadeData = {
+        enabled: true,
+        enabledAt: new Date().toISOString(),
+        enabledBy: "code-workspace",
+      };
+      if (core?.metadata?.setExtMeta) {
+        await core.metadata.setExtMeta(node, "cascade", cascadeData);
+      } else {
+        await Node.updateOne(
+          { _id: node._id },
+          { $set: { "metadata.cascade": cascadeData } },
+        );
+      }
+      log.info("CodeWorkspace", `Enabled cascade on project root ${node._id}`);
+    }
+  } catch (err) {
+    log.warn("CodeWorkspace", `Failed to enable cascade on project: ${err.message}`);
   }
 
   log.info("CodeWorkspace", `Initialized project "${data.name}" at ${resolvedPath} (node ${node._id})`);
@@ -180,9 +233,25 @@ function splitPath(relPath) {
   if (typeof relPath !== "string") throw new Error("file path must be a string");
   const cleaned = relPath.replace(/^[\/\\]+/, "").replace(/[\/\\]+$/, "");
   if (!cleaned) throw new Error("empty file path");
-  if (cleaned.includes("..")) throw new Error(`path traversal not allowed: "${relPath}"`);
   if (cleaned.includes("\0")) throw new Error(`null byte in path: "${relPath}"`);
-  return cleaned.split(/[\/\\]+/).filter(Boolean);
+
+  // Split first, then filter. This handles `./`, `foo/./bar`,
+  // `foo//bar`, and similar normalization cases without needing a
+  // separate regex pass. Dot-segments (`.`) are path syntax for
+  // "current directory" and get collapsed. Double-dot segments (`..`)
+  // are path traversal and must REJECT — we check AFTER filtering so
+  // a single-segment `./` cleanly rejects as empty, while a real
+  // filename containing `..` (like `some..name.js`) is still legal.
+  const raw = cleaned.split(/[\/\\]+/).filter(Boolean);
+  const segments = raw.filter((s) => s !== ".");
+
+  if (segments.some((s) => s === "..")) {
+    throw new Error(`path traversal not allowed: "${relPath}"`);
+  }
+  if (segments.length === 0) {
+    throw new Error("empty file path (after normalization)");
+  }
+  return segments;
 }
 
 async function findChildByName(parentId, childName) {
@@ -386,6 +455,16 @@ async function checkSourceGate(fileNodeId) {
 export async function writeFileContent({ fileNodeId, content, userId }) {
   await checkSourceGate(fileNodeId);
 
+  // Snapshot the existing content BEFORE we delete, so we can detect
+  // edit-vs-create and fire the right hook action. This matters for
+  // the afterNote validators (syntax, contract, dead-receiver) that
+  // care whether a file is being rewritten or created for the first time.
+  const existing = await Note.findOne({ nodeId: fileNodeId, contentType: "text" })
+    .sort({ createdAt: -1 })
+    .lean();
+  const isEdit = !!existing;
+  const previousSize = existing?.content ? Buffer.byteLength(existing.content, "utf8") : 0;
+
   await Note.deleteMany({ nodeId: fileNodeId });
   const note = await Note.create({
     _id: uuidv4(),
@@ -394,6 +473,49 @@ export async function writeFileContent({ fileNodeId, content, userId }) {
     userId: userId || WORKSPACE_SYSTEM_USER,
     nodeId: fileNodeId,
   });
+
+  const newSize = Buffer.byteLength(content ?? "", "utf8");
+  const sizeKB = Math.ceil(newSize / 1024);
+  const deltaKB = Math.ceil((newSize - previousSize) / 1024);
+
+  // Fire afterNote so the validators (phase 1-4) see this write. The
+  // bypass of beforeNote is intentional — that hook has a size cap for
+  // user-facing notes and bulk code writes can exceed it. But the
+  // AFTER side is the one the validators care about and it never
+  // rejects writes, just reacts to them.
+  try {
+    const { hooks } = await import("../../seed/hooks.js");
+    hooks.run("afterNote", {
+      note,
+      nodeId: fileNodeId,
+      userId: userId || WORKSPACE_SYSTEM_USER,
+      contentType: "text",
+      sizeKB,
+      deltaKB,
+      action: isEdit ? "edit" : "create",
+    }).catch(() => {});
+  } catch {}
+
+  // Log the contribution so the tree's audit trail includes this
+  // write. Without this, code-workspace writes were invisible to
+  // every downstream system (recent activity, contribution queries,
+  // user metrics, blame walks).
+  try {
+    await logContribution({
+      userId: userId || WORKSPACE_SYSTEM_USER,
+      nodeId: fileNodeId,
+      action: "note",
+      noteAction: {
+        action: isEdit ? "edit" : "add",
+        noteId: note._id.toString(),
+        content: content ?? "",
+      },
+      via: "code-workspace.writeFileContent",
+      sizeKB,
+      deltaKB,
+    });
+  } catch {}
+
   return note;
 }
 
@@ -408,6 +530,83 @@ export async function writeFileContent({ fileNodeId, content, userId }) {
  * same thing for compiling notes into a single document; we do it to
  * compile a subtree into an on-disk project.
  */
+/**
+ * Local view of the tree from the current node's perspective. This is
+ * TreeOS's principle of "each node handles itself and reaches out to
+ * its neighbors" applied to context: the AI at any position doesn't
+ * need a flat walk of the whole project, it needs to see its own
+ * immediate surroundings.
+ *
+ * Returns:
+ *   {
+ *     self:     { name, role, childCount },
+ *     parent:   { name, role, nodeId } | null,
+ *     children: [{ name, role, nodeId }],   // direct children
+ *     siblings: [{ name, role, nodeId }],   // children of parent,
+ *                                            // excluding self
+ *   }
+ *
+ * Bounded: max 30 children, max 30 siblings. If the AI needs to see
+ * deeper, it navigates (workspace-list / cd) and the view shifts to
+ * its new position. One level at a time, like walking a real
+ * filesystem.
+ */
+export async function localNodeView(nodeId) {
+  if (!nodeId) return null;
+  const node = await Node.findById(nodeId).select("_id name parent metadata children").lean();
+  if (!node) return null;
+  const selfMeta = readMeta(node);
+  const selfRole = selfMeta?.role || null;
+
+  const childDocs = Array.isArray(node.children) && node.children.length > 0
+    ? await Node.find({ _id: { $in: node.children } })
+        .select("_id name metadata").lean()
+    : [];
+  childDocs.sort((a, b) => a.name.localeCompare(b.name));
+  const children = childDocs.slice(0, 30).map((c) => ({
+    name: c.name,
+    nodeId: String(c._id),
+    role: readMeta(c)?.role || null,
+  }));
+
+  let parent = null;
+  let siblings = [];
+  if (node.parent) {
+    const parentDoc = await Node.findById(node.parent)
+      .select("_id name metadata children").lean();
+    if (parentDoc) {
+      parent = {
+        name: parentDoc.name,
+        nodeId: String(parentDoc._id),
+        role: readMeta(parentDoc)?.role || null,
+      };
+      if (Array.isArray(parentDoc.children) && parentDoc.children.length > 0) {
+        const sibDocs = await Node.find({
+          _id: { $in: parentDoc.children, $ne: node._id },
+        }).select("_id name metadata").lean();
+        sibDocs.sort((a, b) => a.name.localeCompare(b.name));
+        siblings = sibDocs.slice(0, 30).map((s) => ({
+          name: s.name,
+          nodeId: String(s._id),
+          role: readMeta(s)?.role || null,
+        }));
+      }
+    }
+  }
+
+  return {
+    self: {
+      name: node.name,
+      nodeId: String(node._id),
+      role: selfRole,
+      childCount: Array.isArray(node.children) ? node.children.length : 0,
+    },
+    parent,
+    children,
+    siblings,
+  };
+}
+
 export async function walkProjectFiles(projectNodeId) {
   const files = [];
 
@@ -424,7 +623,16 @@ export async function walkProjectFiles(projectNodeId) {
       return;
     }
 
-    if (data.role === ROLE_PROJECT || data.role === ROLE_DIRECTORY) {
+    // Project = root, no path prefix.
+    // Directory / Branch = contributes the node name to the path so files
+    // under backend/ write to workspace/backend/ on disk (branches created
+    // by the swarm runner use role="branch" and need the same traversal
+    // and path-prefix behavior as plain directories).
+    if (
+      data.role === ROLE_PROJECT ||
+      data.role === ROLE_DIRECTORY ||
+      data.role === "branch"
+    ) {
       const childRel = data.role === ROLE_PROJECT
         ? ""
         : (relBase ? `${relBase}/${node.name}` : node.name);

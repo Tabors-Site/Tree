@@ -13,7 +13,7 @@
 import crypto from "crypto";
 import log from "../seed/log.js";
 import { resolveTreeAccess } from "../seed/tree/treeAccess.js";
-import { getToolOwner, isExtensionBlockedAtNode } from "../seed/tree/extensionScope.js";
+import { getToolOwner, isExtensionBlockedAtNode, isToolReadOnly } from "../seed/tree/extensionScope.js";
 import { getChatContext } from "../seed/llm/chatTracker.js";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -254,13 +254,24 @@ async function handleMcpRequest(req, res) {
 
       const nodeId = requestArgs.nodeId ?? requestArgs.rootId ?? requestArgs.parentNodeID ?? requestArgs.parentId ?? requestArgs.rootNodeId;
 
-      // Tree access check
+      // Tree access check. Read-only tools (annotation readOnlyHint: true)
+      // only need canRead; write tools need canWrite. Without this split a
+      // read-only tool like get-node-notes was being rejected with
+      // "Invalid nodeId, or you are not in this tree" whenever the user had
+      // read-only access to the tree — which is wrong and spammed the log.
       if (nodeId && req.userId) {
         const access = await resolveTreeAccess(nodeId, req.userId);
-        if (!access.canWrite) {
+        const readOnly = toolName ? isToolReadOnly(toolName) : false;
+        const allowed = readOnly ? (access.canRead || access.canWrite) : access.canWrite;
+        if (!allowed) {
           return res.status(403).json({
             jsonrpc: "2.0", id: req.body.id,
-            error: { code: -32602, message: "Invalid nodeId, or you are not in this tree." },
+            error: {
+              code: -32602,
+              message: readOnly
+                ? `Read access denied for node ${nodeId}.`
+                : `Write access denied for node ${nodeId} (tool "${toolName}" requires write).`,
+            },
           });
         }
       }

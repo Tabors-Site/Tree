@@ -25,7 +25,17 @@ function loadData() {
 }
 
 function saveData(data) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    // Use async write to avoid blocking the event loop
+    return new Promise((resolve, reject) => {
+        fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2), (err) => {
+            if (err) {
+                console.error('Error saving data file:', err);
+                reject(err);
+            } else {
+                resolve();
+            }
+        });
+    });
 }
 
 function generateMockUsers() {
@@ -39,6 +49,8 @@ function generateMockUsers() {
             name: `${namesFirst[i % namesFirst.length]} ${namesLast[i % namesLast.length]}`,
             age: 22 + Math.floor(Math.random() * 10),
             distance: 0 + Math.floor(Math.random() * 30),
+              photo: `https://i.pravatar.cc/400?u=${i + 1}`,
+
             photo: `https://pravatar.cc/400?u=${i + 1}`,
             bio: getRandomBio()
         });
@@ -72,14 +84,14 @@ function hasSwipe(data, userId, targetId) {
     );
 }
 
-function addSwipe(data, userId, targetId, direction, targetProfile) {
+async function addSwipe(data, userId, targetId, direction, targetProfile) {
     if (hasSwipe(data, userId, targetId)) {
         return { userHasSwiped: true, matched: true, otherInfo: null };
     }
 
     const timestamp = Date.now();
     data.swipes.push({ userId, targetId, direction, timestamp });
-    saveData(data);
+    await saveData(data);
 
     if (direction === SWIPE_LEFT) {
         return { userHasSwiped: false, matched: false, otherInfo: null };
@@ -93,7 +105,7 @@ function addSwipe(data, userId, targetId, direction, targetProfile) {
             targetProfile: targetProfile,
             timestamp
         });
-        saveData(data);
+        await saveData(data);
         return { userHasSwiped: false, matched: true, otherInfo: targetProfile };
     }
 
@@ -124,7 +136,7 @@ function getMessages(data, userId, matchId) {
         .sort((a, b) => a.timestamp - b.timestamp);
 }
 
-function sendMessage(data, userId, toUserId, message) {
+async function sendMessage(data, userId, toUserId, message) {
     const msg = {
         id: Date.now(),
         userId,
@@ -133,12 +145,25 @@ function sendMessage(data, userId, toUserId, message) {
         timestamp: Date.now()
     };
     data.messages.push(msg);
-    saveData(data);
+    await saveData(data);
     return msg;
+}
+
+function getUserId(urlParams) {
+    const userIdParam = urlParams.get('userId');
+    if (userIdParam) {
+        const parsed = parseInt(userIdParam, 10);
+        if (!isNaN(parsed) && parsed > 0) {
+            return parsed;
+        }
+    }
+    return 1; // Default fallback
 }
 
 const requestHandler = (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
+    const urlParams = new URLSearchParams(url.search);
+    const userId = getUserId(urlParams);
     
     if (url.pathname.startsWith('/public/')) {
         const filePath = path.join(__dirname, 'public', url.pathname.substring(1));
@@ -181,28 +206,25 @@ const requestHandler = (req, res) => {
         });
     } else if (url.pathname === '/api/profiles') {
         const data = loadData();
-        const userId = 1;
         const swipedUsers = getSwipedUsers(data, userId);
         const allUsers = generateMockUsers();
         const remainingUsers = allUsers.filter(u => !swipedUsers.includes(u.id));
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(remainingUsers));
     } else if (url.pathname === '/api/swipe') {
-        const data = loadData();
-        const userId = 1;
-        
         let body = '';
         req.on('data', chunk => {
             body += chunk.toString();
         });
         
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
+                const data = loadData();
                 const { userId: targetId, direction } = JSON.parse(body);
                 const allUsers = generateMockUsers();
                 const targetProfile = allUsers.find(u => u.id === targetId);
                 
-                const result = addSwipe(data, userId, targetId, direction, targetProfile);
+                const result = await addSwipe(data, userId, targetId, direction, targetProfile);
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(result));
@@ -213,13 +235,11 @@ const requestHandler = (req, res) => {
         });
     } else if (url.pathname === '/api/matches') {
         const data = loadData();
-        const userId = 1;
         const matches = getMatches(data, userId);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(matches));
     } else if (url.pathname === '/api/stats') {
         const data = loadData();
-        const userId = 1;
         const totalSwipedRight = data.swipes.filter(s => s.userId === userId && s.direction === SWIPE_RIGHT).length;
         const totalMatches = data.matches.filter(m => m.userId === userId).length;
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -228,7 +248,6 @@ const requestHandler = (req, res) => {
             matches: totalMatches
         }));
     } else if (url.pathname === '/api/messages') {
-        const urlParams = new URLSearchParams(url.search);
         const matchId = parseInt(urlParams.get('matchId'));
         
         if (!matchId) {
@@ -238,21 +257,18 @@ const requestHandler = (req, res) => {
         }
         
         const data = loadData();
-        const userId = 1;
         const messages = getMessages(data, userId, matchId);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(messages));
     } else if (url.pathname === '/api/send-message') {
-        const data = loadData();
-        const userId = 1;
-        
         let body = '';
         req.on('data', chunk => {
             body += chunk.toString();
         });
         
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
+                const data = loadData();
                 const { matchId, message } = JSON.parse(body);
                 
                 if (!matchId || !message) {
@@ -261,7 +277,7 @@ const requestHandler = (req, res) => {
                     return;
                 }
                 
-                const msg = sendMessage(data, userId, matchId, message);
+                const msg = await sendMessage(data, userId, matchId, message);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(msg));
             } catch (err) {

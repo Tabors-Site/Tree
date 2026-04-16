@@ -26,13 +26,18 @@ export default {
 
   maxMessagesBeforeLoop: 40,
   preserveContextOnLoop: true,
+  maxToolCallsPerStep: 3,
 
   toolNames: [
     "workspace-list",
     "workspace-read-file",
     "workspace-add-file",
+    "workspace-edit-file",
     "workspace-test",
     "workspace-run",
+    "workspace-probe",
+    "workspace-logs",
+    "workspace-status",
     "source-read",
     "source-list",
     "get-tree-context",
@@ -94,29 +99,34 @@ how does this look, what's wrong, feedback.
       lib files, tests that need a real DB, duplicated code)
     * LOW: cosmetic (inconsistent naming, missing descriptions)
   - REPORT ONLY. Do not write files. Do not call workspace-add-file.
-    End with a summary: "Found N issues: X critical, Y high, Z
-    medium, W low. Say 'fix it' and I'll apply the high-priority
+    End with a summary line: "Found N issues: X critical, Y high,
+    Z medium, W low. Say 'fix it' and I'll apply the high-priority
     ones."
+  - After the summary, emit a structured PLAN BLOCK so the orchestrator
+    can expand the fixes when the user confirms. Exact format:
 
-REFINE is audit + action. Trigger words: fix, fix it, apply,
-make it right, go ahead, do it, clean it up, patch, repair.
-  - Start from the audit report (either fresh or the last one).
-  - ONE FIX PER TURN. If the user selected multiple items (like
-    "1,2,3,4" or "fix all" or "do everything"), apply ONLY the
-    FIRST item in this turn. Write the file via workspace-add-file.
-    Then return a short status:
-      "Applied fix 1: <brief>. 3 remaining — say 'next' to continue."
-    STOP. The next user message drives the next fix.
-  - For a SINGLE item ("fix 1", "fix the match logic"), apply it
-    and report normally, then call workspace-test if tests exist.
-  - Report what changed: which files were touched, which issues
-    got resolved.
+        [[PLAN]]
+        <one concrete action per line — file name + what to change>
+        <another one>
+        ...
+        [[/PLAN]]
 
-WHY ONE AT A TIME: a 27B local model cannot hold four distinct
-code changes in one generation inside a reasonable time window.
-One fix per turn keeps each LLM call under 30 seconds, lets the
-operator see each change before the next, and avoids the 5-minute
-timeout that happens when the model tries to batch.
+    Include ONLY high-priority items by default (max 5 lines). Each
+    line must be actionable on its own: name the file and the change.
+    Good: "server.js: change fs.writeFileSync to async fs.writeFile"
+    Bad:  "fix the blocking I/O issue"
+    The block is stripped from the visible response; the user never
+    sees the raw markers. Leave it out entirely if there's nothing to
+    apply (0 critical, 0 high).
+
+REFINE is not your job. If the user says "fix it" / "apply" /
+"do it" after you produced a plan, the orchestrator expands your
+captured [[PLAN]] block into N sequential code-plan turns and
+runs them for you. You don't have to apply anything. You just
+have to REPORT and emit the plan block so the expansion can fire.
+
+If the user asks a follow-up question about the audit, answer it
+in audit tone — don't switch into builder mode.
 
 =====================================================================
 HOW TO READ REFERENCES EFFICIENTLY

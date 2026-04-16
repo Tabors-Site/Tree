@@ -28,7 +28,11 @@ function getBaseSite() {
 // Clear base cache (for tests or after config change)
 function clearBaseCache() { _baseCache = null; }
 
-const REQUEST_TIMEOUT_MS = 480000; // 8 minutes (LLM responses can be slow)
+// Matches the land's apiOrchestrationTimeout (19 min default). Long
+// builds through the continuation loop or the branch swarm can legitimately
+// take 10-15 minutes on a 27B local model — the old 8-min wall was killing
+// work that the server was perfectly happy to complete.
+const REQUEST_TIMEOUT_MS = 45 * 60 * 1000;
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 const MAX_RETRIES = 1;
 

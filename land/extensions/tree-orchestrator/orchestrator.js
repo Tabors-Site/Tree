@@ -172,7 +172,16 @@ function extractBehavioral(sourceType) {
   if (sourceType === "be" || sourceType.endsWith("-be")) return "be";
   return "chat"; // default
 }
-import { setChatContext } from "../../seed/llm/chatTracker.js";
+import { setChatContext, startChainStep, finalizeChat } from "../../seed/llm/chatTracker.js";
+import { getModesOwnedBy as _getModesOwnedBy } from "../../seed/tree/extensionScope.js";
+import {
+  parsePlan,
+  setPendingPlan,
+  getPendingPlan,
+  clearPendingPlan,
+  isAffirmative,
+} from "./pendingPlan.js";
+import { parseBranches, runBranchSwarm, validateBranches, parseContracts } from "./swarm.js";
 import { isActiveNavigator } from "../../seed/ws/sessionRegistry.js";
 
 import {
@@ -525,6 +534,13 @@ const TENSE_FUTURE = new RegExp([
 // Imperative tense (plan): commanding a structural change. Building, creating, modifying.
 const TENSE_IMPERATIVE = /\b(plan|build|create|make|setup|set up|set\s+.*\b(?:goal|target|weight|value)|structure|organize|define|add|modify|remove|delete|restructure|program|taper|schedule|adjust|change|update|curriculum|configure|redesign|rebuild|swap|replace|rename|initialize|start tracking|stop tracking|enable|disable|turn on|turn off|fix|correct|revise|repair|edit)\b/i;
 
+// Sentence-start imperative: when a message begins with a classic
+// build/action verb, it's always imperative regardless of other matches.
+// Catches "Make a tinder app..." / "Build me a server..." / "Write a
+// function that..." which could otherwise be mis-classified as present
+// indicative when the grammar pipeline is being cautious.
+const SENTENCE_START_IMPERATIVE = /^\s*(please\s+)?(make|build|create|write|scaffold|generate|add|fix|edit|modify|refactor|delete|remove|rename|replace|update|install|setup|set\s+up|implement|design|ship|publish)\b/i;
+
 // Negation: cancels the default action. "Don't do the thing."
 // Includes undo intent, course corrections, explicit cancel words.
 const NEGATION = /\b(don'?t|do not|not|no|skip|stop|cancel|ignore|forget it|forget that|never mind|nevermind|undo|take.*back|that'?s wrong|wasn'?t|isn'?t|aren'?t|won'?t|hold on|wait|scratch that|scrap that|disregard)\b/i;
@@ -555,6 +571,16 @@ async function parseTense(baseMode, message, behavioral) {
 
     if (behavioral === "be" || lower === "be") {
       return { mode: find("coach") || baseMode, tense: "imperative-guided", pattern: "be" };
+    }
+
+    // Sentence-start imperative short-circuit: "Make a tinder app",
+    // "Build me a server", "Write a function" — these are unambiguously
+    // commands. Skip the full compound-match scoring and commit to plan.
+    if (SENTENCE_START_IMPERATIVE.test(lower)) {
+      const planMode = find("plan");
+      if (planMode) {
+        return { mode: planMode, tense: "imperative", pattern: "plan-anchored" };
+      }
     }
 
     // Detect all matching tenses for compound intent detection
@@ -929,6 +955,22 @@ const CONDITIONAL_ELSE = /(?:,?\s*(?:otherwise|else|if not|or else)\s+)(.+)$/i;
  */
 function parseConditional(message) {
   const lower = message.toLowerCase().trim();
+
+  // Build-imperative bailout. When the user says "build me a tinder app
+  // that has X when Y", the "when Y" is describing app runtime behavior
+  // — part of the spec, not a control-flow condition for the orchestrator.
+  // We only want to treat conditionals as runtime forks when the matrix
+  // verb is something like "log this when I finish" or "fix it if tests
+  // pass" — not when the verb is "build/scaffold/create" and the rest
+  // of the sentence is describing what to construct.
+  //
+  // Same rule used elsewhere in this file: if the sentence opens with
+  // a build/scaffold imperative, the message is a SPEC, not a runtime
+  // workflow. Skip conditional parsing entirely.
+  if (SENTENCE_START_IMPERATIVE.test(lower)) {
+    return null;
+  }
+
   let match;
   let condEnd = 0;
 
@@ -1415,13 +1457,23 @@ function buildExecutionGraph({
       ...mods, tense: tenseInfo?.tense || "present",
     });
 
-    // The alternative dispatch: coach mode for graceful handling
-    const altMode = (() => {
-      if (!extName) return resolvedMode;
-      const base = resolvedMode || "";
-      const prefix = base.includes(":") ? base.split(":")[0] : "tree";
-      return `${prefix}:${extName}-coach`;
-    })();
+    // The alternative dispatch: coach mode for graceful handling.
+    // Resolve via the mode registry (getModesOwnedBy) instead of
+    // string-concatenating `${extName}-coach`. Extension name and mode
+    // prefix don't always match — code-workspace owns tree:code-coach,
+    // not tree:code-workspace-coach. Asking the registry for the
+    // extension's modes and finding the one that ends in -coach is the
+    // correct lookup. Falls back to the action mode if no coach exists,
+    // so a fork against an extension without a coach mode just runs
+    // the same dispatch on both branches (degenerate but safe).
+    let altMode = resolvedMode;
+    if (extName) {
+      try {
+        const ownedModes = _getModesOwnedBy(extName) || [];
+        const coachMode = ownedModes.find((m) => m.endsWith("-coach"));
+        if (coachMode) altMode = coachMode;
+      } catch {}
+    }
     const altDispatch = makeDispatch(altMode || resolvedMode, extName, classification?.targetNodeId || currentNodeId, {
       ...mods, tense: "future",
     });
@@ -1526,6 +1578,8 @@ async function executeGraph(node, message, visitorId, opts) {
       voice: node.modifiers.voice,
       treeCapabilities: node.modifiers.treeCapabilities || null,
       reroutePrefix: opts.reroutePrefix || null,
+      sessionId: opts.sessionId,
+      rootChatId: opts.rootChatId,
     });
   }
 
@@ -1711,11 +1765,485 @@ function logParseTree(message, { noun, nounSource, nounConf, tense, tensePattern
  * return the standard response shape. Every exit path that runs a mode
  * should call this instead of inlining the same 20 lines.
  */
+// Expand a captured plan into a sequence of independent chat turns.
+// Each item becomes its own Chat record (new chainIndex inside the same
+// session) so the frontend renders them as sibling steps under the
+// affirmative's root chat. Runs sequentially; any failure or abort stops
+// the chain but leaves prior items written.
+//
+// Each item dispatches through code-plan at the current tree position.
+// The mode's own tool cap + the runSteppedMode continuation loop already
+// handle per-item work bounding.
+async function runPendingPlan(pending, triggerMessage, visitorId, {
+  socket, username, userId, signal, sessionId,
+  rootId, rootChatId, slot, onToolLoopCheckpoint,
+}) {
+  emitStatus(socket, "intent", `Applying ${pending.items.length} planned fixes...`);
+
+  const items = pending.items;
+  // Always execute through code-plan — it's the imperative builder mode.
+  // Plans can be captured by any mode (review, coach, ask), but applying
+  // them means writing files, and code-plan is the one wired to do that.
+  // Using the capture mode would run items through an audit-only prompt
+  // that explicitly says "don't write", and the model would respect it.
+  const mode = "tree:code-plan";
+  const results = [];
+  const appliedLines = [];
+
+  // Ensure we're in the plan mode for the whole sequence. Cheap: switchMode
+  // short-circuits when already in the target mode.
+  await switchMode(visitorId, mode, {
+    username, userId, rootId,
+    currentNodeId: getCurrentNodeId(visitorId) || rootId,
+    clearHistory: false,
+  });
+
+  for (let i = 0; i < items.length; i++) {
+    if (signal?.aborted) {
+      log.info("Tree Orchestrator", `⏹  Plan aborted after ${i}/${items.length}`);
+      break;
+    }
+
+    const item = items[i];
+    const itemMessage =
+      `Apply plan item ${i + 1} of ${items.length}: ${item}\n\n` +
+      `You previously produced this plan and the user confirmed it. ` +
+      `Make the change now via workspace-edit-file or workspace-add-file. ` +
+      `Report one short line when done. Do not ask for confirmation.`;
+
+    emitStatus(socket, "intent", `Fix ${i + 1}/${items.length}: ${item.slice(0, 60)}`);
+
+    // Dispatch the item. runSteppedMode creates its own chain steps via
+    // rt.beginChainStep — including a first-call step whose input is
+    // itemMessage. Each write-nudge retry and each continuation step
+    // also gets its own chain step. No need to wrap with a parent item
+    // header — the chain records speak for themselves.
+    let itemResult;
+    try {
+      itemResult = await runSteppedMode(visitorId, mode, itemMessage, {
+        username, userId, rootId, signal, slot,
+        readOnly: false, onToolLoopCheckpoint, socket,
+        parentChatId: rootChatId || null,
+        dispatchOrigin: "plan-expand",
+      });
+    } catch (err) {
+      log.error("Tree Orchestrator", `Plan item ${i + 1} failed: ${err.message}`);
+      appliedLines.push(`${i + 1}. ❌ ${item} — ${err.message}`);
+      continue;
+    }
+
+    results.push(itemResult);
+    appliedLines.push(`${i + 1}. ✓ ${item}`);
+  }
+
+  // Restore context to the root chat record so the upstream finalize
+  // (in runOrchestration) writes the final answer on the trigger chat.
+  if (rootChatId && sessionId) {
+    setChatContext(visitorId, sessionId, rootChatId);
+  }
+
+  const summary = appliedLines.length === items.length
+    ? `Applied all ${items.length} planned fixes:\n${appliedLines.join("\n")}`
+    : `Applied ${appliedLines.length}/${items.length} planned fixes:\n${appliedLines.join("\n")}`;
+
+  emitStatus(socket, "done", "");
+  if (summary) pushMemory(visitorId, triggerMessage, summary);
+
+  return {
+    success: true,
+    answer: summary,
+    modeKey: mode,
+    modesUsed: [mode],
+    rootId,
+  };
+}
+
+// Run processMessage for a mode, but split the tool-call work across
+// chainIndex steps. The first call reuses the rootChat created upstream.
+// If processMessage signals _continue (the mode's maxToolCallsPerStep cap
+// was hit), we open a fresh chainIndex step via startChainStep, swap the
+// active chat context to it so new tool calls land on the new record,
+// and re-enter processMessage with continuation: true. Finalize each
+// sub-step's chat as we go, restore the root chat context at the end so
+// the upstream orchestrator can still write the final answer to it.
+async function runSteppedMode(visitorId, mode, message, {
+  username, userId, rootId, signal, slot,
+  readOnly, onToolLoopCheckpoint, socket,
+  parentChatId = null, dispatchOrigin = null,
+  sessionId: sessionIdParam = null,
+  rootChatId: rootChatIdParam = null,
+}) {
+  const active = getActiveRequest(visitorId) || {};
+  const sessionId = sessionIdParam || active.sessionId;
+  const rootChatId = rootChatIdParam || active.rootChatId;
+  const rt = active.rt; // shared OrchestratorRuntime with rt.chainIndex counter
+
+  // Helper to begin a chain step (live chat context for tool calls) using
+  // rt.beginChainStep. Falls back to a direct startChainStep + local counter
+  // only if rt is somehow missing (non-orchestrator caller path).
+  //
+  // IMPORTANT: stamp the chat step's treeContext.targetNodeId with the
+  // CURRENT node (which swarm dispatch moves to the branch node via
+  // setCurrentNodeId), NOT with rootId. Prior behavior stamped every
+  // branch's chat chain under the project root, making per-node chat
+  // pages empty for every branch. This is the load-bearing fix that
+  // makes per-node drill-in work.
+  let fallbackChainIndex = 0;
+  const beginStep = async (stepModeKey, stepInput) => {
+    const currentNodeId = getCurrentNodeId(visitorId) || rootId;
+    log.info("Tree Orchestrator",
+      `📍 beginChainStep ${stepModeKey} targetNodeId=${currentNodeId?.slice?.(0, 8)} (rootId=${rootId?.slice?.(0, 8)}, dispatchOrigin=${dispatchOrigin || "continuation"}, parentChatId=${parentChatId ? parentChatId.slice(0, 8) : "null"}, rt=${rt && !rt._cleaned ? "live" : "fallback"})`,
+    );
+    if (rt && !rt._cleaned) {
+      const step = await rt.beginChainStep(stepModeKey, stepInput, {
+        treeContext: currentNodeId ? { targetNodeId: currentNodeId } : undefined,
+        parentChatId: parentChatId || null,
+        dispatchOrigin: dispatchOrigin || "continuation",
+      });
+      if (step?.chatId) {
+        setChatContext(visitorId, sessionId, step.chatId);
+      }
+      return step;
+    }
+    // Fallback: rt is null or cleaned (common for branch dispatches
+    // where the shared runtime has progressed past this branch).
+    // Create the chat record directly so treeContext is stamped.
+    try {
+      const { startChainStep } = await import("../../seed/llm/chatTracker.js");
+      if (!sessionId || !userId) {
+        log.warn("Tree Orchestrator", `beginStep fallback: missing sessionId=${!!sessionId} userId=${!!userId}`);
+      }
+      const chat = await startChainStep({
+        userId,
+        sessionId,
+        chainIndex: fallbackChainIndex++,
+        rootChatId: rootChatId || null,
+        modeKey: stepModeKey,
+        source: "branch",
+        input: stepInput,
+        treeContext: currentNodeId ? { targetNodeId: currentNodeId } : undefined,
+        parentChatId: parentChatId || null,
+        dispatchOrigin: dispatchOrigin || "branch-swarm",
+      });
+      if (chat?._id) {
+        log.info("Tree Orchestrator", `📍 fallback chat created: ${chat._id.slice(0, 8)} target=${currentNodeId?.slice(0, 8)}`);
+        setChatContext(visitorId, sessionId, chat._id);
+        return { chatId: chat._id, chainIndex: fallbackChainIndex - 1 };
+      }
+      log.warn("Tree Orchestrator", `beginStep fallback: startChainStep returned null`);
+    } catch (err) {
+      log.warn("Tree Orchestrator", `beginStep fallback failed: ${err.message}`);
+    }
+    return null;
+  };
+
+  const finishStep = async (step, outputText, stopped = false) => {
+    if (!step?.chatId) return;
+    if (rt && !rt._cleaned) {
+      await rt.finishChainStep(step.chatId, {
+        output: outputText,
+        stopped,
+        modeKey: mode,
+      });
+    } else {
+      await finalizeChat({
+        chatId: step.chatId,
+        content: outputText,
+        stopped,
+        modeKey: mode,
+      }).catch(() => {});
+    }
+  };
+
+  // Modes that are expected to produce file writes. A turn that ends with
+  // reads only is suspicious for these — the model is probably claiming
+  // completion without actually doing the work. We'll force a retry below.
+  const WRITE_EXPECTED_MODES = new Set([
+    "tree:code-plan",
+    "tree:code-log",
+    "tree:code-coach",
+  ]);
+  const expectsWrites = WRITE_EXPECTED_MODES.has(mode);
+
+  // Tool-call audit for this whole runSteppedMode invocation. We flag each
+  // call as read-only or write via isToolReadOnly(). If a plan-mode turn
+  // finishes with pureReadCount > 0 and writeCount === 0, we inject a
+  // nudge and force one more step.
+  let writeCount = 0;
+  let readCount = 0;
+  const { isToolReadOnly } = await import("../../seed/tree/extensionScope.js");
+
+  const onToolResults = (results) => {
+    if (signal?.aborted) return;
+    for (const r of results) {
+      socket.emit(WS.TOOL_RESULT, r);
+      if (r?.tool) {
+        if (isToolReadOnly(r.tool)) readCount++;
+        else writeCount++;
+      }
+    }
+  };
+
+  const pmCtx = {
+    username, userId, rootId, signal, slot,
+    readOnly,
+    onToolLoopCheckpoint,
+    onToolResults,
+    meta: { internal: false },
+  };
+
+  // Markers the model can emit to signal status to the orchestrator.
+  // Stripped from visible text before it reaches the user AND before we
+  // write the OUT to the chain step's chat record.
+  //   [[NO-WRITE: reason]]  — this turn intentionally has no write, skip retry
+  //   [[DONE]]              — the entire task is complete, stop continuing
+  const NO_WRITE_RE = /\[\[\s*no[\s-]?write(?::\s*([^\]]*))?\s*\]\]/i;
+  const DONE_RE = /\[\[\s*done\s*\]\]/i;
+  const stripMarkers = (r) => {
+    if (!r?.content) return { noWrite: null, done: false };
+    let txt = r.content;
+    let noWrite = null;
+    const mNW = txt.match(NO_WRITE_RE);
+    if (mNW) {
+      noWrite = (mNW[1] || "no change needed").trim();
+      txt = txt.replace(NO_WRITE_RE, "").trim();
+    }
+    const done = DONE_RE.test(txt);
+    if (done) txt = txt.replace(DONE_RE, "").trim();
+    if (txt !== r.content) {
+      r.content = txt;
+      r.answer = txt;
+    }
+    return { noWrite, done };
+  };
+
+  // ─── First call: always gets its own chain step ────────────────────
+  // Even the very first runSteppedMode call (top-level message) opens a
+  // fresh chain step so every LLM call is a distinct, visible substep.
+  // chainIndex 0 stays reserved for the root (user's message + final
+  // aggregated answer), set up upstream by runOrchestration.
+  let firstStep = await beginStep(mode, message || "(empty)");
+  let result;
+  const allContent = []; // accumulate content across continuation turns
+  try {
+    result = await processMessage(visitorId, message, pmCtx);
+    if (result?.content) allContent.push(result.content);
+  } catch (err) {
+    await finishStep(firstStep, `Error: ${err.message}`, true);
+    if (rootChatId && sessionId) setChatContext(visitorId, sessionId, rootChatId);
+    throw err;
+  }
+
+  let noWriteReason = null;
+  {
+    const { noWrite, done } = stripMarkers(result);
+    if (noWrite) {
+      noWriteReason = noWrite;
+      log.info("Tree Orchestrator", `🟡 ${mode} declared no-write: ${noWrite}`);
+    }
+    if (done) {
+      log.info("Tree Orchestrator", `✅ ${mode} declared done`);
+      result._taskDone = true;
+    }
+  }
+
+  // Finalize the first step with its real OUT
+  await finishStep(
+    firstStep,
+    result?.content || result?.answer || "(no text)",
+    signal?.aborted || false,
+  );
+
+  // No-write guardrail. If the mode was supposed to write files but the
+  // turn ended with only reads AND no escape hatch was declared, the
+  // model is claiming completion it didn't earn. Force one retry with a
+  // nudge. After one retry it either writes, or declares no-write, or
+  // we accept whatever it said (don't loop forever lying to the user).
+  let noWriteRetries = 0;
+  const MAX_NO_WRITE_RETRIES = 1;
+  const needsWriteRetry = () =>
+    expectsWrites
+    && !readOnly
+    && !result?._continue
+    && !noWriteReason
+    && readCount > 0
+    && writeCount === 0
+    && noWriteRetries < MAX_NO_WRITE_RETRIES;
+
+  if (needsWriteRetry()) {
+    noWriteRetries++;
+    log.warn("Tree Orchestrator",
+      `⚠️  ${mode} finished with ${readCount} reads, 0 writes. Injecting write nudge and retrying.`,
+    );
+    const nudge =
+      `You read files but did not call workspace-add-file or workspace-edit-file. ` +
+      `You must either (a) apply the change now via a write tool, or ` +
+      `(b) explain why no write is needed and end your response with ` +
+      `[[NO-WRITE: <one-line reason>]]. Do not respond with "Done" unless ` +
+      `you actually wrote something in this turn.`;
+
+    const retryStep = await beginStep(mode, nudge);
+    try {
+      result = await processMessage(visitorId, nudge, pmCtx);
+    } catch (err) {
+      await finishStep(retryStep, `Error: ${err.message}`, true);
+      if (rootChatId && sessionId) setChatContext(visitorId, sessionId, rootChatId);
+      throw err;
+    }
+    const afterRetry = stripMarkers(result);
+    if (afterRetry.noWrite) {
+      noWriteReason = afterRetry.noWrite;
+      log.info("Tree Orchestrator", `🟡 ${mode} declared no-write on retry`);
+    }
+    if (afterRetry.done) result._taskDone = true;
+    await finishStep(
+      retryStep,
+      result?.content || result?.answer || "(no text)",
+      signal?.aborted || false,
+    );
+  }
+
+  // Per-mode continuation budget. Plan mode ships with maxSteppedRuns=20
+  // so it can run 20 short LLM calls back-to-back without hitting the
+  // default 8-step cap. Modes that don't declare it keep the default.
+  let maxSteps = 8;
+  try {
+    const { resolveMode } = await import("../../seed/modes/registry.js");
+    const modeObj = resolveMode(mode);
+    if (modeObj?.maxSteppedRuns && Number.isFinite(modeObj.maxSteppedRuns)) {
+      maxSteps = Math.max(1, Math.min(Math.floor(modeObj.maxSteppedRuns), 40));
+    }
+  } catch {}
+
+  // Continuation loop. Two triggers:
+  //  (a) result._continue is true — the tool cap was hit mid-generation
+  //      and we should re-enter with the same session to keep going.
+  //  (b) result._taskDone is NOT set AND writes happened — the model
+  //      stopped on its own but didn't explicitly declare done. Force
+  //      another step and ask "anything else, or [[DONE]]?" so a lazy
+  //      "package.json written, I'll do the rest later" becomes actual
+  //      completion.
+  //
+  // Stops when: _taskDone is true, or signal is aborted, or maxSteps
+  // cap is reached. chainIndex is tracked by rt.chainIndex (via
+  // beginChainStep), not a local counter.
+  let continuationCount = 0;
+  let idleTurns = 0;
+  let lastWriteCount = writeCount;
+  const MAX_IDLE_TURNS = 4;
+  const shouldContinue = () => {
+    if (signal?.aborted) return false;
+    if (result?._taskDone) return false;
+    if (continuationCount >= maxSteps) return false;
+    // Track idle turns (no writes) across BOTH _continue and
+    // force-continue paths. Without this, _continue from read-only
+    // tool calls burns unlimited turns.
+    if (writeCount > lastWriteCount) {
+      idleTurns = 0;
+      lastWriteCount = writeCount;
+    } else {
+      idleTurns++;
+    }
+    if (idleTurns >= MAX_IDLE_TURNS && !result?._continue) return false;
+    if (idleTurns >= MAX_IDLE_TURNS * 2) return false; // hard cap even for _continue
+    if (result?._continue) return true;
+    if (expectsWrites && writeCount > 0) return true;
+    return false;
+  };
+
+  while (shouldContinue()) {
+    continuationCount++;
+
+    // Active cascade nudge check — between turns, see if any other
+    // session wrote a signal targeting this session's subtree while
+    // we were waiting on the last LLM call. If yes, log it so the
+    // operator knows the feature fired; the actual "fresh banner"
+    // injection happens naturally on the next enrichContext run.
+    // Guard with try/catch so a nudge failure never breaks the loop.
+    try {
+      const { getExtension: _getExt } = await import("../loader.js");
+      const cwExt = _getExt("code-workspace")?.exports;
+      if (cwExt?.maybeApplyCascadeNudge) {
+        await cwExt.maybeApplyCascadeNudge({ sessionId, visitorId });
+      }
+      // DEBUG_ENRICH_CONTEXT=1 dumps what the AI sees before each
+      // processMessage call. One operator switch for deep inspection
+      // without touching the prompt path.
+      if (process.env.DEBUG_ENRICH_CONTEXT === "1" && cwExt?.dumpContextForSession) {
+        try {
+          const dump = await cwExt.dumpContextForSession(sessionId, core, { dryRun: true });
+          log.debug(
+            "Tree Orchestrator",
+            `[DEBUG_ENRICH_CONTEXT] sid=${sessionId?.slice?.(0, 8)}\n${JSON.stringify(dump?.context || {}, null, 2).slice(0, 4000)}`,
+          );
+        } catch {}
+      }
+    } catch (nudgeErr) {
+      log.warn(
+        "Tree Orchestrator",
+        `maybeApplyCascadeNudge failed: ${nudgeErr.message}`,
+      );
+    }
+
+    // Pick the nudge based on which trigger fired:
+    //   - tool cap hit:  empty message, just re-enter the loop
+    //   - missing done:  explicit "what's next, or emit [[DONE]]" prompt
+    const nudgeMessage = result?._continue
+      ? "[continue]"
+      : `Anything else to do for this task? ` +
+        `If yes: call the next write tool now (one per turn). ` +
+        `If no: end your response with [[DONE]] on its own line. ` +
+        `Do not describe what you "will do next" — either do it, or emit [[DONE]].`;
+
+    const useContinuation = result?._continue; // only true for empty-message re-entry
+    const stepChat = await beginStep(mode, nudgeMessage);
+
+    try {
+      result = await processMessage(visitorId, result?._continue ? "" : nudgeMessage, {
+        ...pmCtx,
+        continuation: useContinuation,
+      });
+      if (result?.content) allContent.push(result.content);
+    } catch (err) {
+      await finishStep(stepChat, `Error: ${err.message}`, true);
+      if (rootChatId && sessionId) setChatContext(visitorId, sessionId, rootChatId);
+      throw err;
+    }
+
+    // Strip markers from continuation responses too
+    const stripped = stripMarkers(result);
+    if (stripped.done) result._taskDone = true;
+    if (stripped.noWrite) result._taskDone = true; // no-write on a continuation = done
+
+    await finishStep(
+      stepChat,
+      result?.content || result?.answer || "(no text)",
+      signal?.aborted || false,
+    );
+  }
+
+  // Restore context to the root chat so any subsequent writes (final answer,
+  // contributions, upstream finalizeChat) target chainIndex 0.
+  if (rootChatId && sessionId) {
+    setChatContext(visitorId, sessionId, rootChatId);
+  }
+
+  // Attach accumulated content from all continuation turns so the
+  // caller can detect [[CONTRACTS]]/[[BRANCHES]] blocks that appeared
+  // in earlier turns but were overwritten by later continuations.
+  if (result && allContent.length > 1) {
+    result._allContent = allContent.join("\n");
+  }
+
+  return result;
+}
+
 async function runModeAndReturn(visitorId, mode, message, {
   socket, username, userId, rootId, signal, slot,
   currentNodeId, readOnly = false, clearHistory = false,
   onToolLoopCheckpoint, modesUsed,
   targetNodeId = null,
+  sessionId = null, rootChatId = null,
   treeCapabilities = null,
   adjectives = null,
   quantifiers = null,
@@ -1827,19 +2355,266 @@ async function runModeAndReturn(visitorId, mode, message, {
     treeCapabilities,
   });
 
-  const result = await processMessage(visitorId, message, {
+  const result = await runSteppedMode(visitorId, mode, message, {
     username, userId, rootId, signal, slot,
-    readOnly,
-    onToolLoopCheckpoint,
-    meta: { internal: false },
-    onToolResults(results) {
-      if (signal?.aborted) return;
-      for (const r of results) socket.emit(WS.TOOL_RESULT, r);
-    },
+    readOnly, onToolLoopCheckpoint, socket,
+    sessionId, rootChatId,
   });
 
   emitStatus(socket, "done", "");
-  const answer = result?.content || result?.answer || null;
+  let answer = result?._allContent || result?.content || result?.answer || null;
+
+  // Branch swarm detection. If the mode emitted a [[BRANCHES]]...[[/BRANCHES]]
+  // block, parse it and dispatch each branch as its own sequence of
+  // plan-mode runs at a dedicated child node. This is how a compound
+  // project request ("make a tinder app with backend and frontend") turns
+  // into a tree of chats that each build one component. The branch runner
+  // is sequential in phase 1; the `slot` field on each branch is preserved
+  // for when we flip to parallel (per-slot LLM routing).
+  if (answer) {
+    // Parse contracts FIRST so parseBranches sees the cleaned text
+    // (the [[CONTRACTS]] block is stripped before parseBranches runs).
+    // Contracts are optional — a simple single-branch build doesn't
+    // need them — but when present they become the authoritative wire
+    // protocol all branches must implement.
+    const contractsParse = parseContracts(answer);
+    let parsedContracts = contractsParse.contracts;
+    if (parsedContracts.length > 0) {
+      answer = contractsParse.cleaned;
+      if (result) {
+        result.content = contractsParse.cleaned;
+        result.answer = contractsParse.cleaned;
+      }
+      log.info("Tree Orchestrator",
+        `📜 Architect declared ${parsedContracts.length} contract(s): ${parsedContracts.map((c) => `${c.kind} ${c.name}`).join(", ")}`,
+      );
+    }
+
+    log.info("Tree Orchestrator", `🔍 parseBranches input: ${answer?.length || 0} chars, has [[BRANCHES]]: ${answer?.includes?.("[[BRANCHES]]") || false}`);
+    const branchParse = parseBranches(answer);
+    log.info("Tree Orchestrator", `🔍 parseBranches result: ${branchParse.branches.length} branches`);
+    if (branchParse.branches.length > 0) {
+      answer = branchParse.cleaned;
+      if (result) {
+        result.content = branchParse.cleaned;
+        result.answer = branchParse.cleaned;
+      }
+      log.info("Tree Orchestrator",
+        `🌿 Detected ${branchParse.branches.length} branches from ${mode}: ${branchParse.branches.map((b) => b.name).join(", ")}`,
+      );
+
+      // Resolve the current project root node so the swarm runner knows
+      // where to hang branch children. We look up by the current position
+      // walking the metadata.code-workspace.role chain to find "project".
+      // If no project exists yet (common: user is at a fresh tree root,
+      // no files written), auto-initialize the tree root as a workspace
+      // project so the swarm has somewhere to hang branches.
+      try {
+        const { getExtension } = await import("../loader.js");
+        const cwExt = getExtension("code-workspace");
+        // Walk from current position to find the project root
+        let projectNode = null;
+        const searchNodeId = currentNodeId || targetNodeId || rootId;
+        const NodeModel = (await import("../../seed/models/node.js")).default;
+        if (searchNodeId) {
+          let cursor = String(searchNodeId);
+          for (let i = 0; i < 64 && cursor; i++) {
+            const n = await NodeModel.findById(cursor).select("_id name parent metadata").lean();
+            if (!n) break;
+            const meta = n.metadata instanceof Map ? n.metadata.get("code-workspace") : n.metadata?.["code-workspace"];
+            if (meta?.role === "project" && meta?.initialized) {
+              projectNode = n;
+              break;
+            }
+            if (!n.parent) break;
+            cursor = String(n.parent);
+          }
+        }
+
+        // Auto-init fallback. If the user is at a tree root with no
+        // existing project metadata, treat the tree root as the project
+        // and initialize it via code-workspace's initProject export.
+        // Mirrors the ensureProject auto-init that runs on first file
+        // write, but fires before the swarm dispatch so branches have a
+        // parent to hang under.
+        if (!projectNode && rootId && cwExt?.exports?.initProject) {
+          log.info("Tree Orchestrator", `Swarm: no project at position, auto-initializing tree root ${rootId}`);
+          try {
+            const rootNode = await NodeModel.findById(rootId).lean();
+            if (rootNode) {
+              await cwExt.exports.initProject({
+                projectNodeId: rootId,
+                name: rootNode.name || "workspace",
+                description: "Auto-initialized by swarm dispatch.",
+                userId,
+              });
+              projectNode = await NodeModel.findById(rootId).select("_id name parent metadata").lean();
+            }
+          } catch (initErr) {
+            log.error("Tree Orchestrator", `Swarm auto-init failed: ${initErr.message}`);
+          }
+        }
+
+        if (!projectNode) {
+          log.warn("Tree Orchestrator", "Swarm: no project root found at current position; branches will not run.");
+        } else {
+          // Persist the architect's declared contracts on the project
+          // root BEFORE the swarm dispatches, so each branch session's
+          // enrichContext walks into them via readProjectContracts and
+          // injects them into the branch's system prompt from turn 1.
+          // This is how the architect's design flows to every
+          // implementing branch without a separate distribution step.
+          if (parsedContracts && parsedContracts.length > 0) {
+            try {
+              const { setProjectContracts } = await import("../code-workspace/swarmEvents.js");
+              await setProjectContracts({
+                projectNodeId: projectNode._id,
+                contracts: parsedContracts,
+                core: { metadata: { setExtMeta: async (node, ns, data) => {
+                  const NodeModel = (await import("../../seed/models/node.js")).default;
+                  await NodeModel.updateOne({ _id: node._id }, { $set: { [`metadata.${ns}`]: data } });
+                } } },
+              });
+              log.info("Tree Orchestrator",
+                `📜 Contracts stored on project root ${String(projectNode._id).slice(0, 8)}`,
+              );
+            } catch (ctxErr) {
+              log.warn("Tree Orchestrator", `Failed to store contracts: ${ctxErr.message}`);
+            }
+          }
+
+          // Validate the architect's branch paths against the seam
+          // rules (no path may equal the project name, all paths must
+          // be unique, every branch must have a path). If any branch
+          // is broken, reject the whole block, skip the swarm dispatch,
+          // and append an error message to the answer so the next turn
+          // forces the architect to re-emit a corrected [[BRANCHES]]
+          // block. Without this, a bad branch plan (like two branches
+          // both using path=ProjectName) silently collapses the whole
+          // swarm into one subdirectory with empty branch nodes.
+          const validation = validateBranches(branchParse.branches, projectNode?.name);
+          if (validation.errors.length > 0) {
+            log.warn("Tree Orchestrator",
+              `🚫 Swarm: rejecting branch plan with ${validation.errors.length} validation error(s):\n  - ${validation.errors.join("\n  - ")}`,
+            );
+            const errorBlock = [
+              "",
+              "⚠️ BRANCH PLAN REJECTED — the [[BRANCHES]] block violated the seam rules:",
+              ...validation.errors.map((e) => `  • ${e}`),
+              "",
+              "Re-emit the [[BRANCHES]] block with valid paths and [[DONE]] your turn again.",
+            ].join("\n");
+            answer = (answer || "") + "\n" + errorBlock;
+            if (result) {
+              result.content = answer;
+              result.answer = answer;
+            }
+            return { success: true, answer, modeKey: mode, modesUsed, rootId, targetNodeId: targetNodeId || currentNodeId };
+          }
+
+          const _swarmActive = getActiveRequest(visitorId) || {};
+          const swarmResult = await runBranchSwarm({
+            branches: branchParse.branches,
+            rootProjectNode: projectNode,
+            rootChatId,
+            sessionId,
+            visitorId,
+            userId,
+            username,
+            rootId,
+            signal,
+            slot,
+            socket,
+            onToolLoopCheckpoint,
+            userRequest: message,
+            rt: _swarmActive.rt,
+            core: { metadata: { setExtMeta: async (node, ns, data) => {
+              // Safe fallback via direct Node update if core services aren't available here
+              const NodeModel = (await import("../../seed/models/node.js")).default;
+              await NodeModel.updateOne({ _id: node._id }, { $set: { [`metadata.${ns}`]: data } });
+            } } },
+            emitStatus,
+            runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot, ...rest }) => {
+              // Position the session at the branch node + clear history so
+              // each branch starts fresh at its own tree position.
+              log.info("Tree Orchestrator",
+                `🌿 runBranch dispatching: mode=${branchMode} branchNodeId=${branchNodeId?.slice?.(0, 8)} (was currentNodeId=${getCurrentNodeId(visitorId)?.slice?.(0, 8)})`,
+              );
+              setCurrentNodeId(visitorId, branchNodeId);
+              // Refresh the active request so the branch's
+              // runSteppedMode can read sessionId/userId/rt.
+              // The 30s TTL on getActiveRequest expires during
+              // long builds; re-stamp with the values captured
+              // at swarm start (line 2497) so they survive.
+              setActiveRequest(visitorId, {
+                socket, username, userId, signal,
+                sessionId,
+                rootId,
+                rootChatId,
+                slot, onToolLoopCheckpoint,
+                rt: (getActiveRequest(visitorId) || {}).rt,
+              });
+              await switchMode(visitorId, branchMode, {
+                username, userId, rootId,
+                currentNodeId: branchNodeId,
+                clearHistory: true,
+              });
+              log.info("Tree Orchestrator",
+                `🌿 runBranch post-switch: currentNodeId=${getCurrentNodeId(visitorId)?.slice?.(0, 8)} (expected ${branchNodeId?.slice?.(0, 8)})`,
+              );
+              // Stamp dispatch lineage on the branch's chat chain so
+              // the operator can walk from the orchestrator's root
+              // step down to each branch and back. parentChatId points
+              // at the orchestrator's root chat (active.rootChatId);
+              // dispatchOrigin tells the renderer "this is a swarm
+              // branch spawn" so the labels are right.
+              return runSteppedMode(visitorId, branchMode, branchMessage, {
+                username, userId, rootId, signal, slot: branchSlot,
+                readOnly: false, onToolLoopCheckpoint, socket,
+                sessionId, rootChatId,
+                parentChatId: rootChatId || null,
+                dispatchOrigin: "branch-swarm",
+              });
+            },
+          });
+
+          // Replace the answer with the swarm summary so the user sees the
+          // full picture. Original architect text + swarm result.
+          answer = [answer, "", swarmResult.summary].filter(Boolean).join("\n");
+          if (result) {
+            result.content = answer;
+            result.answer = answer;
+          }
+
+          // Restore position to the original project root
+          if (projectNode?._id) setCurrentNodeId(visitorId, String(projectNode._id));
+        }
+      } catch (err) {
+        log.error("Tree Orchestrator", `Swarm dispatch failed: ${err.message}`);
+        log.error("Tree Orchestrator", err.stack?.split("\n").slice(0, 5).join("\n"));
+      }
+    }
+  }
+
+  // Plan capture: if the mode emitted a [[PLAN]]...[[/PLAN]] block, strip it
+  // from the visible answer and stash it for the next turn. The next
+  // affirmative from this visitor will expand the plan into N sequential
+  // runs, one chat per item. Non-affirmative next message clears it.
+  if (answer) {
+    const { items, cleaned } = parsePlan(answer);
+    if (items.length > 0) {
+      setPendingPlan(visitorId, items, mode);
+      answer = cleaned;
+      if (result) {
+        result.content = cleaned;
+        result.answer = cleaned;
+      }
+      log.info("Tree Orchestrator",
+        `📋 Captured plan: ${items.length} items from ${mode}. Say an affirmative to expand.`,
+      );
+    }
+  }
+
   if (answer) pushMemory(visitorId, message, answer);
   return { success: true, answer, modeKey: mode, modesUsed, rootId, targetNodeId: targetNodeId || currentNodeId };
 }
@@ -1931,13 +2706,162 @@ export async function orchestrateTreeRequest({
 
   const rootId = rootIdParam ?? getRootId(visitorId);
 
+  // Create the OrchestratorRuntime EARLY — before pending-plan expand,
+  // misroute intercept, or classification — so every code path that
+  // writes chain-step Chat records can use the same rt.chainIndex as
+  // the single source of truth. runPendingPlan, runSteppedMode,
+  // runBranchSwarm, the classifier step tracker — all of them read rt
+  // from getActiveRequest(visitorId).rt.
+  const rt = new OrchestratorRuntime({
+    rootId,
+    userId,
+    username,
+    visitorId,
+    sessionType: "tree-chat",
+    description: message,
+    modeKeyForLlm: "tree:librarian",
+    slot,
+  });
+  const llmProvider = await resolveLlmProvider(userId, rootId, "tree:librarian", slot);
+  rt.attach({ sessionId, mainChatId: rootChatId, llmProvider, signal, chainIndex: 1 });
+
   // Stash the active request context so extensions (like misroute) can
   // redispatch on the same socket if they detect a correction. Cleared in
-  // a finally below so we never leak state across requests.
+  // a finally below so we never leak state across requests. Includes rt
+  // so downstream helpers can read/increment the shared chain counter.
   setActiveRequest(visitorId, {
     socket, username, userId, signal, sessionId, rootId,
     rootChatId, slot, sourceType, sourceId, onToolLoopCheckpoint,
+    rt,
   });
+
+  // Ensure AI contribution context is set so MCP tool calls get chatId/sessionId
+  if (rootChatId) {
+    setChatContext(visitorId, sessionId, rootChatId);
+  }
+
+  // ── Resumable swarm intercept ──
+  // When the user is inside (or at) a code-workspace project with a
+  // masterPlan that has ANY non-done branches, AND this message looks
+  // like a continuation ("continue", "finish", "keep going", or any
+  // short imperative at the project), skip the classifier/architect
+  // entirely and dispatch runBranchSwarm directly with the pending /
+  // paused / failed branches.
+  //
+  // This is the "TreeOS knows what it already built" behavior: the
+  // tree is the authoritative state, AI chats are ephemeral. Any new
+  // message at a project automatically sees its state and picks up
+  // where it left off — no re-architecting, no duplicate branches.
+  if (!forceMode && message && rootId) {
+    try {
+      // Use the session's current tree position if set, otherwise the
+      // tree root. `currentNodeId` is NOT a destructured param on this
+      // function — a previous version referenced it as an undeclared
+      // local which silently ReferenceError'd every call and left the
+      // whole resume intercept inert. Read it off the session instead.
+      const searchNodeId = getCurrentNodeId(visitorId) || rootId;
+      const { findProjectForNode, detectResumableSwarm } = await import("../code-workspace/swarmEvents.js");
+      const projectNode = await findProjectForNode(searchNodeId);
+      if (projectNode) {
+        const resumable = await detectResumableSwarm(projectNode._id);
+        if (resumable && resumable.resumable.length > 0) {
+          // At least one non-done branch exists. Should we intercept?
+          // Intercept if:
+          //   - message is an affirmative / continuation word, OR
+          //   - message is short + imperative (user said "build it" or "go" at an in-progress project)
+          // Skip intercept if message is long and clearly describes a new task
+          // (user will get the architect path to produce fresh branches).
+          const RESUME_CONTINUATION_RE = /^\s*(continue|keep\s+going|resume|finish(\s+it)?(\s+up)?|pick(\s+up)?|retry|again|go|go\s+ahead|proceed|keep\s+building|build|make\s+it|do\s+it|complete(\s+it)?|the\s+rest|what('|')?s\s+left|where\s+were\s+we)\b/i;
+          const shortImperative = message.length < 60 && RESUME_CONTINUATION_RE.test(message);
+
+          if (shortImperative) {
+            log.info("Tree Orchestrator",
+              `▶️  Resume intercept: ${resumable.resumable.length} of ${resumable.total} branches non-done under "${resumable.projectName}" (${JSON.stringify(resumable.statusCounts)}). Skipping classifier, dispatching runBranchSwarm in resume mode.`,
+            );
+            emitStatus(socket, "intent", `Resuming ${resumable.resumable.length} branch(es) from prior run...`);
+
+            const swarmResult = await runBranchSwarm({
+              branches: resumable.resumable,
+              rootProjectNode: projectNode,
+              rootChatId,
+              sessionId,
+              visitorId,
+              userId,
+              username,
+              rootId,
+              signal,
+              slot,
+              socket,
+              onToolLoopCheckpoint,
+              userRequest: resumable.systemSpec || message,
+              rt,
+              resumeMode: true,
+              core: {
+                metadata: {
+                  setExtMeta: async (node, ns, data) => {
+                    const NodeModel = (await import("../../seed/models/node.js")).default;
+                    await NodeModel.updateOne({ _id: node._id }, { $set: { [`metadata.${ns}`]: data } });
+                  },
+                },
+              },
+              emitStatus,
+              runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot }) => {
+                setCurrentNodeId(visitorId, branchNodeId);
+                await switchMode(visitorId, branchMode, {
+                  username, userId, rootId,
+                  currentNodeId: branchNodeId,
+                  clearHistory: true,
+                });
+                return runSteppedMode(visitorId, branchMode, branchMessage, {
+                  username, userId, rootId, signal, slot: branchSlot,
+                  readOnly: false, onToolLoopCheckpoint, socket,
+                  parentChatId: rootChatId || null,
+                  dispatchOrigin: "branch-swarm",
+                });
+              },
+            });
+
+            emitStatus(socket, "done", "");
+            return {
+              success: swarmResult.success,
+              answer: swarmResult.summary,
+              modeKey: "tree:code-plan",
+              modesUsed: ["tree:code-plan"],
+              rootId,
+              targetNodeId: String(projectNode._id),
+            };
+          }
+        }
+      }
+    } catch (err) {
+      log.debug("Tree Orchestrator", `Resume intercept skipped: ${err.message}`);
+    }
+  }
+
+  // ── Pending-plan expand ──
+  // If a prior review/audit stashed a structured plan and this message is
+  // a clear affirmative ("ok", "fix it", "do them all"), expand the plan
+  // into a sequence of runs. Each item becomes its own chat turn. Non-
+  // affirmative input clears the stashed plan — the user moved on and
+  // shouldn't get their unrelated message silently expanded.
+  if (!forceMode && message) {
+    const pending = getPendingPlan(visitorId);
+    if (pending) {
+      if (isAffirmative(message)) {
+        log.info("Tree Orchestrator",
+          `▶️  Expanding pending plan: ${pending.items.length} items (mode=${pending.mode || "?"})`,
+        );
+        clearPendingPlan(visitorId);
+        return runPendingPlan(pending, message, visitorId, {
+          socket, username, userId, signal, sessionId,
+          rootId, rootChatId, slot, onToolLoopCheckpoint,
+        });
+      } else {
+        // User said something else — they moved on. Drop the stash.
+        clearPendingPlan(visitorId);
+      }
+    }
+  }
 
   // ── Early misroute intercept ──
   // Before classification runs, ask the misroute extension if the current
@@ -1980,28 +2904,8 @@ export async function orchestrateTreeRequest({
     }
   }
 
-  // Create an attached runtime (reuses the websocket's session, MCP, Chat)
-  const rt = new OrchestratorRuntime({
-    rootId,
-    userId,
-    username,
-    visitorId,
-    sessionType: "tree-chat",
-    description: message,
-    modeKeyForLlm: "tree:librarian",
-    slot,
-  });
-
-  const llmProvider = await resolveLlmProvider(userId, rootId, "tree:librarian", slot);
-
-  // Attach to the existing websocket session
-  rt.attach({ sessionId, mainChatId: rootChatId, llmProvider, signal, chainIndex: 1 });
-
-  // Ensure AI contribution context is set so MCP tool calls get chatId/sessionId
-  if (rootChatId) {
-    setChatContext(visitorId, sessionId, rootChatId);
-  }
-
+  // rt / llmProvider / setActiveRequest already created above before the
+  // pending-plan and misroute intercepts. Reuse them here.
   const meta = { username, userId, rootId, slot, llmProvider };
   const modesUsed = []; // Track full chain for Chat
 
@@ -2342,7 +3246,15 @@ export async function orchestrateTreeRequest({
               const decision = await ext.exports.handleMessage("be", {
                 userId, username, rootId, targetNodeId: String(currentNodeId),
               });
-              const resolvedMode = decision?.mode || `tree:${extName}-coach`;
+              // Resolve coach mode via registry, NOT string concatenation.
+              // Extension name and mode prefix don't always match
+              // (code-workspace owns tree:code-coach, not tree:code-workspace-coach).
+              const extCoachModes = getModesOwnedBy(extName).filter((m) => m.endsWith("-coach"));
+              const resolvedMode = decision?.mode || extCoachModes[0] || null;
+              if (!resolvedMode) {
+                log.warn("Tree Orchestrator", `BE mode: ${extName} has no coach mode registered, skipping`);
+                continue;
+              }
               modesUsed.push(resolvedMode);
 
               if (decision?.answer) {
@@ -2395,7 +3307,8 @@ export async function orchestrateTreeRequest({
             const ext = getExtension(extName);
             if (!ext?.exports?.handleMessage) continue;
             const extModes = getModesOwnedBy(extName);
-            if (!extModes.some(m => m.endsWith("-coach"))) continue;
+            const extCoachModes = extModes.filter((m) => m.endsWith("-coach"));
+            if (extCoachModes.length === 0) continue;
 
             const targetId = entry.nodeId || entry.nodes?.[0]?.nodeId;
             log.verbose("Tree Orchestrator", `  BE mode: routing to closest extension ${extName} at ${targetId}`);
@@ -2405,7 +3318,10 @@ export async function orchestrateTreeRequest({
               const decision = await ext.exports.handleMessage("be", {
                 userId, username, rootId, targetNodeId: targetId,
               });
-              const resolvedMode = decision?.mode || `tree:${extName}-coach`;
+              // Use the first registered -coach mode for this extension.
+              // Extension name ≠ mode prefix in general (code-workspace
+              // owns tree:code-coach), so we look up via the registry.
+              const resolvedMode = decision?.mode || extCoachModes[0];
               modesUsed.push(resolvedMode);
 
               if (decision?.answer) {
@@ -2711,6 +3627,7 @@ export async function orchestrateTreeRequest({
       currentNodeId: classification.targetNodeId || currentNodeId,
       onToolLoopCheckpoint, modesUsed,
       reroutePrefix, // null unless misroute intercept fired above
+      sessionId, rootChatId,
     });
   }
 

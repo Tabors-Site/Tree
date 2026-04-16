@@ -395,3 +395,62 @@ export function trackChainStep({
     log.warn("AI", `Failed to track chain step [${modeKey}]: ${err.message}`);
   });
 }
+
+/**
+ * Awaited version of trackChainStep. Creates a chain-step Chat record
+ * and returns the doc so the caller can swap chatContext to it and
+ * finalize it later with the step's result.
+ *
+ * Used by the tree-orchestrator to split a long tool-call session into
+ * bounded chainIndex steps so each step has its own visible phase.
+ */
+export async function startChainStep({
+  userId,
+  sessionId,
+  chainIndex,
+  rootChatId = null,
+  modeKey,
+  source = "continuation",
+  input,
+  treeContext,
+  llmProvider = null,
+  parentChatId = null,
+  dispatchOrigin = null,
+}) {
+  if (!sessionId || !userId) return null;
+
+  const safeKey = modeKey || "orchestrator:step";
+  const cIdx = safeKey.indexOf(":");
+  const stepZone = cIdx > 0 ? safeKey.slice(0, cIdx) : safeKey;
+  const stepMode = cIdx > 0 ? safeKey.slice(cIdx + 1) : "step";
+
+  const maxStep = MAX_CHAIN_STEP_CONTENT();
+  const inputStr =
+    typeof input === "string"
+      ? input.slice(0, maxStep)
+      : JSON.stringify(input || "").slice(0, maxStep);
+
+  try {
+    const chat = await Chat.create({
+      _id: uuidv4(),
+      userId,
+      sessionId,
+      chainIndex,
+      rootChatId,
+      parentChatId: parentChatId || null,
+      dispatchOrigin: dispatchOrigin || source || null,
+      startMessage: {
+        content: inputStr,
+        source,
+        time: new Date(),
+      },
+      aiContext: { zone: stepZone, mode: stepMode },
+      llmProvider: llmProvider || { isCustom: false, model: null, connectionId: null },
+      ...(treeContext ? { treeContext } : {}),
+    });
+    return chat;
+  } catch (err) {
+    log.warn("AI", `startChainStep failed [${modeKey}]: ${err.message}`);
+    return null;
+  }
+}

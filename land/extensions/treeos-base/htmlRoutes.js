@@ -45,6 +45,91 @@ import { renderLlmPage } from "./pages/llmPage.js";
 import { renderNodeLlmPage } from "./pages/nodeLlmPage.js";
 import { escapeHtml, renderMedia } from "../html-rendering/html/utils.js";
 import { notFoundPage } from "../html-rendering/notFoundPage.js";
+import AiCapture from "./models/aiCapture.js";
+import Chat from "../../seed/models/chat.js";
+
+/**
+ * Bulk-load AI forensics captures for a list of chat docs. Single
+ * query keyed on chatId so the renderer can look up O(1) without
+ * per-row awaits. Returns a Map<chatId, capture>. Errors swallow to
+ * empty map — rendering must succeed even if the capture collection
+ * is missing or indexed badly.
+ */
+async function loadCapturesForChats(chats) {
+  const map = new Map();
+  if (!Array.isArray(chats) || chats.length === 0) return map;
+  try {
+    const ids = chats.map((c) => String(c._id));
+    const caps = await AiCapture.find({ chatId: { $in: ids } })
+      .sort({ startedAt: -1 })
+      .lean();
+    // If multiple captures exist for a chat (retry path), the first
+    // (most recent) wins.
+    for (const cap of caps) {
+      if (cap.chatId && !map.has(cap.chatId)) map.set(cap.chatId, cap);
+    }
+  } catch (err) {
+    log.debug("HTML", `loadCapturesForChats failed: ${err.message}`);
+  }
+  return map;
+}
+
+/**
+ * Bulk-load dispatch lineage for a page of chats. Returns two maps:
+ *
+ *   childrenByParent: Map<parentChatId, Array<childChat>>
+ *       "For this chat step, these are the chats it dispatched"
+ *       Used to render "▶ Dispatched to N branches" on a step.
+ *
+ *   parentByChatId:   Map<chatId, parentChat>
+ *       "This chat was dispatched from that one"
+ *       Used to render "◀ Dispatched from <parent>" at the top of a
+ *       branch chain.
+ *
+ * Both maps contain lean Chat docs with just the fields the renderer
+ * needs (no startMessage.content bulk). Errors swallow to empty maps
+ * so a lineage-query failure never breaks rendering.
+ */
+async function loadLineageForChats(chats) {
+  const childrenByParent = new Map();
+  const parentByChatId = new Map();
+  if (!Array.isArray(chats) || chats.length === 0) {
+    return { childrenByParent, parentByChatId };
+  }
+  try {
+    const ids = chats.map((c) => String(c._id));
+
+    // Forward query: chats dispatched BY any of our chats
+    const children = await Chat.find({ parentChatId: { $in: ids } })
+      .select("_id parentChatId sessionId chainIndex rootChatId treeContext aiContext dispatchOrigin endMessage.stopped")
+      .sort({ chainIndex: 1 })
+      .lean();
+    for (const child of children) {
+      const key = String(child.parentChatId);
+      if (!childrenByParent.has(key)) childrenByParent.set(key, []);
+      childrenByParent.get(key).push(child);
+    }
+
+    // Backward query: parents of any chats whose parentChatId is set.
+    // Deduplicate parent ids so we only load each parent once.
+    const parentIds = [...new Set(
+      chats
+        .map((c) => c.parentChatId)
+        .filter((p) => typeof p === "string" && p.length > 0),
+    )];
+    if (parentIds.length > 0) {
+      const parents = await Chat.find({ _id: { $in: parentIds } })
+        .select("_id sessionId chainIndex rootChatId treeContext aiContext dispatchOrigin")
+        .lean();
+      for (const p of parents) {
+        parentByChatId.set(String(p._id), p);
+      }
+    }
+  } catch (err) {
+    log.debug("HTML", `loadLineageForChats failed: ${err.message}`);
+  }
+  return { childrenByParent, parentByChatId };
+}
 
 // Resolve "latest" to current version from metadata. Prestige extension owns versioning.
 // Inlined here to avoid cross-extension dependency.
@@ -632,6 +717,14 @@ export function buildTreeosHtmlRoutes() {
       const token = req.query.token || "";
       const tQS = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
 
+      // Bulk-fetch AI forensics captures for every chat in one query.
+      // Keyed into a Map so renderSubstep can look up O(1) without
+      // awaiting mid-render. If the AiCapture model is unavailable
+      // (e.g. treeos-base not fully loaded), the map is empty and the
+      // renderer falls back to the pre-forensics thin view.
+      const capturesByChatId = await loadCapturesForChats(allChats);
+      const { childrenByParent, parentByChatId } = await loadLineageForChats(allChats);
+
       return res.send(renderNodeChats({
         nodeId,
         nodeName: node.name,
@@ -640,6 +733,9 @@ export function buildTreeosHtmlRoutes() {
         allChats,
         token,
         tokenQS: tQS,
+        capturesByChatId,
+        childrenByParent,
+        parentByChatId,
       }));
     } catch (err) {
       log.error("HTML", "Node chats render error:", err.message);
@@ -801,8 +897,14 @@ export function buildTreeosHtmlRoutes() {
       const token = req.query.token || "";
       const tQS = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
 
+      const capturesByChatId = await loadCapturesForChats(allChats);
+      const { childrenByParent, parentByChatId } = await loadLineageForChats(allChats);
+
       return res.send(renderRootChats({
         rootId, rootName: root.name, sessions, allChats, token, tokenQS: tQS,
+        capturesByChatId,
+        childrenByParent,
+        parentByChatId,
       }));
     } catch (err) {
       log.error("HTML", "Root chats render error:", err.message);

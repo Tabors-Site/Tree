@@ -138,7 +138,9 @@ const groupStepsIntoPhases = (steps) => {
   return phases;
 };
 
-const renderSubstep = (chat, tokenQS) => {
+const renderSubstep = (chat, tokenQS, capturesByChatId, childrenByParent) => {
+  const capture = capturesByChatId?.get?.(String(chat._id)) || null;
+  const dispatchedChildren = childrenByParent?.get?.(String(chat._id)) || [];
   const duration = formatDuration(
     chat.startMessage?.time,
     chat.endMessage?.time,
@@ -158,6 +160,38 @@ const renderSubstep = (chat, tokenQS) => {
   const inputFull = formatContent(chat.startMessage?.content);
   const outputFull = formatContent(chat.endMessage?.content);
 
+  // Tool calls for this specific continuation step. Without this, the
+  // chain only shows the first step's tool calls and every following
+  // write/read stays invisible in the frontend.
+  const toolCalls = Array.isArray(chat.toolCalls) ? chat.toolCalls : [];
+  const toolCallsHtml = toolCalls.length === 0 ? "" : `
+          <div class="chain-step-tool-calls">
+            <div class="tc-title">${toolCalls.length} tool call${toolCalls.length !== 1 ? "s" : ""}</div>
+            ${toolCalls
+              .map((tc) => {
+                const ok = tc.success !== false;
+                const icon = ok ? "→" : "✗";
+                const iconClass = ok ? "tc-ok" : "tc-fail";
+                const argHint = formatToolArgHint(tc.args);
+                const ms = tc.ms ? `${tc.ms}ms` : "";
+                const err = !ok && tc.error ? `<div class="tc-error">${esc(String(tc.error).slice(0, 200))}</div>` : "";
+                return `
+                  <div class="tc-row">
+                    <span class="tc-icon ${iconClass}">${icon}</span>
+                    <span class="tc-name">${esc(tc.tool || "?")}</span>
+                    ${argHint ? `<span class="tc-args">${esc(argHint)}</span>` : ""}
+                    ${ms ? `<span class="tc-ms">${ms}</span>` : ""}
+                    ${err}
+                  </div>`;
+              })
+              .join("")}
+          </div>`;
+
+  const forensicsHtml = capture ? renderForensicsSections(capture, chat) : "";
+  const dispatchedToHtml = dispatchedChildren.length > 0
+    ? renderDispatchedTo(dispatchedChildren, tokenQS)
+    : "";
+
   return `
       <details class="chain-substep">
         <summary class="chain-substep-summary">
@@ -168,17 +202,213 @@ const renderSubstep = (chat, tokenQS) => {
           ${tc?.resultDetail && tc.stepResult === "failed" ? `<span class="chain-step-fail-reason">${truncate(tc.resultDetail, 60)}</span>` : ""}
           ${renderModelBadge(chat)}
           ${duration ? `<span class="chain-step-duration">${duration}</span>` : ""}
+          ${toolCalls.length ? `<span class="chain-step-toolcount">${toolCalls.length} tool${toolCalls.length !== 1 ? "s" : ""}</span>` : ""}
+          ${capture ? `<span class="chain-step-captured" title="AI forensics capture available">📸</span>` : ""}
         </summary>
         <div class="chain-step-body">
           ${renderTreeContext(tc, tokenQS)}
           ${renderDirective(tc)}
           <div class="chain-step-input"><span class="chain-io-label chain-io-in">IN</span>${inputFull}</div>
           ${outputFull ? `<div class="chain-step-output"><span class="chain-io-label chain-io-out">OUT</span>${outputFull}</div>` : ""}
+          ${toolCallsHtml}
+          ${forensicsHtml}
+          ${dispatchedToHtml}
         </div>
       </details>`;
 };
 
-const renderPhases = (steps, tokenQS) => {
+/**
+ * Render the "Dispatched to N branches" block under a chat step that
+ * spawned one or more child chat chains. Used for branch dispatches
+ * (swarm), plan expansions, retries. Each child becomes a clickable
+ * link that jumps the operator to the child's chat page — at the
+ * child's OWN node, not the parent's.
+ */
+const renderDispatchedTo = (children, tokenQS) => {
+  if (!Array.isArray(children) || children.length === 0) return "";
+  const originLabel = (() => {
+    const kinds = new Set(children.map((c) => c.dispatchOrigin).filter(Boolean));
+    if (kinds.size === 1) {
+      const k = [...kinds][0];
+      return ({
+        "branch-swarm": "Dispatched to branches",
+        "plan-expand": "Expanded into plan items",
+        "retry": "Retried",
+        "continuation": "Continued into",
+      })[k] || "Dispatched to";
+    }
+    return "Dispatched to";
+  })();
+  const rows = children.map((c) => {
+    const cTc = c.treeContext;
+    const cNodeId = cTc?.targetNodeId || null;
+    const cNodeName = cTc?.targetNodeName || cNodeId?.slice?.(0, 8) || "(unnamed)";
+    const cMode = c.aiContext?.mode ? modeLabel(c.aiContext.mode) : "";
+    const stopped = c.endMessage?.stopped ? " (stopped)" : "";
+    const linkHref = cNodeId
+      ? `/api/v1/node/${cNodeId}/chats${tokenQS}`
+      : "#";
+    return `
+      <a class="lineage-to-row" href="${linkHref}">
+        <span class="lineage-icon">▶</span>
+        <span class="lineage-to-name">${esc(cNodeName)}</span>
+        ${cMode ? `<span class="lineage-to-mode">${esc(cMode)}</span>` : ""}
+        <span class="lineage-to-chain">chainIndex ${c.chainIndex ?? "?"}${stopped}</span>
+      </a>`;
+  }).join("");
+  return `
+      <div class="lineage-to">
+        <div class="lineage-to-label">${esc(originLabel)} (${children.length})</div>
+        ${rows}
+      </div>`;
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// AI Forensics rendering — the "first person" view of what the AI saw
+// and did. Only fires when an AiCapture exists for this chat step.
+// ─────────────────────────────────────────────────────────────────────
+
+const SIGNAL_ICONS = {
+  "syntax-error": "🔴",
+  "dead-receiver": "👻",
+  "contract-mismatch": "🔗",
+  "contract": "📜",
+  "probe-failure": "🔴",
+  "test-failure": "🧪",
+  "runtime-error": "💥",
+};
+
+const renderForensicsSections = (capture, chat) => {
+  if (!capture) return "";
+  const parts = [];
+
+  // 1. What the AI saw
+  const pm = Array.isArray(capture.promptMessages) ? capture.promptMessages : [];
+  if (pm.length > 0) {
+    const bytesLabel = capture.promptBytes
+      ? ` (${Math.round(capture.promptBytes / 1024)}KB${capture.promptTruncated ? ", truncated" : ""})`
+      : "";
+    const messagesHtml = pm
+      .map((m) => {
+        const role = esc(m.role || "unknown");
+        const truncMark = m.truncated ? ' <span class="fx-trunc">[truncated]</span>' : "";
+        const content = m.content ? `<pre class="fx-msg-content">${esc(m.content)}</pre>` : "";
+        const toolCallsJson = m.tool_calls
+          ? `<pre class="fx-msg-toolcalls">${esc(JSON.stringify(m.tool_calls, null, 2))}</pre>`
+          : "";
+        return `
+            <details class="fx-message fx-msg-${role}">
+              <summary>
+                <span class="fx-msg-role">${role}</span>
+                ${m.name ? `<span class="fx-msg-name">${esc(m.name)}</span>` : ""}
+                ${truncMark}
+                ${m.content ? `<span class="fx-msg-size">${Buffer.byteLength(m.content || "", "utf8")}b</span>` : ""}
+              </summary>
+              ${content}
+              ${toolCallsJson}
+            </details>`;
+      })
+      .join("");
+    parts.push(`
+        <details class="fx-section fx-section-prompt">
+          <summary>📖 What the AI saw${bytesLabel}</summary>
+          <div class="fx-messages">${messagesHtml}</div>
+        </details>`);
+  }
+
+  // 2. Full LLM response (if different from chat.endMessage)
+  if (capture.responseText && capture.responseText.length > 0) {
+    const truncMark = capture.responseTruncated ? ' <span class="fx-trunc">[truncated]</span>' : "";
+    parts.push(`
+        <details class="fx-section fx-section-response">
+          <summary>💬 Full LLM response${truncMark}</summary>
+          <pre class="fx-response">${esc(capture.responseText)}</pre>
+        </details>`);
+  }
+
+  // 3. Tool calls — expanded with full args, full results, and signals
+  if (Array.isArray(capture.toolCalls) && capture.toolCalls.length > 0) {
+    const rowsHtml = capture.toolCalls
+      .map((tc) => {
+        const ok = tc.success !== false;
+        const icon = ok ? "✓" : "✗";
+        const iconClass = ok ? "fx-tc-ok" : "fx-tc-fail";
+        const ms = tc.ms ? ` ${tc.ms}ms` : "";
+        const argsJson = tc.args != null
+          ? `<pre class="fx-tc-args">${esc(JSON.stringify(tc.args, null, 2))}</pre>`
+          : "";
+        const argsTruncMark = tc.argsTruncated ? ' <span class="fx-trunc">[args truncated]</span>' : "";
+        const resultHtml = tc.result
+          ? `<pre class="fx-tc-result">${esc(tc.result)}</pre>`
+          : "";
+        const resultTruncMark = tc.resultTruncated ? ' <span class="fx-trunc">[result truncated]</span>' : "";
+        const errorHtml = !ok && tc.error
+          ? `<div class="fx-tc-error">${esc(String(tc.error))}</div>`
+          : "";
+        const signalsHtml = Array.isArray(tc.signals) && tc.signals.length > 0
+          ? `<div class="fx-tc-signals">
+              <div class="fx-section-label">Signals fired:</div>
+              ${tc.signals
+                .map((s) => {
+                  const icn = SIGNAL_ICONS[s.kind] || "•";
+                  return `<div class="fx-signal">${icn} <span class="fx-signal-kind">${esc(s.kind || "?")}</span> ${esc(s.summary || "")}</div>`;
+                })
+                .join("")}
+            </div>`
+          : "";
+        return `
+            <details class="fx-toolcall ${ok ? "" : "fx-toolcall-failed"}">
+              <summary>
+                <span class="fx-tc-icon ${iconClass}">${icon}</span>
+                <span class="fx-tc-name">${esc(tc.tool || "?")}</span>
+                <span class="fx-tc-ms">${ms}</span>
+                ${argsTruncMark}${resultTruncMark}
+              </summary>
+              <div class="fx-tc-body">
+                ${argsJson ? `<div class="fx-section-label">Args:</div>${argsJson}` : ""}
+                ${resultHtml ? `<div class="fx-section-label">Result:</div>${resultHtml}` : ""}
+                ${errorHtml ? `<div class="fx-section-label">Error:</div>${errorHtml}` : ""}
+                ${signalsHtml}
+              </div>
+            </details>`;
+      })
+      .join("");
+    parts.push(`
+        <details class="fx-section fx-section-tools" open>
+          <summary>🔧 Tool calls (${capture.toolCalls.length})</summary>
+          <div class="fx-toolcalls">${rowsHtml}</div>
+        </details>`);
+  }
+
+  // 4. Branch transitions
+  if (Array.isArray(capture.branchEvents) && capture.branchEvents.length > 0) {
+    const rowsHtml = capture.branchEvents
+      .map((ev) => {
+        const fromTxt = ev.from ? `${ev.from} → ` : "";
+        const reason = ev.reason ? ` <span class="fx-branch-reason">— ${esc(truncate(ev.reason, 120))}</span>` : "";
+        return `<div class="fx-branch-event">🎯 <span class="fx-branch-name">${esc(ev.branchName)}</span>: ${esc(fromTxt)}<span class="fx-branch-to">${esc(ev.to)}</span>${reason}</div>`;
+      })
+      .join("");
+    parts.push(`
+        <details class="fx-section fx-section-branches">
+          <summary>🌿 Branch transitions (${capture.branchEvents.length})</summary>
+          <div class="fx-branch-events">${rowsHtml}</div>
+        </details>`);
+  }
+
+  // 5. Abort reason
+  if (capture.abortReason) {
+    parts.push(`
+        <div class="fx-section fx-section-abort">
+          <span class="fx-abort-label">⚠️ Aborted:</span> <span class="fx-abort-reason">${esc(capture.abortReason)}</span>
+        </div>`);
+  }
+
+  if (parts.length === 0) return "";
+  return `<div class="fx-forensics">${parts.join("\n")}</div>`;
+};
+
+const renderPhases = (steps, tokenQS, capturesByChatId, childrenByParent) => {
   const phases = groupStepsIntoPhases(steps);
   if (phases.length === 0) return "";
 
@@ -246,7 +476,7 @@ const renderPhases = (steps, tokenQS) => {
               ${renderModelBadge(m)}
             </div>
             <div class="chain-plan-directive">${inputFull}</div>
-            ${hasSubsteps ? `<div class="chain-substeps">${phase.substeps.map((s) => renderSubstep(s, tokenQS)).join("")}</div>` : ""}
+            ${hasSubsteps ? `<div class="chain-substeps">${phase.substeps.map((s) => renderSubstep(s, tokenQS, capturesByChatId, childrenByParent)).join("")}</div>` : ""}
           </div>`;
       }
 
@@ -275,7 +505,7 @@ const renderPhases = (steps, tokenQS) => {
           </details>`;
       }
 
-      return renderSubstep(phase.step, tokenQS);
+      return renderSubstep(phase.step, tokenQS, capturesByChatId, childrenByParent);
     })
     .join("");
 
@@ -320,7 +550,7 @@ const renderPhases = (steps, tokenQS) => {
       </details>`;
 };
 
-const renderChain = (chain, tokenQS, token) => {
+const renderChain = (chain, tokenQS, token, capturesByChatId, childrenByParent, parentByChatId) => {
   const chat = chain.root;
   const steps = chain.steps;
   const duration = formatDuration(
@@ -407,10 +637,39 @@ const renderChain = (chain, tokenQS, token) => {
     })
     .join("");
 
-  const stepsHtml = hasSteps ? renderPhases(steps, tokenQS) : "";
+  const stepsHtml = hasSteps ? renderPhases(steps, tokenQS, capturesByChatId, childrenByParent) : "";
+
+  // Dispatched-from block: if this chat was spawned by another chat
+  // (branch dispatch, plan expansion, retry, continuation), render a
+  // backlink at the top of the chain so the operator can walk up the
+  // lineage. Looks at chat.parentChatId → parentByChatId map.
+  const dispatchedFromHtml = (() => {
+    if (!chat.parentChatId || !parentByChatId) return "";
+    const parent = parentByChatId.get(String(chat.parentChatId));
+    if (!parent) return "";
+    const parentNodeId = parent.treeContext?.targetNodeId || null;
+    const parentMode = parent.aiContext?.mode ? `${esc(parent.aiContext.zone || "")}:${esc(parent.aiContext.mode)}` : "";
+    const originLabel = ({
+      "branch-swarm": "🌿 Dispatched from swarm",
+      "plan-expand": "📋 Dispatched from plan item",
+      "retry": "🔁 Retry of",
+      "continuation": "↪ Continuation of",
+    })[chat.dispatchOrigin] || "◀ Dispatched from";
+    const linkHref = parentNodeId
+      ? `/api/v1/node/${parentNodeId}/chats${tokenQS}`
+      : `/api/v1/root/${esc(parent.sessionId || "")}/chats${tokenQS}`;
+    return `
+      <div class="lineage-from">
+        <a class="lineage-from-link" href="${linkHref}">
+          <span class="lineage-icon">◀</span>
+          <span class="lineage-text">${originLabel} ${parentMode ? `<span class="lineage-mode">${parentMode}</span>` : ""} (chainIndex ${parent.chainIndex ?? "?"})</span>
+        </a>
+      </div>`;
+  })();
 
   return `
       <li class="note-card">
+        ${dispatchedFromHtml}
         <div class="chat-header">
           <div class="chat-header-left">
             <span class="chat-mode">${modeLabel(chat.aiContext?.mode)}</span>
@@ -781,6 +1040,178 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
   .chain-plan-summary-text { max-width: 160px; }
   .chain-step-fail-reason { max-width: 120px; }
 }
+
+/* ── AI Forensics sections ── */
+.chain-step-captured { opacity: 0.7; margin-left: 4px; font-size: 11px; }
+.fx-forensics {
+  margin-top: 10px;
+  border-top: 1px dashed rgba(255,255,255,0.12);
+  padding-top: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.fx-section > summary {
+  cursor: pointer; font-size: 11px; font-weight: 600;
+  color: rgba(255,255,255,0.7); padding: 6px 10px;
+  background: rgba(100,150,255,0.08); border-radius: 6px;
+  list-style: none;
+}
+.fx-section > summary::-webkit-details-marker { display: none; }
+.fx-section > summary::before {
+  content: "▸"; display: inline-block; margin-right: 6px;
+  transition: transform 0.15s; color: rgba(255,255,255,0.4);
+}
+.fx-section[open] > summary::before { transform: rotate(90deg); }
+.fx-section[open] > summary { background: rgba(100,150,255,0.14); }
+.fx-section-prompt > summary { background: rgba(100,200,150,0.08); }
+.fx-section-prompt[open] > summary { background: rgba(100,200,150,0.14); }
+.fx-section-response > summary { background: rgba(200,150,100,0.08); }
+.fx-section-response[open] > summary { background: rgba(200,150,100,0.14); }
+.fx-section-tools > summary { background: rgba(150,150,200,0.08); }
+.fx-section-tools[open] > summary { background: rgba(150,150,200,0.14); }
+.fx-section-branches > summary { background: rgba(100,200,100,0.08); }
+.fx-section-branches[open] > summary { background: rgba(100,200,100,0.14); }
+.fx-section-abort {
+  padding: 8px 10px; background: rgba(255,100,100,0.12);
+  border-radius: 6px; font-size: 12px; color: rgba(255,200,200,0.95);
+}
+.fx-abort-label { font-weight: 700; }
+.fx-messages { padding: 6px 0 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+.fx-message {
+  background: rgba(0,0,0,0.2); border-radius: 4px; padding: 6px 10px;
+  border-left: 2px solid rgba(255,255,255,0.15);
+  font-size: 11px;
+}
+.fx-message > summary {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 8px;
+  color: rgba(255,255,255,0.65);
+}
+.fx-message > summary::-webkit-details-marker { display: none; }
+.fx-msg-system { border-left-color: rgba(100,200,150,0.6); }
+.fx-msg-user { border-left-color: rgba(100,150,255,0.6); }
+.fx-msg-assistant { border-left-color: rgba(200,150,100,0.6); }
+.fx-msg-tool { border-left-color: rgba(150,150,200,0.6); }
+.fx-msg-role {
+  font-weight: 600; text-transform: uppercase; font-size: 10px;
+  letter-spacing: 0.5px; color: rgba(255,255,255,0.8);
+}
+.fx-msg-name { font-size: 10px; color: rgba(255,255,255,0.5); }
+.fx-msg-size { font-size: 10px; color: rgba(255,255,255,0.4); margin-left: auto; }
+.fx-msg-content, .fx-msg-toolcalls, .fx-response, .fx-tc-args, .fx-tc-result {
+  margin: 6px 0 0; padding: 8px 10px;
+  background: rgba(0,0,0,0.35); border-radius: 4px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 11px;
+  color: rgba(255,255,255,0.85); white-space: pre-wrap; word-break: break-word;
+  max-height: 400px; overflow: auto;
+}
+.fx-response { max-height: 500px; }
+.fx-trunc {
+  color: rgba(255,180,100,0.8); font-size: 10px; font-weight: 600;
+  margin-left: 4px;
+}
+.fx-toolcalls { padding: 6px 0 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+.fx-toolcall {
+  background: rgba(0,0,0,0.25); border-radius: 4px; padding: 6px 10px;
+  border-left: 2px solid rgba(100,200,100,0.5);
+}
+.fx-toolcall-failed { border-left-color: rgba(255,100,100,0.7); }
+.fx-toolcall > summary {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 8px;
+  color: rgba(255,255,255,0.85); font-size: 11px;
+}
+.fx-toolcall > summary::-webkit-details-marker { display: none; }
+.fx-tc-icon { font-weight: 700; }
+.fx-tc-ok { color: rgba(100,255,150,0.9); }
+.fx-tc-fail { color: rgba(255,120,120,0.9); }
+.fx-tc-name { font-weight: 600; font-family: ui-monospace, Menlo, monospace; }
+.fx-tc-ms { color: rgba(255,255,255,0.4); font-size: 10px; margin-left: auto; }
+.fx-tc-body { padding: 6px 0 0; }
+.fx-tc-error {
+  padding: 6px 10px; background: rgba(255,100,100,0.15);
+  border-radius: 4px; color: rgba(255,220,220,0.95); font-size: 11px;
+}
+.fx-tc-signals { margin-top: 8px; padding: 6px 10px;
+  background: rgba(255,150,100,0.08); border-radius: 4px; font-size: 11px;
+}
+.fx-signal { padding: 2px 0; color: rgba(255,220,180,0.9); }
+.fx-signal-kind {
+  display: inline-block; padding: 1px 6px; margin: 0 4px;
+  background: rgba(255,255,255,0.1); border-radius: 3px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+}
+.fx-section-label {
+  font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.5);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  margin: 6px 0 2px;
+}
+.fx-branch-events { padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+.fx-branch-event { font-size: 11px; color: rgba(255,255,255,0.85); }
+.fx-branch-name { font-weight: 600; color: rgba(150,220,200,0.95); }
+.fx-branch-to {
+  font-weight: 700; padding: 1px 6px; border-radius: 3px;
+  background: rgba(100,200,150,0.15); color: rgba(150,255,200,0.95);
+}
+.fx-branch-reason { color: rgba(255,255,255,0.5); font-style: italic; }
+
+/* ── Dispatch lineage (dispatched from / to) ── */
+.lineage-from {
+  padding: 6px 12px; margin-bottom: 8px;
+  background: rgba(150,100,255,0.08);
+  border-left: 3px solid rgba(150,100,255,0.5);
+  border-radius: 4px;
+  font-size: 11px;
+}
+.lineage-from-link {
+  color: rgba(220,200,255,0.95);
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.lineage-from-link:hover {
+  text-shadow: 0 0 8px rgba(200,150,255,0.5);
+}
+.lineage-icon {
+  font-weight: 700; color: rgba(200,150,255,0.8);
+}
+.lineage-mode {
+  background: rgba(255,255,255,0.1); padding: 1px 6px;
+  border-radius: 3px; font-family: ui-monospace, Menlo, monospace;
+  font-size: 10px; margin: 0 4px;
+}
+.lineage-to {
+  margin-top: 10px; padding: 8px 10px;
+  background: rgba(100,200,150,0.08);
+  border-left: 3px solid rgba(100,200,150,0.5);
+  border-radius: 4px;
+}
+.lineage-to-label {
+  font-size: 11px; font-weight: 600;
+  color: rgba(180,255,200,0.9);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.lineage-to-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 6px; border-radius: 3px;
+  text-decoration: none; font-size: 11px;
+  color: rgba(220,255,230,0.9);
+  transition: background 0.15s;
+}
+.lineage-to-row:hover {
+  background: rgba(100,200,150,0.15);
+}
+.lineage-to-name {
+  font-weight: 600; font-family: ui-monospace, Menlo, monospace;
+  color: rgba(180,255,200,0.95);
+}
+.lineage-to-mode {
+  background: rgba(255,255,255,0.08); padding: 1px 6px;
+  border-radius: 3px; font-size: 10px;
+  color: rgba(255,255,255,0.7);
+}
+.lineage-to-chain {
+  margin-left: auto; font-size: 10px; color: rgba(255,255,255,0.4);
+}
 `;
 
 /* ── client-side JS ── */
@@ -816,6 +1247,9 @@ export function renderNodeChats({
   allChats,
   token,
   tokenQS,
+  capturesByChatId,
+  childrenByParent,
+  parentByChatId,
 }) {
   const sessionGroups = sessions;
 
@@ -825,7 +1259,7 @@ export function renderNodeChats({
       const sessionTime = formatTime(group.startTime);
       const shortId = group.sessionId.slice(0, 8);
       const chains = groupIntoChains(group.chats);
-      const chatCards = chains.map((c) => renderChain(c, tokenQS, token)).join("");
+      const chatCards = chains.map((c) => renderChain(c, tokenQS, token, capturesByChatId, childrenByParent, parentByChatId)).join("");
 
       return `
       <div class="session-group">
@@ -886,7 +1320,7 @@ export function renderNodeChats({
  * Alias for tree-root chat history.
  * The route passes rootId/rootName; we map to nodeId/nodeName.
  */
-export function renderRootChats({ rootId, rootName, sessions, allChats, token, tokenQS }) {
+export function renderRootChats({ rootId, rootName, sessions, allChats, token, tokenQS, capturesByChatId, childrenByParent, parentByChatId }) {
   return renderNodeChats({
     nodeId: rootId,
     nodeName: rootName,
@@ -895,5 +1329,8 @@ export function renderRootChats({ rootId, rootName, sessions, allChats, token, t
     allChats,
     token,
     tokenQS,
+    capturesByChatId,
+    childrenByParent,
+    parentByChatId,
   });
 }

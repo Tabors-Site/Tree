@@ -106,6 +106,53 @@ export async function init(core) {
   core.hooks.register("afterSessionCreate", pushDashboard, "dashboard");
   core.hooks.register("afterSessionEnd", pushDashboard, "dashboard");
 
+  // ── Live tree updates: push when nodes are created or removed ──────
+  // The dashboard's tree view listens for "dashboardTreeChanged" and
+  // re-fetches the current tree if it matches. We walk up to the root
+  // and emit to the owner plus every contributor so anyone watching
+  // the tree gets the live update.
+  async function notifyTreeWatchers(nodeId) {
+    try {
+      // Walk up to the root node to get owner + contributors.
+      let current = await Node.findById(nodeId).select("parent rootOwner contributors").lean();
+      let depth = 0;
+      while (current && depth < 50) {
+        if (!current.parent || current.rootOwner) break;
+        current = await Node.findById(current.parent).select("parent rootOwner contributors").lean();
+        depth++;
+      }
+      if (!current) return;
+
+      const recipients = new Set();
+      if (current.rootOwner) recipients.add(String(current.rootOwner));
+      if (Array.isArray(current.contributors)) {
+        for (const c of current.contributors) {
+          if (c) recipients.add(String(c));
+        }
+      }
+      const payload = { nodeId: String(nodeId) };
+      for (const userId of recipients) {
+        core.websocket.emitToUser(userId, "dashboardTreeChanged", payload);
+      }
+    } catch {}
+  }
+
+  core.hooks.register("afterNodeCreate", async ({ node }) => {
+    if (!node?._id) return;
+    notifyTreeWatchers(node._id);
+  }, "dashboard");
+
+  // beforeNodeDelete fires before the node is gone, so rootOwner is still readable.
+  core.hooks.register("beforeNodeDelete", async ({ nodeId }) => {
+    if (!nodeId) return;
+    notifyTreeWatchers(nodeId);
+  }, "dashboard");
+
+  core.hooks.register("afterNodeMove", async ({ nodeId }) => {
+    if (!nodeId) return;
+    notifyTreeWatchers(nodeId);
+  }, "dashboard");
+
   // Register tree quick link
   try {
     const { getExtension } = await import("../loader.js");

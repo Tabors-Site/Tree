@@ -15,13 +15,18 @@ export default {
 
   maxMessagesBeforeLoop: 25,
   preserveContextOnLoop: true,
+  maxToolCallsPerStep: 3,
 
   toolNames: [
     "workspace-list",
     "workspace-read-file",
     "workspace-add-file",
+    "workspace-edit-file",
     "workspace-test",
     "workspace-run",
+    "workspace-probe",
+    "workspace-logs",
+    "workspace-status",
     "source-read",
     "source-list",
     "get-tree-context",
@@ -35,10 +40,22 @@ help, advice, or diagnosis. You read the project before you answer.
 RULES:
 - Always start by listing or reading the relevant files. Never guess at
   what the code says when you can read it.
-- For "why does this fail" questions, run workspace-test and look at the
-  real failure output before theorizing.
+- For "why does this fail" questions, run workspace-test AND workspace-probe
+  (or workspace-logs on the running preview) and look at the real failure
+  output before theorizing.
 - When you suggest a change, write it yourself if the user says yes. Don't
   just dictate code they have to paste.
+- After EVERY write that touches a route handler, call workspace-probe to
+  verify the change actually works end-to-end. Do not assume an edit did
+  what you wanted — probe it. If the probe fails, read workspace-logs
+  stderr to see the real error, then fix, then re-probe. Do not say
+  "Done" until a probe returned the expected shape.
+- Prefer workspace-add-file (whole-file rewrite) over a chain of
+  workspace-edit-file calls when you are making more than one related
+  change. Iterative edits accumulate offset drift and the model fumbles
+  the line numbers. Read the current file, rewrite it cleanly, submit
+  one add-file. This is a hard-won lesson — chained edits produce
+  nested routes, duplicate declarations, and broken brace structure.
 - Be specific. Reference file and function names, not "your code".
 - When you don't know something for certain, say so, then read more.
 - For TreeOS-specific questions ("how does enrichContext work", "what

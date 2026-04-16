@@ -145,8 +145,14 @@ function releaseLlmSlot() {
 // ── LLM Failover ────────────────────────────────────────────────────────
 // The kernel provides the retry mechanism. Extensions register a resolver
 // that returns fallback connection IDs for a given userId/rootId context.
-
-const RETRYABLE_CODES = new Set([429, 500, 502, 503, 504]);
+//
+// 500 is deliberately NOT in the retryable set. Local inference backends
+// (ollama/qwen3/etc) return 500 for deterministic failures like tool-call
+// JSON parse errors in their own template engines, not for transient
+// overload. Retrying burns 5+ minutes per attempt on a request that was
+// never going to succeed. 502/503/504 remain retryable because those ARE
+// usually transient network / upstream issues. 429 stays for rate limits.
+const RETRYABLE_CODES = new Set([429, 502, 503, 504]);
 
 let _failoverResolver = null;
 
@@ -329,7 +335,11 @@ async function resolveConnection(connectionId, cacheKey) {
     client: new OpenAI({
       baseURL,
       apiKey,
-      maxRetries: LLM_MAX_RETRIES,
+      // SDK-side retry is disabled. We handle retry decisions in
+      // callWithFailover based on our own RETRYABLE_CODES set so we can
+      // fast-fail on deterministic backend parse failures (500 from
+      // local inference stacks) instead of burning 15 minutes retrying.
+      maxRetries: 0,
       timeout: LLM_TIMEOUT_MS,
       defaultHeaders: {
         "HTTP-Referer": getLandConfigValue("landUrl") || `http://localhost:${process.env.PORT || 3000}`,
@@ -651,6 +661,9 @@ export async function switchMode(visitorId, newModeKey, ctx) {
     ...ctx,
     rootId: session.rootId || ctx.rootId,
     currentNodeId: ctx.currentNodeId || session.currentNodeId,
+    enrichedContext: session._lastEnrichedContext || null,
+    isFirstTurn: !session._hasHadFirstTurn,
+    editsByFile: session._editsByFile || {},
   });
 
   // Reset conversation with new system prompt + carried context
@@ -831,6 +844,9 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
       userId: ctx.userId,
       rootId: session.rootId,
       currentNodeId: session.currentNodeId,
+      enrichedContext: session._lastEnrichedContext || null,
+      isFirstTurn: !session._hasHadFirstTurn,
+      editsByFile: session._editsByFile || {},
     });
 
     session.messages = [
@@ -845,11 +861,44 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
 
   // Build/refresh system prompt every call so it reflects current tree state
   {
+    // Run enrichContext for the session's current node so mode buildSystemPrompt
+    // hooks (and facet shouldInject checks) get the same injected data the
+    // tree-orchestrator sees. Cheap: the handlers already guard with data
+    // checks and are designed to run per-turn.
+    let enrichedContext = null;
+    try {
+      const posNodeId = session.currentNodeId || session.rootId || ctx.rootId || null;
+      if (posNodeId) {
+        const posNode = await Node.findById(posNodeId).lean();
+        if (posNode) {
+          const meta = posNode.metadata instanceof Map
+            ? Object.fromEntries(posNode.metadata)
+            : (posNode.metadata || {});
+          enrichedContext = {};
+          await hooks.run("enrichContext", {
+            context: enrichedContext,
+            node: posNode,
+            meta,
+            nodeId: posNodeId,
+            userId: ctx.userId,
+            sessionId: visitorId,
+            dumpMode: true,
+          });
+          session._lastEnrichedContext = enrichedContext;
+        }
+      }
+    } catch (err) {
+      log.debug("LLM", `enrichContext gather skipped: ${err.message}`);
+    }
+
     const systemPrompt = await buildPromptForMode(session.modeKey, {
       username: ctx.username,
       userId: ctx.userId,
       rootId: session.rootId,
       currentNodeId: session.currentNodeId,
+      enrichedContext: enrichedContext || session._lastEnrichedContext || null,
+      isFirstTurn: !session._hasHadFirstTurn,
+      editsByFile: session._editsByFile || {},
     });
     if (session.messages.length === 0) {
       session.messages = [{ role: "system", content: systemPrompt }];
@@ -892,12 +941,17 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     session.messages = [systemMsg, ...recent];
   }
 
-  // Add user message (capped to prevent oversized entries in conversation history)
-  const maxMsgBytes = MAX_MESSAGE_CONTENT_BYTES();
-  const safeUserMsg = message.length > maxMsgBytes
-    ? message.slice(0, maxMsgBytes) + "\n... (message truncated)"
-    : message;
-  session.messages.push({ role: "user", content: safeUserMsg });
+  // Add user message (capped to prevent oversized entries in conversation history).
+  // On continuation re-entries, the caller is just re-running the tool loop on the
+  // existing messages; we skip pushing a new user message so the chat doesn't grow
+  // with synthetic "continue" turns.
+  if (!ctx?.continuation) {
+    const maxMsgBytes = MAX_MESSAGE_CONTENT_BYTES();
+    const safeUserMsg = message.length > maxMsgBytes
+      ? message.slice(0, maxMsgBytes) + "\n... (message truncated)"
+      : message;
+    session.messages.push({ role: "user", content: safeUserMsg });
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1090,7 +1144,7 @@ async function resolveToolsForPosition(session) {
  * The LLM API call with semaphore, failover, afterLLMCall hook, and failed_generation handling.
  * Returns the response object.
  */
-async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
+async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorId) {
   const requestParams = {
     model: MODEL,
     messages: session.messages,
@@ -1106,11 +1160,17 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
   const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
 
   // beforeLLMCall: extensions can cancel (quota exhausted) or modify params.
-  // messages exposed so before-hooks can prepend/modify system prompts
+  // messages exposed so before-hooks can prepend/modify system prompts.
+  // chatId/sessionId let extension hook handlers correlate back to the
+  // originating chat step (needed by the AI forensics capture path in
+  // treeos-base/ai-forensics.js).
+  const _llmChatCtx = getChatContext(visitorId) || {};
   const llmHookData = {
     userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
     model: MODEL, messageCount: session.messages.length, hasTools: tools.length > 0,
     messages: session.messages, nodeId: session.currentNodeId || ctx.rootId || null,
+    chatId: _llmChatCtx.chatId || null,
+    sessionId: _llmChatCtx.sessionId || null,
   };
   const llmHookResult = await hooks.run("beforeLLMCall", llmHookData);
   if (llmHookResult.cancelled) {
@@ -1146,12 +1206,17 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
       Object.assign(clientEntry, failoverResult.usedClient);
     }
 
-    // afterLLMCall: token metering, billing, analytics
+    // afterLLMCall: token metering, billing, analytics, forensics.
+    // Includes the full responseText so the AI forensics capture in
+    // treeos-base gets "what the AI said" without a second hook.
     hooks.run("afterLLMCall", {
       userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
       model: failoverResult.usedClient?.model || MODEL,
       usage: response?.usage || null,
       hasToolCalls: !!response?.choices?.[0]?.message?.tool_calls?.length,
+      chatId: _llmChatCtx.chatId || null,
+      sessionId: _llmChatCtx.sessionId || null,
+      responseText: response?.choices?.[0]?.message?.content || null,
     }).catch(() => {});
   } catch (apiErr) {
     // Handle models that invent tool names (e.g. "json") instead of using defined tools.
@@ -1201,6 +1266,9 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry) {
           usage: null, // No usage data available from the error
           hasToolCalls: false,
           _failedGeneration: true,
+          chatId: _llmChatCtx.chatId || null,
+          sessionId: _llmChatCtx.sessionId || null,
+          responseText: extracted || null,
         }).catch(() => {});
       } else {
         log.error("LLM", `Model invented tool "${inventedTool}" but no usable text could be extracted from failed_generation.`);
@@ -1381,7 +1449,7 @@ function parseInternalResponse(raw, isCustom, MODEL, resolvedConnectionId) {
  * DB health check, callTool, afterToolCall hooks, error handling.
  * Returns { result: toolResultEntry } where toolResultEntry has { tool, args?, success, error? }.
  */
-async function executeTool(toolCall, session, ctx, client) {
+async function executeTool(toolCall, session, ctx, client, visitorId) {
   const toolName = toolCall.function.name;
   let args;
 
@@ -1428,8 +1496,18 @@ async function executeTool(toolCall, session, ctx, client) {
     return { tool: toolName, args, success: false, error: "tool_circuit_tripped" };
   }
 
-  // beforeToolCall: extensions can modify args or cancel
-  const hookData = { toolName, args, userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey };
+  // beforeToolCall: extensions can modify args or cancel. chatId +
+  // sessionId + nodeId let forensics correlate the tool call to its
+  // originating chat step and the tree node whose signalInbox
+  // should be snapshotted for signal diffing.
+  const _toolChatCtx = getChatContext(visitorId) || {};
+  const hookData = {
+    toolName, args,
+    userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+    chatId: _toolChatCtx.chatId || null,
+    sessionId: _toolChatCtx.sessionId || null,
+    nodeId: session.currentNodeId || ctx.rootId || null,
+  };
   const hookResult = await hooks.run("beforeToolCall", hookData);
   if (hookResult.cancelled) {
     const errCode = hookResult.timedOut ? "HOOK_TIMEOUT" : "HOOK_CANCELLED";
@@ -1497,6 +1575,9 @@ async function executeTool(toolCall, session, ctx, client) {
     hooks.run("afterToolCall", {
       toolName: resolvedToolName, args, result: resultText, success: true,
       userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+      chatId: _toolChatCtx.chatId || null,
+      sessionId: _toolChatCtx.sessionId || null,
+      nodeId: session.currentNodeId || ctx.rootId || null,
     }).catch(() => {});
 
     return { tool: resolvedToolName, args, success: true };
@@ -1524,6 +1605,9 @@ async function executeTool(toolCall, session, ctx, client) {
     hooks.run("afterToolCall", {
       toolName: resolvedToolName, args, error: err.message, success: false,
       userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+      chatId: _toolChatCtx.chatId || null,
+      sessionId: _toolChatCtx.sessionId || null,
+      nodeId: session.currentNodeId || ctx.rootId || null,
     }).catch(() => {});
 
     return {
@@ -1630,12 +1714,25 @@ export async function processMessage(visitorId, message, ctx) {
   let iterations = 0;
   const maxIterations = session._nodeLlmConfig.maxToolIterations ?? MAX_TOOL_ITERATIONS;
 
+  // Bounded per-step tool-call budget. When a mode declares maxToolCallsPerStep
+  // (or ctx forces one), break out after that many tool calls and signal the
+  // caller with _continue: true so an orchestrator can open a new chainIndex
+  // step and re-enter this loop on the same session. This keeps each LLM
+  // generation short, prevents 5-minute freezes on 27B local models, and turns
+  // a fat single-shot tool loop into a readable chain of phases.
+  const maxToolCallsPerStep =
+    ctx?.maxToolCallsPerStep ??
+    mode.maxToolCallsPerStep ??
+    null;
+  let toolCallsThisStep = 0;
+  let continueReason = null;
+
   while (iterations < maxIterations) {
     if (ctx.signal?.aborted) throw new Error("Request cancelled");
     iterations++;
 
     // LLM call with semaphore, failover, hooks
-    response = await callLLM(openai, MODEL, session, tools, ctx, clientEntry);
+    response = await callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorId);
 
     const choice = response.choices?.[0];
     if (!choice) break;
@@ -1662,9 +1759,10 @@ export async function processMessage(visitorId, message, ctx) {
     for (const toolCall of assistantMessage.tool_calls) {
       if (ctx.signal?.aborted) throw new Error("Request cancelled");
       const _toolStart = Date.now();
-      const toolResult = await executeTool(toolCall, session, ctx, client);
+      const toolResult = await executeTool(toolCall, session, ctx, client, visitorId);
       const _toolMs = Date.now() - _toolStart;
       toolResults.push(toolResult);
+      toolCallsThisStep++;
 
       // Persist the tool call on the active Chat record so the step
       // trace is visible in chat history (CLI `chats` and dashboard).
@@ -1682,6 +1780,27 @@ export async function processMessage(visitorId, message, ctx) {
           });
         }
       } catch {}
+
+      // Track edits-per-file so the rewriteOverEdits facet can inject
+      // a whole-file-rewrite warning after the 2nd edit to the same file.
+      if (toolResult.tool === "workspace-edit-file" && toolResult.success) {
+        try {
+          const filePath = toolResult.args?.filePath || toolResult.args?.path || null;
+          if (filePath) {
+            if (!session._editsByFile) session._editsByFile = {};
+            session._editsByFile[filePath] = (session._editsByFile[filePath] || 0) + 1;
+          }
+        } catch {}
+      }
+    }
+
+    // Bounded step: if the mode wants step-bounded tool calls, break the
+    // loop after the budget is spent. The assistant message with tool_calls
+    // and all corresponding tool results are already in session.messages,
+    // so re-entering the loop on a fresh step picks up cleanly.
+    if (maxToolCallsPerStep && toolCallsThisStep >= maxToolCallsPerStep) {
+      continueReason = "tool-cap";
+      break;
     }
 
     // Yield tool results for real-time frontend updates
@@ -1715,7 +1834,31 @@ export async function processMessage(visitorId, message, ctx) {
     }
   }
 
-  // Phase 7: Finalize response
+  // Phase 7: Finalize response.
+  // If we broke out of the loop because the step-bounded tool budget was hit,
+  // skip the "ensure final text" call in finalizeResponse — the model was
+  // actively tool-calling, not wrapping up. The caller (orchestrator) will
+  // re-enter on a new chainIndex step with continuation: true.
+  if (continueReason === "tool-cap") {
+    const _internal = {
+      modeKey: session.modeKey,
+      rootId: session.rootId,
+      isCustom,
+      model: MODEL,
+      connectionId: resolvedConnectionId || null,
+    };
+    session._hasHadFirstTurn = true;
+    return {
+      success: true,
+      content: "",
+      answer: "",
+      _internal,
+      _continue: true,
+      _continueReason: continueReason,
+    };
+  }
+
+  session._hasHadFirstTurn = true;
   return finalizeResponse(session, openai, MODEL, response, isInternal, isCustom, resolvedConnectionId, ctx);
 }
 
@@ -1770,6 +1913,42 @@ export function clearSession(visitorId) {
 }
 
 /**
+ * Reset a visitor's in-memory session state after an abort so the next
+ * message starts clean. Keeps mode / rootId / currentNodeId intact, but
+ * throws away the message history (which may contain a half-finished
+ * tool loop or a cancelled LLM call). The system prompt is rebuilt on
+ * the next processMessage call via prepareConversation.
+ *
+ * Also clears the AI chat context so appendToolCall/finalizeChat don't
+ * write to a stale chatId from the previous run.
+ *
+ * Called from the abort path in runOrchestration (CLI disconnect,
+ * timeout, explicit signal). The tree state (masterPlan, files on disk,
+ * metadata) is left alone — that's the authoritative state and persists
+ * across reruns.
+ */
+export function resetVisitorSession(visitorId, reason = "aborted") {
+  const session = sessions.get(visitorId);
+  if (session) {
+    // Drop the accumulated messages entirely. The system prompt gets
+    // rebuilt fresh on the next prepareConversation call using the
+    // current mode + tree position.
+    session.messages = [];
+    // Reset any in-loop state markers
+    session._toolFailures = {};
+    delete session._nodeLlmConfig;
+  }
+  // Fire-and-forget: clear chat context so next message starts from a
+  // clean slate. clearChatContext is in chatTracker but we already have
+  // it imported via other call sites.
+  import("./chatTracker.js").then(({ clearChatContext }) => {
+    try { clearChatContext(visitorId); } catch {}
+  }).catch(() => {});
+
+  log.info("LLM", `🧹 Reset session for ${visitorId} (reason: ${reason})`);
+}
+
+/**
  * Reset conversation messages but keep mode and rootId intact.
  * Rebuilds system prompt for the current mode.
  */
@@ -1782,10 +1961,13 @@ export async function resetConversation(visitorId, ctx) {
     userId: ctx.userId,
     rootId: session.rootId,
     currentNodeId: session.currentNodeId,
+    enrichedContext: session._lastEnrichedContext || null,
+    isFirstTurn: !session._hasHadFirstTurn,
+    editsByFile: session._editsByFile || {},
   });
 
   session.messages = [{ role: "system", content: systemPrompt }];
-  log.debug("LLM", 
+  log.debug("LLM",
     `🔄 Reset conversation for ${visitorId} (mode: ${session.modeKey}, root: ${session.rootId})`,
   );
 }
@@ -2093,7 +2275,7 @@ export async function runOrchestration({
   setSessionAbort(sessionId, abort);
 
   // ── Timeout ────────────────────────────────────────────────────────────
-  const TIMEOUT_MS = Number(getLandConfigValue("apiOrchestrationTimeout")) || (19 * 60 * 1000);
+  const TIMEOUT_MS = Number(getLandConfigValue("apiOrchestrationTimeout")) || (45 * 60 * 1000);
   let timedOut = false;
   let chat = null;
 
@@ -2249,6 +2431,9 @@ export async function runOrchestration({
         stopped: false,
       }).catch(() => {});
     }
+    // Reset in-memory session so the next message starts clean. Tree
+    // state persists; only the LLM conversation history gets wiped.
+    resetVisitorSession(visitorId, "timeout");
     cleanup();
     throw new ProtocolError(500, ERR.TIMEOUT, "Request timed out");
   }
@@ -2263,6 +2448,9 @@ export async function runOrchestration({
         stopped,
       }).catch(() => {});
     }
+    // Reset session state on any execution error (aborted or otherwise).
+    // Tree state survives; conversation history does not.
+    resetVisitorSession(visitorId, abort.signal.aborted ? "aborted" : "error");
     cleanup();
     throw executionError;
   }
@@ -2316,6 +2504,13 @@ export async function runOrchestration({
         modeKey: modeKey || (zone === "tree" ? "tree:orchestrator" : `${zone}:default`),
       }).catch((err) => log.error("Orchestration", `Chat finalize failed: ${err.message}`));
     } catch {}
+  }
+
+  // If the request was aborted mid-flight (CLI disconnect, explicit
+  // signal), wipe the in-memory session so the next message starts
+  // clean. Tree state survives; only conversation history is cleared.
+  if (stopped) {
+    resetVisitorSession(visitorId, "aborted");
   }
 
   cleanup();

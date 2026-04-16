@@ -1,0 +1,241 @@
+/**
+ * Compound branches facet.
+ *
+ * Only injected on turn 1 of a fresh task at an empty project root.
+ * Once the project has children (the swarm has dispatched, or the
+ * AI has started writing), this facet is dead weight — every
+ * continuation turn is working on files, not decomposing the task
+ * again.
+ *
+ * Keeps ~2KB out of every continuation turn and every branch dispatch.
+ */
+export default {
+  name: "compound-branches",
+
+  shouldInject(ctx) {
+    // Only on turn 1 of a session
+    if (!ctx?.isFirstTurn) return false;
+    // Use the raw view object (localViewData), NOT the formatted string
+    // at localView. The string is for prompt rendering; only the raw
+    // shape has .self.role / .self.childCount on it.
+    const view = ctx?.enrichedContext?.localViewData;
+    if (!view) return false;
+    // Project role means we're at an initialized workspace root. If the
+    // role is null, this is a fresh tree root the workspace hasn't
+    // auto-initialized yet — which is ALSO a valid place to branch,
+    // so we accept project OR null. Branch / directory / file
+    // positions skip this facet (they don't decompose further).
+    const selfRole = view.self?.role;
+    if (selfRole && selfRole !== "project") return false;
+    // Only if the position is empty (no children yet). If the project
+    // already has files, the AI should be EXTENDING them, not
+    // decomposing a fresh task.
+    if ((view.self?.childCount || 0) > 0) return false;
+    return true;
+  },
+
+  text: `=================================================================
+COMPOUND TASKS → BRANCH FIRST. THIS IS NOT OPTIONAL.
+=================================================================
+
+You are at a FRESH project root on turn 1. Before you decide what
+to do, read the user's request and count the independent layers.
+
+A "layer" is a self-contained unit of ownership: a backend, a
+frontend, a persistence layer, a data layer, an auth system, a
+UI theme. Tests are NOT a layer. Each branch writes its own tests
+inline (e.g. backend/tests/). Do NOT create a separate "tests"
+branch unless the user explicitly asks for one. A standalone tests
+branch copies sibling code, bloats context, and duplicates what
+the contract conformance validator already checks automatically.
+
+**HARD RULE**: if the user's request names two or more layers, your
+FIRST action MUST be a [[BRANCHES]] block — NOT workspace-plan,
+NOT workspace-add-file, NOT source-read. Decomposition comes
+first, then every branch builds in its own scope.
+
+Examples of requests that MUST branch (count the layers):
+
+  "backend and frontend"                    → 2 layers
+  "Node server + HTML client"               → 2 layers
+  "API, UI, data layer"                     → 3 layers
+  "auth, swiping, messaging, settings"      → 4 layers
+  "server with persistence"                 → 2 layers
+
+Examples of requests that do NOT branch:
+
+  "add a vowel counter to lib.js"           → 0 layers, one file
+  "fix the off-by-one in index.js"          → 0 layers, one edit
+  "write a JSON parser"                     → 1 layer, small
+  "backend, frontend, and tests"            → 2 layers (tests are inline, not a branch)
+
+If the request names 2+ layers, do NOT attempt a flat plan. A flat
+workspace-plan action=set with 8 mixed backend/frontend/test steps
+is a FAILURE mode — you end up with server code, client code, and
+tests all being written by one session that can't hold all three
+contexts at once. Branches solve this. Do not skip branches because
+it feels faster.
+
+THE path FIELD — READ THIS CAREFULLY, IT IS HOW MOST BRANCH
+PLANS BREAK
+=================================================================
+
+The path on a branch is the SUBDIRECTORY NAME where that branch's
+files live on disk. It is NOT the project name. It is NOT a
+human-readable label. It is a short, lowercase directory name like
+"backend", "frontend", "public", "server", "client", "api", "ui",
+"db", "data", "store", "tests", "docs".
+
+**HARD RULES on path**:
+
+  1. path MUST equal name. The branch name IS the subdirectory
+     name. If the branch is named "backend", path is "backend".
+     If it's named "frontend", path is "frontend". Do not pick a
+     fancy path that differs from the name — the branch tree node
+     is created with the branch's name, and files are stored as
+     descendants of that node. If name and path disagree, files
+     physically land in a sibling directory at the project root
+     instead of under the branch node, breaking the rollup and
+     leaving the branch node empty.
+  2. NEVER use the project's own name as name or path. If the
+     project is called "TronGame", do NOT name a branch "TronGame"
+     or set its path to "TronGame". Pick a name describing the
+     LAYER (backend, frontend, server, client, api, ui, db, data,
+     store, tests, docs).
+  3. Every branch MUST be UNIQUE within the [[BRANCHES]] block.
+     Two branches with the same name/path is a bug — they will
+     compete for the same files.
+  4. Keep it short. Prefer a single directory component. Branch
+     name "backend" not "src/backend", "ui" not "packages/client/ui".
+
+If you break any of these rules, the swarm runner will REJECT
+your [[BRANCHES]] block and make you re-emit it. Don't guess.
+
+=================================================================
+DESIGN THE SEAM FIRST — EMIT [[CONTRACTS]] BEFORE [[BRANCHES]]
+=================================================================
+
+If your branches will talk to each other (backend serves routes a
+frontend calls, a WebSocket server and client exchange messages, a
+persistence layer has a store format an API writes to), YOU MUST
+first declare the wire contracts they share. Otherwise each branch's
+AI session will independently invent its own names for the same
+concepts and the compound system will be broken from minute one.
+
+*** CRITICAL — READ THIS BEFORE YOU DO ANYTHING ***
+
+[[CONTRACTS]] is a RESPONSE BLOCK, exactly like [[BRANCHES]].
+You MUST emit it as TEXT IN YOUR RESPONSE — not as a file.
+
+  - DO NOT use workspace-add-file to write contracts to disk.
+  - DO NOT create a contracts.md, CONTRACTS.md, or any file
+    containing the contract definitions.
+  - DO NOT write the [[CONTRACTS]] block to ANY file at all.
+
+The swarm runner PARSES your [[CONTRACTS]] block directly from
+your response text, stores the contracts on the project root, and
+injects them into every branch's prompt automatically. If you
+write contracts to a file instead of emitting them in your
+response, the swarm runner never sees them, the contracts are
+never stored, and every branch invents its own wire format.
+
+The correct output shape for a compound task looks like this —
+all three blocks in your response text, in order:
+
+    [[CONTRACTS]]
+    ... (wire contracts here)
+    [[/CONTRACTS]]
+
+    [[BRANCHES]]
+    ... (branch definitions here)
+    [[/BRANCHES]]
+
+    [[DONE]]
+
+*** END CRITICAL ***
+
+Emit a [[CONTRACTS]] block BEFORE [[BRANCHES]]. One line per
+contract. Two kinds:
+
+  - "message <name>: { <field>: <type>, ... }" — a wire message
+  - "type <name>: { <field>: <type>, ... }" — a shared data shape
+
+Example for a realtime multiplayer game:
+
+    [[CONTRACTS]]
+    message join: { type: "join", roomId: string }
+    message gameState: { type: "gameState", players: Map<id, Snake>, apples: Apple[], grid: number }
+    message direction: { type: "direction", direction: "up"|"down"|"left"|"right" }
+    message playerId: { type: "playerId", playerId: string }
+    type Snake: { x: number, y: number, direction: string, tail: {x,y}[], dead: boolean }
+    type Apple: { x: number, y: number }
+    [[/CONTRACTS]]
+
+Rules on contracts:
+
+  1. Every message has a "type" field that matches the contract's
+     name. The AI on each branch will send/receive messages by this
+     type string.
+  2. Field names are canonical. Pick one and stick with it. If the
+     backend stores the snake body as "tail", the frontend reads
+     data.tail, not data.pos or data.segments.
+  3. Don't over-design. Declare only the messages that cross branch
+     boundaries. Internal helper types live inside a branch and
+     don't need to be in the contract.
+  4. Contracts are stored on the project root and injected into
+     every branch's system prompt automatically. Branches will see
+     them in their "Declared Contracts" section. If a branch emits
+     a message type not in the contracts or reads a field that
+     isn't declared, the post-swarm validator will flag it and
+     flip that branch to failed for retry.
+
+After [[/CONTRACTS]], emit [[BRANCHES]] as usual. Close with
+[[DONE]]. The swarm runner parses both blocks from your response
+text, stores the contracts, dispatches the branches, and every
+branch session sees the contracts at the top of its prompt.
+
+=================================================================
+[[BRANCHES]] format (emit after [[/CONTRACTS]], then [[DONE]])
+=================================================================
+
+    [[BRANCHES]]
+    branch: backend
+      spec: <one-paragraph spec for the backend — routes, payloads,
+            persistence interface, what it owns end to end>
+      slot: code-plan
+      path: backend
+      files: package.json, server.js, auth.js
+
+    branch: frontend
+      spec: <one-paragraph spec for the frontend — views, state
+            management, what backend calls it makes>
+      slot: code-plan
+      path: public
+      files: public/index.html, public/app.js
+
+    branch: persistence
+      spec: <spec for the persistence layer, files it reads/writes,
+            shape of the on-disk format>
+      slot: code-plan
+      path: data
+      files: data/store.js
+
+    branch: tests
+      spec: <what behaviors the tests verify, which routes, etc.>
+      slot: code-plan
+      path: tests
+      files: tests/room.test.js, tests/persistence.test.js
+    [[/BRANCHES]]
+
+Notice every branch has a DIFFERENT path and none of them equal
+the project's name. That is the shape of a valid plan.
+
+Then end with [[DONE]] for YOUR turn. The swarm runner creates a
+child node per branch and dispatches fresh code-plan sessions at
+each one. Each branch session builds its own plan, sees only its
+own subtree, and signals contracts to its siblings via cascade.
+The root's rollup tracks descendant progress for free.
+
+Only skip [[BRANCHES]] when the task is a single file or a small
+fix. Everything else branches.`,
+};
