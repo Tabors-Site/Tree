@@ -623,7 +623,7 @@ export default function getWorkspaceTools(core) {
           const Note = (await import("../../seed/models/note.js")).default;
           await Note.deleteMany({ nodeId: fileNode._id });
           if (core?.tree?.deleteNodeBranch) {
-            await core.tree.deleteNodeBranch({ nodeId: fileNode._id, userId });
+            await core.tree.deleteNodeBranch(fileNode._id, userId);
           } else {
             await Node.deleteOne({ _id: fileNode._id });
             await Node.updateOne({ _id: fileNode.parent }, { $pull: { children: fileNode._id } });
