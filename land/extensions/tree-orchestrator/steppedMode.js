@@ -10,8 +10,6 @@ import {
   getCurrentNodeId,
 } from "../../seed/llm/conversation.js";
 import { setChatContext, startChainStep, finalizeChat } from "../../seed/llm/chatTracker.js";
-import { getActiveRequest } from "./state.js";
-
 // Run processMessage for a mode, but split the tool-call work across
 // chainIndex steps. The first call reuses the rootChat created upstream.
 // If processMessage signals _continue (the mode's maxToolCallsPerStep cap
@@ -24,13 +22,8 @@ export async function runSteppedMode(visitorId, mode, message, {
   username, userId, rootId, signal, slot,
   readOnly, onToolLoopCheckpoint, socket,
   parentChatId = null, dispatchOrigin = null,
-  sessionId: sessionIdParam = null,
-  rootChatId: rootChatIdParam = null,
+  sessionId, rootChatId, rt,
 }) {
-  const active = getActiveRequest(visitorId) || {};
-  const sessionId = sessionIdParam || active.sessionId;
-  const rootChatId = rootChatIdParam || active.rootChatId;
-  const rt = active.rt; // shared OrchestratorRuntime with rt.chainIndex counter
 
   // Helper to begin a chain step (live chat context for tool calls) using
   // rt.beginChainStep. Falls back to a direct startChainStep + local counter

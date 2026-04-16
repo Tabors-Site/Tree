@@ -988,6 +988,7 @@ export async function orchestrateTreeRequest({
               socket, username, userId, rootId, signal, slot,
               currentNodeId: effectMatch.targetNodeId,
               onToolLoopCheckpoint, modesUsed,
+              sessionId, rootChatId, rt,
             });
           }
         }
@@ -999,7 +1000,7 @@ export async function orchestrateTreeRequest({
           steps: allMatches.map(m => makeDispatch(m.mode, m.extName, m.targetNodeId, { tense: "present" })),
           source: "multi-extension",
         };
-        return executeGraph(chainGraph, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed });
+        return executeGraph(chainGraph, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootChatId, rt });
       }
     } catch (err) {
       log.debug("Tree Orchestrator", `Chain check failed: ${err.message}`);
@@ -1175,7 +1176,7 @@ export async function orchestrateTreeRequest({
       currentNodeId: classification.targetNodeId || currentNodeId,
       onToolLoopCheckpoint, modesUsed,
       reroutePrefix, // null unless misroute intercept fired above
-      sessionId, rootChatId,
+      sessionId, rootChatId, rt,
     });
   }
 
@@ -1215,6 +1216,7 @@ export async function orchestrateTreeRequest({
           socket, username, userId, rootId, signal, slot,
           currentNodeId: single.targetNodeId, clearHistory: true,
           onToolLoopCheckpoint, modesUsed,
+          sessionId, rootChatId, rt,
         });
       }
 
@@ -1225,7 +1227,7 @@ export async function orchestrateTreeRequest({
           steps: indexMatches.map(m => makeDispatch(m.mode, m.extName, m.targetNodeId, { tense: "present" })),
           source: "converse-multi",
         };
-        return executeGraph(converseChainGraph, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed });
+        return executeGraph(converseChainGraph, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootChatId, rt });
       }
     } catch (err) {
       log.debug("Tree Orchestrator", `Converse check failed: ${err.message}`);
@@ -1288,6 +1290,7 @@ export async function orchestrateTreeRequest({
       socket, username, userId, rootId, signal, slot,
       currentNodeId, clearHistory: true,
       onToolLoopCheckpoint, modesUsed,
+      sessionId, rootChatId, rt,
     });
   }
 

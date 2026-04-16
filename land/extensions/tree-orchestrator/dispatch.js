@@ -84,7 +84,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
   currentNodeId, readOnly = false, clearHistory = false,
   onToolLoopCheckpoint, modesUsed,
   targetNodeId = null,
-  sessionId = null, rootChatId = null,
+  sessionId = null, rootChatId = null, rt = null,
   treeCapabilities = null,
   adjectives = null,
   quantifiers = null,
@@ -199,7 +199,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
   const result = await runSteppedMode(visitorId, mode, message, {
     username, userId, rootId, signal, slot,
     readOnly, onToolLoopCheckpoint, socket,
-    sessionId, rootChatId,
+    sessionId, rootChatId, rt,
   });
 
   emitStatus(socket, "done", "");
@@ -412,7 +412,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
               return runSteppedMode(visitorId, branchMode, branchMessage, {
                 username, userId, rootId, signal, slot: branchSlot,
                 readOnly: false, onToolLoopCheckpoint, socket,
-                sessionId, rootChatId,
+                sessionId, rootChatId, rt,
                 parentChatId: rootChatId || null,
                 dispatchOrigin: "branch-swarm",
               });
