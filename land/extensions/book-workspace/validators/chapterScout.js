@@ -36,11 +36,10 @@ const MIN_TARGET_RATIO = 0.4;
  * Walk the project subtree, collect every chapter/scene node, run
  * each through the detectors, return structured findings.
  */
-export async function scanChapters({ projectNodeId, contracts }) {
+export async function scanChapters({ projectNodeId, contracts, subPlan }) {
   if (!projectNodeId) return { skipped: true, reason: "no projectNodeId" };
 
   const chapters = await collectChapters(projectNodeId);
-  if (chapters.length === 0) return { skipped: true, reason: "no chapters found" };
 
   const mongoose = (await import("mongoose")).default;
   const Note = mongoose.models.Note;
@@ -55,6 +54,45 @@ export async function scanChapters({ projectNodeId, contracts }) {
     : [];
 
   const findings = [];
+
+  // MISSED / ORPHAN CHAPTERS — compare the project's subPlan (what the
+  // architect declared) against actual tree children (what swarm
+  // produced). Entries in subPlan that never landed as chapter nodes,
+  // OR landed but never transitioned out of pending/paused/failed,
+  // should be surfaced so reconcile + retry picks them up on the next
+  // Start. This runs BEFORE the per-chapter audits so missing entries
+  // are reported alongside empty/broken ones.
+  if (Array.isArray(subPlan?.branches) && subPlan.branches.length > 0) {
+    const chaptersByNodeId = new Map();
+    for (const ch of chapters) chaptersByNodeId.set(String(ch._id), ch);
+    for (const entry of subPlan.branches) {
+      const status = entry.status || "pending";
+      if (entry.nodeId && chaptersByNodeId.has(String(entry.nodeId))) {
+        // Has a tree node. Status-based findings handled per-chapter below.
+        continue;
+      }
+      if (!entry.nodeId || status === "pending" || status === "paused" || status === "failed") {
+        findings.push({
+          kind: "missed-chapter",
+          chapter: entry.name,
+          chapterNodeId: entry.nodeId ? String(entry.nodeId) : null,
+          status,
+          spec: entry.spec || null,
+          message:
+            `Chapter "${entry.name}" was declared in the TOC but ${entry.nodeId ? "its status is \"" + status + "\"" : "never got dispatched as a tree node"}. ` +
+            `Click Start Writing again — reconcile will pick it up and swarm will retry. ` +
+            `If this keeps happening, the branch may be failing repeatedly; check the chapter's signalInbox for recurring errors.`,
+        });
+      }
+    }
+  }
+
+  if (chapters.length === 0) {
+    // If we had subPlan missing-chapter findings, report those and skip
+    // the per-chapter audits. If we had nothing at all, skip entirely.
+    if (findings.length > 0) return { ok: false, findings, scanned: 0 };
+    return { skipped: true, reason: "no chapters found" };
+  }
   for (const ch of chapters) {
     const notes = await Note.find({ nodeId: ch._id })
       .sort({ createdAt: 1 })
@@ -63,6 +101,30 @@ export async function scanChapters({ projectNodeId, contracts }) {
     const proseText = notes.map((n) => String(n.content || "")).join("\n\n").trim();
     const proseLen = proseText.length;
     const approxWords = proseText.split(/\s+/).filter(Boolean).length;
+
+    // Control-marker pollution. Prose should never contain
+    // [[BRANCHES]] / [[CONTRACTS]] / [[PREMISE]] / [[DONE]] / [[NO-WRITE]]
+    // markers — those are parser directives. If the writer emitted
+    // both prose AND a [[BRANCHES]] block (Path A + Path B confusion),
+    // the markers end up in the note and the book compiler renders
+    // them verbatim as literal text.
+    const markerMatch = proseText.match(/\[\[\s*\/?\s*(branches|contracts|premise|done|no-write)[^\]]*\]\]/i);
+    if (markerMatch) {
+      findings.push({
+        kind: "prose-pollution",
+        chapter: ch.name,
+        chapterNodeId: String(ch._id),
+        marker: markerMatch[0],
+        location: proseText.indexOf(markerMatch[0]),
+        message:
+          `Chapter "${ch.name}" contains the control marker "${markerMatch[0]}" inside its prose. ` +
+          `Control markers ([[BRANCHES]], [[CONTRACTS]], [[PREMISE]], [[DONE]], [[NO-WRITE]]) are parser ` +
+          `directives, never prose. The book compiler renders notes verbatim, so this marker will appear ` +
+          `as literal text in the published book. Rewrite the chapter with the marker removed; if you meant ` +
+          `to decompose into scene branches instead of writing prose, delete the prose and keep only the ` +
+          `[[BRANCHES]] block in your response text (Path B in the write-mode prompt).`,
+      });
+    }
 
     // Empty-chapter
     if (proseLen === 0) {
@@ -111,6 +173,32 @@ export async function scanChapters({ projectNodeId, contracts }) {
           `That's under ${Math.round(MIN_TARGET_RATIO * 100)}% of target — likely truncated or cut short. ` +
           `Rewrite with fuller scene development.`,
       });
+    }
+
+    // Character name drift — prose mentions proper nouns that look
+    // like character names but aren't in the contract. Catches the
+    // failure mode where the writer invents "Elena" and "Daniel"
+    // when the contract declared "Tabor" and "Mara". Heuristic:
+    // capitalized words that appear 3+ times, aren't sentence-starts
+    // of common words, and don't match any declared character name.
+    if (characters.length > 0) {
+      const undeclared = detectUndeclaredCharacters(proseText, characters);
+      if (undeclared.length > 0) {
+        findings.push({
+          kind: "character-drift",
+          chapter: ch.name,
+          chapterNodeId: String(ch._id),
+          undeclaredNames: undeclared.map((u) => u.name),
+          declaredCharacters: characters.map((c) => c.name),
+          message:
+            `Chapter "${ch.name}" introduces character names the contract never declared: ${undeclared.map((u) => `"${u.name}" (${u.count} mentions)`).join(", ")}. ` +
+            `The contract only declared: ${characters.map((c) => c.name).join(", ")}. ` +
+            `Rewrite to use ONLY the declared characters, OR emit [[NO-WRITE: need additional character ` +
+            `(${undeclared[0].name}) declared in contracts]] if the plot genuinely requires one. ` +
+            `Do NOT silently invent characters across chapters — each chapter that adds a new one ` +
+            `makes the book less coherent.`,
+        });
+      }
     }
 
     // Character pronoun drift. For each declared character that appears
@@ -242,6 +330,52 @@ function findRepetition(text) {
 
 function normalize(s) {
   return s.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// Words that look capitalized because they start sentences or are proper
+// nouns that don't count as character names (days, months, places we
+// can't know, common sentence starters). Keep this list conservative —
+// over-including filters hides real character-drift findings.
+const CAPITALIZED_FALSE_POSITIVES = new Set([
+  "I","The","A","An","He","She","They","It","We","You","My","His","Her",
+  "And","But","Or","So","Then","Now","When","Where","Why","How","What","Who",
+  "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday",
+  "January","February","March","April","May","June","July","August",
+  "September","October","November","December",
+  "TreeOS","God","Earth","America","English","German","French","Spanish",
+  "Chapter","Part","Book","Scene","Prologue","Epilogue",
+]);
+
+/**
+ * Find proper nouns in the prose that aren't in the declared character
+ * list. Returns [{ name, count }] sorted by count desc. Threshold: a
+ * name must appear ≥ 3 times to count as "a character" (one-off proper
+ * nouns like a single place name shouldn't trigger drift).
+ */
+function detectUndeclaredCharacters(text, characters) {
+  if (!text) return [];
+  const declaredNames = new Set(characters.map((c) => c.name));
+  const declaredLower = new Set(characters.map((c) => c.name.toLowerCase()));
+  // Match every capitalized word. Filter out the common English
+  // sentence-starters and calendar/cardinal false positives via the
+  // FALSE_POSITIVES set. This catches proper nouns wherever they
+  // appear — including right after a period — which is exactly where
+  // character names show up in prose.
+  const counts = new Map();
+  const re = /\b([A-Z][a-z]{1,20})\b/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const word = m[1];
+    if (CAPITALIZED_FALSE_POSITIVES.has(word)) continue;
+    if (declaredNames.has(word) || declaredLower.has(word.toLowerCase())) continue;
+    counts.set(word, (counts.get(word) || 0) + 1);
+  }
+  const out = [];
+  for (const [name, count] of counts) {
+    if (count >= 3) out.push({ name, count });
+  }
+  out.sort((a, b) => b.count - a.count);
+  return out.slice(0, 8); // cap the report
 }
 
 function escapeRegex(s) {

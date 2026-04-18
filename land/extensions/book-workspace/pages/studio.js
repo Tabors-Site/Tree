@@ -313,6 +313,9 @@ export function renderStudioPage({ nodeId, projectId, title, scope, user, token 
         <button class="btn primary" id="start-btn" onclick="startBook()">Start Writing</button>
         <button class="btn" id="stop-btn" onclick="stopBook()" style="display:none;background:var(--red);color:#fff;border-color:var(--red);">Stop</button>
       </div>
+      <div class="actions" style="margin-top:8px;">
+        <button class="btn" id="scout-btn" onclick="runScout()" title="Audit every chapter for missed content, drift, empty prose, pronoun mismatches, repetition loops">🔍 Run Scout</button>
+      </div>
       <div id="run-status" style="margin-top:8px;font-size:12px;color:var(--muted);"></div>
 
       <div class="contracts-preview" id="contracts-preview"></div>
@@ -454,6 +457,44 @@ async function startBook() {
     setRunning(true);
   } else {
     log(\`✗ Start failed: \${data.error?.message || res.statusText}\`);
+  }
+}
+
+async function runScout() {
+  if (!NODE_ID) return;
+  log(\`→ Running scout audit…\`);
+  const res = await fetch(\`\${API_BASE}/scout\`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    const d = data?.data;
+    if (d?.skipped) log(\`scout skipped: \${d.reason}\`);
+    else if (d?.ok) log(\`✓ scout passed: \${d.scanned} chapters clean\`);
+    else log(\`⚠ scout: \${d.findings?.length || 0} finding(s) — see AI Chats / refresh tree\`);
+  } else {
+    log(\`✗ scout failed: \${data.error?.message || res.statusText}\`);
+  }
+  refresh();
+}
+
+async function rewriteChapter(chapterNodeId) {
+  if (!chapterNodeId) return;
+  if (!confirm("Rewrite this chapter from scratch? Current prose will be replaced.")) return;
+  log(\`→ Dispatching rewrite for chapter \${chapterNodeId}…\`);
+  const res = await fetch(\`/api/v1/\${chapterNodeId}/bookstudio/start\`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok) {
+    log(\`✓ rewrite started for chapter\`);
+  } else {
+    log(\`✗ rewrite failed: \${data.error?.message || res.statusText}\`);
   }
 }
 
@@ -649,6 +690,7 @@ function renderTree() {
       <div class="chapter-head">
         <span class="status \${status}">\${statusIcon} \${status}</span>
         <span>\${escapeHtml(ch.name || "(unnamed)")}</span>
+        \${ch.nodeId ? \`<button class="expand" style="margin-left:auto;" onclick="rewriteChapter('\${escapeHtml(ch.nodeId)}')" title="Regenerate this chapter's prose from scratch">↻ Rewrite</button>\` : ""}
       </div>
       \${ch.spec ? \`<div class="spec">\${escapeHtml(ch.spec)}</div>\` : ""}
       <div class="prose \${prose ? "" : "empty"}">\${prose ? escapeHtml(prose) : "(no prose yet)"}</div>

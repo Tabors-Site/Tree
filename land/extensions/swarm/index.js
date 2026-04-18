@@ -96,7 +96,7 @@ async function ensureProject({ rootId, systemSpec, owner }) {
     systemSpec,
     owner,
     core: _core,
-    fireHook: (name, payload) => _core?.hooks?.fire?.(name, payload),
+    fireHook: (name, payload) => _core?.hooks?.run?.(name, payload),
   });
 }
 

@@ -139,6 +139,7 @@ async function collectSubtreeBranches(startNodeId) {
   const mongoose = (await import("mongoose")).default;
   const Note = mongoose.models.Note;
   const out = [];
+  const seenNames = new Set();
   const visited = new Set([String(startNodeId)]);
   const queue = [String(startNodeId)];
   let scanned = 0;
@@ -151,14 +152,15 @@ async function collectSubtreeBranches(startNodeId) {
     const swMeta = node.metadata instanceof Map
       ? node.metadata.get("swarm")
       : node.metadata?.["swarm"];
-    const isAuthorial = bwMeta?.role === "chapter" || bwMeta?.role === "part" || bwMeta?.role === "scene";
+    const role = bwMeta?.role || swMeta?.role;
+    const isAuthorial = role === "chapter" || role === "part" || role === "scene" || role === "branch";
     if (isAuthorial && String(id) !== String(startNodeId)) {
       const notes = Note ? await Note.find({ nodeId: id })
         .sort({ createdAt: 1 }).limit(20).select("content type createdAt").lean() : [];
       out.push({
         nodeId: String(id),
         name: node.name,
-        role: bwMeta.role,
+        role,
         status: swMeta?.status || bwMeta?.status || "pending",
         spec: swMeta?.spec || bwMeta?.systemSpec || null,
         path: swMeta?.path || null,
@@ -169,6 +171,33 @@ async function collectSubtreeBranches(startNodeId) {
           createdAt: n.createdAt,
         })),
       });
+      seenNames.add(node.name);
+    }
+    // Also surface PLANNED sub-branches from this node's subPlan that
+    // haven't been dispatched yet. Mid-run, a part's architect turn
+    // emits nested [[BRANCHES]] pre-seeding subPlan with pending
+    // entries — those don't have tree nodes yet but represent planned
+    // chapters. Showing them lets the studio render the full TOC as
+    // soon as decomposition completes, not only after each chapter
+    // dispatches. Skip entries that already appeared as real tree
+    // nodes above (deduplicate by name).
+    const subPlanEntries = swMeta?.subPlan?.branches;
+    if (Array.isArray(subPlanEntries) && subPlanEntries.length > 0) {
+      for (const entry of subPlanEntries) {
+        if (entry.nodeId) continue; // will appear (or already did) via tree walk
+        if (seenNames.has(entry.name)) continue;
+        seenNames.add(entry.name);
+        out.push({
+          nodeId: null,
+          name: entry.name,
+          role: entry.mode === "tree:book-plan" ? "part" : "chapter",
+          status: entry.status || "pending",
+          spec: entry.spec || null,
+          path: entry.path || null,
+          summary: null,
+          notes: [],
+        });
+      }
     }
     if (Array.isArray(node.children)) {
       for (const kid of node.children) {
@@ -178,6 +207,45 @@ async function collectSubtreeBranches(startNodeId) {
     }
   }
   return out;
+}
+
+/**
+ * Parse swarm's generic dispatch message and rewrite it for book-write.
+ * Pulls the branch name, parent, path, spec lines out of the generic
+ * template and rebuilds them without the "Files expected" line (books
+ * don't have files) and WITHOUT the optional-nested-branches escape
+ * (prose chapters shouldn't decompose into sub-branches during
+ * writing — the architect already chose the structure).
+ */
+function extractBookWriteMessage(generic) {
+  const branchMatch = generic.match(/Branch name:\s*(.+)/);
+  const parentMatch = generic.match(/Parent branch:\s*(.+)/);
+  const pathMatch = generic.match(/Path:\s*(.+)/);
+  const specMatch = generic.match(/Spec:\s*\n?([\s\S]*?)(?:\n\nFocus only|\n\nIf YOUR|$)/);
+
+  const branch = branchMatch?.[1]?.trim() || "(unnamed)";
+  const parent = parentMatch?.[1]?.trim() || null;
+  const path = pathMatch?.[1]?.trim() || "(no path)";
+  const spec = (specMatch?.[1] || "").trim();
+
+  return (
+    `You are writing ONE chapter (or scene) of a book.\n\n` +
+    `Chapter: ${branch}\n` +
+    (parent ? `Parent: ${parent}\n` : "") +
+    `Tree path: ${path}\n\n` +
+    `Chapter spec:\n${spec}\n\n` +
+    `WRITE THE CHAPTER'S PROSE NOW via create-node-note. Your first ` +
+    `action on this turn MUST be a create-node-note call with the ` +
+    `chapter's full prose as its content argument. Read the declared ` +
+    `contracts (characters, setting, voice) and sibling chapter summaries ` +
+    `in your context FIRST, then write the chapter honoring those facts ` +
+    `exactly. Target the word count the spec states. When the ` +
+    `create-node-note call completes, emit [[DONE]].\n\n` +
+    `Do NOT decompose this chapter into scene branches. The architect ` +
+    `already chose the structure; this turn is prose-writing only. ` +
+    `Do NOT emit [[BRANCHES]]. If a required contract is missing and you ` +
+    `cannot work around it, emit [[NO-WRITE: exact thing missing]] and stop.`
+  );
 }
 
 const router = express.Router();
@@ -324,11 +392,26 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
     // them inline so needsIntake picks them up and the intake stage runs
     // before the architect. Otherwise it's a pre-declared-contract-only
     // dispatch and the architect works from structured fields alone.
-    const userMsg = sources
-      ? `${scopeNote}\n\nPremise: ${premise}\n\nSources / raw input to ingest:\n\n${sources}`
-      : `${scopeNote} Use the pre-declared contracts at the project root ` +
-        `(characters, setting, voice, theme, depth hint). If seed chapters ` +
-        `exist, honor them; extend if scope warrants. Premise: ${premise}`;
+    // Scope determines which mode dispatches. At a project root or part,
+    // we run the architect (plan mode) to decompose. At a chapter or
+    // scene, we run the writer directly — the architect already chose
+    // the structure; this is a targeted rewrite of one node's prose.
+    const isWriteScope = ctx?.scope === "chapter" || ctx?.scope === "scene";
+    const dispatchMode = isWriteScope ? "tree:book-write" : "tree:book-plan";
+
+    const userMsg = isWriteScope
+      ? `Rewrite this chapter. ` +
+        `Read the declared contracts at the project root (characters with ` +
+        `pronouns, setting, voice, theme) and any sibling chapter summaries ` +
+        `in your context. Regenerate the chapter's prose honoring those ` +
+        `facts exactly. Target the word count the spec states. Call ` +
+        `create-node-note with the new prose as your first action, then ` +
+        `emit [[DONE]].${sources ? `\n\nAdditional source material:\n\n${sources}` : ""}`
+      : sources
+        ? `${scopeNote}\n\nPremise: ${premise}\n\nSources / raw input to ingest:\n\n${sources}`
+        : `${scopeNote} Use the pre-declared contracts at the project root ` +
+          `(characters, setting, voice, theme, depth hint). If seed chapters ` +
+          `exist, honor them; extend if scope warrants. Premise: ${premise}`;
 
     if (!userId) {
       return sendError(res, 401, ERR.UNAUTHORIZED, "userId required to dispatch architect");
@@ -344,6 +427,36 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
     (async () => {
       try {
         const { runChat } = await import("../../seed/llm/conversation.js");
+
+        // If we're rewriting a chapter/scene, skip intake + skip the
+        // full swarm dispatch — just run tree:book-write directly at
+        // the target node. Chapter-level rewrites are single-turn
+        // regenerations, not decomposition + dispatch.
+        if (isWriteScope) {
+          broadcast(nodeId, "update", `writer thinking (tree:book-write)…`);
+          const wResult = await runChat({
+            userId, username,
+            message: userMsg,
+            mode: "tree:book-write",
+            rootId: projectId,
+            nodeId,
+            signal: controller.signal,
+            visitorId: `bookstudio-rewrite:${userId}:${nodeId}`,
+            onToolResults: (results) => {
+              for (const r of results || []) {
+                const name = r?.toolName || r?.name || "tool";
+                broadcast(nodeId, "update", `tool: ${name}`);
+              }
+            },
+          });
+          const wAnswer = (wResult?.answer || wResult?.content || "").trim();
+          if (wAnswer) {
+            const preview = wAnswer.length > 240 ? wAnswer.slice(0, 240) + "…" : wAnswer;
+            broadcast(nodeId, "update", `writer: ${preview.replace(/\n/g, " ")}`);
+          }
+          broadcast(nodeId, "update", "rewrite complete");
+          return; // skip the rest of the swarm dispatch flow
+        }
 
         // STAGE 1 — INTAKE.
         // If the caller's input is raw (URLs, long text, file references,
@@ -483,9 +596,19 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
           },
           defaultBranchMode: "tree:book-write",
           runBranch: async ({ mode: bMode, message: bMessage, branchNodeId, slot: bSlot }) => {
+            // Override swarm's generic (code-centric) dispatch message
+            // with a book-specific one for tree:book-write branches.
+            // The generic message mentions "Files expected" and lets the
+            // model skip writing via nested [[BRANCHES]] — neither
+            // applies to a prose chapter, and the permission to skip
+            // was the single biggest reason chapters came back empty.
+            const isWriteMode = bMode === "tree:book-write";
+            const bookMessage = isWriteMode
+              ? extractBookWriteMessage(bMessage)
+              : bMessage;
             const bResult = await runChat({
               userId, username,
-              message: bMessage,
+              message: bookMessage,
               mode: bMode,
               rootId: projectId,
               nodeId: branchNodeId,
@@ -528,6 +651,67 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
   }
 });
 
+// ── POST /api/v1/:nodeId/bookstudio/scout ───────────────────────
+// Run the chapter scout on demand — audit every chapter in the book
+// for empty content, pronoun drift, character drift, repetition loops,
+// under-target drafts, prose pollution, missed chapters. Findings land
+// on the project's signal inbox exactly like the post-swarm run does.
+// Operators can invoke this any time to get a fresh audit without
+// re-running a full swarm.
+router.post("/:nodeId/bookstudio/scout", authenticate, async (req, res) => {
+  const { nodeId } = req.params;
+  try {
+    const ctx = await resolveStudioContext(nodeId);
+    const projectId = ctx?.project?._id ? String(ctx.project._id) : nodeId;
+    const swx = sw();
+    const contracts = swx?.readContracts ? (await swx.readContracts(projectId) || []) : [];
+    const subPlan = swx?.readSubPlan ? await swx.readSubPlan(projectId) : null;
+
+    const { scanChapters } = await import("./validators/chapterScout.js");
+    broadcast(nodeId, "update", `scout starting…`);
+    const scout = await scanChapters({ projectNodeId: projectId, contracts, subPlan });
+
+    if (scout.skipped) {
+      broadcast(nodeId, "update", `scout skipped: ${scout.reason}`);
+      return sendOk(res, { skipped: true, reason: scout.reason });
+    }
+
+    // Emit signals for every finding to the appropriate node. Same
+    // routing as the post-swarm scout: missed-chapter lands on the
+    // project root (no chapter node exists); everything else lands
+    // on the chapter's inbox.
+    if (swx?.appendSignal) {
+      for (const f of scout.findings) {
+        const signalTargetId = f.chapterNodeId || projectId;
+        await swx.appendSignal({
+          nodeId: signalTargetId,
+          signal: {
+            from: "chapter-scout",
+            kind: "coherence-gap",
+            filePath: null,
+            payload: f,
+          },
+        });
+        broadcast(nodeId, "update", `scout: ${f.kind} in ${f.chapter}`);
+      }
+    }
+
+    broadcast(nodeId, "update",
+      scout.ok
+        ? `scout passed: ${scout.scanned} chapters, 0 gaps`
+        : `scout: ${scout.findings.length} finding(s) across ${scout.scanned} chapters`,
+    );
+    return sendOk(res, {
+      ok: scout.ok,
+      scanned: scout.scanned,
+      findings: scout.findings,
+    });
+  } catch (err) {
+    log.error("BookWorkspace/routes", `scout failed: ${err.message}`);
+    return sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
 // ── POST /api/v1/:nodeId/bookstudio/stop ────────────────────────
 router.post("/:nodeId/bookstudio/stop", authenticate, async (req, res) => {
   const { nodeId } = req.params;
@@ -560,36 +744,15 @@ router.get("/:nodeId/bookstudio/state", (req, res, next) => htmlAuth(req, res, n
       : null;
     const contracts = swxData?.contracts || [];
 
-    // At a project root, pull subPlan.branches. At a branch, walk the
-    // subtree for authorial descendants.
-    let chapters = [];
-    if (ctx?.scope === "project") {
-      const subPlanBranches = swxData?.subPlan?.branches || [];
-      const mongoose = (await import("mongoose")).default;
-      const Note = mongoose.models.Note;
-      for (const b of subPlanBranches) {
-        const entry = {
-          name: b.name,
-          nodeId: b.nodeId || null,
-          status: b.status || "pending",
-          spec: b.spec || null,
-          path: b.path || null,
-          summary: b.summary || null,
-          notes: [],
-        };
-        if (b.nodeId && Note) {
-          const notes = await Note.find({ nodeId: b.nodeId })
-            .sort({ createdAt: 1 }).limit(20).select("content type createdAt").lean();
-          entry.notes = notes.map(n => ({
-            content: String(n.content || "").slice(0, 20000),
-            type: n.type, createdAt: n.createdAt,
-          }));
-        }
-        chapters.push(entry);
-      }
-    } else {
-      chapters = await collectSubtreeBranches(nodeId);
-    }
+    // For a book, walk the ENTIRE subtree for authorial nodes
+    // (chapter/scene roles). Books use a parts → chapters hierarchy,
+    // so the project root's subPlan.branches only lists top-level
+    // parts. Showing just those gives the operator no visibility
+    // into the actual prose nodes. collectSubtreeBranches walks every
+    // descendant with a book-workspace role and returns them flat —
+    // parts included (so the user can still trigger Rewrite on a part),
+    // chapters included, scenes included, every one carrying its notes.
+    const chapters = await collectSubtreeBranches(nodeId);
 
     const bwMeta = readMeta(node);
     const title = (projectNode && readMeta(projectNode)?.title) || bwMeta?.title || node.name;

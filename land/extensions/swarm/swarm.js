@@ -63,8 +63,8 @@ const CONTRACTS_CLOSE_LOOSE = /\[\[[^\[\]]*(\/|end)[^\[\]]*contracts[^\[\]]*\]\]
  */
 async function fireHook(core, name, payload) {
   try {
-    if (core?.hooks?.fire) {
-      await core.hooks.fire(name, payload);
+    if (core?.hooks?.run) {
+      await core.hooks.run(name, payload);
     }
   } catch (err) {
     log.warn("Swarm", `hook ${name} listener error: ${err.message}`);
@@ -243,9 +243,12 @@ export function parseContracts(responseText) {
   }
 
   if (closeIdxInRest == null) {
-    // Unclosed block — consume to EOF if the body has at least one
-    // recognizable `message` or `type` declaration. Otherwise reject.
-    if (/^\s*(message|type)\s+[A-Za-z_]/im.test(rest)) {
+    // Unclosed block — consume to EOF if the body has any
+    // recognizable `<kind> <name>: {...}` or `<kind>: {...}` entry.
+    // (Was message|type only; now accepts any kind so book/research/
+    // curriculum contracts survive — character, setting, voice, theme,
+    // chapter, etc.)
+    if (/^\s*[a-zA-Z][\w-]*(\s+[A-Za-z_][\w-]*)?\s*:\s*[\{"]/m.test(rest)) {
       closeIdxInRest = rest.length;
       closeLength = 0;
     } else {
@@ -261,13 +264,29 @@ export function parseContracts(responseText) {
     const line = raw.trim();
     if (!line) continue;
     if (line.startsWith("#") || line.startsWith("//")) continue;
-    const kvMatch = line.match(/^(message|type)\s+([A-Za-z_][\w-]*)\s*:\s*(.+)$/i);
-    if (!kvMatch) continue;
-    const kind = kvMatch[1].toLowerCase();
-    const name = kvMatch[2];
-    const rhs = kvMatch[3].trim();
+    if (line.startsWith("[[")) continue;
+    // Domain-neutral contract parsing. Accept BOTH shapes:
+    //   "character Tabor: { pronouns: 'he/him', ... }"     → named entry
+    //   "setting: { timelineSpan: '...' }"                 → unnamed entry
+    //   "message join: { roomId, playerName }"             → code-style named
+    // The kind is any word; the name is the second word if present.
+    let kind, name, rhs;
+    const namedMatch = line.match(/^([a-zA-Z][a-zA-Z-]*)\s+([A-Za-z_][\w-]*)\s*:\s*(.+)$/);
+    const unnamedMatch = !namedMatch && line.match(/^([a-zA-Z][a-zA-Z-]*)\s*:\s*(.+)$/);
+    if (namedMatch) {
+      kind = namedMatch[1].toLowerCase();
+      name = namedMatch[2];
+      rhs = namedMatch[3].trim();
+    } else if (unnamedMatch) {
+      kind = unnamedMatch[1].toLowerCase();
+      name = kind; // unnamed entries use kind as name (setting/voice/theme pattern)
+      rhs = unnamedMatch[2].trim();
+    } else {
+      continue;
+    }
 
     const fields = new Set();
+    const values = {}; // key -> raw value string; preserves data the scout can use
     const braceIdx = rhs.indexOf("{");
     if (braceIdx !== -1) {
       let depth = 0;
@@ -289,14 +308,29 @@ export function parseContracts(responseText) {
           const nameStr = colonIdx !== -1 ? trimmed.slice(0, colonIdx).trim() : trimmed;
           const clean = nameStr.replace(/\?$/, "").trim();
           if (/^['"]?[A-Za-z_$][\w$-]*['"]?$/.test(clean)) {
-            fields.add(clean.replace(/^['"]|['"]$/g, ""));
+            const fieldName = clean.replace(/^['"]|['"]$/g, "");
+            fields.add(fieldName);
+            // Also preserve the VALUE so downstream consumers (book
+            // scout's pronoun detector, form repopulation, etc.) can
+            // read "he/him" not just "pronouns". Strip quotes on the
+            // value side the same way.
+            if (colonIdx !== -1) {
+              const rawVal = trimmed.slice(colonIdx + 1).trim().replace(/,\s*$/, "");
+              const cleanVal = rawVal.replace(/^['"]|['"]$/g, "").trim();
+              if (cleanVal) values[fieldName] = cleanVal;
+            }
           }
         }
       }
     }
 
     fields.delete("type");
-    contracts.push({ kind, name, fields: [...fields], raw: line });
+    // Lift common scout-accessible fields to the top-level entry so
+    // the book-workspace pronoun scout and form repopulation can read
+    // them without re-parsing. Pronouns is the critical one.
+    const entry = { kind, name, fields: [...fields], values, raw: line };
+    if (values.pronouns) entry.pronouns = values.pronouns;
+    contracts.push(entry);
   }
 
   const openStart = openMatch.index;
@@ -982,7 +1016,14 @@ export async function runBranchSwarm({
         continue;
       }
 
-      // Recursive expansion: nested [[BRANCHES]] inside the response
+      // Recursive expansion: nested [[BRANCHES]] inside the response.
+      // Also pre-populate the parent's subPlan with the declared sub-
+      // branches so visibility tools (book-studio, dashboard) see the
+      // planned-but-not-yet-dispatched chapter list as soon as a parent
+      // finishes decomposing. Without this, the studio shows only
+      // dispatched branches mid-run — a 30-chapter book looks like
+      // "4 parts, (no prose yet)" until every chapter has actually
+      // started running, which can be 30+ minutes on a local LLM.
       if (branch.depth < MAX_DEPTH && branchResult?.answer) {
         const nested = parseBranches(branchResult.answer);
         if (nested.branches.length > 0) {
@@ -995,6 +1036,27 @@ export async function runBranchSwarm({
               parentBranch: branch.name,
               depth: branch.depth + 1,
             });
+            // Pre-seed the parent's subPlan with a pending entry.
+            // ensureBranchNode + upsertSubPlanEntry run again when the
+            // branch actually dispatches; that write is an upsert so
+            // this pre-seed is harmless — it just fills the gap for
+            // visibility. No nodeId yet (the tree node doesn't exist
+            // until dispatch creates it).
+            try {
+              await upsertSubPlanEntry({
+                parentNodeId: branchNode._id,
+                core,
+                child: {
+                  name: sub.name,
+                  spec: sub.spec,
+                  path: sub.path || null,
+                  files: sub.files || [],
+                  slot: sub.slot || null,
+                  mode: sub.mode || null,
+                  status: "pending",
+                },
+              });
+            } catch {}
           }
           const cleanAnswer = nested.cleaned;
           const lastIdx = results.length - 1;

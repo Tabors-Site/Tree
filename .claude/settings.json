@@ -768,7 +768,28 @@
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\" http://localhost:51002/)",
       "Bash(curl -s http://localhost:51002/)",
       "Bash(kill 917093)",
-      "Bash(grep -n \"return { title, premise\\\\|collectForm\" /home/tabor/github/Tree/land/extensions/book-workspace/pages/studio.js)"
+      "Bash(grep -n \"return { title, premise\\\\|collectForm\" /home/tabor/github/Tree/land/extensions/book-workspace/pages/studio.js)",
+      "Bash(grep -i \"pig\\\\|latin\" echo \"---\" ls /home/tabor/github/Tree/land/extensions/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)",
+      "Bash(echo \"PID=$!\" sleep 8 curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/api/v1/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(disown)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/api/v1/health)",
+      "Read(//etc/**)",
+      "Bash(curl -sk -o /dev/null -w \"%{http_code}\\\\n\" https://treeos.ai/api/v1/health)",
+      "Bash(ps -p 3029210 -o pid,cmd)",
+      "Read(//home/tabor/github/Tree/cli/**)",
+      "Bash(xxd /tmp/game5-chat.out)",
+      "Bash(pgrep -af \"node.*index.js.*chat\" echo \"---\" ps -ef)",
+      "Bash(kill 3029210 3029212)",
+      "Bash(ps -p 3029212)",
+      "Bash(rm -f /tmp/game5-boot.log /tmp/game6-boot.log)",
+      "Bash(grep -A 5 \"^OUTPUT$\\\\|^=====$\\\\|=== OUTPUT\\\\|OUTPUT$\" /home/tabor/github/Tree/land/extensions/code-workspace/modes/plan.js)",
+      "Bash(kill 3095172 3095173 sleep 2 ss -tlnp)",
+      "Bash(echo \"PID=$!\" disown sleep 12 ss -tlnp)",
+      "Bash(kill 3136394 3136395 sleep 2 ss -tlnp)",
+      "Bash(echo \"PID=$!\" disown sleep 14 ss -tlnp)",
+      "Bash(kill 3244371 3244372 sleep 2 cd /home/tabor/github/Tree/land)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
@@ -795,7 +816,8 @@
       "/home/tabor/github/Tree/land/extensions/explore",
       "/home/tabor/github/Tree/land/seed",
       "/home/tabor/github/Tree/land/extensions/recovery",
-      "/home/tabor/github/Tree/land/extensions/$ext"
+      "/home/tabor/github/Tree/land/extensions/$ext",
+      "/home/tabor/.treeos"
     ]
   }
 }

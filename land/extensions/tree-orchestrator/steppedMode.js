@@ -118,6 +118,12 @@ export async function runSteppedMode(visitorId, mode, message, {
   // nudge and force one more step.
   let writeCount = 0;
   let readCount = 0;
+  // Tool trace for post-hoc summarization. Each entry captures the tool
+  // name and a compact arg hint (path for file ops, method+path for
+  // probes). Bounded to the last 40 calls so a long chain doesn't eat
+  // the summarizer's context.
+  const toolTrace = [];
+  const TOOL_TRACE_MAX = 40;
   const { isToolReadOnly } = await import("../../seed/tree/extensionScope.js");
 
   const onToolResults = (results) => {
@@ -127,6 +133,14 @@ export async function runSteppedMode(visitorId, mode, message, {
       if (r?.tool) {
         if (isToolReadOnly(r.tool)) readCount++;
         else writeCount++;
+        let hint = "";
+        const args = r.args || r.arguments || {};
+        if (args.filePath) hint = args.filePath;
+        else if (args.path && args.method) hint = `${args.method} ${args.path}`;
+        else if (args.path) hint = args.path;
+        else if (args.name) hint = args.name;
+        toolTrace.push({ tool: r.tool, hint: String(hint || "").slice(0, 120) });
+        if (toolTrace.length > TOOL_TRACE_MAX) toolTrace.shift();
       }
     }
   };
@@ -380,6 +394,15 @@ export async function runSteppedMode(visitorId, mode, message, {
   // in earlier turns but were overwritten by later continuations.
   if (result && allContent.length > 1) {
     result._allContent = allContent.join("\n");
+  }
+
+  // Attach the tool trace + write/read counts so callers (dispatch.js)
+  // can decide whether to run a post-hoc summarizer when the model
+  // emitted a bare [[DONE]] with no user-facing prose.
+  if (result) {
+    result._toolTrace = toolTrace;
+    result._writeCount = writeCount;
+    result._readCount = readCount;
   }
 
   return result;

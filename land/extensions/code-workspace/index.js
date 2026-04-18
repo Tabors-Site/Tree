@@ -50,6 +50,7 @@ import logMode from "./modes/log.js";
 import coachMode from "./modes/coach.js";
 import askMode from "./modes/ask.js";
 import reviewMode from "./modes/review.js";
+import summarizeMode from "./modes/summarize.js";
 
 // Serve subsystem — live preview of workspace projects
 import createServeRouter from "./serve/routes.js";
@@ -583,6 +584,7 @@ export async function init(core) {
   core.modes.registerMode("tree:code-coach", coachMode, "code-workspace");
   core.modes.registerMode("tree:code-ask", askMode, "code-workspace");
   core.modes.registerMode("tree:code-review", reviewMode, "code-workspace");
+  core.modes.registerMode("tree:code-summarize", summarizeMode, "code-workspace");
 
   try {
     core.llm?.registerModeAssignment?.("tree:code-plan", "code-plan");
@@ -590,6 +592,9 @@ export async function init(core) {
     core.llm?.registerModeAssignment?.("tree:code-coach", "code-coach");
     core.llm?.registerModeAssignment?.("tree:code-ask", "code-ask");
     core.llm?.registerModeAssignment?.("tree:code-review", "code-review");
+    // The summarizer reuses code-log's slot (same small-model profile),
+    // so it doesn't require its own slot config on every tree.
+    core.llm?.registerModeAssignment?.("tree:code-summarize", "code-log");
   } catch {}
 
   // enrichContext:
@@ -1800,6 +1805,50 @@ export async function init(core) {
         const { runInWorkspace } = await import("./sandbox.js");
         return runInWorkspace(args);
       },
+
+      // Flat-build scout. Called by the orchestrator when a
+      // tree:code-* chain ends without dispatching any branches —
+      // i.e. a single-dir build that swarm:afterAllBranchesComplete
+      // never fires for. Walks every file in the project and runs
+      // validateSyntax on whatever the validator recognizes (.js,
+      // .mjs, .cjs, .json, .html). Returns a compact summary the
+      // summarizer can fold into its recap so the user learns about
+      // broken files before they try to run the app.
+      //
+      // Keeps going on per-file exceptions; a single bad read never
+      // silences the whole scan.
+      async runFlatBuildScout({ rootId }) {
+        try {
+          const { findProject, walkProjectFiles } = await import("./workspace.js");
+          const project = await findProject(rootId);
+          if (!project) return { ok: true, filesScanned: 0, errors: [], reason: "no project" };
+          const files = await walkProjectFiles(project._id);
+          const errors = [];
+          let scanned = 0;
+          for (const f of files) {
+            try {
+              const res = validateSyntax({ filePath: f.filePath, content: f.content || "" });
+              scanned++;
+              if (!res.ok && res.error) {
+                errors.push({
+                  file: f.filePath,
+                  line: res.error.line || null,
+                  column: res.error.column || null,
+                  message: res.error.message || "parse error",
+                });
+              }
+            } catch (err) {
+              // Per-file crash is non-fatal — keep scanning the rest.
+              log.debug("CodeWorkspace", `flat-build-scout skip ${f.filePath}: ${err.message}`);
+            }
+          }
+          return { ok: errors.length === 0, filesScanned: scanned, errors };
+        } catch (err) {
+          log.warn("CodeWorkspace", `runFlatBuildScout crashed: ${err.message}`);
+          return { ok: true, filesScanned: 0, errors: [], reason: err.message };
+        }
+      },
+
       readMeta,
       // Serve subsystem exports — let other extensions (code-forge, etc.)
       // drive previews programmatically.

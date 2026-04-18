@@ -305,6 +305,27 @@ export async function init(core) {
     if (toolName !== "create-node-note" && toolName !== "edit-node-note") return;
     const targetNodeId = args?.nodeId || args?.branchId || null;
     if (!targetNodeId) return;
+
+    // Reject notes containing swarm control markers — these are CONTROL
+    // SYNTAX (consumed by parseBranches / parseContracts) and should
+    // never land in a note body. If they do, the book compiler renders
+    // them verbatim and the reader sees "[[BRANCHES]] branch: ch06..."
+    // as literal text in the book. Cancel the tool call with a redirect
+    // instruction so the model re-emits without markers OR rewrites its
+    // turn entirely to use Path B (branches-only, no prose).
+    const content = typeof args?.content === "string" ? args.content : null;
+    if (content && /\[\[\s*\/?\s*(branches|contracts|premise)\s*\]\]/i.test(content)) {
+      cancel(
+        "Note content contains control markers ([[BRANCHES]], [[CONTRACTS]], or [[PREMISE]]). " +
+        "These are parser directives; they must NEVER appear inside prose the book compiler will render. " +
+        "If you meant to decompose into scene branches, DON'T call create-node-note AT ALL on this turn — " +
+        "emit your [[BRANCHES]] block in the response text instead, then [[DONE]]. " +
+        "If you meant to write the chapter, rewrite the note with the control markers stripped out — " +
+        "the scenes inside your prose are narrative scenes, not dispatch blocks.",
+      );
+      return;
+    }
+
     try {
       const { default: NodeModel } = await import("../../seed/models/node.js");
       const node = await NodeModel.findById(targetNodeId).select("metadata").lean();
@@ -358,7 +379,8 @@ export async function init(core) {
       try {
         const sw = (await import("../loader.js")).getExtension("swarm")?.exports;
         const contracts = sw?.readContracts ? await sw.readContracts(project._id) : [];
-        const scout = await scanChapters({ projectNodeId: project._id, contracts });
+        const subPlan = sw?.readSubPlan ? await sw.readSubPlan(project._id) : null;
+        const scout = await scanChapters({ projectNodeId: project._id, contracts, subPlan });
         if (scout.skipped) {
           log.debug("BookWorkspace", `chapter scout skipped: ${scout.reason}`);
         } else if (!scout.ok) {
@@ -366,8 +388,13 @@ export async function init(core) {
             `🔍 Chapter scout: ${scout.findings.length} issue(s) across ${scout.scanned} chapters`);
           if (sw?.appendSignal) {
             for (const f of scout.findings) {
+              // missed-chapter findings have no chapterNodeId (never
+              // dispatched). Land those signals on the PROJECT root so
+              // the operator sees them and the next reconcile picks
+              // the entry up. All other findings land on their chapter.
+              const signalTargetId = f.chapterNodeId || String(project._id);
               await sw.appendSignal({
-                nodeId: f.chapterNodeId,
+                nodeId: signalTargetId,
                 signal: {
                   from: "chapter-scout",
                   kind: "coherence-gap",
@@ -376,8 +403,10 @@ export async function init(core) {
                 },
                 core,
               });
-              // Also flip the result so retry loop picks it up. Find
-              // the matching result by chapter name.
+              // Flip the corresponding result to failed (if there is
+              // one) so swarm's retry loop re-dispatches. For
+              // missed-chapter (no result entry), there's nothing to
+              // flip — the next Start will reconcile and dispatch it.
               const r = results.find((x) => x.rawName === f.chapter || x.name === f.chapter);
               if (r && r.status === "done") {
                 r.status = "failed";

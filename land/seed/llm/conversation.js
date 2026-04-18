@@ -154,6 +154,26 @@ function releaseLlmSlot() {
 // usually transient network / upstream issues. 429 stays for rate limits.
 const RETRYABLE_CODES = new Set([429, 502, 503, 504]);
 
+/**
+ * Detect the class of 500 that IS worth retrying once — provider
+ * rejects the model's tool-call JSON because it contained invalid
+ * escape sequences (raw backslash, backslash-space, unescaped control
+ * char). A blind retry fails identically, but a retry with corrective
+ * feedback ("your last turn had invalid escapes, avoid backslashes")
+ * usually succeeds because the model actually rewrites the content.
+ *
+ * Targets the specific small-model failure mode the kernel comment
+ * above warns about — NOT transient-overload 500s, which remain
+ * non-retryable. Different signal, different recovery.
+ */
+function isJsonEscapeError(err) {
+  if (!err) return false;
+  const status = err.status || err.code;
+  if (status !== 500 && status !== 400) return false;
+  const msg = String(err.message || err.error?.message || "");
+  return /failed to parse JSON|invalid (character|escape).*(escape|string)|unexpected escape|json.*parse.*error/i.test(msg);
+}
+
 let _failoverResolver = null;
 
 /**
@@ -1274,11 +1294,46 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorI
         log.error("LLM", `Model invented tool "${inventedTool}" but no usable text could be extracted from failed_generation.`);
         throw apiErr;
       }
+    } else if (isJsonEscapeError(apiErr) && !session._jsonRetryDone) {
+      // Provider rejected the model's tool-call JSON because its content
+      // had invalid escape sequences (raw backslash, backslash-space,
+      // unescaped control chars — small models hit this when they emit
+      // regex patterns, Windows paths, or C-style escapes in a tool
+      // arg). Blind retry of the identical request would fail identically.
+      // So: inject a corrective system message and signal the caller
+      // below to retry ONCE. The retry runs in the same callLLM frame,
+      // releasing and re-acquiring its semaphore slot cleanly.
+      //
+      // session._jsonRetryDone is the per-session guard preventing an
+      // infinite retry loop if the model can't produce clean output.
+      session._jsonRetryDone = true;
+      const errMsg = String(apiErr.message || apiErr.error?.message || "").slice(0, 200);
+      log.warn("LLM", `JSON-escape failure on ${MODEL} (${errMsg}). Retrying once with corrective hint.`);
+      session.messages.push({
+        role: "system",
+        content:
+          `Your previous turn failed with a JSON parse error: "${errMsg}". The provider could not ` +
+          `deserialize one of your tool-call arguments because it contained invalid escape sequences ` +
+          `(raw backslashes, backslash followed by a space, or unescaped control characters). ` +
+          `RETRY WITH SIMPLER CONTENT: avoid backslashes entirely in tool arguments, keep content ASCII ` +
+          `where possible, and prefer prose over literal code / regex / file paths. If you must ` +
+          `include code, keep it short and use only simple identifiers.`,
+      });
+      ctx._retryJsonEscape = true; // signal to the outer wrapper below
     } else {
       throw apiErr;
     }
   } finally {
     releaseLlmSlot();
+  }
+
+  // JSON-escape retry: the catch block above injected a corrective
+  // message into session.messages and set ctx._retryJsonEscape. Re-enter
+  // callLLM once from a clean slot-acquisition. The session guard
+  // (_jsonRetryDone) prevents this branch from firing a second time.
+  if (ctx._retryJsonEscape) {
+    ctx._retryJsonEscape = false;
+    return await callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorId);
   }
 
   // Validate response structure. Some LLM providers return malformed responses

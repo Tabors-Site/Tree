@@ -125,7 +125,9 @@ OUTPUT
 - Do not re-print the code. Do not explain it.
 - When every step of your plan is done, end with [[DONE]] on its
   own line. The orchestrator keeps re-invoking you until you emit
-  it — so call a tool or declare done, never narrate.`;
+  it — so call a tool or declare done, never narrate.
+- The orchestrator will write the final user-facing summary from
+  the tool trace, so a bare [[DONE]] is fine.`;
 
 export default {
   name: "tree:code-log",

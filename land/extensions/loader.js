@@ -1012,12 +1012,120 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
     setExtensionNamesProvider(getLoadedExtensionNames);
   } catch {}
 
+  // Hook-listen validation pass. Every extension's manifest declares
+  // provides.hooks.listens: [...]. Cross-check those names against:
+  //   (a) the kernel's own hooks (fired by seed/*)
+  //   (b) every other extension's declared fires (custom events)
+  // Any listen that matches neither is a silent-orphan — an invented
+  // name that the kernel will never fire, so the handler never runs.
+  // Warn loudly at boot instead of letting the failure stay invisible.
+  validateHookListens(loaded);
+
   // All extensions loaded. Freeze the top-level core object.
   // Extension service registration (core.energy = {...}) happened during init().
   // No more property additions. core.hooks = "garbage" now fails.
   if (coreServices) Object.freeze(coreServices);
 
   return loaded;
+}
+
+// ---------------------------------------------------------------------------
+// Hook listen validation
+// ---------------------------------------------------------------------------
+
+// Mirror of the CORE_HOOKS list in seed/hooks.js plus afterBoot which
+// isn't in that list but is fired by startup.js after all extensions
+// initialize. Kept here so we don't import across the seed boundary for
+// one list.
+const CORE_HOOKS_VALID = new Set([
+  "beforeNote", "afterNote", "beforeContribution",
+  "beforeNodeCreate", "afterNodeCreate",
+  "beforeStatusChange", "afterStatusChange", "beforeNodeDelete",
+  "enrichContext", "onCascade", "onDocumentPressure",
+  "beforeLLMCall", "afterLLMCall", "beforeToolCall", "afterToolCall",
+  "beforeResponse", "beforeRegister", "afterRegister",
+  "afterSessionCreate", "afterSessionEnd", "afterNavigate", "onNodeNavigate",
+  "afterNodeMove", "afterMetadataWrite", "afterScopeChange", "afterOwnershipChange", "afterBoot",
+  "onTreeTripped", "onTreeRevived", "onCompress",
+]);
+
+function validateHookListens(loadedMap) {
+  // Build the set of all hook names that SOMETHING fires — core + any
+  // extension's declared customs.
+  const firedByExt = new Map(); // hookName -> Set<extName>
+  const knownValid = new Set(CORE_HOOKS_VALID);
+  for (const [extName, entry] of loadedMap) {
+    const fires = entry?.manifest?.provides?.hooks?.fires;
+    if (!Array.isArray(fires)) continue;
+    for (const h of fires) {
+      if (typeof h !== "string" || !h) continue;
+      knownValid.add(h);
+      if (!firedByExt.has(h)) firedByExt.set(h, new Set());
+      firedByExt.get(h).add(extName);
+    }
+  }
+
+  // Now walk each extension's listens. Flag any that match nothing.
+  for (const [extName, entry] of loadedMap) {
+    const listens = entry?.manifest?.provides?.hooks?.listens;
+    if (!Array.isArray(listens)) continue;
+    for (const h of listens) {
+      if (typeof h !== "string" || !h) continue;
+      if (knownValid.has(h)) continue;
+      // Invented / typo. Find the nearest valid name for a helpful hint.
+      const suggestion = nearestHookName(h, knownValid);
+      if (suggestion) {
+        log.warn("Extensions",
+          `"${extName}" listens to "${h}" but nothing fires it. ` +
+          `Did you mean "${suggestion}"? No handler will run.`,
+        );
+      } else {
+        log.warn("Extensions",
+          `"${extName}" listens to "${h}" but nothing fires it. ` +
+          `Not a core hook and no extension declares it in fires. ` +
+          `No handler will run.`,
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Return the closest valid hook name by Levenshtein distance, or null
+ * if the nearest candidate is further than a useful threshold.
+ */
+function nearestHookName(name, validSet) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const candidate of validSet) {
+    const d = levenshtein(name.toLowerCase(), candidate.toLowerCase());
+    if (d < bestDist) {
+      bestDist = d;
+      best = candidate;
+    }
+  }
+  // Only suggest if reasonably close. ~50% of the name different is too
+  // far to be a typo — don't guess.
+  const maxReasonable = Math.max(3, Math.floor(name.length / 2));
+  return bestDist <= maxReasonable ? best : null;
+}
+
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const prev = new Array(b.length + 1);
+  const curr = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    for (let j = 0; j <= b.length; j++) prev[j] = curr[j];
+  }
+  return prev[b.length];
 }
 
 // ---------------------------------------------------------------------------

@@ -396,6 +396,93 @@ export async function runModeAndReturn(visitorId, mode, message, {
     }
   }
 
+  // Flat-build scout. If the builder wrote files but dispatched no
+  // branches, swarm:afterAllBranchesComplete never fired — so the
+  // existing cross-branch validators (symbol coherence, behavioral
+  // tests, etc.) stayed silent. Ask code-workspace for a one-shot
+  // syntax scan across the workspace so obvious broken files surface
+  // before the user tries to run the app.
+  const SUMMARIZE_MODES = new Set(["tree:code-plan", "tree:code-log", "tree:code-coach"]);
+  let flatScoutReport = null;
+  if (
+    SUMMARIZE_MODES.has(mode) &&
+    (result?._writeCount || 0) > 0 &&
+    rootId
+  ) {
+    try {
+      const { getExtension } = await import("../loader.js");
+      const cw = getExtension("code-workspace")?.exports;
+      if (cw?.runFlatBuildScout) {
+        flatScoutReport = await cw.runFlatBuildScout({ rootId });
+        if (flatScoutReport?.errors?.length > 0) {
+          log.warn("Tree Orchestrator",
+            `🔍 Flat-build scout: ${flatScoutReport.errors.length} syntax issue(s) across ${flatScoutReport.filesScanned} file(s)`,
+          );
+        } else if (flatScoutReport?.filesScanned > 0) {
+          log.info("Tree Orchestrator",
+            `✅ Flat-build scout: ${flatScoutReport.filesScanned} file(s), zero syntax issues`,
+          );
+        }
+      }
+    } catch (err) {
+      log.warn("Tree Orchestrator", `flat-build scout failed: ${err.message}`);
+    }
+  }
+
+  // Summarizer rescue. When the builder ends with a bare "[[DONE]]" or
+  // empty prose but tools actually ran, the user sees nothing. Fire a
+  // one-shot summarizer so the chat doesn't close on silence. Only for
+  // modes that opt in (the tree:code-* builder family). Skipped when
+  // branches dispatched (they produce their own summary) or the builder
+  // already wrote a real reply (>= 80 chars after marker strip).
+  if (
+    SUMMARIZE_MODES.has(mode) &&
+    (result?._writeCount || 0) > 0 &&
+    Array.isArray(result?._toolTrace) && result._toolTrace.length > 0 &&
+    ((answer || "").trim().length < 80)
+  ) {
+    try {
+      const { runChat } = await import("../../seed/llm/conversation.js");
+      const traceLines = result._toolTrace
+        .map((t) => `  - ${t.tool}${t.hint ? " (" + t.hint + ")" : ""}`)
+        .join("\n");
+      const scoutNote = flatScoutReport && flatScoutReport.errors?.length > 0
+        ? `\n\nSCOUT FOUND SYNTAX ISSUES:\n${flatScoutReport.errors
+            .slice(0, 6)
+            .map((e) => `  - ${e.file}${e.line ? ":" + e.line : ""}: ${e.message}`)
+            .join("\n")}\n(Mention these to the user — they will need to be fixed before the app runs.)`
+        : "";
+      const summarizerMsg =
+        `ORIGINAL REQUEST:\n${message}\n\n` +
+        `TOOL TRACE (${result._toolTrace.length} calls, ${result._writeCount} writes, ${result._readCount || 0} reads):\n${traceLines}\n\n` +
+        `BUILDER'S FINAL REPLY: ${((answer || "").trim()) || "(empty)"}` +
+        scoutNote +
+        `\n\nWrite the user-facing recap now.`;
+      const summary = await runChat({
+        userId, username,
+        message: summarizerMsg,
+        mode: "tree:code-summarize",
+        rootId,
+        signal,
+        // Separate visitorId keeps the summarizer session from clobbering
+        // the main builder session's mode + chat context.
+        visitorId: `summarize:${rootId || "nil"}:${userId}`,
+        llmPriority: "INTERACTIVE",
+      });
+      const recap = (summary?.answer || "").trim();
+      if (recap && recap.length > 0 && recap !== "No response.") {
+        answer = recap;
+        if (result) {
+          result.content = recap;
+          result.answer = recap;
+        }
+        log.info("Tree Orchestrator", `📝 Summarizer rescued bare [[DONE]] (${recap.length} chars)`);
+      }
+    } catch (err) {
+      log.warn("Tree Orchestrator", `summarizer failed: ${err.message}`);
+    }
+  }
+
   // Plan capture: if the mode emitted a [[PLAN]]...[[/PLAN]] block, strip it
   // from the visible answer and stash it for the next turn. The next
   // affirmative from this visitor will expand the plan into N sequential

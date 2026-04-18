@@ -208,7 +208,11 @@ OUTPUT
 
 One or two lines after the tools finish. Name what you created.
 Don't paste code, don't narrate, don't apologize.
-Example: "Created manifest.js, index.js, lib.js, test.js."`;
+Example: "Created manifest.js, index.js, lib.js, test.js."
+
+The orchestrator automatically writes a final user-facing summary
+from the tool trace, so a bare [[DONE]] at the end is fine —
+focus your prose budget on the actual work.`;
 
 export default {
   name: "tree:code-plan",

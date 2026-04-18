@@ -492,7 +492,7 @@ export default function getWorkspaceTools(core) {
     // ---------------------------------------------------------------
     {
       name: "workspace-edit-file",
-      description: "Edit a file in the active project by line range. Replaces lines [startLine, endLine) with `content` (both 1-indexed and inclusive in user terms — this tool converts to 0-indexed internally). Omit endLine to insert `content` before startLine. Use this for small surgical edits instead of rewriting the whole file.",
+      description: "Edit a file in the active project by line range. Replaces lines [startLine, endLine) with `content` (both 1-indexed and inclusive in user terms — this tool converts to 0-indexed internally). Omit endLine to insert `content` before startLine. Use this for small surgical edits instead of rewriting the whole file. The success response reports the new total line count plus a small post-edit window of what actually landed — trust those numbers over your own memory when planning a second edit in the same turn, since any length-changing edit shifts every line below it.",
       schema: {
         filePath: z.string().describe("Path relative to the project root."),
         content: z.string().describe("New content to splice in (can be multi-line)."),
@@ -603,6 +603,8 @@ export default function getWorkspaceTools(core) {
           const lineStart0 = Math.max(0, (startLine | 0) - 1);
           const lineEnd0 = endLine != null ? Math.max(lineStart0, (endLine | 0) - 1) : null;
 
+          const oldLineCount = (note.content || "").split("\n").length;
+
           const result = await editNote({
             noteId: note._id,
             content,
@@ -614,7 +616,32 @@ export default function getWorkspaceTools(core) {
 
           scheduleSync(project._id);
           trace("workspace-edit-file", "OK", `${filePath} ${result.message || "updated"}`);
-          return text(`Edited ${filePath} lines ${startLine}-${endLine ?? "(insert)"}: ${result.message || "updated"}. Auto-sync scheduled.`);
+
+          // Post-edit context window. Edits that change line count leave the
+          // agent's mental line-number map stale. A subsequent edit in the
+          // same turn will either miss or fail with "Invalid line range".
+          // Surface the new total plus a small window of what actually
+          // landed so the agent can self-correct offsets (and visually
+          // verify it didn't accidentally drop a function it still calls).
+          const newText = result?.Note?.content ?? "";
+          const newLines = newText.length ? newText.split("\n") : [];
+          const newTotal = newLines.length;
+          const insertedCount = (content || "").split("\n").length;
+          const windowStart1 = Math.max(1, startLine - 2);
+          const windowEnd1 = Math.min(newTotal, startLine - 1 + insertedCount + 2);
+          const windowLines = [];
+          for (let i = windowStart1; i <= windowEnd1; i++) {
+            const s = newLines[i - 1] ?? "";
+            windowLines.push(`  ${String(i).padStart(4, " ")}  ${s}`);
+          }
+          const contextBlock = windowLines.length
+            ? `\nPost-edit (lines ${windowStart1}-${windowEnd1}):\n${windowLines.join("\n")}`
+            : "";
+          return text(
+            `Edited ${filePath} lines ${startLine}-${endLine ?? "(insert)"}: ${result.message || "updated"}. ` +
+            `File now ${newTotal} lines (was ${oldLineCount}). Auto-sync scheduled.` +
+            contextBlock
+          );
         } catch (e) {
           trace("workspace-edit-file", "FAILED", e.message);
           return text(`workspace-edit-file failed: ${e.message}`);

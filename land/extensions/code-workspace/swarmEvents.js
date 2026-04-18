@@ -22,6 +22,7 @@
 
 import Node from "../../seed/models/node.js";
 import log from "../../seed/log.js";
+import { setExtMeta as kernelSetExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 const NS = "code-workspace";
 
@@ -1184,14 +1185,11 @@ async function replaceInbox({ nodeId, signals, core, sw }) {
       ? (node.metadata.get("swarm") || {})
       : (node.metadata?.swarm || {});
     const next = { ...current, inbox: Array.isArray(signals) ? signals : [] };
-    if (core?.metadata?.setExtMeta) {
-      await core.metadata.setExtMeta(node, "swarm", next);
-    } else {
-      await Node.updateOne(
-        { _id: node._id },
-        { $set: { "metadata.swarm": next } },
-      );
-    }
+    // Swarm-namespace writes from this module run under code-workspace's
+    // scoped core, which rejects cross-namespace writes. Use the kernel's
+    // unscoped setExtMeta directly — we're writing on swarm's behalf
+    // (filtering its own inbox), not sneaking into its namespace.
+    await kernelSetExtMeta(node, "swarm", next);
   } catch (err) {
     log.warn("CodeWorkspace", `replaceInbox ${nodeId} failed: ${err.message}`);
   }

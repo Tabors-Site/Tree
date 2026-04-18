@@ -177,6 +177,50 @@ export async function initProject({ projectNodeId, name, description, workspaceP
     await Node.updateOne({ _id: node._id }, { $set: { [`metadata.${NS}`]: data } });
   }
 
+  // Pin the response mode on the project node so follow-up messages
+  // ("proceed", "make them the same color") stay in code modes and
+  // don't fall through to tree:respond. The orchestrator's tense
+  // suffix routing still redirects to code-plan / code-review / etc.
+  // when the grammar is confident; this only catches the ambiguous
+  // default-receiver case.
+  try {
+    await Node.updateOne(
+      { _id: node._id },
+      { $set: { "metadata.modes.respond": "tree:code-coach" } },
+    );
+  } catch (err) {
+    log.debug("CodeWorkspace", `pin respond mode failed: ${err.message}`);
+  }
+
+  // Module-type anchor. The workspace sits inside land/.workspaces/,
+  // and land/package.json has "type": "module". Without an explicit
+  // package.json at the workspace root, Node walks up and loads every
+  // AI-written .js file as ESM — so `const x = require(...)` crashes
+  // with "require is not defined in ES module scope" on preview spawn.
+  // Drop a minimal package.json pinning "type": "commonjs" so the AI's
+  // CJS code runs. If the AI later writes its own package.json (with
+  // deps, scripts, etc.), its version wins — this file is only a
+  // first-write default.
+  try {
+    const fsMod = await import("fs/promises");
+    const pkgPath = path.join(resolvedPath, "package.json");
+    await fsMod.mkdir(resolvedPath, { recursive: true });
+    try {
+      await fsMod.access(pkgPath);
+    } catch {
+      const stub = {
+        name: (data.name || "workspace").toLowerCase().replace(/[^a-z0-9_-]+/g, "-"),
+        version: "0.0.0",
+        private: true,
+        type: "commonjs",
+      };
+      await fsMod.writeFile(pkgPath, JSON.stringify(stub, null, 2) + "\n", "utf8");
+      log.info("CodeWorkspace", `seeded package.json at ${pkgPath} (type=commonjs)`);
+    }
+  } catch (err) {
+    log.warn("CodeWorkspace", `seed package.json failed: ${err.message}`);
+  }
+
   // Enable the kernel cascade system on the project root so file writes
   // anywhere in the sub-tree automatically fire propagation. Extensions
   // like code-workspace (here), contradiction, notifications, codebook,
@@ -597,8 +641,22 @@ export async function walkProjectFiles(projectNodeId) {
   async function visit(nodeId, relBase) {
     const node = await Node.findById(nodeId).select("_id name parent metadata children").lean();
     if (!node) return;
-    const data = readMeta(node);
-    if (!data) return;
+    let data = readMeta(node);
+    // Swarm-created branch nodes have `role` only in metadata.swarm, not
+    // metadata.code-workspace. When plan-mode writes the local plan to
+    // metadata.code-workspace.plan, the branch ends up with a truthy
+    // code-workspace namespace but no `role` field. Check for the role
+    // specifically — if absent, fall back to the swarm namespace so the
+    // recursion descends into branch nodes. Without this, every file
+    // written under a swarm branch is invisible to syncUp: tree has the
+    // notes, disk stays empty, the preview has nothing to run.
+    if (!data?.role) {
+      const swMeta = node.metadata instanceof Map
+        ? node.metadata.get("swarm")
+        : node.metadata?.swarm;
+      if (swMeta?.role === "branch") data = { ...(data || {}), role: "branch" };
+    }
+    if (!data?.role) return;
 
     if (data.role === ROLE_FILE) {
       const filePath = relBase ? `${relBase}/${node.name}` : node.name;
