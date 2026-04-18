@@ -15,6 +15,7 @@ import LandingPage from "./Landing/LandingPage.jsx";
 import AIArchitecturePage from "./Landing/AIArchitecturePage.jsx";
 import KernelPage from "./Landing/KernelPage.jsx";
 import CascadePage from "./Landing/CascadePage.jsx";
+import SwarmPage from "./Landing/SwarmPage.jsx";
 import ExtensionsPage from "./Landing/ExtensionsPage.jsx";
 import NetworkPage from "./Landing/NetworkPage.jsx";
 import FlowPage from "./Landing/FlowPage.jsx";
@@ -63,6 +64,7 @@ const WelcomeRoutes = () => {
       <Route path="/kernel" element={<KernelPage />} />
       <Route path="/seed" element={<KernelPage />} />
       <Route path="/cascade" element={<CascadePage />} />
+      <Route path="/swarm" element={<SwarmPage />} />
       <Route path="/extensions" element={<ExtensionsPage />} />
       <Route path="/network" element={<NetworkPage />} />
       <Route path="/flow" element={<FlowPage />} />

@@ -38,6 +38,7 @@ const CodePage = () => {
           <div className="lp-hero-ctas lp-hero-ctas-sub">
             <a className="lp-btn lp-btn-secondary" href="/ai">The Grammar</a>
             <a className="lp-btn lp-btn-secondary" href="/kernel">The Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="/swarm">Swarm</a>
             <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
             <a className="lp-btn lp-btn-secondary" href="/build">Build</a>
           </div>

@@ -104,14 +104,16 @@ const SYNC_DEBOUNCE_MS = 250;
 async function resolveBranchPrefix(nodeId) {
   if (!nodeId) return null;
   try {
-    const { findBranchContext } = await import("./swarmEvents.js");
-    const ctx = await findBranchContext(nodeId);
+    const { getExtension } = await import("../loader.js");
+    const sw = getExtension("swarm")?.exports;
+    if (!sw?.findBranchContext) return null;
+    const ctx = await sw.findBranchContext(nodeId);
     const branch = ctx?.branchNode;
     if (!branch) return null;
-    const meta = branch.metadata instanceof Map
-      ? branch.metadata.get("code-workspace")
-      : branch.metadata?.["code-workspace"];
-    const prefix = meta?.path;
+    const swarmMeta = branch.metadata instanceof Map
+      ? branch.metadata.get("swarm")
+      : branch.metadata?.["swarm"];
+    const prefix = swarmMeta?.path;
     if (!prefix || typeof prefix !== "string") return null;
     return prefix.replace(/^\/+/, "").replace(/\/+$/, "") || null;
   } catch {
@@ -433,6 +435,49 @@ export default function getWorkspaceTools(core) {
           );
         } catch (e) {
           return text(`workspace-read-file failed: ${e.message}`);
+        }
+      },
+    },
+
+    // ---------------------------------------------------------------
+    // workspace-peek-sibling-file: read-only access to a sibling
+    // branch's file. Each branch's subtree is exclusively its own for
+    // writes; this tool is how a branch's AI checks what its siblings
+    // actually built before composing code that depends on their shape.
+    // The full file content is returned; no edit tool exists for
+    // siblings (their subtree is off-limits to writes from here).
+    // ---------------------------------------------------------------
+    {
+      name: "workspace-peek-sibling-file",
+      description:
+        "Read a file from a SIBLING branch. Each branch's subtree is " +
+        "write-scoped to itself; use this tool to see what a sibling " +
+        "has actually built before writing code that depends on it. " +
+        "siblingName matches the branch name (as shown in the Sibling " +
+        "Branches context block). filePath is relative to the sibling's " +
+        "branch root.",
+      schema: {
+        siblingName: z.string().describe("The sibling branch's name (e.g. 'backend', 'shared')."),
+        filePath: z.string().describe("Path relative to that sibling branch's root (e.g. 'server.js', 'src/auth.js')."),
+      },
+      annotations: { readOnlyHint: true },
+      async handler({ siblingName, filePath, nodeId }) {
+        try {
+          const { getExtension } = await import("../loader.js");
+          const sw = getExtension("swarm")?.exports;
+          if (!sw?.readSiblingNode) return text(`workspace-peek-sibling-file: swarm extension unavailable.`);
+          const result = await sw.readSiblingNode(nodeId, siblingName, filePath);
+          if (!result) return text(`workspace-peek-sibling-file: no file at ${siblingName}/${filePath}.`);
+          const notes = Array.isArray(result.notes) ? result.notes : [];
+          if (notes.length === 0) return text(`${siblingName}/${filePath} exists but has no content yet.`);
+          const body = notes[0].content || "";
+          const truncated = notes[0].truncated ? "\n\n... (truncated)" : "";
+          return text(
+            `${siblingName}/${filePath} (${body.length}b, read-only):\n` +
+            "```\n" + body + "\n```" + truncated,
+          );
+        } catch (err) {
+          return text(`workspace-peek-sibling-file failed: ${err.message}`);
         }
       },
     },
@@ -895,9 +940,10 @@ export default function getWorkspaceTools(core) {
           // when it fires this probe? Used for tree-state attribution
           // (verifiedEndpoint.probedBy, signal.from) and for picking
           // the right ancestor to roll the verification up to.
-          const { findBranchContext, rollUpDetail, appendSignalInbox, SIGNAL_KIND, pruneProbeFailureForEndpoint } =
-            await import("./swarmEvents.js");
-          const branchCtx = await findBranchContext(nodeId);
+          const { getExtension } = await import("../loader.js");
+          const sw = getExtension("swarm")?.exports;
+          const { SIGNAL_KIND, pruneProbeFailureForEndpoint } = await import("./swarmEvents.js");
+          const branchCtx = sw?.findBranchContext ? await sw.findBranchContext(nodeId) : null;
           const branchNode = branchCtx?.branchNode || null;
           const branchName = branchNode?.name || null;
           // Source of rollup walks: prefer the branch (if we're in
@@ -1002,23 +1048,25 @@ export default function getWorkspaceTools(core) {
           if (!result.ok || (result.status >= 400)) {
             const status = result.status || null;
             try {
-              await appendSignalInbox({
-                nodeId: rollupSource,
-                signal: {
-                  from: branchName || project.name || "probe",
-                  kind: SIGNAL_KIND.PROBE_FAILURE,
-                  filePath: null,
-                  payload: {
-                    method,
-                    path: urlPath,
-                    status,
-                    reason: result.error || (status ? `HTTP ${status}` : "unknown"),
-                    body: result.body || null,
-                    stderrTail: stderrSnapshot || null,
+              if (sw?.appendSignal) {
+                await sw.appendSignal({
+                  nodeId: rollupSource,
+                  signal: {
+                    from: branchName || project.name || "probe",
+                    kind: SIGNAL_KIND.PROBE_FAILURE,
+                    filePath: null,
+                    payload: {
+                      method,
+                      path: urlPath,
+                      status,
+                      reason: result.error || (status ? `HTTP ${status}` : "unknown"),
+                      body: result.body || null,
+                      stderrTail: stderrSnapshot || null,
+                    },
                   },
-                },
-                core,
-              });
+                  core,
+                });
+              }
             } catch {}
             const reason = result.error || `HTTP ${status}`;
             const bodyTail = result.body ? `\nbody:\n${result.body.slice(0, 1000)}` : "";
@@ -1044,20 +1092,22 @@ export default function getWorkspaceTools(core) {
             } catch {}
           }
           try {
-            await rollUpDetail({
-              fromNodeId: rollupSource,
-              delta: {
-                verifiedEndpoint: {
-                  key: `${method} ${urlPath}`,
-                  status: result.status,
-                  returnedFields,
-                  lastVerifiedAt: new Date().toISOString(),
-                  probedBy: branchName || null,
+            if (sw?.rollUpDetail) {
+              await sw.rollUpDetail({
+                fromNodeId: rollupSource,
+                delta: {
+                  verifiedEndpoint: {
+                    key: `${method} ${urlPath}`,
+                    status: result.status,
+                    returnedFields,
+                    lastVerifiedAt: new Date().toISOString(),
+                    probedBy: branchName || null,
+                  },
+                  lastActivity: new Date().toISOString(),
                 },
-                lastActivity: new Date().toISOString(),
-              },
-              core,
-            });
+                core,
+              });
+            }
             await pruneProbeFailureForEndpoint({
               nodeId: rollupSource,
               method,
@@ -1138,8 +1188,9 @@ export default function getWorkspaceTools(core) {
           // (which may have rotated, or the preview may have died).
           // Stored on the branch (if we're in one) else on the project.
           try {
-            const { findBranchContext } = await import("./swarmEvents.js");
-            const ctx = await findBranchContext(nodeId);
+            const { getExtension } = await import("../loader.js");
+            const sw = getExtension("swarm")?.exports;
+            const ctx = sw?.findBranchContext ? await sw.findBranchContext(nodeId) : null;
             const target = ctx?.branchNode?._id || project._id;
             const snapshot = {
               readAt: new Date().toISOString(),
@@ -1155,9 +1206,7 @@ export default function getWorkspaceTools(core) {
               const cur = node.metadata instanceof Map
                 ? node.metadata.get("code-workspace") || {}
                 : node.metadata?.["code-workspace"] || {};
-              const draft = { ...cur };
-              if (!draft.aggregatedDetail) draft.aggregatedDetail = {};
-              draft.aggregatedDetail.recentLogSnapshot = snapshot;
+              const draft = { ...cur, logSnapshot: snapshot };
               if (core?.metadata?.setExtMeta) {
                 await core.metadata.setExtMeta(node, "code-workspace", draft);
               } else {
@@ -1296,13 +1345,17 @@ export default function getWorkspaceTools(core) {
             // that path.
             try {
               const targetDoc = await Node.findById(targetNodeId).select("children metadata").lean();
-              const targetMeta = targetDoc?.metadata instanceof Map
+              const cwTargetMeta = targetDoc?.metadata instanceof Map
                 ? targetDoc.metadata.get("code-workspace")
                 : targetDoc?.metadata?.["code-workspace"];
-              const isProjectRole = targetMeta?.role === "project" || targetMeta?.role == null;
+              const swTargetMeta = targetDoc?.metadata instanceof Map
+                ? targetDoc.metadata.get("swarm")
+                : targetDoc?.metadata?.["swarm"];
+              const role = swTargetMeta?.role || cwTargetMeta?.role;
+              const isProjectRole = role === "project" || role == null;
               const hasChildren = Array.isArray(targetDoc?.children) && targetDoc.children.length > 0;
-              const existingStepCount = targetMeta?.subPlan?.steps?.length || 0;
-              const filesWritten = targetMeta?.aggregatedDetail?.filesWritten || 0;
+              const existingStepCount = cwTargetMeta?.plan?.steps?.length || 0;
+              const filesWritten = swTargetMeta?.aggregatedDetail?.filesWritten || 0;
 
               // Only reject at the empty-root decision point: project
               // role, no children, no prior files, no prior plan, AND

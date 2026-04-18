@@ -153,12 +153,11 @@ export async function initProject({ projectNodeId, name, description, workspaceP
     : path.join(DEFAULT_WORKSPACE_ROOT, String(node._id));
 
   // Merge on top of whatever the node already carries under this
-  // namespace. The AI may have written a plan (subPlan.steps[]) BEFORE
+  // namespace. The AI may have written a plan (plan.steps[]) BEFORE
   // the first file write auto-initialized the project, and a blind
   // replace would wipe that state. Only fields that initProject
-  // actually owns get overwritten; everything else (subPlan.steps,
-  // subPlan.driftAt, signalInbox entries, swarmEvents) is
-  // preserved from the existing metadata.
+  // actually owns get overwritten; everything else (plan.steps,
+  // plan.driftAt, logSnapshot, etc.) is preserved.
   const existingBase = existing && typeof existing === "object" ? existing : {};
   const data = {
     ...existingBase,
@@ -169,22 +168,7 @@ export async function initProject({ projectNodeId, name, description, workspaceP
     workspacePath: resolvedPath,
     language: existingBase.language || "javascript",
     createdAt: existingBase.createdAt || new Date().toISOString(),
-    // Self-similar state placeholders — populated incrementally by the
-    // swarm runner and the cascade rollup. Preserve any prior subPlan
-    // (including steps and branches the AI may have set before auto-init).
-    subPlan: existingBase.subPlan || { branches: [], createdAt: new Date().toISOString() },
-    aggregatedDetail: existingBase.aggregatedDetail || {
-      filesWritten: 0,
-      contracts: [],
-      statusCounts: { done: 0, running: 0, pending: 0, failed: 0 },
-      lastActivity: null,
-    },
-    signalInbox: Array.isArray(existingBase.signalInbox) ? existingBase.signalInbox : [],
-    swarmEvents: Array.isArray(existingBase.swarmEvents) ? existingBase.swarmEvents : [],
   };
-  // Make sure subPlan has the branches slot even if it was previously
-  // written with only steps[] (workspace-plan action=set does that).
-  if (!Array.isArray(data.subPlan.branches)) data.subPlan.branches = [];
 
   if (core?.metadata) {
     await core.metadata.setExtMeta(node, NS, data);

@@ -84,6 +84,10 @@ export default function renderEnrichedContextBlock(enriched) {
     sections.push(enriched.swarmLateralSignals);
   }
 
+  if (Array.isArray(enriched.siblingBranches) && enriched.siblingBranches.length > 0) {
+    sections.push(renderSiblingBranches(enriched.siblingBranches));
+  }
+
   if (enriched.swarmPlanTree) {
     sections.push(`## Plan Tree\n${enriched.swarmPlanTree}`);
   }
@@ -94,4 +98,66 @@ CONTEXT FOR THIS TURN
 =================================================================
 
 ${sections.join("\n\n")}`;
+}
+
+/**
+ * Render the sibling-branches block. Compact: one heading per sibling,
+ * status + path + spec one-liner + file summaries. The AI uses
+ * workspace-peek-sibling-file to fetch full content on demand.
+ */
+function renderSiblingBranches(siblings) {
+  const lines = ["## Sibling Branches (read-only)"];
+  lines.push("");
+  for (const sib of siblings) {
+    const icon =
+      sib.status === "done" ? "✓" :
+      sib.status === "failed" ? "✗" :
+      sib.status === "running" ? "🟡" :
+      sib.status === "paused" ? "⏸" : "⏳";
+    lines.push(`### ${icon} ${sib.name}  [${sib.status}${sib.path ? `, ${sib.path}` : ""}]`);
+    if (sib.spec) lines.push(`Spec: ${truncate(sib.spec, 240)}`);
+    if (sib.summary) lines.push(`Summary: ${truncate(sib.summary, 240)}`);
+
+    const files = (sib.nodes || []).filter((n) => Array.isArray(n.notes) && n.notes.length > 0);
+    if (files.length > 0) {
+      lines.push("");
+      lines.push("Files:");
+      for (const file of files.slice(0, 30)) {
+        const path = file.path ? `${file.path}/${file.name}` : file.name;
+        const headline = headlineFromNotes(file.notes);
+        lines.push(`  - ${path}${headline ? ` — ${truncate(headline, 120)}` : ""}`);
+      }
+      if (files.length > 30) {
+        lines.push(`  ... and ${files.length - 30} more (peek with workspace-peek-sibling-file)`);
+      }
+    } else {
+      lines.push("(no files yet)");
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+function headlineFromNotes(notes) {
+  for (const note of notes) {
+    const content = note?.content;
+    if (typeof content !== "string" || !content.trim()) continue;
+    // Pick the first non-trivial line: skip blanks, comments, bare imports,
+    // strict directives, bare re-exports.
+    for (const raw of content.split("\n")) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (line.startsWith("//") || line.startsWith("#")) continue;
+      if (line === '"use strict";' || line === "'use strict';") continue;
+      if (/^import\b/.test(line)) continue;
+      if (/^export\s*\{/.test(line)) continue;
+      return line;
+    }
+  }
+  return null;
+}
+
+function truncate(s, n) {
+  const str = String(s || "");
+  return str.length > n ? str.slice(0, n - 1) + "…" : str;
 }

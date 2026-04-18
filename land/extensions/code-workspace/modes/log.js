@@ -17,6 +17,7 @@ import localTreeView from "./facets/localTreeView.js";
 import rewriteOverEdits from "./facets/rewriteOverEdits.js";
 import blockingError from "./facets/blockingError.js";
 import declaredContracts from "./facets/declaredContracts.js";
+import siblings from "./facets/siblings.js";
 import renderEnrichedContextBlock from "./renderContext.js";
 
 const FACETS = [
@@ -26,6 +27,7 @@ const FACETS = [
   // declaredContracts next — any branch session must see the architect's
   // wire protocol at the top of its prompt.
   declaredContracts,
+  siblings,
   localTreeView,
   nodePlan,
   rewriteOverEdits,

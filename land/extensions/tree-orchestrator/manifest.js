@@ -31,7 +31,7 @@ export default {
   },
 
   optional: {
-    extensions: ["competence", "explore", "contradiction", "purpose", "evolution", "remember", "understanding"],
+    extensions: ["swarm", "competence", "explore", "contradiction", "purpose", "evolution", "remember", "understanding"],
   },
 
   provides: {

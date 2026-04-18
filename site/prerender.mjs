@@ -33,6 +33,7 @@ const STATIC_ROUTES = [
   "/ai",
   "/kernel",
   "/cascade",
+  "/swarm",
   "/extensions",
   "/flow",
   "/network",
@@ -86,6 +87,10 @@ const PAGE_META = {
   "/cascade": {
     title: "Cascade . How the Tree Communicates",
     description: "The fourth primitive. Seven kernel additions. Two entry points. Six statuses none terminal. .flow as the water table. The nervous system of the tree.",
+  },
+  "/swarm": {
+    title: "Swarm . Parallel Inquiry as a Primitive",
+    description: "One compound task, many independent branches, one coherent result. The architect decomposes, branches build in isolation, contracts keep the seams aligned, validators catch drift. Code projects, research papers, books, curricula, data pipelines. The tree turns plural problems into parallel work.",
   },
   "/flow": {
     title: "The Flow . How Data Moves Through the System",

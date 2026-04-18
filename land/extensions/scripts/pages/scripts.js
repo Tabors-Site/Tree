@@ -1215,13 +1215,12 @@ export function renderScriptHelp({ nodeId, nodeName, data, qsWithQ }) {
       </table>
     </div>
 
-    <!-- Version Properties -->
-    <div class="section" id="version-properties">
-      <div class="section-title">Version Properties</div>
+    <!-- Metadata Properties -->
+    <div class="section" id="metadata-properties">
+      <div class="section-title">Metadata Properties</div>
 
       <div class="section-description">
-        Access version data using index <code>i</code>. Use <code>0</code> for the first version,
-        or <code>0</code> for the latest version.
+        Extension data lives in <code>metadata</code>. Access via <code>node.metadata.&lt;namespace&gt;</code>.
       </div>
 
       <table>
@@ -1232,7 +1231,7 @@ export function renderScriptHelp({ nodeId, nodeName, data, qsWithQ }) {
           </tr>
         </thead>
         <tbody>
-          ${data.nodeProperties.version
+          ${data.nodeProperties.metadata
             .map(
               (item) => `
             <tr>

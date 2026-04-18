@@ -9,9 +9,9 @@
  * when a human noticed the app was broken).
  *
  * This module is pure extraction + diff. It touches no tree state and
- * no disk. The storage layer lives in swarmEvents.js
- * (upsertContract, readContracts); the afterNote wiring lives in
- * code-workspace/index.js.
+ * no disk. The storage layer lives in the swarm extension
+ * (metadata.swarm.contracts via setContracts / readContracts); the
+ * afterNote wiring lives in code-workspace/index.js.
  *
  * Extraction strategy
  * ───────────────────

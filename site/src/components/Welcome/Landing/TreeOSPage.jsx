@@ -460,6 +460,7 @@ const TreeOSPage = () => {
               <a href="/seed">The Seed</a>
               <a href="/ai">The AI</a>
               <a href="/cascade">Cascade</a>
+              <a href="/swarm">Swarm</a>
               <a href="/flow">The Flow</a>
               <a href="/extensions">Extensions</a>
               <a href="/build">Build</a>

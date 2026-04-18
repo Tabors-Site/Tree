@@ -86,7 +86,7 @@ export default {
 
   optional: {
     services: ["llm", "websocket"],
-    extensions: ["codebase", "book", "approve"],
+    extensions: ["codebase", "book", "approve", "swarm"],
   },
 
   provides: {
@@ -101,7 +101,16 @@ export default {
 
     hooks: {
       fires: [],
-      listens: ["enrichContext", "afterBoot"],
+      listens: [
+        "enrichContext",
+        "afterBoot",
+        "afterNote",
+        "afterSessionEnd",
+        "onCascade",
+        "swarm:afterProjectInit",
+        "swarm:afterBranchComplete",
+        "swarm:afterAllBranchesComplete",
+      ],
     },
 
     modes: [

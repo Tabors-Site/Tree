@@ -13,7 +13,10 @@ import {
   resolveRootLlmForMode,
 } from "../../seed/llm/conversation.js";
 import { setChatContext } from "../../seed/llm/chatTracker.js";
-import { parseBranches, runBranchSwarm, validateBranches, parseContracts } from "./swarm.js";
+async function swarmExt() {
+  const { getExtension } = await import("../loader.js");
+  return getExtension("swarm")?.exports || null;
+}
 import { parsePlan, setPendingPlan } from "./pendingPlan.js";
 import {
   pushMemory, formatMemoryContext,
@@ -213,12 +216,16 @@ export async function runModeAndReturn(visitorId, mode, message, {
   // is sequential in phase 1; the `slot` field on each branch is preserved
   // for when we flip to parallel (per-slot LLM routing).
   if (answer) {
-    // Parse contracts FIRST so parseBranches sees the cleaned text
-    // (the [[CONTRACTS]] block is stripped before parseBranches runs).
-    // Contracts are optional — a simple single-branch build doesn't
-    // need them — but when present they become the authoritative wire
-    // protocol all branches must implement.
-    const contractsParse = parseContracts(answer);
+    const sw = await swarmExt();
+    if (!sw) {
+      // swarm extension absent: leave the answer unchanged, skip dispatch.
+      // A mode emitting [[BRANCHES]] has nothing to dispatch to without swarm.
+    } else {
+    // Parse contracts FIRST so parseBranches sees the cleaned text.
+    // Contracts are optional — a simple single-branch build doesn't need
+    // them — but when present they become the authoritative wire protocol
+    // every branch must implement.
+    const contractsParse = sw.parseContracts(answer);
     let parsedContracts = contractsParse.contracts;
     if (parsedContracts.length > 0) {
       answer = contractsParse.cleaned;
@@ -232,7 +239,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
     }
 
     log.info("Tree Orchestrator", `🔍 parseBranches input: ${answer?.length || 0} chars, has [[BRANCHES]]: ${answer?.includes?.("[[BRANCHES]]") || false}`);
-    const branchParse = parseBranches(answer);
+    const branchParse = sw.parseBranches(answer);
     log.info("Tree Orchestrator", `🔍 parseBranches result: ${branchParse.branches.length} branches`);
     if (branchParse.branches.length > 0) {
       answer = branchParse.cleaned;
@@ -244,77 +251,34 @@ export async function runModeAndReturn(visitorId, mode, message, {
         `🌿 Detected ${branchParse.branches.length} branches from ${mode}: ${branchParse.branches.map((b) => b.name).join(", ")}`,
       );
 
-      // Resolve the current project root node so the swarm runner knows
-      // where to hang branch children. We look up by the current position
-      // walking the metadata.code-workspace.role chain to find "project".
-      // If no project exists yet (common: user is at a fresh tree root,
-      // no files written), auto-initialize the tree root as a workspace
-      // project so the swarm has somewhere to hang branches.
       try {
-        const { getExtension } = await import("../loader.js");
-        const cwExt = getExtension("code-workspace");
-        // Walk from current position to find the project root
-        let projectNode = null;
         const searchNodeId = currentNodeId || targetNodeId || rootId;
-        const NodeModel = (await import("../../seed/models/node.js")).default;
-        if (searchNodeId) {
-          let cursor = String(searchNodeId);
-          for (let i = 0; i < 64 && cursor; i++) {
-            const n = await NodeModel.findById(cursor).select("_id name parent metadata").lean();
-            if (!n) break;
-            const meta = n.metadata instanceof Map ? n.metadata.get("code-workspace") : n.metadata?.["code-workspace"];
-            if (meta?.role === "project" && meta?.initialized) {
-              projectNode = n;
-              break;
-            }
-            if (!n.parent) break;
-            cursor = String(n.parent);
-          }
-        }
-
-        // Auto-init fallback. If the user is at a tree root with no
-        // existing project metadata, treat the tree root as the project
-        // and initialize it via code-workspace's initProject export.
-        // Mirrors the ensureProject auto-init that runs on first file
-        // write, but fires before the swarm dispatch so branches have a
-        // parent to hang under.
-        if (!projectNode && rootId && cwExt?.exports?.initProject) {
-          log.info("Tree Orchestrator", `Swarm: no project at position, auto-initializing tree root ${rootId}`);
-          try {
-            const rootNode = await NodeModel.findById(rootId).lean();
-            if (rootNode) {
-              await cwExt.exports.initProject({
-                projectNodeId: rootId,
-                name: rootNode.name || "workspace",
-                description: "Auto-initialized by swarm dispatch.",
-                userId,
-              });
-              projectNode = await NodeModel.findById(rootId).select("_id name parent metadata").lean();
-            }
-          } catch (initErr) {
-            log.error("Tree Orchestrator", `Swarm auto-init failed: ${initErr.message}`);
-          }
+        // Find the swarm project anchored at or above this position. If
+        // none exists, swarm.ensureProject promotes rootId into one and
+        // fires swarm:afterProjectInit so code-workspace (or any other
+        // domain workspace) can finish its side of the init.
+        let projectNode = searchNodeId ? await sw.findProjectForNode(searchNodeId) : null;
+        if (!projectNode && rootId) {
+          log.info("Tree Orchestrator", `Swarm: no project at position, promoting tree root ${rootId}`);
+          projectNode = await sw.ensureProject({
+            rootId,
+            systemSpec: message,
+            owner: { userId, username },
+          });
         }
 
         if (!projectNode) {
           log.warn("Tree Orchestrator", "Swarm: no project root found at current position; branches will not run.");
         } else {
           // Persist the architect's declared contracts on the project
-          // root BEFORE the swarm dispatches, so each branch session's
-          // enrichContext walks into them via readProjectContracts and
-          // injects them into the branch's system prompt from turn 1.
-          // This is how the architect's design flows to every
-          // implementing branch without a separate distribution step.
+          // root before dispatch. Each branch's enrichContext injects
+          // them via readContracts so contracts flow to every branch
+          // from turn 1 without a separate distribution step.
           if (parsedContracts && parsedContracts.length > 0) {
             try {
-              const { setProjectContracts } = await import("../code-workspace/swarmEvents.js");
-              await setProjectContracts({
+              await sw.setContracts({
                 projectNodeId: projectNode._id,
                 contracts: parsedContracts,
-                core: { metadata: { setExtMeta: async (node, ns, data) => {
-                  const NodeModel = (await import("../../seed/models/node.js")).default;
-                  await NodeModel.updateOne({ _id: node._id }, { $set: { [`metadata.${ns}`]: data } });
-                } } },
               });
               log.info("Tree Orchestrator",
                 `📜 Contracts stored on project root ${String(projectNode._id).slice(0, 8)}`,
@@ -324,16 +288,11 @@ export async function runModeAndReturn(visitorId, mode, message, {
             }
           }
 
-          // Validate the architect's branch paths against the seam
-          // rules (no path may equal the project name, all paths must
-          // be unique, every branch must have a path). If any branch
-          // is broken, reject the whole block, skip the swarm dispatch,
-          // and append an error message to the answer so the next turn
-          // forces the architect to re-emit a corrected [[BRANCHES]]
-          // block. Without this, a bad branch plan (like two branches
-          // both using path=ProjectName) silently collapses the whole
-          // swarm into one subdirectory with empty branch nodes.
-          const validation = validateBranches(branchParse.branches, projectNode?.name);
+          // Validate the architect's branch paths. If any branch is
+          // broken, reject the whole block, skip dispatch, and append
+          // an error so the next turn forces the architect to re-emit
+          // a corrected [[BRANCHES]] block.
+          const validation = sw.validateBranches(branchParse.branches, projectNode?.name);
           if (validation.errors.length > 0) {
             log.warn("Tree Orchestrator",
               `🚫 Swarm: rejecting branch plan with ${validation.errors.length} validation error(s):\n  - ${validation.errors.join("\n  - ")}`,
@@ -354,7 +313,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
           }
 
           const _swarmActive = getActiveRequest(visitorId) || {};
-          const swarmResult = await runBranchSwarm({
+          const swarmResult = await sw.runBranchSwarm({
             branches: branchParse.branches,
             rootProjectNode: projectNode,
             rootChatId,
@@ -370,7 +329,6 @@ export async function runModeAndReturn(visitorId, mode, message, {
             userRequest: message,
             rt: _swarmActive.rt,
             core: { metadata: { setExtMeta: async (node, ns, data) => {
-              // Safe fallback via direct Node update if core services aren't available here
               const NodeModel = (await import("../../seed/models/node.js")).default;
               await NodeModel.updateOne({ _id: node._id }, { $set: { [`metadata.${ns}`]: data } });
             } } },
@@ -434,6 +392,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
         log.error("Tree Orchestrator", `Swarm dispatch failed: ${err.message}`);
         log.error("Tree Orchestrator", err.stack?.split("\n").slice(0, 5).join("\n"));
       }
+    }
     }
   }
 

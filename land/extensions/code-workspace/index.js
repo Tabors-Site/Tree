@@ -1,27 +1,18 @@
 import log from "../../seed/log.js";
 import getWorkspaceTools from "./tools.js";
-import { readMeta, localNodeView } from "./workspace.js";
+import { readMeta, localNodeView, initProject, getWorkspacePath } from "./workspace.js";
 import { ensureSourceTree } from "./source.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
 import {
-  findBranchContext,
-  findProjectForNode,
-  findBranchSiblings,
-  recordSwarmEvent,
-  readSwarmEvents,
-  readSubPlan,
-  readAggregatedDetail,
-  readSignalInbox,
-  rollUpDetail,
-  appendSignalInbox,
   pruneSignalInboxForFile,
+  pruneContractMismatchesForFile,
   formatAggregatedDetail,
   formatSignalInbox,
   formatSwarmContext,
   formatContracts,
-  readContracts,
   replaceContractsFromFile,
   summarizeWrite,
+  summaryTier,
   SIGNAL_KIND,
   readNodePlanSteps,
   readNodeStepRollup,
@@ -29,17 +20,21 @@ import {
   markPlanDrift,
   formatNodePlan,
   findBlockingSyntaxError,
-  readProjectContracts,
 } from "./swarmEvents.js";
 import { classifyWrite } from "./perspectiveFilter.js";
 import { validateSyntax } from "./validators/syntax.js";
 import {
   extractBackendContracts,
   extractFrontendExpectations,
-  extractMountPrefixes,
   diffContracts,
 } from "./validators/contracts.js";
 import { detectDeadReceivers } from "./validators/deadReceivers.js";
+import { smokeBranch } from "./validators/smoke.js";
+import { smokeIntegration } from "./validators/integration.js";
+import { smokeWsSeam } from "./validators/wsSeam.js";
+import { runBehavioralTests } from "./validators/behavioralTest.js";
+import { checkContractConformance } from "./validators/contractConformance.js";
+import { checkSymbolCoherence } from "./validators/symbolCoherence.js";
 import {
   registerWatcher,
   unregisterWatcher,
@@ -70,6 +65,11 @@ import { registerCodeServeSlot } from "./serve/slot.js";
 import { installPreviewUpgradeProxy } from "./serve/wsProxy.js";
 import { z } from "zod";
 
+async function swarm() {
+  const { getExtension } = await import("../loader.js");
+  return getExtension("swarm")?.exports;
+}
+
 const DEFAULT_PREVIEW_PORT = 3100;
 
 /**
@@ -98,65 +98,68 @@ async function buildPositionBreadcrumb(nodeId) {
   if (!nodeId) return null;
   const { default: NodeModel } = await import("../../seed/models/node.js");
 
-  // Walk up collecting nodes
+  // Walk up collecting nodes. Each entry carries both namespaces:
+  // swarm metadata (role, systemSpec, subPlan, aggregatedDetail,
+  // inbox) and code-workspace metadata (filePath for file nodes).
   const chain = [];
   let cursor = String(nodeId);
   let guard = 0;
   while (cursor && guard < 8) {
     const n = await NodeModel.findById(cursor).select("_id name parent metadata").lean();
     if (!n) break;
-    const meta = n.metadata instanceof Map
+    const cwMeta = n.metadata instanceof Map
       ? n.metadata.get("code-workspace")
       : n.metadata?.["code-workspace"];
-    chain.push({ node: n, meta });
-    if (meta?.role === "project") break;
+    const swMeta = n.metadata instanceof Map
+      ? n.metadata.get("swarm")
+      : n.metadata?.["swarm"];
+    chain.push({ node: n, cwMeta, swMeta });
+    if (swMeta?.role === "project") break;
     if (!n.parent) break;
     cursor = String(n.parent);
     guard++;
   }
   if (chain.length === 0) return null;
-  // Reverse so root is first, current node last
   chain.reverse();
 
-  // Find the project entry to surface its spec at the top
-  const project = chain.find((c) => c.meta?.role === "project");
+  const project = chain.find((c) => c.swMeta?.role === "project");
   if (!project) return null;
 
   const lines = ["## YOUR POSITION IN THE TREE"];
   lines.push("");
 
   for (let i = 0; i < chain.length; i++) {
-    const { node, meta } = chain[i];
+    const { node, cwMeta, swMeta } = chain[i];
     const isCurrent = i === chain.length - 1;
     const indent = "  ".repeat(i);
     const arrow = i > 0 ? "└ " : "";
     const here = isCurrent ? "  ← YOU ARE HERE" : "";
-    const role = meta?.role ? ` (${meta.role})` : "";
-    lines.push(`${indent}${arrow}${node.name}${role}${here}`);
+    const role = swMeta?.role || cwMeta?.role;
+    const roleLabel = role ? ` (${role})` : "";
+    lines.push(`${indent}${arrow}${node.name}${roleLabel}${here}`);
 
-    // Per-level details
-    if (meta?.role === "project") {
-      if (meta.systemSpec) lines.push(`${indent}  spec: ${truncate(meta.systemSpec, 200)}`);
-      const counts = meta.aggregatedDetail?.statusCounts;
-      const subBranches = meta.subPlan?.branches?.length || 0;
+    if (swMeta?.role === "project") {
+      if (swMeta.systemSpec) lines.push(`${indent}  spec: ${truncate(swMeta.systemSpec, 200)}`);
+      const counts = swMeta.aggregatedDetail?.statusCounts;
+      const subBranches = swMeta.subPlan?.branches?.length || 0;
       if (subBranches > 0) {
         const done = counts?.done || 0;
         lines.push(`${indent}  status: ${done}/${subBranches} branches done`);
       }
-      const verified = meta.aggregatedDetail?.verifiedEndpoints;
+      const verified = swMeta.aggregatedDetail?.verifiedEndpoints;
       if (verified && Object.keys(verified).length > 0) {
         lines.push(`${indent}  verified endpoints: ${Object.keys(verified).length}`);
       }
-    } else if (meta?.role === "branch") {
-      const spec = meta.systemSpec || meta.spec;
+    } else if (swMeta?.role === "branch") {
+      const spec = swMeta.systemSpec || swMeta.spec;
       if (spec) lines.push(`${indent}  spec: ${truncate(spec, 160)}`);
-      if (meta.path) lines.push(`${indent}  path: ${meta.path}`);
-      const filesWritten = meta.aggregatedDetail?.filesWritten || 0;
+      if (swMeta.path) lines.push(`${indent}  path: ${swMeta.path}`);
+      const filesWritten = swMeta.aggregatedDetail?.filesWritten || 0;
       if (filesWritten > 0) lines.push(`${indent}  files written so far: ${filesWritten}`);
-      const sigCount = Array.isArray(meta.signalInbox) ? meta.signalInbox.length : 0;
+      const sigCount = Array.isArray(swMeta.inbox) ? swMeta.inbox.length : 0;
       if (sigCount > 0) lines.push(`${indent}  pending signals: ${sigCount}`);
-    } else if (meta?.role === "file") {
-      if (meta.filePath) lines.push(`${indent}  file: ${meta.filePath}`);
+    } else if (cwMeta?.role === "file") {
+      if (cwMeta.filePath) lines.push(`${indent}  file: ${cwMeta.filePath}`);
     }
   }
 
@@ -248,11 +251,11 @@ async function findProjectAndAncestors(nodeId) {
     ancestorIds.add(cursor);
     const n = await NodeModel.findById(cursor).select("_id name parent metadata").lean();
     if (!n) return null;
-    const meta = n.metadata instanceof Map
-      ? n.metadata.get("code-workspace")
-      : n.metadata?.["code-workspace"];
-    if (meta?.role === "project") {
-      return { projectNode: n, projectMeta: meta, ancestorIds };
+    const swMeta = n.metadata instanceof Map
+      ? n.metadata.get("swarm")
+      : n.metadata?.["swarm"];
+    if (swMeta?.role === "project") {
+      return { projectNode: n, projectMeta: swMeta, ancestorIds };
     }
     if (!n.parent) return null;
     cursor = String(n.parent);
@@ -298,8 +301,8 @@ async function buildPlanTree(projectNodeId, currentAncestorIds) {
     const parent = await NodeModel.findById(parentNodeId).select("_id metadata").lean();
     if (!parent) return;
     const parentMeta = parent.metadata instanceof Map
-      ? parent.metadata.get("code-workspace")
-      : parent.metadata?.["code-workspace"];
+      ? parent.metadata.get("swarm")
+      : parent.metadata?.["swarm"];
     const subBranches = parentMeta?.subPlan?.branches;
     if (!Array.isArray(subBranches) || subBranches.length === 0) return;
 
@@ -414,6 +417,156 @@ function buildServeTools(previewPort) {
   ];
 }
 
+/**
+ * Render a swarm project's subPlan + aggregatedDetail + contracts into a
+ * human-readable plan.md written at the project root. The source of truth
+ * is metadata.swarm on each node; plan.md is just a projection for disk
+ * consumption + the git history.
+ */
+async function writeSwarmPlan({ projectNode, userRequest, userId, core }) {
+  try {
+    const { default: NodeModel } = await import("../../seed/models/node.js");
+
+    async function renderNodeSection(nodeId, depth) {
+      const n = await NodeModel.findById(nodeId).select("_id name metadata").lean();
+      if (!n) return [];
+      const meta = n.metadata instanceof Map
+        ? n.metadata.get("swarm")
+        : n.metadata?.["swarm"];
+      if (!meta) return [];
+
+      const lines = [];
+      const headingLevel = Math.min(2 + depth, 6);
+      const prefix = "#".repeat(headingLevel);
+      const icon =
+        meta.status === "done" ? "✅" :
+        meta.status === "failed" ? "❌" :
+        meta.status === "running" ? "🟡" : "⏳";
+      const label = meta.role === "project"
+        ? `${prefix} Project: ${n.name}`
+        : `${prefix} ${icon} ${n.name}`;
+      lines.push(label);
+      lines.push("");
+
+      if (meta.systemSpec || meta.spec) {
+        lines.push(`**Spec:** ${meta.systemSpec || meta.spec}`);
+      }
+      if (meta.path) lines.push(`**Path:** \`${meta.path}\``);
+      if (Array.isArray(meta.files) && meta.files.length) {
+        lines.push(`**Files:** ${meta.files.map((f) => `\`${f}\``).join(", ")}`);
+      }
+      if (meta.slot) lines.push(`**LLM slot:** \`${meta.slot}\``);
+      if (meta.summary) lines.push(`**Result:** ${truncate(meta.summary, 400)}`);
+      if (meta.error) lines.push(`**Error:** ${meta.error}`);
+
+      const agg = meta.aggregatedDetail;
+      if (agg && (agg.filesWritten > 0 || (agg.contracts && agg.contracts.length > 0))) {
+        lines.push("");
+        lines.push(`**Aggregated under here:** ${agg.filesWritten || 0} files written`);
+        if (agg.contracts?.length) {
+          lines.push("**Established contracts:**");
+          for (const c of agg.contracts.slice(-12)) {
+            lines.push(`- \`${c}\``);
+          }
+        }
+      }
+
+      if (Array.isArray(meta.inbox) && meta.inbox.length > 0) {
+        lines.push("");
+        lines.push(`**Lateral signals received:** ${meta.inbox.length}`);
+        for (const sig of meta.inbox.slice(-6)) {
+          const payload = typeof sig.payload === "string" ? sig.payload : JSON.stringify(sig.payload);
+          lines.push(`- from ${sig.from || "?"}: ${truncate(payload, 200)}`);
+        }
+      }
+
+      lines.push("");
+
+      const subPlan = meta.subPlan;
+      if (subPlan?.branches?.length > 0 && depth < 6) {
+        for (const child of subPlan.branches) {
+          if (!child.nodeId) continue;
+          const childLines = await renderNodeSection(child.nodeId, depth + 1);
+          lines.push(...childLines);
+        }
+      }
+
+      return lines;
+    }
+
+    const lines = [
+      `# Project Plan: ${projectNode.name || "project"}`,
+      "",
+      "## Request",
+      "",
+      userRequest || "(no request text)",
+      "",
+      "## Structure",
+      "",
+    ];
+
+    const rootSection = await renderNodeSection(projectNode._id, 0);
+    rootSection.shift();
+    lines.push(...rootSection);
+
+    try {
+      const { getExtension } = await import("../loader.js");
+      const sw = getExtension("swarm")?.exports;
+      const contracts = sw?.readContracts ? await sw.readContracts(projectNode._id) : null;
+      if (Array.isArray(contracts) && contracts.length > 0) {
+        lines.push("");
+        lines.push("## Declared API Contracts");
+        lines.push("");
+        lines.push("These are the field-level contracts each branch committed to.");
+        lines.push("Siblings read them via enrichContext and the validator diffs new writes against them.");
+        lines.push("");
+        const sorted = [...contracts].sort((a, b) => {
+          if (a.endpoint !== b.endpoint) return a.endpoint.localeCompare(b.endpoint);
+          return a.method.localeCompare(b.method);
+        });
+        for (const c of sorted) {
+          const by = c.declaredBy ? ` _[${c.declaredBy}]_` : "";
+          const src = c.sourceFile ? ` \`${c.sourceFile}:${c.sourceLine || "?"}\`` : "";
+          lines.push(`### \`${c.method} ${c.endpoint}\`${by}`);
+          lines.push(`Source: ${src}`);
+          const body = c.request?.body || [];
+          if (body.length > 0) {
+            lines.push(`- **request.body:** ${body.map((k) => `\`${k}\``).join(", ")}`);
+          }
+          const shape = c.response?.shape || [];
+          if (shape.length > 0) {
+            lines.push(`- **response:** ${shape.map((k) => `\`${k}\``).join(", ")}`);
+          } else if (c.response?.inferred === "variable") {
+            lines.push(`- **response:** _(dynamic — shape unknown at extraction time)_`);
+          }
+          lines.push("");
+        }
+      }
+    } catch (err) {
+      log.debug("CodeWorkspace", `plan.md contracts section skipped: ${err.message}`);
+    }
+
+    lines.push("---");
+    lines.push("");
+    lines.push(`_Generated ${new Date().toISOString()} by the TreeOS swarm runner._`);
+    lines.push(`_Each node's subPlan and aggregatedDetail live at metadata.swarm — this file is just a projection._`);
+
+    const content = lines.join("\n");
+
+    const { resolveOrCreateFile, writeFileContent } = await import("./workspace.js");
+    const { fileNode } = await resolveOrCreateFile({
+      projectNodeId: projectNode._id,
+      relPath: "plan.md",
+      userId: userId || null,
+      core,
+    });
+    await writeFileContent({ fileNodeId: fileNode._id, content, userId: userId || null });
+    log.info("CodeWorkspace", `📄 Swarm: wrote plan.md at ${projectNode.name} (from distributed subPlan)`);
+  } catch (err) {
+    log.warn("CodeWorkspace", `writeSwarmPlan failed: ${err.message}`);
+  }
+}
+
 export async function init(core) {
   // LLM slots: one per mode so operators can pin a cheap model to
   // ask/coach and a strong model to plan/log.
@@ -452,27 +605,25 @@ export async function init(core) {
   // it, and signalInbox carries lateral signals between siblings.
   core.hooks.register(
     "enrichContext",
-    async ({ context, meta, nodeId, sessionId, dumpMode }) => {
-      const data = meta?.["code-workspace"] || null;
-      // Note: we do NOT return when data is null. Freshly-created tree
-      // roots have no code-workspace metadata until the first file
+    async ({ context, meta, nodeId, sessionId, dumpMode, rootId }) => {
+      const cwData = meta?.["code-workspace"] || null;
+      const swData = meta?.["swarm"] || null;
+      // Note: we do NOT return when namespaces are missing. Freshly-created
+      // tree roots have no code-workspace metadata until the first file
       // write auto-initializes them, but the AI's turn-1 system prompt
       // still needs localView + nodePlan injection so the
-      // compoundBranches and nodePlan facets fire. We only skip the
-      // project/branch specific sections further down when data is
-      // absent.
+      // compoundBranches and nodePlan facets fire.
 
       // Active cascade watcher registration. When the AI's session
       // enriches context for a project or branch node, we treat that
       // as "session is working here" and register it as a watcher
-      // so cross-session signals can find it. Skipped when called
-      // via dumpContextForSession (dumpMode=true) so inspection
-      // doesn't register fake watchers.
-      if (data && sessionId && !dumpMode && (data.role === "project" || data.role === "branch")) {
+      // so cross-session signals can find it.
+      const role = swData?.role;
+      if (sessionId && !dumpMode && (role === "project" || role === "branch")) {
         try {
-          const projectId = data.role === "project"
+          const projectId = role === "project"
             ? String(nodeId)
-            : (data.parentProjectId || null);
+            : (swData?.parentProjectId || null);
           registerWatcher(sessionId, nodeId, projectId);
         } catch (err) {
           log.debug("CodeWorkspace", `registerWatcher failed: ${err.message}`);
@@ -520,24 +671,15 @@ export async function init(core) {
           readNodePlanSteps(nodeId),
           readNodeStepRollup(nodeId),
           readPlanDrift(nodeId),
-          // Fall back to the raw node name when code-workspace metadata
-          // doesn't exist yet (fresh uninitialized project root).
           (async () => {
             const N = (await import("../../seed/models/node.js")).default;
             return N.findById(nodeId).select("name").lean();
           })(),
         ]);
-        // ALWAYS inject nodePlan so the facet fires on every workspace
-        // turn — even when the plan is empty. An empty plan block is
-        // how the AI learns "you need to set a plan first". If we only
-        // injected when a plan existed, a fresh project would never
-        // see the nodePlan facet and would start writing files without
-        // planning. That was the bug on the snake build: turn 1 had no
-        // facets because context.nodePlan was gated on hasLocal.
         context.nodePlan = formatNodePlan({
           steps: localSteps || [],
           rollup,
-          nodeName: data?.name || nodeDoc?.name || null,
+          nodeName: cwData?.name || nodeDoc?.name || null,
           drift,
         });
       } catch (err) {
@@ -549,17 +691,16 @@ export async function init(core) {
       // write that targets a DIFFERENT file. Surface the block in
       // the system prompt BEFORE the AI composes the next file, so
       // it never wastes tokens generating content that will be
-      // rejected at submit time. Walks up to the project root once
-      // to find the one checked against the write gate.
+      // rejected at submit time.
       try {
-        const { findProjectForNode } = await import("./swarmEvents.js");
-        const projectNode = data?.role === "project"
-          ? { _id: nodeId, name: data?.name || null }
-          : await findProjectForNode(nodeId);
+        const sw = await swarm();
+        const projectNode = role === "project"
+          ? { _id: nodeId, name: cwData?.name || null }
+          : (sw?.findProjectForNode ? await sw.findProjectForNode(nodeId) : null);
         if (projectNode?._id) {
           const blocker = await findBlockingSyntaxError({
             projectNodeId: projectNode._id,
-            targetFilePath: null, // we want "is ANY file broken?"
+            targetFilePath: null,
           });
           if (blocker) {
             const errFile = blocker?.payload?.file || blocker?.filePath;
@@ -577,25 +718,19 @@ export async function init(core) {
       }
 
       // Declared contracts. The architect publishes them on the
-      // project root via setProjectContracts when it emits a
+      // project root via swarm.setContracts when it emits a
       // [[CONTRACTS]] block alongside [[BRANCHES]]. Every branch's
-      // session walks to its project root and picks them up here, so
-      // the system prompt at every branch position has the exact wire
-      // protocol the architect designed. Branches implement the
-      // declared types; the post-swarm conformance check flags any
-      // branch that sends/receives a type not in the contracts.
+      // session picks them up here.
       try {
-        // Try from the current node first (walks ancestor chain),
-        // then fall back to rootId directly. Branch nodes created
-        // by the swarm may not have their parent set to the project
-        // root, so the ancestor walk returns null. rootId is the
-        // tree root, which IS the project root for code-workspace.
-        let contracts = await readProjectContracts(nodeId);
-        if (!contracts && rootId && rootId !== nodeId) {
-          contracts = await readProjectContracts(rootId);
-        }
-        if (Array.isArray(contracts) && contracts.length > 0) {
-          context.declaredContracts = contracts;
+        const sw = await swarm();
+        if (sw?.readContracts) {
+          let contracts = await sw.readContracts(nodeId);
+          if (!contracts && rootId && rootId !== nodeId) {
+            contracts = await sw.readContracts(rootId);
+          }
+          if (Array.isArray(contracts) && contracts.length > 0) {
+            context.declaredContracts = contracts;
+          }
         }
       } catch (err) {
         log.debug("CodeWorkspace", `declaredContracts injection skipped: ${err.message}`);
@@ -649,48 +784,39 @@ export async function init(core) {
         log.debug("CodeWorkspace", `position/spec/plan skipped: ${err.message}`);
       }
 
-      if (data && (data.role === "project" || data.role === "branch")) {
-        const levelName = data.role === "project" ? (data.name || "project") : null;
-        context.workspace = data.role === "project"
-          ? {
-              name: data.name || null,
-              workspacePath: data.workspacePath || null,
-              initialized: !!data.initialized,
-              task: data.systemSpec || null,
-            }
-          : undefined;
-
-        if (data.role === "branch") {
-          context.swarmBranch = {
-            systemSpec: data.systemSpec || data.spec || null,
-            path: data.path || null,
-            files: data.files || [],
-            status: data.status || "pending",
-            parentBranch: data.parentBranch || null,
+      if (role === "project" || role === "branch") {
+        const levelName = role === "project" ? (cwData?.name || swData?.name || null) : null;
+        if (role === "project") {
+          context.workspace = {
+            name: cwData?.name || null,
+            workspacePath: cwData?.workspacePath || null,
+            initialized: !!cwData?.initialized,
+            task: swData?.systemSpec || null,
           };
         }
 
-        // Aggregated detail — what's rolled up under this level. Works
-        // identically at project and branch levels thanks to self-similar
-        // storage. At root = everything. At a branch = everything below
-        // this branch. Nothing if nothing's written yet.
+        if (role === "branch") {
+          context.swarmBranch = {
+            systemSpec: swData?.systemSpec || swData?.spec || null,
+            path: swData?.path || null,
+            files: swData?.files || [],
+            status: swData?.status || "pending",
+            parentBranch: swData?.parentBranch || null,
+          };
+        }
+
+        // Aggregated detail — what's rolled up under this level. Read
+        // from swarm's aggregatedDetail at the current node.
         const aggFormatted = formatAggregatedDetail(
-          data.aggregatedDetail,
+          swData?.aggregatedDetail,
           levelName,
         );
         if (aggFormatted) context.swarmAggregated = aggFormatted;
 
         // Cascaded context — lateral signals this level received from
-        // siblings (the perspective filter decided what was worth
-        // propagating). Key to solving the seam problem: frontend sees
-        // backend's actual routes, not assumed ones.
-        //
-        // Active cascade: partition signals by the session's watermark.
-        // Signals that arrived AFTER the session's last enrichContext
-        // run render as a prominent "🔔 NEW SIGNALS" banner at the top
-        // of the AI's context. Older signals render normally below.
-        // Watermark advances AFTER rendering so a mid-turn crash
-        // doesn't silently drop fresh signals.
+        // siblings. Active cascade: partition by session watermark so
+        // signals that arrived AFTER the session's last render show up
+        // as a prominent "🔔 NEW SIGNALS" banner.
         let sessionWatermark = null;
         let sessionPrevMeta = null;
         if (sessionId) {
@@ -701,17 +827,15 @@ export async function init(core) {
             sessionWatermark = sessionPrevMeta?.lastSeenCascadedAt || null;
           } catch {}
         }
-        const { fresh, seen } = partitionCascaded(data.signalInbox, sessionWatermark);
+        const inbox = Array.isArray(swData?.inbox) ? swData.inbox : [];
+        const { fresh, seen } = partitionCascaded(inbox, sessionWatermark);
         const freshBanner = formatFreshBanner(fresh);
         if (freshBanner) context.swarmFreshSignals = freshBanner;
         const signalsFormatted = formatSignalInbox(seen);
         if (signalsFormatted) context.swarmLateralSignals = signalsFormatted;
 
-        // Advance the watermark now that rendering succeeded — but ONLY
-        // when not in dump mode. dumpContextForSession is read-only:
-        // the operator inspecting context must not "consume" fresh
-        // signals and hide them from the next real turn.
-        if (sessionId && !dumpMode && Array.isArray(data.signalInbox) && data.signalInbox.length > 0) {
+        // Advance the watermark after rendering — but only outside dump mode.
+        if (sessionId && !dumpMode && inbox.length > 0) {
           try {
             const { updateSessionMeta } = await import("../../seed/ws/sessionRegistry.js");
             updateSessionMeta(sessionId, {
@@ -727,37 +851,48 @@ export async function init(core) {
           }
         }
 
-        // Declared contracts — shared truth between branches. Only
-        // rendered at branch level (the project root already has other
-        // context) and only for branches that might be consuming the
-        // contracts (i.e., anything that writes frontend-style fetch
-        // calls or another backend route for the same project). We
-        // err on the side of ALWAYS showing to any working branch so
-        // the model has no excuse to invent field names.
-        if (data.role === "branch") {
+        // Declared contracts — shared truth between branches. Rendered at
+        // branch level so the model has no excuse to invent field names.
+        if (role === "branch") {
           try {
-            const { default: NodeModel } = await import("../../seed/models/node.js");
-            const cur = await NodeModel.findById(nodeId).select("metadata").lean();
-            const curMeta = cur?.metadata instanceof Map
-              ? cur.metadata.get("code-workspace")
-              : cur?.metadata?.["code-workspace"];
-            const projectId = curMeta?.parentProjectId;
-            if (projectId) {
-              const contracts = await readContracts(projectId);
+            const sw = await swarm();
+            const projectId = swData?.parentProjectId;
+            if (projectId && sw?.readContracts) {
+              const contracts = await sw.readContracts(projectId);
               const formatted = formatContracts(contracts);
               if (formatted) context.swarmContracts = formatted;
             }
           } catch (err) {
             log.debug("CodeWorkspace", `contract enrichContext skipped: ${err.message}`);
           }
+
+          // Sibling branches — read-only visibility into what the other
+          // parallel branches have actually written. Stops the class of
+          // bugs where each branch invents interfaces its siblings don't
+          // implement.
+          try {
+            const sw = await swarm();
+            if (sw?.readSiblingBranches) {
+              const siblings = await sw.readSiblingBranches(nodeId, {
+                includeNotes: true,
+                maxNoteLength: 1200,
+                maxDescendants: 40,
+              });
+              if (Array.isArray(siblings) && siblings.length > 0) {
+                context.siblingBranches = siblings;
+              }
+            }
+          } catch (err) {
+            log.debug("CodeWorkspace", `sibling enrichContext skipped: ${err.message}`);
+          }
         }
 
-        // Sub-plan — the decomposition beneath this level. Shows which
-        // children are done/running/pending so the model at this level
-        // knows what's in flight.
-        if (data.subPlan?.branches?.length > 0) {
+        // Sub-plan — the decomposition beneath this level. Read from
+        // swarm's subPlan.branches.
+        const subBranches = swData?.subPlan?.branches;
+        if (Array.isArray(subBranches) && subBranches.length > 0) {
           const lines = ["Direct sub-branches under this level:"];
-          for (const b of data.subPlan.branches.slice(0, 20)) {
+          for (const b of subBranches.slice(0, 20)) {
             const icon =
               b.status === "done" ? "✓" :
               b.status === "failed" ? "✗" :
@@ -766,16 +901,16 @@ export async function init(core) {
           }
           context.swarmSubPlan = lines.join("\n");
         }
-      } else if (data && data.role === "file") {
+      } else if (cwData?.role === "file") {
         context.code = {
           role: "file",
-          filePath: data.filePath || null,
-          language: data.language || null,
+          filePath: cwData.filePath || null,
+          language: cwData.language || null,
         };
-      } else if (data && data.role === "directory") {
+      } else if (cwData?.role === "directory") {
         context.code = {
           role: "directory",
-          filePath: data.filePath || null,
+          filePath: cwData.filePath || null,
         };
       }
     },
@@ -792,7 +927,9 @@ export async function init(core) {
       if (contentType !== "text") return;
       if (!nodeId) return;
       try {
-        const found = await findBranchContext(nodeId);
+        const sw = await swarm();
+        if (!sw?.findBranchContext) return;
+        const found = await sw.findBranchContext(nodeId);
         if (!found) return;
         const { branchNode, projectNode } = found;
 
@@ -803,10 +940,9 @@ export async function init(core) {
           : fileNode?.metadata?.["code-workspace"];
         const filePath = fileMeta?.filePath || fileNode?.name || String(nodeId);
 
-        // Keep the flat event log on the project root for the dashboard
-        // and the history view.
+        // Flat event log on the project root for the dashboard / history.
         const summary = summarizeWrite(note?.content || "");
-        await recordSwarmEvent({
+        await sw.recordEvent({
           projectNodeId: projectNode._id,
           event: {
             branchName: branchNode?.name || null,
@@ -816,6 +952,7 @@ export async function init(core) {
             summary,
           },
           core,
+          summaryTier,
         });
 
         // Roll the delta up the ancestor chain. Every branch and the
@@ -824,7 +961,7 @@ export async function init(core) {
           filePath,
           content: note?.content || "",
         });
-        await rollUpDetail({
+        await sw.rollUpDetail({
           fromNodeId: nodeId,
           delta: {
             filesWrittenDelta: 1,
@@ -834,16 +971,16 @@ export async function init(core) {
           core,
         });
 
-        // Lateral propagation: if the write is contract-affecting AND the
+        // Lateral propagation: if the write is contract-affecting and the
         // file sits inside a branch, fan the signals to that branch's
         // siblings so their next session sees them in their inbox.
         let siblingCountForCascade = 0;
         if (classification.isContract && branchNode && classification.signals.length > 0) {
-          const siblings = await findBranchSiblings(branchNode._id);
+          const siblings = await sw.findBranchSiblings(branchNode._id);
           siblingCountForCascade = siblings.length;
           if (siblings.length > 0) {
             for (const sib of siblings) {
-              await appendSignalInbox({
+              await sw.appendSignal({
                 nodeId: sib._id,
                 signal: {
                   from: branchNode.name,
@@ -853,19 +990,11 @@ export async function init(core) {
                 },
                 core,
               });
-              // Mark the sibling's plan as potentially stale — their
-              // checklist may reference the old shape of this contract.
-              // The marker is cleared the next time the sibling touches
-              // its plan (set/add/check), so drift doesn't linger after
-              // an acknowledged replan.
               await markPlanDrift({
                 nodeId: sib._id,
                 reason: `${branchNode.name} updated ${filePath}`,
                 core,
               });
-              // Active cascade: wake any running session watching this
-              // sibling (or its ancestors) so they see the new contract
-              // signal in their NEXT turn's fresh banner.
               await notifySignal(sib._id, { reason: "contract cascade" });
             }
             log.info(
@@ -876,14 +1005,7 @@ export async function init(core) {
         }
 
         // Fire a kernel-level cascade record so the Flow dashboard shows
-        // code-workspace activity alongside every other extension's
-        // events. The sibling fan-out above is a private per-node AI
-        // inbox (code-workspace's signalInbox), but operators watching
-        // the Flow dashboard want to see "backend wrote room.js, 3
-        // contracts, fanned to 16 siblings" as a global event. One
-        // checkCascade call at the project root per file write does
-        // that. The project root is cascade-enabled by initProject, so
-        // the kernel onCascade hook + .flow write path is ready.
+        // code-workspace activity alongside every other extension's events.
         if (projectNode?._id) {
           try {
             const { checkCascade } = await import("../../seed/tree/cascade.js");
@@ -901,23 +1023,10 @@ export async function init(core) {
           }
         }
 
-        // Syntax validation. Run AFTER the perspective filter + rollup +
-        // lateral propagation so we don't block cascade work on a
-        // validator hiccup. Uses the raw note.content from memory — the
-        // exact bytes the model just wrote, not a re-read from disk.
-        //
-        // Runs for ANY file write inside a project, whether or not the
-        // file sits under a branch node. Previously this was gated on
-        // `branchNode` which meant files written at the project root
-        // (by a non-swarm plan-mode call, or by a swarm write whose
-        // tree position was at the root) bypassed syntax validation
-        // entirely — resulting in hard parse errors surviving to the
-        // preview spawner. The signal is attached to the branch when
-        // one exists (so the retry loop picks it up); otherwise it
-        // attaches to the project root.
-        //
-        // On success: prune any prior syntax-error signals for this
-        // file from wherever they live.
+        // Syntax validation. Runs for ANY file write inside a project.
+        // Signal attaches to the branch when one exists (retry loop picks
+        // it up); otherwise attaches to the project root. On success,
+        // prunes any prior syntax-error signals for this file.
         const signalTargetId = branchNode?._id || projectNode?._id;
         if (signalTargetId && note?.content != null) {
           try {
@@ -925,10 +1034,6 @@ export async function init(core) {
               filePath,
               content: note.content,
             });
-            // Surface _skipped at INFO so a silent miss is visible
-            // without running at debug level. _skipped means the
-            // validator couldn't run (timeout, spawn error) and fell
-            // open to "valid" — which is dangerous.
             if (validation._skipped) {
               log.warn(
                 "CodeWorkspace",
@@ -936,7 +1041,7 @@ export async function init(core) {
               );
             }
             if (!validation.ok && validation.error) {
-              await appendSignalInbox({
+              await sw.appendSignal({
                 nodeId: signalTargetId,
                 signal: {
                   from: branchNode?.name || projectNode?.name || "project",
@@ -952,8 +1057,6 @@ export async function init(core) {
                 `🔴 Syntax error in ${filePath} (line ${validation.error.line}): ${validation.error.message}`,
               );
             } else if (validation.ok && !validation._skipped) {
-              // File parses cleanly — if any prior errors for this file
-              // are in signalInbox, prune them. They're resolved.
               await pruneSignalInboxForFile({
                 nodeId: signalTargetId,
                 filePath,
@@ -965,11 +1068,8 @@ export async function init(core) {
           }
         }
 
-        // Dead-receiver detection (phase 4a). Runs only on JS files.
-        // Only fires when the file PARSES — running on broken syntax
-        // would just produce noise (the receiver patterns lean on
-        // well-formed regions). Targets the same node as syntax
-        // signals (branch if available, else project root).
+        // Dead-receiver detection (phase 4a). Only fires when the file
+        // PARSES — running on broken syntax would just produce noise.
         if (signalTargetId && note?.content && /\.[cm]?js$/.test(filePath)) {
           try {
             const drResult = detectDeadReceivers({
@@ -978,7 +1078,7 @@ export async function init(core) {
             });
             if (drResult.issues.length > 0) {
               for (const issue of drResult.issues) {
-                await appendSignalInbox({
+                await sw.appendSignal({
                   nodeId: signalTargetId,
                   signal: {
                     from: branchNode?.name || projectNode?.name || "project",
@@ -1000,29 +1100,13 @@ export async function init(core) {
           }
         }
 
-        // Phase 2 contract extraction + diff.
-        //
-        // Two paths:
-        //
-        // 1. Backend path: the file looks like a route file. Extract
-        //    contracts (endpoint, method, request body, response shape),
-        //    replace any prior contracts from this same source file on
-        //    the project root, emit CONTRACT signals to siblings.
-        //
-        // 2. Frontend path: the file has fetch() calls. Extract the
-        //    expected request/response shapes, diff against existing
-        //    contracts on the project root, emit CONTRACT_MISMATCH
-        //    signals per field disagreement to this branch's own
-        //    signalInbox (so the retry loop fixes the frontend).
-        //
-        // A file may legitimately be both (e.g. a Next.js page that
-        // defines an API route and calls fetch elsewhere). We run both
-        // extractors and merge.
+        // Phase 2 contract extraction + diff. Backend writes declare
+        // contracts on the project root; frontend writes diff their fetch
+        // expectations against declared contracts and emit mismatches.
         if (projectNode && note?.content) {
           try {
             const fileContent = note.content;
 
-            // Path 1: backend contract extraction
             const backendResult = extractBackendContracts({
               filePath,
               content: fileContent,
@@ -1042,12 +1126,10 @@ export async function init(core) {
                   `📜 Contracts from ${filePath}: +${added} −${removed} Δ${changed}`,
                 );
               }
-              // Also cascade a CONTRACT signal to siblings so they know
-              // something changed on this endpoint surface
               if (branchNode) {
-                const siblings = await findBranchSiblings(branchNode._id);
+                const siblings = await sw.findBranchSiblings(branchNode._id);
                 for (const sib of siblings) {
-                  await appendSignalInbox({
+                  await sw.appendSignal({
                     nodeId: sib._id,
                     signal: {
                       from: branchNode.name,
@@ -1062,17 +1144,13 @@ export async function init(core) {
               }
             }
 
-            // Path 2: frontend expectation diff
             const frontendResult = extractFrontendExpectations({
               filePath,
               content: fileContent,
             });
             if (frontendResult.expectations.length > 0 && branchNode) {
-              const existingContracts = await readContracts(projectNode._id);
-              if (existingContracts.length > 0) {
-                // Clear any stale mismatches for this file before
-                // re-diffing — a rewrite may have resolved them.
-                const { pruneContractMismatchesForFile } = await import("./swarmEvents.js");
+              const existingContracts = await sw.readContracts(projectNode._id);
+              if (Array.isArray(existingContracts) && existingContracts.length > 0) {
                 await pruneContractMismatchesForFile({
                   nodeId: branchNode._id,
                   filePath,
@@ -1091,10 +1169,6 @@ export async function init(core) {
                 }
                 if (allMismatches.length > 0) {
                   for (const mm of allMismatches) {
-                    // Flatten the payload: extract only scalar fields from the
-                    // nested `contract` and `expectation` sub-objects so the
-                    // signal stays at depth 4 within the metadata namespace.
-                    // renderFieldMismatch in swarmEvents.js reads these flat keys.
                     const flatPayload = {
                       kind: mm.kind,
                       severity: mm.severity,
@@ -1109,7 +1183,7 @@ export async function init(core) {
                       expectationSourceFile: mm.expectation?.sourceFile ?? null,
                       expectationSourceLine: mm.expectation?.sourceLine ?? null,
                     };
-                    await appendSignalInbox({
+                    await sw.appendSignal({
                       nodeId: branchNode._id,
                       signal: {
                         from: branchNode.name,
@@ -1210,6 +1284,404 @@ export async function init(core) {
       } catch (err) {
         log.error("CodeWorkspace", `.source boot ingest failed: ${err.message}`);
         log.error("CodeWorkspace", err.stack?.split("\n").slice(0, 5).join("\n"));
+      }
+    },
+    "code-workspace",
+  );
+
+  // ── Swarm hook handlers ──────────────────────────────────────────
+  //
+  // When swarm spins up a project or finishes branch work, code-workspace
+  // runs its own domain-specific concerns: filesystem workspace init,
+  // per-branch smoke, cross-branch integration/conformance/ws-seam checks,
+  // behavioral tests, and the plan.md projection. All of it reacts to
+  // swarm's mechanism via these three hooks.
+
+  // swarm:afterProjectInit — code-workspace claims this project and
+  // creates the filesystem workspace directory. Swarm stamps role=project
+  // in its own namespace before firing; we layer our workspace data on top.
+  core.hooks.register(
+    "swarm:afterProjectInit",
+    async ({ projectNode, owner }) => {
+      if (!projectNode?._id) return;
+      try {
+        await initProject({
+          projectNodeId: projectNode._id,
+          name: projectNode.name || null,
+          userId: owner?.userId || null,
+          core,
+        });
+      } catch (err) {
+        log.warn("CodeWorkspace", `swarm:afterProjectInit initProject failed: ${err.message}`);
+      }
+    },
+    "code-workspace",
+  );
+
+  // swarm:afterBranchComplete — after each branch lands cleanly, run the
+  // runtime smoke test on its path. Failure flips the result to failed
+  // so swarm re-runs retry with the fresh RUNTIME_ERROR signals in the
+  // branch's inbox.
+  core.hooks.register(
+    "swarm:afterBranchComplete",
+    async ({ branchNode, rootProjectNode, branch, result }) => {
+      if (!rootProjectNode?._id || !branch?.path) return;
+      if (result?.status !== "done") return;
+      try {
+        const projectDoc = await (await import("../../seed/models/node.js")).default
+          .findById(rootProjectNode._id);
+        if (!projectDoc) return;
+        const workspaceRoot = getWorkspacePath(projectDoc);
+        const smoke = await smokeBranch({
+          workspaceRoot,
+          branchPath: branch.path,
+          branchName: result?.name || branch.name,
+        });
+        if (smoke.skipped) {
+          log.debug("CodeWorkspace", `Smoke skipped for ${branch.name}: ${smoke.reason}`);
+          return;
+        }
+        if (smoke.ok) return;
+        log.warn("CodeWorkspace",
+          `💥 Branch "${branch.name}" passed syntax but failed smoke: ${smoke.errors[0]?.message || "(unknown)"}`,
+        );
+        const sw = await swarm();
+        if (sw?.appendSignal && branchNode?._id) {
+          for (const err of smoke.errors) {
+            await sw.appendSignal({
+              nodeId: branchNode._id,
+              signal: {
+                from: branch.name,
+                kind: SIGNAL_KIND.RUNTIME_ERROR,
+                filePath: err.file,
+                payload: err,
+              },
+              core,
+            });
+          }
+        }
+        const errSummary = smoke.errors
+          .slice(0, 3)
+          .map((e) => `${e.file}:${e.line} ${e.message}`)
+          .join("; ");
+        result.status = "failed";
+        result.error = `smoke: ${errSummary}`;
+      } catch (err) {
+        log.warn("CodeWorkspace", `swarm:afterBranchComplete smoke crashed: ${err.message}`);
+      }
+    },
+    "code-workspace",
+  );
+
+  // swarm:afterAllBranchesComplete — cross-branch validations run once
+  // after all branch sessions terminate. Integration smoke probes the
+  // HTTP seams, contract conformance flags branches that violate declared
+  // contracts, WS seam statically checks the websocket protocol, and
+  // behavioral tests exercise tests/spec.test.js. Flipping a result's
+  // status to "failed" triggers swarm's retry pass.
+  core.hooks.register(
+    "swarm:afterAllBranchesComplete",
+    async ({ rootProjectNode, results, branches, signal }) => {
+      if (!rootProjectNode?._id) return;
+      if (signal?.aborted) return;
+
+      const NodeModel = (await import("../../seed/models/node.js")).default;
+      const projectDoc = await NodeModel.findById(rootProjectNode._id);
+      if (!projectDoc) return;
+      const workspaceRoot = getWorkspacePath(projectDoc);
+      const sw = await swarm();
+
+      const branchNodeByName = new Map();
+      try {
+        if (sw?.readSubPlan) {
+          const rootSubPlan = await sw.readSubPlan(rootProjectNode._id);
+          if (rootSubPlan?.branches) {
+            for (const b of rootSubPlan.branches) {
+              if (b.nodeId && b.name) branchNodeByName.set(b.name, b.nodeId);
+            }
+          }
+        }
+      } catch {}
+
+      const allDone = results.every((r) => r.status === "done");
+
+      // Integration smoke — HTTP seam verification
+      if (allDone && results.length >= 2) {
+        try {
+          const integration = await smokeIntegration({
+            workspaceRoot,
+            branches: results.map((r) => {
+              const original = branches.find((b) => b.name === r.rawName);
+              return { name: r.name, path: original?.path || null, status: r.status };
+            }),
+          });
+          if (integration.skipped) {
+            log.info("CodeWorkspace", `Integration smoke skipped: ${integration.reason}`);
+          } else if (!integration.ok) {
+            log.warn("CodeWorkspace",
+              `🔗 Integration smoke found ${integration.mismatches.length} mismatch(es) — surfacing to operator`);
+            if (sw?.appendSignal) {
+              for (const mm of integration.mismatches) {
+                await sw.appendSignal({
+                  nodeId: rootProjectNode._id,
+                  signal: {
+                    from: mm.from || "integration",
+                    kind: SIGNAL_KIND.CONTRACT_MISMATCH,
+                    filePath: null,
+                    payload: mm,
+                  },
+                  core,
+                });
+              }
+            }
+          } else {
+            log.info("CodeWorkspace",
+              `✅ Integration smoke passed: ${integration.probed || 0} endpoint(s) verified`);
+          }
+        } catch (err) {
+          log.warn("CodeWorkspace", `Integration smoke crashed (non-blocking): ${err.message}`);
+        }
+      }
+
+      // Contract conformance — branches must match declared contracts
+      if (allDone && results.length >= 2) {
+        try {
+          const declared = sw?.readContracts ? await sw.readContracts(rootProjectNode._id) : null;
+          if (declared && declared.length > 0) {
+            const conform = await checkContractConformance({
+              workspaceRoot,
+              branches: results.map((r) => {
+                const original = branches.find((b) => b.name === r.rawName);
+                return { name: r.name, path: original?.path || null, status: r.status };
+              }),
+              contracts: declared,
+            });
+            if (conform.skipped) {
+              log.info("CodeWorkspace", `Contract conformance skipped: ${conform.reason}`);
+            } else if (!conform.ok) {
+              log.warn("CodeWorkspace",
+                `📜 Contract conformance: ${conform.violations.length} violation(s) — flipping branches for retry`);
+              const failedNames = new Set();
+              for (const v of conform.violations) {
+                const target = branchNodeByName.get(v.branch);
+                const targets = new Set([target, String(rootProjectNode._id)].filter(Boolean));
+                if (sw?.appendSignal) {
+                  for (const nodeId of targets) {
+                    await sw.appendSignal({
+                      nodeId,
+                      signal: {
+                        from: "contract-conformance",
+                        kind: SIGNAL_KIND.CONTRACT_MISMATCH,
+                        filePath: v.file || null,
+                        payload: {
+                          kind: v.kind,
+                          branch: v.branch,
+                          type: v.type,
+                          field: v.field || null,
+                          declaredTypes: v.declaredTypes ? v.declaredTypes.join(",") : null,
+                          declaredFields: v.declaredFields ? v.declaredFields.join(",") : null,
+                          message: v.message,
+                        },
+                      },
+                      core,
+                    });
+                  }
+                }
+                failedNames.add(v.branch);
+              }
+              for (const name of failedNames) {
+                const r = results.find((x) => x.rawName === name);
+                if (r) {
+                  r.status = "failed";
+                  r.error = "Contract violation (see signalInbox)";
+                }
+              }
+            } else {
+              log.info("CodeWorkspace",
+                `✅ Contract conformance passed: all ${declared.length} declared contract(s) satisfied across branches`);
+            }
+          }
+        } catch (err) {
+          log.warn("CodeWorkspace", `Contract conformance crashed (non-blocking): ${err.message}`);
+        }
+      }
+
+      // WS seam — static analysis of the WebSocket protocol between
+      // server and client branches
+      if (allDone && results.length >= 2) {
+        try {
+          const wsSeam = await smokeWsSeam({
+            workspaceRoot,
+            branches: results.map((r) => {
+              const original = branches.find((b) => b.name === r.rawName);
+              return { name: r.name, path: original?.path || null, status: r.status };
+            }),
+          });
+          if (wsSeam.skipped) {
+            log.info("CodeWorkspace", `WS seam check skipped: ${wsSeam.reason}`);
+          } else if (!wsSeam.ok) {
+            log.warn("CodeWorkspace",
+              `🔗 WS seam: ${wsSeam.mismatches.length} mismatch(es) — propagating signals to involved branches`);
+            for (const mm of wsSeam.mismatches) {
+              const producerId = branchNodeByName.get(mm.fromBranch);
+              const consumerId = branchNodeByName.get(mm.toBranch);
+              const targets = new Set([producerId, consumerId].filter(Boolean));
+              targets.add(String(rootProjectNode._id));
+              if (sw?.appendSignal) {
+                for (const targetNodeId of targets) {
+                  await sw.appendSignal({
+                    nodeId: targetNodeId,
+                    signal: {
+                      from: "ws-seam",
+                      kind: SIGNAL_KIND.CONTRACT_MISMATCH,
+                      filePath: mm.evidence?.clientFile || mm.evidence?.serverFile || null,
+                      payload: {
+                        kind: mm.kind,
+                        direction: mm.direction,
+                        type: mm.type,
+                        field: mm.field || null,
+                        fromBranch: mm.fromBranch,
+                        toBranch: mm.toBranch,
+                        message: mm.message,
+                      },
+                    },
+                    core,
+                  });
+                }
+              }
+            }
+            const failedNames = new Set();
+            for (const mm of wsSeam.mismatches) {
+              failedNames.add(mm.fromBranch);
+              failedNames.add(mm.toBranch);
+            }
+            for (const name of failedNames) {
+              const r = results.find((x) => x.rawName === name);
+              if (r) {
+                r.status = "failed";
+                r.error = "WS seam mismatch (see signalInbox)";
+              }
+            }
+          } else {
+            log.info("CodeWorkspace",
+              `✅ WS seam passed: ${wsSeam.stats?.clientSends || 0} client sends, ` +
+              `${wsSeam.stats?.serverBroadcasts || 0} server broadcasts, ` +
+              `${wsSeam.stats?.fieldReads || 0} field reads all matched`);
+          }
+        } catch (err) {
+          log.warn("CodeWorkspace", `WS seam check crashed (non-blocking): ${err.message}`);
+        }
+      }
+
+      // Symbol coherence scout — pure static analysis looking for
+      // cross-file import/export mismatches the wire-protocol validators
+      // don't catch. The PolyPong-class bug: sibling exports fetchUser,
+      // another branch imports getUser. No syntax error, no test failure,
+      // just an undefined reference waiting to surface at runtime.
+      // Runs whenever we have at least two branches (single-branch
+      // projects don't have cross-branch gaps worth hunting).
+      if (results.length >= 2) {
+        try {
+          const scout = await checkSymbolCoherence({
+            workspaceRoot,
+            branches: results.map((r) => {
+              const original = branches.find((b) => b.name === r.rawName);
+              return { name: r.name, path: original?.path || null };
+            }),
+          });
+          if (scout.skipped) {
+            log.info("CodeWorkspace", `Symbol coherence scout skipped: ${scout.reason}`);
+          } else if (!scout.ok) {
+            log.warn("CodeWorkspace",
+              `🔍 Symbol coherence: ${scout.gaps.length} gap(s) across ${scout.scanned} files`);
+            if (sw?.appendSignal) {
+              // Route each gap to the importing branch so the worker at
+              // THAT branch sees the mismatch on its next turn.
+              const branchNodeByName = new Map();
+              for (const b of results) {
+                const orig = branches.find((bb) => bb.name === b.rawName);
+                if (orig?.nodeId) branchNodeByName.set(b.rawName, orig.nodeId);
+              }
+              const subPlan = sw?.readSubPlan ? await sw.readSubPlan(rootProjectNode._id) : null;
+              for (const b of subPlan?.branches || []) {
+                if (b.nodeId && b.name) branchNodeByName.set(b.name, b.nodeId);
+              }
+              for (const gap of scout.gaps) {
+                const target = branchNodeByName.get(gap.branch) || String(rootProjectNode._id);
+                await sw.appendSignal({
+                  nodeId: target,
+                  signal: {
+                    from: "symbol-coherence",
+                    kind: SIGNAL_KIND.COHERENCE_GAP,
+                    filePath: gap.file,
+                    payload: gap,
+                  },
+                  core,
+                });
+              }
+            }
+          } else {
+            log.info("CodeWorkspace",
+              `✅ Symbol coherence passed: ${scout.scanned} files, zero cross-file gaps`);
+          }
+        } catch (err) {
+          log.warn("CodeWorkspace", `Symbol coherence scout crashed (non-blocking): ${err.message}`);
+        }
+      }
+
+      // Behavioral test gate — run tests/spec.test.js if present
+      if (allDone && results.length >= 1) {
+        try {
+          const testRun = await runBehavioralTests({
+            workspaceRoot,
+            projectNode: projectDoc,
+            core,
+          });
+          if (testRun.skipped) {
+            log.info("CodeWorkspace", `Behavioral test gate skipped: ${testRun.reason}`);
+          } else if (!testRun.ok) {
+            log.warn("CodeWorkspace",
+              `🧪 Behavioral tests failed: ${testRun.failures.length} failure(s) — surfacing to retry loop`);
+            if (sw?.appendSignal) {
+              for (const failure of testRun.failures) {
+                await sw.appendSignal({
+                  nodeId: rootProjectNode._id,
+                  signal: {
+                    from: "behavioral-test",
+                    kind: SIGNAL_KIND.TEST_FAILURE,
+                    filePath: failure.file || "tests/spec.test.js",
+                    payload: failure,
+                  },
+                  core,
+                });
+              }
+            }
+          } else {
+            log.info("CodeWorkspace",
+              `✅ Behavioral tests passed: ${testRun.ran || 0} test file(s)`);
+          }
+        } catch (err) {
+          log.warn("CodeWorkspace", `Behavioral test runner crashed (non-blocking): ${err.message}`);
+        }
+      }
+
+      // Plan.md projection at the project root. Reads the distributed
+      // subPlan off metadata.swarm and renders a readable tree.
+      try {
+        const userRequest = (() => {
+          const meta = projectDoc.metadata instanceof Map
+            ? projectDoc.metadata.get("swarm")
+            : projectDoc.metadata?.["swarm"];
+          return meta?.systemSpec || null;
+        })();
+        await writeSwarmPlan({
+          projectNode: projectDoc,
+          userRequest,
+          userId: null,
+          core,
+        });
+      } catch (err) {
+        log.warn("CodeWorkspace", `swarm plan.md write crashed: ${err.message}`);
       }
     },
     "code-workspace",

@@ -96,6 +96,18 @@ Six statuses: succeeded, failed, rejected, queued, partial, awaiting. None termi
 
 .flow uses daily partitions. flowMaxResultsPerDay caps growth with circular overwrite. Retention deletes entire partitions by date.
 
+## Swarm
+
+Parallel inquiry as a primitive. Compound tasks (build a project with backend and frontend, write a research paper with multiple sections, draft a book with chapters) decompose into independent branches that run in parallel and reconverge through contracts.
+
+Five phases: decompose (architect emits [[CONTRACTS]] and [[BRANCHES]]), dispatch (one AI session per branch at its own tree position with contracts injected into the prompt), build (parallel output with contract signals cascading to siblings), validate (contract conformance plus domain-specific validators via hooks), retry and converge (failed branches get one more shot with the violation signal in enrichContext).
+
+Swarm is different from the orchestrator. The orchestrator takes one natural-language request and compiles it into execution at a position: parse grammar, classify intent, pick the mode, run the continuation loop, dispatch one conversation. Swarm coordinates many orchestrator invocations in parallel. A simple request never touches swarm. A compound request passes through the orchestrator, hits the architect mode, and hands off to swarm for the parallel build.
+
+Hook lifecycle: afterContractsDeclared, onBranchStart, afterBranchFileWrite, afterBranchComplete, onSwarmComplete. Extensions subscribe without importing from each other. code-workspace ships with swarm and provides code-specific validators (syntax, smoke, integration probe, WebSocket seam, contract conformance). Future research-workspace, book-workspace, and curriculum-workspace plug in their own validators (fact-check, citation-check, consistency-check).
+
+Contracts are whatever invariant keeps parallel branches coherent. Wire message shapes for code. Terminology and citations for research. Character names and timeline for fiction. Schemas for data pipelines. Learning objectives for curriculum.
+
 ## Extensions
 
 A folder with manifest.js and index.js. The manifest declares needs (models, services, other extensions with semver). init(core) returns routes, tools, jobs, pageRouter, exports.

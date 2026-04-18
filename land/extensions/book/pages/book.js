@@ -835,6 +835,23 @@ ${bookContentStyles}
       }
     }
 
+    /* Print styles — when the user picks "Save as PDF" from the print
+       dialog the page chrome (nav, filters, TOC toggle, share buttons)
+       disappears and the content gets paper-friendly margins + chapter
+       page breaks. */
+    @media print {
+      body { background: white !important; color: black !important; }
+      .top-nav, .filters, #tocTopBtn, .nav-buttons, .nav-button { display: none !important; }
+      .content-wrapper { max-width: 100% !important; padding: 0 !important; }
+      .content { padding: 0 !important; }
+      .book-section { page-break-inside: avoid; }
+      .book-section.depth-1 { page-break-before: always; margin-top: 0; }
+      .book-section.depth-1:first-of-type { page-break-before: auto; }
+      h1, h2, h3 { page-break-after: avoid; }
+      a { color: black !important; text-decoration: none !important; }
+      @page { margin: 0.6in; }
+    }
+
 ${bookTocStyles}
   `;
 
@@ -849,6 +866,9 @@ ${bookTocStyles}
           </a>
 
         </div>
+        <button class="nav-button" onclick="window.print()" title="Use your browser's print dialog to save as PDF">
+          \ud83d\udcc4 Download as PDF
+        </button>
         <button class="nav-button" onclick="generateShare()">
           \ud83d\udd17 Generate Share Link
         </button>
@@ -1178,6 +1198,19 @@ ${bookContentStyles}
       }
     }
 
+    @media print {
+      body { background: white !important; color: black !important; }
+      .top-nav, #tocTopBtn, .nav-buttons, .nav-button { display: none !important; }
+      .content-wrapper { max-width: 100% !important; padding: 0 !important; }
+      .content { padding: 0 !important; }
+      .book-section { page-break-inside: avoid; }
+      .book-section.depth-1 { page-break-before: always; margin-top: 0; }
+      .book-section.depth-1:first-of-type { page-break-before: auto; }
+      h1, h2, h3 { page-break-after: avoid; }
+      a { color: black !important; text-decoration: none !important; }
+      @page { margin: 0.6in; }
+    }
+
 ${bookTocStyles}
 
     .share-book-title {
@@ -1248,6 +1281,7 @@ ${bookTocStyles}
     <div class="top-nav-content">
       <div class="nav-buttons">
         <a href="/" class="nav-button" onclick="event.preventDefault();window.top.location.href='/';">Home</a>
+        <button class="nav-button" onclick="window.print()" title="Use your browser's print dialog to save as PDF">\ud83d\udcc4 Download as PDF</button>
         <button class="nav-button" id="copyUrlBtn">Copy URL</button>
         <button class="nav-button" id="copyTextBtn">Copy Text</button>
         <button class="nav-button" id="toggleTitlesBtn" onclick="toggleTitles()" title="Toggle Titles">Aa</button>

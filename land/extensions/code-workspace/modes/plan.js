@@ -30,6 +30,7 @@ import localTreeView from "./facets/localTreeView.js";
 import nodePlan from "./facets/nodePlan.js";
 import blockingError from "./facets/blockingError.js";
 import declaredContracts from "./facets/declaredContracts.js";
+import siblings from "./facets/siblings.js";
 import renderEnrichedContextBlock from "./renderContext.js";
 
 const FACETS = [
@@ -41,6 +42,10 @@ const FACETS = [
   // architect's wire protocol at the top of its prompt, not buried
   // under local planning guidance.
   declaredContracts,
+  // siblings immediately after — with sibling visibility + contracts
+  // together, the branch has both the declared protocol and the actual
+  // code siblings wrote. Invented interfaces become impossible.
+  siblings,
   compoundBranches,
   localTreeView,
   nodePlan,
