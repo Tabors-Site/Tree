@@ -17,6 +17,46 @@ export async function init(core) {
     }
   }, "tree-orchestrator");
 
+  // ── Mode-list presence filter ──
+  // Seed fires `filterAvailableModes` right before emitting the
+  // mode dropdown. We use the routing index + classifier-hint
+  // metadata to drop modes whose owning extension isn't scaffolded
+  // in this tree. Baseline (treeos-base) and background-only
+  // extensions (no classifier vocab — dream, understanding, etc.)
+  // stay visible. Result: a fresh code-only tree shows just the
+  // code-workspace + baseline + background modes, not KB/Study/
+  // fitness/food/etc. that were registered globally but never
+  // instantiated here.
+  core.hooks.register("filterAvailableModes", async (payload) => {
+    try {
+      if (payload?.bigMode !== "tree" || !payload?.rootId) return;
+      const modes = Array.isArray(payload.modes) ? payload.modes : [];
+      if (modes.length === 0) return;
+
+      const { getExtension } = await import("../loader.js");
+      const { getModeOwner } = await import("../../seed/modes/registry.js");
+      const { getClassifierHintsForMode } = await import("../loader.js");
+
+      const treeIndex = getIndexForRoot(payload.rootId);
+
+      payload.modes = modes.filter((m) => {
+        const owner = getModeOwner(m.key);
+        if (!owner) return true;                     // kernel mode
+        if (owner === "treeos-base") return true;    // baseline
+        if (treeIndex && treeIndex.has(owner)) return true; // scaffolded here
+
+        // Background-only extensions (no classifier vocab) stay visible;
+        // they never compete for chat routing and are useful to invoke
+        // explicitly (dream-summary, understanding-review, etc.).
+        const hints = getClassifierHintsForMode(m.key);
+        if (!hints || hints.length === 0) return true;
+        return false;
+      });
+    } catch (err) {
+      log.debug("TreeOrchestrator", `filterAvailableModes skipped: ${err.message}`);
+    }
+  }, "tree-orchestrator");
+
   // ── Routing index: rebuild when modes change on a node ──
   core.hooks.register("afterMetadataWrite", async ({ nodeId, extName }) => {
     if (extName !== "modes") return;

@@ -112,8 +112,9 @@ how does this look, what's wrong, feedback.
         [[/PLAN]]
 
     Include ONLY high-priority items by default (max 5 lines). Each
-    line must be actionable on its own: name the file and the change.
-    Good: "server.js: change fs.writeFileSync to async fs.writeFile"
+    line must be actionable on its own: name the actual file (as it
+    appears in the project you just inspected) and the concrete change.
+    Good: "<real file from project>: change sync call to async"
     Bad:  "fix the blocking I/O issue"
     The block is stripped from the visible response; the user never
     sees the raw markers. Leave it out entirely if there's nothing to

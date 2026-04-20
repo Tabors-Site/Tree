@@ -225,7 +225,7 @@ A snake eating its own tail. Claude Code, but operated from inside the system it
 - What Is TreeOS: https://treeos.ai/what
 - Get Started: https://treeos.ai/start
 - HTML System: https://treeos.ai/html
-- Start a Land: https://treeos.ai/land
+- Start a Land: https://treeos.ai/lands
 - CLI Reference: https://treeos.ai/cli
 - TreeOS (the OS): https://treeos.ai/treeos
 - Mycelium: https://treeos.ai/mycelium

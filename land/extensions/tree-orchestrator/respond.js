@@ -14,7 +14,7 @@ function formatStepSummaries(steps) {
 }
 
 function emitStatus(socket, phase, text) {
-  socket.emit("executionStatus", { phase, text });
+  if (socket?.emit) socket.emit(WS.EXECUTION_STATUS, { phase, text });
 }
 
 export async function runRespond({
@@ -88,8 +88,16 @@ export async function runRespond({
     onToolResults(results) {
       if (signal?.aborted) return;
       for (const r of results) {
-        socket.emit(WS.TOOL_RESULT, r);
+        socket?.emit?.(WS.TOOL_RESULT, r);
       }
+    },
+    onToolCalled(call) {
+      if (signal?.aborted) return;
+      socket?.emit?.(WS.TOOL_CALLED, call);
+    },
+    onThinking(thought) {
+      if (signal?.aborted) return;
+      socket?.emit?.(WS.THINKING, thought);
     },
   });
 

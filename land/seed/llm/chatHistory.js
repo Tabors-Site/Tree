@@ -267,4 +267,83 @@ async function getNodeChats({ nodeId, sessionLimit = 10, sessionId, startDate, e
   }
 }
 
-export { getChats, getNodeChats };
+// ─────────────────────────────────────────────────────────────────────────
+// Chat-level focus view. Fetch a single chat + its descendants via
+// parentChatId BFS, plus an ancestor trail for breadcrumb rendering.
+// Shape mirrors getNodeChats so the renderer doesn't fork.
+// ─────────────────────────────────────────────────────────────────────────
+async function getChatChain(chatId, { maxDescendants = 200, maxDepth = 20, includeAncestors = true } = {}) {
+  if (!chatId) throw new Error("Missing required parameter: chatId");
+  try {
+    const focus = await Chat.findById(chatId)
+      .populate({ path: "treeContext.targetNodeId", select: "name", model: "Node" })
+      .populate({ path: "llmProvider.connectionId", select: "name model", model: "LlmConnection" })
+      .lean();
+    if (!focus) {
+      return { message: `No chat found for id ${chatId}`, sessions: [], ancestors: [] };
+    }
+
+    // Walk down via parentChatId. Cap total descendants and depth so a
+    // pathological chain never eats the request budget.
+    const collected = [focus];
+    let frontier = [String(focus._id)];
+    let depth = 0;
+    while (frontier.length > 0 && collected.length < maxDescendants && depth < maxDepth) {
+      depth++;
+      const kids = await Chat.find({ parentChatId: { $in: frontier } })
+        .populate({ path: "treeContext.targetNodeId", select: "name", model: "Node" })
+        .populate({ path: "llmProvider.connectionId", select: "name model", model: "LlmConnection" })
+        .lean();
+      if (!kids.length) break;
+      const remaining = maxDescendants - collected.length;
+      const next = kids.slice(0, remaining);
+      collected.push(...next);
+      frontier = next.map((k) => String(k._id));
+    }
+
+    // Walk up via parentChatId for breadcrumb. Stop at null or session
+    // boundary (a chat with a different sessionId is another session's
+    // root — shouldn't happen via normal dispatch but guard anyway).
+    const ancestors = [];
+    if (includeAncestors) {
+      let cursorId = focus.parentChatId ? String(focus.parentChatId) : null;
+      let hops = 0;
+      while (cursorId && hops < 20) {
+        hops++;
+        const parent = await Chat.findById(cursorId)
+          .select("_id sessionId chainIndex aiContext treeContext parentChatId startMessage endMessage dispatchOrigin")
+          .populate({ path: "treeContext.targetNodeId", select: "name", model: "Node" })
+          .lean();
+        if (!parent) break;
+        if (String(parent.sessionId) !== String(focus.sessionId)) break;
+        ancestors.unshift(parent);
+        cursorId = parent.parentChatId ? String(parent.parentChatId) : null;
+      }
+    }
+
+    await attachContributions(collected);
+
+    // The renderer's `groupIntoChains` treats a chat as the chain root
+    // only if `chainIndex === 0` OR `_id === rootChatId`. In a focused
+    // subtree the focus chat is neither — it inherited the session's
+    // original rootChatId (a user turn higher up). Rewrite rootChatId
+    // on the in-memory copies so the renderer groups the focused chain
+    // correctly: all collected chats map to focus._id, focus itself
+    // becomes the chain root. Doesn't touch DB.
+    const focusIdStr = String(focus._id);
+    for (const c of collected) {
+      c.rootChatId = focusIdStr;
+    }
+
+    return {
+      message: "AI chat chain retrieved successfully",
+      sessions: groupIntoSessions([String(focus.sessionId)], collected),
+      ancestors,
+    };
+  } catch (err) {
+    log.error("AI", "getChatChain:", err.message);
+    throw new Error(err.message || "Database error occurred while retrieving chat chain.");
+  }
+}
+
+export { getChats, getNodeChats, getChatChain };

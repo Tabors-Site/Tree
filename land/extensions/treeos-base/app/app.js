@@ -667,6 +667,38 @@ body.show-bg-messages .mobile-mode-bar {
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
     @keyframes typing { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-8px); } }
 
+    /* Live reasoning stream — same vocabulary the CLI renders. Each
+       event is one compact row inserted between the user message and
+       the typing indicator during processing. Lines stay in the
+       transcript afterward so the user can scroll back through the
+       trace. */
+    .live-line {
+      margin: 2px 0 2px 50px;
+      padding: 2px 10px;
+      font-size: 12px;
+      line-height: 1.5;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      color: rgba(255, 255, 255, 0.78);
+      animation: liveIn 0.18s ease-out;
+    }
+    .live-line b { color: rgba(255, 255, 255, 0.95); font-weight: 600; }
+    .live-dim { color: rgba(255, 255, 255, 0.5); }
+    .live-ok { color: rgba(125, 220, 155, 0.95); font-weight: 700; }
+    .live-fail { color: rgba(240, 130, 130, 0.95); font-weight: 700; }
+    .live-fail-text { color: rgba(240, 130, 130, 0.85); }
+    .live-dot { color: rgba(255, 255, 255, 0.45); }
+    .live-tc-dot { color: rgba(255, 200, 100, 0.9); font-weight: 700; }
+    .live-swarm { color: rgba(140, 180, 240, 0.95); font-weight: 700; }
+    .live-branch { color: rgba(140, 180, 240, 0.95); font-weight: 700; }
+    .live-line-intent { padding-left: 6px; }
+    .live-line-intent b { color: rgba(160, 210, 255, 0.95); }
+    .live-line-mode { padding-left: 6px; }
+    .live-line-mode b { color: rgba(160, 210, 255, 0.95); }
+    .live-line-thinking { color: rgba(210, 170, 255, 0.85); font-style: italic; }
+    .live-line-tool-call, .live-line-tool-ok, .live-line-tool-fail { padding-left: 20px; }
+    .live-line-branch-start, .live-line-branch-ok, .live-line-branch-fail { padding-left: 20px; }
+    @keyframes liveIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
+
     .chat-input-area { padding: 16px 20px 20px; border-top: 1px solid var(--glass-border-light); position: relative; z-index: 1; }
     .input-container { display: flex; align-items: flex-end; gap: 12px; padding: 14px 18px; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border: 1px solid var(--glass-border-light); border-radius: 18px; transition: all var(--transition-fast); }
     .input-container:focus-within { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.4); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1); }
@@ -2540,6 +2572,12 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
         isSending = true;
         lockModeBar(true);
       }
+      // Reset the live-event dedupe so the first mode switch /
+      // thinking line of the next turn always renders.
+      if (typeof _liveState !== "undefined") {
+        _liveState.lastMode = null;
+        _liveState.lastThinking = null;
+      }
       requestGeneration++;
       const thisGen = requestGeneration;
       updateSendButtons();
@@ -3145,8 +3183,134 @@ function injectIframeParamForwarding() {
       iframe.contentWindow?.location.reload();
     });
 
-    socket.on("toolResult", ({ tool, args, success, error }) => {
-      console.log("[socket] tool:", tool, success ? "✓" : "✗", error || "");
+    // ── Live reasoning stream (mirrors CLI liveRenderer) ─────────────
+    // The dashboard gets the same event vocabulary as the CLI: intent,
+    // mode switches, thinking prose, tool calls + results, swarm fanout,
+    // branch start/end. Lines land as compact rows between the user
+    // message and the typing indicator.
+    var _liveState = { lastMode: null, lastThinking: null };
+
+    function _liveAddLine(classSuffix, html) {
+      [chatMessages, mobileChatMessages].forEach(function(container) {
+        if (!container) return;
+        const welcome = container.querySelector(".welcome-message");
+        if (welcome) welcome.remove();
+        const typing = container.querySelector(".typing-indicator")?.closest(".message");
+        const row = document.createElement("div");
+        row.className = "live-line live-line-" + classSuffix;
+        row.innerHTML = html;
+        if (typing) container.insertBefore(row, typing);
+        else container.appendChild(row);
+        container.scrollTop = container.scrollHeight;
+      });
+    }
+
+    function _liveOneLine(s, max) {
+      if (!s) return "";
+      var flat = String(s).replace(/\\s+/g, " ").trim();
+      return flat.length <= max ? flat : flat.slice(0, max - 1) + "\\u2026";
+    }
+
+    function _liveFormatArgs(args) {
+      if (!args || typeof args !== "object") return "";
+      var keys = ["filePath", "path", "name", "query", "command", "action"];
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        if (args[k] != null && typeof args[k] !== "object") {
+          var v = String(args[k]);
+          return v.length > 60 ? v.slice(0, 57) + "\\u2026" : v;
+        }
+      }
+      return "";
+    }
+
+    // Reset dedupe state when a new chat message is about to go out
+    // (hooked from the sendChatMessage path — see _resetLiveStateForTurn()).
+    window._resetLiveStateForTurn = function() {
+      _liveState.lastMode = null;
+      _liveState.lastThinking = null;
+    };
+
+    socket.on("toolResult", function(ev) {
+      console.log("[socket] tool:", ev && ev.tool, ev && ev.success ? "\\u2713" : "\\u2717", (ev && ev.error) || "");
+      var name = ev && ev.tool ? String(ev.tool) : "?";
+      var ok = !(ev && (ev.success === false || ev.error));
+      if (ok) {
+        var preview = "";
+        if (ev && typeof ev.result === "string" && ev.result.trim()) {
+          var firstLine = ev.result.split("\\n").find(function(l) { return l.trim(); }) || "";
+          preview = _liveOneLine(firstLine, 120);
+        }
+        _liveAddLine("tool-ok",
+          '<span class="live-ok">\\u2713</span> <span class="live-dim">' + escapeHtml(name) + '</span>' +
+          (preview ? ' <span class="live-dim">\\u2014 ' + escapeHtml(preview) + '</span>' : "")
+        );
+      } else {
+        var err = _liveOneLine((ev && ev.error) || "failed", 160);
+        _liveAddLine("tool-fail",
+          '<span class="live-fail">\\u2717</span> <span class="live-dim">' + escapeHtml(name) + '</span>' +
+          (err ? ' <span class="live-fail-text">' + escapeHtml(err) + '</span>' : "")
+        );
+      }
+    });
+
+    socket.on("toolCalled", function(ev) {
+      var name = ev && ev.tool ? String(ev.tool) : "?";
+      var hint = _liveFormatArgs(ev && ev.args);
+      _liveAddLine("tool-call",
+        '<span class="live-tc-dot">\\u00b7</span> <b>' + escapeHtml(name) + '</b>' +
+        (hint ? ' <span class="live-dim">(' + escapeHtml(hint) + ')</span>' : "")
+      );
+    });
+
+    socket.on("thinking", function(ev) {
+      var text = _liveOneLine(ev && ev.text, 200);
+      if (!text) return;
+      var key = text.slice(0, 60);
+      if (key === _liveState.lastThinking) return;
+      _liveState.lastThinking = key;
+      _liveAddLine("thinking", '\\u2026 <span class="live-dim">' + escapeHtml(text) + '</span>');
+    });
+
+    socket.on("modeSwitched", function(ev) {
+      var m = ev && (ev.mode || ev.modeKey || ev.to);
+      if (!m || m === _liveState.lastMode) return;
+      _liveAddLine("mode", '\\u21aa <b>' + escapeHtml(m) + '</b>');
+      _liveState.lastMode = m;
+    });
+
+    socket.on("swarmDispatch", function(ev) {
+      var count = (ev && ev.count) || (ev && ev.branches && ev.branches.length) || 0;
+      var names = (ev && ev.branches ? ev.branches.map(function(b) { return b.name; }).filter(Boolean) : []);
+      var label = names.length ? " [" + names.slice(0, 6).join(", ") + (names.length > 6 ? " +" + (names.length - 6) : "") + "]" : "";
+      _liveAddLine("swarm",
+        '<span class="live-swarm">\\u232b</span> swarm: <b>' + count + ' branch' + (count === 1 ? "" : "es") + '</b>' +
+        '<span class="live-dim">' + escapeHtml(label) + '</span>'
+      );
+    });
+
+    socket.on("branchStarted", function(ev) {
+      var name = ev && ev.name ? String(ev.name) : "?";
+      var pos = (ev && ev.index != null && ev.total != null) ? " " + ev.index + "/" + ev.total : "";
+      _liveAddLine("branch-start",
+        '<span class="live-branch">\\u25b6</span> <b>' + escapeHtml(name) + '</b><span class="live-dim">' + pos + '</span>'
+      );
+    });
+
+    socket.on("branchCompleted", function(ev) {
+      var name = ev && ev.name ? String(ev.name) : "?";
+      var st = (ev && ev.status) || "done";
+      if (st === "done") {
+        _liveAddLine("branch-ok",
+          '<span class="live-ok">\\u2713</span> <span class="live-dim">branch </span><b>' + escapeHtml(name) + '</b>'
+        );
+      } else {
+        var err = _liveOneLine((ev && ev.error) || st, 140);
+        _liveAddLine("branch-fail",
+          '<span class="live-fail">\\u2717</span> <span class="live-dim">branch </span><b>' + escapeHtml(name) + '</b>' +
+          (err ? ' <span class="live-fail-text">' + escapeHtml(err) + '</span>' : "")
+        );
+      }
     });
 
     // Stream extension: message was accumulated for mid-flight injection
@@ -3163,62 +3327,36 @@ function injectIframeParamForwarding() {
         container.scrollTop = container.scrollHeight;
       }
     });
-socket.on("executionStatus", ({ phase, text }) => {
-  if (!text || phase === "done") return;
-  console.log("[status]", phase, text);
-  // Optionally show as a subtle inline status
-  addOrchestratorStep("status:" + phase, text);
-});
-socket.on("orchestratorStep", ({ modeKey, result, timestamp }) => {
-  console.log("[orchestrator]", modeKey, result);
-  addOrchestratorStep(modeKey, result);
+socket.on("executionStatus", function(ev) {
+  if (!ev || (!ev.text && (ev.phase === "intent" || ev.phase === "done"))) return;
+  _liveAddLine("status", '<span class="live-dot">\\u00b7</span> ' + escapeHtml(ev.text || ev.phase));
 });
 
-function addOrchestratorStep(modeKey, result) {
-  // Truncate long results for display
-  let displayResult = result;
- // if (displayResult.length > 500) {
-   // displayResult = displayResult.slice(0, 500) + "\\n… (truncated)";
-  //}
+socket.on("orchestratorStep", function(ev) {
+  var mode = ev && ev.modeKey ? String(ev.modeKey) : "?";
 
-  const MODE_EMOJIS = {
-    "intent": "🎯",
-    "tree:navigate": "🧭",
-    "tree:get-context": "📖",
-    "tree:structure": "🏗️",
-    "tree:edit": "✏️",
-    "tree:notes": "📝",
-    "tree:respond": "💬",
-  };
-
-  const emoji = MODE_EMOJIS[modeKey] || "⚙️";
-  const label = modeKey.replace("tree:", "");
-
-  [chatMessages, mobileChatMessages].forEach(container => {
-    // Remove welcome if present
-    const welcome = container.querySelector(".welcome-message");
-    if (welcome) welcome.remove();
-
-    // Insert before the typing indicator if it exists
-    const typing = container.querySelector(".typing-indicator")?.closest(".message");
-
-    const msg = document.createElement("div");
-    msg.className = "message orchestrator-step";
-    msg.innerHTML =
-      '<div class="message-avatar">' + emoji + '</div>' +
-      '<div class="message-content">' +
-        '<span class="step-mode">' + escapeHtml(label) + '</span>' +
-        '<span class="step-body">' + escapeHtml(displayResult) + '</span>' +
-      '</div>';
-
-    if (typing) {
-      container.insertBefore(msg, typing);
-    } else {
-      container.appendChild(msg);
+  // Classifier result: render intent + target mode + confidence inline
+  // (\\ud83c\\udfaf extension \\u2192 tree:code-plan conf=0.96 \\u2014 <msg>).
+  if (mode === "intent") {
+    var parsed = ev.result;
+    if (typeof parsed === "string") {
+      try { parsed = JSON.parse(parsed); } catch (e) { parsed = null; }
     }
-    container.scrollTop = container.scrollHeight;
-  });
-}
+    if (parsed && typeof parsed === "object") {
+      var intent = parsed.intent || "?";
+      var conf = typeof parsed.confidence === "number" ? " conf=" + parsed.confidence.toFixed(2) : "";
+      var targetMode = parsed.mode ? " \\u2192 " + escapeHtml(parsed.mode) : "";
+      var summary = parsed.summary ? ' <span class="live-dim">\\u2014 ' + escapeHtml(_liveOneLine(parsed.summary, 120)) + '</span>' : "";
+      _liveAddLine("intent", '\\ud83c\\udfaf <b>' + escapeHtml(intent) + '</b>' + targetMode + '<span class="live-dim">' + conf + '</span>' + summary);
+      _liveState.lastMode = mode;
+      return;
+    }
+  }
+  if (mode !== _liveState.lastMode) {
+    _liveAddLine("mode", '\\u21aa <b>' + escapeHtml(mode) + '</b>');
+    _liveState.lastMode = mode;
+  }
+});
     // API
     window.TreeApp = {
       sendMessage: sendChatMessage,

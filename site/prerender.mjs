@@ -43,7 +43,7 @@ const STATIC_ROUTES = [
   "/cli",
   "/mycelium",
   "/seed",
-  "/land",
+  "/lands",
   "/treeos",
   "/study",
   "/fitness",
@@ -124,7 +124,7 @@ const PAGE_META = {
     title: "Mycelium . The Forest Underground",
     description: "Intelligent cross-land signal routing. Not a server. An extension any land installs to become a routing node. Three layers: water table, canopy, mycelium.",
   },
-  "/land": {
+  "/lands": {
     title: "Your Land . Start a TreeOS Server",
     description: "A land is your server. Node.js, MongoDB, your own LLM. Four commands to start. Your data stays on it. Your AI runs on it. Your extensions live on it.",
   },

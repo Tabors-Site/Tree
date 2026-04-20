@@ -954,7 +954,7 @@ const AIArchitecturePage = () => {
               <a href="/build">Build</a>
               <a href="/network">The Network</a>
               <a href="/mycelium">Mycelium</a>
-              <a href="/land">Start a Land</a>
+              <a href="/lands">Start a Land</a>
               <a href="/cli">CLI</a>
             </div>
             <div className="lp-footer-col">

@@ -925,6 +925,32 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     } else if (session.messages[0]?.role === "system") {
       session.messages[0].content = systemPrompt;
     }
+
+    // Persist the rendered system prompt + enrichContext output onto the
+    // active chat record so the /chats viewer can replay exactly what
+    // the AI saw. Fire-and-forget; we only write on the first turn per
+    // chat (chatId stays in context across iterations). Subsequent turns
+    // of the same chat keep the first capture — that's the one the user
+    // cares about auditing.
+    try {
+      const _chatCtx = getChatContext(visitorId);
+      if (_chatCtx?.chatId && !session._chatContextPersisted?.[_chatCtx.chatId]) {
+        session._chatContextPersisted ||= {};
+        session._chatContextPersisted[_chatCtx.chatId] = true;
+        const _setFields = { $set: { systemPrompt } };
+        if (enrichedContext && Object.keys(enrichedContext).length > 0) {
+          _setFields.$set.enrichedContext = enrichedContext;
+        }
+        (async () => {
+          try {
+            const Chat = (await import("../models/chat.js")).default;
+            await Chat.updateOne({ _id: _chatCtx.chatId, systemPrompt: null }, _setFields);
+          } catch (err) {
+            log.debug("LLM", `systemPrompt persist skipped: ${err.message}`);
+          }
+        })();
+      }
+    } catch {}
   }
 
 
@@ -1184,13 +1210,26 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorI
   // chatId/sessionId let extension hook handlers correlate back to the
   // originating chat step (needed by the AI forensics capture path in
   // treeos-base/ai-forensics.js).
+  // parentChatId is resolved from the Chat record so forensics captures
+  // can point back to the dispatching call (summarizer → builder,
+  // branch → architect, continuation → root). One lookup per LLM call;
+  // skipped silently if the chat doc is unavailable.
   const _llmChatCtx = getChatContext(visitorId) || {};
+  let _llmParentChatId = null;
+  if (_llmChatCtx.chatId) {
+    try {
+      const { default: _Chat } = await import("../models/chat.js");
+      const _chatDoc = await _Chat.findById(_llmChatCtx.chatId).select("parentChatId").lean();
+      if (_chatDoc?.parentChatId) _llmParentChatId = String(_chatDoc.parentChatId);
+    } catch {}
+  }
   const llmHookData = {
     userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
     model: MODEL, messageCount: session.messages.length, hasTools: tools.length > 0,
     messages: session.messages, nodeId: session.currentNodeId || ctx.rootId || null,
     chatId: _llmChatCtx.chatId || null,
     sessionId: _llmChatCtx.sessionId || null,
+    parentChatId: _llmParentChatId,
   };
   const llmHookResult = await hooks.run("beforeLLMCall", llmHookData);
   if (llmHookResult.cancelled) {
@@ -1578,6 +1617,13 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
 
   log.debug("LLM", `🔧 [${session.modeKey}] ${resolvedToolName}`, args);
 
+  // Announce tool call BEFORE it runs. Gives live consumers (CLI, web) a
+  // chance to show "running <tool>..." status before the result lands.
+  if (ctx.onToolCalled) {
+    try { ctx.onToolCalled({ tool: resolvedToolName, args }); }
+    catch { /* never let a listener break the tool loop */ }
+  }
+
   // DB health check: if the database is unreachable, tell the AI immediately
   // so it responds to the user instead of retrying blindly with broken hands.
   if (!isDbHealthy()) {
@@ -1635,7 +1681,10 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
       nodeId: session.currentNodeId || ctx.rootId || null,
     }).catch(() => {});
 
-    return { tool: resolvedToolName, args, success: true };
+    // Return the full result text too so the chat record can store it
+    // for audit replay. Consumers that only care about success still
+    // work — the extra field is optional.
+    return { tool: resolvedToolName, args, result: resultText, success: true };
   } catch (err) {
     log.error("LLM", `❌ Tool ${resolvedToolName} failed:`, err.message);
 
@@ -1798,6 +1847,24 @@ export async function processMessage(visitorId, message, ctx) {
     // Tool results MUST follow their corresponding assistant tool_call message.
     session.messages.push(assistantMessage);
 
+    // Surface intermediate assistant prose as "thinking". When the model
+    // writes something like "ok let me check the plan before I act" before
+    // emitting a tool_call, that text explains its next move in plain
+    // English. Previously it was only preserved in session.messages; now
+    // we push it to any live consumer (CLI, web) so the user sees the
+    // train of thought in real time. Fires on every iteration that still
+    // has tool_calls queued — the final prose-only turn becomes the
+    // answer through the normal break path below.
+    if (
+      ctx.onThinking &&
+      assistantMessage.tool_calls?.length &&
+      typeof assistantMessage.content === "string" &&
+      assistantMessage.content.trim().length > 0
+    ) {
+      try { ctx.onThinking({ text: assistantMessage.content, modeKey: session.modeKey }); }
+      catch { /* never let a listener break the loop */ }
+    }
+
     // Detect models returning tool-call text instead of proper function calling
     const quirk = await handleModelQuirks(assistantMessage, session, tools, openai, MODEL, ctx, isInternal, isCustom, resolvedConnectionId);
     if (quirk?.earlyReturn) return quirk.earlyReturn;
@@ -1829,6 +1896,7 @@ export async function processMessage(visitorId, message, ctx) {
           appendToolCall(chatCtx.chatId, {
             tool: toolResult.tool,
             args: toolResult.args,
+            result: toolResult.result,
             success: toolResult.success,
             error: toolResult.error,
             ms: _toolMs,
@@ -2043,7 +2111,7 @@ export function sessionCount() {
  *     nodeId: null,  // optional, for per-node context
  *   });
  */
-export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null, llmPriority = null, onToolResults = null, visitorId: callerVisitorId = null }) {
+export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null, llmPriority = null, onToolResults = null, onToolCalled = null, onThinking = null, visitorId: callerVisitorId = null, ephemeral = false, treeContext = null }) {
   if (!userId || !message || !mode) {
     throw new Error("runChat requires userId, message, and mode");
   }
@@ -2068,19 +2136,37 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   // land:{userId}          - land zone (persistent across land chats)
   // home:{userId}          - home zone (persistent across home chats)
   // tree:{rootId}:{userId} - tree zone (new session per tree, persistent within tree)
+  //
+  // `ephemeral: true` bypasses the persistent session cache entirely —
+  // the call gets its own fresh visitorId and sessionId, and neither is
+  // written to _runChatSessions. Used by hook-triggered background LLM
+  // calls (contradiction detector, intent classifier, etc.) so their
+  // prompt/response pairs never leak into the user's active chat
+  // session. Without this, any hook that runs runChat({ rootId, userId })
+  // collides with the user's live chat at `{rootId}:{userId}` and their
+  // messages interleave.
   const bigMode = mode.split(":")[0];
   const contextKey = bigMode === "tree" && rootId ? rootId : bigMode;
-  const visitorId = callerVisitorId || `${contextKey}:${userId}`;
+  const visitorId = callerVisitorId || (ephemeral
+    ? `ephemeral:${crypto.randomUUID()}`
+    : `${contextKey}:${userId}`);
 
-  // Persistent sessionId per zone (chains Chats together)
-  if (!_runChatSessions.has(visitorId)) {
-    if (_runChatSessions.size >= MAX_CONVERSATION_SESSIONS) {
-      const first = _runChatSessions.keys().next().value;
-      _runChatSessions.delete(first);
+  // Persistent sessionId per zone (chains Chats together).
+  // Ephemeral calls get a fresh session that isn't stored; it dies
+  // with the call and cannot pollute a later turn.
+  let sessionId;
+  if (ephemeral) {
+    sessionId = crypto.randomUUID();
+  } else {
+    if (!_runChatSessions.has(visitorId)) {
+      if (_runChatSessions.size >= MAX_CONVERSATION_SESSIONS) {
+        const first = _runChatSessions.keys().next().value;
+        _runChatSessions.delete(first);
+      }
+      _runChatSessions.set(visitorId, crypto.randomUUID());
     }
-    _runChatSessions.set(visitorId, crypto.randomUUID());
+    sessionId = _runChatSessions.get(visitorId);
   }
-  const sessionId = _runChatSessions.get(visitorId);
 
   // Abort controller for cancellation (Ctrl+C, timeout, etc.)
   const abort = signal ? null : new AbortController();
@@ -2123,6 +2209,11 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   let chat;
   try {
     const clientInfo = await getClientForUser(userId, visitorId) || {};
+    // runChat callers can provide a `treeContext` (room-agent delivery
+    // passes { targetNodeId, roomNodeId, roomSubId } so the chat shows
+    // up on the tree's chats page AND carries the room link). Default
+    // falls back to rootId-only when caller didn't specify.
+    const mergedTreeContext = treeContext || (rootId ? { targetNodeId: rootId } : undefined);
     chat = await startChat({
       userId,
       sessionId,
@@ -2133,7 +2224,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
         model: clientInfo.model || "unknown",
         connectionId: clientInfo.connectionId || null,
       },
-      treeContext: rootId ? { targetNodeId: rootId } : undefined,
+      treeContext: mergedTreeContext,
     });
     if (chat) setChatContext(visitorId, sessionId, chat._id);
   } catch (err) {
@@ -2151,6 +2242,8 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
       signal: abortSignal,
       llmPriority,
       onToolResults,
+      onToolCalled,
+      onThinking,
     });
   } catch (err) {
     if (chat) {
@@ -2234,6 +2327,8 @@ export async function runOrchestration({
   clientOverride = null,                 // For canopy proxy public queries
   onChatCreated = null,                  // Callback fired right after Chat record exists
   onToolResults = null,
+  onToolCalled = null,                   // Announce tool calls BEFORE they run
+  onThinking = null,                     // Mid-turn assistant prose (reasoning)
   onToolLoopCheckpoint = null,
 }) {
   if (!userId || !message || !zone) {
@@ -2440,6 +2535,9 @@ export async function runOrchestration({
             rootChatId: chat?._id || null,
             sourceType: sourceType || `${zone}-chat`,
             onToolLoopCheckpoint,
+            onToolResults,
+            onToolCalled,
+            onThinking,
             ...orchestrateFlags,
           });
         } else {
@@ -2463,6 +2561,8 @@ export async function runOrchestration({
             signal: abort.signal,
             llmPriority,
             onToolResults,
+            onToolCalled,
+            onThinking,
             onToolLoopCheckpoint,
           });
         }

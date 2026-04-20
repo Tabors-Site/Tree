@@ -129,7 +129,7 @@ export async function runSteppedMode(visitorId, mode, message, {
   const onToolResults = (results) => {
     if (signal?.aborted) return;
     for (const r of results) {
-      socket.emit(WS.TOOL_RESULT, r);
+      socket?.emit?.(WS.TOOL_RESULT, r);
       if (r?.tool) {
         if (isToolReadOnly(r.tool)) readCount++;
         else writeCount++;
@@ -145,11 +145,22 @@ export async function runSteppedMode(visitorId, mode, message, {
     }
   };
 
+  const onToolCalled = (call) => {
+    if (signal?.aborted) return;
+    socket?.emit?.(WS.TOOL_CALLED, call);
+  };
+  const onThinking = (thought) => {
+    if (signal?.aborted) return;
+    socket?.emit?.(WS.THINKING, thought);
+  };
+
   const pmCtx = {
     username, userId, rootId, signal, slot,
     readOnly,
     onToolLoopCheckpoint,
     onToolResults,
+    onToolCalled,
+    onThinking,
     meta: { internal: false },
   };
 
@@ -184,6 +195,10 @@ export async function runSteppedMode(visitorId, mode, message, {
   // chainIndex 0 stays reserved for the root (user's message + final
   // aggregated answer), set up upstream by runOrchestration.
   let firstStep = await beginStep(mode, message || "(empty)");
+  // Track the most recent chain-step chatId so the caller (dispatch.js
+  // swarm wiring) can point branch workers at the step that actually
+  // emitted [[BRANCHES]] instead of the whole session's root chat.
+  let lastStepChatId = firstStep?.chatId || null;
   let result;
   const allContent = []; // accumulate content across continuation turns
   try {
@@ -244,6 +259,7 @@ export async function runSteppedMode(visitorId, mode, message, {
       `you actually wrote something in this turn.`;
 
     const retryStep = await beginStep(mode, nudge);
+    if (retryStep?.chatId) lastStepChatId = retryStep.chatId;
     try {
       result = await processMessage(visitorId, nudge, pmCtx);
     } catch (err) {
@@ -358,6 +374,7 @@ export async function runSteppedMode(visitorId, mode, message, {
 
     const useContinuation = result?._continue; // only true for empty-message re-entry
     const stepChat = await beginStep(mode, nudgeMessage);
+    if (stepChat?.chatId) lastStepChatId = stepChat.chatId;
 
     try {
       result = await processMessage(visitorId, result?._continue ? "" : nudgeMessage, {
@@ -403,6 +420,10 @@ export async function runSteppedMode(visitorId, mode, message, {
     result._toolTrace = toolTrace;
     result._writeCount = writeCount;
     result._readCount = readCount;
+    // The last chain-step chatId. Used by dispatch.js to nest branch
+    // workers under the architect's final step (the one that emitted
+    // [[BRANCHES]]) so the chat-history tree groups correctly.
+    result._lastChatId = lastStepChatId;
   }
 
   return result;

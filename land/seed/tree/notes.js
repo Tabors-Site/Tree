@@ -156,7 +156,7 @@ async function createNote({
   // the AI walk past blocking errors. After hooks run parallel so
   // awaiting the Promise.all adds no serialization latency beyond
   // the slowest single handler.
-  await hooks.run("afterNote", { note: newNote, nodeId, userId, contentType, sizeKB, action: "create" }).catch((err) => {
+  await hooks.run("afterNote", { note: newNote, nodeId, userId, contentType, sizeKB, action: "create", chatId, sessionId }).catch((err) => {
     log.warn("Notes", `afterNote hook chain failed: ${err?.message}`);
   });
 
@@ -235,7 +235,7 @@ async function editNote({
   // Awaited: see comment in createNote above. Callers (tool handlers
   // on the LLM path) need the syntax validator + cascade signaling
   // complete before they return, or the next turn reads stale state.
-  await hooks.run("afterNote", { note, nodeId: note.nodeId, userId, contentType: note.contentType, sizeKB: newSizeKB, deltaKB, action: "edit" }).catch((err) => {
+  await hooks.run("afterNote", { note, nodeId: note.nodeId, userId, contentType: note.contentType, sizeKB: newSizeKB, deltaKB, action: "edit", chatId, sessionId }).catch((err) => {
     log.warn("Notes", `afterNote hook chain failed: ${err?.message}`);
   });
 
@@ -357,6 +357,7 @@ async function deleteNoteAndFile({
       note, nodeId, userId: fileOwnerId,
       contentType: note.contentType, fileSizeKB,
       action: "delete", fileDeleted,
+      chatId, sessionId,
     }).catch(() => {});
 
     import("./cascade.js").then(({ checkCascade }) =>

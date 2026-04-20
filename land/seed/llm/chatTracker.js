@@ -166,6 +166,8 @@ export async function startChat({
   modeKey,
   llmProvider,
   treeContext,
+  systemPrompt = null,
+  enrichedContext = null,
 }) {
   const safeModeKey = modeKey || "home:default";
   const colonIdx = safeModeKey.indexOf(":");
@@ -196,9 +198,23 @@ export async function startChat({
     },
     llmProvider: llmProvider || { isCustom: false, model: null, connectionId: null },
     ...(treeContext ? { treeContext } : {}),
+    ...(systemPrompt ? { systemPrompt: capSystemPrompt(systemPrompt) } : {}),
+    ...(enrichedContext ? { enrichedContext } : {}),
+    modeHistory: [{ modeKey: safeModeKey, reason: "start", at: new Date() }],
   });
 
   return chat;
+}
+
+// System prompts are large by design (persona, tools, enrichContext). We
+// keep them whole for audit but still cap at 1MB so a runaway prompt
+// builder can't explode a single chat document past Mongo's 16MB limit.
+const MAX_SYSTEM_PROMPT_BYTES = 1_000_000;
+function capSystemPrompt(s) {
+  if (typeof s !== "string") return null;
+  if (Buffer.byteLength(s, "utf8") <= MAX_SYSTEM_PROMPT_BYTES) return s;
+  const chars = Math.floor(MAX_SYSTEM_PROMPT_BYTES * 0.9);
+  return s.slice(0, chars) + "\n... (systemPrompt truncated at 1MB)";
 }
 
 /**
@@ -289,9 +305,29 @@ function summarizeArgs(args) {
  * Fire-and-forget: every call the tool loop makes gets logged, but a
  * failure here never blocks the conversation.
  */
-export async function appendToolCall(chatId, { tool, args, success, error, ms }) {
+// Full tool args + result cap. 1MB per entry gives real auditability
+// while keeping each chat document well inside Mongo's 16MB cap even
+// with a full 50-call log. If either hits the cap, `truncated: true`
+// flags the entry so the viewer can show a "truncated" badge.
+const MAX_FULL_TOOL_BYTES = 1_000_000;
+function capFullBytes(value, isString = false) {
+  if (value == null) return { value: null, truncated: false };
+  const str = isString ? String(value) : (typeof value === "string" ? value : (() => {
+    try { return JSON.stringify(value); } catch { return "[unserializable]"; }
+  })());
+  if (Buffer.byteLength(str, "utf8") <= MAX_FULL_TOOL_BYTES) {
+    return { value: isString ? str : value, truncated: false };
+  }
+  const chars = Math.floor(MAX_FULL_TOOL_BYTES * 0.9);
+  const sliced = str.slice(0, chars) + "\n... (truncated at 1MB)";
+  return { value: sliced, truncated: true };
+}
+
+export async function appendToolCall(chatId, { tool, args, result, success, error, ms }) {
   if (!chatId || !tool) return;
   try {
+    const fullArgs = capFullBytes(args);
+    const fullResult = capFullBytes(result, true);
     await Chat.updateOne(
       { _id: chatId },
       {
@@ -300,6 +336,9 @@ export async function appendToolCall(chatId, { tool, args, success, error, ms })
             $each: [{
               tool,
               args: summarizeArgs(args),
+              argsFull: fullArgs.value,
+              resultFull: fullResult.value,
+              truncated: fullArgs.truncated || fullResult.truncated,
               success: success !== false,
               error: error ? String(error).slice(0, 500) : null,
               ms: Number(ms) || 0,
@@ -312,6 +351,27 @@ export async function appendToolCall(chatId, { tool, args, success, error, ms })
     );
   } catch (err) {
     log.debug("ChatTracker", `appendToolCall failed for ${chatId}: ${err.message}`);
+  }
+}
+
+/**
+ * Push a mode switch onto the chat's modeHistory. Fire-and-forget; a
+ * failure never breaks the orchestrator flow. Used when a chain step
+ * changes mode (handoffs, nested dispatches, converse → extension).
+ */
+export async function appendModeSwitch(chatId, { modeKey, reason = null }) {
+  if (!chatId || !modeKey) return;
+  try {
+    await Chat.updateOne(
+      { _id: chatId },
+      {
+        $push: {
+          modeHistory: { modeKey, reason, at: new Date() },
+        },
+      },
+    );
+  } catch (err) {
+    log.debug("ChatTracker", `appendModeSwitch failed for ${chatId}: ${err.message}`);
   }
 }
 
@@ -416,6 +476,8 @@ export async function startChainStep({
   llmProvider = null,
   parentChatId = null,
   dispatchOrigin = null,
+  systemPrompt = null,
+  enrichedContext = null,
 }) {
   if (!sessionId || !userId) return null;
 
@@ -447,6 +509,9 @@ export async function startChainStep({
       aiContext: { zone: stepZone, mode: stepMode },
       llmProvider: llmProvider || { isCustom: false, model: null, connectionId: null },
       ...(treeContext ? { treeContext } : {}),
+      ...(systemPrompt ? { systemPrompt: capSystemPrompt(systemPrompt) } : {}),
+      ...(enrichedContext ? { enrichedContext } : {}),
+      modeHistory: [{ modeKey: safeKey, reason: source || "chain-step", at: new Date() }],
     });
     return chat;
   } catch (err) {

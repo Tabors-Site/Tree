@@ -76,7 +76,7 @@ const WelcomeRoutes = () => {
       <Route path="/use" element={<UsePage />} />
       <Route path="/cli" element={<CLIAbout />} />
       <Route path="/mycelium" element={<MyceliumPage />} />
-      <Route path="/land" element={<LandPage />} />
+      <Route path="/lands" element={<LandPage />} />
       <Route path="/treeos" element={<TreeOSPage />} />
       <Route path="/study" element={<StudyPage />} />
       <Route path="/fitness" element={<FitnessPage />} />

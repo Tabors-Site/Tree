@@ -27,10 +27,15 @@ import {
   onBeforeToolCall as forensicsBeforeTool,
   onAfterToolCall as forensicsAfterTool,
   onAfterLLMCall as forensicsAfterLLM,
+  onCascadeSignal as forensicsOnCascade,
   recordBranchEvent,
   recordLLMResponse,
+  recordCascadeEmitted,
+  recordCascadeReceived,
+  recordSwarmSignalEmitted,
   startForensicsSweep,
   pendingCaptureCount,
+  setCaptureEmitter,
 } from "./ai-forensics.js";
 
 export async function init(core) {
@@ -133,8 +138,21 @@ export async function init(core) {
   core.hooks.register("beforeToolCall", forensicsBeforeTool, "treeos-base");
   core.hooks.register("afterToolCall", forensicsAfterTool, "treeos-base");
   core.hooks.register("afterLLMCall", forensicsAfterLLM, "treeos-base");
+  // onCascade — attaches cascade signalId to the pending capture that
+  // owns the originating nodeId, so the forensics timeline answers
+  // "which call emitted this cascade?" without a separate query.
+  core.hooks.register("onCascade", forensicsOnCascade, "treeos-base");
+  // Wire the live-stream emitter: every incremental capture update
+  // fires `captureUpdated` on the user's socket so the chat page (and
+  // any dashboard) can re-fetch and render the new delta. The emitter
+  // is resolved through core.ws so we don't import seed/ws at module
+  // load and risk a circular dep.
+  if (typeof core.ws?.emitToUser === "function") {
+    setCaptureEmitter(core.ws.emitToUser);
+    log.verbose("TreeosBase", "AI forensics live-stream emitter wired (captureUpdated)");
+  }
   startForensicsSweep();
-  log.verbose("TreeosBase", "AI forensics capture installed (beforeLLMCall + 3 more hooks)");
+  log.verbose("TreeosBase", "AI forensics capture installed (beforeLLMCall + 4 more hooks)");
 
   // ── Register TreeOS HTML pages (if html-rendering is installed) ──
   // html-rendering is infrastructure. TreeOS provides the actual pages.
@@ -286,9 +304,14 @@ export async function init(core) {
       registerSlot, unregisterSlots, resolveSlots, resolveSlotsAsync, listSlots, emitSlotUpdate,
       // AI Forensics — direct-call API for modules that have data
       // the hooks don't carry (swarm branch transitions, full LLM
-      // response text). Other extensions reach these via
-      // `getExtension("treeos-base")?.exports?.recordBranchEvent(...)`.
+      // response text, cascade/signal attribution). Other extensions
+      // reach these via:
+      //   `getExtension("treeos-base")?.exports?.recordBranchEvent(...)`
+      //   `getExtension("treeos-base")?.exports?.recordSwarmSignalEmitted(...)`
+      // so a signal appendSignal inside swarm can tag the emitting
+      // capture without swarm knowing anything about AiCapture.
       recordBranchEvent, recordLLMResponse, pendingCaptureCount,
+      recordCascadeEmitted, recordCascadeReceived, recordSwarmSignalEmitted,
     },
   };
 }

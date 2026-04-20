@@ -158,6 +158,21 @@ const ChatSchema = new mongoose.Schema({
     },
     resultDetail: String,
 
+    // Room linkage. When a room-agent subscription dispatches through
+    // runChat, the resulting chat carries the room's node id and the
+    // subscription id so the per-node chats page can show a "via room
+    // <name>" link and the room transcript can cross-reference the
+    // chat record.
+    roomNodeId: {
+      type: String,
+      ref: "Node",
+      default: null,
+    },
+    roomSubId: {
+      type: String,
+      default: null,
+    },
+
     _id: false,
   },
 
@@ -198,15 +213,59 @@ const ChatSchema = new mongoose.Schema({
   // a cap) so the chat record holds the full step-by-step of what
   // the AI did. Rendered in CLI `chats` history and the dashboard
   // chat view. Capped at 50 per chat to keep document size bounded.
+  //
+  // `args` holds the 2KB summary used by history listings. `argsFull`
+  // and `resultFull` carry the whole payload up to ~1MB each so the
+  // audit page can replay exactly what the AI saw. `truncated` flags
+  // when either hit the cap.
   // -----------------------------------
   toolCalls: [
     {
       tool: { type: String, required: true },
       args: { type: mongoose.Schema.Types.Mixed, default: null },
+      argsFull: { type: mongoose.Schema.Types.Mixed, default: null },
+      resultFull: { type: String, default: null },
+      truncated: { type: Boolean, default: false },
       success: { type: Boolean, default: true },
       error: { type: String, default: null },
       ms: { type: Number, default: 0 },
       at: { type: Date, default: Date.now },
+      _id: false,
+    },
+  ],
+
+  // -----------------------------------
+  // The rendered system prompt the AI received for this step.
+  // Captured at the start of the chat (or chain step) so the operator
+  // can audit why the AI behaved the way it did. No size cap here; the
+  // onDocumentPressure hook warns if a chat document crosses its cap.
+  // -----------------------------------
+  systemPrompt: {
+    type: String,
+    default: null,
+  },
+
+  // -----------------------------------
+  // Accumulated output of the enrichContext hook — everything each
+  // extension injected into the AI's working context before the LLM
+  // call. Mixed so extensions can store their own shapes.
+  // -----------------------------------
+  enrichedContext: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
+  },
+
+  // -----------------------------------
+  // Mode switches that happened mid-chain. A single chat step usually
+  // runs in one mode but the orchestrator can swap modes mid-run
+  // (handoffs, nested dispatches). This log keeps the lineage so
+  // auditors can see the full mode journey.
+  // -----------------------------------
+  modeHistory: [
+    {
+      modeKey: { type: String, required: true },
+      at: { type: Date, default: Date.now },
+      reason: { type: String, default: null },
       _id: false,
     },
   ],

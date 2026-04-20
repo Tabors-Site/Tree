@@ -95,8 +95,74 @@ let _httpServerRef = null;
 export function getHttpServer() { return _httpServerRef; }
 
 // Socket tracking
-const userSockets = new Map(); // visitorId → socket.id
-const authSessions = new Map(); // userId → socket.id
+const userSockets = new Map(); // visitorId → socket.id (1:1; each visitorId is unique per connection)
+const authSessions = new Map(); // userId → Set<socket.id> (N:1; a user can hold many concurrent sockets)
+
+// Helpers for the N:1 authSessions map. Every emit-to-user function
+// uses these so a single user's events fan out to all their clients
+// (web tab, CLI shell, room agent, etc.) without the server having
+// to disconnect any of them.
+function addAuthSession(userId, socketId) {
+  if (!userId || !socketId) return;
+  let set = authSessions.get(userId);
+  if (!set) { set = new Set(); authSessions.set(userId, set); }
+  set.add(socketId);
+}
+function removeAuthSession(userId, socketId) {
+  const set = authSessions.get(userId);
+  if (!set) return;
+  set.delete(socketId);
+  if (set.size === 0) authSessions.delete(userId);
+}
+function getAuthSocketIds(userId) {
+  const set = authSessions.get(userId);
+  return set ? [...set] : [];
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Mode-list filter: only surface modes actually relevant to this tree.
+//
+// The mode registry returns every registered mode for a big-zone
+// (every `tree:*` mode, every `home:*` mode, etc.). Most trees only
+// scaffold a handful of extensions — KB/Study/Fitness/etc. register
+// their modes globally, but they aren't present in a pure code tree.
+// Surfacing them in the dropdown gaslights the user into thinking
+// the tree knows what "Study Session" means when it doesn't.
+//
+// Seed applies the always-safe filters (kernel baseline check,
+// extension scope blocks). Richer presence heuristics — routing-index
+// scaffolding, classifier vocab detection — live in the tree
+// orchestrator extension, wired in via the `filterAvailableModes`
+// hook (registered sequentially so each handler refines the list).
+// ─────────────────────────────────────────────────────────────────────
+async function _filterModesForPresence(modes, { nodeId, rootId, bigMode }) {
+  if (!Array.isArray(modes) || modes.length === 0) return modes;
+
+  // Seed-level pass: scope block filter + always keep kernel baseline.
+  let filtered = modes;
+  if (nodeId) {
+    try {
+      const { getBlockedExtensionsAtNode } = await import("../tree/extensionScope.js");
+      const scope = await getBlockedExtensionsAtNode(nodeId);
+      filtered = filtered.filter((m) => {
+        const owner = getModeOwner(m.key);
+        return !owner || !scope.blocked.has(owner);
+      });
+    } catch {}
+  }
+
+  // Extension-level pass: let subscribers (tree-orchestrator) shrink
+  // the list further based on what's actually scaffolded in this
+  // tree. Hook payload mutates in place — each handler reassigns
+  // payload.modes with its filtered result.
+  try {
+    const payload = { modes: filtered, nodeId, rootId, bigMode };
+    await hooks.run("filterAvailableModes", payload);
+    if (Array.isArray(payload.modes)) filtered = payload.modes;
+  } catch {}
+
+  return filtered;
+}
 
 // ── Socket handler registry (extensions register event handlers) ──────
 const _socketHandlers = new Map();
@@ -209,6 +275,8 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     const cookie = socket.request.headers.cookie;
     socket.userId = null;
 
+    // 1. Browser path: JWT in the `token` cookie. This is how the website
+    //    has always authenticated its socket.
     if (cookie) {
       const tokenMatch = cookie.match(/token=([^;]+)/);
       if (tokenMatch) {
@@ -223,6 +291,42 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       }
     }
 
+    // 2. CLI / programmatic path: socket.io `handshake.auth.token`
+    //    carries a JWT. Cookie auth still wins when both are present
+    //    (the browser session is the source of truth). API keys are
+    //    not accepted here — clients without a JWT should exchange
+    //    their API key via /auth/exchange first.
+    if (!socket.userId) {
+      const auth = socket.handshake.auth || {};
+      if (auth.token) {
+        try {
+          const decoded = jwt.verify(auth.token, JWT_SECRET);
+          socket.userId = decoded.userId;
+          socket.username = decoded.username;
+          socket.jwt = auth.token;
+        } catch (tokenErr) {
+          log.debug("WS", `Invalid handshake.auth token from ${ip}: ${tokenErr.message}`);
+        }
+      }
+    }
+
+    // Client identity tags. `clientKind` names the source (web, cli,
+    // room-agent, mobile, …); `clientInstance` names the specific
+    // copy (a browser tab uuid, a CLI process pid, a room
+    // subscription id). Together with userId they uniquely identify
+    // this connection, so two sockets from the same user coexist
+    // without kicking each other. Fall back to web/socket.id so
+    // unpatched clients still work.
+    //
+    // CAREFUL: do NOT name these `socket.client` or `socket.conn` —
+    // those are Socket.IO's internal getters (client = Engine.IO
+    // client, conn = this.client.conn). Overwriting `socket.client`
+    // breaks the internal getter and crashes _onconnect with
+    // "Cannot read properties of undefined (reading 'protocol')".
+    const auth = socket.handshake.auth || {};
+    socket.clientKind = (typeof auth.client === "string" && /^[a-z0-9_-]{1,32}$/i.test(auth.client)) ? auth.client : "web";
+    socket.clientInstance = (typeof auth.instance === "string" && /^[a-z0-9_-]{1,40}$/i.test(auth.instance)) ? auth.instance : socket.id.slice(0, 8);
+
     next();
   });
 
@@ -232,13 +336,11 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       `🔗 Socket connected: ${socket.id} (user: ${userId || "anon"})`,
     );
 
-    // Track auth session
+    // Track auth session. Multiple sockets per user are supported:
+    // the set grows, nothing gets disconnected. CLI + browser + mobile
+    // all coexist under the same userId.
     if (userId) {
-      const oldSocketId = authSessions.get(userId);
-      if (oldSocketId && oldSocketId !== socket.id) {
-        io.sockets.sockets.get(oldSocketId)?.disconnect(true);
-      }
-      authSessions.set(userId, socket.id);
+      addAuthSession(userId, socket.id);
     }
 
     socket.on("ready", () => {
@@ -262,7 +364,13 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         return;
       }
 
-      const visitorId = `user:${username}`;
+      // Per-connection visitorId. `client:instance` uniquely
+      // identifies this socket within the user, so separate tabs /
+      // CLI shells / room-agent dispatches each get their own
+      // isolated session, MCP connection, and chat memory.
+      // Dedupe still fires — but ONLY on exact-match visitorId, i.e.
+      // a reload in the same tab or a re-exec of the same CLI pid.
+      const visitorId = `user:${username}:${socket.clientKind || "web"}:${socket.clientInstance || socket.id.slice(0, 8)}`;
       const oldSocketId = userSockets.get(visitorId);
       if (oldSocketId && oldSocketId !== socket.id) {
         io.sockets.sockets.get(oldSocketId)?.disconnect(true);
@@ -445,16 +553,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       const bigMode = activeMode?.split(":")[0] || newBigMode;
       let subModes = getSubModes(bigMode);
 
-      // Filter modes by extension scope at current position
-      if (activeRootId) {
-        try {
-          const scope = await getBlockedExtensionsAtNode(activeRootId);
-          subModes = subModes.filter(m => {
-            const owner = getModeOwner(m.key);
-            return !owner || !scope.blocked.has(owner);
-          });
-        } catch {}
-      }
+      const activeNodeId = getCurrentNodeId(visitorId) || activeRootId;
+      subModes = await _filterModesForPresence(subModes, {
+        nodeId: activeNodeId,
+        rootId: activeRootId,
+        bigMode,
+      });
 
       socket.emit(WS.AVAILABLE_MODES, {
         bigMode,
@@ -541,16 +645,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         } catch {}
       }
 
-      // Filter modes by extension scope at current position
-      if (activeRootId) {
-        try {
-          const scope = await getBlockedExtensionsAtNode(activeRootId);
-          subModes = subModes.filter(m => {
-            const owner = getModeOwner(m.key);
-            return !owner || !scope.blocked.has(owner);
-          });
-        } catch {}
-      }
+      const activeNodeId2 = getCurrentNodeId(visitorId) || activeRootId;
+      subModes = await _filterModesForPresence(subModes, {
+        nodeId: activeNodeId2,
+        rootId: activeRootId,
+        bigMode,
+      });
 
       socket.emit(WS.AVAILABLE_MODES, {
         bigMode,
@@ -580,9 +680,111 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     const _chatTimestamps = [];
 
     // Named handler so extensions can call socket._chatHandler() for debounce
-    const _chatHandler = async ({ message, username, generation, mode: chatMode }) => {
+    const _chatHandler = async ({ message, username, generation, mode: chatMode, rootId: payloadRootId, currentNodeId: payloadNodeId, zone: payloadZone, sessionHandle: payloadHandle }) => {
       if (!message || typeof message !== "string" || !username || typeof username !== "string" || username.length > 200) {
         return socket.emit(WS.CHAT_ERROR, { error: "Missing or invalid message", generation });
+      }
+
+      log.info("WS", `📨 chat: root=${payloadRootId?.slice?.(0,8) || "-"} node=${payloadNodeId?.slice?.(0,8) || "-"} zone=${payloadZone || "-"} handle=${payloadHandle || "-"}`);
+
+      // Position override from the payload. The CLI is authoritative
+      // about where the user is — a server restart wipes session
+      // state, and without this override the orchestrator would fall
+      // back to "home" zone for every first message after reboot. We
+      // still validate tree access before trusting the IDs, and we
+      // also flip bigMode to "tree" so the zone lookup at line ~667
+      // (`currentMode?.split(":")[0] || "home"`) routes correctly.
+      //
+      // Per-position visitorId. Same scheme the HTTP path builds in
+      // `runOrchestration` (see llm/conversation.js line ~2370):
+      //
+      //   tree,  no handle  → `${rootId}:${userId}`
+      //   tree,  handle     → `${rootId}:${userId}:${handle}`
+      //   home/land, no h   → `${zone}:${userId}`
+      //   home/land, handle → `${zone}:${userId}:${handle}`
+      //
+      // This is load-bearing: without it, every CLI chat shares the
+      // socket-level `user:${username}` visitorId, so switching roots
+      // (cd /other-tree) inherits the previous tree's conversation
+      // memory + mode + position. The HTTP path always gave per-tree
+      // isolation; now WS matches.
+      //
+      // When no payload context is present (e.g. a browser socket
+      // that still uses urlChanged for navigation), we fall back to
+      // the socket-level visitorId so the existing website behavior
+      // is preserved.
+      const _handle = (payloadHandle && typeof payloadHandle === "string" && /^[a-z0-9_-]{1,40}$/i.test(payloadHandle))
+        ? payloadHandle
+        : null;
+      let _pvId = socket.visitorId || `user:${socket.userId}`;
+      if (payloadRootId && typeof payloadRootId === "string" && payloadRootId.length <= 36) {
+        _pvId = _handle
+          ? `${payloadRootId}:${socket.userId}:${_handle}`
+          : `${payloadRootId}:${socket.userId}`;
+      } else if (payloadZone === "home" || payloadZone === "land") {
+        _pvId = _handle
+          ? `${payloadZone}:${socket.userId}:${_handle}`
+          : `${payloadZone}:${socket.userId}`;
+      }
+      if (payloadRootId && typeof payloadRootId === "string" && payloadRootId.length <= 36) {
+        try {
+          const access = await resolveTreeAccess(payloadRootId, socket.userId);
+          if (access?.ok) {
+            setRootId(_pvId, payloadRootId);
+            const nId = payloadNodeId && typeof payloadNodeId === "string" && payloadNodeId.length <= 36
+              ? payloadNodeId
+              : payloadRootId;
+            setCurrentNodeId(_pvId, nId);
+            // Ensure the session is in tree mode. Without this the
+            // chat handler below still sees `home:default` (or
+            // whatever stuck from the prior message) and routes to
+            // the home orchestrator. Use the base "tree:chat" mode;
+            // the tree orchestrator classifier takes over from there.
+            try {
+              const curr = getCurrentMode(_pvId);
+              const currBig = curr?.split(":")[0] || null;
+              if (currBig !== "tree") {
+                await switchMode(_pvId, "tree:converse", {
+                  username, userId: socket.userId, rootId: payloadRootId,
+                  currentNodeId: nId,
+                });
+                log.info("WS", `🌳 ${_pvId} → tree:converse (was ${curr || "unset"})`);
+              }
+            } catch (modeErr) {
+              log.warn("WS", `tree-mode switch FAILED on ${_pvId}: ${modeErr.message}`);
+            }
+          } else {
+            log.warn("WS", `tree access denied for root ${payloadRootId}: ok=${access?.ok}`);
+          }
+        } catch (e) {
+          log.warn("WS", `resolveTreeAccess errored: ${e.message}`);
+        }
+      } else if (payloadNodeId && typeof payloadNodeId === "string" && payloadNodeId.length <= 36) {
+        // Node-only update (same tree, different position).
+        setCurrentNodeId(_pvId, payloadNodeId);
+      } else if (payloadZone === "home" || payloadZone === "land") {
+        // Non-tree zones: the CLI tells us which one. Clear any
+        // stale tree position from a previous message and force the
+        // matching big-mode so the chat handler below routes to the
+        // right orchestrator. Zone → mode: home uses `home:default`
+        // (treeos-base), land uses `land:manager` (land-manager). The
+        // orchestrator treats the mode's zone prefix as the routing
+        // key, so both entries land in the right orchestrator.
+        setRootId(_pvId, null);
+        setCurrentNodeId(_pvId, null);
+        const zoneBaseMode = payloadZone === "land" ? "land:manager" : "home:default";
+        try {
+          const curr = getCurrentMode(_pvId);
+          const currBig = curr?.split(":")[0] || null;
+          if (currBig !== payloadZone) {
+            await switchMode(_pvId, zoneBaseMode, {
+              username, userId: socket.userId,
+            });
+            log.info("WS", `🏠 ${_pvId} → ${zoneBaseMode} (was ${curr || "unset"})`);
+          }
+        } catch (modeErr) {
+          log.warn("WS", `${payloadZone}-mode switch FAILED on ${_pvId}: ${modeErr.message}`);
+        }
       }
       const maxChatChars = Number(getLandConfigValue("maxChatMessageChars")) || 5000;
       if (message.length > maxChatChars) {
@@ -600,7 +802,10 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       _chatTimestamps.push(now);
 
       const safeChatMode = ["chat", "place", "query", "be"].includes(chatMode) ? chatMode : "chat";
-      const visitorId = socket.visitorId || `user:${socket.userId}`;
+      // `_pvId` was computed above from the session-handle scheme.
+      // Every downstream state read (position, mode, LLM access) uses
+      // it so a @fitness chat doesn't touch @default's state.
+      const visitorId = _pvId;
 
       // LLM access gate
       try {
@@ -623,7 +828,18 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           return;
         }
         if (socket._onStreamIdle) {
-          const handled = socket._onStreamIdle(message, safeChatMode, generation);
+          // Pass the full payload context so the stream extension's
+          // debounced replay carries rootId/nodeId/zone/sessionHandle
+          // forward. Without this, the replay re-enters _chatHandler
+          // with bare args, _pvId falls back to the socket-level
+          // visitor, and the session's tree-mode state is missed —
+          // every debounced message lands in home:default.
+          const handled = socket._onStreamIdle(message, safeChatMode, generation, {
+            rootId: payloadRootId,
+            currentNodeId: payloadNodeId,
+            zone: payloadZone,
+            sessionHandle: payloadHandle,
+          });
           if (handled) return;
         }
       }
@@ -657,6 +873,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             currentNodeId: getCurrentNodeId(visitorId),
             visitorId,
             sessionId,
+            sessionHandle: payloadHandle || null,
             socket,
             signal: abort.signal,
             chatSource: "user",
@@ -677,6 +894,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             },
             onToolResults: (results) => {
               if (!abort.signal.aborted) for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+            },
+            onToolCalled: (call) => {
+              if (!abort.signal.aborted) socket.emit(WS.TOOL_CALLED, call);
+            },
+            onThinking: (thought) => {
+              if (!abort.signal.aborted) socket.emit(WS.THINKING, thought);
             },
             onToolLoopCheckpoint: socket._streamCheckpoint || null,
           });
@@ -875,8 +1098,8 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         socket._chatAbort = null;
       }
 
-      if (userId && authSessions.get(userId) === socket.id) {
-        authSessions.delete(userId);
+      if (userId) {
+        removeAuthSession(userId, socket.id);
       }
 
       if (socket.visitorId) {
@@ -897,11 +1120,14 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     });
   });
 
-  // Subscribe to session changes → sync navigator badge
+  // Subscribe to session changes → sync navigator badge on every
+  // active socket for this user (web tabs, CLIs, etc. all get the
+  // refresh so the navigator indicator stays consistent).
   function syncNavigatorOnSessionChange({ userId }) {
-    const socketId = authSessions.get(userId);
-    const userSocket = socketId ? io.sockets.sockets.get(socketId) : null;
-    if (userSocket) emitNavigatorStatus(userSocket);
+    for (const socketId of getAuthSocketIds(userId)) {
+      const s = io.sockets.sockets.get(socketId);
+      if (s) emitNavigatorStatus(s);
+    }
   }
   hooks.register("afterSessionCreate", syncNavigatorOnSessionChange, "_kernel-ws");
   hooks.register("afterSessionEnd", syncNavigatorOnSessionChange, "_kernel-ws");
@@ -936,19 +1162,24 @@ export function emitNavigate({
     return;
   }
 
-  const socketId = authSessions.get(userId);
-  if (socketId) {
+  // Fan out to every active socket for this user (web tab, CLI, …).
+  // Each client chooses whether to react to the navigate event — the
+  // CLI currently ignores it, the browser follows it.
+  const socketIds = getAuthSocketIds(userId);
+  if (socketIds.length === 0) return;
+  for (const socketId of socketIds) {
     io.to(socketId).emit(WS.NAVIGATE, { url, replace });
-    log.debug("WS",
-      `📍 Navigated user ${userId} to ${url} (session: ${sessionId ? sessionId.slice(0, 8) : "ungated"})`,
-    );
   }
+  log.debug("WS",
+    `📍 Navigated user ${userId} to ${url} (session: ${sessionId ? sessionId.slice(0, 8) : "ungated"}, fanout: ${socketIds.length})`,
+  );
 }
 
 export function emitReload({ userId }) {
   if (!io) return;
-  const socketId = authSessions.get(userId);
-  if (socketId) io.to(socketId).emit(WS.RELOAD);
+  for (const socketId of getAuthSocketIds(userId)) {
+    io.to(socketId).emit(WS.RELOAD);
+  }
 }
 
 /**
@@ -979,23 +1210,27 @@ export function emitBroadcast(event, data) {
 
 export function emitToUser(userId, event, data) {
   if (!io) return;
-  const socketId = authSessions.get(userId);
-  if (socketId) io.to(socketId).emit(event, data);
+  for (const socketId of getAuthSocketIds(userId)) {
+    io.to(socketId).emit(event, data);
+  }
 }
 
 export function isUserOnline(userId) {
-  return authSessions.has(String(userId));
+  const set = authSessions.get(String(userId));
+  return !!(set && set.size > 0);
 }
 
 export function notifyTreeChange({ userId, nodeId, changeType, details }) {
   if (!io) return;
-  const socketId = authSessions.get(userId);
-  if (socketId)
+  for (const socketId of getAuthSocketIds(userId)) {
     io.to(socketId).emit(WS.TREE_CHANGED, { nodeId, changeType, details });
+  }
 }
 
 function logStats() {
+  let totalSockets = 0;
+  for (const set of authSessions.values()) totalSockets += set.size;
   log.debug("WS",
-    `📊 Auth: ${authSessions.size} | Visitors: ${userSockets.size} | MCP: ${mcpClients.size} | Sessions: ${sessionCount()} | Registry: ${registeredSessionCount()}`,
+    `📊 Users: ${authSessions.size} (${totalSockets} sockets) | Visitors: ${userSockets.size} | MCP: ${mcpClients.size} | Sessions: ${sessionCount()} | Registry: ${registeredSessionCount()}`,
   );
 }

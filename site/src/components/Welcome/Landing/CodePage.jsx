@@ -592,7 +592,7 @@ tree:code-review        past: audit + refine loop with .source references`}</pre
             is built as a tree, the AI is navigating that tree, and the tree is reading its own source.
           </p>
           <div className="lp-hero-ctas">
-            <a className="lp-btn lp-btn-primary" href="/land">Start a land</a>
+            <a className="lp-btn lp-btn-primary" href="/lands">Start a land</a>
             <a className="lp-btn lp-btn-secondary" href="/ai">How the grammar works</a>
             <a className="lp-btn lp-btn-secondary" href="/kernel">Inside the seed</a>
           </div>
@@ -615,7 +615,7 @@ tree:code-review        past: audit + refine loop with .source references`}</pre
             <div className="lp-footer-col">
               <h4>TreeOS</h4>
               <a href="/treeos">Overview</a>
-              <a href="/land">Start a Land</a>
+              <a href="/lands">Start a Land</a>
               <a href="/cli">CLI</a>
             </div>
             <div className="lp-footer-col">

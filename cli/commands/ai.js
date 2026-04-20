@@ -7,6 +7,42 @@ const {
 const { getApi } = require("../helpers");
 const { printChats } = require("../display");
 
+// Live websocket path for the four conversational verbs. Renders mode
+// picks, tool calls, mid-turn thinking, and swarm branch forks as they
+// arrive. Falls back to the caller's HTTP routine on any websocket
+// error (TreeWSUnavailable), so scripts and anon-auth users still get
+// an answer. `--no-live` on any verb forces the HTTP path.
+async function tryLive({ verb, message, rootId = null, currentNodeId: nodeId = null, zone = null, sessionHandle = null, noLive = false }) {
+  if (noLive) return { fallback: true, reason: "--no-live" };
+  let ws, renderer;
+  try {
+    ws = require("../ws");
+    renderer = require("../liveRenderer");
+  } catch (err) {
+    return { fallback: true, reason: err.message };
+  }
+  const { runConversational, TreeWSUnavailable } = ws;
+  const { createLiveRenderer } = renderer;
+  const live = createLiveRenderer();
+  try {
+    const result = await runConversational({
+      verb,
+      message,
+      rootId,
+      currentNodeId: nodeId,
+      zone,
+      sessionHandle,
+      onProgress: live.onProgress,
+    });
+    live.finish();
+    return { live: true, result };
+  } catch (err) {
+    live.finish();
+    if (err instanceof TreeWSUnavailable) return { fallback: true, reason: err.message };
+    throw err;
+  }
+}
+
 module.exports = (program) => {
   const cfg = load();
 
@@ -72,7 +108,8 @@ module.exports = (program) => {
   program
     .command("chat [message...]")
     .description("Chat with AI. @name pins a session to the current position. @name alone switches to it.")
-    .action(async (parts) => {
+    .option("--no-live", "Force HTTP path; skip websocket live streaming")
+    .action(async (parts, opts) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: chat <message> or @name <message>"));
       const cfg = requireAuth();
       const api = getApi(cfg);
@@ -126,26 +163,43 @@ module.exports = (program) => {
         global._treeosInFlight = new AbortController();
         const signal = global._treeosInFlight.signal;
         const label = handle ? chalk.magenta(`@${handle}`) : chalk.bold("Tree");
+        const noLive = opts && opts.live === false;
 
         if (!target.rootId && !cfg.atHome) {
           console.log(chalk.dim("Land Manager…"));
-          const data = await api.post("/land/chat", { message }, { signal });
-          console.log(chalk.bold("\nLand:") + " " + (data.answer || "No response."));
+          const live = await tryLive({ verb: "chat", message, zone: "land", noLive });
+          if (live.live) {
+            console.log(chalk.bold("\nLand:") + " " + (live.result.answer || "No response."));
+          } else {
+            const data = await api.post("/land/chat", { message }, { signal });
+            console.log(chalk.bold("\nLand:") + " " + (data.answer || "No response."));
+          }
         } else if (!target.rootId) {
           console.log(chalk.dim("Thinking…"));
-          const data = await api.post("/home/chat", { message }, { signal });
-          console.log(chalk.bold("\nHome:") + " " + (data.answer || "No response."));
+          const live = await tryLive({ verb: "chat", message, zone: "home", noLive });
+          if (live.live) {
+            console.log(chalk.bold("\nHome:") + " " + (live.result.answer || "No response."));
+          } else {
+            const data = await api.post("/home/chat", { message }, { signal });
+            console.log(chalk.bold("\nHome:") + " " + (data.answer || "No response."));
+          }
         } else {
           console.log(chalk.dim("Thinking…"));
           // Send currentNodeId so the server knows position even after restart
           const currentNode = cfg.pathStack?.length > 0
             ? cfg.pathStack[cfg.pathStack.length - 1].id
             : target.rootId;
-          const data = await api.chat(target.rootId, message, {
-            signal,
-            sessionHandle: handle || undefined,
-            currentNodeId: currentNode,
-          });
+          const live = await tryLive({ verb: "chat", message, rootId: target.rootId, currentNodeId: currentNode, sessionHandle: handle || undefined, noLive });
+          let data;
+          if (live.live) {
+            data = { answer: live.result.answer, targetNodeId: live.result.targetNodeId };
+          } else {
+            data = await api.chat(target.rootId, message, {
+              signal,
+              sessionHandle: handle || undefined,
+              currentNodeId: currentNode,
+            });
+          }
           console.log(`\n${label}: ` + (data.answer || "No response."));
 
           // Auto-navigate CLI when territory match routed to a different node
@@ -179,7 +233,8 @@ module.exports = (program) => {
   program
     .command("place [message...]")
     .description("AI-place a message into the branch you are in")
-    .action(async (parts) => {
+    .option("--no-live", "Force HTTP path; skip websocket live streaming")
+    .action(async (parts, opts) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: place <message>"));
       const message = parts.join(" ");
       const cfg = requireAuth();
@@ -189,7 +244,14 @@ module.exports = (program) => {
       const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
-        const data = await api.place(nodeId, message);
+        const noLive = opts && opts.live === false;
+        const live = await tryLive({ verb: "place", message, rootId: cfg.activeRootId, currentNodeId: nodeId, noLive });
+        let data;
+        if (live.live) {
+          data = { targetPath: live.result.targetPath, stepSummaries: live.result.stepSummaries };
+        } else {
+          data = await api.place(nodeId, message);
+        }
         if (data.targetPath)
           console.log(chalk.green(`✓ Placed under: ${data.targetPath}`));
         else console.log(chalk.green("✓ Placed"));
@@ -201,7 +263,8 @@ module.exports = (program) => {
   program
     .command("query [message...]")
     .description("Query AI about the branch you are in (read-only)")
-    .action(async (parts) => {
+    .option("--no-live", "Force HTTP path; skip websocket live streaming")
+    .action(async (parts, opts) => {
       if (!parts || !parts.length) return console.log(chalk.yellow("Usage: query <message>"));
       const message = parts.join(" ");
       const cfg = requireAuth();
@@ -211,7 +274,9 @@ module.exports = (program) => {
       const api = getApi(cfg);
       try {
         const nodeId = currentNodeId(cfg);
-        const data = await api.query(nodeId, message);
+        const noLive = opts && opts.live === false;
+        const live = await tryLive({ verb: "query", message, rootId: cfg.activeRootId, currentNodeId: nodeId, noLive });
+        const data = live.live ? { answer: live.result.answer } : await api.query(nodeId, message);
         console.log(
           chalk.bold("\nTree:") + " " + (data.answer || "No response."),
         );
@@ -223,7 +288,8 @@ module.exports = (program) => {
   program
     .command("be [message...]")
     .description("Guided walkthrough. The tree leads. You follow.")
-    .action(async (parts) => {
+    .option("--no-live", "Force HTTP path; skip websocket live streaming")
+    .action(async (parts, opts) => {
       const message = (parts || []).join(" ") || "begin";
       const cfg = requireAuth();
       if (!cfg.activeRootId)
@@ -234,7 +300,9 @@ module.exports = (program) => {
         const currentNode = cfg.pathStack?.length > 0
           ? cfg.pathStack[cfg.pathStack.length - 1].id
           : cfg.activeRootId;
-        const data = await api.be(cfg.activeRootId, message, { currentNodeId: currentNode });
+        const noLive = opts && opts.live === false;
+        const live = await tryLive({ verb: "be", message, rootId: cfg.activeRootId, currentNodeId: currentNode, noLive });
+        const data = live.live ? { answer: live.result.answer } : await api.be(cfg.activeRootId, message, { currentNodeId: currentNode });
         console.log(
           chalk.bold("\nTree:") + " " + (data.answer || "No response."),
         );

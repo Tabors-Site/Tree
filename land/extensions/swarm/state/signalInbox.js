@@ -16,10 +16,17 @@ const MAX_INBOX = 30;
  * Append a signal onto a target node's inbox. Capped at MAX_INBOX
  * (most recent wins). The next session that runs at that node picks it
  * up via enrichContext.
+ *
+ * `emitterChatId` is optional: when the caller knows which chat step
+ * caused this signal emission (afterNote/afterToolCall), passing it
+ * lets treeos-base's AI forensics attribute the emission to that
+ * capture's `swarmSignalsEmitted[]`. Best-effort: if the treeos-base
+ * extension isn't present or has no pending capture for the chatId,
+ * the call silently no-ops.
  */
-export async function appendSignal({ nodeId, signal, core }) {
+export async function appendSignal({ nodeId, signal, core, emitterChatId = null }) {
   if (!nodeId || !signal) return;
-  return mutateMeta(nodeId, (draft) => {
+  const result = await mutateMeta(nodeId, (draft) => {
     if (!Array.isArray(draft.inbox)) draft.inbox = [];
     draft.inbox.push({
       at: signal.at || new Date().toISOString(),
@@ -30,6 +37,23 @@ export async function appendSignal({ nodeId, signal, core }) {
     }
     return draft;
   }, core);
+  if (emitterChatId) {
+    try {
+      const { getExtension } = await import("../../loader.js");
+      const forensics = getExtension("treeos-base")?.exports?.recordSwarmSignalEmitted;
+      if (typeof forensics === "function") {
+        forensics({
+          chatId: emitterChatId,
+          toNodeId: String(nodeId),
+          kind: signal.kind || "unknown",
+          filePath: signal.filePath || null,
+        });
+      }
+    } catch {
+      // Forensics is optional — never block signal delivery on it.
+    }
+  }
+  return result;
 }
 
 export async function readSignals(nodeId) {

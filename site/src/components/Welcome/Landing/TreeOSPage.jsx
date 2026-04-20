@@ -441,7 +441,7 @@ const TreeOSPage = () => {
       <section className="lp-section" style={{paddingBottom: 60}}>
         <div className="lp-container" style={{textAlign: "center"}}>
           <div className="lp-hero-ctas">
-            <a className="lp-btn lp-btn-primary" href="/land">Start a Land</a>
+            <a className="lp-btn lp-btn-primary" href="/lands">Start a Land</a>
             <a className="lp-btn lp-btn-secondary" href="/what">More Into TreeOS</a>
             <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
             <a className="lp-btn lp-btn-secondary" href="/guide">Guide</a>
@@ -466,7 +466,7 @@ const TreeOSPage = () => {
               <a href="/build">Build</a>
               <a href="/network">The Network</a>
               <a href="/mycelium">Mycelium</a>
-              <a href="/land">Start a Land</a>
+              <a href="/lands">Start a Land</a>
               <a href="/cli">CLI</a>
             </div>
             <div className="lp-footer-col">

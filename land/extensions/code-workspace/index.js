@@ -1,5 +1,5 @@
 import log from "../../seed/log.js";
-import getWorkspaceTools from "./tools.js";
+import getWorkspaceTools, { writeFileInBranch, readFileInBranch } from "./tools.js";
 import { readMeta, localNodeView, initProject, getWorkspacePath } from "./workspace.js";
 import { ensureSourceTree } from "./source.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
@@ -54,6 +54,8 @@ import summarizeMode from "./modes/summarize.js";
 
 // Serve subsystem — live preview of workspace projects
 import createServeRouter from "./serve/routes.js";
+import { registerStrategy, buildStrategyContextBlock, listStrategies } from "./strategyRegistry.js";
+import { branchSummary } from "./fileSurface.js";
 import {
   startPreview,
   stopPreview,
@@ -928,7 +930,7 @@ export async function init(core) {
   // is the main driver of self-similar state maintenance.
   core.hooks.register(
     "afterNote",
-    async ({ note, nodeId, contentType, action }) => {
+    async ({ note, nodeId, contentType, action, chatId }) => {
       if (contentType !== "text") return;
       if (!nodeId) return;
       try {
@@ -937,6 +939,12 @@ export async function init(core) {
         const found = await sw.findBranchContext(nodeId);
         if (!found) return;
         const { branchNode, projectNode } = found;
+        // Pulled from afterNote hookData; threaded into appendSignal below
+        // so AI forensics can attribute the signal emission to the
+        // capture that caused this note write. Silently null for
+        // background note writes (no chat context), in which case the
+        // forensics layer no-ops.
+        const emitterChatId = chatId || null;
 
         const { default: NodeModel } = await import("../../seed/models/node.js");
         const fileNode = await NodeModel.findById(nodeId).select("name metadata").lean();
@@ -994,6 +1002,7 @@ export async function init(core) {
                   payload: classification.signals.slice(0, 8).join(" · "),
                 },
                 core,
+                emitterChatId,
               });
               await markPlanDrift({
                 nodeId: sib._id,
@@ -1055,6 +1064,7 @@ export async function init(core) {
                   payload: validation.error,
                 },
                 core,
+                emitterChatId,
               });
               await notifySignal(signalTargetId, { reason: "syntax error" });
               log.warn(
@@ -1092,6 +1102,7 @@ export async function init(core) {
                     payload: issue,
                   },
                   core,
+                  emitterChatId,
                 });
               }
               await notifySignal(signalTargetId, { reason: "dead receiver" });
@@ -1143,6 +1154,7 @@ export async function init(core) {
                       payload: `${backendResult.contracts.length} contract(s) declared on ${filePath}`,
                     },
                     core,
+                    emitterChatId,
                   });
                   await notifySignal(sib._id, { reason: "backend contracts" });
                 }
@@ -1197,6 +1209,7 @@ export async function init(core) {
                         payload: flatPayload,
                       },
                       core,
+                      emitterChatId,
                     });
                   }
                   await notifySignal(branchNode._id, { reason: "contract mismatch" });
@@ -1327,11 +1340,53 @@ export async function init(core) {
   // runtime smoke test on its path. Failure flips the result to failed
   // so swarm re-runs retry with the fresh RUNTIME_ERROR signals in the
   // branch's inbox.
+  //
+  // Also writes a surface summary ("WS handles: join/flap/gameState; HTTP:
+  // GET /health") onto the branch's subPlan entry. Siblings see this in
+  // their enrichContext instead of the raw "[[DONE]]" the architect emits.
   core.hooks.register(
     "swarm:afterBranchComplete",
     async ({ branchNode, rootProjectNode, branch, result }) => {
       if (!rootProjectNode?._id || !branch?.path) return;
       if (result?.status !== "done") return;
+
+      // Write a surface summary for siblings, regardless of smoke outcome.
+      // Done BEFORE smoke so a branch that later flips to failed still has
+      // its summary visible for diagnosis.
+      try {
+        const { walkProjectFiles } = await import("./workspace.js");
+        const allFiles = await walkProjectFiles(rootProjectNode._id);
+        const prefix = branch.path.replace(/^\/+/, "").replace(/\/+$/, "") + "/";
+        const branchFiles = allFiles
+          .filter((f) => String(f.filePath || "").startsWith(prefix))
+          .map((f) => ({ filePath: f.filePath.slice(prefix.length), content: f.content || "" }));
+        const summary = branchSummary(branch.name, branchFiles);
+        if (summary) {
+          const sw = await swarm();
+          if (sw?.setBranchStatus) {
+            await sw.setBranchStatus({
+              branchNodeId: branchNode._id,
+              status: "done",
+              summary,
+              core,
+            });
+          }
+          if (sw?.upsertSubPlanEntry) {
+            await sw.upsertSubPlanEntry({
+              parentNodeId: rootProjectNode._id,
+              core,
+              child: {
+                name: branch.name,
+                nodeId: String(branchNode._id),
+                summary,
+              },
+            });
+          }
+        }
+      } catch (sumErr) {
+        log.debug("CodeWorkspace", `branch summary skipped: ${sumErr.message}`);
+      }
+
       try {
         const projectDoc = await (await import("../../seed/models/node.js")).default
           .findById(rootProjectNode._id);
@@ -1856,6 +1911,22 @@ export async function init(core) {
       stopPreview,
       getServeEntryByNodeId: getEntryByNodeId,
       allServeEntries: allEntries,
+
+      // Strategy registry. Domain packages (code-strategy-http,
+      // code-strategy-websocket, ...) call registerStrategy from their own
+      // init() to add a short context block that plan-mode inlines when
+      // the predicate matches. Tools are declared in the strategy's own
+      // manifest and injected into tree:code-plan via modeTools.
+      registerStrategy,
+      buildStrategyContextBlock,
+      listStrategies,
+      // Branch-aware single-file write. Strategy wrappers (ws-create-server,
+      // http-create-server, ...) call this so they don't re-implement the
+      // path-root validation or project detection the base tools already do.
+      writeFileInBranch,
+      // Branch-aware single-file read — companion to writeFileInBranch.
+      // Strategy wrappers use this to read a file they plan to patch.
+      readFileInBranch,
     },
   };
 }

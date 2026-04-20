@@ -172,6 +172,7 @@ export async function localClassify(message, currentNodeId, rootId, userId = nul
 // ─────────────────────────────────────────────────────────────────────────
 
 export function extractBehavioral(sourceType) {
+  if (!sourceType || typeof sourceType !== "string") return "chat"; // default for null/missing callers (background, room-agent, cron)
   if (sourceType === "query" || sourceType.endsWith("-query")) return "query";
   if (sourceType === "place" || sourceType.endsWith("-place")) return "place";
   if (sourceType === "be" || sourceType.endsWith("-be")) return "be";

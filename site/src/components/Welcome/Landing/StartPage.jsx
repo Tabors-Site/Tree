@@ -52,7 +52,7 @@ const StartPage = () => {
                 cd my-land<br/>
                 npm start
               </div>
-              <a href="/land" style={{display: "inline-block", marginTop: 14, fontSize: "0.85rem", color: "#6ee7b7"}}>
+              <a href="/lands" style={{display: "inline-block", marginTop: 14, fontSize: "0.85rem", color: "#6ee7b7"}}>
                 Full setup guide
               </a>
             </div>
@@ -238,7 +238,7 @@ chat "how's my progress this week"`}</Code>
               <a href="/build">Build</a>
               <a href="/network">The Network</a>
               <a href="/mycelium">Mycelium</a>
-              <a href="/land">Start a Land</a>
+              <a href="/lands">Start a Land</a>
               <a href="/cli">CLI</a>
             </div>
             <div className="lp-footer-col">

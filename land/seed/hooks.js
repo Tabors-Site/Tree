@@ -49,7 +49,12 @@ import { getLandConfigValue } from "./landConfig.js";
  *
  * run() returns { cancelled: false } or { cancelled: true, reason: "..." }.
  *
- * One handler per extension per hook. Duplicate registrations replace the previous one.
+ * Multiple handlers per extension per hook are allowed — an extension with
+ * separate concerns on the same hook (e.g. channels: delivery path vs.
+ * invitation path) can register each as its own handler. Duplicate detection
+ * is by HANDLER FUNCTION IDENTITY, not extension name: registering the same
+ * function twice (e.g. init re-running) replaces the previous entry, while
+ * two different functions from the same extension are both kept.
  * Max 100 handlers per hook as a safety cap. 5s timeout per handler.
  *
  * Usage in extensions:
@@ -77,6 +82,7 @@ const SEQUENTIAL_OVERRIDES = {
   enrichContext: true,  // builds cumulative AI context, each handler adds to previous
   onCascade: true,      // ordered .flow writes, result ordering matters
   onCompress: true,     // handlers refine the same summary field sequentially
+  filterAvailableModes: true, // each handler refines modes[] in payload
 };
 const _failureCounts = new Map(); // "hookName:extName" -> count
 const _circuitOpenedAt = new Map(); // "hookName:extName" -> timestamp when breaker opened
@@ -160,7 +166,13 @@ function withTimeout(promise, ms, label) {
 /**
  * Register a hook handler from an extension.
  * Called during extension init().
- * One handler per extension per hook. Second call replaces the first.
+ *
+ * Multiple handlers per extension are allowed — an extension with separate
+ * concerns on the same hook (e.g. channels: delivery + invitation) may
+ * register each as its own handler. Duplicate detection is by handler
+ * function IDENTITY: re-registering the exact same function replaces the
+ * previous entry (idempotent init), while two distinct functions from the
+ * same extension are both kept.
  */
 function register(hookName, handler, extName = "unknown") {
   if (typeof handler !== "function") {
@@ -196,10 +208,13 @@ function register(hookName, handler, extName = "unknown") {
 
   const handlers = registry.get(hookName);
 
-  // Replace existing handler from same extension (no duplicates)
-  const existingIdx = handlers.findIndex(h => h.extName === extName);
-  if (existingIdx !== -1) {
-    handlers[existingIdx] = { extName, handler };
+  // Idempotent re-register: same function object → replace in place.
+  // Different function from same extension → keep as a second handler.
+  // This supports init()'s being called more than once during development
+  // and extensions that legitimately need multiple listeners on one hook.
+  const sameFnIdx = handlers.findIndex(h => h.handler === handler);
+  if (sameFnIdx !== -1) {
+    handlers[sameFnIdx] = { extName, handler };
     return;
   }
 

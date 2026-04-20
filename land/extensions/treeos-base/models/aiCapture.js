@@ -92,6 +92,43 @@ const BranchEventSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Cascade signal that this call emitted (a local write fired checkCascade).
+// One entry per onCascade firing correlated to this call's chatId.
+const CascadeEmittedSchema = new mongoose.Schema(
+  {
+    signalId: { type: String, required: true },
+    nodeId: { type: String, default: null },
+    status: { type: String, default: null },
+    at: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+// Cascade signal that arrived at this call's node (deliverCascade path) —
+// captured so the renderer can show "this call saw cascade X from node Y".
+const CascadeReceivedSchema = new mongoose.Schema(
+  {
+    signalId: { type: String, required: true },
+    sourceNodeId: { type: String, default: null },
+    at: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+// Lateral swarm signal this call dropped into a sibling's inbox.
+// Supplements toolCalls[].signals which is the receiver-side view; this
+// is the emitter-side view so the forensics UI can show "this call
+// informed sibling Y with kind K".
+const SwarmSignalEmittedSchema = new mongoose.Schema(
+  {
+    toNodeId: { type: String, required: true },
+    kind: { type: String, required: true },
+    filePath: { type: String, default: null },
+    at: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const AiCaptureSchema = new mongoose.Schema({
   _id: {
     type: String,
@@ -131,6 +168,20 @@ const AiCaptureSchema = new mongoose.Schema({
 
   // Swarm branch status transitions attributed to this call
   branchEvents: { type: [BranchEventSchema], default: [] },
+
+  // Cross-call lineage. Mirrors Chat.parentChatId so the forensics
+  // timeline can walk from a child capture (e.g., a summarizer rescue,
+  // a swarm-dispatched branch) back to its parent call without a
+  // Chat-side join.
+  parentChatId: { type: String, default: null, index: true },
+
+  // Cascade + swarm signal emission/reception. Fills the "why did the
+  // AI do this?" gap that the plain toolCalls[] doesn't answer: a tool
+  // call shows up, but the signal that provoked it or the signal the
+  // call emitted was previously invisible from the capture.
+  cascadesEmitted: { type: [CascadeEmittedSchema], default: [] },
+  cascadesReceived: { type: [CascadeReceivedSchema], default: [] },
+  swarmSignalsEmitted: { type: [SwarmSignalEmittedSchema], default: [] },
 });
 
 // Index for timeline queries at a specific tree position

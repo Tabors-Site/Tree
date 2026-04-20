@@ -456,6 +456,39 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
     @keyframes typing { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-8px); } }
 
+    /* Live event stream — mirrors the CLI liveRenderer. Each line is
+       a single-row dimmed status inserted between the user bubble and
+       the typing indicator during a turn. They stay in the transcript
+       after the answer lands so the user can scroll the trace. */
+    .live-line {
+      margin: 2px 0 2px 50px;
+      padding: 2px 10px;
+      font-size: 12px;
+      line-height: 1.5;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      color: rgba(255, 255, 255, 0.75);
+      animation: liveIn 0.18s ease-out;
+    }
+    .live-line b { color: rgba(255, 255, 255, 0.95); font-weight: 600; }
+    .live-dim { color: rgba(255, 255, 255, 0.5); }
+    .live-ok { color: rgba(125, 220, 155, 0.95); font-weight: 700; }
+    .live-fail { color: rgba(240, 130, 130, 0.95); font-weight: 700; }
+    .live-fail-text { color: rgba(240, 130, 130, 0.85); }
+    .live-dot { color: rgba(255, 255, 255, 0.45); }
+    .live-tc-dot { color: rgba(255, 200, 100, 0.9); font-weight: 700; }
+    .live-swarm { color: rgba(140, 180, 240, 0.95); font-weight: 700; }
+    .live-branch { color: rgba(140, 180, 240, 0.95); font-weight: 700; }
+    .live-line-intent { padding-left: 6px; }
+    .live-line-intent b { color: rgba(160, 210, 255, 0.95); }
+    .live-line-mode { padding-left: 6px; }
+    .live-line-mode b { color: rgba(160, 210, 255, 0.95); }
+    .live-line-thinking { color: rgba(210, 170, 255, 0.8); font-style: italic; }
+    .live-line-tool-call { padding-left: 20px; }
+    .live-line-tool-ok, .live-line-tool-fail { padding-left: 20px; }
+    .live-line-branch-start { padding-left: 20px; }
+    .live-line-branch-ok, .live-line-branch-fail { padding-left: 20px; }
+    @keyframes liveIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
+
     /* Input — matches app.js */
     .chat-input-area { padding: 16px 20px 20px; border-top: 1px solid var(--glass-border-light); }
     .input-container { display: flex; align-items: flex-end; gap: 12px; padding: 14px 18px; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border: 1px solid var(--glass-border-light); border-radius: 18px; transition: all var(--transition-fast); }
@@ -1160,6 +1193,161 @@ router.get("/chat", authenticateLite, async (req, res) => {
       }
     });
 
+    // ── Live reasoning stream ───────────────────────────────────────
+    // Mirrors the CLI liveRenderer: the moment a message is sent, a
+    // row of dimmed status lines appears between the user bubble and
+    // the typing indicator, showing what the AI is doing right now.
+    // Every line stays in the transcript so the user can scroll back
+    // through the trace of a turn later.
+    var _liveState = { lastMode: null, lastThinking: null };
+
+    function addLiveLine(classSuffix, html) {
+      const welcome = chatMessages.querySelector(".welcome-message");
+      if (welcome) {
+        welcome.remove();
+        document.getElementById("chatArea").classList.remove("empty");
+      }
+      const typing = document.getElementById("typingIndicator");
+      const row = document.createElement("div");
+      row.className = "live-line live-line-" + classSuffix;
+      row.innerHTML = html;
+      if (typing) chatMessages.insertBefore(row, typing);
+      else chatMessages.appendChild(row);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function oneLineLive(s, max) {
+      if (!s) return "";
+      var flat = String(s).replace(/\\s+/g, " ").trim();
+      return flat.length <= max ? flat : flat.slice(0, max - 1) + "\\u2026";
+    }
+
+    function formatLiveArgs(args) {
+      if (!args || typeof args !== "object") return "";
+      var keys = ["filePath", "path", "name", "query", "command", "action"];
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        if (args[k] != null && typeof args[k] !== "object") {
+          var v = String(args[k]);
+          return v.length > 60 ? v.slice(0, 57) + "\\u2026" : v;
+        }
+      }
+      return "";
+    }
+
+    socket.on("executionStatus", function(ev) {
+      // "intent" / "done" phase with no text is just a progress marker.
+      if (!ev || (!ev.text && (ev.phase === "intent" || ev.phase === "done"))) return;
+      addLiveLine("status", '<span class="live-dot">\\u00b7</span> ' + escapeHtml(ev.text || ev.phase));
+    });
+
+    socket.on("orchestratorStep", function(ev) {
+      var mode = ev && ev.modeKey ? String(ev.modeKey) : "?";
+
+      // Classifier result: render the chosen intent + target mode + confidence
+      // the same way the CLI does (\\ud83c\\udfaf extension \\u2192 tree:code-plan conf=0.96).
+      if (mode === "intent") {
+        var parsed = ev.result;
+        if (typeof parsed === "string") {
+          try { parsed = JSON.parse(parsed); } catch (e) { parsed = null; }
+        }
+        if (parsed && typeof parsed === "object") {
+          var intent = parsed.intent || "?";
+          var conf = typeof parsed.confidence === "number" ? " conf=" + parsed.confidence.toFixed(2) : "";
+          var targetMode = parsed.mode ? " \\u2192 " + escapeHtml(parsed.mode) : "";
+          var summary = parsed.summary ? ' <span class="live-dim">\\u2014 ' + escapeHtml(oneLineLive(parsed.summary, 120)) + '</span>' : "";
+          addLiveLine("intent", '\\ud83c\\udfaf <b>' + escapeHtml(intent) + '</b>' + targetMode + '<span class="live-dim">' + conf + '</span>' + summary);
+          _liveState.lastMode = mode;
+          return;
+        }
+      }
+      if (mode !== _liveState.lastMode) {
+        addLiveLine("mode", '\\u21aa <b>' + escapeHtml(mode) + '</b>');
+        _liveState.lastMode = mode;
+      }
+    });
+
+    socket.on("modeSwitched", function(ev) {
+      var m = ev && (ev.mode || ev.modeKey || ev.to);
+      if (!m || m === _liveState.lastMode) return;
+      addLiveLine("mode", '\\u21aa <b>' + escapeHtml(m) + '</b>');
+      _liveState.lastMode = m;
+    });
+
+    socket.on("thinking", function(ev) {
+      var text = oneLineLive(ev && ev.text, 200);
+      if (!text) return;
+      var key = text.slice(0, 60);
+      if (key === _liveState.lastThinking) return;
+      _liveState.lastThinking = key;
+      addLiveLine("thinking", '\\u2026 <span class="live-dim">' + escapeHtml(text) + '</span>');
+    });
+
+    socket.on("toolCalled", function(ev) {
+      var name = ev && ev.tool ? String(ev.tool) : "?";
+      var hint = formatLiveArgs(ev && ev.args);
+      addLiveLine("tool-call",
+        '<span class="live-tc-dot">\\u00b7</span> <b>' + escapeHtml(name) + '</b>' +
+        (hint ? ' <span class="live-dim">(' + escapeHtml(hint) + ')</span>' : "")
+      );
+    });
+
+    socket.on("toolResult", function(ev) {
+      var name = ev && ev.tool ? String(ev.tool) : "?";
+      var ok = !(ev && (ev.success === false || ev.error));
+      if (ok) {
+        var preview = "";
+        if (ev && typeof ev.result === "string" && ev.result.trim()) {
+          var firstLine = ev.result.split("\\n").find(function(l) { return l.trim(); }) || "";
+          preview = oneLineLive(firstLine, 120);
+        }
+        addLiveLine("tool-ok",
+          '<span class="live-ok">\\u2713</span> <span class="live-dim">' + escapeHtml(name) + '</span>' +
+          (preview ? ' <span class="live-dim">\\u2014 ' + escapeHtml(preview) + '</span>' : "")
+        );
+      } else {
+        var err = oneLineLive((ev && ev.error) || "failed", 160);
+        addLiveLine("tool-fail",
+          '<span class="live-fail">\\u2717</span> <span class="live-dim">' + escapeHtml(name) + '</span>' +
+          (err ? ' <span class="live-fail-text">' + escapeHtml(err) + '</span>' : "")
+        );
+      }
+    });
+
+    socket.on("swarmDispatch", function(ev) {
+      var count = (ev && ev.count) || (ev && ev.branches && ev.branches.length) || 0;
+      var names = (ev && ev.branches ? ev.branches.map(function(b) { return b.name; }).filter(Boolean) : []);
+      var label = names.length ? " [" + names.slice(0, 6).join(", ") + (names.length > 6 ? " +" + (names.length - 6) : "") + "]" : "";
+      addLiveLine("swarm",
+        '<span class="live-swarm">\\u232b</span> swarm: <b>' + count + ' branch' + (count === 1 ? "" : "es") + '</b>' +
+        '<span class="live-dim">' + escapeHtml(label) + '</span>'
+      );
+    });
+
+    socket.on("branchStarted", function(ev) {
+      var name = ev && ev.name ? String(ev.name) : "?";
+      var pos = (ev && ev.index != null && ev.total != null) ? " " + ev.index + "/" + ev.total : "";
+      addLiveLine("branch-start",
+        '<span class="live-branch">\\u25b6</span> <b>' + escapeHtml(name) + '</b><span class="live-dim">' + pos + '</span>'
+      );
+    });
+
+    socket.on("branchCompleted", function(ev) {
+      var name = ev && ev.name ? String(ev.name) : "?";
+      var st = (ev && ev.status) || "done";
+      if (st === "done") {
+        addLiveLine("branch-ok",
+          '<span class="live-ok">\\u2713</span> <span class="live-dim">branch </span><b>' + escapeHtml(name) + '</b>'
+        );
+      } else {
+        var err = oneLineLive((ev && ev.error) || st, 140);
+        addLiveLine("branch-fail",
+          '<span class="live-fail">\\u2717</span> <span class="live-dim">branch </span><b>' + escapeHtml(name) + '</b>' +
+          (err ? ' <span class="live-fail-text">' + escapeHtml(err) + '</span>' : "")
+        );
+      }
+    });
+
     socket.on("placeResult", ({ stepSummaries, targetPath, generation }) => {
       if (generation !== undefined && generation < requestGeneration) return;
       var el = document.getElementById("placeStatus");
@@ -1358,7 +1546,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       // Reset chat
       const welcome = chatMessages.querySelector(".welcome-message");
       if (welcome) welcome.style.display = "";
-      chatMessages.querySelectorAll(".message, .typing-indicator").forEach(el => el.remove());
+      chatMessages.querySelectorAll(".message, .typing-indicator, .live-line").forEach(el => el.remove());
       chatArea.classList.add("empty");
 
       // Tell server about this root
@@ -1583,6 +1771,11 @@ router.get("/chat", authenticateLite, async (req, res) => {
       } else {
         addTyping();
       }
+      // Reset the live-stream dedupe state for this new turn so the
+      // first mode switch / thinking line of the next run always
+      // shows (the previous turn's values don't carry over).
+      _liveState.lastMode = null;
+      _liveState.lastThinking = null;
       isSending = true;
       requestGeneration++;
       updateSendBtn();

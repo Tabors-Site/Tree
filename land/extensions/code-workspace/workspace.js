@@ -285,10 +285,27 @@ function splitPath(relPath) {
 async function findChildByName(parentId, childName) {
   const parent = await Node.findById(parentId).select("children").lean();
   if (!parent?.children?.length) return null;
-  return Node.findOne({
+  const candidates = await Node.find({
     _id: { $in: parent.children },
     name: childName,
   }).lean();
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
+  // Duplicate children with the same name exist (a consistency bug elsewhere
+  // in the swarm). Pick the one with actual content — the one with more
+  // descendants, or, as a tiebreak, the oldest. Never return an empty
+  // duplicate when a populated one is available; that was the failure mode
+  // where workspace-read-file reported "did not exist" for a file that
+  // lived under a sibling duplicate.
+  candidates.sort((a, b) => {
+    const aCount = Array.isArray(a.children) ? a.children.length : 0;
+    const bCount = Array.isArray(b.children) ? b.children.length : 0;
+    if (aCount !== bCount) return bCount - aCount;
+    const aTime = a.dateCreated ? new Date(a.dateCreated).getTime() : 0;
+    const bTime = b.dateCreated ? new Date(b.dateCreated).getTime() : 0;
+    return aTime - bTime;
+  });
+  return candidates[0];
 }
 
 /**

@@ -21,7 +21,7 @@ import {
   setCurrentNodeId,
 } from "../../seed/llm/conversation.js";
 import { formatMemoryContext, pushMemory } from "./state.js";
-import { emitStatus } from "./dispatch.js";
+import { emitStatus, buildSocketBridge } from "./dispatch.js";
 
 export async function runBeMode(message, {
   visitorId, socket, username, userId, rootId,
@@ -69,7 +69,7 @@ export async function runBeMode(message, {
             });
             const result = await processMessage(visitorId, decision?.message || message, {
               username, userId, rootId, signal, slot, onToolLoopCheckpoint,
-              onToolResults(results) { if (signal?.aborted) return; for (const r of results) socket.emit(WS.TOOL_RESULT, r); },
+              ...buildSocketBridge(socket, signal),
             });
             emitStatus(socket, "done", "");
             const answer = result?.content || result?.answer || null;
@@ -146,7 +146,7 @@ export async function runBeMode(message, {
             });
             const result = await processMessage(visitorId, decision?.message || message, {
               username, userId, rootId, signal, slot, onToolLoopCheckpoint,
-              onToolResults(results) { if (signal?.aborted) return; for (const r of results) socket.emit(WS.TOOL_RESULT, r); },
+              ...buildSocketBridge(socket, signal),
             });
             emitStatus(socket, "done", "");
             const answer = result?.content || result?.answer || null;

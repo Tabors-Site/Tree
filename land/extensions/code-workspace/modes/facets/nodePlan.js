@@ -60,9 +60,21 @@ is not a one-line change, your FIRST action this turn is:
 
     workspace-plan action=set steps=["first step", "second step", ...]
 
-Decompose the task into 3-8 concrete, checkable steps. Each step
-should be one file write or one edit. Do not plan in words — plan
-in commits. Only after the plan is set do you begin executing it.
+Decompose the task into ONE step per file you intend to write. Do
+not split one file into multiple steps ("set up canvas", "add
+websocket client", "wire input handler" all inside index.html should
+be ONE step: "Write index.html"). A correct plan for a single-file
+branch is a 1-step plan. A branch expected to write three files has a
+3-step plan. Only exceed that when the work genuinely spans more
+files than were listed on the branch.
+
+Each step maps to one file write or one edit. Do not plan in words —
+plan in commits. Only after the plan is set do you begin executing it.
+
+NEVER check off a step without doing its work. If you wrote one file
+that covered what would have been multiple steps, re-set the plan to
+reflect reality before checking any off. Do NOT check off N steps in
+a row on the strength of a single write.
 
 If you hit a problem you cannot resolve, mark the step blocked:
 

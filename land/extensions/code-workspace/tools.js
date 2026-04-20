@@ -39,6 +39,71 @@ import { syncUp } from "./sync.js";
 import { runInWorkspace, DEFAULTS } from "./sandbox.js";
 import { setSourceWriteMode, SOURCE_PROJECT_NAME, getSourceProject } from "./source.js";
 
+// ─────────────────────────────────────────────────────────────────────────
+// EDIT-DRIFT GUARD
+//
+// When workspace-edit-file runs twice on the same file without an
+// intervening read, the model's line numbers are stale: the first edit
+// shifted every line below it, so the second edit lands at the wrong
+// offset (best case: nothing; worst case: duplicates or broken braces).
+// The coach's system prompt already warns about this, but the model
+// defaults to "small problem → small edit" and ignores it.
+//
+// Rule enforced here: an edit is rejected when the file has already
+// been edited in this user's context without a subsequent read. The
+// rejection tells the model to either re-read the file (which refreshes
+// its mental line map) or switch to workspace-add-file (whole-file
+// rewrite — offsets don't matter). Reads and add-file calls reset the
+// counter.
+//
+// Scope: `${userId}:${filePath}`. Per-user so concurrent users don't
+// interfere. 10-minute TTL so a long-idle file becomes free to edit
+// again without a re-read (the user probably forgot the file state by
+// then anyway). Module-local Map, bounded by the sweeper below.
+// ─────────────────────────────────────────────────────────────────────────
+
+const _editDrift = new Map(); // key → { editsSinceRead, lastTouch }
+const EDIT_DRIFT_TTL_MS = 10 * 60 * 1000;
+
+function _driftKey(userId, filePath) { return `${userId}:${filePath}`; }
+function _driftNoteRead(userId, filePath) {
+  _editDrift.set(_driftKey(userId, filePath), { editsSinceRead: 0, lastTouch: Date.now() });
+}
+function _driftNoteEdit(userId, filePath) {
+  const k = _driftKey(userId, filePath);
+  const entry = _editDrift.get(k) || { editsSinceRead: 0, lastTouch: Date.now() };
+  entry.editsSinceRead += 1;
+  entry.lastTouch = Date.now();
+  _editDrift.set(k, entry);
+}
+function _driftCheckBeforeEdit(userId, filePath) {
+  const k = _driftKey(userId, filePath);
+  const entry = _editDrift.get(k);
+  if (!entry) return null;
+  if (Date.now() - entry.lastTouch > EDIT_DRIFT_TTL_MS) {
+    _editDrift.delete(k);
+    return null;
+  }
+  if (entry.editsSinceRead > 0) {
+    return (
+      `workspace-edit-file rejected: you already edited ${filePath} ${entry.editsSinceRead === 1 ? "once" : entry.editsSinceRead + " times"} ` +
+      `in this session without re-reading it. Your line numbers are stale. ` +
+      `Call workspace-read-file(${JSON.stringify({ filePath })}) first to refresh the line numbers, ` +
+      `or call workspace-add-file to rewrite the whole file cleanly (preferred for 2+ related changes — see the coach prompt).`
+    );
+  }
+  return null;
+}
+
+// TTL sweep: reap entries whose lastTouch is older than the cap.
+// Runs every 5 min, unrefs so it doesn't keep the process alive.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of _editDrift) {
+    if (now - v.lastTouch > EDIT_DRIFT_TTL_MS) _editDrift.delete(k);
+  }
+}, 5 * 60 * 1000).unref();
+
 function text(s) {
   return { content: [{ type: "text", text: String(s) }] };
 }
@@ -90,44 +155,196 @@ const _pendingSyncs = new Map(); // projectId -> timer
 const SYNC_DEBOUNCE_MS = 250;
 
 /**
- * Walk up from the current tree position to find the nearest swarm
- * branch node with a declared path, and return the path prefix (or
- * null if no branch ancestor). Used by the write/read tools to enforce
- * that branch file operations land UNDER the branch's declared path.
+ * Resolve a worker-supplied `filePath` against the caller's branch root.
  *
- * Without this, the LLM occasionally drops the `backend/` prefix when
- * writing a file (forgetting which branch it's in) and the file lands
- * at the workspace root — which confuses the smoke validator, the
- * sync engine, and every downstream consumer. The tools now auto-
- * prefix to the branch path so the model physically can't mis-target.
+ * A swarm worker's path is ALWAYS relative to its own branch. The tool
+ * refuses anything that would leave the branch: absolute paths, `..`
+ * segments, paths whose first segment is the worker's own branch name
+ * (double-nesting), and paths whose first segment matches a sibling
+ * branch name (ghost-copying a peer's tree).
+ *
+ * Returns { filePath, isInBranch, error }. On success `filePath` is the
+ * branch-rooted project path. On rejection `error` is a clean string
+ * the tool returns to the agent. When the caller is not inside a branch
+ * at all, the path is returned unchanged (project-level calls are fine).
  */
-async function resolveBranchPrefix(nodeId) {
-  if (!nodeId) return null;
+async function resolveBranchRootedPath(nodeId, filePath) {
+  const raw = String(filePath || "").trim();
+  if (!raw) return { filePath: raw, isInBranch: false, error: "filePath is empty" };
+  if (raw.startsWith("/")) {
+    return { filePath: raw, isInBranch: false, error: `absolute paths are not allowed: "${raw}"` };
+  }
+
+  if (!nodeId) return { filePath: raw, isInBranch: false, error: null };
+
+  let branch = null;
+  let siblingNames = new Set();
   try {
     const { getExtension } = await import("../loader.js");
     const sw = getExtension("swarm")?.exports;
-    if (!sw?.findBranchContext) return null;
-    const ctx = await sw.findBranchContext(nodeId);
-    const branch = ctx?.branchNode;
-    if (!branch) return null;
-    const swarmMeta = branch.metadata instanceof Map
-      ? branch.metadata.get("swarm")
-      : branch.metadata?.["swarm"];
-    const prefix = swarmMeta?.path;
-    if (!prefix || typeof prefix !== "string") return null;
-    return prefix.replace(/^\/+/, "").replace(/\/+$/, "") || null;
+    if (sw?.findBranchContext) {
+      const ctx = await sw.findBranchContext(nodeId);
+      branch = ctx?.branchNode || null;
+      if (branch && sw.findBranchSiblings) {
+        const sibs = await sw.findBranchSiblings(branch._id);
+        siblingNames = new Set((sibs || []).map((s) => s.name).filter(Boolean));
+      }
+    }
+  } catch {
+    // Swarm extension missing → treat as not-in-branch. Path passes through.
+  }
+
+  if (!branch) return { filePath: raw, isInBranch: false, error: null };
+
+  const swarmMeta = branch.metadata instanceof Map
+    ? branch.metadata.get("swarm")
+    : branch.metadata?.["swarm"];
+  const branchPath = (swarmMeta?.path || branch.name || "")
+    .toString()
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
+  if (!branchPath) return { filePath: raw, isInBranch: false, error: null };
+
+  // Integration / shell branch (path: "."). Its filesystem slot is
+  // the project root, so writes pass through unchanged: "index.html"
+  // stays "index.html", not "./index.html". We still mark it as
+  // isInBranch so sibling-path validation below can refuse writes
+  // into peer branches. But we skip the sibling + self-prefix checks
+  // — shell intentionally names files at the root level that don't
+  // conflict with peer dirs.
+  if (branchPath === ".") {
+    return { filePath: raw, isInBranch: true, error: null };
+  }
+
+  const segments = raw.split("/").filter(Boolean);
+  if (segments.length === 0) {
+    return { filePath: raw, isInBranch: true, error: "filePath has no segments" };
+  }
+  for (const seg of segments) {
+    if (seg === "." || seg === "..") {
+      return {
+        filePath: raw, isInBranch: true,
+        error: `path "${raw}" contains "${seg}" — paths inside a branch cannot traverse out of it`,
+      };
+    }
+  }
+  if (segments[0] === branchPath) {
+    return {
+      filePath: raw, isInBranch: true,
+      error: `path "${raw}" starts with your own branch name "${branchPath}". You are already inside "${branchPath}" — write paths are relative to your branch root, so drop the "${branchPath}/" prefix.`,
+    };
+  }
+  if (siblingNames.has(segments[0])) {
+    const sibling = segments[0];
+    const afterSibling = segments.slice(1).join("/");
+    const peekHint = afterSibling
+      ? `To read a file from "${sibling}", call workspace-peek-sibling-file with siblingName="${sibling}" filePath="${afterSibling}".`
+      : `To read files from "${sibling}", call workspace-peek-sibling-file with siblingName="${sibling}" filePath="<file in that branch>".`;
+    return {
+      filePath: raw, isInBranch: true,
+      error: `path "${raw}" points into sibling branch "${sibling}". You're in branch "${branchPath}"; "${sibling}" is a peer branch with its own worker. ${peekHint} To reference "${sibling}" at runtime, embed the reference (fetch URL, require path) as a literal string inside your own code — do not write files there.`,
+    };
+  }
+
+  return { filePath: `${branchPath}/${raw}`, isInBranch: true, error: null };
+}
+
+/**
+ * Files we allow at a project root even after branches exist. Two
+ * categories:
+ *   1. Workspace-wide config that belongs above the branch level
+ *      (package.json, tsconfig.json, .gitignore, …).
+ *   2. Integration / entry-point files — the "shell" that loads
+ *      branch modules and composes them into one app. A static HTML
+ *      game with modules in backend/, frontend/, etc. still needs a
+ *      root index.html that pulls the modules together. Same for a
+ *      root main.* or serve.* that imports branch code. Without these
+ *      in the allow-list, the architect can't write the integration
+ *      layer even when branches exist.
+ */
+const ROOT_ALLOWED_FILES = new Set([
+  // config
+  "package.json",
+  "package-lock.json",
+  ".gitignore",
+  ".npmrc",
+  ".nvmrc",
+  "README.md",
+  "readme.md",
+  ".env.example",
+  "tsconfig.json",
+  "jsconfig.json",
+  "Makefile",
+  "Dockerfile",
+  // integration shell — the entry point that loads branch modules
+  "index.html",
+  "index.htm",
+  "index.js",
+  "index.mjs",
+  "index.ts",
+  "main.js",
+  "main.mjs",
+  "main.ts",
+  "main.py",
+  "app.js",
+  "app.mjs",
+  "app.ts",
+  "app.py",
+  "server.js",
+  "server.mjs",
+  "server.ts",
+  // stylesheets + assets siblings index.html typically imports
+  "style.css",
+  "styles.css",
+  "main.css",
+  "index.css",
+  "app.css",
+]);
+
+/**
+ * Reject file writes at a project root that don't belong inside any
+ * existing branch. Once a project has decomposed into branches, every
+ * file is the responsibility of some branch — a bare "server.js" at
+ * the project root is an orphan. But a path like "backend/server.js"
+ * is a legitimate branch-scoped write expressed via the full path, so
+ * it's allowed. Root-level config files (package.json, README.md,
+ * tsconfig.json, etc.) are also allowed.
+ *
+ * Only runs when nodeId is AT the project root (resolveBranchRootedPath
+ * already covered in-branch calls).
+ *
+ * Returns null on OK, or an error string on reject.
+ */
+async function checkProjectRootHasBranches(nodeId, filePath) {
+  if (!nodeId || !filePath) return null;
+  const firstSegment = filePath.split("/").filter(Boolean)[0] || filePath;
+  if (ROOT_ALLOWED_FILES.has(firstSegment)) return null;
+  try {
+    const node = await Node.findById(nodeId).select("metadata name").lean();
+    if (!node) return null;
+    const sw = node.metadata instanceof Map
+      ? node.metadata.get("swarm")
+      : node.metadata?.["swarm"];
+    if (sw?.role !== "project") return null;
+    const branches = sw?.subPlan?.branches;
+    if (!Array.isArray(branches) || branches.length === 0) return null;
+    const branchNames = new Set(branches.map((b) => b?.name).filter(Boolean));
+    // Branch-prefixed path: "backend/server.js" when "backend" is an
+    // existing branch. That's a legitimate scoped write, not an orphan.
+    if (branchNames.has(firstSegment)) return null;
+    const namesList = [...branchNames].join(", ") || "(unknown)";
+    return (
+      `write at project root rejected: "${node.name}" has child branches [${namesList}] and "${firstSegment}" is not one of them. ` +
+      `Either write inside an existing branch by prefixing the path with the branch name ` +
+      `(e.g. "${[...branchNames][0] || "backend"}/${filePath.includes("/") ? filePath.split("/").slice(1).join("/") : filePath}"), ` +
+      `or emit a [[BRANCHES]] block adding "${firstSegment}" as a new branch with [[DONE]]. ` +
+      `Root-level config files (package.json, README.md, tsconfig.json, etc.) are allowed at the root.`
+    );
   } catch {
     return null;
   }
 }
 
-/**
- * If `filePath` isn't already under `branchPrefix`, prepend it. Returns
- * { filePath, rewrote } so callers can log when the rewrite happened.
- * Idempotent: files that are already correctly prefixed pass through.
- * Accepts `branchPrefix === null` as a no-op so the helper is safe
- * to call unconditionally.
- */
 /**
  * Render a one-paragraph summary of a preview registry entry for the
  * workspace-status tool. Includes the slug, port, kind, child PID,
@@ -155,11 +372,101 @@ function formatEntrySummary(entry) {
   return lines.join("\n");
 }
 
-function applyBranchPrefix(filePath, branchPrefix) {
-  if (!branchPrefix) return { filePath, rewrote: false };
-  if (filePath === branchPrefix) return { filePath, rewrote: false };
-  if (filePath.startsWith(branchPrefix + "/")) return { filePath, rewrote: false };
-  return { filePath: `${branchPrefix}/${filePath}`, rewrote: true };
+/**
+ * Branch-aware single-file write. Wraps the same pipeline workspace-add-file
+ * uses (resolveBranchRootedPath + resolveOrCreateFile + writeFileContent +
+ * debounced sync) so strategy wrappers like ws-create-server don't need to
+ * re-implement branch rooting or project detection.
+ *
+ * Accepts { core, nodeId, userId, rootId, projectName?, filePath, content }.
+ * Returns { ok, filePath, created } on success or { ok: false, error } on
+ * rejection/failure. The filePath returned reflects any branch-root rewrite.
+ */
+export async function writeFileInBranch({
+  core = null,
+  nodeId,
+  userId,
+  rootId,
+  projectName,
+  filePath,
+  content,
+}) {
+  try {
+    const resolved = await resolveBranchRootedPath(nodeId, filePath);
+    if (resolved.error) return { ok: false, error: resolved.error };
+    const finalPath = resolved.filePath;
+
+    // Locate or auto-init the project. Reuse the same priority chain as
+    // the tool handlers by calling findProject / initProject directly —
+    // ensureProject lives inside the getWorkspaceTools closure for reasons
+    // of `core` access, and is not reachable from module-top helpers.
+    let project = await findProject(nodeId || rootId);
+    if (!project && projectName && rootId) {
+      project = await findProjectByName(rootId, projectName);
+    }
+    if (!project && rootId) {
+      const rootNode = await Node.findById(rootId).lean();
+      if (rootNode) {
+        const { node } = await initProject({
+          projectNodeId: rootId,
+          name: rootNode.name || "workspace",
+          description: "Auto-initialized by strategy wrapper.",
+          userId,
+          core,
+        });
+        project = node;
+      }
+    }
+    if (!project) return { ok: false, error: "no active workspace; cannot resolve project root" };
+
+    const { fileNode, created } = await resolveOrCreateFile({
+      projectNodeId: project._id,
+      relPath: finalPath,
+      userId,
+      core,
+    });
+    await writeFileContent({ fileNodeId: fileNode._id, content, userId });
+    scheduleSync(project._id);
+    return { ok: true, filePath: finalPath, created };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
+/**
+ * Branch-aware single-file read. The companion to writeFileInBranch: same
+ * path-resolution rules, same project auto-detection, returns the file's
+ * content as a string or null if the file doesn't exist.
+ *
+ * Accepts { nodeId, userId, rootId, projectName?, filePath }.
+ * Returns { ok, filePath, content } on success or { ok: false, error } on
+ * rejection/failure. Strategy wrappers use this instead of reaching into
+ * workspace internals to read a peer file in their own branch.
+ */
+export async function readFileInBranch({
+  nodeId,
+  rootId,
+  projectName,
+  filePath,
+}) {
+  try {
+    const resolved = await resolveBranchRootedPath(nodeId, filePath);
+    if (resolved.error) return { ok: false, error: resolved.error };
+    const finalPath = resolved.filePath;
+
+    let project = await findProject(nodeId || rootId);
+    if (!project && projectName && rootId) {
+      project = await findProjectByName(rootId, projectName);
+    }
+    if (!project) return { ok: false, error: "no active workspace" };
+
+    const fileNode = await findFileByPath(project._id, finalPath);
+    if (!fileNode) return { ok: true, filePath: finalPath, content: null };
+    const content = await readFileContent(fileNode._id);
+    return { ok: true, filePath: finalPath, content: content ?? "" };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
 }
 
 function scheduleSync(projectId) {
@@ -328,7 +635,7 @@ export default function getWorkspaceTools(core) {
       name: "workspace-add-file",
       description: "Create or overwrite a file inside the active project. The file becomes a tree node with its content stored as a note, so the AI can navigate to it later. Path is relative to the project root and may include subdirectories (e.g. 'src/lib/util.js') which become directory nodes.",
       schema: {
-        filePath: z.string().describe("Path relative to the project root (e.g. 'index.js' or 'lib/helper.js')."),
+        filePath: z.string().describe("Path inside your workspace. If you're inside a swarm branch, paths are rooted at your branch — drop the branch name, and paths that leave your branch (absolute, '..', sibling-branch name) are rejected."),
         content: z.string().describe("Full file content. Replaces any previous content on the node."),
         projectName: z.string().optional().describe("Target project by name if you're not inside one."),
       },
@@ -339,17 +646,28 @@ export default function getWorkspaceTools(core) {
         try {
           const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
           trace("workspace-add-file", "project", `${project.name} (${project._id})`);
-          // Enforce branch path prefix. If the caller is operating
-          // inside a swarm branch with a declared path, any file it
-          // writes MUST live under that path — else the file lands at
-          // the project root, confusing smoke validation and downstream
-          // consumers. Rewrite quietly; log the rewrite so the trace
-          // shows what happened.
-          const branchPrefix = await resolveBranchPrefix(nodeId);
-          const prefixed = applyBranchPrefix(filePath, branchPrefix);
-          if (prefixed.rewrote) {
-            trace("workspace-add-file", "branch-prefix", `${filePath} → ${prefixed.filePath}`);
-            filePath = prefixed.filePath;
+          // Branch-rooted path resolution. If the caller is inside a
+          // swarm branch, the path is always resolved relative to that
+          // branch's root. Any attempt to leave the branch (absolute,
+          // `..`, sibling branch name, own branch name) is rejected
+          // cleanly. Project-level calls pass through unchanged.
+          {
+            const resolved = await resolveBranchRootedPath(nodeId, filePath);
+            if (resolved.error) {
+              trace("workspace-add-file", "REJECTED", resolved.error.slice(0, 200));
+              return text(`workspace-add-file rejected: ${resolved.error}`);
+            }
+            if (resolved.filePath !== filePath) {
+              trace("workspace-add-file", "branch-root", `${filePath} → ${resolved.filePath}`);
+              filePath = resolved.filePath;
+            }
+            if (!resolved.isInBranch) {
+              const orphan = await checkProjectRootHasBranches(nodeId, filePath);
+              if (orphan) {
+                trace("workspace-add-file", "ORPHAN-AT-ROOT", orphan.slice(0, 200));
+                return text(`workspace-add-file rejected: ${orphan}`);
+              }
+            }
           }
 
           // Syntax-error gate: if another file in this project is still
@@ -383,6 +701,10 @@ export default function getWorkspaceTools(core) {
           trace("workspace-add-file", "note-saved", `${bytes}b on ${fileNode._id}`);
           scheduleSync(project._id);
           trace("workspace-add-file", "OK", `${filePath} scheduled sync`);
+          // Whole-file rewrite: the model's next edit starts from a
+          // clean slate (it submitted the entire file, so line numbers
+          // are whatever it just wrote). Clear drift state.
+          _driftNoteRead(userId, filePath);
           return text(`${created ? "Created" : "Updated"} ${filePath} (${bytes}b) on node ${fileNode._id} in project "${project.name}". Auto-sync scheduled.`);
         } catch (e) {
           if (e instanceof SourceWriteRejected) {
@@ -407,7 +729,7 @@ export default function getWorkspaceTools(core) {
       name: "workspace-read-file",
       description: "Read a file in the active project as a line-numbered window. Default returns first 200 lines. Use startLine (0-indexed) and limit to page through larger files. Numbered output (1-indexed) can be fed back to workspace-edit-file.",
       schema: {
-        filePath: z.string().describe("Path relative to the project root."),
+        filePath: z.string().describe("Path inside your workspace. Rooted at your branch if you're inside one."),
         startLine: z.number().int().min(0).optional().describe("Zero-indexed starting line. Default 0."),
         limit: z.number().int().min(1).max(800).optional().describe("Max lines to return. Default 200, max 800."),
         projectName: z.string().optional(),
@@ -416,9 +738,11 @@ export default function getWorkspaceTools(core) {
       async handler({ filePath, startLine, limit, projectName, userId, rootId, nodeId }) {
         try {
           const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
-          const branchPrefix = await resolveBranchPrefix(nodeId);
-          const prefixed = applyBranchPrefix(filePath, branchPrefix);
-          if (prefixed.rewrote) filePath = prefixed.filePath;
+          {
+            const resolved = await resolveBranchRootedPath(nodeId, filePath);
+            if (resolved.error) return text(`workspace-read-file rejected: ${resolved.error}`);
+            filePath = resolved.filePath;
+          }
           const { fileNode, created } = await resolveOrCreateFile({
             projectNodeId: project._id, relPath: filePath, userId, core,
           });
@@ -429,6 +753,9 @@ export default function getWorkspaceTools(core) {
           const tail = slice.remaining > 0
             ? `\n\n... ${slice.remaining} more lines. Call again with startLine=${slice.nextStart} to continue.`
             : "";
+          // Reset the edit-drift counter for this file: the model just
+          // saw fresh line numbers, so the next edit is trusted.
+          _driftNoteRead(userId, filePath);
           return text(
             `${filePath} (${content.length}b, ${slice.totalLines} lines) — showing ${slice.rangeLabel}:\n` +
             "```\n" + slice.body + "\n```" + tail,
@@ -494,7 +821,7 @@ export default function getWorkspaceTools(core) {
       name: "workspace-edit-file",
       description: "Edit a file in the active project by line range. Replaces lines [startLine, endLine) with `content` (both 1-indexed and inclusive in user terms — this tool converts to 0-indexed internally). Omit endLine to insert `content` before startLine. Use this for small surgical edits instead of rewriting the whole file. The success response reports the new total line count plus a small post-edit window of what actually landed — trust those numbers over your own memory when planning a second edit in the same turn, since any length-changing edit shifts every line below it.",
       schema: {
-        filePath: z.string().describe("Path relative to the project root."),
+        filePath: z.string().describe("Path inside your workspace. Rooted at your branch if you're inside one."),
         content: z.string().describe("New content to splice in (can be multi-line)."),
         startLine: z.number().int().min(1).describe("1-indexed start line. With endLine, the start of the replaced range. Alone, the line to insert before."),
         endLine: z.number().int().min(1).optional().describe("1-indexed exclusive end line. Omit to insert without replacing."),
@@ -504,13 +831,42 @@ export default function getWorkspaceTools(core) {
       async handler({ filePath, content, startLine, endLine, projectName, userId, rootId, nodeId }) {
         const bytes = Buffer.byteLength(content || "", "utf8");
         trace("workspace-edit-file", "CALL", `path=${filePath} lines=${startLine}-${endLine ?? "(insert)"} bytes=${bytes}`);
+
+        // Edit-drift guard: chained edits without a re-read accumulate
+        // offset drift and land at the wrong place. If we've already
+        // edited this file in this user's session without a read since,
+        // reject and tell the model to refresh its line numbers or
+        // switch to workspace-add-file. Resolution happens after the
+        // branch-rooted path resolution below.
+        try {
+          const preResolved = await resolveBranchRootedPath(nodeId, filePath);
+          const resolvedPath = preResolved?.error ? filePath : preResolved.filePath;
+          const driftMsg = _driftCheckBeforeEdit(userId, resolvedPath);
+          if (driftMsg) {
+            trace("workspace-edit-file", "DRIFT-REJECTED", resolvedPath);
+            return text(driftMsg);
+          }
+        } catch {}
+
         try {
           const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
-          const branchPrefix = await resolveBranchPrefix(nodeId);
-          const prefixed = applyBranchPrefix(filePath, branchPrefix);
-          if (prefixed.rewrote) {
-            trace("workspace-edit-file", "branch-prefix", `${filePath} → ${prefixed.filePath}`);
-            filePath = prefixed.filePath;
+          {
+            const resolved = await resolveBranchRootedPath(nodeId, filePath);
+            if (resolved.error) {
+              trace("workspace-edit-file", "REJECTED", resolved.error.slice(0, 200));
+              return text(`workspace-edit-file rejected: ${resolved.error}`);
+            }
+            if (resolved.filePath !== filePath) {
+              trace("workspace-edit-file", "branch-root", `${filePath} → ${resolved.filePath}`);
+              filePath = resolved.filePath;
+            }
+            if (!resolved.isInBranch) {
+              const orphan = await checkProjectRootHasBranches(nodeId, filePath);
+              if (orphan) {
+                trace("workspace-edit-file", "ORPHAN-AT-ROOT", orphan.slice(0, 200));
+                return text(`workspace-edit-file rejected: ${orphan}`);
+              }
+            }
           }
 
           // Syntax-error gate with a twist for the EDIT tool: if the
@@ -616,6 +972,7 @@ export default function getWorkspaceTools(core) {
 
           scheduleSync(project._id);
           trace("workspace-edit-file", "OK", `${filePath} ${result.message || "updated"}`);
+          _driftNoteEdit(userId, filePath);
 
           // Post-edit context window. Edits that change line count leave the
           // agent's mental line-number map stale. A subsequent edit in the

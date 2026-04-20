@@ -1,3 +1,5 @@
+import { fileHeadline } from "../fileSurface.js";
+
 /**
  * Shared renderer for the enrichedContext block that both plan.js and
  * log.js inject into their system prompts.
@@ -124,8 +126,8 @@ function renderSiblingBranches(siblings) {
       lines.push("Files:");
       for (const file of files.slice(0, 30)) {
         const path = file.path ? `${file.path}/${file.name}` : file.name;
-        const headline = headlineFromNotes(file.notes);
-        lines.push(`  - ${path}${headline ? ` — ${truncate(headline, 120)}` : ""}`);
+        const headline = headlineFromNotes(path, file.notes);
+        lines.push(`  - ${path}${headline ? ` — ${truncate(headline, 160)}` : ""}`);
       }
       if (files.length > 30) {
         lines.push(`  ... and ${files.length - 30} more (peek with workspace-peek-sibling-file)`);
@@ -138,21 +140,11 @@ function renderSiblingBranches(siblings) {
   return lines.join("\n");
 }
 
-function headlineFromNotes(notes) {
+function headlineFromNotes(filePath, notes) {
   for (const note of notes) {
     const content = note?.content;
     if (typeof content !== "string" || !content.trim()) continue;
-    // Pick the first non-trivial line: skip blanks, comments, bare imports,
-    // strict directives, bare re-exports.
-    for (const raw of content.split("\n")) {
-      const line = raw.trim();
-      if (!line) continue;
-      if (line.startsWith("//") || line.startsWith("#")) continue;
-      if (line === '"use strict";' || line === "'use strict';") continue;
-      if (/^import\b/.test(line)) continue;
-      if (/^export\s*\{/.test(line)) continue;
-      return line;
-    }
+    return fileHeadline(filePath, content);
   }
   return null;
 }

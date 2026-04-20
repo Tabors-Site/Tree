@@ -24,7 +24,7 @@
 //
 //   branch: frontend
 //     spec: HTML/CSS/JS frontend with login, swipe deck, chat pane.
-//     path: public
+//     path: frontend
 //   [[/BRANCHES]]
 //
 // Each branch becomes a child node of the project root (named after
@@ -33,6 +33,7 @@
 // initial message.
 
 import log from "../../seed/log.js";
+import { WS } from "../../seed/protocol.js";
 import Node from "../../seed/models/node.js";
 import { v4 as uuidv4 } from "uuid";
 import { startChainStep, finalizeChat, setChatContext, getChatContext } from "../../seed/llm/chatTracker.js";
@@ -48,12 +49,16 @@ import { readMeta, mutateMeta } from "./state/meta.js";
 import { promoteDoneAncestors } from "./project.js";
 import { reconcileProject } from "./reconcile.js";
 
-const BRANCHES_OPEN = /\[\[\s*branches\s*\]\]/i;
-const BRANCHES_CLOSE_TIGHT = /\[\[\s*\]?\s*\/\s*branches\s*\]\]/i;
-const BRANCHES_CLOSE_LOOSE = /\[\[[^\[\]]*(\/|end)[^\[\]]*branches[^\[\]]*\]\]/i;
-const CONTRACTS_OPEN = /\[\[\s*contracts\s*\]\]/i;
-const CONTRACTS_CLOSE_TIGHT = /\[\[\s*\]?\s*\/\s*contracts\s*\]\]/i;
-const CONTRACTS_CLOSE_LOOSE = /\[\[[^\[\]]*(\/|end)[^\[\]]*contracts[^\[\]]*\]\]/i;
+// Accept one or two square brackets on the markers. Small local models
+// drop a bracket sometimes ([BRANCHES] instead of [[BRANCHES]]); the
+// architect's intent is unambiguous either way, so don't reject the
+// whole swarm dispatch over a bracket count.
+const BRANCHES_OPEN = /\[\[?\s*branches\s*\]?\]/i;
+const BRANCHES_CLOSE_TIGHT = /\[\[?\s*\]?\s*\/\s*branches\s*\]?\]/i;
+const BRANCHES_CLOSE_LOOSE = /\[\[?[^\[\]]*(\/|end)[^\[\]]*branches[^\[\]]*\]?\]/i;
+const CONTRACTS_OPEN = /\[\[?\s*contracts\s*\]?\]/i;
+const CONTRACTS_CLOSE_TIGHT = /\[\[?\s*\]?\s*\/\s*contracts\s*\]?\]/i;
+const CONTRACTS_CLOSE_LOOSE = /\[\[?[^\[\]]*(\/|end)[^\[\]]*contracts[^\[\]]*\]?\]/i;
 
 /**
  * Fire a custom swarm lifecycle hook. Handlers registered by domain
@@ -408,11 +413,31 @@ export function validateBranches(branches, projectName) {
       continue;
     }
 
+    // Integration / shell branch: path "." means "project root". The
+    // architect uses this for the one branch that owns the top-level
+    // entry file (index.html, main.py, etc.) and wires siblings
+    // together. At most one such branch per swarm. Name doesn't have
+    // to match path for this special case.
+    const isShell = pathNorm === "." || pathRaw === ".";
+    if (isShell) {
+      const existingShell = [...seenPaths.entries()].find(([p]) => p === "." || p === "");
+      if (existingShell) {
+        errors.push(
+          `Branch "${b.name}" has path "." but branch "${existingShell[1]}" already owns the project root. ` +
+          `Only one branch can have path "." (the integration/shell branch that wires siblings together).`
+        );
+        continue;
+      }
+      seenPaths.set(".", b.name);
+      continue;
+    }
+
     const nameNorm = normalize(b.name);
     if (nameNorm && nameNorm !== pathNorm) {
       errors.push(
         `Branch "${b.name}" has path "${pathRaw}" which does not match its name. ` +
-        `Set path equal to name (rename the branch or change its path).`
+        `Set path equal to name (rename the branch or change its path), or use path: "." ` +
+        `if this is the integration branch that owns the project root.`
       );
       continue;
     }
@@ -740,7 +765,7 @@ async function retryFailedBranches({
  * and re-runs retryFailedBranches to give those branches a fresh shot.
  */
 export async function runBranchSwarm({
-  branches, rootProjectNode, rootChatId, sessionId,
+  branches, rootProjectNode, rootChatId, architectChatId, sessionId,
   visitorId, userId, username, rootId, signal, slot, socket,
   onToolLoopCheckpoint, core, runBranch, emitStatus, userRequest,
   rt, resumeMode = false, defaultBranchMode = null,
@@ -755,6 +780,22 @@ export async function runBranchSwarm({
   log.info("Swarm",
     `🌿 ${resumeMode ? "Resuming" : "Dispatching"} ${branches.length} branches under ${rootProjectNode.name || rootProjectNode._id}`,
   );
+
+  // Announce the fanout to live consumers (CLI, web) so they can render
+  // the fork UI before individual branches start firing. Labels let the
+  // renderer show the list up front: `⎇ swarm: 3 branches [backend,
+  // frontend, tests]`. Emission is safe when socket is absent.
+  socket?.emit?.(WS.SWARM_DISPATCH, {
+    resume: !!resumeMode,
+    count: branches.length,
+    branches: branches.map((b) => ({
+      name: b.name,
+      parentBranch: b.parentBranch || null,
+      path: b.path || null,
+      mode: b.mode || null,
+    })),
+    projectNodeId: String(rootProjectNode._id),
+  });
 
   // Tree-authoritative reconciliation. User edits to the tree (inserted
   // branches, renamed, deleted, rewrote specs) get absorbed into subPlan
@@ -790,17 +831,27 @@ export async function runBranchSwarm({
   let fallbackChainIdx = 1;
 
   const beginBranchHeader = async ({ input, branchNodeId, modeKey }) => {
+    // Dispatch marker's parent is the architect chat (the LLM call that
+    // emitted [[BRANCHES]]). This makes the node-chats tree render
+    // architect → [dispatch marker backend → worker turns, dispatch
+    // marker frontend → worker turns, ...] instead of a flat sibling
+    // list.
+    const markerParent = architectChatId || rootChatId || null;
     if (rt && !rt._cleaned) {
       return rt.beginChainStep(modeKey, input, {
         treeContext: branchNodeId ? { targetNodeId: branchNodeId } : undefined,
+        parentChatId: markerParent,
+        dispatchOrigin: "branch-swarm",
       });
     }
     const chat = await startChainStep({
       userId, sessionId,
       chainIndex: fallbackChainIdx++,
       rootChatId: rootChatId || null,
+      parentChatId: markerParent,
       modeKey,
       source: "swarm-branch",
+      dispatchOrigin: "branch-swarm",
       input,
       treeContext: branchNodeId ? { targetNodeId: branchNodeId } : undefined,
     });
@@ -858,6 +909,15 @@ export async function runBranchSwarm({
     const qualifiedName = depthPrefix + branch.name;
 
     emitStatus?.(socket, "intent", `Branch ${processed}/${totalKnown}: ${qualifiedName}`);
+    socket?.emit?.(WS.BRANCH_STARTED, {
+      name: qualifiedName,
+      rawName: branch.name,
+      parentBranch: branch.parentBranch || null,
+      index: processed,
+      total: totalKnown,
+      mode: branch.mode || null,
+      path: branch.path || null,
+    });
 
     let branchNode;
     try {
@@ -949,6 +1009,10 @@ export async function runBranchSwarm({
           visitorId, username, userId, rootId,
           signal: branchAbort.signal,
           onToolLoopCheckpoint, socket,
+          // Dispatch-marker chatId → worker-turn parent. Nests every
+          // continuation of this branch under its own marker card so
+          // the chats UI renders the dispatch tree correctly.
+          markerChatId: branchHeaderStep?.chatId || null,
         });
       } finally {
         if (parentAbortListener && signal) {
@@ -1103,6 +1167,16 @@ export async function runBranchSwarm({
         modeKey: branchMode,
       });
     }
+    const lastResult = results[results.length - 1];
+    socket?.emit?.(WS.BRANCH_COMPLETED, {
+      name: qualifiedName,
+      rawName: branch.name,
+      parentBranch: branch.parentBranch || null,
+      index: processed,
+      total: totalKnown,
+      status: lastResult?.status || "unknown",
+      error: lastResult?.error || null,
+    });
   }
 
   if (queue.length > 0 && !signal?.aborted && processed >= MAX_BRANCHES) {

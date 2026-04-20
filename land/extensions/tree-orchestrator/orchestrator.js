@@ -54,6 +54,7 @@ import {
 import {
   emitStatus,
   emitModeResult,
+  buildSocketBridge,
   resolveLlmProvider,
   runModeAndReturn,
   runChain,
@@ -385,7 +386,7 @@ export async function orchestrateTreeRequest({
       emitStatus(socket, "intent", "");
       const result = await processMessage(visitorId, message, {
         username, userId, rootId, signal, slot, onToolLoopCheckpoint,
-        onToolResults(results) { if (signal?.aborted) return; for (const r of results) socket.emit(WS.TOOL_RESULT, r); },
+        ...buildSocketBridge(socket, signal),
       });
       emitStatus(socket, "done", "");
       const answer = result?.content || result?.answer || null;
@@ -543,6 +544,8 @@ export async function orchestrateTreeRequest({
   );
   emitModeResult(socket, "intent", {
     intent: classification.intent,
+    mode: classification.mode || null,
+    targetNodeId: classification.targetNodeId || null,
     responseHint: classification.responseHint,
     summary: classification.summary,
     confidence,

@@ -19,7 +19,7 @@ const StudyPage = () => {
             where you left off.
           </p>
           <div className="lp-hero-ctas">
-            <a className="lp-btn lp-btn-primary" href="/land">Start a Land</a>
+            <a className="lp-btn lp-btn-primary" href="/lands">Start a Land</a>
             <a className="lp-btn lp-btn-secondary" href="/treeos">What is TreeOS?</a>
           </div>
         </div>
@@ -351,7 +351,7 @@ const StudyPage = () => {
             The AI is ready when you are.
           </p>
           <div className="lp-hero-ctas" style={{justifyContent: "center"}}>
-            <a className="lp-btn lp-btn-primary" href="/land">Start a Land</a>
+            <a className="lp-btn lp-btn-primary" href="/lands">Start a Land</a>
             <a className="lp-btn lp-btn-secondary" href="/extensions">All Extensions</a>
           </div>
         </div>
@@ -372,7 +372,7 @@ const StudyPage = () => {
               <a href="/build">Build</a>
               <a href="/network">The Network</a>
               <a href="/mycelium">Mycelium</a>
-              <a href="/land">Start a Land</a>
+              <a href="/lands">Start a Land</a>
               <a href="/cli">CLI</a>
             </div>
             <div className="lp-footer-col">

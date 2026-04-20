@@ -31,6 +31,30 @@ import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
 import AiCapture, { CAPTURE_LIMITS } from "./models/aiCapture.js";
 
+// Live stream emitter. Every incremental update to a pending capture
+// fires this WS event so the node-chats page (and any dashboard) can
+// re-fetch the capture and render the delta in real time. Filled in at
+// init() by treeos-base/index.js — we can't import seed/ws directly
+// here without circular-import risk during module load.
+let _emitToUser = null;
+export function setCaptureEmitter(fn) {
+  _emitToUser = typeof fn === "function" ? fn : null;
+}
+function emitCaptureUpdated(capture) {
+  if (!_emitToUser || !capture) return;
+  try {
+    _emitToUser(capture.userId, "captureUpdated", {
+      chatId: capture.chatId,
+      captureId: String(capture._id || ""),
+      rootId: capture.rootId || null,
+      sessionId: capture.sessionId || null,
+      at: Date.now(),
+    });
+  } catch (err) {
+    log.debug("AiForensics", `emitCaptureUpdated failed: ${err.message}`);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Module state — in-memory pending captures
 // ─────────────────────────────────────────────────────────────────────
@@ -313,6 +337,10 @@ export async function onBeforeLLMCall(data) {
       rootId: data.rootId || null,
       nodeId: data.nodeId || null,
       mode: data.mode || null,
+      // If the kernel passes parentChatId (continuations, branch-swarm
+      // dispatches, summarizer rescues), record it so the forensics
+      // timeline can walk the dispatch lineage across LLM calls.
+      parentChatId: data.parentChatId || null,
       startedAt: new Date(),
       promptMessages: messages,
       promptBytes: totalBytes,
@@ -320,11 +348,38 @@ export async function onBeforeLLMCall(data) {
       modelUsed: data.model || null,
       toolCalls: [],
       branchEvents: [],
+      cascadesEmitted: [],
+      cascadesReceived: [],
+      swarmSignalsEmitted: [],
       _createdAt: Date.now(),
     };
-    // If an existing pending capture exists for this chatId (e.g., a
-    // retry after an abort), replace it cleanly.
+
+    // Incremental persistence: write the capture doc NOW so the chat
+    // page can show it live. Each subsequent hook atomically updates
+    // the same doc. If the server crashes mid-call, we still have
+    // partial forensics instead of losing the whole capture.
+    try {
+      const doc = await AiCapture.create({
+        chatId: draft.chatId,
+        sessionId: draft.sessionId,
+        userId: draft.userId,
+        rootId: draft.rootId,
+        nodeId: draft.nodeId,
+        mode: draft.mode,
+        parentChatId: draft.parentChatId,
+        startedAt: draft.startedAt,
+        promptMessages: draft.promptMessages,
+        promptBytes: draft.promptBytes,
+        promptTruncated: draft.promptTruncated,
+        modelUsed: draft.modelUsed,
+      });
+      draft._id = doc._id;
+    } catch (err) {
+      log.debug("AiForensics", `onBeforeLLMCall create failed: ${err.message}`);
+    }
+
     pendingCaptures.set(data.chatId, draft);
+    emitCaptureUpdated(draft);
   } catch (err) {
     log.debug("AiForensics", `onBeforeLLMCall failed: ${err.message}`);
   }
@@ -362,6 +417,16 @@ export async function onBeforeToolCall(data) {
       _cascadedNodeId: data.nodeId || capture.nodeId || null,
     };
     capture.toolCalls.push(entry);
+
+    // Persist the new tool entry live. Strip hidden fields for DB.
+    if (capture._id) {
+      const { _cascadedSnapshot, _cascadedNodeId, ...persistable } = entry;
+      AiCapture.updateOne(
+        { _id: capture._id },
+        { $push: { toolCalls: persistable } },
+      ).catch(() => {});
+      emitCaptureUpdated(capture);
+    }
   } catch (err) {
     log.debug("AiForensics", `onBeforeToolCall failed: ${err.message}`);
   }
@@ -380,10 +445,12 @@ export async function onAfterToolCall(data) {
 
     // Find the most recent open entry that matches this tool name
     let entry = null;
+    let entryIndex = -1;
     for (let i = capture.toolCalls.length - 1; i >= 0; i--) {
       const e = capture.toolCalls[i];
       if (!e.endedAt && e.tool === (data.toolName || "unknown")) {
         entry = e;
+        entryIndex = i;
         break;
       }
     }
@@ -406,9 +473,20 @@ export async function onAfterToolCall(data) {
       entry.signals = await diffSignalInbox(entry._cascadedNodeId, entry._cascadedSnapshot);
     }
 
-    // Strip the hidden fields before the final write
+    // Strip the hidden fields before the DB write
     delete entry._cascadedSnapshot;
     delete entry._cascadedNodeId;
+
+    // Persist the closed entry live. Using positional $set with the
+    // known index because we have the authoritative in-memory copy —
+    // no other writer races us on this doc's toolCalls array.
+    if (capture._id && entryIndex >= 0) {
+      AiCapture.updateOne(
+        { _id: capture._id },
+        { $set: { [`toolCalls.${entryIndex}`]: entry } },
+      ).catch(() => {});
+      emitCaptureUpdated(capture);
+    }
   } catch (err) {
     log.debug("AiForensics", `onAfterToolCall failed: ${err.message}`);
   }
@@ -436,16 +514,38 @@ export async function onAfterLLMCall(data) {
     }
     capture.endedAt = new Date();
 
-    // Strip hidden state + save
-    const toWrite = { ...capture };
-    delete toWrite._createdAt;
-    if (Array.isArray(toWrite.toolCalls)) {
-      toWrite.toolCalls = toWrite.toolCalls.map((tc) => {
-        const { _cascadedSnapshot, _cascadedNodeId, ...rest } = tc;
-        return rest;
-      });
+    // Finalize: the doc was created on beforeLLMCall and updated live
+    // through every hook; all we need now is to $set the closing
+    // fields. If the doc wasn't created (DB was down at the start),
+    // fall back to a single create call with the full in-memory state.
+    if (capture._id) {
+      AiCapture.updateOne(
+        { _id: capture._id },
+        {
+          $set: {
+            endedAt: capture.endedAt,
+            responseText: capture.responseText || "",
+            responseTruncated: capture.responseTruncated || false,
+            modelUsed: capture.modelUsed,
+            tokenUsage: capture.tokenUsage,
+          },
+        },
+      ).catch((err) => log.debug("AiForensics", `onAfterLLMCall finalize failed: ${err.message}`));
+      emitCaptureUpdated(capture);
+    } else {
+      // Cold-start fallback: doc never got created; write everything now.
+      const toWrite = { ...capture };
+      delete toWrite._createdAt;
+      delete toWrite._id;
+      if (Array.isArray(toWrite.toolCalls)) {
+        toWrite.toolCalls = toWrite.toolCalls.map((tc) => {
+          const { _cascadedSnapshot, _cascadedNodeId, ...rest } = tc;
+          return rest;
+        });
+      }
+      await AiCapture.create(toWrite);
     }
-    await AiCapture.create(toWrite);
+
     pendingCaptures.delete(data.chatId);
   } catch (err) {
     log.debug("AiForensics", `onAfterLLMCall failed: ${err.message}`);
@@ -470,6 +570,13 @@ export function recordLLMResponse({ chatId, responseText }) {
     const r = truncateString(responseText, CAPTURE_LIMITS.RESPONSE_BYTES);
     capture.responseText = r.value;
     capture.responseTruncated = r.truncated;
+    if (capture._id) {
+      AiCapture.updateOne(
+        { _id: capture._id },
+        { $set: { responseText: r.value, responseTruncated: r.truncated } },
+      ).catch(() => {});
+      emitCaptureUpdated(capture);
+    }
   } catch (err) {
     log.debug("AiForensics", `recordLLMResponse failed: ${err.message}`);
   }
@@ -489,15 +596,159 @@ export function recordBranchEvent({ chatId, branchName, from, to, reason }) {
   try {
     const capture = pendingCaptures.get(chatId);
     if (!capture) return;
-    capture.branchEvents.push({
+    const event = {
       branchName,
       from: from || null,
       to,
       reason: reason || null,
       at: new Date(),
-    });
+    };
+    capture.branchEvents.push(event);
+    if (capture._id) {
+      AiCapture.updateOne({ _id: capture._id }, { $push: { branchEvents: event } }).catch(() => {});
+      emitCaptureUpdated(capture);
+    }
   } catch (err) {
     log.debug("AiForensics", `recordBranchEvent failed: ${err.message}`);
+  }
+}
+
+/**
+ * Record a cascade signal this call emitted (a local write at a
+ * cascade-enabled node fired checkCascade which wrote to .flow). Called
+ * from the onCascade listener below; also exposed for anything else
+ * that wants to attribute a cascade to the active capture.
+ *
+ * Matching is by chatId — we attach to the pending capture only if one
+ * exists for the given chat. No-op otherwise (background jobs that
+ * don't pass chatId through).
+ */
+export function recordCascadeEmitted({ chatId, signalId, nodeId, status }) {
+  if (!chatId || !signalId) return;
+  try {
+    const capture = pendingCaptures.get(chatId);
+    if (!capture) return;
+    const entry = {
+      signalId,
+      nodeId: nodeId || null,
+      status: status || null,
+      at: new Date(),
+    };
+    capture.cascadesEmitted.push(entry);
+    if (capture._id) {
+      AiCapture.updateOne({ _id: capture._id }, { $push: { cascadesEmitted: entry } }).catch(() => {});
+      emitCaptureUpdated(capture);
+    }
+  } catch (err) {
+    log.debug("AiForensics", `recordCascadeEmitted failed: ${err.message}`);
+  }
+}
+
+/**
+ * Record a cascade signal that landed at this call's node. Used by the
+ * propagation extension when a deliverCascade arrives and the local
+ * position has a pending capture.
+ */
+export function recordCascadeReceived({ chatId, signalId, sourceNodeId }) {
+  if (!chatId || !signalId) return;
+  try {
+    const capture = pendingCaptures.get(chatId);
+    if (!capture) return;
+    const entry = {
+      signalId,
+      sourceNodeId: sourceNodeId || null,
+      at: new Date(),
+    };
+    capture.cascadesReceived.push(entry);
+    if (capture._id) {
+      AiCapture.updateOne({ _id: capture._id }, { $push: { cascadesReceived: entry } }).catch(() => {});
+      emitCaptureUpdated(capture);
+    }
+  } catch (err) {
+    log.debug("AiForensics", `recordCascadeReceived failed: ${err.message}`);
+  }
+}
+
+/**
+ * Record a lateral swarm signal this call dropped into a sibling's
+ * inbox. Supplements the receiver-side view (toolCalls[].signals) with
+ * the emitter-side view: "this capture informed node Y with kind K".
+ *
+ * Called by swarm's appendSignal path (via getExtension("treeos-base"))
+ * when the current visitor's chat has a pending capture.
+ */
+export function recordSwarmSignalEmitted({ chatId, toNodeId, kind, filePath }) {
+  if (!chatId || !toNodeId || !kind) return;
+  try {
+    const capture = pendingCaptures.get(chatId);
+    if (!capture) return;
+    const entry = {
+      toNodeId,
+      kind,
+      filePath: filePath || null,
+      at: new Date(),
+    };
+    capture.swarmSignalsEmitted.push(entry);
+    if (capture._id) {
+      AiCapture.updateOne({ _id: capture._id }, { $push: { swarmSignalsEmitted: entry } }).catch(() => {});
+      emitCaptureUpdated(capture);
+    }
+  } catch (err) {
+    log.debug("AiForensics", `recordSwarmSignalEmitted failed: ${err.message}`);
+  }
+}
+
+/**
+ * onCascade handler. The kernel fires onCascade whenever checkCascade
+ * sees a write at a cascade-enabled node (emission, depth=0) or
+ * deliverCascade drops a signal into a node (reception, depth>0).
+ * Emission goes into `cascadesEmitted[]`, reception into
+ * `cascadesReceived[]` — so the forensics timeline answers both
+ * "which call emitted this cascade?" and "which call saw it arrive?".
+ *
+ * When the hookData doesn't carry chatId (current kernel path), we
+ * fall back to matching by nodeId against every pending capture.
+ *
+ * Best-effort: never blocks, never throws. A missed attachment just
+ * leaves the capture's cascade arrays empty.
+ */
+export async function onCascadeSignal(data) {
+  if (!data?.signalId) return;
+  try {
+    const isReception = (data.depth || 0) > 0;
+    const attach = (chatId) => {
+      if (isReception) {
+        recordCascadeReceived({
+          chatId,
+          signalId: data.signalId,
+          sourceNodeId: data.source || null,
+        });
+      } else {
+        recordCascadeEmitted({
+          chatId,
+          signalId: data.signalId,
+          nodeId: data.nodeId,
+          status: data._resultStatus,
+        });
+      }
+    };
+    const chatId = data.chatId;
+    if (chatId) {
+      attach(chatId);
+      return;
+    }
+    // No direct chatId on hookData — attach to any pending capture whose
+    // active nodeId matches the target node (emission = the writer's
+    // capture; reception = whatever capture happens to be running at the
+    // receiving node, if any).
+    for (const [activeChatId, capture] of pendingCaptures.entries()) {
+      if (capture.nodeId && String(capture.nodeId) === String(data.nodeId)) {
+        attach(activeChatId);
+        return;
+      }
+    }
+  } catch (err) {
+    log.debug("AiForensics", `onCascadeSignal failed: ${err.message}`);
   }
 }
 

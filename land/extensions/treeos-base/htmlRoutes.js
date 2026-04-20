@@ -16,7 +16,7 @@ import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getTreeStructure } from "../../seed/tree/treeData.js";
 import { getContributions } from "../../seed/tree/contributions.js";
 import { buildPathString } from "../../seed/tree/treeFetch.js";
-import { getNodeChats } from "../../seed/llm/chatHistory.js";
+import { getNodeChats, getChatChain } from "../../seed/llm/chatHistory.js";
 import { getConnectionsForUser, getAllRootLlmSlots } from "../../seed/llm/connections.js";
 import getNodeName from "../../routes/api/helpers/getNameById.js";
 import { getExtension } from "../loader.js";
@@ -646,9 +646,14 @@ export function buildTreeosHtmlRoutes() {
   // NODE VERSION DETAIL
   // ===================================================================
 
-  router.get("/node/:nodeId/:version", urlAuth, htmlOnly, async (req, res) => {
+  router.get("/node/:nodeId/:version", urlAuth, htmlOnly, async (req, res, next) => {
     try {
       const { nodeId } = req.params;
+      // Reserved subresource words — fall through to their dedicated
+      // handlers (chats, notes, metadata, etc.). The :version catchall
+      // is only for actual version numbers / resolvable labels.
+      const reserved = new Set(["chats", "notes", "metadata", "command-center", "contributions", "flow"]);
+      if (reserved.has(req.params.version)) return next();
       let v = Number(req.params.version);
       if (isNaN(v)) {
         try { v = Number(await resolveVersion(nodeId, req.params.version)); } catch {
@@ -698,19 +703,37 @@ export function buildTreeosHtmlRoutes() {
   // version segment is cosmetic for URL consistency with notes/contributions.
   async function renderNodeChatsHandler(req, res) {
     try {
-      const { nodeId } = req.params;
+      const { nodeId, sessionId: sessionIdFromPath, chatId: chatIdFromPath } = req.params;
       const node = await Node.findById(nodeId).select("name rootOwner").lean();
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
-      const sessionLimit = Math.min(Number(req.query.limit) || 3, 10);
-      const { sessions } = await getNodeChats({
-        nodeId,
-        sessionLimit,
-        sessionId: req.query.sessionId || null,
-        startDate: req.query.startDate || null,
-        endDate: req.query.endDate || null,
-        includeChildren: false,
-      });
+      // Three entry shapes:
+      //   /node/:nodeId/chats                           — list N recent sessions
+      //   /node/:nodeId/chats/session/:sessionId        — zoom one session
+      //   /node/:nodeId/chats/chat/:chatId              — zoom one chat subtree
+      // The path-level param wins. Legacy ?sessionId= query still accepted
+      // so existing bookmarks keep working.
+      const focusSessionId = sessionIdFromPath || req.query.sessionId || null;
+      const focusChatId = chatIdFromPath || null;
+
+      let sessions;
+      let ancestors = [];
+      if (focusChatId) {
+        const r = await getChatChain(focusChatId, { maxDescendants: 200 });
+        sessions = r.sessions;
+        ancestors = r.ancestors || [];
+      } else {
+        const sessionLimit = Math.min(Number(req.query.limit) || 3, 10);
+        const r = await getNodeChats({
+          nodeId,
+          sessionLimit: focusSessionId ? 1 : sessionLimit,
+          sessionId: focusSessionId,
+          startDate: req.query.startDate || null,
+          endDate: req.query.endDate || null,
+          includeChildren: false,
+        });
+        sessions = r.sessions;
+      }
 
       const allChats = sessions.flatMap(s => s.chats);
       const nodePath = await buildPathString(nodeId);
@@ -736,6 +759,10 @@ export function buildTreeosHtmlRoutes() {
         capturesByChatId,
         childrenByParent,
         parentByChatId,
+        req,
+        focusChatId,
+        focusSessionId,
+        ancestors,
       }));
     } catch (err) {
       log.error("HTML", "Node chats render error:", err.message);
@@ -744,6 +771,8 @@ export function buildTreeosHtmlRoutes() {
   }
 
   router.get("/node/:nodeId/chats", urlAuth, htmlOnly, renderNodeChatsHandler);
+  router.get("/node/:nodeId/chats/session/:sessionId", urlAuth, htmlOnly, renderNodeChatsHandler);
+  router.get("/node/:nodeId/chats/chat/:chatId", urlAuth, htmlOnly, renderNodeChatsHandler);
   router.get("/node/:nodeId/:version/chats", urlAuth, htmlOnly, renderNodeChatsHandler);
 
   // ===================================================================
@@ -905,6 +934,7 @@ export function buildTreeosHtmlRoutes() {
         capturesByChatId,
         childrenByParent,
         parentByChatId,
+        req,
       }));
     } catch (err) {
       log.error("HTML", "Root chats render error:", err.message);

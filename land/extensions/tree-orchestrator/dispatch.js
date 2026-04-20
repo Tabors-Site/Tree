@@ -29,23 +29,58 @@ import { runSteppedMode } from "./steppedMode.js";
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Emit a status event to the frontend.
+ * Emit a status event to the frontend. No-op when socket is null — the
+ * orchestrator runs legitimately without a socket in background contexts
+ * (room-agent delivery, cron-driven chains, batch jobs). Hardening here
+ * lets every such caller invoke orchestrateTreeRequest without stubbing.
  */
 export function emitStatus(socket, phase, text) {
-  socket.emit("executionStatus", { phase, text });
+  if (!socket?.emit) return;
+  socket.emit(WS.EXECUTION_STATUS, { phase, text });
 }
 
 /**
- * Emit an internal mode result to the chat so the user can see what's happening.
+ * Build the standard progress-callback bundle passed into processMessage /
+ * runSteppedMode. Every call site in the tree orchestrator wants the same
+ * three things: forward tool results, announce tool calls as they begin,
+ * and stream the model's mid-turn reasoning prose. Extracted here so the
+ * six+ call sites stay in sync as the event set grows. Returns a frozen
+ * object; callers spread it into their ctx.
+ *
+ * Safe when socket is null — each callback becomes a no-op. Signal check
+ * mirrors the old onToolResults guard so an aborted run stops emitting.
+ */
+export function buildSocketBridge(socket, signal = null) {
+  const isLive = () => socket?.emit && !signal?.aborted;
+  return {
+    onToolResults: (results) => {
+      if (!isLive()) return;
+      for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+    },
+    onToolCalled: (call) => {
+      if (!isLive()) return;
+      socket.emit(WS.TOOL_CALLED, call);
+    },
+    onThinking: (thought) => {
+      if (!isLive()) return;
+      socket.emit(WS.THINKING, thought);
+    },
+  };
+}
+
+/**
+ * Emit an internal mode result to the chat so the user can see what's
+ * happening. No-op when socket is null (same rationale as emitStatus).
  */
 export function emitModeResult(socket, modeKey, result) {
+  if (!socket?.emit) return;
   // Strip internal tracking fields before sending to client
   let sanitized = result;
   if (result && typeof result === "object") {
     const { _llmProvider, _raw, ...rest } = result;
     sanitized = rest;
   }
-  socket.emit("orchestratorStep", {
+  socket.emit(WS.ORCHESTRATOR_STEP, {
     modeKey,
     result:
       typeof sanitized === "string"
@@ -313,10 +348,16 @@ export async function runModeAndReturn(visitorId, mode, message, {
           }
 
           const _swarmActive = getActiveRequest(visitorId) || {};
+          // Prefer the architect's own last chain-step chatId so the
+          // branch dispatch markers and their worker turns nest
+          // directly under the step that emitted [[BRANCHES]]. Falls
+          // back to rootChatId if steppedMode didn't expose it.
+          const architectChatId = result?._lastChatId || rootChatId || null;
           const swarmResult = await sw.runBranchSwarm({
             branches: branchParse.branches,
             rootProjectNode: projectNode,
             rootChatId,
+            architectChatId,
             sessionId,
             visitorId,
             userId,
@@ -333,7 +374,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
               await NodeModel.updateOne({ _id: node._id }, { $set: { [`metadata.${ns}`]: data } });
             } } },
             emitStatus,
-            runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot, ...rest }) => {
+            runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot, markerChatId, ...rest }) => {
               // Position the session at the branch node + clear history so
               // each branch starts fresh at its own tree position.
               log.info("Tree Orchestrator",
@@ -363,15 +404,15 @@ export async function runModeAndReturn(visitorId, mode, message, {
               );
               // Stamp dispatch lineage on the branch's chat chain so
               // the operator can walk from the orchestrator's root
-              // step down to each branch and back. parentChatId points
-              // at the orchestrator's root chat (active.rootChatId);
-              // dispatchOrigin tells the renderer "this is a swarm
-              // branch spawn" so the labels are right.
+              // step down to each branch and back. When the swarm
+              // passes markerChatId, worker continuations nest UNDER
+              // the dispatch marker card; without it, fall back to
+              // rootChatId so the tree still walks.
               return runSteppedMode(visitorId, branchMode, branchMessage, {
                 username, userId, rootId, signal, slot: branchSlot,
                 readOnly: false, onToolLoopCheckpoint, socket,
                 sessionId, rootChatId, rt,
-                parentChatId: rootChatId || null,
+                parentChatId: markerChatId || rootChatId || null,
                 dispatchOrigin: "branch-swarm",
               });
             },
@@ -483,6 +524,63 @@ export async function runModeAndReturn(visitorId, mode, message, {
     }
   }
 
+  // Coach → plan handoff. A diagnose-mode (tree:code-coach) that is
+  // confident about a concrete fix emits `[[HANDOFF: <task>]]` on its
+  // last line. The orchestrator strips that marker from the visible
+  // answer and dispatches a fresh tree:code-plan run at the same node
+  // with the task description as its input. Result: one chat turn
+  // delivers both the diagnosis and the applied fix, instead of making
+  // the user re-prompt.
+  if (answer) {
+    const handoffMatch = answer.match(/\[\[HANDOFF:\s*([^\]]+?)\s*\]\]/);
+    if (handoffMatch) {
+      const fixTask = handoffMatch[1].trim();
+      answer = answer.replace(/\[\[HANDOFF:[^\]]+\]\]/g, "").trim();
+      if (result) {
+        result.content = answer;
+        result.answer = answer;
+      }
+      log.info("Tree Orchestrator",
+        `🔧 Handoff: coach → plan at ${currentNodeId || rootId} — "${fixTask.slice(0, 80)}${fixTask.length > 80 ? "..." : ""}"`,
+      );
+      try {
+        const { runChat } = await import("../../seed/llm/conversation.js");
+        const planRun = await runChat({
+          userId, username,
+          message: fixTask,
+          mode: "tree:code-plan",
+          rootId,
+          nodeId: currentNodeId || targetNodeId || rootId,
+          signal,
+          // Dedicated visitorId for handoffs — keeps the plan run isolated
+          // from both the coach session and any concurrent user chats.
+          // Deterministic per-(rootId, userId) so successive handoffs at
+          // the same tree share continuity.
+          visitorId: `handoff:${rootId || "nil"}:${userId}`,
+          llmPriority: "INTERACTIVE",
+        });
+        const planAnswer = (planRun?.answer || "").trim();
+        if (planAnswer) {
+          answer = answer
+            ? `${answer}\n\n---\n\n${planAnswer}`
+            : planAnswer;
+          if (result) {
+            result.content = answer;
+            result.answer = answer;
+          }
+          log.info("Tree Orchestrator", `🔧 Handoff plan completed (${planAnswer.length} chars)`);
+        }
+      } catch (err) {
+        log.warn("Tree Orchestrator", `handoff plan failed: ${err.message}`);
+        answer = `${answer}\n\n(handoff failed: ${err.message})`;
+        if (result) {
+          result.content = answer;
+          result.answer = answer;
+        }
+      }
+    }
+  }
+
   // Plan capture: if the mode emitted a [[PLAN]]...[[/PLAN]] block, strip it
   // from the visible answer and stash it for the next turn. The next
   // affirmative from this visitor will expand the plan into N sequential
@@ -541,7 +639,7 @@ export async function runChain(chain, message, visitorId, {
         onToolLoopCheckpoint,
         onToolResults(results) {
           if (signal?.aborted) return;
-          for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+          for (const r of results) socket?.emit?.(WS.TOOL_RESULT, r);
         },
       });
 

@@ -45,7 +45,14 @@ export async function init(core) {
     // drains all accumulated messages and processes them as one.
     let _debounceBypass = false; // prevent re-entry on debounce fire
 
-    socket._onStreamIdle = (message, chatMode, generation) => {
+    // Snapshot of the first message's payload context (rootId /
+    // currentNodeId / zone / sessionHandle) so the debounced replay
+    // below can re-supply them. Without this, the replay fires with
+    // bare args and the server-side `_pvId` derivation collapses back
+    // to the default socket visitor, dropping tree mode.
+    let _ctxSnapshot = null;
+
+    socket._onStreamIdle = (message, chatMode, generation, ctx = {}) => {
       // When the debounce timer fires, it re-enters the chat handler.
       // Skip debounce on re-entry so the combined message processes normally.
       if (_debounceBypass) {
@@ -54,6 +61,12 @@ export async function init(core) {
       }
 
       pushMessage(visitorId, message);
+
+      // Keep the most recent non-empty context. CLI sends it every
+      // message; browser may not, so we don't overwrite with nulls.
+      if (ctx && (ctx.rootId || ctx.zone || ctx.currentNodeId || ctx.sessionHandle)) {
+        _ctxSnapshot = ctx;
+      }
 
       const existing = debounceTimers.get(visitorId);
       if (existing) clearTimeout(existing);
@@ -74,7 +87,9 @@ export async function init(core) {
             username: socket.username,
             generation,
             mode: chatMode,
+            ...(_ctxSnapshot || {}),
           });
+          _ctxSnapshot = null;
         }
       }, DEBOUNCE_MS);
 

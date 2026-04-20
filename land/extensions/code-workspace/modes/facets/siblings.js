@@ -11,8 +11,8 @@
  * other's real code and invented interfaces that didn't match reality.
  * Contracts were shape-only; they caught protocol bugs but not wiring
  * bugs (null handling, missing method implementations, lifecycle
- * mismatches). With sibling visibility, the frontend branch reads the
- * backend's actual server.js before writing its fetch calls.
+ * mismatches). With sibling visibility, each branch reads its
+ * siblings' actual files before wiring to them.
  */
 export default {
   name: "siblings",
@@ -35,17 +35,17 @@ its file tree, and a one-line summary of every file (first non-trivial
 line: exports, route declarations, top-level definitions). Use it to:
 
   1. Match function / type / field names to what the sibling actually
-     defined. If the sibling's server.js handles "POST /api/login",
-     write your frontend fetch to "/api/login", not "/login" or
-     "/api/auth/login". Copy names exactly.
+     defined. If a sibling declares a route, import, export, or
+     message shape, copy those names and paths exactly — don't invent
+     your own variant.
 
   2. Know what already exists before writing anything new. If a
-     sibling already built "backend/db.js" with a user CRUD module,
-     don't duplicate it. Reference it.
+     sibling already built the module you'd reach for, reference it
+     instead of duplicating.
 
-  3. Spot gaps. If your branch's spec expects "backend/auth.js" but
-     no sibling branch is building auth, call that out in a
-     [[NO-WRITE: gap — no sibling owns auth]] block. Don't invent
+  3. Spot gaps. If your branch's spec expects a file or responsibility
+     that no sibling is building, call that out in a
+     [[NO-WRITE: gap — no sibling owns <thing>]] block. Don't invent
      the missing piece yourself.
 
 When the summary isn't enough — you need the full source of a sibling's

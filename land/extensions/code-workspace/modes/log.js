@@ -77,9 +77,17 @@ AUTO-INIT, AUTO-SYNC
 The workspace auto-initializes on the first write. Never ask about
 setup. Never call workspace-sync. Disk mirroring is automatic.
 
-For helpers: drop them in lib.js (create if missing).
-For entry-point code: index.js or server.js.
-For tests: tests/*.test.js.
+For any new file: match the project's existing shape. If the project
+is a static HTML page with inline JS, keep it inline — do not split
+out a server.js. If the project already has a server file, add to it.
+If the project has a clear entry-point (whatever it's named — main.py,
+bot.ts, serve.rb, whatever), add to THAT one. Never invent a new
+entry-point for a project that runs without one.
+For helpers: drop them next to what uses them, not in a new top-level
+  file, unless the project already has a lib/ or similar.
+For tests: match whatever test shape already exists. Only create a
+  tests/ folder if none exists AND the project's ecosystem (Node, Py,
+  etc.) expects one.
 
 =================================================================
 SERVERS: BIND TO process.env.PORT

@@ -199,36 +199,75 @@ branch session sees the contracts at the top of its prompt.
 =================================================================
 
     [[BRANCHES]]
-    branch: backend
-      spec: <one-paragraph spec for the backend — routes, payloads,
-            persistence interface, what it owns end to end>
+    branch: <name of the first logical part of THIS project>
+      spec: <one-paragraph spec for this part — what it owns end to end>
       slot: code-plan
-      path: backend
-      files: package.json, server.js, auth.js
+      path: <subdir name>
+      files: <concrete file names that part will contain>
 
-    branch: frontend
-      spec: <one-paragraph spec for the frontend — views, state
-            management, what backend calls it makes>
+    branch: <name of the next part>
+      spec: <one-paragraph spec — views, state management, etc.>
       slot: code-plan
-      path: public
-      files: public/index.html, public/app.js
+      path: <subdir>
+      files: <concrete file names>
+
+    (Choose branch names, paths, and files based on what the PROJECT
+    calls for. A full-stack app might split backend/frontend/tests; a
+    single-page HTML game doesn't need branches at all; a CLI tool
+    might split parser/commands/output. Match the shape to the task,
+    don't force a backend+frontend template.)
 
     branch: persistence
       spec: <spec for the persistence layer, files it reads/writes,
             shape of the on-disk format>
       slot: code-plan
-      path: data
-      files: data/store.js
+      path: persistence
+      files: store.js
 
     branch: tests
       spec: <what behaviors the tests verify, which routes, etc.>
       slot: code-plan
       path: tests
-      files: tests/room.test.js, tests/persistence.test.js
+      files: room.test.js, persistence.test.js
     [[/BRANCHES]]
 
-Notice every branch has a DIFFERENT path and none of them equal
-the project's name. That is the shape of a valid plan.
+Every module branch has path equal to its name. That is the
+hard rule for subsystem branches: path MUST match name, letter
+for letter. The one exception is the integration "shell" branch
+below, which lives at the project root (path: ".").
+
+INTEGRATION BRANCH (critical for anything that runs as a single app):
+
+If the project has ONE runnable target — an index.html you open in
+a browser, a main.py you invoke, a serve.js you start — exactly ONE
+branch must own that entry point and wire the sibling modules
+together. That branch has path: "." (a single dot, project root)
+and owns the composition file:
+
+    branch: shell
+      spec: Root-level index.html that loads every sibling module
+            as <script src="<sibling>/<sibling>.js"> tags and
+            boots the app. Owns only the composition; no subsystem
+            logic lives here.
+      slot: code-plan
+      path: .
+      files: index.html
+
+Without a shell branch, every module branch writes its own disconnected
+index.html in its own subdirectory and the preview serves one of
+them in isolation — the user sees one subsystem, not the composed
+app. Don't let that happen.
+
+Module branches (game-loop, characters, progression, etc.) MUST NOT
+create their own root-level entry point. They produce the .js files
+the shell branch imports. If a module branch needs a local demo
+harness during development, keep it inside its own subdirectory and
+never at project root.
+
+Exception: if each branch genuinely runs standalone (separate
+microservices, independent CLIs), skip the shell branch. But for a
+single-page app, single binary, or single frontend: one shell, many
+modules.
 
 Then end with [[DONE]] for YOUR turn. The swarm runner creates a
 child node per branch and dispatches fresh code-plan sessions at

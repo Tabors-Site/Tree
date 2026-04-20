@@ -23,6 +23,7 @@
  */
 
 import compoundBranches from "./facets/compoundBranches.js";
+import amendMissingLayer from "./facets/amendMissingLayer.js";
 import behavioralTest from "./facets/behavioralTest.js";
 import probeLoop from "./facets/probeLoop.js";
 import rewriteOverEdits from "./facets/rewriteOverEdits.js";
@@ -32,6 +33,7 @@ import blockingError from "./facets/blockingError.js";
 import declaredContracts from "./facets/declaredContracts.js";
 import siblings from "./facets/siblings.js";
 import renderEnrichedContextBlock from "./renderContext.js";
+import { buildStrategyContextBlock } from "../strategyRegistry.js";
 
 const FACETS = [
   // blockingError goes FIRST so a red banner is the first thing the
@@ -47,6 +49,10 @@ const FACETS = [
   // code siblings wrote. Invented interfaces become impossible.
   siblings,
   compoundBranches,
+  // amendMissingLayer fires when the current node has existing child
+  // branches and the user may be asking for a new layer — complementary
+  // to compoundBranches (which handles the fresh-decomposition case).
+  amendMissingLayer,
   localTreeView,
   nodePlan,
   behavioralTest,
@@ -98,53 +104,6 @@ Treat every message as a single standalone task:
   3. Return ONE short line saying what changed.
 
 =================================================================
-SERVERS: BIND TO process.env.PORT
-=================================================================
-
-Any server file you write MUST read the listen port from
-process.env.PORT, with a sensible fallback only if PORT is unset:
-
-    const PORT = process.env.PORT || 3000;
-    server.listen(PORT, () => { ... });
-
-Do NOT invent alternative names like WS_PORT, HTTP_PORT,
-SERVER_PORT, APP_PORT, MY_PORT, etc. The preview spawner allocates
-a port at runtime and passes it via env.PORT. If your server reads
-a different variable the preview will fail with ERR_CONNECTION_REFUSED
-because the child will be listening on a hardcoded fallback instead
-of the port the spawner expects.
-
-Same rule for WebSocket-only servers: construct them on an
-http.Server that binds to process.env.PORT, then attach a
-WebSocketServer to that http server. Don't listen the WS server
-directly on a separate port.
-
-A server that mounts a WebSocketServer MUST ALSO serve HTTP. Use
-http.createServer((req, res) => ...) or express, and attach the
-WebSocketServer to it via { server: httpServer }. Never use
-http.createServer() with NO request handler — such a server
-accepts TCP connections but hangs on every HTTP request, which
-makes the preview proxy time out and your frontend unreachable.
-If your project has a frontend directory with index.html, mount
-it with express.static or a basic manual file handler so the
-browser can load the page that opens the WebSocket.
-
-=================================================================
-TREEOS EXTENSION WORK — ALWAYS SOURCE-READ A REFERENCE
-=================================================================
-
-For any TreeOS-specific file (manifest.js, init() in index.js, a
-tool definition, a custom mode, an enrichContext hook), source-read
-at least ONE matching reference from .source before writing. The
-fitness extension is a complete working reference:
-
-  source-read extensions/fitness/manifest.js
-  source-read extensions/fitness/index.js
-  source-read extensions/fitness/tools.js
-
-Never use workspace-read-file to read from .source. Use source-read.
-
-=================================================================
 TOOLS AT A GLANCE
 =================================================================
 
@@ -160,47 +119,13 @@ workspace-logs                     preview stdout/stderr tail
 workspace-status                   preview state (port, pid, uptime)
 
 =================================================================
-WEBSOCKET CLIENTS: USE window.location FOR THE URL
+BRANCH SCOPE
 =================================================================
 
-Frontend code that opens a WebSocket MUST NOT hardcode a host or
-port. The preview runs behind a path-based proxy. The browser
-reaches the preview at /api/v1/preview/<slug>/ and a WebSocket
-connecting to "ws://localhost:PORT/..." will fail for any remote
-user because their browser cannot reach the server's localhost.
-
-The correct pattern:
-
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const base = window.location.pathname.replace(/\/+$/, "");
-    const ws = new WebSocket(\`\${proto}//\${window.location.host}\${base}/ws\`);
-
-This resolves to the land's origin + the preview path prefix +
-your chosen WS path. The preview proxy tunnels it to the child's
-/ws handler automatically.
-
-Never do any of these:
-    new WebSocket("ws://localhost:3000/ws")
-    new WebSocket("ws://" + location.host + "/ws")
-    new WebSocket(\`ws://\${window.location.host}/ws\`)
-
-=================================================================
-BRANCH SCOPE — DO NOT COPY SIBLING FILES
-=================================================================
-
-You are building ONE branch of a compound project. Other branches
-(backend, frontend, tests, etc.) are being built by separate AI
-sessions in their own subdirectories.
-
-NEVER copy files from a sibling branch into your directory. If you
-need to understand what a sibling wrote, use source-read to READ
-it for reference. Then write your OWN files that import from or
-reference the sibling path at runtime (e.g. the frontend fetches
-from the backend URL, tests require("../backend/game.js")).
-
-Bad:  workspace-add-file frontend/backend/server.js  (copying)
-Good: source-read backend/server.js                  (reading)
-      then write frontend/app.js that connects to the backend
+If you are inside a swarm branch, your write paths are rooted at
+your branch. The file-write tools reject paths that leave it. To
+reference a sibling's output, embed the reference as a literal
+string in your own file (a fetch URL, a require path).
 
 =================================================================
 OUTPUT
@@ -258,9 +183,20 @@ export default {
       }
     }
     const contextBlock = renderEnrichedContextBlock(ctx?.enrichedContext);
+    // Strategy packages (code-strategy-http, code-strategy-websocket,
+    // code-strategy-treeos-extension, ...) each contribute a short
+    // explanatory block. Only blocks whose predicate matches this ctx
+    // are inlined — an HTTP-only project never sees the websocket block.
+    let strategyBlock = "";
+    try {
+      strategyBlock = buildStrategyContextBlock(ctx) || "";
+    } catch {
+      // A broken registry never breaks the prompt build.
+    }
     const parts = [core];
     if (contextBlock) parts.push(contextBlock);
     if (facetBlocks.length > 0) parts.push(facetBlocks.join("\n\n"));
+    if (strategyBlock) parts.push(strategyBlock);
     return parts.join("\n\n");
   },
 };
