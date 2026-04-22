@@ -1,9 +1,10 @@
 /**
- * Flow Dashboard
+ * Flow Dashboard — the land's nervous system at a glance.
  *
- * The network operations center for your land.
- * Three sections: Pulse Strip, Tree Map, Network Layer.
- * All data from existing APIs. Polls every 10 seconds.
+ * One screen: a live SVG map of which trees are exchanging signals, a
+ * filterable live feed with every signal linking out to chat / tree /
+ * signal-detail pages, and breakdown chips for status / extension / tree.
+ * Polls /api/v1/flow every 10s.
  */
 
 import express from "express";
@@ -14,10 +15,9 @@ const router = express.Router();
 
 router.get("/dashboard/flow", authenticateLite, async (req, res) => {
   if (!req.userId) return res.redirect("/login");
-  // Inject userId into the page so client JS can fetch the right endpoints
-  const injectedJs = `const USER_ID = "${req.userId}";\n` + JS;
+  const injectedJs = `const USER_ID = ${JSON.stringify(req.userId)};\n` + JS;
   res.send(page({
-    title: "Flow Dashboard -- TreeOS",
+    title: "Flow · TreeOS",
     bare: true,
     css: CSS,
     body: BODY,
@@ -27,430 +27,248 @@ router.get("/dashboard/flow", authenticateLite, async (req, res) => {
 
 export default router;
 
-// ── CSS ──
+// ── CSS ───────────────────────────────────────────────────────────────
 
 const CSS = `
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  background: #0a0a0a;
-  color: #e5e5e5;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #030712;
+  color: #e5e7eb;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
-}
-
-:root {
-  --signal-success: #22c55e;
-  --signal-pending: #eab308;
-  --signal-failed: #ef4444;
-  --signal-canopy: #3b82f6;
-  --signal-mycelium: #a855f7;
-  --node-active: rgba(34, 197, 94, 0.15);
-  --node-dormant: rgba(255, 255, 255, 0.03);
-  --peer-healthy: #22c55e;
-  --peer-degraded: #eab308;
-  --peer-dead: #ef4444;
-  --glass: rgba(255, 255, 255, 0.04);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --text-dim: rgba(255, 255, 255, 0.4);
-  --text-mid: rgba(255, 255, 255, 0.6);
-  --text-bright: rgba(255, 255, 255, 0.9);
-}
-
-.flow-dashboard {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
   min-height: 100vh;
 }
 
+:root {
+  --success: #4ade80;
+  --pending: #fbbf24;
+  --failed:  #f87171;
+  --queued:  #60a5fa;
+  --awaiting:#a78bfa;
+  --rejected:#fb7185;
+  --partial: #fcd34d;
+  --card-bg: linear-gradient(180deg, #1a2234 0%, #131a2a 100%);
+  --card-border: rgba(148,163,184,0.12);
+  --text-dim: #64748b;
+  --text-mid: #94a3b8;
+  --text-bright: #f1f5f9;
+  --accent: #5eead4;
+}
+
+.fd-wrap { max-width: 1400px; margin: 0 auto; padding: 20px 20px 40px; display: flex; flex-direction: column; gap: 18px; }
+
 /* ── Header ── */
-.fd-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 0;
-}
-.fd-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-bright);
-  letter-spacing: -0.3px;
-}
-.fd-subtitle {
-  font-size: 13px;
-  color: var(--text-dim);
-  margin-top: 2px;
-}
-.fd-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.fd-breath-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--signal-success);
-  animation: breathPulse 2s ease-in-out infinite;
-}
-.fd-breath-dot.dormant { background: #333; animation: none; }
-@keyframes breathPulse {
-  0%, 100% { opacity: 0.3; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.2); }
-}
+.fd-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.fd-title { font-size: 1.5rem; font-weight: 600; color: var(--text-bright); letter-spacing: -0.02em; }
+.fd-sub { font-size: 0.85rem; color: var(--text-mid); margin-top: 4px; }
+.fd-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.fd-winbtn { padding: 6px 12px; background: transparent; border: 1px solid var(--card-border); color: var(--text-mid); border-radius: 999px; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 120ms; }
+.fd-winbtn:hover { color: var(--text-bright); border-color: var(--accent); }
+.fd-winbtn.fd-active { background: rgba(94,234,212,0.1); color: var(--accent); border-color: var(--accent); }
+.fd-backlink { padding: 6px 14px; color: var(--text-mid); text-decoration: none; font-size: 0.82rem; border: 1px solid var(--card-border); border-radius: 8px; }
+.fd-backlink:hover { color: var(--text-bright); border-color: var(--accent); }
 
-/* ── Section container ── */
-.fd-section {
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
-  overflow: hidden;
-}
-.fd-section-header {
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--glass-border);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-mid);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
+/* ── Stat chips ── */
+.fd-stats { display: flex; gap: 10px; flex-wrap: wrap; font-size: 0.82rem; }
+.fd-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 999px; color: var(--text-mid); }
+.fd-chip strong { color: var(--text-bright); font-weight: 600; }
+.fd-chip .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.fd-chip-live { color: var(--success); border-color: rgba(74,222,128,0.4); }
+.fd-chip-live .dot { background: var(--success); box-shadow: 0 0 0 3px rgba(74,222,128,0.2); animation: livePulse 1.4s ease-in-out infinite; }
+.fd-chip-live.idle { color: var(--text-mid); border-color: var(--card-border); }
+.fd-chip-live.idle .dot { background: var(--text-dim); box-shadow: none; animation: none; }
+@keyframes livePulse { 0%,100% { box-shadow: 0 0 0 3px rgba(74,222,128,0.2); } 50% { box-shadow: 0 0 0 6px rgba(74,222,128,0); } }
 
-/* ── Pulse Strip ── */
-.pulse-strip {
-  position: relative;
-  height: 80px;
-  overflow: hidden;
-  padding: 0 20px;
-}
-.pulse-timeline {
-  position: relative;
-  height: 100%;
-  width: 100%;
-}
-.pulse-dot {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  top: 50%;
-  transform: translateY(-50%);
-  opacity: 0.8;
-  transition: opacity 0.3s;
-}
-.pulse-dot:hover { opacity: 1; transform: translateY(-50%) scale(2); }
-.pulse-dot.succeeded { background: var(--signal-success); }
-.pulse-dot.failed, .pulse-dot.rejected { background: var(--signal-failed); }
-.pulse-dot.queued, .pulse-dot.partial, .pulse-dot.awaiting { background: var(--signal-pending); }
-.pulse-dot.canopy { background: var(--signal-canopy); }
-.pulse-dot.mycelium { background: var(--signal-mycelium); }
-.pulse-hour-label {
-  position: absolute;
-  bottom: 4px;
-  font-size: 10px;
-  color: var(--text-dim);
-  transform: translateX(-50%);
-}
-.pulse-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-dim);
-  font-size: 13px;
-}
-.pulse-tooltip {
-  position: fixed;
-  background: rgba(0,0,0,0.9);
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 12px;
-  color: var(--text-bright);
-  pointer-events: none;
-  z-index: 100;
-  max-width: 250px;
-  display: none;
-}
+/* ── Grid ── */
+.fd-grid { display: grid; grid-template-columns: 1fr 320px; gap: 18px; }
+@media (max-width: 900px) { .fd-grid { grid-template-columns: 1fr; } }
 
-/* ── Tree Map ── */
-.tree-map {
-  padding: 16px 20px;
-  max-height: 500px;
-  overflow-y: auto;
-}
-.tm-tree { margin-bottom: 12px; }
-.tm-tree-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-bright);
-  cursor: pointer;
-  padding: 6px 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.tm-tree-name:hover { color: #fff; }
-.tm-chevron {
-  font-size: 10px;
-  transition: transform 0.2s;
-  color: var(--text-dim);
-}
-.tm-chevron.open { transform: rotate(90deg); }
-.tm-children { padding-left: 20px; border-left: 1px solid rgba(255,255,255,0.05); }
-.tm-node {
-  padding: 4px 8px;
-  margin: 2px 0;
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--text-mid);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: background 0.3s;
-}
-.tm-node:hover { background: rgba(255,255,255,0.06); }
-.tm-node.active { background: var(--node-active); color: var(--text-bright); }
-.tm-node.pulsing { animation: nodePulse 1.5s ease-in-out infinite; }
-.tm-node.dormant { color: rgba(255,255,255,0.2); }
-.tm-signal-count {
-  font-size: 10px;
-  color: var(--text-dim);
-  margin-left: auto;
-}
-.tm-channel-badge {
-  font-size: 9px;
-  padding: 1px 6px;
-  border-radius: 10px;
-  background: rgba(168, 85, 247, 0.15);
-  color: var(--signal-mycelium);
-  border: 1px solid rgba(168, 85, 247, 0.2);
-}
-@keyframes nodePulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-  50% { box-shadow: 0 0 8px 2px rgba(34, 197, 94, 0.2); }
-}
-.tm-collapsed-summary {
-  font-size: 11px;
-  color: var(--text-dim);
-  padding: 4px 8px;
-}
-.tm-empty {
-  padding: 20px;
-  text-align: center;
-  color: var(--text-dim);
-  font-size: 13px;
-}
+.fd-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 18px; }
+.fd-card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.fd-card-title { font-size: 0.72rem; font-weight: 700; color: var(--text-mid); letter-spacing: 0.08em; text-transform: uppercase; }
+.fd-card-count { font-size: 0.7rem; color: var(--text-dim); letter-spacing: normal; text-transform: none; }
 
-/* ── Node Panel ── */
-.node-panel {
-  position: fixed;
-  right: 0;
-  top: 0;
-  width: 360px;
-  height: 100vh;
-  background: #111;
-  border-left: 1px solid var(--glass-border);
-  padding: 20px;
-  overflow-y: auto;
-  transform: translateX(100%);
-  transition: transform 0.25s ease;
-  z-index: 50;
-}
-.node-panel.open { transform: translateX(0); }
-.np-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  font-size: 18px;
-  cursor: pointer;
-}
-.np-path {
-  font-size: 12px;
-  color: var(--signal-canopy);
-  font-family: monospace;
-  margin-bottom: 16px;
-  word-break: break-all;
-}
-.np-stat {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 0;
-  font-size: 13px;
-  color: var(--text-mid);
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-}
-.np-stat-label { color: var(--text-dim); }
-.np-signal-list { margin-top: 16px; }
-.np-signal-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
-}
-.np-signal {
-  padding: 6px 0;
-  font-size: 12px;
-  color: var(--text-mid);
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-  display: flex;
-  gap: 8px;
-}
-.np-signal-dir { color: var(--signal-success); }
-.np-signal-time { color: var(--text-dim); margin-left: auto; font-size: 11px; }
+/* ── Map ── */
+.fd-map-box { position: relative; border-radius: 12px; overflow: hidden; background: radial-gradient(ellipse at center, #0f172a 0%, #020617 100%); border: 1px solid rgba(148,163,184,0.08); }
+.fd-map-box svg { display: block; width: 100%; height: auto; }
+.fd-map-empty { padding: 60px 20px; text-align: center; color: var(--text-dim); font-style: italic; }
+.fd-tree-card rect { transition: filter 160ms; cursor: pointer; }
+.fd-tree-card:hover rect { filter: brightness(1.25); }
+.fd-tree-card text { paint-order: stroke; stroke: rgba(3,7,18,0.85); stroke-width: 3px; stroke-linejoin: round; }
+.fd-edge { transition: stroke-width 160ms, opacity 160ms; cursor: pointer; }
+.fd-edge:hover { opacity: 1 !important; stroke-width: 6 !important; }
+.fd-edge.fd-active-pair { opacity: 1 !important; stroke-width: 6 !important; filter: drop-shadow(0 0 4px currentColor); }
+.fd-edge-live { animation: edgeFlow 2.4s linear infinite; stroke-dasharray: 6 8; }
+@keyframes edgeFlow { to { stroke-dashoffset: -28; } }
+.fd-self-loop { stroke-dasharray: 3 5; opacity: 0.5; }
 
-/* ── Network Layer ── */
-.network-layer { padding: 20px; min-height: 120px; }
-.nl-graph {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 40px;
-  flex-wrap: wrap;
-  padding: 20px 0;
-}
-.nl-peer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  padding: 12px;
-  border-radius: 12px;
-  transition: background 0.2s;
-}
-.nl-peer:hover { background: rgba(255,255,255,0.04); }
-.nl-peer-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-}
-.nl-peer-name {
-  font-size: 12px;
-  color: var(--text-mid);
-  max-width: 100px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: center;
-}
-.nl-peer-status {
-  font-size: 10px;
-  color: var(--text-dim);
-}
-.nl-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.nl-center-dot {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--signal-canopy);
-  border: 2px solid rgba(59, 130, 246, 0.3);
-}
-.nl-center-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-bright);
-}
-.nl-empty {
-  text-align: center;
-  color: var(--text-dim);
-  font-size: 13px;
-  padding: 20px;
-}
-.nl-hidden { display: none; }
+.fd-clear-pair { display: none; margin-left: 8px; padding: 3px 10px; font-size: 0.72rem; background: rgba(239,68,68,0.12); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); border-radius: 999px; cursor: pointer; }
+.fd-clear-pair.show { display: inline-block; }
+.fd-clear-pair:hover { background: rgba(239,68,68,0.2); color: #fee2e2; }
 
-/* ── Responsive ── */
-@media (max-width: 768px) {
-  .flow-dashboard { padding: 12px; gap: 12px; }
-  .pulse-strip { height: 50px; }
-  .node-panel { width: 100%; }
-  .tree-map { max-height: 400px; }
-  .nl-graph { gap: 20px; }
-}
+.fd-legend { position: absolute; top: 12px; right: 12px; background: rgba(15,23,42,0.85); backdrop-filter: blur(6px); border: 1px solid rgba(148,163,184,0.2); border-radius: 10px; padding: 10px 12px; font-size: 0.72rem; color: #cbd5e1; }
+.fd-legend-title { font-weight: 600; color: var(--text-bright); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+.fd-legend-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.fd-legend-sw { width: 12px; height: 2.5px; border-radius: 2px; }
+
+/* ── Breakdowns ── */
+.fd-breakdowns { display: flex; flex-direction: column; gap: 14px; }
+.fd-bar { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 0.8rem; }
+.fd-bar-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.fd-bar-label { color: var(--text-mid); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fd-bar-label a { color: var(--text-mid); text-decoration: none; border-bottom: 1px dotted transparent; }
+.fd-bar-label a:hover { color: var(--text-bright); border-bottom-color: var(--accent); }
+.fd-bar-count { color: var(--text-bright); font-weight: 600; font-variant-numeric: tabular-nums; }
+.fd-bar-bar { height: 4px; background: rgba(148,163,184,0.1); border-radius: 2px; overflow: hidden; margin-top: 3px; }
+.fd-bar-fill { height: 100%; border-radius: 2px; transition: width 300ms; }
+.fd-status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.fd-status-cell { padding: 10px; border-radius: 8px; background: rgba(30,41,59,0.5); border: 1px solid rgba(148,163,184,0.08); text-align: center; }
+.fd-status-cell .v { font-size: 1.1rem; font-weight: 600; color: var(--text-bright); font-variant-numeric: tabular-nums; }
+.fd-status-cell .l { font-size: 0.7rem; color: var(--text-mid); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 2px; }
+
+/* ── Feed ── */
+.fd-feed { max-height: 540px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; scrollbar-width: thin; scrollbar-color: rgba(148,163,184,0.3) transparent; }
+.fd-feed::-webkit-scrollbar { width: 8px; }
+.fd-feed::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.25); border-radius: 4px; }
+
+.fd-sig { display: grid; grid-template-columns: auto 1fr auto auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 10px; border: 1px solid transparent; transition: background 120ms, border-color 120ms; }
+.fd-sig:hover { background: rgba(30,41,59,0.5); border-color: rgba(148,163,184,0.1); }
+.fd-sig-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.fd-sig-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fd-sig-flow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.85rem; }
+.fd-sig-flow a { color: var(--text-bright); text-decoration: none; border-bottom: 1px dotted rgba(148,163,184,0.4); }
+.fd-sig-flow a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.fd-sig-arrow { color: var(--text-dim); font-weight: bold; font-size: 0.72rem; }
+.fd-sig-meta { display: flex; gap: 8px; font-size: 0.72rem; color: var(--text-dim); flex-wrap: wrap; }
+.fd-sig-meta a { color: var(--text-dim); text-decoration: none; }
+.fd-sig-meta a:hover { color: var(--accent); }
+.fd-sig-meta .ext { color: var(--accent); }
+.fd-sig-status { padding: 2px 8px; border-radius: 999px; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.fd-sig-time { font-size: 0.72rem; color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ── Filter bar ── */
+.fd-filter { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.fd-fchip { padding: 4px 10px; background: transparent; border: 1px solid var(--card-border); color: var(--text-mid); border-radius: 999px; font-size: 0.72rem; font-weight: 600; cursor: pointer; transition: all 120ms; }
+.fd-fchip:hover { color: var(--text-bright); }
+.fd-fchip.active { background: rgba(94,234,212,0.1); color: var(--accent); border-color: var(--accent); }
+
+/* ── Loader ── */
+.fd-empty { padding: 40px 20px; text-align: center; color: var(--text-dim); font-style: italic; }
+.fd-skeleton { padding: 10px 12px; border-radius: 10px; background: rgba(30,41,59,0.3); animation: skel 1.5s ease-in-out infinite; }
+@keyframes skel { 0%,100% { opacity: 0.5; } 50% { opacity: 0.8; } }
 `;
 
-// ── Body HTML ──
+// ── Body ──────────────────────────────────────────────────────────────
 
 const BODY = `
-<div class="flow-dashboard">
-  <div class="fd-header">
+<div class="fd-wrap">
+  <div class="fd-head">
     <div>
       <div class="fd-title">Flow Dashboard</div>
-      <div class="fd-subtitle">Signal activity across your land</div>
+      <div class="fd-sub">Signal activity across your land</div>
     </div>
-    <div style="display:flex;align-items:center;gap:16px;">
-      <div class="fd-status">
-        <div class="fd-breath-dot dormant" id="breathDot"></div>
-        <span id="breathLabel">loading...</span>
+    <div class="fd-actions">
+      <button class="fd-winbtn" data-win="3600000">1h</button>
+      <button class="fd-winbtn fd-active" data-win="86400000">24h</button>
+      <button class="fd-winbtn" data-win="604800000">7d</button>
+      <button class="fd-winbtn" data-win="0">all</button>
+      <a href="/dashboard" class="fd-backlink">← Home</a>
+    </div>
+  </div>
+
+  <div class="fd-stats" id="fdStats"></div>
+
+  <div class="fd-grid">
+    <div>
+      <div class="fd-card">
+        <div class="fd-card-head">
+          <div class="fd-card-title">Flow Map</div>
+          <div class="fd-card-count" id="fdMapCount"></div>
+        </div>
+        <div class="fd-map-box" id="fdMapBox">
+          <div class="fd-map-empty">Loading…</div>
+        </div>
       </div>
-      <a href="/dashboard" style="color:var(--text-dim);text-decoration:none;font-size:0.85rem;padding:6px 14px;border:1px solid var(--glass-border);border-radius:8px;">Dashboard</a>
+
+      <div class="fd-card" style="margin-top:18px">
+        <div class="fd-card-head">
+          <div class="fd-card-title">Live Feed</div>
+          <div class="fd-card-count" id="fdFeedCount"></div>
+        </div>
+        <div class="fd-filter" id="fdFilter"></div>
+        <div class="fd-feed" id="fdFeed"><div class="fd-empty">Loading…</div></div>
+      </div>
+    </div>
+
+    <div class="fd-breakdowns">
+      <div class="fd-card">
+        <div class="fd-card-head"><div class="fd-card-title">By Status</div></div>
+        <div class="fd-status-grid" id="fdByStatus"></div>
+      </div>
+      <div class="fd-card">
+        <div class="fd-card-head"><div class="fd-card-title">By Extension</div></div>
+        <div id="fdByExt"></div>
+      </div>
+      <div class="fd-card">
+        <div class="fd-card-head"><div class="fd-card-title">By Tree</div></div>
+        <div id="fdByTree"></div>
+      </div>
+      <div class="fd-card">
+        <div class="fd-card-head"><div class="fd-card-title">Storage</div></div>
+        <div id="fdStats2"></div>
+      </div>
+      <div class="fd-card" id="fdPeerCard" style="display:none">
+        <div class="fd-card-head"><div class="fd-card-title">Peers</div></div>
+        <div id="fdPeers"></div>
+      </div>
     </div>
   </div>
-
-  <div class="fd-section">
-    <div class="fd-section-header">Pulse Strip (last 24h)</div>
-    <div class="pulse-strip" id="pulseStrip">
-      <div class="pulse-timeline" id="pulseTimeline"></div>
-    </div>
-  </div>
-
-  <div class="fd-section">
-    <div class="fd-section-header">Tree Map</div>
-    <div class="tree-map" id="treeMap">
-      <div class="tm-empty">Loading trees...</div>
-    </div>
-  </div>
-
-  <div class="fd-section" id="networkSection">
-    <div class="fd-section-header">Network</div>
-    <div class="network-layer" id="networkLayer">
-      <div class="nl-empty">Loading peers...</div>
-    </div>
-  </div>
-
-  <div class="node-panel" id="nodePanel">
-    <button class="np-close" onclick="closePanel()">&times;</button>
-    <div id="panelContent"></div>
-  </div>
-
-  <div class="pulse-tooltip" id="tooltip"></div>
 </div>
 `;
 
-// ── Client-side JavaScript ──
+// ── JS ────────────────────────────────────────────────────────────────
 
 const JS = `
 const API = "/api/v1";
-const POLL_INTERVAL = 10000;
-const MAX_DOTS = 500;
-const HOUR_MS = 3600000;
-const DAY_MS = 24 * HOUR_MS;
+const POLL = 10000;
 
-let flowData = [];
-let roots = [];        // [{ id, name }]  (id always a string)
-let signalCounts = {}; // rootId -> signal count
-let expandedTrees = {}; // rootId -> { tree, signalMap }
-let selectedNode = null;
+// Auth token from query string is preserved across links so iframe/inApp
+// sessions don't lose the share-token context.
+const AUTH_QS = (function(){
+  const q = new URLSearchParams(window.location.search);
+  const tok = q.get("token");
+  return tok ? ("&token=" + encodeURIComponent(tok)) : "";
+})();
 
-// ── Fetch helpers ──
+const STATUS_COLORS = {
+  succeeded: "#4ade80",
+  failed:    "#f87171",
+  rejected:  "#fb7185",
+  queued:    "#60a5fa",
+  awaiting:  "#a78bfa",
+  partial:   "#fcd34d",
+  unknown:   "#64748b",
+};
+const STATUS_ORDER = ["succeeded","failed","rejected","queued","awaiting","partial"];
+
+// Palette aligns with rooms map so the same tree wears the same color everywhere.
+const TREE_PALETTE = ["#7dd3fc","#fca5a5","#a7f3d0","#fde68a","#c4b5fd","#fdba74","#f9a8d4","#86efac","#93c5fd","#fcd34d"];
+
+let state = {
+  roots: [],           // [{ id, name }]
+  rootById: {},        // id -> root obj
+  nodeToRoot: {},      // nodeId -> rootId (populated as we learn from signals)
+  treeColor: {},       // rootId -> color
+  signals: [],         // all cascade hops in window, sorted newest first
+  windowMs: 86400000,  // 24h default
+  statusFilter: null,
+  pairFilter: null,    // { src, tgt } — when clicked, feed shows only that pair
+  peers: [],
+  stats: null,
+};
+
+// ── fetch helpers ──
 
 async function fetchJson(url) {
   try {
@@ -460,466 +278,497 @@ async function fetchJson(url) {
     return j.data != null ? j.data : j;
   } catch { return null; }
 }
-
-// id() safely extracts a string ID from MongoDB _id (could be ObjectId or string)
-function id(obj) {
-  if (!obj) return "";
-  if (typeof obj === "string") return obj;
-  if (obj._id) return String(obj._id);
-  if (obj.id) return String(obj.id);
-  return String(obj);
+function idOf(v) { if (!v) return ""; if (typeof v === "string") return v; if (v._id) return String(v._id); return String(v); }
+function esc(s) { if (s == null) return ""; const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+function timeAgo(d) {
+  const sec = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
+  if (sec < 60) return sec + "s";
+  if (sec < 3600) return Math.floor(sec/60) + "m";
+  if (sec < 86400) return Math.floor(sec/3600) + "h";
+  return Math.floor(sec/86400) + "d";
+}
+function link(href, text, cls) {
+  return '<a href="' + href + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + esc(text) + '</a>';
+}
+function withAuth(path) {
+  // The dashboard itself runs authenticated via cookie, but links to
+  // authenticated HTML pages need the ?token=...&html pair in many setups.
+  const sep = path.includes("?") ? "&" : "?";
+  return path + sep + "html" + AUTH_QS;
 }
 
-// ── Load roots ──
-// GET /api/v1/user/:userId -> { roots: [{ _id, name, visibility }] }
+// ── data load ──
 
-async function loadRoots() {
+async function loadAll() {
+  // Roots for this user
   const userData = await fetchJson(API + "/user/" + USER_ID);
-  // Normalize: always { id: string, name: string }
-  roots = (userData?.roots || []).map(r => ({
-    id: id(r),
-    name: r.name || id(r).slice(0, 8),
-  }));
-  return roots;
-}
-
-// ── Pulse Strip ──
-// Fetch flow data from first few trees in parallel (just flow, not tree structure)
-
-async function loadPulseStrip() {
-  if (!roots.length) return;
-
-  // Fetch all cascade results globally, then filter by rootId per tree
-  const globalFlow = await fetchJson(API + "/flow?limit=200");
-  // Results come as { signalId: [results...] }. Flatten into a single array.
-  const resultMap = globalFlow?.results || {};
-  const allResults = [];
-  for (const [signalId, signalResults] of Object.entries(resultMap)) {
-    if (Array.isArray(signalResults)) {
-      for (const r of signalResults) allResults.push({ ...r, signalId });
-    }
-  }
-
-  const allSignals = [];
-  const now = Date.now();
-  const cutoff = now - DAY_MS;
-
-  // Reset signal counts for tree cards
-  signalCounts = {};
-
-  for (const r of allResults) {
-    const ts = new Date(r.timestamp || r.createdAt).getTime();
-    if (ts > cutoff) {
-      allSignals.push({
-        timestamp: ts,
-        status: r.status || "succeeded",
-        source: r.source,
-        extName: r.extName,
-      });
-      // Count per source node's root (if available)
-      const srcRoot = r.rootId || r.source || "unknown";
-      signalCounts[srcRoot] = (signalCounts[srcRoot] || 0) + 1;
-    }
-  }
-
-  allSignals.sort((a, b) => a.timestamp - b.timestamp);
-  flowData = allSignals.slice(-MAX_DOTS);
-  renderPulseStrip();
-  renderTreeCards(); // update signal badges on tree cards
-}
-
-function renderPulseStrip() {
-  const timeline = document.getElementById("pulseTimeline");
-  if (!flowData.length) {
-    timeline.innerHTML = '<div class="pulse-empty">No signals in the last 24 hours</div>';
-    return;
-  }
-
-  const now = Date.now();
-  const start = now - DAY_MS;
-  let html = "";
-
-  for (let h = 0; h < 24; h += 4) {
-    const t = start + h * HOUR_MS;
-    const pct = ((t - start) / DAY_MS) * 100;
-    const label = new Date(t).toLocaleTimeString([], { hour: "numeric" });
-    html += '<div class="pulse-hour-label" style="left:' + pct + '%">' + label + '</div>';
-  }
-
-  for (const signal of flowData) {
-    const pct = ((signal.timestamp - start) / DAY_MS) * 100;
-    if (pct < 0 || pct > 100) continue;
-    const y = 20 + Math.random() * 30;
-    html += '<div class="pulse-dot ' + signal.status + '" '
-      + 'style="left:' + pct + '%;top:' + y + 'px" '
-      + 'data-ts="' + signal.timestamp + '" '
-      + 'data-status="' + signal.status + '" '
-      + 'data-ext="' + (signal.extName || "") + '"'
-      + '></div>';
-  }
-
-  timeline.innerHTML = html;
-
-  const tooltip = document.getElementById("tooltip");
-  timeline.querySelectorAll(".pulse-dot").forEach(dot => {
-    dot.addEventListener("mouseenter", (e) => {
-      const ts = new Date(parseInt(dot.dataset.ts));
-      const time = ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      const ext = dot.dataset.ext ? " (" + dot.dataset.ext + ")" : "";
-      tooltip.textContent = dot.dataset.status + ext + " at " + time;
-      tooltip.style.display = "block";
-      tooltip.style.left = e.clientX + 12 + "px";
-      tooltip.style.top = e.clientY - 30 + "px";
-    });
-    dot.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+  state.roots = (userData?.roots || []).map(r => ({ id: idOf(r), name: r.name || idOf(r).slice(0,8) }));
+  state.rootById = {};
+  state.treeColor = {};
+  state.roots.forEach((r, i) => {
+    state.rootById[r.id] = r;
+    state.treeColor[r.id] = TREE_PALETTE[i % TREE_PALETTE.length];
   });
+
+  // Pre-populate nodeToRoot: every root node maps to itself.
+  for (const r of state.roots) state.nodeToRoot[r.id] = r.id;
+
+  // Global flow — last 500 signals.
+  const flow = await fetchJson(API + "/flow?limit=500");
+  const resultMap = flow?.results || {};
+  const hops = [];
+  for (const [signalId, signalResults] of Object.entries(resultMap)) {
+    if (!Array.isArray(signalResults)) continue;
+    for (const r of signalResults) {
+      const ts = new Date(r.timestamp || r.createdAt || Date.now()).getTime();
+      hops.push({
+        signalId,
+        timestamp: ts,
+        status: r.status || "unknown",
+        source: r.source ? String(r.source) : null,
+        target: r.nodeId ? String(r.nodeId) : null,
+        extName: r.extName || r.extension || null,
+        depth: r.depth != null ? r.depth : null,
+        summary: r.summary || r.reason || null,
+      });
+    }
+  }
+  hops.sort((a, b) => b.timestamp - a.timestamp);
+  state.signals = hops;
+
+  // Resolve unknown nodeIds to their root via /node/:id lookup, cached.
+  await resolveUnknownRoots(hops);
+
+  // Storage stats + peers in parallel (best-effort; may 403 for non-admin).
+  const [stats, peers] = await Promise.all([
+    fetchJson(API + "/flow/stats").catch(() => null),
+    fetchJson(API + "/canopy/admin/peers").catch(() => null),
+  ]);
+  state.stats = stats;
+  state.peers = Array.isArray(peers) ? peers : [];
 }
 
-// ── Tree Map (lazy load) ──
-// Page load: collapsed cards. Click: fetch that tree. One call per expand.
+async function resolveUnknownRoots(hops) {
+  const seen = new Set();
+  const pending = [];
+  for (const h of hops) {
+    for (const nid of [h.source, h.target]) {
+      if (!nid || seen.has(nid) || state.nodeToRoot[nid] != null) continue;
+      seen.add(nid);
+      pending.push(nid);
+      if (pending.length >= 40) break;  // cap per tick
+    }
+    if (pending.length >= 40) break;
+  }
+  if (pending.length === 0) return;
+  await Promise.all(pending.map(async (nid) => {
+    const wrapped = await fetchJson(API + "/node/" + nid);
+    const n = wrapped?.node || wrapped;
+    if (!n) { state.nodeToRoot[nid] = null; return; }
+    // rootOwner is a userId (not a root nodeId), so don't use it. Walk via
+    // the node's parent chain isn't cheap from here — instead, /node/:id
+    // returns a "path" through the tree if the route supports it. As a
+    // fallback treat any node whose id matches a known root as its own
+    // root, and otherwise mark unknown.
+    if (state.rootById[nid]) state.nodeToRoot[nid] = nid;
+    else if (n.rootId) state.nodeToRoot[nid] = String(n.rootId);
+    else state.nodeToRoot[nid] = null;
+  }));
+}
 
-function renderTreeCards() {
-  const container = document.getElementById("treeMap");
-  if (!roots.length) {
-    container.innerHTML = '<div class="tm-empty">No trees</div>';
+// ── windowing ──
+
+function inWindow(sig) {
+  if (!state.windowMs) return true;
+  return Date.now() - sig.timestamp <= state.windowMs;
+}
+function filteredSignals() {
+  let out = state.signals.filter(inWindow);
+  if (state.statusFilter) out = out.filter(s => s.status === state.statusFilter);
+  if (state.pairFilter) {
+    const { src, tgt } = state.pairFilter;
+    out = out.filter((s) => {
+      const sr = rootOfNode(s.source) || "_unknown";
+      const tr = s.target ? rootOfNode(s.target) || "_unknown" : sr;
+      return sr === src && tr === tgt;
+    });
+  }
+  return out;
+}
+
+// ── header stats ──
+
+function renderStats() {
+  const sigs = state.signals.filter(inWindow);
+  const total = sigs.length;
+  const byStatus = {};
+  for (const s of sigs) byStatus[s.status] = (byStatus[s.status] || 0) + 1;
+  const succ = byStatus.succeeded || 0;
+  const successPct = total > 0 ? Math.round((succ / total) * 100) : 0;
+  const lastMinute = sigs.filter(s => Date.now() - s.timestamp < 60000).length;
+  const livePulse = lastMinute > 0;
+
+  const chips = [
+    '<span class="fd-chip fd-chip-live ' + (livePulse ? '' : 'idle') + '"><span class="dot"></span>' +
+      (livePulse ? lastMinute + '/min' : 'idle') + '</span>',
+    '<span class="fd-chip"><strong>' + total + '</strong> signals</span>',
+    '<span class="fd-chip"><strong>' + successPct + '%</strong> success</span>',
+    '<span class="fd-chip"><strong>' + state.roots.length + '</strong> tree' + (state.roots.length === 1 ? '' : 's') + '</span>',
+  ];
+  document.getElementById("fdStats").innerHTML = chips.join("");
+}
+
+// ── flow map ──
+
+function rootOfNode(nodeId) { return state.nodeToRoot[nodeId] || null; }
+function labelForRoot(rid) { return state.rootById[rid]?.name || (rid ? rid.slice(0, 8) : "unknown"); }
+
+function renderMap() {
+  const box = document.getElementById("fdMapBox");
+  const countEl = document.getElementById("fdMapCount");
+  const sigs = filteredSignals();
+
+  // Build tree nodes + pairwise flow counts (aggregated by source tree → target tree).
+  const treeHits = new Map();   // rootId -> { sent, received, last }
+  const pairFlow = new Map();   // "src|tgt" -> { src, tgt, count, lastStatus, lastTs }
+
+  for (const s of sigs) {
+    const srcRoot = rootOfNode(s.source) || "_unknown";
+    const tgtRoot = s.target ? rootOfNode(s.target) || "_unknown" : srcRoot;
+    const srcEntry = treeHits.get(srcRoot) || { sent: 0, received: 0, last: 0 };
+    srcEntry.sent++; srcEntry.last = Math.max(srcEntry.last, s.timestamp);
+    treeHits.set(srcRoot, srcEntry);
+    if (tgtRoot !== srcRoot || !s.target) {
+      const tgtEntry = treeHits.get(tgtRoot) || { sent: 0, received: 0, last: 0 };
+      tgtEntry.received++; tgtEntry.last = Math.max(tgtEntry.last, s.timestamp);
+      treeHits.set(tgtRoot, tgtEntry);
+    }
+    const key = srcRoot + "|" + tgtRoot;
+    const pair = pairFlow.get(key) || { src: srcRoot, tgt: tgtRoot, count: 0, lastStatus: s.status, lastTs: 0 };
+    pair.count++;
+    if (s.timestamp > pair.lastTs) { pair.lastTs = s.timestamp; pair.lastStatus = s.status; }
+    pairFlow.set(key, pair);
+  }
+
+  countEl.textContent = treeHits.size + " tree" + (treeHits.size === 1 ? "" : "s") + " · " + pairFlow.size + " flow" + (pairFlow.size === 1 ? "" : "s");
+
+  if (treeHits.size === 0) {
+    box.innerHTML = '<div class="fd-map-empty">No signals in this window. Write a note on a cascade-enabled node to see signals land here.</div>';
     return;
   }
 
-  let html = "";
-  for (const root of roots) {
-    const sig = signalCounts[root.id] || 0;
-    const isExpanded = !!expandedTrees[root.id];
+  // Layout: trees in a ring.
+  const W = 1000, H = 540;
+  const cx = W/2, cy = H/2;
+  const trees = [...treeHits.keys()];
+  const R = Math.min(W, H) * (trees.length === 1 ? 0 : 0.34);
+  const treePos = new Map();
+  trees.forEach((rid, i) => {
+    const a = (i / trees.length) * 2 * Math.PI - Math.PI / 2;
+    treePos.set(rid, { x: trees.length === 1 ? cx : cx + R * Math.cos(a), y: trees.length === 1 ? cy : cy + R * Math.sin(a) });
+  });
 
-    html += '<div class="tm-tree" id="tcard-' + root.id + '">';
-    html += '<div class="tm-tree-name" data-rid="' + root.id + '">';
-    html += '<span class="tm-chevron' + (isExpanded ? " open" : "") + '">></span> ';
-    html += esc(root.name);
-    if (sig > 0) html += ' <span class="tm-signal-count">' + sig + '</span>';
-    html += '</div>';
-    html += '<div class="tm-children" id="tbody-' + root.id + '"';
-    if (!isExpanded) html += ' style="display:none"';
-    html += '>';
+  const TREE_W = 160, TREE_H = 52;
 
-    if (isExpanded) {
-      html += buildTreeHtml(expandedTrees[root.id], root.id);
+  // Max count for stroke scaling.
+  const maxCount = Math.max(...[...pairFlow.values()].map(p => p.count), 1);
+  const now = Date.now();
+
+  // Edges (draw first so tree cards paint on top). Every edge is clickable
+  // and carries data-src/data-tgt so the feed can filter to that pair.
+  const edges = [];
+  for (const pair of pairFlow.values()) {
+    const sp = treePos.get(pair.src), tp = treePos.get(pair.tgt);
+    if (!sp || !tp) continue;
+    const stroke = STATUS_COLORS[pair.lastStatus] || STATUS_COLORS.unknown;
+    const width = 1.5 + (pair.count / maxCount) * 5;
+    const isLive = now - pair.lastTs < 60000;
+    const liveCls = isLive ? " fd-edge-live" : "";
+    const isActive = state.pairFilter && state.pairFilter.src === pair.src && state.pairFilter.tgt === pair.tgt;
+    const activeCls = isActive ? " fd-active-pair" : "";
+    const title = labelForRoot(pair.src) + " → " + labelForRoot(pair.tgt) + " · " + pair.count + " signal" + (pair.count === 1 ? "" : "s") + " · last " + timeAgo(pair.lastTs) + " · click to filter feed";
+    const dataAttrs = ' data-src="' + esc(pair.src) + '" data-tgt="' + esc(pair.tgt) + '"';
+    if (pair.src === pair.tgt) {
+      // Self loop: a ~3/4 circle to the right of the card.
+      const r = 22;
+      const anchorX = sp.x + TREE_W / 2;
+      const endX = sp.x + TREE_W / 2;
+      edges.push('<path class="fd-edge fd-self-loop' + liveCls + activeCls + '"' + dataAttrs + ' d="M ' + anchorX.toFixed(1) + ' ' + (sp.y - 10).toFixed(1) + ' a ' + r + ' ' + r + ' 0 1 1 0 ' + (20) + '" fill="none" stroke="' + stroke + '" stroke-width="' + width.toFixed(1) + '" opacity="0.6"><title>' + esc(title) + '</title></path>');
+    } else {
+      // Curve between two cards.
+      const dx = tp.x - sp.x, dy = tp.y - sp.y;
+      const mx = (sp.x + tp.x) / 2 - dy * 0.12;
+      const my = (sp.y + tp.y) / 2 + dx * 0.12;
+      edges.push('<path class="fd-edge' + liveCls + activeCls + '"' + dataAttrs + ' d="M ' + sp.x.toFixed(1) + ' ' + sp.y.toFixed(1) + ' Q ' + mx.toFixed(1) + ' ' + my.toFixed(1) + ' ' + tp.x.toFixed(1) + ' ' + tp.y.toFixed(1) + '" fill="none" stroke="' + stroke + '" stroke-width="' + width.toFixed(1) + '" opacity="0.6"><title>' + esc(title) + '</title></path>');
     }
-
-    html += '</div></div>';
   }
 
-  container.innerHTML = html;
+  // Tree cards — darker fill + thicker stroke + brighter text with outline so
+  // labels pop against both the card and the background glow behind it.
+  const treeCards = trees.map(rid => {
+    const p = treePos.get(rid);
+    const hit = treeHits.get(rid);
+    const color = state.treeColor[rid] || "#94a3b8";
+    const name = labelForRoot(rid);
+    const rx = p.x - TREE_W/2;
+    const ry = p.y - TREE_H/2;
+    const link = rid === "_unknown" ? null : withAuth("/api/v1/root/" + rid);
+    const wrapperOpen = link ? '<a href="' + link + '">' : '<g>';
+    const wrapperClose = link ? '</a>' : '</g>';
+    return (
+      '<g class="fd-tree-card">' + wrapperOpen +
+        '<title>' + esc(name) + ' · ' + hit.sent + ' sent · ' + hit.received + ' received</title>' +
+        '<rect x="' + rx.toFixed(1) + '" y="' + ry.toFixed(1) + '" width="' + TREE_W + '" height="' + TREE_H + '" rx="10" fill="#0f172a" stroke="' + color + '" stroke-width="2.5" />' +
+        '<text x="' + p.x.toFixed(1) + '" y="' + (p.y - 4).toFixed(1) + '" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="700" filter="url(#labelShadow)" style="pointer-events:none">' + esc(name) + '</text>' +
+        '<text x="' + p.x.toFixed(1) + '" y="' + (p.y + 15).toFixed(1) + '" text-anchor="middle" fill="' + color + '" font-size="11" font-weight="600" filter="url(#labelShadow)" style="pointer-events:none">↑' + hit.sent + ' ↓' + hit.received + '</text>' +
+      wrapperClose + '</g>'
+    );
+  }).join("");
+
+  box.innerHTML =
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMidYMid meet">' +
+      '<defs>' +
+        '<filter id="labelShadow" x="-20%" y="-20%" width="140%" height="140%">' +
+          '<feDropShadow dx="0" dy="0" stdDeviation="1.2" flood-color="#020617" flood-opacity="0.95"/>' +
+        '</filter>' +
+      '</defs>' +
+      '<rect width="' + W + '" height="' + H + '" fill="#030712" />' +
+      '<g class="edges">' + edges.join("") + '</g>' +
+      '<g class="trees">' + treeCards + '</g>' +
+    '</svg>' +
+    '<div class="fd-legend">' +
+      '<div class="fd-legend-title">Edge = latest status</div>' +
+      '<div class="fd-legend-row"><span class="fd-legend-sw" style="background:#4ade80"></span>succeeded</div>' +
+      '<div class="fd-legend-row"><span class="fd-legend-sw" style="background:#f87171"></span>failed</div>' +
+      '<div class="fd-legend-row"><span class="fd-legend-sw" style="background:#60a5fa"></span>queued</div>' +
+      '<div class="fd-legend-row"><span class="fd-legend-sw" style="background:#a78bfa"></span>awaiting</div>' +
+      '<div class="fd-legend-row"><span class="fd-legend-sw" style="background:#fcd34d"></span>partial</div>' +
+      '<div class="fd-legend-row" style="margin-top:4px;color:#94a3b8">thickness = volume</div>' +
+    '</div>';
 }
 
-function buildTreeHtml(td, rootId) {
-  if (!td || !td.tree) return '<div class="tm-collapsed-summary">Failed to load</div>';
-  const kids = (td.tree.children || []).filter(function(n) { return n.name && n.name[0] !== "."; });
-  if (!kids.length) return '<div class="tm-collapsed-summary">Empty tree</div>';
-  return renderNodes(kids, td.signalMap, Date.now(), rootId, 0);
+// ── feed ──
+
+function renderFilter() {
+  const counts = {};
+  for (const s of state.signals.filter(inWindow)) counts[s.status] = (counts[s.status] || 0) + 1;
+  const total = Object.values(counts).reduce((a,b)=>a+b, 0);
+  const chips = ['<button class="fd-fchip' + (state.statusFilter == null ? " active" : "") + '" data-status="">All ' + total + '</button>'];
+  for (const st of STATUS_ORDER) {
+    const n = counts[st] || 0;
+    if (n === 0) continue;
+    const active = state.statusFilter === st ? " active" : "";
+    chips.push('<button class="fd-fchip' + active + '" data-status="' + st + '" style="border-color:' + STATUS_COLORS[st] + '66;color:' + STATUS_COLORS[st] + '">' + st + ' ' + n + '</button>');
+  }
+  // Pair filter chip (from edge click). Visible only while set.
+  if (state.pairFilter) {
+    const srcName = labelForRoot(state.pairFilter.src);
+    const tgtName = labelForRoot(state.pairFilter.tgt);
+    chips.push('<button class="fd-clear-pair show" id="fdClearPair">✕ ' + esc(srcName) + ' → ' + esc(tgtName) + '</button>');
+  }
+  document.getElementById("fdFilter").innerHTML = chips.join("");
 }
 
-async function toggleTreeLazy(rootId) {
-  var body = document.getElementById("tbody-" + rootId);
-  var card = document.getElementById("tcard-" + rootId);
-  var chevron = card ? card.querySelector(".tm-chevron") : null;
+function renderFeed() {
+  const feed = document.getElementById("fdFeed");
+  const countEl = document.getElementById("fdFeedCount");
+  const sigs = filteredSignals().slice(0, 80);
+  countEl.textContent = sigs.length + " shown";
 
-  if (expandedTrees[rootId]) {
-    delete expandedTrees[rootId];
-    if (body) body.style.display = "none";
-    if (chevron) chevron.classList.remove("open");
+  if (sigs.length === 0) {
+    feed.innerHTML = '<div class="fd-empty">No signals match this filter.</div>';
     return;
   }
 
-  // Show loading
-  if (body) { body.style.display = ""; body.innerHTML = '<div class="tm-collapsed-summary">Loading...</div>'; }
-  if (chevron) chevron.classList.add("open");
+  const rows = sigs.map(s => {
+    const color = STATUS_COLORS[s.status] || STATUS_COLORS.unknown;
+    const srcRoot = rootOfNode(s.source);
+    const tgtRoot = s.target ? rootOfNode(s.target) : null;
+    const srcName = srcRoot ? labelForRoot(srcRoot) : (s.source ? s.source.slice(0,8) : "—");
+    const tgtName = s.target ? (tgtRoot ? labelForRoot(tgtRoot) : s.target.slice(0,8)) : null;
 
-  try {
-    // GET /root/:rootId -> { _id, name, children: [{_id, name, children, ...}], ... }
-    // GET /flow -> { results: { signalId: [...] } }
-    var results = await Promise.all([
-      fetchJson(API + "/root/" + rootId),
-      fetchJson(API + "/flow?limit=50")
-    ]);
-    var tree = results[0];
-    var flow = results[1];
+    const srcLink = s.source ? withAuth("/api/v1/node/" + s.source + "/chats") : null;
+    const tgtLink = s.target ? withAuth("/api/v1/node/" + s.target + "/chats") : null;
+    const signalDetailLink = withAuth("/api/v1/flow/signal/" + s.signalId);
 
-    var signalMap = {};
-    // Flatten signal map into array
-    var flowResultMap = (flow && flow.results) ? flow.results : {};
-    var flowResults = [];
-    for (var [sid, sResults] of Object.entries(flowResultMap)) {
-      if (Array.isArray(sResults)) {
-        for (var sr of sResults) flowResults.push(sr);
-      }
-    }
-    for (var i = 0; i < flowResults.length; i++) {
-      var r = flowResults[i];
-      var ts = new Date(r.timestamp || r.createdAt).getTime();
-      var src = r.source ? String(r.source) : null;
-      var tgt = r.nodeId ? String(r.nodeId) : null;
-      if (src) {
-        if (!signalMap[src]) signalMap[src] = { sent: 0, received: 0, lastSignal: 0 };
-        signalMap[src].sent++;
-        if (ts > signalMap[src].lastSignal) signalMap[src].lastSignal = ts;
-      }
-      if (tgt) {
-        if (!signalMap[tgt]) signalMap[tgt] = { sent: 0, received: 0, lastSignal: 0 };
-        signalMap[tgt].received++;
-        if (ts > signalMap[tgt].lastSignal) signalMap[tgt].lastSignal = ts;
-      }
-    }
+    const srcHtml = srcLink ? link(srcLink, srcName) : esc(srcName);
+    const arrow = tgtName ? '<span class="fd-sig-arrow">→</span>' : '';
+    const tgtHtml = tgtName ? (tgtLink ? link(tgtLink, tgtName) : esc(tgtName)) : '';
 
-    expandedTrees[rootId] = { tree: tree, signalMap: signalMap };
-    if (body) body.innerHTML = buildTreeHtml(expandedTrees[rootId], rootId);
-  } catch (err) {
-    if (body) body.innerHTML = '<div class="tm-collapsed-summary">Error: ' + err.message + '</div>';
-  }
+    const extHtml = s.extName ? '<span class="ext">' + esc(s.extName) + '</span>' : '';
+    const depthHtml = s.depth != null ? 'hop ' + s.depth : '';
+    const sigLinkHtml = link(signalDetailLink, s.signalId.slice(0,8), 'signal-id');
+    const summaryHtml = s.summary ? esc(String(s.summary).slice(0, 80)) : '';
+
+    return (
+      '<div class="fd-sig">' +
+        '<span class="fd-sig-dot" style="background:' + color + '"></span>' +
+        '<div class="fd-sig-body">' +
+          '<div class="fd-sig-flow">' + srcHtml + arrow + tgtHtml + '</div>' +
+          '<div class="fd-sig-meta">' +
+            sigLinkHtml +
+            (extHtml ? ' · ' + extHtml : '') +
+            (depthHtml ? ' · ' + depthHtml : '') +
+            (summaryHtml ? ' · ' + summaryHtml : '') +
+          '</div>' +
+        '</div>' +
+        '<span class="fd-sig-status" style="background:' + color + '22;color:' + color + '">' + esc(s.status) + '</span>' +
+        '<span class="fd-sig-time">' + timeAgo(s.timestamp) + ' ago</span>' +
+      '</div>'
+    );
+  });
+
+  feed.innerHTML = rows.join("");
 }
 
-function renderNodes(nodes, signalMap, now, rootId, depth) {
-  var visible = [];
-  for (var i = 0; i < nodes.length; i++) {
-    if (nodes[i].name && nodes[i].name[0] !== ".") visible.push(nodes[i]);
+// ── breakdowns ──
+
+function renderBreakdowns() {
+  const sigs = state.signals.filter(inWindow);
+
+  // By status
+  const byStatus = {};
+  for (const s of sigs) byStatus[s.status] = (byStatus[s.status] || 0) + 1;
+  const statusHtml = STATUS_ORDER
+    .filter(st => byStatus[st])
+    .map(st => (
+      '<div class="fd-status-cell" style="border-color:' + STATUS_COLORS[st] + '33">' +
+        '<div class="v" style="color:' + STATUS_COLORS[st] + '">' + byStatus[st] + '</div>' +
+        '<div class="l">' + st + '</div>' +
+      '</div>'
+    )).join("") || '<div class="fd-empty" style="grid-column:span 2">No data</div>';
+  document.getElementById("fdByStatus").innerHTML = statusHtml;
+
+  // By extension
+  const byExt = {};
+  for (const s of sigs) { const k = s.extName || "kernel"; byExt[k] = (byExt[k] || 0) + 1; }
+  const extTotal = Object.values(byExt).reduce((a,b)=>a+b, 0) || 1;
+  const extRows = Object.entries(byExt).sort((a,b)=>b[1]-a[1]).slice(0, 8).map(([k,n]) => {
+    const pct = Math.round((n / extTotal) * 100);
+    return (
+      '<div class="fd-bar">' +
+        '<span class="fd-bar-swatch" style="background:#5eead4"></span>' +
+        '<span class="fd-bar-label">' + esc(k) + '</span>' +
+        '<span class="fd-bar-count">' + n + '</span>' +
+      '</div>' +
+      '<div class="fd-bar-bar"><div class="fd-bar-fill" style="background:#5eead4;width:' + pct + '%"></div></div>'
+    );
+  });
+  document.getElementById("fdByExt").innerHTML = extRows.length ? extRows.join("") : '<div class="fd-empty">No data</div>';
+
+  // By tree
+  const byTree = {};
+  for (const s of sigs) {
+    const rid = rootOfNode(s.source) || "_unknown";
+    byTree[rid] = (byTree[rid] || 0) + 1;
   }
-  if (!visible.length) return "";
-  if (depth > 2) {
-    return '<div class="tm-collapsed-summary">' + countAll(visible) + ' deeper nodes</div>';
-  }
-  var html = "";
-  for (var i = 0; i < visible.length; i++) {
-    var node = visible[i];
-    var nid = String(node._id || "");
-    var sig = signalMap[nid];
-    var cls = "tm-node";
-    if (sig && sig.sent > 0 && (now - sig.lastSignal < HOUR_MS)) cls += " pulsing";
-    else if (sig && (now - sig.lastSignal < HOUR_MS)) cls += " active";
-    var badge = sig ? ' <span class="tm-signal-count">' + (sig.sent + sig.received) + '</span>' : "";
-    html += '<div class="' + cls + '" data-nodeid="' + nid + '" data-rootid="' + rootId + '">' + esc(node.name) + badge + '</div>';
-    var kids = node.children;
-    if (kids && kids.length) {
-      html += '<div class="tm-children">' + renderNodes(kids, signalMap, now, rootId, depth + 1) + '</div>';
-    }
-  }
-  return html;
-}
+  const treeTotal = Object.values(byTree).reduce((a,b)=>a+b, 0) || 1;
+  const treeRows = Object.entries(byTree).sort((a,b)=>b[1]-a[1]).slice(0, 8).map(([rid,n]) => {
+    const pct = Math.round((n / treeTotal) * 100);
+    const name = labelForRoot(rid);
+    const color = state.treeColor[rid] || "#94a3b8";
+    const labelHtml = rid === "_unknown" ? esc(name) : link(withAuth("/api/v1/root/" + rid), name);
+    return (
+      '<div class="fd-bar">' +
+        '<span class="fd-bar-swatch" style="background:' + color + '"></span>' +
+        '<span class="fd-bar-label">' + labelHtml + '</span>' +
+        '<span class="fd-bar-count">' + n + '</span>' +
+      '</div>' +
+      '<div class="fd-bar-bar"><div class="fd-bar-fill" style="background:' + color + ';width:' + pct + '%"></div></div>'
+    );
+  });
+  document.getElementById("fdByTree").innerHTML = treeRows.length ? treeRows.join("") : '<div class="fd-empty">No data</div>';
 
-function countAll(nodes) {
-  var c = 0;
-  for (var i = 0; i < nodes.length; i++) {
-    c++;
-    if (nodes[i].children) c += countAll(nodes[i].children);
-  }
-  return c;
-}
-
-// ── Node Panel ──
-
-async function selectNode(nodeId, rootId) {
-  selectedNode = nodeId;
-  const panel = document.getElementById("nodePanel");
-  const content = document.getElementById("panelContent");
-
-  const node = await fetchJson(API + "/node/" + nodeId);
-  const flowRaw = await fetchJson(API + "/flow?limit=50");
-  const flowMap = flowRaw?.results || {};
-  const flowSignals = [];
-  for (const [, sResults] of Object.entries(flowMap)) {
-    if (Array.isArray(sResults)) {
-      for (const sr of sResults) flowSignals.push(sr);
-    }
-  }
-  // Filter to signals involving this node
-  const signals = flowSignals.filter(s => s.source === nodeId || s.nodeId === nodeId);
-
-  let channels = null;
-  try { channels = await fetchJson(API + "/node/" + nodeId + "/channels"); } catch {}
-
-  let html = '<div class="np-path">' + esc(node?.path || node?.name || nodeId) + '</div>';
-  const sent = signals.filter(s => s.source === nodeId).length;
-  const received = signals.length - sent;
-
-  html += '<div class="np-stat"><span class="np-stat-label">Signals sent</span><span>' + sent + '</span></div>';
-  html += '<div class="np-stat"><span class="np-stat-label">Signals received</span><span>' + received + '</span></div>';
-
-  if (channels?.subscriptions?.length) {
-    html += '<div class="np-stat"><span class="np-stat-label">Channels</span><span>'
-      + channels.subscriptions.map(c => c.channelName).join(", ") + '</span></div>';
-  }
-
-  if (node?.metadata?.cascade?.enabled) {
-    html += '<div class="np-stat"><span class="np-stat-label">Cascade</span><span>enabled</span></div>';
-  }
-
-  // Recent signals
-  if (signals.length > 0) {
-    html += '<div class="np-signal-list"><div class="np-signal-title">Recent Signals</div>';
-    for (const sig of signals.slice(0, 15)) {
-      const dir = sig.source === nodeId ? ">" : "<";
-      const dirCls = sig.source === nodeId ? "sent" : "received";
-      const ago = timeAgo(new Date(sig.timestamp || sig.createdAt));
-      const desc = sig.extName || sig.status || "";
-      html += '<div class="np-signal">'
-        + '<span class="np-signal-dir">' + dir + '</span>'
-        + '<span>' + esc(desc) + '</span>'
-        + '<span class="np-signal-time">' + ago + '</span>'
-        + '</div>';
-    }
-    html += '</div>';
-  }
-
-  content.innerHTML = html;
-  panel.classList.add("open");
-}
-
-function closePanel() {
-  document.getElementById("nodePanel").classList.remove("open");
-  selectedNode = null;
-}
-
-// ── Network Layer ──
-
-async function loadNetwork() {
-  const section = document.getElementById("networkSection");
-  const container = document.getElementById("networkLayer");
-
-  let peers;
-  try {
-    peers = await fetchJson(API + "/canopy/admin/peers");
-  } catch {}
-  if (!peers?.length) {
-    section.classList.add("nl-hidden");
-    return;
-  }
-
-  section.classList.remove("nl-hidden");
-  peerData = peers;
-
-  let html = '<div class="nl-graph">';
-
-  // Peers on the left
-  const leftPeers = peers.slice(0, Math.ceil(peers.length / 2));
-  const rightPeers = peers.slice(Math.ceil(peers.length / 2));
-
-  for (const p of leftPeers) html += renderPeer(p);
-
-  // Center: this land
-  html += '<div class="nl-center"><div class="nl-center-dot"></div><div class="nl-center-label">This Land</div></div>';
-
-  for (const p of rightPeers) html += renderPeer(p);
-
-  html += '</div>';
-  container.innerHTML = html;
-}
-
-function renderPeer(peer) {
-  const status = peer.status || "unknown";
-  let color = "var(--peer-dead)";
-  let label = "inactive";
-  if (status === "active" || status === "healthy") { color = "var(--peer-healthy)"; label = "healthy"; }
-  else if (status === "degraded") { color = "var(--peer-degraded)"; label = "degraded"; }
-  else if (status === "unreachable") { color = "var(--peer-dead)"; label = "unreachable"; }
-
-  const name = peer.name || peer.landUrl || peer.peerId?.slice(0, 12) || "unknown";
-  return '<div class="nl-peer">'
-    + '<div class="nl-peer-dot" style="background:' + color + '"></div>'
-    + '<div class="nl-peer-name">' + esc(name) + '</div>'
-    + '<div class="nl-peer-status">' + label + '</div>'
-    + '</div>';
-}
-
-// ── Breath Status ──
-// Breath has no HTTP endpoint. Infer activity from flow data and tree count.
-
-async function loadBreath() {
-  const dot = document.getElementById("breathDot");
-  const label = document.getElementById("breathLabel");
-  if (!dot || !label) return;
-  const treeCount = roots?.length || 0;
-
-  if (treeCount === 0) {
-    dot.className = "fd-breath-dot dormant";
-    label.textContent = "no trees";
-    return;
-  }
-
-  // Check recent signal activity as a proxy for breath
-  const recentSignals = flowData.filter(s => Date.now() - s.timestamp < HOUR_MS).length;
-  if (recentSignals > 0) {
-    dot.classList.remove("dormant");
-    // Faster pulse when more active
-    const rate = recentSignals > 20 ? 0.5 : recentSignals > 5 ? 1 : 2;
-    dot.style.animationDuration = rate + "s";
-    label.textContent = treeCount + " tree" + (treeCount > 1 ? "s" : "") + ", " + recentSignals + " signals/hr";
+  // Storage stats
+  if (state.stats) {
+    const s = state.stats;
+    const htmlParts = [];
+    htmlParts.push('<div class="fd-bar"><span class="fd-bar-label">Partitions</span><span class="fd-bar-count">' + (s.partitionCount || 0) + '</span></div>');
+    htmlParts.push('<div class="fd-bar"><span class="fd-bar-label">Today</span><span class="fd-bar-count">' + (s.todaySignals || 0) + ' / ' + (s.todayCap || 0) + '</span></div>');
+    htmlParts.push('<div class="fd-bar"><span class="fd-bar-label">Retention</span><span class="fd-bar-count">' + (s.resultTTLDays || 0) + ' days</span></div>');
+    if (s.oldestPartition) htmlParts.push('<div class="fd-bar"><span class="fd-bar-label">Oldest partition</span><span class="fd-bar-count">' + esc(s.oldestPartition) + '</span></div>');
+    document.getElementById("fdStats2").innerHTML = htmlParts.join("");
   } else {
-    dot.classList.add("dormant");
-    label.textContent = treeCount + " tree" + (treeCount > 1 ? "s" : "") + ", quiet";
+    document.getElementById("fdStats2").innerHTML = '<div class="fd-empty">No data</div>';
+  }
+
+  // Peers
+  if (state.peers?.length) {
+    document.getElementById("fdPeerCard").style.display = "";
+    const peerRows = state.peers.slice(0, 10).map(p => {
+      const st = p.status || "unknown";
+      const color = st === "active" || st === "healthy" ? "#4ade80" : st === "degraded" ? "#fbbf24" : "#64748b";
+      const name = p.name || p.landUrl || idOf(p).slice(0,12);
+      return (
+        '<div class="fd-bar">' +
+          '<span class="fd-bar-swatch" style="background:' + color + '"></span>' +
+          '<span class="fd-bar-label">' + esc(name) + '</span>' +
+          '<span class="fd-bar-count" style="color:' + color + ';font-size:0.72rem">' + esc(st) + '</span>' +
+        '</div>'
+      );
+    });
+    document.getElementById("fdPeers").innerHTML = peerRows.join("");
   }
 }
 
-// ── Helpers ──
+// ── render + events ──
 
-function esc(s) {
-  if (!s) return "";
-  const div = document.createElement("div");
-  div.textContent = s;
-  return div.innerHTML;
+function renderAll() {
+  renderStats();
+  renderMap();
+  renderFilter();
+  renderFeed();
+  renderBreakdowns();
 }
 
-function timeAgo(date) {
-  const sec = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (sec < 60) return sec + "s ago";
-  if (sec < 3600) return Math.floor(sec / 60) + "m ago";
-  if (sec < 86400) return Math.floor(sec / 3600) + "h ago";
-  return Math.floor(sec / 86400) + "d ago";
-}
-
-// ── Event delegation for tree map clicks ──
-
-document.getElementById("treeMap").addEventListener("click", function(e) {
-  // Tree name click (expand/collapse)
-  var treeName = e.target.closest(".tm-tree-name");
-  if (treeName && treeName.dataset.rid) {
-    toggleTreeLazy(treeName.dataset.rid);
+document.addEventListener("click", (e) => {
+  const winBtn = e.target.closest(".fd-winbtn");
+  if (winBtn) {
+    document.querySelectorAll(".fd-winbtn").forEach(b => b.classList.remove("fd-active"));
+    winBtn.classList.add("fd-active");
+    state.windowMs = parseInt(winBtn.dataset.win, 10) || 0;
+    renderAll();
     return;
   }
-  // Node click (open panel)
-  var nodeEl = e.target.closest(".tm-node");
-  if (nodeEl && nodeEl.dataset.nodeid) {
-    selectNode(nodeEl.dataset.nodeid, nodeEl.dataset.rootid);
+  // Edge click: filter feed to this pair, scroll into view, re-render map
+  // so the clicked edge highlights with a glow.
+  const edge = e.target.closest(".fd-edge");
+  if (edge) {
+    e.preventDefault();
+    const src = edge.dataset.src, tgt = edge.dataset.tgt;
+    if (src && tgt) {
+      if (state.pairFilter && state.pairFilter.src === src && state.pairFilter.tgt === tgt) {
+        state.pairFilter = null;
+      } else {
+        state.pairFilter = { src, tgt };
+      }
+      renderMap();
+      renderFilter();
+      renderFeed();
+      document.getElementById("fdFeed")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    return;
+  }
+  // Clear pair filter chip
+  if (e.target.closest("#fdClearPair")) {
+    state.pairFilter = null;
+    renderMap();
+    renderFilter();
+    renderFeed();
+    return;
+  }
+  const fchip = e.target.closest(".fd-fchip");
+  if (fchip) {
+    state.statusFilter = fchip.dataset.status || null;
+    renderFilter();
+    renderFeed();
   }
 });
 
-// ── Init and polling ──
-
-async function init() {
-  // One call: get root list
-  await loadRoots();
-
-  // Render tree cards immediately (collapsed, no fetches)
-  renderTreeCards();
-
-  // Load flow data and network in parallel (flow is independent of tree structure)
-  await Promise.allSettled([loadPulseStrip(), loadNetwork()]);
-  loadBreath().catch(() => {});
-
-  // Always update breath label even if loadBreath fails
-  const label = document.getElementById("breathLabel");
-  if (label && label.textContent === "loading...") {
-    label.textContent = roots.length + " tree" + (roots.length !== 1 ? "s" : "");
-  }
-
-  // Poll flow data every 10s (updates pulse strip + signal badges on cards)
-  setInterval(async () => {
-    await loadPulseStrip();
-    loadBreath();
-  }, POLL_INTERVAL);
-
-  // Refresh root list every 60s (picks up new trees)
-  setInterval(async () => {
-    await loadRoots();
-    renderTreeCards();
-  }, 60000);
+async function tick() {
+  try { await loadAll(); renderAll(); } catch (err) { console.error("[flow] tick failed", err); }
 }
 
-init();
+tick();
+setInterval(tick, POLL);
 `;

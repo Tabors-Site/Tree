@@ -77,11 +77,12 @@ export default {
   needs: {
     services: ["hooks", "metadata"],
     models: ["Node", "Note"],
+    extensions: ["plan", "swarm"],
   },
 
   optional: {
     services: ["llm"],
-    extensions: ["swarm", "book", "intake", "treeos-base"],
+    extensions: ["book", "intake", "treeos-base"],
   },
 
   provides: {

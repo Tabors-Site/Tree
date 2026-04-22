@@ -82,6 +82,7 @@ export default {
   needs: {
     services: ["hooks", "metadata", "tree"],
     models: ["Node", "Note"],
+    extensions: ["plan"],
   },
 
   optional: {
@@ -110,6 +111,7 @@ export default {
         "swarm:afterProjectInit",
         "swarm:afterBranchComplete",
         "swarm:afterAllBranchesComplete",
+        "swarm:runScouts",
       ],
     },
 

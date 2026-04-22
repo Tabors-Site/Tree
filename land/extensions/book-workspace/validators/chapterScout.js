@@ -35,9 +35,27 @@ const MIN_TARGET_RATIO = 0.4;
 /**
  * Walk the project subtree, collect every chapter/scene node, run
  * each through the detectors, return structured findings.
+ *
+ * `plan` is the project's metadata.plan (from the plan extension).
+ * Branch / chapter kind steps are the TOC the architect declared.
  */
-export async function scanChapters({ projectNodeId, contracts, subPlan }) {
+export async function scanChapters({ projectNodeId, contracts, plan, subPlan }) {
   if (!projectNodeId) return { skipped: true, reason: "no projectNodeId" };
+  // Adapt new plan shape to the legacy "subPlan with branches[]" shape
+  // the rest of this file expects. Branch kind plan steps map cleanly:
+  // step.title→entry.name, step.childNodeId→entry.nodeId, etc.
+  if (!subPlan && plan?.steps) {
+    subPlan = {
+      branches: plan.steps
+        .filter((s) => s.kind === "branch" || s.kind === "chapter")
+        .map((s) => ({
+          name: s.title,
+          nodeId: s.childNodeId || null,
+          status: s.status,
+          spec: s.spec || null,
+        })),
+    };
+  }
 
   const chapters = await collectChapters(projectNodeId);
 

@@ -687,6 +687,17 @@ const startShell = module.exports.startShell = async () => {
       process.stdin.removeListener("keypress", _onKeypress);
       rl.removeListener("close", onClose);
       rl.close();
+      // While the subcommand runs there is no readline SIGINT handler, so a
+      // bare Ctrl+C would hit Node's default and kill the whole shell. Install
+      // a process-level guard that aborts the in-flight chat instead; if there
+      // is nothing in flight the handler just swallows the signal so the user
+      // drops back to the shell prompt rather than exiting treeos.
+      const subSigint = () => {
+        if (global._treeosInFlight) {
+          global._treeosInFlight.abort();
+        }
+      };
+      process.on("SIGINT", subSigint);
       try {
         _shellChatFallback = cleanInput;
         global._treeosChatFallback = false;
@@ -711,6 +722,8 @@ const startShell = module.exports.startShell = async () => {
         if (!e.code?.startsWith("commander.")) {
           console.error(chalk.red(e.message));
         }
+      } finally {
+        process.removeListener("SIGINT", subSigint);
       }
       // Recreate shell readline and reattach listeners
       rl = readline.createInterface({
@@ -744,7 +757,41 @@ const startShell = module.exports.startShell = async () => {
       if (!input) return prompt();
 
       if (_processing) {
-        // Queue the line, it will run after the current command finishes
+        // A chat is in flight. Two possible intents for this new line:
+        //   (a) mid-flight natural-language update — send to the active
+        //       socket so the server's stream extension intercepts and
+        //       injects into the current turn at the next tool-loop
+        //       checkpoint. Matches how the HTML UI works.
+        //   (b) a follow-on shell command the user wants to run AFTER
+        //       the chat completes — queue it.
+        //
+        // Heuristic: if the first word matches a registered top-level
+        // CLI command (chat, cd, ls, help, etc.), treat as (b) and
+        // queue. Otherwise treat as (a) and ship over the socket.
+        // Natural-language mid-flight updates rarely start with
+        // one of those words, and when they accidentally do the user
+        // can simply wait for the chat to finish and rephrase.
+        const firstWord = input.split(/\s+/)[0]?.toLowerCase() || "";
+        const cliCommands = new Set(program.commands.map((c) => c.name()));
+        // Shell keywords are always queued regardless of first word.
+        const shellKeywords = new Set(["exit", "quit", "shell", "start", "help", "?"]);
+        const looksLikeCommand = cliCommands.has(firstWord) || shellKeywords.has(firstWord);
+
+        if (!looksLikeCommand) {
+          try {
+            const ws = require("./ws");
+            if (ws.hasActiveSocket && ws.hasActiveSocket()) {
+              const sent = ws.sendMidflight(input);
+              if (sent) {
+                console.log(chalk.dim(`  mid-flight → ${input}`));
+                return;
+              }
+            }
+          } catch {
+            // ws module missing — fall through to queue
+          }
+        }
+
         _lineQueue.push(input);
         console.log(chalk.dim(`  queued: ${input}`));
         return;

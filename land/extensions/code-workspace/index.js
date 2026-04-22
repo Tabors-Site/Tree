@@ -35,6 +35,8 @@ import { smokeWsSeam } from "./validators/wsSeam.js";
 import { runBehavioralTests } from "./validators/behavioralTest.js";
 import { checkContractConformance } from "./validators/contractConformance.js";
 import { checkSymbolCoherence } from "./validators/symbolCoherence.js";
+import { checkLoadGraph } from "./validators/loadGraph.js";
+import { runScout } from "./validators/scout.js";
 import {
   registerWatcher,
   unregisterWatcher,
@@ -485,14 +487,20 @@ async function writeSwarmPlan({ projectNode, userRequest, userId, core }) {
 
       lines.push("");
 
-      const subPlan = meta.subPlan;
-      if (subPlan?.branches?.length > 0 && depth < 6) {
-        for (const child of subPlan.branches) {
-          if (!child.nodeId) continue;
-          const childLines = await renderNodeSection(child.nodeId, depth + 1);
-          lines.push(...childLines);
+      // Walk children via the unified plan namespace (branch kind steps).
+      try {
+        const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
+        const planObj = planExt ? await planExt.readPlan(nodeId) : null;
+        const branchSteps = (planObj?.steps || []).filter((s) => s.kind === "branch");
+        if (branchSteps.length > 0 && depth < 6) {
+          for (const child of branchSteps) {
+            const childId = child.childNodeId;
+            if (!childId) continue;
+            const childLines = await renderNodeSection(childId, depth + 1);
+            lines.push(...childLines);
+          }
         }
-      }
+      } catch {}
 
       return lines;
     }
@@ -894,19 +902,20 @@ export async function init(core) {
           }
         }
 
-        // Sub-plan — the decomposition beneath this level. Read from
-        // swarm's subPlan.branches.
-        const subBranches = swData?.subPlan?.branches;
-        if (Array.isArray(subBranches) && subBranches.length > 0) {
+        // Plan — the decomposition beneath this level. Read branch kind
+        // steps from the unified plan namespace.
+        const planMeta = meta?.plan;
+        const planBranches = (planMeta?.steps || []).filter((s) => s.kind === "branch");
+        if (planBranches.length > 0) {
           const lines = ["Direct sub-branches under this level:"];
-          for (const b of subBranches.slice(0, 20)) {
+          for (const b of planBranches.slice(0, 20)) {
             const icon =
               b.status === "done" ? "✓" :
               b.status === "failed" ? "✗" :
               b.status === "running" ? "▶" : "·";
-            lines.push(`  ${icon} ${b.name}${b.summary ? " — " + String(b.summary).slice(0, 120) : ""}`);
+            lines.push(`  ${icon} ${b.title}${b.summary ? " — " + String(b.summary).slice(0, 120) : ""}`);
           }
-          context.swarmSubPlan = lines.join("\n");
+          context.planSummary = lines.join("\n");
         }
       } else if (cwData?.role === "file") {
         context.code = {
@@ -1350,6 +1359,36 @@ export async function init(core) {
       if (!rootProjectNode?._id || !branch?.path) return;
       if (result?.status !== "done") return;
 
+      // GATE 1: syntax-blocks-done. Any lingering SYNTAX_ERROR signal on
+      // this branch's inbox means a file in the branch still won't parse.
+      // The afterNote validator prunes the signal when the file later
+      // writes cleanly, so a live signal here = live broken file. Flip to
+      // failed before smoke runs (smoke on unparseable code is noise).
+      if (branchNode?._id) {
+        try {
+          const sw = await swarm();
+          if (sw?.readSignals) {
+            const signals = await sw.readSignals(branchNode._id);
+            const syntaxErrors = (signals || []).filter((s) => s?.kind === SIGNAL_KIND.SYNTAX_ERROR);
+            if (syntaxErrors.length > 0) {
+              const first = syntaxErrors[0];
+              const file = first.filePath || first.payload?.file || "(unknown)";
+              const line = first.payload?.line || "?";
+              const msg = (first.payload?.message || "syntax error").slice(0, 120);
+              result.status = "failed";
+              result.error = `syntax: ${file}:${line} ${msg}`;
+              log.warn(
+                "CodeWorkspace",
+                `🔴 Branch "${branch.name}" blocked on syntax: ${syntaxErrors.length} unparseable file(s); first=${file}:${line}`,
+              );
+              return;
+            }
+          }
+        } catch (err) {
+          log.debug("CodeWorkspace", `syntax gate check skipped: ${err.message}`);
+        }
+      }
+
       // Write a surface summary for siblings, regardless of smoke outcome.
       // Done BEFORE smoke so a branch that later flips to failed still has
       // its summary visible for diagnosis.
@@ -1362,24 +1401,17 @@ export async function init(core) {
           .map((f) => ({ filePath: f.filePath.slice(prefix.length), content: f.content || "" }));
         const summary = branchSummary(branch.name, branchFiles);
         if (summary) {
-          const sw = await swarm();
-          if (sw?.setBranchStatus) {
-            await sw.setBranchStatus({
-              branchNodeId: branchNode._id,
+          // Stamp the summary on the parent's branch step via the plan
+          // extension. (Status is already done from swarm's own write
+          // earlier in the dispatch flow.)
+          const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
+          if (planExt?.setBranchStepStatus) {
+            await planExt.setBranchStepStatus({
+              parentNodeId: String(rootProjectNode._id),
+              childNodeId: String(branchNode._id),
               status: "done",
               summary,
               core,
-            });
-          }
-          if (sw?.upsertSubPlanEntry) {
-            await sw.upsertSubPlanEntry({
-              parentNodeId: rootProjectNode._id,
-              core,
-              child: {
-                name: branch.name,
-                nodeId: String(branchNode._id),
-                summary,
-              },
             });
           }
         }
@@ -1453,11 +1485,12 @@ export async function init(core) {
 
       const branchNodeByName = new Map();
       try {
-        if (sw?.readSubPlan) {
-          const rootSubPlan = await sw.readSubPlan(rootProjectNode._id);
-          if (rootSubPlan?.branches) {
-            for (const b of rootSubPlan.branches) {
-              if (b.nodeId && b.name) branchNodeByName.set(b.name, b.nodeId);
+        const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
+        if (planExt?.readPlan) {
+          const rootPlan = await planExt.readPlan(rootProjectNode._id);
+          for (const s of rootPlan?.steps || []) {
+            if (s.kind === "branch" && s.title && s.childNodeId) {
+              branchNodeByName.set(s.title, s.childNodeId);
             }
           }
         }
@@ -1633,6 +1666,88 @@ export async function init(core) {
         }
       }
 
+      // GATE 3: load-graph — orphan-module detection. If a branch wrote a
+      // .js file and NO index.html references it, the module is unreachable
+      // at runtime. Blame lands on the SHELL branch (the consumer that
+      // forgot to include it) because flipping the orphan branch would
+      // just re-emit the same file — the fix belongs on whoever holds the
+      // entry point. We signal the shell, flip it to failed, and the
+      // retry re-runs shell with a signal listing the missing includes.
+      if (results.length >= 2) {
+        try {
+          const lg = await checkLoadGraph({
+            workspaceRoot,
+            branches: branches.map((b) => ({ name: b.name, path: b.path || null })),
+            results,
+          });
+          if (lg.skipped) {
+            log.debug("CodeWorkspace", `Load-graph skipped: ${lg.reason}`);
+          } else if (!lg.ok) {
+            log.warn("CodeWorkspace",
+              `👻 Load-graph: ${lg.orphans.length} orphan module(s) — shell missing <script src> for ${lg.orphans.map((o) => o.branch).join(", ")}`);
+
+            // Identify the shell branch: the one whose path contains
+            // (or IS) one of the checked entry files. Falls back to any
+            // branch with path "." or the first done branch if no
+            // match — better to flip something than stay silent.
+            const entryDirs = new Set(
+              (lg.entriesChecked || []).map((p) => {
+                const dir = p.split("/").slice(0, -1).join("/");
+                return dir || ".";
+              }),
+            );
+            let shellBranchName = null;
+            for (const b of branches) {
+              const bp = (b.path || "").replace(/^\.\/?/, "").replace(/\/+$/, "") || ".";
+              if (entryDirs.has(bp)) { shellBranchName = b.name; break; }
+            }
+            const shellNodeId = shellBranchName ? branchNodeByName.get(shellBranchName) : null;
+
+            if (sw?.appendSignal) {
+              for (const orphan of lg.orphans) {
+                const targets = new Set(
+                  [shellNodeId, String(rootProjectNode._id)].filter(Boolean),
+                );
+                for (const targetNodeId of targets) {
+                  await sw.appendSignal({
+                    nodeId: targetNodeId,
+                    signal: {
+                      from: "load-graph",
+                      kind: SIGNAL_KIND.COHERENCE_GAP,
+                      filePath: orphan.files?.[0] || null,
+                      payload: {
+                        kind: "orphan-module",
+                        message: `No <script src> references ${orphan.branch}'s output. ` +
+                          `Add a script tag for ${orphan.files?.[0] || orphan.branch} to the shell's index.html, ` +
+                          `or remove the orphaned module if it's no longer needed.`,
+                        branch: shellBranchName || "shell",
+                        orphanBranch: orphan.branch,
+                        orphanFiles: orphan.files,
+                      },
+                    },
+                    core,
+                  });
+                }
+              }
+              await notifySignal(shellNodeId || rootProjectNode._id, { reason: "orphan module" });
+            }
+
+            if (shellBranchName) {
+              const r = results.find((x) => x.rawName === shellBranchName);
+              if (r && r.status === "done") {
+                r.status = "failed";
+                r.error = `load-graph: ${lg.orphans.length} orphan module(s) not wired into index.html`;
+              }
+            }
+          } else {
+            log.info("CodeWorkspace",
+              `✅ Load-graph passed: every branch reachable from ${lg.entriesChecked?.length || 0} entry point(s)`);
+          }
+        } catch (err) {
+          log.warn("CodeWorkspace", `Load-graph check crashed (non-blocking): ${err.message}`);
+        }
+      }
+
       // Symbol coherence scout — pure static analysis looking for
       // cross-file import/export mismatches the wire-protocol validators
       // don't catch. The PolyPong-class bug: sibling exports fetchUser,
@@ -1662,9 +1777,12 @@ export async function init(core) {
                 const orig = branches.find((bb) => bb.name === b.rawName);
                 if (orig?.nodeId) branchNodeByName.set(b.rawName, orig.nodeId);
               }
-              const subPlan = sw?.readSubPlan ? await sw.readSubPlan(rootProjectNode._id) : null;
-              for (const b of subPlan?.branches || []) {
-                if (b.nodeId && b.name) branchNodeByName.set(b.name, b.nodeId);
+              const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
+              const planObj = planExt ? await planExt.readPlan(rootProjectNode._id) : null;
+              for (const s of planObj?.steps || []) {
+                if (s.kind === "branch" && s.title && s.childNodeId) {
+                  branchNodeByName.set(s.title, s.childNodeId);
+                }
               }
               for (const gap of scout.gaps) {
                 const target = branchNodeByName.get(gap.branch) || String(rootProjectNode._id);
@@ -1747,6 +1865,69 @@ export async function init(core) {
     "code-workspace",
   );
 
+  // swarm:runScouts — LLM scout phase. Fires after the static
+  // validators above have had their pass. The scout reads contracts +
+  // every branch's shipped files and reports SEMANTIC seam mismatches
+  // that the regex-based validators don't catch (function name drift,
+  // field-shape drift the model can see by reading the code). Each
+  // finding lands as a signal on the offending branch's inbox and
+  // flips its result to "failed" so swarm's scout loop redeploys it.
+  //
+  // Runs up to 3 cycles; swarm owns the adaptive cycling policy. The
+  // handler itself runs ONE integration scout per cycle — batched
+  // context, one LLM call, emits one SCOUT_REPORT event per finding.
+  core.hooks.register(
+    "swarm:runScouts",
+    async (payload) => {
+      const { cycle, rootProjectNode, results, branches, socket, issueSummary, signal } = payload;
+      if (!rootProjectNode?._id || signal?.aborted) return;
+
+      const NodeModel = (await import("../../seed/models/node.js")).default;
+      const projectDoc = await NodeModel.findById(rootProjectNode._id);
+      if (!projectDoc) return;
+      const workspaceRoot = getWorkspacePath(projectDoc);
+
+      const sw = await swarm();
+      const contracts = sw?.readContracts ? await sw.readContracts(rootProjectNode._id) : [];
+
+      const branchNodeByName = new Map();
+      try {
+        const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
+        if (planExt?.readPlan) {
+          const planObj = await planExt.readPlan(rootProjectNode._id);
+          for (const s of planObj?.steps || []) {
+            if (s.kind === "branch" && s.title && s.childNodeId) {
+              branchNodeByName.set(s.title, s.childNodeId);
+            }
+          }
+        }
+      } catch {}
+
+      try {
+        const outcome = await runScout({
+          cycle,
+          rootProjectNode,
+          results,
+          branches,
+          workspaceRoot,
+          contracts: contracts || [],
+          socket,
+          core: payload.core || undefined,
+          issueSummary,
+          branchNodeByName,
+        });
+        if (outcome.skipped) {
+          log.debug("CodeWorkspace", `Scout cycle ${cycle} skipped: ${outcome.reason}`);
+        } else if (outcome.clean) {
+          log.info("CodeWorkspace", `🔍 Scout cycle ${cycle}: clean — no seam mismatches`);
+        }
+      } catch (err) {
+        log.warn("CodeWorkspace", `Scout cycle ${cycle} crashed: ${err.message}`);
+      }
+    },
+    "code-workspace",
+  );
+
   // Serve subsystem: runs through the main land router. No second HTTP
   // server, no extra port. Preview requests arrive at /api/v1/preview/<slug>/*
   // and are either streamed from the workspace's static dir or proxied to
@@ -1764,7 +1945,7 @@ export async function init(core) {
         "tree-owner-sections",
         "code-workspace",
         registerCodeServeSlot({ previewPort }),
-        { priority: 5 },
+        { priority: 5, requiresScaffolding: true },
       );
       log.info("CodeWorkspace", "serve: registered tree-owner-sections slot");
     } else {

@@ -107,25 +107,54 @@ Treat every message as a single standalone task:
 TOOLS AT A GLANCE
 =================================================================
 
-source-list / source-read         .source browsing (read-only)
 workspace-add-file                 create or overwrite a file
 workspace-edit-file                splice by line range
-workspace-read-file                read a file (line-numbered)
+workspace-read-file                read a file in THIS project — the
+                                    user's actual code, including
+                                    sibling branches. Default tool
+                                    for "what did branch X write?"
 workspace-list                     list files in the project
 workspace-plan                     set / check / show node-local plan
 workspace-test                     run node --test
 workspace-probe                    HTTP fire at the running preview
 workspace-logs                     preview stdout/stderr tail
 workspace-status                   preview state (port, pid, uptime)
+source-list / source-read          browse .source — TreeOS's OWN
+                                    codebase (kernel + every installed
+                                    extension). Use when you want to
+                                    see reference examples of how
+                                    TreeOS code is written. NOT for
+                                    reading your project's files —
+                                    that's workspace-read-file.
 
 =================================================================
 BRANCH SCOPE
 =================================================================
 
 If you are inside a swarm branch, your write paths are rooted at
-your branch. The file-write tools reject paths that leave it. To
-reference a sibling's output, embed the reference as a literal
-string in your own file (a fetch URL, a require path).
+your branch. The file-write tools reject paths that leave it.
+
+READS are different. To look at what a sibling branch wrote, call
+workspace-read-file with its path from the project root:
+  workspace-read-file filePath="game/game.js"
+  workspace-read-file filePath="../game/game.js"  (also works)
+
+Cross-branch reads are encouraged when you need to match a peer's
+API surface or wire shape. You still CAN'T write into a sibling —
+only that branch's own worker owns its files. To reference a
+sibling's output at runtime, embed the reference (a script tag, a
+fetch URL, a require path) as a literal string in your own file.
+
+READ SPARINGLY. Every read call's result stays in your conversation
+context for the rest of the turn. Your context has a hard ceiling;
+if you read every sibling's full file you will exhaust the LLM's
+input window before you write anything. The "Sibling Branches"
+section of your context already shows each sibling's exports and
+first significant line. Use those first. Only call workspace-read-file
+when the summary is genuinely insufficient — usually for ONE specific
+file whose function signature or message shape you need to match
+exactly. Reading three or four sibling files in full is almost
+always a mistake.
 
 =================================================================
 OUTPUT

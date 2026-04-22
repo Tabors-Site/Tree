@@ -1,7 +1,12 @@
 export default {
   name: "dreams",
-  version: "1.0.1",
+  version: "1.0.2",
   builtFor: "TreeOS",
+  // Confined: dreams is an opt-in-per-tree capability. Operator runs
+  // `ext-allow dreams` at a tree root to activate the nightly maintenance
+  // cycle. Without an explicit allow, tree pages stay clean — no dream-time
+  // card, no short-term holdings, no background job targeting that tree.
+  scope: "confined",
   description:
     "Trees accumulate entropy. Nodes end up under the wrong parent. Dense notes pile up " +
     "on a single node instead of branching into structure. Deferred items sit in short-term " +

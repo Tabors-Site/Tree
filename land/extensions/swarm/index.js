@@ -1,14 +1,18 @@
 // swarm extension entry point.
 //
-// Exposes branch-orchestration primitives that any domain extension can
-// drive. Registers no modes; swarm is pure mechanism. Fires these
-// lifecycle hooks (subscribers declare them in their manifest.listens):
+// Swarm is the EXECUTION engine over the unified plan primitive owned
+// by the `plan` extension. It reads branch kind steps, dispatches each
+// as its own session at the corresponding tree node, and writes status
+// updates back through the plan api as branches finish.
 //
-//   swarm:afterProjectInit       — a project root was initialized
-//   swarm:beforeBranchRun        — about to dispatch a branch
-//   swarm:afterBranchComplete    — a branch finished (done / failed / paused)
-//   swarm:afterAllBranchesComplete — every branch terminated, pre-summary
-//   swarm:branchRetryNeeded      — handlers flipped statuses, re-running retry
+// Lifecycle hooks (subscribers declare them in their manifest.listens):
+//
+//   swarm:afterProjectInit       a project root was initialized
+//   swarm:beforeBranchRun        about to dispatch a branch
+//   swarm:afterBranchComplete    a branch finished (done / failed / paused)
+//   swarm:afterAllBranchesComplete every branch terminated, pre summary
+//   swarm:branchRetryNeeded      handlers flipped statuses, re running retry
+//   swarm:runScouts              scout phase cycle (scout extensions hook here)
 
 import {
   parseBranches,
@@ -28,13 +32,6 @@ import {
 import { reconcileProject } from "./reconcile.js";
 import { readSiblingBranches, readSiblingNode } from "./siblingRead.js";
 import {
-  readSubPlan,
-  upsertSubPlanEntry,
-  initProjectPlan,
-  initBranchNode,
-  setBranchStatus,
-} from "./state/subPlan.js";
-import {
   appendSignal,
   readSignals,
   pruneSignalsForFile,
@@ -43,15 +40,96 @@ import {
 import { setContracts, readContracts } from "./state/contracts.js";
 import { rollUpDetail, readAggregatedDetail } from "./state/aggregation.js";
 import { recordEvent, readEvents } from "./state/events.js";
+import { plan } from "./state/planAccess.js";
+import log from "../../seed/log.js";
 
 let _core = null;
 
 export async function init(core) {
   _core = core;
-  // Loader requires init() to return an object. Swarm has no router,
-  // no tools, no jobs — just exported primitives consumed via
-  // getExtension("swarm").exports. The return value wires those up.
+
+  // Mount the swarm-specific generate-sub-plan route. The branch step
+  // edit endpoints live in the plan extension; swarm only owns dispatch
+  // actions that need their own endpoint.
+  const { default: router } = await import("./routes.js");
+
+  // Register the read only "swarm plans" HTML view at
+  // /api/v1/root/:rootId/swarm-plans (current plan + archived ring).
+  // Skips gracefully if html-rendering isn't loaded.
+  try {
+    const { getExtension } = await import("../loader.js");
+    const html = getExtension("html-rendering")?.exports;
+    if (html?.registerPage) {
+      const authenticate = (await import("../../seed/middleware/authenticate.js")).default;
+      const { renderSwarmPlansPage } = await import("./pages/swarmPlans.js");
+      html.registerPage("get", "/root/:rootId/swarm-plans", authenticate, async (req, res) => {
+        try { res.send(await renderSwarmPlansPage({ rootId: req.params.rootId })); }
+        catch (err) { res.status(500).send(`Swarm plans error: ${err.message}`); }
+      });
+    }
+  } catch {}
+
+  // Sideways signal propagation. When a USER edits a branch step's
+  // spec or files via the plan panel's inline edit form, the plan
+  // extension stamps `_userEdit: true` on the plan namespace. This
+  // hook detects that flag, walks the parent's children, and drops
+  // PEER_SPEC_CHANGED signals into every sibling branch's inbox so
+  // their next session sees the updated peer shape.
+  //
+  // Loop guard: the hook only acts on plan writes flagged with
+  // _userEdit. Non user writes (status updates from execution,
+  // rollup propagation) skip without inspection.
+  core.hooks.register("afterMetadataWrite", async ({ nodeId, extName, data }) => {
+    if (extName !== "plan" || !nodeId || !data) return;
+    if (!data._userEdit) return;
+
+    try {
+      const Node = (await import("../../seed/models/node.js")).default;
+      const parent = await Node.findById(nodeId).select("_id children").lean();
+      if (!parent?.children?.length) return;
+      const kids = await Node.find({ _id: { $in: parent.children } })
+        .select("_id name metadata.swarm")
+        .lean();
+      const branchSteps = (data.steps || []).filter((s) => s.kind === "branch");
+      for (const step of branchSteps) {
+        // Find the sibling each branch corresponds to.
+        const stepKid = kids.find((k) =>
+          (step.childNodeId && String(k._id) === String(step.childNodeId)) ||
+          k.name === step.title,
+        );
+        if (!stepKid) continue;
+        for (const sibling of kids) {
+          if (sibling._id.equals(stepKid._id)) continue;
+          await appendSignal({
+            nodeId: sibling._id,
+            signal: {
+              kind: "PEER_SPEC_CHANGED",
+              fromBranch: step.title,
+              newSpec: step.spec || null,
+              newFiles: Array.isArray(step.files) ? step.files.slice(0, 20) : [],
+              at: new Date().toISOString(),
+            },
+            core: { metadata: { setExtMeta: async (n, ns, d) => {
+              const NodeModel = (await import("../../seed/models/node.js")).default;
+              await NodeModel.updateOne({ _id: n._id }, { $set: { [`metadata.${ns}`]: d } });
+            }}},
+          });
+        }
+      }
+      // Clear the user edit flag so subsequent writes don't re fire.
+      // The plan extension's own writes do not stamp this flag.
+      const NodeModel = (await import("../../seed/models/node.js")).default;
+      await NodeModel.updateOne(
+        { _id: nodeId },
+        { $unset: { "metadata.plan._userEdit": "" } },
+      );
+    } catch (err) {
+      log.debug("Swarm", `sideways propagate skipped: ${err.message}`);
+    }
+  }, "swarm");
+
   return {
+    router,
     exports: {
       parseBranches,
       parseContracts,
@@ -67,11 +145,6 @@ export async function init(core) {
       reconcileProject,
       readSiblingBranches,
       readSiblingNode,
-      readSubPlan,
-      upsertSubPlanEntry,
-      initProjectPlan,
-      initBranchNode,
-      setBranchStatus,
       appendSignal,
       readSignals,
       pruneSignalsForFile,
@@ -82,14 +155,20 @@ export async function init(core) {
       readAggregatedDetail,
       recordEvent,
       readEvents,
+      // Convenience: expose the plan extension's read api so callers
+      // that already do getExtension("swarm") can read a project's
+      // current plan without a second extension lookup. Writes still
+      // go through getExtension("plan") to keep ownership clear.
+      readPlan: async (nodeId) => {
+        try {
+          const p = await plan();
+          return p.readPlan(nodeId);
+        } catch { return null; }
+      },
     },
   };
 }
 
-/**
- * ensureProject wraps the core-aware version so callers don't have to
- * thread `core` + `fireHook` every time.
- */
 async function ensureProject({ rootId, systemSpec, owner }) {
   return _ensureProject({
     rootId,
@@ -101,30 +180,20 @@ async function ensureProject({ rootId, systemSpec, owner }) {
 }
 
 export {
-  // Parsing + dispatch
   parseBranches,
   parseContracts,
   validateBranches,
   runBranchSwarm,
   tryResumeSwarm,
-  // Project / tree walks
   findProjectForNode,
   findBranchContext,
   findBranchSiblings,
   promoteDoneAncestors,
   detectResumableSwarm,
   ensureProject,
-  // Reconciliation (tree is authoritative)
   reconcileProject,
-  // Sibling read-only access
   readSiblingBranches,
   readSiblingNode,
-  // State primitives
-  readSubPlan,
-  upsertSubPlanEntry,
-  initProjectPlan,
-  initBranchNode,
-  setBranchStatus,
   appendSignal,
   readSignals,
   pruneSignalsForFile,

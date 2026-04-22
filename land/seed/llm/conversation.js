@@ -65,7 +65,17 @@ export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
 let LLM_MAX_CONCURRENT = 20;
 let FAILOVER_TIMEOUT_MS = 15000;
 let TOOL_CALL_TIMEOUT_MS = 60000;
-let TOOL_RESULT_MAX_BYTES = 50000;
+// Cap each tool result that lands in session.messages. The AI still
+// sees the full result for its immediate reasoning; only what we
+// remember in the context window is truncated. Previously 50KB per
+// tool result, which stacked dangerously: 4 full-file reads in one
+// branch session = 200KB of message history before the branch even
+// starts writing. Shell-style branches (which read every sibling
+// before composing an entry point) routinely hit 413 on remote
+// providers with 32K / 16K / 8K context ceilings. 15KB per tool
+// result still shows ~450 lines of code comfortably and truncates
+// cleanly for huge files.
+let TOOL_RESULT_MAX_BYTES = 15000;
 let LLM_WAITER_TIMEOUT_MS = 30000;
 let _activeLlmCalls = 0;
 const _llmWaiters = [];
@@ -1010,9 +1020,22 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
 // for LLM-powered summaries.
 // ─────────────────────────────────────────────────────────────────────────
 
-const COMPRESSION_ENABLED = () => getLandConfigValue("conversationCompression") === true;
-const COMPRESSION_THRESHOLD = () => Number(getLandConfigValue("compressionThreshold")) || 30;
-const COMPRESSION_KEEP = () => Number(getLandConfigValue("compressionKeep")) || 6;
+// Compression is ON by default now. A branch session that reads 4+
+// sibling files accumulates enough tool results to blow past a
+// remote provider's context window on the next turn. The old default
+// (off) meant compression never ran unless the operator explicitly
+// enabled it, and the symptom was cryptic 413 / 402 errors from
+// failover providers mid-swarm. Operators who actively want no
+// compression can set conversationCompression=false in the land
+// config. Threshold of 20 messages catches branch sessions that
+// read more than a handful of files without interfering with normal
+// short chats.
+const COMPRESSION_ENABLED = () => {
+  const v = getLandConfigValue("conversationCompression");
+  return v !== false; // default true; only disables when explicitly false
+};
+const COMPRESSION_THRESHOLD = () => Number(getLandConfigValue("compressionThreshold")) || 20;
+const COMPRESSION_KEEP = () => Number(getLandConfigValue("compressionKeep")) || 8;
 
 /**
  * Compress mid-conversation messages into a summary.

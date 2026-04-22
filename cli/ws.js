@@ -108,15 +108,61 @@ async function runConversational({ verb, message, rootId = null, currentNodeId =
     timeout: CONNECT_TIMEOUT_MS,
   });
 
+  // Expose the live socket to the interactive shell so mid-flight
+  // messages typed while a chat is in progress can be emitted onto it.
+  // The server's stream extension sees a second `chat` event on a
+  // socket that already has an in-flight _chatAbort and routes through
+  // its _onStreamMessage path — accumulate, drain at next tool-loop
+  // checkpoint. Without this, the shell would just queue the line and
+  // the AI would never see it until the current turn ends. Matches
+  // how the HTML page already works (one persistent socket, multiple
+  // emits).
+  global._treeosActiveSocket = {
+    socket,
+    rootId, currentNodeId, zone, sessionHandle,
+    username: load().username || "cli",
+    verb,
+  };
+
   let finished = false;
+  let rejectFn = null;
   const cleanup = () => {
     if (finished) return;
     finished = true;
     try { socket.removeAllListeners(); } catch {}
     try { socket.disconnect(); } catch {}
+    if (global._treeosActiveSocket?.socket === socket) {
+      global._treeosActiveSocket = null;
+    }
+    if (global._treeosInFlight?._socket === socket) {
+      global._treeosInFlight = null;
+    }
+  };
+
+  // Expose an abort handle for the shell's SIGINT handler. Ctrl+C
+  // checks global._treeosInFlight?.abort() — emit cancelRequest to
+  // the server, reject the pending Promise so the shell unblocks,
+  // then clean up the local socket. Without the reject the Promise
+  // hangs forever and the shell prompt never returns.
+  global._treeosInFlight = {
+    _socket: socket,
+    abort() {
+      // Emit first, give socket.io a tick to flush, THEN disconnect.
+      // Emitting + disconnecting in the same tick drops the cancel on
+      // the floor: disconnect closes the transport before the emit
+      // buffer drains and the server never fires the handler. The
+      // 50ms grace is enough for websocket.send() to complete in
+      // the local case; remote servers tolerate the same delay.
+      try { socket.emit("cancelRequest"); } catch {}
+      if (rejectFn && !finished) {
+        rejectFn(new Error("Chat cancelled by user"));
+      }
+      setTimeout(cleanup, 50);
+    },
   };
 
   return new Promise((resolve, reject) => {
+    rejectFn = reject;
     const connectTimer = setTimeout(() => {
       if (socket.connected) return;
       cleanup();
@@ -193,6 +239,16 @@ async function runConversational({ verb, message, rootId = null, currentNodeId =
     socket.on("swarmDispatch", forward("swarmDispatch"));
     socket.on("branchStarted", forward("branchStarted"));
     socket.on("branchCompleted", forward("branchCompleted"));
+    // Plan-first swarm events.
+    socket.on("swarmPlanProposed", forward("swarmPlanProposed"));
+    socket.on("swarmPlanUpdated", forward("swarmPlanUpdated"));
+    socket.on("swarmPlanArchived", forward("swarmPlanArchived"));
+    // Scout-phase events (semantic seam verification after builders finish).
+    socket.on("swarmScoutsDispatched", forward("swarmScoutsDispatched"));
+    socket.on("swarmScoutReport", forward("swarmScoutReport"));
+    socket.on("swarmIssuesRouted", forward("swarmIssuesRouted"));
+    socket.on("swarmRedeploying", forward("swarmRedeploying"));
+    socket.on("swarmReconciled", forward("swarmReconciled"));
 
     // Terminal events
     socket.on("chatResponse", (resp) => {
@@ -228,4 +284,48 @@ async function runConversational({ verb, message, rootId = null, currentNodeId =
   });
 }
 
-module.exports = { runConversational, TreeWSUnavailable };
+/**
+ * Send a mid-flight message to a currently-running conversational
+ * chat. Returns true if the message was emitted on the active socket,
+ * false when there is no active chat (caller should fall back to
+ * queueing or starting a fresh runConversational).
+ *
+ * The payload mirrors the shape runConversational uses on the initial
+ * `chat` emit so the server's stream extension (which reads from the
+ * same chat handler) sees consistent context. The server detects
+ * in-flight state via socket._chatAbort and routes this second emit
+ * through socket._onStreamMessage → accumulator → next tool-loop
+ * checkpoint.
+ */
+function sendMidflight(message) {
+  const active = global._treeosActiveSocket;
+  if (!active?.socket || !active.socket.connected) return false;
+  if (!message || typeof message !== "string") return false;
+  const payload = {
+    message,
+    username: active.username,
+    generation: Date.now(),
+    mode: active.verb || "chat",
+  };
+  if (active.rootId) payload.rootId = active.rootId;
+  if (active.currentNodeId) payload.currentNodeId = active.currentNodeId;
+  if (active.zone) payload.zone = active.zone;
+  if (active.sessionHandle) payload.sessionHandle = active.sessionHandle;
+  try {
+    active.socket.emit("chat", payload);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns true if there's an active conversational socket right now.
+ * Used by the shell to decide whether to queue or route a line
+ * mid-flight.
+ */
+function hasActiveSocket() {
+  return !!(global._treeosActiveSocket?.socket?.connected);
+}
+
+module.exports = { runConversational, TreeWSUnavailable, sendMidflight, hasActiveSocket };

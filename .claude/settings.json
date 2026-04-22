@@ -879,7 +879,18 @@
       "Bash(kill 97491 97492 909232 909981)",
       "Bash(kill -9 97491 97492)",
       "Bash(kill 2355141)",
-      "Bash(kill 2364742)"
+      "Bash(kill 2364742)",
+      "Bash(grep -n \"return \\\\`\" /home/tabor/github/Tree/land/extensions/treeos-base/app/app.js)",
+      "Bash(PORT=3000 node boot.js)",
+      "Bash(curl -s -o /tmp/htmlresp.txt -w \"HTTP:%{http_code} SIZE:%{size_download}\\\\n\" \"http://localhost:3000/?html\")",
+      "Bash(curl -s -o /tmp/dashresp.txt -w \"HTTP:%{http_code} SIZE:%{size_download}\\\\n\" \"http://localhost:3000/dashboard?html\")",
+      "Bash(curl -s -o /tmp/welcome.txt -w \"HTTP:%{http_code} SIZE:%{size_download}\\\\n\" \"http://localhost:3000/welcome?html\")",
+      "Bash(curl -s -o /tmp/land.txt -w \"HTTP:%{http_code} SIZE:%{size_download}\\\\n\" \"http://localhost:3000/land?html\")",
+      "Bash(curl -s -o /tmp/api.txt -w \"HTTP:%{http_code} SIZE:%{size_download}\\\\n\" \"http://localhost:3000/api/v1\")",
+      "Bash(awk 'NR>=68 { c=1; while\\(c\\) { if\\(prev==\"\\\\\\\\\"\\) {prev=$0; c=0; break;} idx=index\\($0, \"`\"\\); if\\(idx>0\\){print NR\": \"$0; c=0; break;} prev=$0; getline; NR++; }}' /home/tabor/github/Tree/land/extensions/treeos-base/app/app.js)",
+      "Bash(grep -n '^\\\\`' /home/tabor/github/Tree/land/extensions/treeos-base/app/app.js)",
+      "Bash(grep -cE \"\\\\`\" /home/tabor/github/Tree/land/extensions/treeos-base/app/app.js)",
+      "Bash(kill %1)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",
@@ -907,7 +918,8 @@
       "/home/tabor/github/Tree/land/seed",
       "/home/tabor/github/Tree/land/extensions/recovery",
       "/home/tabor/github/Tree/land/extensions/$ext",
-      "/home/tabor/.treeos"
+      "/home/tabor/.treeos",
+      "/home/tabor/.claude/plans"
     ]
   }
 }

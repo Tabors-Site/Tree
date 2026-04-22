@@ -82,6 +82,11 @@ export const SIGNAL_KIND = Object.freeze({
   DEAD_RECEIVER: "dead-receiver",
   PROBE_FAILURE: "probe-failure",
   COHERENCE_GAP: "coherence-gap",
+  // User pivoted mid-flight. A newer plan version has been proposed
+  // at the project root; this branch's spec is stale. Running branches
+  // should exit cleanly via [[NO-WRITE: superseded by pivot]] rather
+  // than keep burning cycles on obsolete work.
+  PLAN_PIVOTED: "plan-pivoted",
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -99,206 +104,90 @@ export const SIGNAL_KIND = Object.freeze({
 // rollUpStepCounts → every ancestor sees the aggregated state without
 // walking the whole tree. Stored at metadata.code-workspace.plan.rollup.
 
-function makeStepId() {
-  return `s_${Math.random().toString(36).slice(2, 8)}`;
-}
+// Plan step api: thin wrappers over the plan extension. The data lives
+// in metadata.plan (owned by the plan extension); code-workspace just
+// hands operations through. Drift tracking (planDrift) stays in code
+// workspace's namespace as a code specific opinion about plan
+// freshness.
 
-function normalizeStatus(s) {
-  const v = String(s || "").toLowerCase();
-  if (v === "done" || v === "blocked" || v === "pending") return v;
-  return "pending";
-}
-
-/**
- * Count the local steps on a single node (this node only, no rollup).
- * Returns { pending, done, blocked, total }.
- */
-function countLocalSteps(meta) {
-  const steps = meta?.plan?.steps;
-  const counts = { pending: 0, done: 0, blocked: 0, total: 0 };
-  if (!Array.isArray(steps)) return counts;
-  for (const s of steps) {
-    const st = normalizeStatus(s?.status);
-    counts[st] = (counts[st] || 0) + 1;
-    counts.total += 1;
-  }
-  return counts;
-}
-
-/**
- * Recompute this node's plan.rollup as:
- *   (own local step counts) + (sum of every direct child's rollup,
- *   which itself already includes its descendants).
- *
- * Stored at metadata.code-workspace.plan.rollup with shape
- * { pending, done, blocked }.
- */
-async function recomputeStepRollup(nodeId, core) {
-  if (!nodeId) return null;
-  const node = await Node.findById(nodeId).select("_id children metadata").lean();
-  if (!node) return null;
-  const selfMeta = readMeta(node);
-  const selfCounts = countLocalSteps(selfMeta);
-
-  const agg = { pending: selfCounts.pending, done: selfCounts.done, blocked: selfCounts.blocked };
-
-  const childIds = Array.isArray(node.children) ? node.children : [];
-  if (childIds.length > 0) {
-    const children = await Node.find({ _id: { $in: childIds } }).select("metadata").lean();
-    for (const c of children) {
-      const cMeta = readMeta(c);
-      const cAgg = cMeta?.plan?.rollup;
-      if (cAgg) {
-        agg.pending += cAgg.pending || 0;
-        agg.done += cAgg.done || 0;
-        agg.blocked += cAgg.blocked || 0;
-      }
-    }
-  }
-
-  await mutateMeta(nodeId, (draft) => {
-    if (!draft.plan) draft.plan = {};
-    draft.plan.rollup = agg;
-    return draft;
-  }, core);
-
-  return agg;
-}
-
-/**
- * Walk from a node upward, recomputing stepCounts at every ancestor.
- * Stops at the project root OR when it hits a node without code-workspace
- * metadata. Idempotent.
- */
-async function rollUpStepCounts(fromNodeId, core) {
-  if (!fromNodeId) return;
-  let cursor = String(fromNodeId);
-  let guard = 0;
-  while (cursor && guard < 64) {
-    const n = await Node.findById(cursor).select("_id parent metadata").lean();
-    if (!n) return;
-    const meta = readMeta(n);
-    if (!meta) return;
-    await recomputeStepRollup(cursor, core);
-    if (meta.role === "project") return;
-    if (!n.parent) return;
-    cursor = String(n.parent);
-    guard++;
-  }
+async function planExt() {
+  const { getExtension } = await import("../loader.js");
+  const ext = getExtension("plan");
+  if (!ext?.exports) throw new Error("plan extension required by code-workspace");
+  return ext.exports;
 }
 
 /**
  * Overwrite a node's plan steps. Accepts a raw step array and fills in
- * id/status/createdAt defaults. Rolls the counts up the ancestor chain.
+ * id/status/createdAt defaults via the plan extension. Treats raw
+ * entries with only a title as `kind: "task"` write style steps.
  */
 export async function setNodePlanSteps({ nodeId, steps, core }) {
   if (!nodeId || !Array.isArray(steps)) return null;
-  const nowIso = new Date().toISOString();
-  const before = await Node.findById(nodeId).select("metadata").lean();
-  const beforeCount = readMeta(before)?.plan?.steps?.length || 0;
-
+  const p = await planExt();
+  const before = await p.readPlan(nodeId);
+  const beforeCount = before?.steps?.length || 0;
   const normalized = steps.map((raw) => ({
-    id: raw?.id || makeStepId(),
+    id: raw?.id,
+    kind: raw?.kind || "task",
     title: String(raw?.title || "").trim() || "(untitled step)",
-    status: normalizeStatus(raw?.status),
-    createdAt: raw?.createdAt || nowIso,
-    completedAt: raw?.status === "done" ? (raw?.completedAt || nowIso) : null,
-    blockedReason: raw?.status === "blocked" ? (raw?.blockedReason || null) : null,
+    status: raw?.status || "pending",
+    createdAt: raw?.createdAt,
+    completedAt: raw?.completedAt,
+    blockedReason: raw?.blockedReason || null,
     note: raw?.note || null,
   }));
-  const out = await mutateMeta(nodeId, (draft) => {
-    if (!draft.plan) draft.plan = {};
-    draft.plan.steps = normalized;
-    draft.plan.updatedAt = nowIso;
-    draft.plan.driftAt = null;
-    draft.plan.driftReason = null;
-    return draft;
-  }, core);
-  await rollUpStepCounts(nodeId, core);
+  await p.setSteps(nodeId, normalized, core);
+  const after = await p.readPlan(nodeId);
 
   const afterCount = normalized.length;
   const reason = beforeCount === 0
     ? `set plan (${afterCount} steps)`
     : `replanned ${beforeCount} → ${afterCount} steps`;
+  // Reset drift on this node since we just wrote it.
+  await clearPlanDrift({ nodeId, core });
   await maybeDriftParentOnStructuralChange({ childNodeId: nodeId, reason, core });
 
-  return out?.plan?.steps || null;
+  return after?.steps || null;
 }
 
 /**
- * Append a single step to a node's plan. Returns the new step.
+ * Append a single step. Returns the new step.
  */
-export async function addNodePlanStep({ nodeId, title, note, core }) {
+export async function addNodePlanStep({ nodeId, title, note, kind, core }) {
   if (!nodeId || !title) return null;
-  const nowIso = new Date().toISOString();
-  const step = {
-    id: makeStepId(),
+  const p = await planExt();
+  const step = await p.addStep(nodeId, {
+    kind: kind || "task",
     title: String(title).trim(),
     status: "pending",
-    createdAt: nowIso,
-    completedAt: null,
-    blockedReason: null,
     note: note || null,
-  };
-  await mutateMeta(nodeId, (draft) => {
-    if (!draft.plan) draft.plan = {};
-    if (!Array.isArray(draft.plan.steps)) draft.plan.steps = [];
-    draft.plan.steps.push(step);
-    draft.plan.updatedAt = nowIso;
-    draft.plan.driftAt = null;
-    draft.plan.driftReason = null;
-    return draft;
   }, core);
-  await rollUpStepCounts(nodeId, core);
+  await clearPlanDrift({ nodeId, core });
   await maybeDriftParentOnStructuralChange({
     childNodeId: nodeId,
-    reason: `added step "${step.title.slice(0, 60)}"`,
+    reason: `added step "${step?.title?.slice(0, 60) || ""}"`,
     core,
   });
   return step;
 }
 
 /**
- * Patch a single step by id. `patch` may set status, blockedReason, note,
- * or title. `completedAt` is auto-managed when status flips to/from done.
+ * Patch a single step by id. `patch` may set status, blockedReason,
+ * note, or title.
  */
 export async function updateNodePlanStep({ nodeId, stepId, patch, core }) {
   if (!nodeId || !stepId || !patch) return null;
-  const nowIso = new Date().toISOString();
-  let updated = null;
-  await mutateMeta(nodeId, (draft) => {
-    const steps = draft?.plan?.steps;
-    if (!Array.isArray(steps)) return draft;
-    const idx = steps.findIndex((s) => s.id === stepId);
-    if (idx === -1) return draft;
-    const before = steps[idx];
-    const next = { ...before };
-    if (patch.title != null) next.title = String(patch.title).trim();
-    if (patch.note != null) next.note = patch.note || null;
-    if (patch.status != null) {
-      next.status = normalizeStatus(patch.status);
-      if (next.status === "done" && before.status !== "done") {
-        next.completedAt = nowIso;
-      } else if (next.status !== "done") {
-        next.completedAt = null;
-      }
-      if (next.status === "blocked") {
-        next.blockedReason = patch.blockedReason || before.blockedReason || null;
-      } else {
-        next.blockedReason = null;
-      }
-    }
-    steps[idx] = next;
-    if (draft.plan) {
-      draft.plan.updatedAt = nowIso;
-      draft.plan.driftAt = null;
-      draft.plan.driftReason = null;
-    }
-    updated = next;
-    return draft;
-  }, core);
-  if (updated) await rollUpStepCounts(nodeId, core);
-  return updated;
+  const p = await planExt();
+  const cleaned = {};
+  if (patch.title != null) cleaned.title = String(patch.title).trim();
+  if (patch.note != null) cleaned.note = patch.note || null;
+  if (patch.status != null) cleaned.status = patch.status;
+  if (patch.blockedReason != null) cleaned.blockedReason = patch.blockedReason;
+  if (patch.kind != null) cleaned.kind = patch.kind;
+  const result = await p.updateStep(nodeId, stepId, cleaned, core);
+  if (result?.changed) await clearPlanDrift({ nodeId, core });
+  return result?.step || null;
 }
 
 /**
@@ -306,35 +195,28 @@ export async function updateNodePlanStep({ nodeId, stepId, patch, core }) {
  */
 export async function readNodePlanSteps(nodeId) {
   if (!nodeId) return null;
-  const n = await Node.findById(nodeId).select("metadata").lean();
-  if (!n) return null;
-  const meta = readMeta(n);
-  return meta?.plan?.steps || null;
+  const p = await planExt();
+  const plan = await p.readPlan(nodeId);
+  return plan?.steps || null;
 }
 
 /**
- * Read a node's rolled-up step counts: { pending, done, blocked } across
- * this node + all descendants. Cheap — reads the precomputed field.
+ * Read a node's rolled up step counts.
  */
 export async function readNodeStepRollup(nodeId) {
   if (!nodeId) return null;
-  const n = await Node.findById(nodeId).select("metadata").lean();
-  if (!n) return null;
-  const meta = readMeta(n);
-  return meta?.plan?.rollup || null;
+  const p = await planExt();
+  return p.readRollup(nodeId);
 }
 
 /**
- * Drop all steps from a node's plan. Rolls counts up after clearing.
+ * Drop all steps from a node's plan.
  */
 export async function clearNodePlanSteps({ nodeId, core }) {
   if (!nodeId) return null;
-  await mutateMeta(nodeId, (draft) => {
-    if (draft?.plan?.steps) draft.plan.steps = [];
-    if (draft.plan) draft.plan.updatedAt = new Date().toISOString();
-    return draft;
-  }, core);
-  await rollUpStepCounts(nodeId, core);
+  const p = await planExt();
+  await p.setSteps(nodeId, [], core);
+  await clearPlanDrift({ nodeId, core });
   await maybeDriftParentOnStructuralChange({
     childNodeId: nodeId,
     reason: "cleared its plan",
@@ -343,37 +225,46 @@ export async function clearNodePlanSteps({ nodeId, core }) {
   return true;
 }
 
-/**
- * Mark a node's plan as potentially stale because something upstream
- * changed. Idempotent — repeated calls update the timestamp. Drift is
- * cleared automatically whenever the AI mutates its own plan.
- */
+// ─────────────────────────────────────────────────────────────────────
+// Plan drift (code workspace's stale plan marker; lives at
+// metadata.code-workspace.planDrift)
+// ─────────────────────────────────────────────────────────────────────
+
 export async function markPlanDrift({ nodeId, reason, core }) {
   if (!nodeId) return;
   const nowIso = new Date().toISOString();
   await mutateMeta(nodeId, (draft) => {
-    if (!draft.plan) draft.plan = {};
-    draft.plan.driftAt = nowIso;
-    draft.plan.driftReason = reason || draft.plan.driftReason || "upstream change";
+    if (!draft.planDrift) draft.planDrift = {};
+    draft.planDrift.driftAt = nowIso;
+    draft.planDrift.driftReason = reason || draft.planDrift.driftReason || "upstream change";
+    return draft;
+  }, core);
+}
+
+async function clearPlanDrift({ nodeId, core }) {
+  if (!nodeId) return;
+  await mutateMeta(nodeId, (draft) => {
+    if (draft.planDrift) {
+      draft.planDrift.driftAt = null;
+      draft.planDrift.driftReason = null;
+    }
     return draft;
   }, core);
 }
 
 /**
- * Walk one level up from a node that just had its plan structurally
- * changed, and mark the parent's plan as drifted — but only if the
- * parent has its own plan to invalidate. Only fires on STRUCTURAL
- * changes (steps added or removed), not on status flips.
+ * Walk one level up from a node whose plan was structurally changed
+ * and mark the parent's plan as drifted — only when the parent has its
+ * own plan to invalidate.
  */
 async function maybeDriftParentOnStructuralChange({ childNodeId, reason, core }) {
   if (!childNodeId) return;
   try {
     const child = await Node.findById(childNodeId).select("_id parent name").lean();
     if (!child?.parent) return;
-    const parent = await Node.findById(child.parent).select("metadata").lean();
-    if (!parent) return;
-    const parentMeta = readMeta(parent);
-    const parentHasPlan = Array.isArray(parentMeta?.plan?.steps) && parentMeta.plan.steps.length > 0;
+    const p = await planExt();
+    const parentPlan = await p.readPlan(child.parent);
+    const parentHasPlan = Array.isArray(parentPlan?.steps) && parentPlan.steps.length > 0;
     if (!parentHasPlan) return;
     await markPlanDrift({
       nodeId: child.parent,
@@ -393,9 +284,9 @@ export async function readPlanDrift(nodeId) {
   const n = await Node.findById(nodeId).select("metadata").lean();
   if (!n) return null;
   const meta = readMeta(n);
-  const pl = meta?.plan;
-  if (!pl?.driftAt) return null;
-  return { driftAt: pl.driftAt, driftReason: pl.driftReason || null };
+  const drift = meta?.planDrift;
+  if (!drift?.driftAt) return null;
+  return { driftAt: drift.driftAt, driftReason: drift.driftReason || null };
 }
 
 /**
@@ -575,13 +466,35 @@ export function formatSignalInbox(signals) {
   const testFailures = recent.filter((s) => s.kind === SIGNAL_KIND.TEST_FAILURE);
   const probeFailures = recent.filter((s) => s.kind === SIGNAL_KIND.PROBE_FAILURE);
   const coherenceGaps = recent.filter((s) => s.kind === SIGNAL_KIND.COHERENCE_GAP);
+  const pivots = recent.filter((s) => s.kind === SIGNAL_KIND.PLAN_PIVOTED);
   const other = recent.filter((s) =>
     ![SIGNAL_KIND.SYNTAX_ERROR, SIGNAL_KIND.CONTRACT, SIGNAL_KIND.CONTRACT_MISMATCH,
       SIGNAL_KIND.RUNTIME_ERROR, SIGNAL_KIND.DEAD_RECEIVER, SIGNAL_KIND.TEST_FAILURE,
-      SIGNAL_KIND.PROBE_FAILURE, SIGNAL_KIND.COHERENCE_GAP].includes(s.kind),
+      SIGNAL_KIND.PROBE_FAILURE, SIGNAL_KIND.COHERENCE_GAP,
+      SIGNAL_KIND.PLAN_PIVOTED].includes(s.kind),
   );
 
   const blocks = [];
+
+  // Plan pivot comes first — if the plan was superseded, none of the
+  // other signals matter. Render at the top so the model sees the
+  // stop-work instruction before reading any stale error detail from
+  // prior turns.
+  if (pivots.length > 0) {
+    const p = pivots[pivots.length - 1];
+    const newVersion = p?.payload?.newVersion ?? "next";
+    const reason = p?.payload?.reason || "user-pivot-midflight";
+    blocks.push(
+      `🛑 PLAN SUPERSEDED.\n\n` +
+      `The user pivoted mid-flight. Your plan was archived (reason: ${reason}); ` +
+      `a new plan (v${newVersion}) has been proposed at the project root. Your ` +
+      `current spec is stale. DO NOT keep building against the old plan.\n\n` +
+      `Your next turn MUST be a single line: ` +
+      `[[NO-WRITE: superseded by pivot]]\n\n` +
+      `No tool calls. No explanation. Just the marker. The branch session will ` +
+      `exit cleanly and the user's new plan will dispatch fresh branches.`
+    );
+  }
 
   if (errors.length > 0) {
     const errorBlocks = errors.map((s) => renderSyntaxError(s)).filter(Boolean);
@@ -930,6 +843,31 @@ function renderFieldMismatch(p) {
 function renderCoherenceGap(signal) {
   const p = signal?.payload;
   if (!p || typeof p !== "object") return null;
+
+  // Load-graph "orphan-module" findings don't have importedName /
+  // availableExports — they just say "branch X shipped files that no
+  // index.html references." Render them with a dedicated shape so the
+  // retry prompt tells the shell EXACTLY what to add.
+  if (p.kind === "orphan-module") {
+    const orphanBranch = p.orphanBranch || "(unknown)";
+    const files = Array.isArray(p.orphanFiles) ? p.orphanFiles : [];
+    const scriptTags = files.length > 0
+      ? files.map((f) => `     <script src="${f}"></script>`).join("\n")
+      : `     <script src="${orphanBranch}/${orphanBranch}.js"></script>`;
+    return [
+      `👻 ORPHAN MODULE — ${orphanBranch} wrote code nothing loads`,
+      ``,
+      p.message || `No <script src> references ${orphanBranch}.`,
+      ``,
+      `   Fix: edit index.html, add a script tag before the boot script:`,
+      scriptTags,
+      ``,
+      `   If the orphan's functionality is duplicated inline in another`,
+      `   branch, delete the duplicate inline copy and wire the module`,
+      `   through its exported global instead.`,
+    ].join("\n");
+  }
+
   const file = p.file || "(unknown)";
   const line = p.line || "?";
   const name = p.importedName || "(unknown)";

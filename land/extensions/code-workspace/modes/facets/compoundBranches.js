@@ -1,20 +1,30 @@
 /**
  * Compound branches facet.
  *
- * Only injected on turn 1 of a fresh task at an empty project root.
- * Once the project has children (the swarm has dispatched, or the
- * AI has started writing), this facet is dead weight — every
- * continuation turn is working on files, not decomposing the task
- * again.
+ * Injected whenever the AI is at an EMPTY project root with no
+ * dispatched subPlan yet. This is the "decompose a fresh task"
+ * moment regardless of session turn count — a user who bounces
+ * between several empty projects in one session hits turn 2+ on
+ * every subsequent one, but each of those is still a fresh task
+ * that needs decomposition. Keying on isFirstTurn was the old bug:
+ * only the very first request of a session ever got the facet,
+ * every request after that missed the HARD RULE.
  *
- * Keeps ~2KB out of every continuation turn and every branch dispatch.
+ * Three conditions, any one skips injection:
+ *   - position is not a project root / uninitialized tree root
+ *   - project already has children (writes are underway; EXTEND,
+ *     don't decompose)
+ *   - subPlan already has branches (a swarm was proposed/dispatched
+ *     here; extending with amendMissingLayer handles add-on work)
+ *
+ * Keeps ~2KB out of every continuation turn and every branch dispatch
+ * because those positions either have children, have a subPlan, or
+ * aren't a project root.
  */
 export default {
   name: "compound-branches",
 
   shouldInject(ctx) {
-    // Only on turn 1 of a session
-    if (!ctx?.isFirstTurn) return false;
     // Use the raw view object (localViewData), NOT the formatted string
     // at localView. The string is for prompt rendering; only the raw
     // shape has .self.role / .self.childCount on it.
@@ -27,10 +37,22 @@ export default {
     // positions skip this facet (they don't decompose further).
     const selfRole = view.self?.role;
     if (selfRole && selfRole !== "project") return false;
-    // Only if the position is empty (no children yet). If the project
-    // already has files, the AI should be EXTENDING them, not
-    // decomposing a fresh task.
-    if ((view.self?.childCount || 0) > 0) return false;
+    // Skip the facet if a plan has already been proposed/dispatched at
+    // this position. context.planSummary is set by the enrichContext
+    // handler when metadata.plan.steps has entries — its presence alone
+    // means the project has been decomposed already and amendMissingLayer
+    // will guide any add on work instead.
+    if (ctx?.enrichedContext?.planSummary) return false;
+    // Note: we INTENTIONALLY do NOT skip when childCount > 0. Earlier
+    // versions of this facet only fired at a perfectly empty project.
+    // That breaks the common case where a previous failed run left
+    // orphan children behind: the project has children (so the facet
+    // skipped) but no plan (so amendMissingLayer didn't fire either),
+    // and the architect just explores stale state instead of
+    // decomposing the user's new compound request. Firing the facet
+    // whenever there's no plan handles both fresh empty projects AND
+    // projects littered with prior cruft — the user's compound
+    // request still triggers a fresh [[BRANCHES]] decomposition.
     return true;
   },
 
@@ -38,8 +60,22 @@ export default {
 COMPOUND TASKS → BRANCH FIRST. THIS IS NOT OPTIONAL.
 =================================================================
 
-You are at a FRESH project root on turn 1. Before you decide what
-to do, read the user's request and count the independent layers.
+This project is EMPTY (no files, no declared branches). The server
+will REJECT any workspace-add-file / workspace-edit-file call that
+targets a non-shell file at the project root until you either emit
+a [[BRANCHES]] block OR write an allowed root file (index.html,
+main.js, app.js, package.json, style.css, etc.).
+
+Rejected writes return a message explaining the rule. Don't try to
+dump module files like "game.js", "characters.js", "server.js"
+directly at the root — they'll be refused. The intended flow:
+
+  → emit [[BRANCHES]] to decompose the task
+  → swarm dispatches one session per branch
+  → each branch writes its own files under its own subdirectory
+
+Count the layers in the user's request. Two or more independent
+layers means decompose.
 
 A "layer" is a self-contained unit of ownership: a backend, a
 frontend, a persistence layer, a data layer, an auth system, a

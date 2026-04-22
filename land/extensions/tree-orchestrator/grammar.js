@@ -78,6 +78,13 @@ export const TENSE_FUTURE = new RegExp([
   "how do i", "can you", "do you", "is it", "are there", "would it",
   "could i", "could we", "might i", "is this", "am i ready", "do i need",
   "when should", "where should", "how often", "how much should",
+  // Interrogative introspection — asking the tree about its own state.
+  // "what workouts do i have" was falling through to log mode because
+  // none of the above caught the shape "what <noun> do/did/have i <verb>".
+  "^(what|which|who|whose|when|where|why|how)\\s",      // sentence-start question word
+  "\\b(what|which|when|where|how\\s+many)\\s+\\w+\\s+(do|does|did|have|has|had|can|could|should|would|will|are|is|was|were)\\s+(i|we|my|our)\\b",
+  "\\b(do|does|did|have|has|had|can|could|should)\\s+(i|we)\\b",   // "do i", "have i", "did i"
+  "\\bhave\\s+(i|we)\\s+(ever|already|been|done)\\b",              // "have i ever"
   // Greetings and small talk
   "^hi$", "^hey$", "^hello$", "^yo$", "^sup$", "^whats up$", "^what's up$",
 ].map(p => `(?:${p})`).join("|"), "i");

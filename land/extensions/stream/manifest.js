@@ -11,7 +11,9 @@ export default {
     services: ["hooks", "websocket"],
   },
 
-  optional: {},
+  optional: {
+    extensions: ["swarm"],
+  },
 
   provides: {
     models: {},

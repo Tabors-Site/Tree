@@ -379,10 +379,30 @@ function resetCircuit(hookName, extName) {
   log.info("Hooks", `Circuit breaker manually reset for ${key}`);
 }
 
+/**
+ * Convenience wrapper around `run` that swallows handler errors with
+ * a warn log instead of propagating. Replaces the `try/catch` dance
+ * every extension used to duplicate around `core.hooks.run(...)`.
+ *
+ * Returns the hook's result (same shape as run) or null on error.
+ * Use `fire` when you want "best effort, don't let a bad listener
+ * break my call site" — use `run` when you need the cancel /
+ * timeout status and can handle errors yourself.
+ */
+async function fire(hookName, payload) {
+  try {
+    return await run(hookName, payload);
+  } catch (err) {
+    log.warn("Hooks", `${hookName} fire failed: ${err.message}`);
+    return null;
+  }
+}
+
 export const hooks = {
   register,
   unregister,
   run,
+  fire,
   list,
   setScopeResolver,
   resetCircuit,

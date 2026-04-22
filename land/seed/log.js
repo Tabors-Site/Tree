@@ -100,4 +100,32 @@ export function error(tag, message, ...args) {
   console.error(`[${tag}] ${message}`, ...args);
 }
 
-export default { info, verbose, debug, warn, error, setLogLevel, getLogLevel, setFormatter };
+/**
+ * Build a namespaced logger bound to a single extension/tag. Extensions
+ * used to repeat `log.info("MyExt", ...)` / `log.warn("MyExt", ...)`
+ * everywhere, or invent their own local `trace()` helper that did the
+ * same thing. This factory returns a tiny object that auto-prefixes
+ * the tag so call sites are one argument shorter.
+ *
+ *   const elog = createLogger("CodeWorkspace");
+ *   elog.info("something happened");
+ *   elog.trace("workspace-add-file", "OK", "path=foo.js bytes=123");
+ *   // prints [CodeWorkspace] workspace-add-file OK: path=foo.js bytes=123
+ *
+ * `trace` is the three-arg "action/detail/context" style seen in
+ * code-workspace, swarm, etc. Not a new log level — just a formatted
+ * info line. Reserved for tool / branch / hook event noise that
+ * benefits from a consistent shape across extensions.
+ */
+export function createLogger(ns) {
+  return {
+    info:    (msg, ...args) => info(ns, msg, ...args),
+    verbose: (msg, ...args) => verbose(ns, msg, ...args),
+    debug:   (msg, ...args) => debug(ns, msg, ...args),
+    warn:    (msg, ...args) => warn(ns, msg, ...args),
+    error:   (msg, ...args) => error(ns, msg, ...args),
+    trace:   (action, tag, detail) => info(ns, `${action} ${tag}: ${detail ?? ""}`),
+  };
+}
+
+export default { info, verbose, debug, warn, error, setLogLevel, getLogLevel, setFormatter, createLogger };

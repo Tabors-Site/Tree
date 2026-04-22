@@ -8,6 +8,7 @@ import { WS } from "../../seed/protocol.js";
 import {
   processMessage,
   getCurrentNodeId,
+  setCurrentNodeId as setCurrentNodeIdSafely,
 } from "../../seed/llm/conversation.js";
 import { setChatContext, startChainStep, finalizeChat } from "../../seed/llm/chatTracker.js";
 // Run processMessage for a mode, but split the tool-call work across
@@ -23,7 +24,12 @@ export async function runSteppedMode(visitorId, mode, message, {
   readOnly, onToolLoopCheckpoint, socket,
   parentChatId = null, dispatchOrigin = null,
   sessionId, rootChatId, rt,
+  currentNodeId = null,
 }) {
+  // Caller (dispatch.js's swarm runBranch) may pass currentNodeId
+  // explicitly so this function can pin position regardless of session
+  // state. Bundle it into a ctx object so downstream code can read it.
+  const ctx = { currentNodeId };
 
   // Helper to begin a chain step (live chat context for tool calls) using
   // rt.beginChainStep. Falls back to a direct startChainStep + local counter
@@ -154,8 +160,28 @@ export async function runSteppedMode(visitorId, mode, message, {
     socket?.emit?.(WS.THINKING, thought);
   };
 
+  // Thread the current node into pmCtx explicitly.
+  //
+  // Two sources, in priority:
+  //   1. ctx.currentNodeId — caller (e.g. dispatch.js's swarm runBranch)
+  //      explicitly tells us "the branch is at THIS node". Authoritative.
+  //   2. getCurrentNodeId(visitorId) — fall back to whatever the session
+  //      currently says.
+  //
+  // Setting it in pmCtx forces ensureSession to also stamp it on the
+  // session record, which double-protects against any upstream code
+  // path that might have reset session.currentNodeId between dispatch
+  // and processMessage. Without this thread-through, enrichContext and
+  // the write-scope guards would see the project root instead of the
+  // actual branch node and the AI would write "game.js" at the root
+  // instead of "game/game.js".
+  const pmCurrentNodeId =
+    ctx.currentNodeId
+      ? String(ctx.currentNodeId)
+      : (getCurrentNodeId(visitorId) || rootId || null);
   const pmCtx = {
     username, userId, rootId, signal, slot,
+    currentNodeId: pmCurrentNodeId,
     readOnly,
     onToolLoopCheckpoint,
     onToolResults,
@@ -163,6 +189,12 @@ export async function runSteppedMode(visitorId, mode, message, {
     onThinking,
     meta: { internal: false },
   };
+  // Belt + suspenders: also re-assert via setCurrentNodeId so any
+  // session-keyed callers (MCP server's getCurrentNodeId injection)
+  // see the right value.
+  if (pmCurrentNodeId) {
+    setCurrentNodeIdSafely(visitorId, pmCurrentNodeId);
+  }
 
   // Markers the model can emit to signal status to the orchestrator.
   // Stripped from visible text before it reaches the user AND before we
@@ -215,7 +247,19 @@ export async function runSteppedMode(visitorId, mode, message, {
     const { noWrite, done } = stripMarkers(result);
     if (noWrite) {
       noWriteReason = noWrite;
-      log.info("Tree Orchestrator", `🟡 ${mode} declared no-write: ${noWrite}`);
+      // Superseded-by-pivot is a special case worth calling out. The
+      // branch received a PLAN_PIVOTED signal, saw the stop-work
+      // block in enrichContext, and emitted [[NO-WRITE: superseded
+      // by pivot]] on its next turn. We mark the result as done too
+      // so no retry loop fires — the branch cleanly bowed out, the
+      // user's new plan will dispatch a fresh set of branches.
+      const superseded = /superseded\s+by\s+pivot/i.test(noWrite);
+      if (superseded) {
+        log.info("Tree Orchestrator", `🛑 ${mode} superseded by pivot; exiting branch cleanly`);
+        result._taskDone = true;
+      } else {
+        log.info("Tree Orchestrator", `🟡 ${mode} declared no-write: ${noWrite}`);
+      }
     }
     if (done) {
       log.info("Tree Orchestrator", `✅ ${mode} declared done`);

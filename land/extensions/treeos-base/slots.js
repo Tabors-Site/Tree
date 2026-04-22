@@ -55,6 +55,14 @@ export function registerSlot(slotName, extName, renderFn, opts = {}) {
     extName,
     render: renderFn,
     priority: opts.priority ?? 50,
+    // If true, this slot only renders when the extension is actually
+    // scaffolded in the tree being rendered. Used by domain extensions
+    // (book-workspace, fitness, food, etc.) so their quick links don't
+    // leak onto every tree just because the extension is installed.
+    // The page renderer must pass context._scaffoldedExtensions (a Set
+    // of extName strings) — without it the flag is a no-op so pages that
+    // don't care about scaffolding keep working unchanged.
+    requiresScaffolding: opts.requiresScaffolding === true,
   });
 
   // Sort by priority (lower first)
@@ -94,6 +102,13 @@ export function resolveSlots(slotName, context = {}, opts = {}) {
   for (const slot of registered) {
     // Spatial scoping: if the extension is blocked at this position, skip its fragment
     if (context._blockedExtensions && context._blockedExtensions.has(slot.extName)) continue;
+
+    // Scaffolding gate: when the page passes _scaffoldedExtensions AND the
+    // slot opted in via requiresScaffolding, only render if the extension
+    // actually owns something on this tree. Pages that don't pass the set
+    // skip this check entirely, so slots stay visible by default.
+    if (slot.requiresScaffolding && context._scaffoldedExtensions instanceof Set
+        && !context._scaffoldedExtensions.has(slot.extName)) continue;
 
     try {
       const html = slot.render(context);

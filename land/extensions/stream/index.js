@@ -16,6 +16,13 @@
 
 import log from "../../seed/log.js";
 import { pushMessage, checkInterrupt } from "./accumulator.js";
+import {
+  detectActiveSwarm,
+  classifyMidflight,
+  triggerStop,
+  triggerPlanPivot,
+} from "./midflightRouter.js";
+import { getRootId, getCurrentNodeId } from "../../seed/llm/conversation.js";
 
 const DEBOUNCE_MS = 500;
 
@@ -99,25 +106,59 @@ export async function init(core) {
     };
 
     // ── Tool loop checkpoint ──
-    // Called by the kernel between tool iterations.
-    // Reads accumulated messages and injects them into the conversation.
+    // Called by the kernel between tool iterations. Reads accumulated
+    // messages, classifies them, and either injects them into the
+    // current branch's turn (today's default), aborts the loop and
+    // archives the plan (stop), or aborts the loop and re-invokes the
+    // architect for a plan-level pivot (plan).
     socket._streamCheckpoint = async () => {
       const pending = checkInterrupt(visitorId);
       if (!pending || pending.length === 0) return null;
 
-      const lastMsg = pending[pending.length - 1].content.toLowerCase().trim();
+      const combined = pending.map((m) => m.content).join("\n");
 
-      // Cancel
-      if (/^(stop|cancel|nevermind|abort|quit)$/.test(lastMsg)) {
-        log.debug("Stream", `Cancel detected for ${visitorId}`);
+      // Is there a live swarm at the anchor node? If not, skip the
+      // classifier entirely — no plan-level route is meaningful.
+      const rootId = getRootId(visitorId) || null;
+      const currentNodeId = getCurrentNodeId(visitorId) || null;
+      const active = await detectActiveSwarm({ rootId, currentNodeId });
+
+      let scope;
+      try {
+        scope = await classifyMidflight({ message: combined, active });
+      } catch (err) {
+        log.debug("Stream", `classifier error, defaulting to branch: ${err.message}`);
+        scope = "branch";
+      }
+
+      if (scope === "stop") {
+        log.info("Stream", `Mid-flight stop for ${visitorId}`);
+        // Fire-and-forget: bookkeeping continues while the loop
+        // aborts. Kernel handles the break via { abort: true }.
+        triggerStop({ active, socket }).catch(() => {});
         return { abort: true };
       }
 
-      // Inject
-      const updates = pending.map(m => m.content).join("\n");
-      log.debug("Stream", `Injecting ${pending.length} message(s) for ${visitorId}`);
+      if (scope === "plan" && active) {
+        log.info("Stream", `Mid-flight plan-pivot for ${visitorId}`);
+        triggerPlanPivot({
+          active,
+          message: combined,
+          visitorId,
+          socket,
+          userId: socket.userId,
+          username: socket.username,
+          rootId,
+        }).catch((err) => log.warn("Stream", `pivot failed: ${err.message}`));
+        return { abort: true };
+      }
+
+      // Default: absorb into the currently running step. Matches the
+      // pre-classifier behavior — correction / tweak for the current
+      // branch. The classifier only escalates when it has grounds.
+      log.debug("Stream", `Injecting ${pending.length} message(s) for ${visitorId} (scope=${scope})`);
       return {
-        inject: `[User update while you were working: "${updates}". ` +
+        inject: `[User update while you were working: "${combined}". ` +
                 `Adjust your remaining work accordingly. ` +
                 `Do not restart. Continue from where you are.]`,
       };

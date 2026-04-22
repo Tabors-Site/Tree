@@ -48,7 +48,7 @@ import { emitNavigate, emitToUser, registerSocketHandler, unregisterSocketHandle
 import { OrchestratorRuntime } from "./orchestrators/runtime.js";
 import { acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks } from "./orchestrators/locks.js";
 import { ok, error, sendOk, sendError, ERR, WS, CASCADE } from "./protocol.js";
-import { getExtMeta, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, batchSetExtMeta, unsetExtMeta } from "./tree/extensionMetadata.js";
+import { getExtMeta, readNs, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, batchSetExtMeta, unsetExtMeta } from "./tree/extensionMetadata.js";
 import { getUserMeta, setUserMeta, incUserMeta, pushUserMeta, batchSetUserMeta, unsetUserMeta, addToUserMetaSet } from "./tree/userMetadata.js";
 import { deliverCascade } from "./tree/cascade.js";
 import { isUserRoot, getLandRootId } from "./landRoot.js";
@@ -188,7 +188,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     nodeLocks: { acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple, isNodeLocked, getStats: getNodeLockStats },
 
     // --- Metadata (namespace-enforced read/write for extension data on nodes) ---
-    metadata: { getExtMeta, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, batchSetExtMeta, unsetExtMeta },
+    metadata: { getExtMeta, readNs, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, batchSetExtMeta, unsetExtMeta },
 
     // --- User metadata (namespace-enforced read/write for extension data on users) ---
     userMetadata: { getUserMeta, setUserMeta, incUserMeta, pushUserMeta, batchSetUserMeta, unsetUserMeta, addToUserMetaSet },

@@ -167,6 +167,87 @@ function createLiveRenderer({ stream = process.stdout, verbose = false } = {}) {
         }
         return;
       }
+
+      // ── Plan-first swarm events ────────────────────────────────
+      case "swarmPlanProposed":
+      case "swarmPlanUpdated": {
+        const isUpdate = ev.type === "swarmPlanUpdated";
+        const version = ev.version != null ? `v${ev.version}` : "";
+        const branchList = Array.isArray(ev.branches) ? ev.branches : [];
+        const count = branchList.length;
+        const header = isUpdate ? "Updated plan" : "Proposed plan";
+        const title = chalk.blue("⎇ ") + chalk.bold(header) + (version ? chalk.dim(" " + version) : "") +
+          chalk.dim(`  ${count} branch${count === 1 ? "" : "es"}`);
+        line(title);
+        if (isUpdate && ev.trigger) {
+          line(chalk.dim("    ↪ " + oneLine(ev.trigger, 120)));
+        }
+        for (const b of branchList) {
+          const name = chalk.bold(b.name || "?");
+          const path = b.path ? chalk.dim(` · path: ${b.path}`) : "";
+          const files = Array.isArray(b.files) && b.files.length
+            ? chalk.dim(" · files: " + oneLine(b.files.join(", "), 80))
+            : "";
+          const mode = b.mode ? chalk.dim(` · ${b.mode}`) : "";
+          line("    " + name + path + mode + files);
+          if (b.spec) {
+            line(chalk.dim("      " + oneLine(b.spec, 140)));
+          }
+        }
+        line(chalk.dim('Reply "yes" to run, or describe what to change. "cancel" to drop.'));
+        return;
+      }
+      case "swarmPlanArchived": {
+        const count = ev.branchCount != null ? `${ev.branchCount} branch${ev.branchCount === 1 ? "" : "es"}` : "a plan";
+        const reason = ev.reason ? ` (${ev.reason})` : "";
+        line(chalk.gray("📦 archived plan: ") + chalk.dim(count + reason));
+        return;
+      }
+
+      // ── Scout phase events ───────────────────────────────────────
+      case "swarmScoutsDispatched": {
+        const cycle = ev.cycle != null ? ` (cycle ${ev.cycle})` : "";
+        const n = ev.branchCount != null ? `${ev.branchCount} branch${ev.branchCount === 1 ? "" : "es"}` : "project";
+        line(chalk.magenta("🔍 dispatching scouts") + chalk.dim(cycle + " over " + n + "…"));
+        return;
+      }
+      case "swarmScoutReport": {
+        const branch = ev.branch || "?";
+        const detail = oneLine(ev.detail || "(no detail)", 180);
+        const counter = ev.counterpartBranch ? chalk.dim(` ↔ ${ev.counterpartBranch}`) : "";
+        line(chalk.yellow("  ⚠ ") + chalk.bold(branch) + counter + chalk.dim(": " + detail));
+        return;
+      }
+      case "swarmIssuesRouted": {
+        const cycle = ev.cycle != null ? `cycle ${ev.cycle} · ` : "";
+        if (!ev.total) {
+          line(chalk.green("  ✓ ") + chalk.dim(cycle + "no mismatches found"));
+        } else {
+          const affected = Array.isArray(ev.affectedBranches) && ev.affectedBranches.length
+            ? ` → ${ev.affectedBranches.slice(0, 6).join(", ")}${ev.affectedBranches.length > 6 ? " +" + (ev.affectedBranches.length - 6) : ""}`
+            : "";
+          line(chalk.blue("  📬 routing ") + chalk.bold(`${ev.total} issue${ev.total === 1 ? "" : "s"}`) + chalk.dim(affected));
+        }
+        return;
+      }
+      case "swarmRedeploying": {
+        const cycle = ev.cycle != null ? ` (cycle ${ev.cycle + 1})` : "";
+        const names = Array.isArray(ev.branches) ? ev.branches.join(", ") : "";
+        line(chalk.cyan("  🔧 redeploying") + chalk.dim(cycle + ": ") + chalk.bold(names));
+        return;
+      }
+      case "swarmReconciled": {
+        const cycles = ev.cycles != null ? `${ev.cycles} cycle${ev.cycles === 1 ? "" : "s"}` : "";
+        const status = ev.status || "done";
+        const total = ev.totalIssues != null ? `, ${ev.totalIssues} issue${ev.totalIssues === 1 ? "" : "s"}` : "";
+        const color = status === "clean" ? chalk.green
+          : status === "stuck" ? chalk.yellow
+          : status === "capped" ? chalk.yellow
+          : chalk.dim;
+        line(color("✓ swarm reconciled") + chalk.dim(` (${status}${cycles ? ` · ${cycles}` : ""}${total})`));
+        return;
+      }
+
       default:
         if (verbose) line(chalk.dim("[" + ev.type + "]"));
     }

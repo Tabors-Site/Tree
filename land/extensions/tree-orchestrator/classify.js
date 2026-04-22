@@ -11,12 +11,91 @@
 import Node from "../../seed/models/node.js";
 import { resolveMode } from "../../seed/modes/registry.js";
 import { buildCurrentPath as _buildCurrentPath } from "./state.js";
+import { SENTENCE_START_IMPERATIVE } from "./grammar.js";
+import { getModesOwnedBy } from "../../seed/tree/extensionScope.js";
 
 // Re-export grammar tables and parsers so existing imports from classify.js
 // keep working. Consumers that want a narrower surface can import from
 // grammar.js or parsers.js directly.
 export * from "./grammar.js";
 export * from "./parsers.js";
+
+// ─────────────────────────────────────────────────────────────────────────
+// MODE UPGRADE FOR COMPOUND IMPERATIVES
+//
+// After the routing index picks an extension, we sometimes want to
+// upgrade its default mode (usually a -log / -tell receiver) to the
+// extension's architect mode (-plan) when the message structure
+// says "this is a multi-part build / design request", not a single
+// log entry. The signal is purely structural — imperative verb +
+// a list of 2+ named parts — so it generalises across any
+// extension with a plan mode, no domain vocab involved.
+//
+// Triggers the upgrade ONLY when ALL of:
+//   1. Message starts with a build-class imperative verb (reuses
+//      SENTENCE_START_IMPERATIVE from grammar.js).
+//   2. Message contains >=2 list items after a connector ("with",
+//      "that has", "including", "plus", colon, or bare commas).
+//   3. The extension owns a -plan mode distinct from the mode the
+//      router picked. If it already picked -plan, nothing changes.
+//
+// No keywords (frontend/backend/api/etc) are hardcoded. Works for
+// code-workspace, book-workspace, or anything else that follows
+// the suffix convention.
+// ─────────────────────────────────────────────────────────────────────────
+
+function _isBuildImperative(message) {
+  // SENTENCE_START_IMPERATIVE covers make / build / create / write /
+  // scaffold / generate / design / implement / … at the start.
+  return SENTENCE_START_IMPERATIVE.test(message || "");
+}
+
+function _listItemCount(message) {
+  if (typeof message !== "string" || !message) return 0;
+  // Prefer the connector-anchored tail: "… with X, Y, and Z" or
+  // "… including X, Y, Z" — only count items AFTER that connector so
+  // prose commas ("Hey, can you, like, help?") don't count.
+  const anchor = /(?:\bwith\b|\bthat has\b|\bincluding\b|\bplus\b|:)/i;
+  const m = message.match(anchor);
+  const tail = m ? message.slice(m.index + m[0].length) : message;
+  // Split on commas AND " and " / " & " joiners, keep non-empty items.
+  const parts = tail
+    .split(/,|\band\b|&/i)
+    .map(s => s.trim())
+    .filter(s => s.length > 0 && s.length < 80);
+  // Single-word items or very short phrases count — this is list
+  // STRUCTURE, not semantic richness.
+  return parts.length;
+}
+
+function _upgradeModeForCompoundImperative(message, currentMode, extName) {
+  try {
+    if (!currentMode || !extName) return null;
+    // Already an architect / plan mode? Nothing to upgrade.
+    if (/-plan$|-architect$/.test(currentMode)) return null;
+    if (!_isBuildImperative(message)) return null;
+    // Need a connector anchor for the list count to be meaningful.
+    // Without it, we fall back to bare-comma counting and require ≥3
+    // items so the bar for ambiguous prose stays high.
+    const hasAnchor = /(?:\bwith\b|\bthat has\b|\bincluding\b|\bplus\b|:)/i.test(message);
+    const items = _listItemCount(message);
+    const threshold = hasAnchor ? 2 : 3;
+    if (items < threshold) return null;
+
+    // Does the extension actually own a -plan mode? If not, keep
+    // the original — we never invent a mode the tree doesn't have.
+    const modes = getModesOwnedBy(extName);
+    const planMode =
+      modes.find(m => m.endsWith("-plan")) ||
+      modes.find(m => m.endsWith("-architect")) ||
+      null;
+    if (!planMode || planMode === currentMode) return null;
+
+    return planMode;
+  } catch {
+    return null;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // LOCAL CLASSIFY
@@ -60,9 +139,24 @@ export async function localClassify(message, currentNodeId, rootId, userId = nul
       const currentPath = await _buildCurrentPath(currentNodeId);
       const scored = queryIndexScored(rootId, message, currentPath, personalVocabAll);
       if (scored?.winner) {
+        // Mode upgrade for compound / multi-part imperatives.
+        // The routing index returns the extension's node-default mode
+        // (often the -log / -tell receiver). When the message is both
+        // IMPERATIVE and LIST-STRUCTURED — meaning the user is asking
+        // to build / create / plan something with multiple named
+        // parts joined by commas, "and", "with" — the architect
+        // (-plan / -architect suffix) fits better than the default
+        // receiver. This is a purely structural signal — no domain
+        // vocabulary, no hardcoded keywords — so it generalises
+        // across every code-* / book-* / any-* workspace extension.
+        const upgraded = _upgradeModeForCompoundImperative(
+          message,
+          scored.winner.mode,
+          scored.winner.extName,
+        );
         return {
           intent: "extension",
-          mode: scored.winner.mode,
+          mode: upgraded || scored.winner.mode,
           targetNodeId: scored.winner.targetNodeId,
           confidence: scored.winner.confidence,
           posMatches: scored.winner.matches,

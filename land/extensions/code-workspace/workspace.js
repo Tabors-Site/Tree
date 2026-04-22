@@ -22,6 +22,7 @@ import Note from "../../seed/models/note.js";
 import { v4 as uuidv4 } from "uuid";
 import log from "../../seed/log.js";
 import { logContribution } from "../../seed/tree/contributions.js";
+import { readNs } from "../../seed/tree/extensionMetadata.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -53,10 +54,11 @@ const NS = "code-workspace";
 // Metadata accessors that work on both Map-backed and plain-object nodes
 // ---------------------------------------------------------------------------
 
+// Thin wrapper over the kernel's readNs so callers can still do
+// readMeta(node) for the code-workspace namespace without threading
+// the namespace argument.
 function readMeta(node, ns = NS) {
-  if (!node?.metadata) return null;
-  if (node.metadata instanceof Map) return node.metadata.get(ns) || null;
-  return node.metadata[ns] || null;
+  return readNs(node, ns);
 }
 
 /**

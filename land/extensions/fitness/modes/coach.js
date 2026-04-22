@@ -18,26 +18,53 @@ export default {
 
   toolNames: [
     "fitness-log-workout",
+    "fitness-get-history",
+    "fitness-get-recent",
+    "fitness-list-program",
+    "fitness-delete-session",
     "fitness-add-exercise",
     "fitness-add-group",
     "fitness-adopt-exercise",
+    "fitness-remove-exercise",
   ],
 
   async buildSystemPrompt({ username, rootId, currentNodeId }) {
     const fitRoot = await findExtensionRoot(currentNodeId || rootId, "fitness") || rootId;
     const state = await getExerciseState(fitRoot);
     const profile = await getProfile(fitRoot);
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+    const formatHistoryEntry = (h, modality) => {
+      const d = h.date || "?";
+      if (modality === "running") {
+        const dist = h.distance ?? h.weeklyMiles;
+        const dur = h.duration ? `${Math.round(h.duration / 60)}min` : "";
+        return `${d}: ${dist ?? "?"}mi ${dur}`.trim();
+      }
+      if (Array.isArray(h.sets) && h.sets.length > 0) {
+        const reps = h.sets.map(s => s.reps ?? s.duration ?? "?").join("/");
+        const w = h.sets[0]?.weight;
+        return w != null ? `${d}: ${w}x${reps}` : `${d}: ${reps}`;
+      }
+      return `${d}: logged`;
+    };
 
     const exerciseSummary = state ? Object.entries(state.groups).map(([group, data]) => {
       const exs = data.exercises.map(e => {
         const vals = e.values || {};
         const schema = e.schema;
-        if (schema?.type === "distance-time") return `${e.name}: ${vals.weeklyMiles || vals.lastDistance || 0} ${schema.unit || "mi"}`;
-        if (schema?.type === "duration") return `${e.name}: ${vals.duration || "?"}s`;
-        if (schema?.type === "reps") return `${e.name}: ${vals.set1 || vals.totalReps || "?"}`;
-        return `${e.name}: ${vals.weight || "?"}${profile?.weightUnit || schema?.unit || "lb"}`;
-      }).join(", ");
-      return `${group} [${data.modality}]: ${exs}`;
+        let head;
+        if (schema?.type === "distance-time") head = `${e.name}: ${vals.weeklyMiles || vals.lastDistance || 0} ${schema.unit || "mi"}`;
+        else if (schema?.type === "duration") head = `${e.name}: ${vals.duration || "?"}s`;
+        else if (schema?.type === "reps") head = `${e.name}: ${vals.set1 || vals.totalReps || "?"}`;
+        else head = `${e.name}: ${vals.weight || "?"}${profile?.weightUnit || schema?.unit || "lb"}`;
+        const recent = (e.recentHistory || []).slice(-3);
+        if (recent.length === 0) return head;
+        const hist = recent.map(h => formatHistoryEntry(h, data.modality)).join("; ");
+        return `${head} [recent: ${hist}]`;
+      }).join("\n  ");
+      return `${group} [${data.modality}]:\n  ${exs}`;
     }).join("\n") : "No exercises configured yet.";
 
     const unadopted = state?._unadopted;
@@ -84,6 +111,29 @@ Call fitness-log-workout IMMEDIATELY with rootId ${fitRoot} and that exercise's 
 Do not wait until the end of the session. Log each exercise as it's completed.
 The user might leave at any time. Every completed exercise must be saved.
 Then report the tool's response (volume, progression) and move to the next exercise.
+
+BACKFILL / MULTI-DAY LOGGING:
+Today is ${today}. Yesterday was ${yesterday}.
+If the user reports workouts from more than one day in a single message
+("yesterday I benched 95x10x2 and today 115x10x2"), call fitness-log-workout
+ONCE PER DAY with the \`date\` param set to that day's YYYY-MM-DD. Never collapse
+multiple days into one tool call. Omit \`date\` only when everything is today.
+Parse relative words: "yesterday" -> ${yesterday}, "today" -> ${today},
+"2 days ago", "Monday", etc. -> compute from today's date above.
+
+LOOKUP TOOLS (use instead of guessing from inlined history):
+- fitness-list-program: lists every exercise in the user's program, grouped by
+  modality. Use when the user asks "what workouts do I have", "what's in my
+  program", or any "show me my exercises" variant. Optional modality filter.
+- fitness-get-recent: time-scoped session log across ALL exercises.
+  sinceDays=7 is the default. Use for "what did I do this week", "show me
+  last 3 days", "have I run lately", etc. Compute sinceDays from the user's
+  window: "today" -> 1, "yesterday" -> 2, "this week" -> 7, "last week" -> 14,
+  "this month" -> 30. Optional modality filter ("running", "gym", "home")
+  and optional exerciseName filter for drill-down.
+- fitness-get-history: ONE exercise's deep history, newest first. Use for
+  "when did I last bench", "show me all my squat sessions". Unlike
+  fitness-get-recent, this returns up to 50 sessions regardless of date.
 
 GUIDING VS ADAPTING:
 - By default, guide: suggest what to do next based on what's been neglected, what's due for progression, what the program says. "Legs are due. Squats at 155. Ready?"

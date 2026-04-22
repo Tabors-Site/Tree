@@ -4,8 +4,8 @@
 
 import Node from "../../seed/models/node.js";
 import log from "../../seed/log.js";
-import { readMeta, mutateMeta } from "./state/meta.js";
-import { upsertSubPlanEntry } from "./state/subPlan.js";
+import { readMeta, mutateMeta, initProjectRole } from "./state/meta.js";
+import { plan, upsertBranchStep } from "./state/planAccess.js";
 
 /**
  * Walk upward from any node, return the nearest swarm project (role=project
@@ -70,37 +70,41 @@ export async function findBranchSiblings(branchNodeId) {
 }
 
 /**
- * After a resume pass completes, walk a project's subPlan bottom-up and
- * promote any parent whose children are all done to status=done. Keeps
- * ancestor status honest without per-write sync.
+ * After a resume pass completes, walk a project's branch tree bottom up
+ * and promote any parent whose children are all done to status=done.
+ * Keeps ancestor status honest without per write sync. Reads branch
+ * kind steps from the unified plan.
  */
 export async function promoteDoneAncestors({ projectNodeId, core }) {
   if (!projectNodeId) return;
   try {
+    const p = await plan();
     const visit = async (nodeId) => {
       const node = await Node.findById(nodeId).select("_id name metadata").lean();
       if (!node) return { status: null, name: null };
       const meta = readMeta(node);
-      const subPlan = meta?.subPlan;
+      const planObj = await p.readPlan(nodeId);
+      const branches = (planObj?.steps || []).filter((s) => s.kind === "branch");
 
-      if (!subPlan || !Array.isArray(subPlan.branches) || subPlan.branches.length === 0) {
+      if (branches.length === 0) {
         return { status: meta?.status || null, name: node.name };
       }
 
       const childStatuses = [];
-      for (const entry of subPlan.branches) {
-        if (!entry.nodeId) {
+      for (const entry of branches) {
+        const childId = entry.childNodeId || null;
+        if (!childId) {
           childStatuses.push(entry.status || "pending");
           continue;
         }
-        const childResult = await visit(entry.nodeId);
+        const childResult = await visit(childId);
         childStatuses.push(childResult.status || entry.status || "pending");
 
         if (childResult.status && childResult.status !== (entry.status || "pending")) {
-          await upsertSubPlanEntry({
+          await upsertBranchStep({
             parentNodeId: nodeId,
             core,
-            child: { name: entry.name, status: childResult.status },
+            branch: { name: entry.title, nodeId: childId, status: childResult.status },
           });
         }
       }
@@ -129,15 +133,16 @@ export async function promoteDoneAncestors({ projectNodeId, core }) {
 }
 
 /**
- * Walk the project's subPlan (and recursively nested subPlans) for any
- * branches NOT done. Returns a flat list of resumable branch specs.
+ * Walk the project's branch kind plan steps (and recursively nested
+ * plans) for any branches NOT done. Returns a flat list of resumable
+ * branch specs.
  *
- * Null when there's no masterPlan/subPlan (fresh project). { resumable: [],
+ * Null when there's no plan yet (fresh project). { resumable: [],
  * total: N } when every branch is done.
  *
- * Decomposition-aware: if a non-done entry has done children, we descend
- * to resume only those non-done children — never re-run a parent whose
- * decomposition already produced done work (which would duplicate it).
+ * Decomposition aware: if a non done entry has done children, we
+ * descend to resume only those non done children. Never re run a
+ * parent whose decomposition already produced done work.
  */
 export async function detectResumableSwarm(projectNodeId) {
   if (!projectNodeId) return null;
@@ -145,10 +150,10 @@ export async function detectResumableSwarm(projectNodeId) {
     const project = await Node.findById(projectNodeId).select("_id name metadata").lean();
     if (!project) return null;
     const meta = readMeta(project);
-    const topSubPlan = meta?.subPlan;
-    if (!topSubPlan || !Array.isArray(topSubPlan.branches) || topSubPlan.branches.length === 0) {
-      return null;
-    }
+    const p = await plan();
+    const topPlan = await p.readPlan(projectNodeId);
+    const topBranches = (topPlan?.steps || []).filter((s) => s.kind === "branch");
+    if (topBranches.length === 0) return null;
 
     const resumable = [];
     const doneCount = { count: 0 };
@@ -156,47 +161,43 @@ export async function detectResumableSwarm(projectNodeId) {
     const statusCounts = { pending: 0, running: 0, paused: 0, failed: 0, done: 0 };
 
     const visit = async (parentNodeId, parentBranchName, depth) => {
-      const parentNode = await Node.findById(parentNodeId).select("_id metadata").lean();
-      const parentMeta = readMeta(parentNode);
-      const subPlan = parentMeta?.subPlan;
-      if (!subPlan || !Array.isArray(subPlan.branches)) return;
+      const parentPlan = await p.readPlan(parentNodeId);
+      const branches = (parentPlan?.steps || []).filter((s) => s.kind === "branch");
+      if (branches.length === 0) return;
 
-      for (const entry of subPlan.branches) {
+      for (const entry of branches) {
         totalCount.count++;
         const status = entry.status || "pending";
         statusCounts[status] = (statusCounts[status] || 0) + 1;
+        const entryNodeId = entry.childNodeId || null;
 
         if (status === "done") {
           doneCount.count++;
-          if (entry.nodeId) {
-            await visit(entry.nodeId, entry.name, depth + 1);
+          if (entryNodeId) {
+            await visit(entryNodeId, entry.title, depth + 1);
           }
           continue;
         }
 
-        // Peek at this entry's own subPlan. If its decomposition ran
-        // and produced done children, descend to pick up the non-done
-        // ones; don't add the parent (re-running duplicates done work).
+        // Peek at this entry's own plan. If its decomposition ran and
+        // produced done children, descend to pick up the non done ones.
         let hasDoneChildren = false;
-        if (entry.nodeId) {
-          const childNode = await Node.findById(entry.nodeId).select("metadata").lean();
-          const childMeta = readMeta(childNode);
-          const childBranches = childMeta?.subPlan?.branches;
-          if (Array.isArray(childBranches) && childBranches.length > 0) {
+        if (entryNodeId) {
+          const childPlan = await p.readPlan(entryNodeId);
+          const childBranches = (childPlan?.steps || []).filter((s) => s.kind === "branch");
+          if (childBranches.length > 0) {
             hasDoneChildren = childBranches.some((c) => c.status === "done");
           }
         }
 
         if (hasDoneChildren) {
-          if (entry.nodeId) {
-            await visit(entry.nodeId, entry.name, depth + 1);
-          }
+          if (entryNodeId) await visit(entryNodeId, entry.title, depth + 1);
           continue;
         }
 
         resumable.push({
-          name: entry.name,
-          nodeId: entry.nodeId || null,
+          name: entry.title,
+          nodeId: entryNodeId,
           spec: entry.spec,
           path: entry.path || null,
           files: entry.files || [],
@@ -232,19 +233,20 @@ export async function detectResumableSwarm(projectNodeId) {
 
 /**
  * Ensure `rootId` is initialized as a swarm project. Sets
- * metadata.swarm.role = "project" + initialized = true, creates empty
- * subPlan/events/inbox if absent, fires `swarm:afterProjectInit` so
- * domain extensions can do their own init (e.g., code-workspace creates
- * the filesystem workspace directory). Idempotent — safe to call when
- * the project already exists.
+ * metadata.swarm.role = "project" + initialized = true, stamps swarm
+ * execution bookkeeping (aggregatedDetail, inbox, events), and
+ * initializes the plan namespace via the plan extension. Fires
+ * `swarm:afterProjectInit` so domain extensions can do their own init.
+ * Idempotent — safe to call when the project already exists.
  */
 export async function ensureProject({ rootId, systemSpec, owner, core, fireHook }) {
   if (!rootId) return null;
   const existing = await Node.findById(rootId).select("_id name metadata").lean();
   if (!existing) return null;
 
-  const { initProjectPlan } = await import("./state/subPlan.js");
-  await initProjectPlan({ projectNodeId: rootId, systemSpec: systemSpec || null, core });
+  await initProjectRole({ nodeId: rootId, systemSpec: systemSpec || null, core });
+  const p = await plan();
+  await p.initPlan(rootId, { systemSpec: systemSpec || null }, core);
 
   const projectNode = await Node.findById(rootId).select("_id name metadata").lean();
   if (typeof fireHook === "function") {

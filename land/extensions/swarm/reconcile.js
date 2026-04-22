@@ -1,45 +1,42 @@
-// Tree-authoritative reconciliation.
+// Tree authoritative reconciliation.
 //
-// subPlan caches branch status + history. The tree node graph is ground
-// truth for what branches actually exist and what they contain. When a
-// user edits the tree directly (reorders, renames, inserts, deletes,
-// rewrites), subPlan drifts from reality. Reconcile walks the tree and
-// merges it back.
+// The unified plan namespace caches branch status + history. The tree
+// node graph is ground truth for what branches actually exist and
+// what they contain. When a user edits the tree directly (reorders,
+// renames, inserts, deletes, rewrites), the plan's branch kind steps
+// drift from reality. Reconcile walks the tree and merges branch
+// kind steps back. Non branch step kinds are preserved as is.
 //
 // Rules:
-//   - Match tree children to subPlan entries by nodeId (stable).
-//   - Tree child present, subPlan entry exists → keep subPlan status,
-//     refresh spec / path / files / mode from the node's metadata.
-//     (User edited the spec; tree wins.)
-//   - Tree child present, subPlan has no matching entry → add a new
-//     pending entry. (User manually inserted a branch.)
-//   - SubPlan entry has nodeId, tree child gone → drop from subPlan.
-//     (User deleted a branch.)
-//   - SubPlan entry has no nodeId (never dispatched) → leave alone;
-//     it's architect-seeded and waiting for dispatch.
+//   - Match tree children to branch kind steps by childNodeId (stable).
+//   - Tree child present, step exists → keep step status, refresh
+//     spec/path/files from the node's swarm metadata. (User edited
+//     the spec; tree wins on structure, plan wins on transient
+//     status.)
+//   - Tree child present, no matching step → add a new pending step.
+//   - Step has childNodeId, tree child gone → drop from plan.
+//   - Step has no childNodeId (never dispatched) → leave as is.
 //
-// Recursive: each matched child's own subPlan reconciles against its
-// own tree children. A user editing the shape at any depth gets
-// absorbed cleanly.
-//
-// Returns { added, removed, updated } counts so callers can surface
-// "here's what the tree looked like vs what I thought".
+// Recursive: each matched child reconciles against its own tree.
 
 import Node from "../../seed/models/node.js";
 import log from "../../seed/log.js";
-import { readMeta, mutateMeta } from "./state/meta.js";
+import { readMeta } from "./state/meta.js";
+import { plan } from "./state/planAccess.js";
 
 export async function reconcileProject({ projectNodeId, core }) {
   if (!projectNodeId) return { added: 0, removed: 0, updated: 0 };
 
   const totals = { added: 0, removed: 0, updated: 0 };
+  const p = await plan();
 
   const reconcileNode = async (nodeId) => {
     const node = await Node.findById(nodeId).select("_id name children metadata").lean();
     if (!node) return;
-    const meta = readMeta(node);
-    const subPlan = meta?.subPlan;
-    const existingEntries = Array.isArray(subPlan?.branches) ? subPlan.branches : [];
+    const planObj = await p.readPlan(nodeId);
+    const allSteps = planObj?.steps || [];
+    const existingBranches = allSteps.filter((s) => s.kind === "branch");
+    const otherSteps = allSteps.filter((s) => s.kind !== "branch");
 
     // Pull all direct children with role=branch from the tree.
     const childIds = Array.isArray(node.children) ? node.children : [];
@@ -53,35 +50,35 @@ export async function reconcileProject({ projectNodeId, core }) {
       });
     }
 
-    // Index existing entries by nodeId for O(1) matching.
-    const entriesByNodeId = new Map();
-    const orphanEntries = []; // subPlan entries without a nodeId (never dispatched)
-    for (const entry of existingEntries) {
-      if (entry.nodeId) {
-        entriesByNodeId.set(String(entry.nodeId), entry);
+    // Index existing branch steps by childNodeId for O(1) matching.
+    const stepsByChildId = new Map();
+    const orphanSteps = []; // branch steps without a childNodeId (never dispatched)
+    for (const step of existingBranches) {
+      if (step.childNodeId) {
+        stepsByChildId.set(String(step.childNodeId), step);
       } else {
-        orphanEntries.push(entry);
+        orphanSteps.push(step);
       }
     }
 
-    // Build reconciled list: one entry per tree child, preserving status
-    // where possible, plus orphan entries (architect seeds awaiting dispatch).
-    const reconciled = [];
-    const seenNodeIds = new Set();
+    const reconciledBranches = [];
+    const seenChildIds = new Set();
     let added = 0;
     let removed = 0;
     let updated = 0;
 
     for (const kid of branchChildren) {
       const kidIdStr = String(kid._id);
-      seenNodeIds.add(kidIdStr);
+      seenChildIds.add(kidIdStr);
       const kidMeta = readMeta(kid);
-      const prior = entriesByNodeId.get(kidIdStr);
+      const prior = stepsByChildId.get(kidIdStr);
 
-      // Node wins on structural fields. Cache wins on transient status.
+      // Tree wins on structural fields. Plan wins on transient status.
       const merged = {
-        name: kid.name || prior?.name,
-        nodeId: kidIdStr,
+        id: prior?.id, // preserve id when matching
+        kind: "branch",
+        title: kid.name || prior?.title,
+        childNodeId: kidIdStr,
         spec: kidMeta?.spec ?? prior?.spec,
         path: kidMeta?.path ?? prior?.path ?? null,
         files: kidMeta?.files ?? prior?.files ?? [],
@@ -98,42 +95,33 @@ export async function reconcileProject({ projectNodeId, core }) {
       if (!prior) {
         added++;
       } else {
-        // Detect "updated": structural fields changed
         const structurallyChanged =
           prior.spec !== merged.spec ||
           prior.path !== merged.path ||
-          prior.name !== merged.name;
+          prior.title !== merged.title;
         if (structurallyChanged) updated++;
       }
-      reconciled.push(merged);
+      reconciledBranches.push(merged);
     }
 
-    // Carry forward any orphan entries (architect-seeded, never dispatched).
-    // These stay in subPlan until they get dispatched or the user clears them.
-    for (const orphan of orphanEntries) reconciled.push(orphan);
+    // Carry forward any orphan branch steps (architect seeded, never
+    // dispatched). They stay until dispatched or the user clears them.
+    for (const orphan of orphanSteps) reconciledBranches.push(orphan);
 
-    // Count entries dropped (had nodeId, tree child gone).
-    for (const [prevNodeId, prev] of entriesByNodeId) {
-      if (!seenNodeIds.has(prevNodeId)) removed++;
+    // Count steps dropped (had childNodeId, tree child gone).
+    for (const [prevId] of stepsByChildId) {
+      if (!seenChildIds.has(prevId)) removed++;
     }
 
-    if (added + removed + updated > 0 || reconciled.length !== existingEntries.length) {
-      await mutateMeta(nodeId, (draft) => {
-        if (!draft.subPlan) draft.subPlan = { branches: [], createdAt: new Date().toISOString() };
-        draft.subPlan.branches = reconciled;
-        draft.subPlan.reconciledAt = new Date().toISOString();
-        if (added + removed + updated > 0) {
-          draft.subPlan.lastReconciliation = { added, removed, updated, at: draft.subPlan.reconciledAt };
-        }
-        return draft;
-      }, core);
-
+    if (added + removed + updated > 0 || reconciledBranches.length !== existingBranches.length) {
+      const nextSteps = [...otherSteps, ...reconciledBranches];
+      await p.setSteps(nodeId, nextSteps, core);
       totals.added += added;
       totals.removed += removed;
       totals.updated += updated;
     }
 
-    // Recurse: each matched child reconciles its own subPlan.
+    // Recurse: each matched child reconciles its own plan.
     for (const kid of branchChildren) {
       await reconcileNode(kid._id);
     }

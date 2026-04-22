@@ -15,6 +15,48 @@ export async function init(core) {
     } catch (err) {
       log.debug("TreeOrchestrator", `Routing index build failed: ${err.message}`);
     }
+
+    // ── Manifest vocabulary scan ──
+    // Walk every loaded extension. If it owns any non-hidden tree:* mode AND
+    // has no classifier vocab (classifierHints + vocabulary.verbs/nouns/
+    // adjectives) AND no explicit `background: true`, its modes will be
+    // hidden by the presence filter — warn the author so they can either
+    // declare vocab (domain extension) or declare background (internal
+    // utility). Scanning here, after loader finishes, avoids timing races.
+    try {
+      const { getLoadedManifests, flattenVocabulary } = await import("../loader.js");
+      const { getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
+      const { getMode } = await import("../../seed/modes/registry.js");
+      const manifests = getLoadedManifests();
+      const warnings = [];
+      for (const manifest of manifests) {
+        if (!manifest?.name) continue;
+        if (manifest.background === true) continue;
+        if (manifest.name === "treeos-base") continue;
+        const ownedModes = getModesOwnedBy(manifest.name) || [];
+        const visibleTreeModes = ownedModes.filter((key) => {
+          if (!key.startsWith("tree:")) return false;
+          const mode = getMode(key);
+          // hidden: true modes still show in the tree dropdown (see
+          // registry.getSubModes), so they count here too.
+          return !!mode;
+        });
+        if (visibleTreeModes.length === 0) continue;
+        const hints = flattenVocabulary(manifest);
+        if (!hints || hints.length === 0) {
+          warnings.push(manifest.name);
+        }
+      }
+      if (warnings.length > 0) {
+        log.warn(
+          "TreeOrchestrator",
+          `Extensions own tree modes but declare no classifier vocabulary — their modes will be hidden from the mode picker. ` +
+          `Add classifierHints or vocabulary (domain extension) or background: true (utility) to the manifest: ${warnings.join(", ")}`,
+        );
+      }
+    } catch (err) {
+      log.debug("TreeOrchestrator", `vocab audit skipped: ${err.message}`);
+    }
   }, "tree-orchestrator");
 
   // ── Mode-list presence filter ──
@@ -33,9 +75,8 @@ export async function init(core) {
       const modes = Array.isArray(payload.modes) ? payload.modes : [];
       if (modes.length === 0) return;
 
-      const { getExtension } = await import("../loader.js");
-      const { getModeOwner } = await import("../../seed/modes/registry.js");
-      const { getClassifierHintsForMode } = await import("../loader.js");
+      const { getClassifierHintsForMode, getExtension } = await import("../loader.js");
+      const { getModeOwner } = await import("../../seed/tree/extensionScope.js");
 
       const treeIndex = getIndexForRoot(payload.rootId);
 
@@ -45,9 +86,15 @@ export async function init(core) {
         if (owner === "treeos-base") return true;    // baseline
         if (treeIndex && treeIndex.has(owner)) return true; // scaffolded here
 
-        // Background-only extensions (no classifier vocab) stay visible;
-        // they never compete for chat routing and are useful to invoke
-        // explicitly (dream-summary, understanding-review, etc.).
+        // Explicit background opt-in from the manifest stays visible even
+        // when the extension also declared vocab (rare but allowed).
+        const ext = getExtension(owner);
+        if (ext?.manifest?.background === true) return true;
+
+        // Missing vocab falls back to "show" so we don't silently hide
+        // utility extensions whose authors forgot to declare background.
+        // The afterBoot scanner logs a warning listing every manifest in
+        // this state so authors can decide: add vocab or add background.
         const hints = getClassifierHintsForMode(m.key);
         if (!hints || hints.length === 0) return true;
         return false;

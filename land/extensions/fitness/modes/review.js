@@ -17,6 +17,9 @@ export default {
   preserveContextOnLoop: true,
 
   toolNames: [
+    "fitness-get-history",
+    "fitness-get-recent",
+    "fitness-list-program",
   ],
 
   async buildSystemPrompt({ username, rootId, currentNodeId }) {

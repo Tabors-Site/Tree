@@ -490,6 +490,22 @@ body.show-bg-messages .mobile-mode-bar {
     .message.carried { opacity: 0.4; pointer-events: none; }
     .message.carried .message-content { border-style: dashed; }
 
+    /* User message sent mid-stream — the stream extension merges it into
+       the running turn rather than starting a new one. Chip explains this. */
+    .message.user.merged .message-content { border-style: dashed; border-color: rgba(125, 211, 133, 0.45); }
+    .user-merge-chip {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 2px 8px;
+      font-size: 11px;
+      color: rgba(125, 211, 133, 0.85);
+      background: rgba(125, 211, 133, 0.08);
+      border: 1px solid rgba(125, 211, 133, 0.25);
+      border-radius: 999px;
+      letter-spacing: 0.02em;
+      cursor: help;
+    }
+
     /* Mode bar locked while AI is responding */
     .mode-bar.locked .mode-current {
       opacity: 0.4;
@@ -690,6 +706,13 @@ body.show-bg-messages .mobile-mode-bar {
     .live-tc-dot { color: rgba(255, 200, 100, 0.9); font-weight: 700; }
     .live-swarm { color: rgba(140, 180, 240, 0.95); font-weight: 700; }
     .live-branch { color: rgba(140, 180, 240, 0.95); font-weight: 700; }
+    .live-scout { color: rgba(200, 160, 250, 0.95); font-weight: 700; }
+    .live-scout-warn { color: rgba(255, 205, 120, 0.95); font-weight: 700; }
+    .live-scout-route { color: rgba(140, 200, 255, 0.95); font-weight: 700; }
+    .live-scout-redeploy { color: rgba(180, 230, 200, 0.95); font-weight: 700; }
+    .live-line-scout-dispatch, .live-line-scout-report, .live-line-scout-route,
+    .live-line-scout-redeploy, .live-line-scout-clean, .live-line-scout-reconciled { padding-left: 6px; }
+    .live-line-scout-report { padding-left: 20px; }
     .live-line-intent { padding-left: 6px; }
     .live-line-intent b { color: rgba(160, 210, 255, 0.95); }
     .live-line-mode { padding-left: 6px; }
@@ -698,6 +721,60 @@ body.show-bg-messages .mobile-mode-bar {
     .live-line-tool-call, .live-line-tool-ok, .live-line-tool-fail { padding-left: 20px; }
     .live-line-branch-start, .live-line-branch-ok, .live-line-branch-fail { padding-left: 20px; }
     @keyframes liveIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Plan card for proposed / updated swarm plans. Larger than a
+       one-liner because it lists branches and carries action buttons. */
+    .live-line-plan-card { padding: 0; margin-top: 8px; margin-bottom: 8px; font-family: inherit; }
+    .plan-card {
+      background: rgba(140,180,240,0.08);
+      border: 1px solid rgba(140,180,240,0.35);
+      border-left: 3px solid rgba(140,180,240,0.85);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: rgba(255,255,255,0.9);
+    }
+    .plan-card-head { font-size: 13px; margin-bottom: 6px; letter-spacing: 0.2px; }
+    .plan-card-head b { font-weight: 700; }
+    .plan-trigger { font-size: 11px; color: rgba(255,255,255,0.55); margin: 2px 0 8px 0; }
+    .plan-branches { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+    .plan-branch {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 11px;
+      padding: 4px 8px;
+      background: rgba(0,0,0,0.15);
+      border-radius: 4px;
+    }
+    .plan-branch b { color: rgba(200,220,255,0.95); }
+    .plan-branch .plan-path, .plan-branch .plan-mode, .plan-branch .plan-files {
+      color: rgba(255,255,255,0.5);
+      margin-left: 6px;
+    }
+    .plan-spec { color: rgba(255,255,255,0.75); margin-top: 3px; font-size: 11px; line-height: 1.5; font-family: inherit; }
+    .plan-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .plan-btn {
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.9);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .plan-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.45); }
+    .plan-btn-accept { background: rgba(125,220,155,0.2); border-color: rgba(125,220,155,0.55); }
+    .plan-btn-accept:hover { background: rgba(125,220,155,0.3); }
+    .plan-btn-cancel { background: rgba(240,130,130,0.15); border-color: rgba(240,130,130,0.45); }
+    .plan-btn-cancel:hover { background: rgba(240,130,130,0.25); }
+    .plan-btn:disabled { cursor: default; opacity: 0.55; }
+    .plan-btn:disabled:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.25); }
+    .plan-btn-chosen { opacity: 1 !important; border-color: rgba(255,255,255,0.6) !important; box-shadow: 0 0 0 1px rgba(255,255,255,0.15) inset; }
+    .plan-btn-unchosen { opacity: 0.3 !important; }
+    .plan-card-spent { opacity: 0.75; }
+    .plan-card-spent .plan-hint { display: none; }
+    .plan-hint { font-size: 10px; color: rgba(255,255,255,0.45); margin-top: 8px; font-style: italic; }
+    .live-line-plan-archived { padding-left: 6px; font-size: 12px; }
 
     .chat-input-area { padding: 16px 20px 20px; border-top: 1px solid var(--glass-border-light); position: relative; z-index: 1; }
     .input-container { display: flex; align-items: flex-end; gap: 12px; padding: 14px 18px; background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(10px); border: 1px solid var(--glass-border-light); border-radius: 18px; transition: all var(--transition-fast); }
@@ -2495,27 +2572,31 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
     }
 
     // Messages
-    function addMessage(content, role) {
+    function addMessage(content, role, opts) {
+      const merged = role === "user" && opts && opts.merged;
       [chatMessages, mobileChatMessages].forEach(container => {
         const welcome = container.querySelector(".welcome-message");
         if (welcome) welcome.remove();
 
         const msg = document.createElement("div");
-        msg.className = "message " + role;
-        
+        msg.className = "message " + role + (merged ? " merged" : "");
+
         const formattedContent = role === "assistant" ? formatMessageContent(content) : escapeHtml(content);
-        
+        const chip = merged
+          ? '<div class="user-merge-chip" title="Sent while the previous response was still streaming. Merged into the running turn.">&#x21BB; merged into running response</div>'
+          : '';
+
         msg.innerHTML = \`
           <div class="message-avatar">\${role === "user" ? "👤" : "🌳"}</div>
-          <div class="message-content">\${formattedContent}</div>
+          <div class="message-content">\${formattedContent}\${chip}</div>
         \`;
-        
+
         if (role === "assistant") {
           msg.querySelectorAll('.menu-item.clickable').forEach(item => {
             item.addEventListener('click', () => handleMenuItemClick(item));
           });
         }
-        
+
         container.appendChild(msg);
         container.scrollTop = container.scrollHeight;
       });
@@ -2566,8 +2647,9 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
     function sendChatMessage(message) {
       if (!message.trim() || !isRegistered) return;
 
-      addMessage(message, "user");
-      if (!isSending) {
+      const startingNewTurn = !isSending;
+      addMessage(message, "user", { merged: !startingNewTurn });
+      if (startingNewTurn) {
         addTypingIndicator();
         isSending = true;
         lockModeBar(true);
@@ -2578,7 +2660,13 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
         _liveState.lastMode = null;
         _liveState.lastThinking = null;
       }
-      requestGeneration++;
+      // Only bump generation when starting a new turn. Mid-flight sends are
+      // accumulated server-side into the running turn (see websocket.js
+      // ~825) and will complete under the original turn's generation. If we
+      // bumped here, the completion's generation would be < requestGeneration
+      // and the chatResponse handler would drop the answer as "stale",
+      // leaving the typing indicator spinning forever.
+      if (startingNewTurn) requestGeneration++;
       const thisGen = requestGeneration;
       updateSendButtons();
 
@@ -3190,7 +3278,13 @@ function injectIframeParamForwarding() {
     // message and the typing indicator.
     var _liveState = { lastMode: null, lastThinking: null };
 
+    // Returns an array of inserted rows, one per chat container,
+    // so callers can bind click listeners directly. Previously
+    // callers used last-of-typewhich matched by element TYPE
+    // (not class) and could grab the wrong element when other
+    // divs followed in the same container — buttons silently no-op.
     function _liveAddLine(classSuffix, html) {
+      var rows = [];
       [chatMessages, mobileChatMessages].forEach(function(container) {
         if (!container) return;
         const welcome = container.querySelector(".welcome-message");
@@ -3202,7 +3296,9 @@ function injectIframeParamForwarding() {
         if (typing) container.insertBefore(row, typing);
         else container.appendChild(row);
         container.scrollTop = container.scrollHeight;
+        rows.push(row);
       });
+      return rows;
     }
 
     function _liveOneLine(s, max) {
@@ -3313,19 +3409,207 @@ function injectIframeParamForwarding() {
       }
     });
 
-    // Stream extension: message was accumulated for mid-flight injection
-    socket.on("messageQueued", ({ message, status }) => {
-      console.log("[stream] queued:", message?.slice(0, 60), status);
-      // Show a subtle indicator that the message was received
-      const indicator = document.createElement("div");
-      indicator.className = "chat-message system";
-      indicator.style.cssText = "font-size:0.75rem;color:rgba(255,255,255,0.3);text-align:center;padding:4px;";
-      indicator.textContent = status || "will be incorporated";
-      const container = document.getElementById("chatMessages");
-      if (container) {
-        container.appendChild(indicator);
-        container.scrollTop = container.scrollHeight;
+    // ── Plan-first swarm events ─────────────────────────────────────
+    // A multi-branch build is proposed: render a full plan card with
+    // a per-branch list and three action buttons (Accept / Revise /
+    // Cancel). All three route back through the chat socket so the
+    // server-side interception in orchestrator.js picks them up the
+    // same way a typed "yes" / "..." / "cancel" would.
+    function _renderPlanCard(ev, isUpdate) {
+      // Remove any prior spent plan cards before rendering a new one.
+      // Clicking Revise on v1 previously left v1 dimmed-but-visible
+      // next to the incoming v2, confusing which plan was live.
+      try {
+        var staleRoots = document.querySelectorAll(".live-line-plan-card");
+        for (var i = 0; i < staleRoots.length; i++) {
+          if (staleRoots[i].querySelector(".plan-card-spent") && staleRoots[i].parentNode) {
+            staleRoots[i].parentNode.removeChild(staleRoots[i]);
+          }
+        }
+      } catch (e) { /* best effort; never block render */ }
+
+      var version = ev && ev.version != null ? "v" + ev.version : "";
+      var branches = (ev && Array.isArray(ev.branches)) ? ev.branches : [];
+      var count = branches.length;
+      var header = isUpdate ? "Updated plan" : "Proposed plan";
+      var trigger = isUpdate && ev && ev.trigger
+        ? '<div class="plan-trigger">\\u21aa ' + escapeHtml(_liveOneLine(ev.trigger, 120)) + '</div>'
+        : '';
+      var rows = branches.map(function(b) {
+        var name = escapeHtml(b.name || "?");
+        var path = b.path ? '<span class="plan-path">\\u00b7 path: ' + escapeHtml(b.path) + '</span>' : '';
+        var mode = b.mode ? '<span class="plan-mode">\\u00b7 ' + escapeHtml(b.mode) + '</span>' : '';
+        var files = (Array.isArray(b.files) && b.files.length)
+          ? '<span class="plan-files">\\u00b7 files: ' + escapeHtml(_liveOneLine(b.files.join(", "), 80)) + '</span>'
+          : '';
+        var spec = b.spec
+          ? '<div class="plan-spec">' + escapeHtml(_liveOneLine(b.spec, 180)) + '</div>'
+          : '';
+        return (
+          '<div class="plan-branch">' +
+            '<div class="plan-branch-head">' +
+              '<b>' + name + '</b> ' + path + ' ' + mode + ' ' + files +
+            '</div>' +
+            spec +
+          '</div>'
+        );
+      }).join("");
+
+      var buttons = (
+        '<div class="plan-actions">' +
+          '<button class="plan-btn plan-btn-accept">Accept</button>' +
+          '<button class="plan-btn plan-btn-revise">Revise</button>' +
+          '<button class="plan-btn plan-btn-cancel">Cancel</button>' +
+        '</div>'
+      );
+
+      var insertedRows = _liveAddLine("plan-card",
+        '<div class="plan-card">' +
+          '<div class="plan-card-head">' +
+            '<span class="live-swarm">\\u232b</span> <b>' + escapeHtml(header) + '</b>' +
+            (version ? ' <span class="live-dim">' + escapeHtml(version) + '</span>' : '') +
+            ' <span class="live-dim">' + count + ' branch' + (count === 1 ? '' : 'es') + '</span>' +
+          '</div>' +
+          trigger +
+          '<div class="plan-branches">' + rows + '</div>' +
+          buttons +
+          '<div class="plan-hint">Reply "yes" to run, or describe what to change. "cancel" to drop.</div>' +
+        '</div>'
+      );
+
+      // Bind buttons on every inserted row (desktop + mobile chat
+      // panels both render the card; need listeners on each). Both
+      // cards share a spent-state so clicking in one dims the other.
+      var sharedSpent = { settled: false, choice: null };
+      function _spendPlanCardRow(card, chosen) {
+        card.classList.add("plan-card-spent");
+        var all = card.querySelectorAll(".plan-btn");
+        for (var i = 0; i < all.length; i++) {
+          all[i].disabled = true;
+          var btnKey = all[i].classList.contains("plan-btn-accept") ? "accept"
+            : all[i].classList.contains("plan-btn-cancel") ? "cancel"
+            : "revise";
+          if (btnKey !== chosen) all[i].classList.add("plan-btn-unchosen");
+          else all[i].classList.add("plan-btn-chosen");
+        }
       }
+      function _spendAllCards(chosen) {
+        sharedSpent.settled = true;
+        sharedSpent.choice = chosen;
+        (insertedRows || []).forEach(function(c) { if (c) _spendPlanCardRow(c, chosen); });
+      }
+      (insertedRows || []).forEach(function(card) {
+        if (!card) return;
+        var accept = card.querySelector(".plan-btn-accept");
+        var cancel = card.querySelector(".plan-btn-cancel");
+        var revise = card.querySelector(".plan-btn-revise");
+        if (accept) accept.addEventListener("click", function() {
+          if (sharedSpent.settled) return;
+          _spendAllCards("accept");
+          if (typeof window !== "undefined" && window.TreeApp && typeof window.TreeApp.sendMessage === "function") {
+            window.TreeApp.sendMessage("yes");
+          }
+        });
+        if (cancel) cancel.addEventListener("click", function() {
+          if (sharedSpent.settled) return;
+          _spendAllCards("cancel");
+          if (typeof window !== "undefined" && window.TreeApp && typeof window.TreeApp.sendMessage === "function") {
+            window.TreeApp.sendMessage("cancel");
+          }
+        });
+        if (revise) revise.addEventListener("click", function() {
+          if (sharedSpent.settled) return;
+          _spendAllCards("revise");
+          var input = document.getElementById("chatInput") || document.getElementById("mobileSheetInput");
+          if (input) {
+            input.focus();
+            if (!input.value) input.placeholder = "describe what to change about the plan\\u2026";
+          }
+        });
+      });
+    }
+
+    socket.on("swarmPlanProposed", function(ev) { _renderPlanCard(ev, false); });
+    socket.on("swarmPlanUpdated",  function(ev) { _renderPlanCard(ev, true); });
+    socket.on("swarmPlanArchived", function(ev) {
+      var count = ev && ev.branchCount != null
+        ? ev.branchCount + " branch" + (ev.branchCount === 1 ? "" : "es")
+        : "plan";
+      var reason = ev && ev.reason ? " \\u00b7 " + escapeHtml(ev.reason) : "";
+      _liveAddLine("plan-archived",
+        '<span class="live-dim">\\ud83d\\udce6 archived </span><b>' + escapeHtml(count) + '</b>' +
+        '<span class="live-dim">' + reason + '</span>'
+      );
+    });
+
+    // ── Scout phase events — seam verification after builders finish ──
+    socket.on("swarmScoutsDispatched", function(ev) {
+      var cycle = ev && ev.cycle != null ? " (cycle " + ev.cycle + ")" : "";
+      var n = ev && ev.branchCount != null
+        ? ev.branchCount + " branch" + (ev.branchCount === 1 ? "" : "es")
+        : "project";
+      _liveAddLine("scout-dispatch",
+        '<span class="live-scout">\\ud83d\\udd0d</span> dispatching scouts<span class="live-dim">' +
+        escapeHtml(cycle) + ' over ' + escapeHtml(n) + '\\u2026</span>'
+      );
+    });
+    socket.on("swarmScoutReport", function(ev) {
+      var branch = (ev && ev.branch) ? String(ev.branch) : "?";
+      var detail = _liveOneLine((ev && ev.detail) || "(no detail)", 180);
+      var counter = (ev && ev.counterpartBranch)
+        ? ' <span class="live-dim">\\u2194 ' + escapeHtml(ev.counterpartBranch) + '</span>'
+        : '';
+      _liveAddLine("scout-report",
+        '<span class="live-scout-warn">\\u26a0</span> <b>' + escapeHtml(branch) + '</b>' + counter +
+        '<span class="live-dim">: ' + escapeHtml(detail) + '</span>'
+      );
+    });
+    socket.on("swarmIssuesRouted", function(ev) {
+      var total = (ev && ev.total) || 0;
+      var cycle = ev && ev.cycle != null ? "cycle " + ev.cycle + " \\u00b7 " : "";
+      if (total === 0) {
+        _liveAddLine("scout-clean",
+          '<span class="live-ok">\\u2713</span> <span class="live-dim">' + escapeHtml(cycle) + 'no mismatches found</span>'
+        );
+      } else {
+        var affected = (ev && Array.isArray(ev.affectedBranches)) ? ev.affectedBranches : [];
+        var suffix = affected.length
+          ? ' \\u2192 ' + affected.slice(0, 6).join(", ") +
+            (affected.length > 6 ? " +" + (affected.length - 6) : "")
+          : "";
+        _liveAddLine("scout-route",
+          '<span class="live-scout-route">\\ud83d\\udcec</span> routing <b>' + total + ' issue' +
+          (total === 1 ? "" : "s") + '</b><span class="live-dim">' + escapeHtml(suffix) + '</span>'
+        );
+      }
+    });
+    socket.on("swarmRedeploying", function(ev) {
+      var cycle = ev && ev.cycle != null ? " (cycle " + (ev.cycle + 1) + ")" : "";
+      var names = (ev && Array.isArray(ev.branches)) ? ev.branches.join(", ") : "";
+      _liveAddLine("scout-redeploy",
+        '<span class="live-scout-redeploy">\\ud83d\\udd27</span> redeploying<span class="live-dim">' +
+        escapeHtml(cycle) + ': </span><b>' + escapeHtml(names) + '</b>'
+      );
+    });
+    socket.on("swarmReconciled", function(ev) {
+      var cycles = (ev && ev.cycles != null) ? ev.cycles + " cycle" + (ev.cycles === 1 ? "" : "s") : "";
+      var status = (ev && ev.status) || "done";
+      var total = (ev && ev.totalIssues != null) ? ", " + ev.totalIssues + " issue" + (ev.totalIssues === 1 ? "" : "s") : "";
+      var cls = status === "clean" ? "live-ok"
+        : status === "stuck" ? "live-scout-warn"
+        : status === "capped" ? "live-scout-warn"
+        : "live-dim";
+      _liveAddLine("scout-reconciled",
+        '<span class="' + cls + '">\\u2713</span> swarm reconciled<span class="live-dim"> (' +
+        escapeHtml(status) + (cycles ? ' \\u00b7 ' + escapeHtml(cycles) : '') + escapeHtml(total) + ')</span>'
+      );
+    });
+
+    // Stream extension: message was accumulated for mid-flight injection.
+    // The user bubble already carries a "merged" chip (see addMessage), so
+    // we no longer render a separate system row — just log the server ACK.
+    socket.on("messageQueued", ({ message, status }) => {
+      console.log("[stream] queued:", message?.slice(0, 60), status || "merged");
     });
 socket.on("executionStatus", function(ev) {
   if (!ev || (!ev.text && (ev.phase === "intent" || ev.phase === "done"))) return;

@@ -158,16 +158,30 @@ export async function init(core) {
     const isInBook = ["project", "chapter", "scene", "part"].includes(bwData.role);
     if (isInBook) {
       try {
-        const sw = await swarm();
-        // Walk to the project root to read the authoritative subPlan.
+        // Walk to the project root and read the authoritative plan.
+        // Branch kind steps are the chapter list. Map step shape back
+        // to the legacy "branch entry" shape renderTOC expects so we
+        // don't have to rewrite the TOC renderer.
         const project = bwData.role === "project"
           ? { _id: nodeId }
           : await findProjectForNode(nodeId);
-        if (project && sw?.readSubPlan) {
-          const subPlan = await sw.readSubPlan(project._id);
-          if (subPlan?.branches?.length > 0) {
-            context.bookTOC = renderTOC(subPlan.branches, String(nodeId));
-            context.bookTOCEntries = subPlan.branches;
+        const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
+        if (project && planExt?.readPlan) {
+          const planObj = await planExt.readPlan(project._id);
+          const chapters = (planObj?.steps || [])
+            .filter((s) => s.kind === "branch" || s.kind === "chapter")
+            .map((s) => ({
+              name: s.title,
+              nodeId: s.childNodeId || null,
+              status: s.status,
+              spec: s.spec,
+              path: s.path || null,
+              files: s.files || [],
+              summary: s.summary || null,
+            }));
+          if (chapters.length > 0) {
+            context.bookTOC = renderTOC(chapters, String(nodeId));
+            context.bookTOCEntries = chapters;
           }
         }
       } catch (err) {
@@ -378,9 +392,10 @@ export async function init(core) {
       // chapters, repetition loops, under-target drafts, pronoun drift).
       try {
         const sw = (await import("../loader.js")).getExtension("swarm")?.exports;
+        const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
         const contracts = sw?.readContracts ? await sw.readContracts(project._id) : [];
-        const subPlan = sw?.readSubPlan ? await sw.readSubPlan(project._id) : null;
-        const scout = await scanChapters({ projectNodeId: project._id, contracts, subPlan });
+        const planObj = planExt?.readPlan ? await planExt.readPlan(project._id) : null;
+        const scout = await scanChapters({ projectNodeId: project._id, contracts, plan: planObj });
         if (scout.skipped) {
           log.debug("BookWorkspace", `chapter scout skipped: ${scout.reason}`);
         } else if (!scout.ok) {
@@ -467,7 +482,7 @@ export async function init(core) {
         "book-workspace",
         ({ rootId }) =>
           `<a href="/api/v1/${rootId}/bookstudio" class="back-link">Book Studio</a>`,
-        { priority: 26 },
+        { priority: 26, requiresScaffolding: true },
       );
     } catch (err) {
       log.debug("BookWorkspace", `afterBoot wiring skipped: ${err.message}`);

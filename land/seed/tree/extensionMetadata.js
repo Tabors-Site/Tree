@@ -152,6 +152,19 @@ export function getExtMeta(node, extName) {
   return data || {};
 }
 
+/**
+ * Like getExtMeta but returns `null` when the namespace is unset
+ * instead of an empty object. Use when callers distinguish "never
+ * written" from "empty state" (e.g. `if (readNs(node, "swarm"))`
+ * style guards). Extensions used to reinvent this function locally
+ * in every state module; prefer this shared one.
+ */
+export function readNs(node, extName) {
+  if (!node || !node.metadata) return null;
+  if (node.metadata instanceof Map) return node.metadata.get(extName) || null;
+  return node.metadata?.[extName] || null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // WRITE
 // ─────────────────────────────────────────────────────────────────────────

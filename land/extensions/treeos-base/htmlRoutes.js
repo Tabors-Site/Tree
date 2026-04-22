@@ -15,7 +15,7 @@ import { getUserMeta } from "../../seed/tree/userMetadata.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getTreeStructure } from "../../seed/tree/treeData.js";
 import { getContributions } from "../../seed/tree/contributions.js";
-import { buildPathString } from "../../seed/tree/treeFetch.js";
+import { buildPathString, resolveRootNode } from "../../seed/tree/treeFetch.js";
 import { getNodeChats, getChatChain } from "../../seed/llm/chatHistory.js";
 import { getConnectionsForUser, getAllRootLlmSlots } from "../../seed/llm/connections.js";
 import getNodeName from "../../routes/api/helpers/getNameById.js";
@@ -474,10 +474,26 @@ export function buildTreeosHtmlRoutes() {
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
       const qs = buildQS(req);
-      const rootId = node.rootOwner || nodeId;
-      const backUrl = node.rootOwner
-        ? `/api/v1/root/${rootId}${qs}`
-        : `/api/v1/node/${nodeId}${qs}`;
+      // node.rootOwner is a USER ID, never a node ID — don't use it as one.
+      // If the URL already carries ?rootId=, trust that. Otherwise resolve the
+      // tree root by walking parents. A node with rootOwner set is itself a
+      // root, so its own _id is the rootId in that case.
+      let rootId = typeof req.query.rootId === "string" && req.query.rootId
+        ? req.query.rootId
+        : null;
+      if (!rootId) {
+        if (node.rootOwner) {
+          rootId = nodeId;
+        } else {
+          try {
+            const root = await resolveRootNode(nodeId);
+            rootId = root?._id ? String(root._id) : nodeId;
+          } catch {
+            rootId = nodeId;
+          }
+        }
+      }
+      const backUrl = `/api/v1/root/${rootId}${qs}`;
 
       return res.send(renderNodeMetadata({ node, nodeId, qs, backUrl }));
     } catch (err) {
@@ -526,7 +542,15 @@ export function buildTreeosHtmlRoutes() {
       const node = await Node.findById(nodeId).select("name metadata parent rootOwner systemRole").lean();
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
-      const rootId = node.rootOwner || nodeId;
+      // rootOwner is a USER id; find the real tree-root node id. If the node
+      // has rootOwner set it IS a root. Otherwise walk parents.
+      let rootId = nodeId;
+      if (!node.rootOwner) {
+        try {
+          const root = await resolveRootNode(nodeId);
+          if (root?._id) rootId = String(root._id);
+        } catch {}
+      }
       const rootNode = rootId !== nodeId ? await Node.findById(rootId).select("name").lean() : node;
 
       let path = node.name;
@@ -822,11 +846,36 @@ export function buildTreeosHtmlRoutes() {
       const { getAllRootLlmSlots } = await import("../../seed/llm/connections.js");
       const allRootSlots = getAllRootLlmSlots();
 
+      // Scaffolding awareness: which extensions actually own a respond mode
+      // somewhere in this tree? Passed to slot resolution so domain quick-
+      // links (Book Studio, Fitness Dashboard, ...) only render on trees
+      // they're actually used on, not every tree that has the ext installed.
+      let scaffoldedExtensions = new Set();
+      let blockedExtensions = new Set();
+      let allowedExtensions = new Set();
+      try {
+        const orchestrator = getExtension("tree-orchestrator");
+        const index = orchestrator?.exports?.getIndexForRoot?.(nodeId);
+        if (index) for (const owner of index.keys()) scaffoldedExtensions.add(owner);
+      } catch {}
+      try {
+        const { getBlockedExtensionsAtNode } = await import("../../seed/tree/extensionScope.js");
+        const scope = await getBlockedExtensionsAtNode(nodeId);
+        blockedExtensions = scope?.blocked || new Set();
+        allowedExtensions = scope?.allowed || new Set();
+        // An explicitly-allowed confined extension counts as scaffolded even
+        // before it has owned a respond mode on this tree. Without this,
+        // `ext-allow code-workspace` at a fresh root wouldn't surface the
+        // Run section until a project is initialized. Allowed IS the signal.
+        for (const name of allowedExtensions) scaffoldedExtensions.add(name);
+      } catch {}
+
       return res.send(renderRootOverview({
         allData, rootMeta, ancestors: allData.ancestors || [],
         isOwner, isDeleted, isRoot, isPublicAccess, queryAvailable,
         currentUserId, queryString, nodeId, userId: req.userId,
         token, deferredItems, ownerConnections, allRootSlots,
+        scaffoldedExtensions, blockedExtensions, allowedExtensions,
       }));
     } catch (err) {
       log.error("HTML", "Root overview render error:", err.message);
@@ -1417,20 +1466,69 @@ export function buildTreeosHtmlRoutes() {
       const node = await Node.findById(nodeId);
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
-      const { clearScopeCache } = await import("../../seed/tree/extensionScope.js");
+      const { notifyScopeChange, isExtensionConfined } = await import("../../seed/tree/extensionScope.js");
       const extConfig = getExtMeta(node, "extensions") || {};
+      extConfig.blocked = Array.isArray(extConfig.blocked) ? [...extConfig.blocked] : [];
+      extConfig.allowed = Array.isArray(extConfig.allowed) ? [...extConfig.allowed] : [];
+      extConfig.restricted = extConfig.restricted && typeof extConfig.restricted === "object"
+        ? { ...extConfig.restricted }
+        : {};
 
+      // "block": add to blocked list (global extensions).
       if (req.body.block) {
         const name = req.body.block;
-        extConfig.blocked = [...new Set([...(extConfig.blocked || []), name])];
+        if (!extConfig.blocked.includes(name)) extConfig.blocked.push(name);
+        // If it was in allowed[] for a confined ext, blocking should also remove that.
+        extConfig.allowed = extConfig.allowed.filter(e => e !== name);
+        delete extConfig.restricted[name];
       }
+      // "allow": remove from blocked list. For confined extensions, ALSO add to
+      // allowed[] so the extension actually activates at this node — otherwise
+      // confined extensions stay dark and the user has to click twice.
       if (req.body.allow) {
         const name = req.body.allow;
-        extConfig.blocked = (extConfig.blocked || []).filter(e => e !== name);
+        extConfig.blocked = extConfig.blocked.filter(e => e !== name);
+        if (isExtensionConfined(name) && !extConfig.allowed.includes(name)) {
+          extConfig.allowed.push(name);
+        }
+      }
+      // "setAllowed": activate a confined extension at this node.
+      if (req.body.setAllowed) {
+        const name = req.body.setAllowed;
+        if (!extConfig.allowed.includes(name)) extConfig.allowed.push(name);
+        extConfig.blocked = extConfig.blocked.filter(e => e !== name);
+      }
+      // "unsetAllowed": revoke a confined extension's activation at this node.
+      if (req.body.unsetAllowed) {
+        const name = req.body.unsetAllowed;
+        extConfig.allowed = extConfig.allowed.filter(e => e !== name);
+      }
+      // "restrict": mark an extension read-only at this node. Destructive /
+      // write tools drop out; read tools stay. Unblocks if previously blocked.
+      if (req.body.restrict) {
+        const name = req.body.restrict;
+        const access = typeof req.body.access === "string" ? req.body.access : "read";
+        extConfig.restricted[name] = access;
+        extConfig.blocked = extConfig.blocked.filter(e => e !== name);
+      }
+      // "unrestrict": lift a read-only restriction.
+      if (req.body.unrestrict) {
+        const name = req.body.unrestrict;
+        delete extConfig.restricted[name];
       }
 
+      if (extConfig.blocked.length === 0) delete extConfig.blocked;
+      if (extConfig.allowed.length === 0) delete extConfig.allowed;
+      if (Object.keys(extConfig.restricted).length === 0) delete extConfig.restricted;
       await setExtMeta(node, "extensions", Object.keys(extConfig).length > 0 ? extConfig : undefined);
-      clearScopeCache();
+
+      notifyScopeChange({
+        nodeId,
+        blocked: extConfig.blocked || [],
+        restricted: extConfig.restricted || {},
+        allowed: extConfig.allowed || [],
+        userId: req.user?._id ? String(req.user._id) : undefined,
+      });
 
       const qs = req.query.token ? `?token=${req.query.token}&html` : "?html";
       return res.redirect(`/api/v1/node/${nodeId}/command-center${qs}`);

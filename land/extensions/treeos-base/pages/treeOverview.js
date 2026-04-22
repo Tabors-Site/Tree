@@ -23,6 +23,8 @@ export function renderRootOverview({
   deferredItems,
   ownerConnections,
   allRootSlots = [],
+  scaffoldedExtensions = new Set(),
+  blockedExtensions = new Set(),
 }) {
   const deferredHtml = deferredItems && deferredItems.length > 0
     ? `<ul class="deferred-list">${deferredItems.map((d) => `<li class="deferred-item"><div class="deferred-content">${escapeHtml(d.content || d.text || JSON.stringify(d.data || ""))}</div><div class="deferred-meta" style="font-size:11px;opacity:0.6;margin-top:4px;">${d.status || "pending"}${d.createdAt ? " . " + new Date(d.createdAt).toLocaleDateString() : ""}</div></li>`).join("")}</ul>`
@@ -339,6 +341,20 @@ ${ownerConnections.length === 0
   const css = `
     .current {
     color: rgb(51, 66, 85);}
+
+    /* Red variant for the Back-to-Profile link — leaving a tree inside the
+       app shell drops the active chat session. Style signals "exit", not
+       "just another link". */
+    .back-link.back-link-danger {
+      background: rgba(239, 68, 68, 0.12);
+      color: #fca5a5;
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+    .back-link.back-link-danger:hover {
+      background: rgba(239, 68, 68, 0.22);
+      color: #fee2e2;
+      border-color: rgba(239, 68, 68, 0.7);
+    }
 
     /* Glass Content Cards */
     .content-card {
@@ -1192,8 +1208,12 @@ transition:
         ? `
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/v1/user/${currentUserId}${queryString}" class="back-link">
+      <a href="/api/v1/user/${currentUserId}${queryString}" class="back-link back-link-danger"
+         data-warn-inapp="${/(\?|&)inApp=1/.test(queryString) ? "1" : ""}">
         <- Back to Profile
+      </a>
+      <a href="/api/v1/node/${allData._id}/command-center${queryString}" class="back-link">
+        Command Center
       </a>
       <a href="/api/v1/root/${allData._id}/llm${queryString}" class="back-link">
         LLM
@@ -1201,7 +1221,14 @@ transition:
       <a href="/api/v1/node/${allData._id}/metadata${queryString}" class="back-link">
         Metadata
       </a>
-      ${resolveSlots("tree-quick-links", { rootId: allData._id, nodeId: allData._id, userId: currentUserId, queryString })}
+      ${resolveSlots("tree-quick-links", {
+        rootId: allData._id,
+        nodeId: allData._id,
+        userId: currentUserId,
+        queryString,
+        _scaffoldedExtensions: scaffoldedExtensions,
+        _blockedExtensions: blockedExtensions,
+      })}
     </div>
     `
         : ""
@@ -1235,7 +1262,7 @@ transition:
     </div>
     ` : ""}
 
-    ${!isPublicAccess ? resolveSlots("tree-holdings", { rootId: nodeId, nodeId, queryString, token, userId, deferredItems, deferredHtml }) : ""}
+    ${!isPublicAccess ? resolveSlots("tree-holdings", { rootId: nodeId, nodeId, queryString, token, userId, deferredItems, deferredHtml, rootMeta, _scaffoldedExtensions: scaffoldedExtensions, _blockedExtensions: blockedExtensions }) : ""}
 
     <!-- Tree Settings Section -->
 ${
@@ -1268,7 +1295,7 @@ ${
   </div>
 </div>
 
-  ${resolveSlots("tree-dream", { rootId: nodeId, nodeId, queryString, token, userId, rootMeta })}
+  ${resolveSlots("tree-dream", { rootId: nodeId, nodeId, queryString, token, userId, rootMeta, _scaffoldedExtensions: scaffoldedExtensions, _blockedExtensions: blockedExtensions })}
   ` : ""}
 
   ${resolveSlots("tree-team", { rootId: nodeId, nodeId, queryString, token, userId, isOwner, rootMeta, ownerHtml, contributorsHtml, inviteFormHtml })}
@@ -1276,7 +1303,7 @@ ${
   ${resolveSlots("tree-transaction-policy", { rootId: nodeId, nodeId, queryString, token, userId, isOwner, policyHtml })}
 
 
-  ${isOwner ? resolveSlots("tree-owner-sections", { rootId: nodeId, nodeId, queryString, token, userId }) : ""}
+  ${isOwner ? resolveSlots("tree-owner-sections", { rootId: nodeId, nodeId, queryString, token, userId, _scaffoldedExtensions: scaffoldedExtensions, _blockedExtensions: blockedExtensions }) : ""}
 
   ${
     !isOwner && userId
@@ -1331,6 +1358,26 @@ ${
 `;
 
   const js = `
+// Warn before leaving the tree ONLY when the parent app shell's chat panel
+// is busy. The shell's send button carries the "stop-mode" class for the
+// entire lifetime of an in-flight chat (from send through streaming until
+// the final chunk). That's more reliable than .typing-indicator, which
+// disappears as soon as the first stream chunk replaces it.
+document.querySelectorAll('.back-link-danger[data-warn-inapp="1"]').forEach(function(a){
+  a.addEventListener('click', function(e){
+    var chatActive = false;
+    try {
+      if (window.parent && window.parent !== window) {
+        var pdoc = window.parent.document;
+        chatActive = !!pdoc.querySelector('.send-btn.stop-mode, .typing-indicator');
+      }
+    } catch (_) { /* cross-origin or parent unavailable — don't block */ }
+    if (chatActive && !confirm('An AI chat is still streaming. Leaving this tree will cancel it. Continue?')) {
+      e.preventDefault();
+    }
+  });
+});
+
 // VISIBILITY
 async function saveVisibility() {
   var select = document.getElementById("visibilitySelect");

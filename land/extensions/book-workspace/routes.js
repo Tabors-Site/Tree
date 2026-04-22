@@ -173,27 +173,32 @@ async function collectSubtreeBranches(startNodeId) {
       });
       seenNames.add(node.name);
     }
-    // Also surface PLANNED sub-branches from this node's subPlan that
-    // haven't been dispatched yet. Mid-run, a part's architect turn
-    // emits nested [[BRANCHES]] pre-seeding subPlan with pending
-    // entries — those don't have tree nodes yet but represent planned
-    // chapters. Showing them lets the studio render the full TOC as
-    // soon as decomposition completes, not only after each chapter
-    // dispatches. Skip entries that already appeared as real tree
-    // nodes above (deduplicate by name).
-    const subPlanEntries = swMeta?.subPlan?.branches;
-    if (Array.isArray(subPlanEntries) && subPlanEntries.length > 0) {
-      for (const entry of subPlanEntries) {
-        if (entry.nodeId) continue; // will appear (or already did) via tree walk
-        if (seenNames.has(entry.name)) continue;
-        seenNames.add(entry.name);
+    // Also surface PLANNED branch / chapter steps from this node's
+    // plan that haven't been dispatched yet. Mid-run, a part's
+    // architect turn emits nested [[BRANCHES]] pre-seeding
+    // metadata.plan.steps with pending entries; those don't have tree
+    // nodes yet but represent planned chapters. Showing them lets the
+    // studio render the full TOC as soon as decomposition completes,
+    // not only after each chapter dispatches. Skip steps that already
+    // appeared as real tree nodes above (deduplicate by name).
+    const planMeta = node.metadata instanceof Map
+      ? node.metadata.get("plan")
+      : node.metadata?.["plan"];
+    const planBranches = (planMeta?.steps || []).filter(
+      (s) => s.kind === "branch" || s.kind === "chapter",
+    );
+    if (planBranches.length > 0) {
+      for (const step of planBranches) {
+        if (step.childNodeId) continue; // will appear (or already did) via tree walk
+        if (seenNames.has(step.title)) continue;
+        seenNames.add(step.title);
         out.push({
           nodeId: null,
-          name: entry.name,
-          role: entry.mode === "tree:book-plan" ? "part" : "chapter",
-          status: entry.status || "pending",
-          spec: entry.spec || null,
-          path: entry.path || null,
+          name: step.title,
+          role: step.mode === "tree:book-plan" ? "part" : "chapter",
+          status: step.status || "pending",
+          spec: step.spec || null,
+          path: step.path || null,
           summary: null,
           notes: [],
         });
@@ -664,12 +669,13 @@ router.post("/:nodeId/bookstudio/scout", authenticate, async (req, res) => {
     const ctx = await resolveStudioContext(nodeId);
     const projectId = ctx?.project?._id ? String(ctx.project._id) : nodeId;
     const swx = sw();
+    const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
     const contracts = swx?.readContracts ? (await swx.readContracts(projectId) || []) : [];
-    const subPlan = swx?.readSubPlan ? await swx.readSubPlan(projectId) : null;
+    const planObj = planExt?.readPlan ? await planExt.readPlan(projectId) : null;
 
     const { scanChapters } = await import("./validators/chapterScout.js");
     broadcast(nodeId, "update", `scout starting…`);
-    const scout = await scanChapters({ projectNodeId: projectId, contracts, subPlan });
+    const scout = await scanChapters({ projectNodeId: projectId, contracts, plan: planObj });
 
     if (scout.skipped) {
       broadcast(nodeId, "update", `scout skipped: ${scout.reason}`);

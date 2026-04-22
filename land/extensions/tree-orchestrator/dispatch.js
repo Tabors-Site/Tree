@@ -24,6 +24,17 @@ import {
 } from "./state.js";
 import { runSteppedMode } from "./steppedMode.js";
 
+// Swarm-plan stash. Used to pause dispatch of a multi-branch build
+// so the user can review / revise / accept the plan before the swarm
+// runs. See land/extensions/swarm/state/pendingSwarmPlan.js.
+async function pendingSwarmPlanApi() {
+  return import("../swarm/state/pendingSwarmPlan.js");
+}
+async function swarmWsEvents() {
+  const mod = await import("../swarm/wsEvents.js");
+  return mod.SWARM_WS_EVENTS;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // EMIT HELPERS
 // ─────────────────────────────────────────────────────────────────────────
@@ -88,6 +99,38 @@ export function emitModeResult(socket, modeKey, result) {
         : JSON.stringify(sanitized, null, 2),
     timestamp: Date.now(),
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// BRANCH POSITION PINNING
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Pin the visitor's current node to a branch and keep it pinned through
+ * switchMode. switchMode runs enrichContext synchronously and can take a
+ * while; anything that stashes the previous root during that window would
+ * otherwise win the race. We set the node, run switchMode, then re-assert.
+ *
+ * This is load-bearing for branch dispatch: without the re-assert, the AI
+ * inside a branch session sometimes writes files at the project root
+ * instead of the branch. Anyone kicking off a branch session must go
+ * through this helper.
+ */
+export async function pinBranchPosition(visitorId, branchNodeId, branchMode, {
+  username, userId, rootId,
+}) {
+  const branchIdStr = String(branchNodeId);
+  setCurrentNodeId(visitorId, branchIdStr);
+  await switchMode(visitorId, branchMode, {
+    username, userId, rootId,
+    currentNodeId: branchIdStr,
+    clearHistory: true,
+  });
+  setCurrentNodeId(visitorId, branchIdStr);
+  log.info("Tree Orchestrator",
+    `📌 Branch dispatch position pinned: visitor=${visitorId.slice(0, 32)} branch=${branchIdStr.slice(0, 8)} mode=${branchMode}`,
+  );
+  return branchIdStr;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -289,26 +332,133 @@ export async function runModeAndReturn(visitorId, mode, message, {
       try {
         const searchNodeId = currentNodeId || targetNodeId || rootId;
         // Find the swarm project anchored at or above this position. If
-        // none exists, swarm.ensureProject promotes rootId into one and
-        // fires swarm:afterProjectInit so code-workspace (or any other
-        // domain workspace) can finish its side of the init.
+        // none exists, promote the AI's CURRENT POSITION (not the tree
+        // root) so the project lives where the user actually started
+        // it. The tree root is the user's parent-of-everything anchor;
+        // promoting it would put every branch under the wrong node and
+        // pollute the user's whole tree with code-workspace metadata.
+        // Falls back to rootId only when there is no current position
+        // context (e.g. headless API calls).
         let projectNode = searchNodeId ? await sw.findProjectForNode(searchNodeId) : null;
-        if (!projectNode && rootId) {
-          log.info("Tree Orchestrator", `Swarm: no project at position, promoting tree root ${rootId}`);
-          projectNode = await sw.ensureProject({
-            rootId,
-            systemSpec: message,
-            owner: { userId, username },
-          });
+        if (!projectNode) {
+          const promoteId = currentNodeId || targetNodeId || rootId;
+          if (promoteId) {
+            log.info("Tree Orchestrator",
+              `Swarm: no project at position, promoting ${promoteId === rootId ? "tree root" : "current node"} ${promoteId}`);
+            projectNode = await sw.ensureProject({
+              rootId: promoteId,
+              systemSpec: message,
+              owner: { userId, username },
+            });
+          }
         }
 
         if (!projectNode) {
           log.warn("Tree Orchestrator", "Swarm: no project root found at current position; branches will not run.");
         } else {
-          // Persist the architect's declared contracts on the project
-          // root before dispatch. Each branch's enrichContext injects
-          // them via readContracts so contracts flow to every branch
-          // from turn 1 without a separate distribution step.
+          // NOTE: contracts are written AFTER validation + auto-retry
+          // passes (see below). Writing them up front was causing
+          // dead contracts to persist when validation rejected the
+          // plan — a later "continue plan" turn would then find them
+          // in enrichContext and have a builder mode generate code
+          // against contracts whose branches never existed. Defer
+          // until we know the plan is definitely going to be stashed
+          // for approval.
+
+          // Validate the architect's branch paths. If any branch is
+          // broken, try ONE automatic retry with the errors injected
+          // as feedback before giving up and showing the user the
+          // rejection. Local models routinely flub name↔path on
+          // first pass (adding -system / core- suffixes to names)
+          // and self-correct cleanly when told exactly what to fix.
+          let validation = sw.validateBranches(branchParse.branches, projectNode?.name);
+          if (validation.errors.length > 0) {
+            log.warn("Tree Orchestrator",
+              `🚫 Swarm: plan rejected with ${validation.errors.length} error(s). Auto-retrying architect once.\n  - ${validation.errors.join("\n  - ")}`,
+            );
+
+            const retryPrompt =
+              `The [[BRANCHES]] block you emitted was REJECTED by validation:\n\n` +
+              validation.errors.map((e) => `  • ${e}`).join("\n") + "\n\n" +
+              `Re-emit a CORRECTED [[BRANCHES]] block that fixes every error above. ` +
+              `Hard rule: each branch's \`path\` MUST equal its \`name\` letter-for-letter, ` +
+              `except for the one integration branch at \`path: "."\` (the shell that owns ` +
+              `the root entry file). Do NOT add suffixes like -system / -logic / core- to ` +
+              `branch names — descriptive labels belong in \`spec:\`, not \`name:\`. ` +
+              `Close with [[DONE]].`;
+
+            try {
+              const { runChat } = await import("../../seed/llm/conversation.js");
+              const retryVisitor = `branch-retry:${String(projectNode._id).slice(0, 8)}:${userId || "anon"}`;
+              const retryResult = await runChat({
+                userId, username,
+                message: retryPrompt,
+                mode,
+                rootId,
+                nodeId: String(projectNode._id),
+                visitorId: retryVisitor,
+                ephemeral: true,
+                llmPriority: "INTERACTIVE",
+                signal,
+              });
+              const retryAnswer = (retryResult?.answer || retryResult?.content || "").toString();
+              const retryParse = sw.parseBranches(retryAnswer);
+              if (retryParse.branches.length > 0) {
+                const retryValidation = sw.validateBranches(retryParse.branches, projectNode?.name);
+                if (retryValidation.errors.length === 0) {
+                  // Retry succeeded — swap in the corrected branches
+                  // and fall through to the normal stash+emit path.
+                  // Also update `answer` / `result` so the text we
+                  // append below uses the corrected plan summary.
+                  log.info("Tree Orchestrator",
+                    `🔁 Architect auto-retry produced valid plan: ${retryParse.branches.map((b) => b.name).join(", ")}`,
+                  );
+                  branchParse.branches = retryParse.branches;
+                  branchParse.cleaned = retryParse.cleaned;
+                  answer = retryParse.cleaned || answer;
+                  if (result) {
+                    result.content = answer;
+                    result.answer = answer;
+                  }
+                  validation = retryValidation; // now clean
+                } else {
+                  log.warn("Tree Orchestrator",
+                    `Auto-retry still invalid: ${retryValidation.errors.join("; ")}`,
+                  );
+                  validation = retryValidation;
+                }
+              } else {
+                log.warn("Tree Orchestrator",
+                  `Auto-retry returned no [[BRANCHES]] block.`,
+                );
+              }
+            } catch (retryErr) {
+              log.warn("Tree Orchestrator", `Auto-retry failed: ${retryErr.message}`);
+            }
+
+            // If retry didn't fix it, surface the reject to the user.
+            if (validation.errors.length > 0) {
+              const errorBlock = [
+                "",
+                "⚠️ BRANCH PLAN REJECTED — the [[BRANCHES]] block violated the seam rules:",
+                ...validation.errors.map((e) => `  • ${e}`),
+                "",
+                "Re-emit the [[BRANCHES]] block with valid paths and [[DONE]] your turn again.",
+              ].join("\n");
+              answer = (answer || "") + "\n" + errorBlock;
+              if (result) {
+                result.content = answer;
+                result.answer = answer;
+              }
+              return { success: true, answer, modeKey: mode, modesUsed, rootId, targetNodeId: targetNodeId || currentNodeId };
+            }
+          }
+
+          // ── Plan-first dispatch: pause here ──
+          // Validation passed (possibly after auto-retry). Now — and
+          // only now — persist contracts and stash the plan for
+          // approval. Writing contracts BEFORE validation caused
+          // dead contracts to linger when plans got rejected.
           if (parsedContracts && parsedContracts.length > 0) {
             try {
               await sw.setContracts({
@@ -323,111 +473,99 @@ export async function runModeAndReturn(visitorId, mode, message, {
             }
           }
 
-          // Validate the architect's branch paths. If any branch is
-          // broken, reject the whole block, skip dispatch, and append
-          // an error so the next turn forces the architect to re-emit
-          // a corrected [[BRANCHES]] block.
-          const validation = sw.validateBranches(branchParse.branches, projectNode?.name);
-          if (validation.errors.length > 0) {
-            log.warn("Tree Orchestrator",
-              `🚫 Swarm: rejecting branch plan with ${validation.errors.length} validation error(s):\n  - ${validation.errors.join("\n  - ")}`,
-            );
-            const errorBlock = [
-              "",
-              "⚠️ BRANCH PLAN REJECTED — the [[BRANCHES]] block violated the seam rules:",
-              ...validation.errors.map((e) => `  • ${e}`),
-              "",
-              "Re-emit the [[BRANCHES]] block with valid paths and [[DONE]] your turn again.",
-            ].join("\n");
-            answer = (answer || "") + "\n" + errorBlock;
-            if (result) {
-              result.content = answer;
-              result.answer = answer;
-            }
-            return { success: true, answer, modeKey: mode, modesUsed, rootId, targetNodeId: targetNodeId || currentNodeId };
-          }
-
-          const _swarmActive = getActiveRequest(visitorId) || {};
-          // Prefer the architect's own last chain-step chatId so the
-          // branch dispatch markers and their worker turns nest
-          // directly under the step that emitted [[BRANCHES]]. Falls
-          // back to rootChatId if steppedMode didn't expose it.
+          // Instead of calling runBranchSwarm directly, stash the
+          // parsed plan and emit a proposal event. The user reviews
+          // the plan on their next turn; the orchestrator-level
+          // interception (see orchestrator.js handlePendingSwarmPlan)
+          // then either accepts → dispatches via dispatchSwarmPlan(),
+          // revises → re-calls the architect, or pivots → archives.
+          //
+          // Version handling: if a prior stash exists for this
+          // visitor, this re-emit is a REVISION — bump its version.
+          // Otherwise it's a fresh proposal → v1. The orchestrator's
+          // revision branch pre-bumps version on the old stash before
+          // asking the architect to re-emit; reading that value here
+          // preserves the count across the round-trip.
           const architectChatId = result?._lastChatId || rootChatId || null;
-          const swarmResult = await sw.runBranchSwarm({
+          const { getPendingSwarmPlan, setPendingSwarmPlan } = await pendingSwarmPlanApi();
+          const SWARM_WS = await swarmWsEvents();
+          const existingStash = getPendingSwarmPlan(visitorId);
+          // A prior stash carries `revisionTrigger` when the user asked
+          // for a revision (set by orchestrator.js's revision branch).
+          // In that case the orchestrator pre-bumped the version, so
+          // keep that bumped value; otherwise this is a fresh proposal.
+          const isRevisionRoundTrip = !!(existingStash && existingStash.revisionTrigger);
+          const planVersion = isRevisionRoundTrip
+            ? (existingStash.version || 1)
+            : ((existingStash?.version || 0) + 1);
+          setPendingSwarmPlan(visitorId, {
             branches: branchParse.branches,
-            rootProjectNode: projectNode,
-            rootChatId,
-            architectChatId,
-            sessionId,
-            visitorId,
-            userId,
-            username,
-            rootId,
-            signal,
-            slot,
-            socket,
-            onToolLoopCheckpoint,
+            contracts: parsedContracts || [],
+            projectNodeId: String(projectNode._id),
+            projectName: projectNode.name || null,
             userRequest: message,
-            rt: _swarmActive.rt,
-            core: { metadata: { setExtMeta: async (node, ns, data) => {
-              const NodeModel = (await import("../../seed/models/node.js")).default;
-              await NodeModel.updateOne({ _id: node._id }, { $set: { [`metadata.${ns}`]: data } });
-            } } },
-            emitStatus,
-            runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot, markerChatId, ...rest }) => {
-              // Position the session at the branch node + clear history so
-              // each branch starts fresh at its own tree position.
-              log.info("Tree Orchestrator",
-                `🌿 runBranch dispatching: mode=${branchMode} branchNodeId=${branchNodeId?.slice?.(0, 8)} (was currentNodeId=${getCurrentNodeId(visitorId)?.slice?.(0, 8)})`,
-              );
-              setCurrentNodeId(visitorId, branchNodeId);
-              // Refresh the active request so the branch's
-              // runSteppedMode can read sessionId/userId/rt.
-              // The 30s TTL on getActiveRequest expires during
-              // long builds; re-stamp with the values captured
-              // at swarm start (line 2497) so they survive.
-              setActiveRequest(visitorId, {
-                socket, username, userId, signal,
-                sessionId,
-                rootId,
-                rootChatId,
-                slot, onToolLoopCheckpoint,
-                rt: (getActiveRequest(visitorId) || {}).rt,
-              });
-              await switchMode(visitorId, branchMode, {
-                username, userId, rootId,
-                currentNodeId: branchNodeId,
-                clearHistory: true,
-              });
-              log.info("Tree Orchestrator",
-                `🌿 runBranch post-switch: currentNodeId=${getCurrentNodeId(visitorId)?.slice?.(0, 8)} (expected ${branchNodeId?.slice?.(0, 8)})`,
-              );
-              // Stamp dispatch lineage on the branch's chat chain so
-              // the operator can walk from the orchestrator's root
-              // step down to each branch and back. When the swarm
-              // passes markerChatId, worker continuations nest UNDER
-              // the dispatch marker card; without it, fall back to
-              // rootChatId so the tree still walks.
-              return runSteppedMode(visitorId, branchMode, branchMessage, {
-                username, userId, rootId, signal, slot: branchSlot,
-                readOnly: false, onToolLoopCheckpoint, socket,
-                sessionId, rootChatId, rt,
-                parentChatId: markerChatId || rootChatId || null,
-                dispatchOrigin: "branch-swarm",
-              });
-            },
+            architectChatId,
+            rootChatId: rootChatId || null,
+            rootId: rootId || null,
+            modeKey: mode,
+            targetNodeId: targetNodeId || currentNodeId || null,
+            version: planVersion,
+            cleanedAnswer: answer || "",
+          });
+          const isUpdate = planVersion > 1;
+          // Trigger string on PLAN_UPDATED: surface the user's actual
+          // revision text (truncated) when this is a revision
+          // round-trip. Falls back to a generic "revision" label when
+          // the stash doesn't carry it (e.g. nested-expansion emits
+          // from swarm.js that reuse this emit path but don't
+          // originate from a user message).
+          const triggerText = isRevisionRoundTrip
+            ? `Revised from: "${String(existingStash.revisionTrigger).slice(0, 200)}"`
+            : "revision";
+          socket?.emit?.(isUpdate ? SWARM_WS.PLAN_UPDATED : SWARM_WS.PLAN_PROPOSED, {
+            version: planVersion,
+            projectNodeId: String(projectNode._id),
+            projectName: projectNode.name || null,
+            branches: branchParse.branches.map((b) => ({
+              name: b.name,
+              spec: b.spec,
+              path: b.path || null,
+              files: b.files || [],
+              slot: b.slot || null,
+              mode: b.mode || null,
+              parentBranch: b.parentBranch || null,
+            })),
+            contracts: parsedContracts || [],
+            ...(isUpdate ? { trigger: triggerText } : {}),
           });
 
-          // Replace the answer with the swarm summary so the user sees the
-          // full picture. Original architect text + swarm result.
-          answer = [answer, "", swarmResult.summary].filter(Boolean).join("\n");
+          // Stub a one-line prompt onto the visible answer. The full
+          // branch-by-branch detail lives in the WS plan card (rich
+          // HTML on dashboard, multi-line ASCII in CLI). Putting the
+          // full list here too makes the chat transcript look
+          // duplicated when both render. The stub stays in the
+          // transcript as a durable record + fallback prompt.
+          const stub =
+            `\n\n📋 ${isUpdate ? "Updated plan" : "Proposed plan"} (v${planVersion}) — ${branchParse.branches.length} branch${branchParse.branches.length === 1 ? "" : "es"}. ` +
+            `Reply "yes" to run, "cancel" to drop, or describe a change.`;
+          answer = (answer || "") + stub;
           if (result) {
             result.content = answer;
             result.answer = answer;
           }
-
-          // Restore position to the original project root
-          if (projectNode?._id) setCurrentNodeId(visitorId, String(projectNode._id));
+          log.info("Tree Orchestrator",
+            `📋 Swarm plan proposed: ${branchParse.branches.length} branches (project=${String(projectNode._id).slice(0, 8)}, visitor=${visitorId})`,
+          );
+          // Early return — DO NOT dispatch. orchestrator.js handles
+          // the next turn's affirmative/revise/pivot.
+          return {
+            success: true,
+            answer,
+            modeKey: mode,
+            modesUsed,
+            rootId,
+            targetNodeId: targetNodeId || currentNodeId,
+          };
         }
       } catch (err) {
         log.error("Tree Orchestrator", `Swarm dispatch failed: ${err.message}`);
@@ -658,4 +796,134 @@ export async function runChain(chain, message, visitorId, {
   emitStatus(socket, "done", "");
   if (context) pushMemory(visitorId, message, context);
   return { success: true, answer: context, modeKey: chainModes[chainModes.length - 1], modesUsed: [...modesUsed, ...chainModes], rootId };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// DISPATCH A STASHED SWARM PLAN (used by orchestrator.js on affirmative)
+//
+// `planData` is whatever setPendingSwarmPlan captured for this visitor —
+// pure data, no closures. `runtimeCtx` is the current-turn context
+// (fresh socket, signal, rt, onToolLoopCheckpoint, etc.) that the
+// swarm needs to actually run. Together they reconstruct the same
+// call `runModeAndReturn` would have made originally.
+//
+// Returns the swarm summary string (or "" on failure) so the caller
+// can post it as the user-facing answer for the current turn.
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function dispatchSwarmPlan(planData, runtimeCtx) {
+  const sw = await swarmExt();
+  if (!sw) {
+    log.warn("Tree Orchestrator", "dispatchSwarmPlan called but swarm extension not loaded.");
+    return "";
+  }
+
+  const {
+    branches, contracts, projectNodeId, userRequest, architectChatId,
+    rootChatId: stashedRootChatId, rootId: stashedRootId,
+  } = planData || {};
+
+  const {
+    visitorId, userId, username, rootId: ctxRootId,
+    sessionId, signal, slot, socket, onToolLoopCheckpoint, rt,
+    rootChatId: ctxRootChatId,
+  } = runtimeCtx || {};
+
+  const rootId = stashedRootId || ctxRootId;
+  const rootChatId = ctxRootChatId || stashedRootChatId || null;
+
+  if (!Array.isArray(branches) || branches.length === 0) {
+    return "";
+  }
+
+  // Resolve the project node from the stashed id. Use findProjectForNode
+  // as the source of truth — the node may have moved or been renamed.
+  let projectNode = null;
+  try {
+    if (projectNodeId) {
+      projectNode = await sw.findProjectForNode(projectNodeId);
+    }
+    if (!projectNode && rootId) {
+      projectNode = await sw.ensureProject({
+        rootId,
+        systemSpec: userRequest,
+        owner: { userId, username },
+      });
+    }
+  } catch (err) {
+    log.warn("Tree Orchestrator", `dispatchSwarmPlan: project lookup failed: ${err.message}`);
+  }
+
+  if (!projectNode) {
+    log.warn("Tree Orchestrator", "dispatchSwarmPlan: no project node resolvable; skipping dispatch.");
+    return "";
+  }
+
+  // Re-persist contracts in case they changed between proposal and accept.
+  if (Array.isArray(contracts) && contracts.length > 0) {
+    try {
+      await sw.setContracts({
+        projectNodeId: projectNode._id,
+        contracts,
+      });
+    } catch (ctxErr) {
+      log.warn("Tree Orchestrator", `dispatchSwarmPlan: contracts write failed: ${ctxErr.message}`);
+    }
+  }
+
+  try {
+    const swarmResult = await sw.runBranchSwarm({
+      branches,
+      rootProjectNode: projectNode,
+      rootChatId,
+      architectChatId,
+      sessionId,
+      visitorId,
+      userId,
+      username,
+      rootId,
+      signal,
+      slot,
+      socket,
+      onToolLoopCheckpoint,
+      userRequest: userRequest || "",
+      rt,
+      core: { metadata: { setExtMeta: async (node, ns, data) => {
+        const NodeModel = (await import("../../seed/models/node.js")).default;
+        await NodeModel.updateOne({ _id: node._id }, { $set: { [`metadata.${ns}`]: data } });
+      } } },
+      emitStatus,
+      runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot, markerChatId }) => {
+        setActiveRequest(visitorId, {
+          socket, username, userId, signal,
+          sessionId,
+          rootId,
+          rootChatId,
+          slot, onToolLoopCheckpoint,
+          rt: (getActiveRequest(visitorId) || {}).rt,
+        });
+        const branchIdStr = await pinBranchPosition(visitorId, branchNodeId, branchMode, {
+          username, userId, rootId,
+        });
+        return runSteppedMode(visitorId, branchMode, branchMessage, {
+          username, userId, rootId, signal, slot: branchSlot,
+          currentNodeId: branchIdStr,
+          readOnly: false, onToolLoopCheckpoint, socket,
+          sessionId, rootChatId, rt,
+          parentChatId: markerChatId || rootChatId || null,
+          dispatchOrigin: "branch-swarm",
+        });
+      },
+    });
+
+    // Restore position to the project root so subsequent chat turns
+    // land on the project, not the last-running branch.
+    if (projectNode?._id) setCurrentNodeId(visitorId, String(projectNode._id));
+
+    return swarmResult?.summary || "";
+  } catch (err) {
+    log.error("Tree Orchestrator", `dispatchSwarmPlan failed: ${err.message}`);
+    log.error("Tree Orchestrator", err.stack?.split("\n").slice(0, 5).join("\n"));
+    return `Swarm dispatch failed: ${err.message}`;
+  }
 }

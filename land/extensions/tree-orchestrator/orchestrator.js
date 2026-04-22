@@ -287,6 +287,208 @@ export async function orchestrateTreeRequest({
     log.debug("Tree Orchestrator", `Resume intercept skipped: ${err.message}`);
   }
 
+  // ── Pending swarm-plan interception ──
+  // A prior architect turn may have proposed a [[BRANCHES]] plan that's
+  // waiting for approval. Outcomes on this next turn:
+  //   affirmative            → dispatch stashed plan via dispatchSwarmPlan
+  //   cancel                 → archive the plan, return
+  //   pivot-confirm pending
+  //     affirmative          → archive, then re-run orchestration using
+  //                            the stashed pivot message (not the "yes")
+  //     anything else        → treat as keeping the plan, fall through
+  //                            to revision flow
+  //   pivot detected fresh   → stash pivotProposedMessage on the swarm
+  //                            plan, return "archive the plan?" prompt
+  //   revision               → re-call architect with user feedback; its
+  //                            next [[BRANCHES]] block replaces the stash
+  if (!forceMode && message) {
+    const { getPendingSwarmPlan, setPendingSwarmPlan, clearPendingSwarmPlan } =
+      await import("../swarm/state/pendingSwarmPlan.js");
+    const pendingSwarm = getPendingSwarmPlan(visitorId);
+
+    if (pendingSwarm) {
+      const trimmed = message.trim();
+      const isCancel = /^\s*(cancel|no|abort|drop|discard|nevermind|never\s*mind)\s*[.!]*$/i.test(trimmed);
+
+      // Helper: archive the current plan and emit PLAN_ARCHIVED.
+      const archiveCurrentPlan = async (reason) => {
+        try {
+          const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
+          const { SWARM_WS_EVENTS } = await import("../swarm/wsEvents.js");
+          if (planExt?.archivePlan) {
+            await planExt.archivePlan({
+              nodeId: pendingSwarm.projectNodeId,
+              reason,
+              core: null,
+            });
+          }
+          socket?.emit?.(SWARM_WS_EVENTS.PLAN_ARCHIVED, {
+            projectNodeId: pendingSwarm.projectNodeId,
+            projectName: pendingSwarm.projectName || null,
+            reason,
+            branchCount: pendingSwarm.branches.length,
+          });
+        } catch (archiveErr) {
+          log.warn("Tree Orchestrator", `archive(${reason}) failed: ${archiveErr.message}`);
+        }
+      };
+
+      // ── Pivot-confirm step (second turn of the pivot dialog) ──
+      // If the stash carries pivotProposedMessage, we asked the user
+      // "archive and proceed?" last turn and we're now receiving
+      // their answer. Yes → archive + reprocess the original pivot
+      // message. No / unclear → drop the pivot offer, continue as
+      // if user is actively revising the plan.
+      if (pendingSwarm.pivotProposedMessage) {
+        if (isAffirmative(message)) {
+          log.info("Tree Orchestrator",
+            `🔀 Pivot confirmed. Archiving plan (${pendingSwarm.branches.length} branches) and re-running on: "${pendingSwarm.pivotProposedMessage.slice(0, 80)}"`,
+          );
+          await archiveCurrentPlan("user-pivot");
+          const pivotMsg = pendingSwarm.pivotProposedMessage;
+          clearPendingSwarmPlan(visitorId);
+          // Overwrite the current message with the pivot text so the
+          // remainder of this orchestrator turn classifies and runs
+          // THAT (not the bare "yes" confirmation).
+          message = pivotMsg;
+          // Fall through to normal classification below.
+        } else {
+          // User backed out of the pivot. Drop the pivot marker; keep
+          // the plan; treat this message as a revision (if non-cancel)
+          // or as a no-op (if cancel).
+          log.info("Tree Orchestrator", `🔀 Pivot declined; keeping plan v${pendingSwarm.version || 1}.`);
+          setPendingSwarmPlan(visitorId, { ...pendingSwarm, pivotProposedMessage: undefined });
+          if (!isCancel && !isAffirmative(message)) {
+            // Treat as revision feedback below.
+          }
+          // Fall through into the affirmative/cancel/revision branches
+          // with the pivotProposedMessage cleared.
+        }
+      }
+
+      // Re-read the (possibly mutated) stash so the affirmative branch
+      // picks up a cleared pivot state if we just reset it.
+      const stash = getPendingSwarmPlan(visitorId);
+
+      if (stash) {
+        if (isAffirmative(message)) {
+          log.info("Tree Orchestrator",
+            `▶️  Accepted swarm plan v${stash.version || 1}: ${stash.branches.length} branches (project=${String(stash.projectNodeId || "").slice(0, 8)})`,
+          );
+          clearPendingSwarmPlan(visitorId);
+          const { dispatchSwarmPlan } = await import("./dispatch.js");
+          const summary = await dispatchSwarmPlan(stash, {
+            visitorId, userId, username,
+            rootId: stash.rootId || rootId,
+            sessionId, signal, slot, socket, onToolLoopCheckpoint, rt,
+            rootChatId,
+          });
+          return {
+            success: true,
+            answer: summary || "Plan dispatched.",
+            modeKey: stash.modeKey || "tree:code-plan",
+            modesUsed: ["tree:code-plan"],
+            rootId: stash.rootId || rootId,
+            targetNodeId: stash.targetNodeId || null,
+          };
+        }
+
+        if (isCancel) {
+          log.info("Tree Orchestrator",
+            `🛑 Canceled swarm plan v${stash.version || 1} (${stash.branches.length} branches)`,
+          );
+          await archiveCurrentPlan("user-cancel");
+          clearPendingSwarmPlan(visitorId);
+          return {
+            success: true,
+            answer: "Plan dropped. What would you like instead?",
+            modeKey: stash.modeKey || "tree:code-plan",
+            modesUsed: [],
+            rootId: stash.rootId || rootId,
+            targetNodeId: stash.targetNodeId || null,
+          };
+        }
+
+        // Classify the message to distinguish revision (stays inside
+        // tree:code-* territory) from pivot (routes to a different
+        // extension, e.g. fitness / food / kb).
+        let pivot = false;
+        try {
+          const classification = await localClassify(
+            message,
+            stash.targetNodeId || stash.projectNodeId || rootId,
+            rootId,
+            userId,
+          );
+          if (
+            classification?.intent === "extension" &&
+            classification.mode &&
+            !classification.mode.startsWith("tree:code-")
+          ) {
+            pivot = true;
+            log.info("Tree Orchestrator",
+              `🔀 Pivot detected on pending swarm plan: new message routes to ${classification.mode}`,
+            );
+          }
+        } catch {}
+
+        if (pivot) {
+          // Stash the pivot message and ask for confirmation. Next
+          // turn's handler (above) picks it up.
+          setPendingSwarmPlan(visitorId, { ...stash, pivotProposedMessage: message });
+          return {
+            success: true,
+            answer:
+              `Looks like a different direction. Archive the pending plan ` +
+              `(${stash.branches.length} branches) and start fresh? ` +
+              `Reply "yes" to pivot, or anything else to keep the plan open.`,
+            modeKey: stash.modeKey || "tree:code-plan",
+            modesUsed: [],
+            rootId: stash.rootId || rootId,
+            targetNodeId: stash.targetNodeId || null,
+          };
+        }
+
+        // Revision path: re-call the architect with user feedback.
+        // Architect's next [[BRANCHES]] block will flow through
+        // dispatch.js and replace the stash.
+        log.info("Tree Orchestrator",
+          `✍️  Revising swarm plan v${stash.version || 1} with: "${message.slice(0, 80)}"`,
+        );
+        // Phrase this as an IMPERATIVE instruction, not past-tense
+        // ("Revise …"). The grammar tense parser runs even under a
+        // forceMode and will re-route past-tense messages to a
+        // `-review` mode, bypassing our architect. "Build a new …
+        // incorporating …" keeps the verb imperative so the parser
+        // stays on `-plan`.
+        const revisionMsg =
+          `Build a new [[BRANCHES]] plan incorporating this feedback from the user: ${message}\n\n` +
+          `Current plan to update:\n${stash.branches.map((b) => `  • ${b.name}${b.path ? ` (${b.path})` : ""}: ${b.spec || ""}`).join("\n")}\n\n` +
+          `Emit the COMPLETE updated [[BRANCHES]] block (every branch, not a diff). ` +
+          `Keep branch names stable where possible so continuity is preserved. ` +
+          `Close with [[DONE]].`;
+        // Bump version so the re-emitted plan's stash reflects history.
+        // Carry the user's actual revision text as `revisionTrigger` so
+        // dispatch.js can surface it on the PLAN_UPDATED event's
+        // `trigger` field — the chat plan card renders it as
+        // "↪ Revised from: <user text>", which preserves the causal
+        // link between the user's ask and the architect's new plan.
+        // Without this the chat looks like the architect spontaneously
+        // re-planned.
+        setPendingSwarmPlan(visitorId, {
+          ...stash,
+          version: (stash.version || 1) + 1,
+          revisionTrigger: String(message).slice(0, 400),
+        });
+        // Replace the user's message with the architect-directed
+        // revision prompt, force the architect mode so classifier
+        // doesn't send this elsewhere.
+        message = revisionMsg;
+        forceMode = stash.modeKey || "tree:code-plan";
+      }
+    }
+  }
+
   // ── Pending-plan expand ──
   // If a prior review/audit stashed a structured plan and this message is
   // a clear affirmative ("ok", "fix it", "do them all"), expand the plan
@@ -434,13 +636,20 @@ export async function orchestrateTreeRequest({
       ? posNode.metadata.get("modes")
       : posNode?.metadata?.modes;
     if (posModes?.respond) {
+      // Hoist getModeOwner so the position-hold log below can name the
+      // owning extension. If the import itself fails we still fall through
+      // to "?" so boot hiccups don't break the hot path.
+      let getModeOwner = null;
+      try {
+        ({ getModeOwner } = await import("../../seed/tree/extensionScope.js"));
+      } catch {}
+
       // Check for departure: does the message match a DIFFERENT extension's hints
       // but NOT the current extension's hints? If so, skip position hold.
       let isDeparture = false;
       try {
         const { getClassifierHintsForMode } = await import("../loader.js");
-        const { getModeOwner } = await import("../../seed/tree/extensionScope.js");
-        const currentExt = getModeOwner(posModes.respond);
+        const currentExt = getModeOwner ? getModeOwner(posModes.respond) : null;
         const currentHints = getClassifierHintsForMode(posModes.respond);
         const matchesCurrent = currentHints?.some(re => re.test(message));
 
@@ -452,8 +661,29 @@ export async function orchestrateTreeRequest({
           if (otherMatches.length > 0) {
             isDeparture = true;
             departed = true;
+            // Commit to the top-scored match as the primary classification.
+            // If we skip this step, STEP 1 CLASSIFY re-runs localClassify,
+            // whose Path-2 fallback (classify.js:192) would re-read
+            // modes.respond at this node and hand back the same mode we
+            // just decided to leave — that's what caused "what workouts do
+            // i have" at a code-workspace node to dispatch tree:code-coach
+            // first and fitness second.
+            const top = otherMatches[0]; // sorted by score desc
+            classification = {
+              intent: "extension",
+              mode: top.mode,
+              targetNodeId: top.targetNodeId,
+              confidence: typeof top.confidence === "number" ? top.confidence : 0.85,
+              summary: message.slice(0, 100),
+              responseHint: "",
+              posAllScores: otherMatches.map(m => ({
+                extName: m.extName,
+                score: m.score,
+                locality: m.locality,
+              })),
+            };
             log.verbose("Tree Orchestrator",
-              `🎯 Departure from ${currentExt}: message matches ${otherMatches.map(m => m.extName).join(", ")}`);
+              `🎯 Departure from ${currentExt}: message matches ${otherMatches.map(m => m.extName).join(", ")} → committing to ${top.extName}`);
           }
         }
       } catch (err) {
@@ -471,7 +701,7 @@ export async function orchestrateTreeRequest({
           summary: message.slice(0, 100),
           responseHint: "",
         };
-        const holdExt = typeof getModeOwner === "function" ? getModeOwner(classification.mode) : "?";
+        const holdExt = getModeOwner ? getModeOwner(classification.mode) : null;
         log.verbose("Grammar", `🎯 noun=${holdExt || "?"} source=position-hold conf=0.95`);
       }
     }
@@ -710,7 +940,12 @@ export async function orchestrateTreeRequest({
       const seenExts = new Set([primaryExt]);
       const otherMatches = [];
 
-      let primaryPos = 0;
+      // Default to Infinity so a primary whose hints do NOT match the message
+      // sorts LAST in the chain instead of first. Without this, a position-
+      // held or inherited primary ("I'm at a code-workspace node but the
+      // message says workouts") would head the chain dispatch and run its
+      // mode before the extension that actually claims the message.
+      let primaryPos = Infinity;
       const primaryManifest = getExtensionManifest(primaryExt);
       if (Array.isArray(primaryManifest?.classifierHints)) {
         for (const re of primaryManifest.classifierHints) {

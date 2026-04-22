@@ -37,17 +37,12 @@ import { WS } from "../../seed/protocol.js";
 import Node from "../../seed/models/node.js";
 import { v4 as uuidv4 } from "uuid";
 import { startChainStep, finalizeChat, setChatContext, getChatContext } from "../../seed/llm/chatTracker.js";
-import {
-  upsertSubPlanEntry,
-  initProjectPlan,
-  readSubPlan,
-  setBranchStatus,
-  initBranchNode,
-} from "./state/subPlan.js";
 import { appendSignal } from "./state/signalInbox.js";
-import { readMeta, mutateMeta } from "./state/meta.js";
+import { readMeta, mutateMeta, initProjectRole, initBranchRole } from "./state/meta.js";
+import { plan, upsertBranchStep, setBranchStatus } from "./state/planAccess.js";
 import { promoteDoneAncestors } from "./project.js";
 import { reconcileProject } from "./reconcile.js";
+import { SWARM_WS_EVENTS } from "./wsEvents.js";
 
 // Accept one or two square brackets on the markers. Small local models
 // drop a bracket sometimes ([BRANCHES] instead of [[BRANCHES]]); the
@@ -66,14 +61,16 @@ const CONTRACTS_CLOSE_LOOSE = /\[\[?[^\[\]]*(\/|end)[^\[\]]*contracts[^\[\]]*\]?
  * never stop swarm. Returns the payload (handlers may mutate fields
  * like `results` to signal retry needs).
  */
-async function fireHook(core, name, payload) {
-  try {
-    if (core?.hooks?.run) {
-      await core.hooks.run(name, payload);
-    }
-  } catch (err) {
-    log.warn("Swarm", `hook ${name} listener error: ${err.message}`);
-  }
+async function fireHook(_core, name, payload) {
+  // Always go through the kernel's singleton hook registry. Earlier
+  // callers passed a stub `core` (e.g. dispatch.js's
+  // { metadata: { setExtMeta } } shim for atomic writes) that had no
+  // hooks accessor, and the legacy "prefer core.hooks, fall back to
+  // kernel" dance silently no-op'd every swarm lifecycle hook. The
+  // _core arg is still accepted for call-site compatibility but the
+  // hook registry is a process-wide singleton anyway.
+  const { hooks } = await import("../../seed/hooks.js");
+  await hooks.fire(name, payload);
   return payload;
 }
 
@@ -519,33 +516,22 @@ async function ensureBranchNode({ rootProjectId, branch, userId, core }) {
     }
   }
 
-  // Swarm-owned metadata. Domain extensions can stamp their own
-  // namespaces (e.g. code-workspace.path for filesystem mapping) via
-  // swarm:beforeBranchRun hook if they need to.
-  await mutateMeta(branchNode._id, (draft) => {
-    draft.role = "branch";
-    draft.branchName = branch.name;
-    draft.spec = branch.spec;
-    draft.slot = branch.slot || null;
-    draft.mode = branch.mode || null;
-    draft.path = branch.path || null;
-    draft.files = branch.files || [];
-    draft.parentProjectId = String(rootProjectId);
-    draft.parentBranch = branch.parentBranch || null;
-    draft.status = draft.status || "pending";
-    if (!draft.subPlan) draft.subPlan = { branches: [], createdAt: new Date().toISOString() };
-    if (!draft.aggregatedDetail) {
-      draft.aggregatedDetail = {
-        filesWritten: 0,
-        contracts: [],
-        statusCounts: { done: 0, running: 0, pending: 0, failed: 0 },
-        lastActivity: null,
-      };
-    }
-    if (!Array.isArray(draft.inbox)) draft.inbox = [];
-    if (!draft.createdAt) draft.createdAt = new Date().toISOString();
-    return draft;
-  }, core);
+  // Swarm-owned execution bookkeeping for the branch (role, parentage,
+  // spec/path/files for prompt rendering, aggregatedDetail, inbox).
+  // The plan namespace at this branch is independent and gets created
+  // lazily when the branch's own decomposition writes to it.
+  await initBranchRole({
+    nodeId: branchNode._id,
+    name: branch.name,
+    spec: branch.spec,
+    path: branch.path || null,
+    files: branch.files || [],
+    slot: branch.slot || null,
+    mode: branch.mode || null,
+    parentProjectId: String(rootProjectId),
+    parentBranch: branch.parentBranch || null,
+    core,
+  });
 
   // Enable cascade on branch nodes so file writes inside fire propagation.
   try {
@@ -687,11 +673,12 @@ async function retryFailedBranches({
         };
       }
       await setBranchStatus({ branchNodeId: branchNode._id, status: "done", summary: retryResult?.answer || null, core });
-      await upsertSubPlanEntry({
+      await upsertBranchStep({
         parentNodeId: rootProjectNode._id,
         core,
-        child: {
+        branch: {
           name: branch.name,
+          nodeId: String(branchNode._id),
           status: "done",
           summary: truncate(retryResult?.answer || "", 300),
           finishedAt: new Date().toISOString(),
@@ -718,11 +705,12 @@ async function retryFailedBranches({
         };
       }
       await setBranchStatus({ branchNodeId: branchNode._id, status: "failed", error: err.message, core });
-      await upsertSubPlanEntry({
+      await upsertBranchStep({
         parentNodeId: rootProjectNode._id,
         core,
-        child: {
+        branch: {
           name: branch.name,
+          nodeId: String(branchNode._id),
           status: "failed",
           error: err.message + " (also failed on retry)",
           finishedAt: new Date().toISOString(),
@@ -741,6 +729,162 @@ async function retryFailedBranches({
   }
 
   return { retried: failed.length };
+}
+
+/**
+ * Scout loop: adaptive multi-cycle cross-branch verification phase that
+ * runs AFTER all builder branches finish and the standard retry pass
+ * concludes. Fires `swarm:runScouts` once per cycle; domain extensions
+ * (code-workspace, book-workspace, etc.) subscribe to it and perform
+ * their own read-only seam checks — LLM scouts, static analyzers,
+ * contract comparisons. Whatever the handlers find gets appended to
+ * branch signal inboxes and their result statuses flipped to "failed";
+ * swarm detects the flip and re-dispatches only the affected branches.
+ * Repeats until no new issues OR the cycle cap is hit.
+ *
+ * Adaptive policy:
+ *   cycle 1: always (if ≥2 branches and at least one listener)
+ *   cycle 2: only if cycle 1 found issues
+ *   cycle 3: only if ≥5 branches AND cycle 2 still found issues
+ *   max:     3 cycles hard-capped
+ *   early:   zero issues at any cycle → done clean
+ *   stuck:   identical issue signature to prior cycle → stop with "stuck"
+ *
+ * Handlers receive `scoutPayload.issueSummary` (array) and push
+ * `{ branch, kind, detail }` entries for every finding. Swarm uses the
+ * length of that array + the set of affected branches to decide
+ * whether to re-dispatch, and to build the final reconciliation event.
+ *
+ * This function emits narration events to the provided socket so the
+ * UI renders a distinct phase: "🔍 dispatching scouts... ⚠ scout·menu
+ * found mismatch... 📬 routing 2 issues to 2 branches... 🔧
+ * redeploying... ✓ swarm reconciled". If no listeners are registered
+ * on `swarm:runScouts`, the whole phase is silent.
+ */
+async function runScoutLoop({
+  rootProjectNode, results, branches, core, socket, signal,
+  runBranch, sessionId, userId, username, visitorId, rootId,
+  slot, onToolLoopCheckpoint, rootChatId, rt, defaultBranchMode,
+}) {
+  if (!Array.isArray(branches) || branches.length < 2) {
+    return { cycles: 0, status: "skipped", totalIssues: 0 };
+  }
+  if (signal?.aborted) {
+    return { cycles: 0, status: "aborted", totalIssues: 0 };
+  }
+
+  // No listener → no scouts. Check the kernel singleton so we see
+  // every registered handler regardless of what `core` shape the
+  // caller handed us (dispatch.js passes a stub without hooks).
+  try {
+    const { hooks } = await import("../../seed/hooks.js");
+    const registered = hooks.list();
+    if (!registered["swarm:runScouts"] || registered["swarm:runScouts"].length === 0) {
+      return { cycles: 0, status: "no-listeners", totalIssues: 0 };
+    }
+  } catch {
+    return { cycles: 0, status: "no-listeners", totalIssues: 0 };
+  }
+
+  const MAX_CYCLES = 3;
+  let cycle = 0;
+  let totalIssues = 0;
+  let prevSignature = "";
+  let exitStatus = "clean";
+
+  while (cycle < MAX_CYCLES) {
+    if (signal?.aborted) { exitStatus = "aborted"; break; }
+
+    // Adaptive gate for cycle 3: only when the swarm is large enough
+    // that a third pass is worth the extra wall time.
+    if (cycle === 2 && branches.length < 5) { exitStatus = "capped"; break; }
+
+    cycle++;
+
+    socket?.emit?.(SWARM_WS_EVENTS.SCOUTS_DISPATCHED, {
+      cycle,
+      branchCount: results.filter((r) => r.status === "done").length,
+      projectNodeId: String(rootProjectNode._id),
+      projectName: rootProjectNode.name || null,
+    });
+
+    const statusesBefore = results.map((r) => `${r.name}:${r.status}`).join("|");
+    const scoutPayload = {
+      cycle,
+      rootProjectNode,
+      results,
+      branches,
+      core,
+      socket,
+      visitorId,
+      signal,
+      // Handlers push { branch, kind, detail, targetBranch? } for every
+      // finding. Swarm uses .length + affected branch set for routing.
+      issueSummary: [],
+    };
+
+    try {
+      await fireHook(core, "swarm:runScouts", scoutPayload);
+    } catch (err) {
+      log.warn("Swarm", `scout cycle ${cycle} hook error: ${err.message}`);
+    }
+    const statusesAfter = results.map((r) => `${r.name}:${r.status}`).join("|");
+
+    const issuesThisCycle = Array.isArray(scoutPayload.issueSummary)
+      ? scoutPayload.issueSummary.length : 0;
+    const affected = [...new Set(
+      (scoutPayload.issueSummary || []).map((i) => i?.branch).filter(Boolean),
+    )];
+    totalIssues += issuesThisCycle;
+
+    socket?.emit?.(SWARM_WS_EVENTS.ISSUES_ROUTED, {
+      cycle,
+      total: issuesThisCycle,
+      affectedBranches: affected,
+      projectNodeId: String(rootProjectNode._id),
+    });
+
+    if (issuesThisCycle === 0) { exitStatus = "clean"; break; }
+
+    // Stuck detection: same findings as last cycle → we're not making
+    // progress, stop to avoid burning cycles on an unsolvable mismatch.
+    const signatureArr = (scoutPayload.issueSummary || [])
+      .map((i) => `${i?.branch || "?"}|${i?.kind || "?"}|${String(i?.detail || "").slice(0, 80)}`)
+      .sort();
+    const signature = signatureArr.join(";");
+    if (cycle > 1 && signature === prevSignature) {
+      exitStatus = "stuck";
+      break;
+    }
+    prevSignature = signature;
+
+    // Handlers flipped statuses → re-dispatch the affected branches.
+    if (statusesAfter !== statusesBefore) {
+      socket?.emit?.(SWARM_WS_EVENTS.REDEPLOYING, {
+        cycle,
+        branches: affected,
+        projectNodeId: String(rootProjectNode._id),
+      });
+      await retryFailedBranches({
+        results, branches, runBranch, rootProjectNode,
+        sessionId, userId, username, visitorId, rootId,
+        signal, slot, socket, onToolLoopCheckpoint, rootChatId,
+        core, emitStatus: () => {}, rt, defaultBranchMode,
+      });
+    }
+  }
+
+  if (cycle >= MAX_CYCLES && exitStatus === "clean") exitStatus = "capped";
+
+  socket?.emit?.(SWARM_WS_EVENTS.SWARM_RECONCILED, {
+    cycles: cycle,
+    status: exitStatus,
+    totalIssues,
+    projectNodeId: String(rootProjectNode._id),
+    projectName: rootProjectNode.name || null,
+  });
+
+  return { cycles: cycle, status: exitStatus, totalIssues };
 }
 
 /**
@@ -803,17 +947,21 @@ export async function runBranchSwarm({
   await reconcileProject({ projectNodeId: rootProjectNode._id, core });
 
   if (!resumeMode) {
-    await initProjectPlan({
-      projectNodeId: rootProjectNode._id,
+    // Mark the project (swarm role + execution bookkeeping).
+    await initProjectRole({
+      nodeId: rootProjectNode._id,
       systemSpec: userRequest,
       core,
     });
+    // Initialize the plan namespace.
+    const p = await plan();
+    await p.initPlan(rootProjectNode._id, { systemSpec: userRequest }, core);
 
     for (const b of branches) {
-      await upsertSubPlanEntry({
+      await upsertBranchStep({
         parentNodeId: rootProjectNode._id,
         core,
-        child: {
+        branch: {
           name: b.name,
           spec: b.spec,
           path: b.path || null,
@@ -888,9 +1036,9 @@ export async function runBranchSwarm({
           parentBranchName: q.parentBranch,
           hint: q.parentNodeId,
         });
-        await upsertSubPlanEntry({
+        await upsertBranchStep({
           parentNodeId: parentForPlan, core,
-          child: {
+          branch: {
             name: q.name,
             status: "pending",
             pausedAt: new Date().toISOString(),
@@ -949,9 +1097,9 @@ export async function runBranchSwarm({
       hint: branch.parentNodeId,
     });
 
-    await upsertSubPlanEntry({
+    await upsertBranchStep({
       parentNodeId: parentNodeForPlan, core,
-      child: {
+      branch: {
         name: branch.name,
         nodeId: String(branchNode._id),
         spec: branch.spec,
@@ -1031,9 +1179,9 @@ export async function runBranchSwarm({
         answer: branchResult?.answer || "",
       };
       results.push(resultEntry);
-      await upsertSubPlanEntry({
+      await upsertBranchStep({
         parentNodeId: parentNodeForPlan, core,
-        child: {
+        branch: {
           name: branch.name,
           nodeId: String(branchNode._id),
           status: "done",
@@ -1062,9 +1210,9 @@ export async function runBranchSwarm({
           error: resultEntry.error || null,
           summary: null, core,
         });
-        await upsertSubPlanEntry({
+        await upsertBranchStep({
           parentNodeId: parentNodeForPlan, core,
-          child: {
+          branch: {
             name: branch.name,
             nodeId: String(branchNode._id),
             status: resultEntry.status,
@@ -1092,32 +1240,29 @@ export async function runBranchSwarm({
         const nested = parseBranches(branchResult.answer);
         if (nested.branches.length > 0) {
           log.info("Swarm",
-            `🌱 Branch "${qualifiedName}" spawned ${nested.branches.length} sub-branch(es): ${nested.branches.map((s) => s.name).join(", ")}`,
+            `🌱 Branch "${qualifiedName}" spawned ${nested.branches.length} sub-branch(es): ${nested.branches.map((s) => s.name).join(", ")}. Pausing for user re-approval.`,
           );
+
+          // Plan-first: DON'T queue the nested branches directly.
+          // Seed them on the parent's subPlan as pending-nested-approval
+          // so the UI shows "this branch discovered subs, pending user
+          // confirmation" and the ring stays visible. Then re-invoke
+          // the architect to produce a COMPLETE UPDATED PLAN (with
+          // peer adjustments) and stash it for user approval via the
+          // same pendingSwarmPlan path the first dispatch used.
           for (const sub of nested.branches) {
-            queue.push({
-              ...sub,
-              parentBranch: branch.name,
-              depth: branch.depth + 1,
-            });
-            // Pre-seed the parent's subPlan with a pending entry.
-            // ensureBranchNode + upsertSubPlanEntry run again when the
-            // branch actually dispatches; that write is an upsert so
-            // this pre-seed is harmless — it just fills the gap for
-            // visibility. No nodeId yet (the tree node doesn't exist
-            // until dispatch creates it).
             try {
-              await upsertSubPlanEntry({
+              await upsertBranchStep({
                 parentNodeId: branchNode._id,
                 core,
-                child: {
+                branch: {
                   name: sub.name,
                   spec: sub.spec,
                   path: sub.path || null,
                   files: sub.files || [],
                   slot: sub.slot || null,
                   mode: sub.mode || null,
-                  status: "pending",
+                  status: "pending-nested-approval",
                 },
               });
             } catch {}
@@ -1125,6 +1270,137 @@ export async function runBranchSwarm({
           const cleanAnswer = nested.cleaned;
           const lastIdx = results.length - 1;
           if (lastIdx >= 0) results[lastIdx].answer = cleanAnswer;
+
+          // Re-invoke the architect at the project root to re-emit
+          // the complete updated plan. We pass the current plan
+          // snapshot + the new discoveries so it can decide whether
+          // peer branches need their specs adjusted. The architect's
+          // response is intercepted by dispatch.js (it sees the new
+          // [[BRANCHES]] block and stashes it via setPendingSwarmPlan)
+          // just like the first proposal.
+          try {
+            const { runChat } = await import("../../seed/llm/conversation.js");
+            const p = await plan();
+            const currentPlan = await p.readPlan(rootProjectNode._id);
+            const branchEntries = (currentPlan?.steps || []).filter(s => s.kind === "branch");
+            const planSummary = branchEntries.length > 0
+              ? branchEntries
+                  .map((b) => `  • ${b.title} [${b.status || "?"}]${b.path ? ` (${b.path})` : ""}: ${b.spec || ""}`)
+                  .join("\n")
+              : "(no plan recorded)";
+            const discoveries = nested.branches
+              .map((s) => `  • ${s.name}${s.path ? ` (${s.path})` : ""}: ${s.spec || ""}`)
+              .join("\n");
+            const replanPrompt =
+              `Branch "${qualifiedName}" ran and discovered new sub-components that need their own branches:\n${discoveries}\n\n` +
+              `Current whole plan:\n${planSummary}\n\n` +
+              `Re-emit the COMPLETE updated [[BRANCHES]] block. Include every branch (done, running, and new). ` +
+              `If these new discoveries change what peer branches should own, adjust their specs accordingly — ` +
+              `the user wants to see the whole coherent plan, not a diff. ` +
+              `Keep existing branch names stable where possible so continuity is preserved. ` +
+              `Close with [[DONE]].`;
+
+            // runChat fires the architect mode at the project root
+            // with an ephemeral visitorId so it doesn't pollute the
+            // user's chat session. The response comes back as a
+            // string — we parse [[BRANCHES]] ourselves and stash
+            // directly against the USER's visitorId so the user's
+            // next chat message (their "yes" / revision / pivot)
+            // flows through the same orchestrator interception path
+            // Phase 1 built.
+            const replanVisitor = `replan:${String(rootProjectNode._id).slice(0, 8)}:${userId || "anon"}`;
+            const replanResult = await runChat({
+              userId,
+              username,
+              message: replanPrompt,
+              mode: "tree:code-plan",
+              rootId,
+              nodeId: String(rootProjectNode._id),
+              visitorId: replanVisitor,
+              ephemeral: true,
+              llmPriority: "INTERACTIVE",
+            });
+            const architectAnswer = (replanResult?.answer || replanResult?.content || "").toString();
+            const newParse = parseBranches(architectAnswer);
+            if (newParse.branches.length > 0) {
+              // Bump the plan version and stash for the user. The
+              // user's next message (via chat) triggers the
+              // orchestrator.js pending-swarm interception, same
+              // as the initial proposal.
+              try {
+                const { getPendingSwarmPlan, setPendingSwarmPlan } =
+                  await import("./state/pendingSwarmPlan.js");
+                const { SWARM_WS_EVENTS } = await import("./wsEvents.js");
+                const prev = getPendingSwarmPlan(visitorId);
+                const nextVersion = (prev?.version || 1) + 1;
+                setPendingSwarmPlan(visitorId, {
+                  branches: newParse.branches,
+                  contracts: prev?.contracts || [],
+                  projectNodeId: String(rootProjectNode._id),
+                  projectName: rootProjectNode.name || null,
+                  userRequest: userRequest || "",
+                  architectChatId: null,
+                  rootChatId,
+                  rootId,
+                  modeKey: "tree:code-plan",
+                  targetNodeId: String(rootProjectNode._id),
+                  version: nextVersion,
+                  cleanedAnswer: newParse.cleaned,
+                  nestedExpansion: true,
+                });
+                socket?.emit?.(SWARM_WS_EVENTS.PLAN_UPDATED, {
+                  version: nextVersion,
+                  projectNodeId: String(rootProjectNode._id),
+                  projectName: rootProjectNode.name || null,
+                  trigger: `nested expansion of ${qualifiedName}`,
+                  branches: newParse.branches.map((b) => ({
+                    name: b.name,
+                    spec: b.spec,
+                    path: b.path || null,
+                    files: b.files || [],
+                    slot: b.slot || null,
+                    mode: b.mode || null,
+                    parentBranch: b.parentBranch || null,
+                  })),
+                });
+                log.info("Swarm",
+                  `🔁 Replan stashed (v${nextVersion}) with ${newParse.branches.length} branches. Awaiting user approval.`,
+                );
+              } catch (stashErr) {
+                log.warn("Swarm", `stash replan failed: ${stashErr.message}`);
+              }
+            } else {
+              log.warn("Swarm",
+                `Replan architect returned no [[BRANCHES]] block; falling back to auto-queue of discovered subs.`,
+              );
+              // Fallback — preserve old behavior if the replan prompt
+              // didn't produce a usable plan.
+              for (const sub of nested.branches) {
+                queue.push({
+                  ...sub,
+                  parentBranch: branch.name,
+                  depth: branch.depth + 1,
+                });
+              }
+            }
+          } catch (replanErr) {
+            log.warn("Swarm", `nested replan failed: ${replanErr.message}. Falling back to auto-queue.`);
+            // Fallback: keep old behavior so the swarm doesn't stall.
+            for (const sub of nested.branches) {
+              queue.push({
+                ...sub,
+                parentBranch: branch.name,
+                depth: branch.depth + 1,
+              });
+              try {
+                await upsertBranchStep({
+                  parentNodeId: branchNode._id,
+                  core,
+                  branch: { name: sub.name, status: "pending" },
+                });
+              } catch {}
+            }
+          }
         }
       }
     } catch (err) {
@@ -1134,9 +1410,9 @@ export async function runBranchSwarm({
         `Branch "${qualifiedName}" ${parentAborted ? "paused (aborted)" : "failed"}: ${err.message}`,
       );
       await setBranchStatus({ branchNodeId: branchNode._id, status: resumableStatus, error: err.message, core });
-      await upsertSubPlanEntry({
+      await upsertBranchStep({
         parentNodeId: parentNodeForPlan, core,
-        child: {
+        branch: {
           name: branch.name,
           nodeId: String(branchNode._id),
           status: resumableStatus,
@@ -1229,6 +1505,28 @@ export async function runBranchSwarm({
         signal, slot, socket, onToolLoopCheckpoint, rootChatId,
         core, emitStatus, rt, defaultBranchMode,
       });
+    }
+  }
+
+  // Scout phase: extension-provided seam verification. Runs AFTER
+  // existing validators have had their shot, so scouts are looking
+  // at the "final" state branches produced. Narrated via
+  // swarmScoutsDispatched / swarmScoutReport / swarmIssuesRouted /
+  // swarmRedeploying / swarmReconciled events. Silent if no
+  // swarm:runScouts listener is registered.
+  if (!signal?.aborted) {
+    try {
+      const scoutOutcome = await runScoutLoop({
+        rootProjectNode, results, branches, core, socket, signal,
+        runBranch, sessionId, userId, username, visitorId, rootId,
+        slot, onToolLoopCheckpoint, rootChatId, rt, defaultBranchMode,
+      });
+      if (scoutOutcome.cycles > 0) {
+        log.info("Swarm",
+          `🔍 Scout loop: ${scoutOutcome.cycles} cycle(s), ${scoutOutcome.totalIssues} issue(s), status=${scoutOutcome.status}`);
+      }
+    } catch (err) {
+      log.warn("Swarm", `scout loop error: ${err.message}`);
     }
   }
 

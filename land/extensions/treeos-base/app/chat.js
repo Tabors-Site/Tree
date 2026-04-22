@@ -478,6 +478,13 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .live-tc-dot { color: rgba(255, 200, 100, 0.9); font-weight: 700; }
     .live-swarm { color: rgba(140, 180, 240, 0.95); font-weight: 700; }
     .live-branch { color: rgba(140, 180, 240, 0.95); font-weight: 700; }
+    .live-scout { color: rgba(200, 160, 250, 0.95); font-weight: 700; }
+    .live-scout-warn { color: rgba(255, 205, 120, 0.95); font-weight: 700; }
+    .live-scout-route { color: rgba(140, 200, 255, 0.95); font-weight: 700; }
+    .live-scout-redeploy { color: rgba(180, 230, 200, 0.95); font-weight: 700; }
+    .live-line-scout-dispatch, .live-line-scout-report, .live-line-scout-route,
+    .live-line-scout-redeploy, .live-line-scout-clean, .live-line-scout-reconciled { padding-left: 6px; }
+    .live-line-scout-report { padding-left: 20px; }
     .live-line-intent { padding-left: 6px; }
     .live-line-intent b { color: rgba(160, 210, 255, 0.95); }
     .live-line-mode { padding-left: 6px; }
@@ -488,6 +495,32 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .live-line-branch-start { padding-left: 20px; }
     .live-line-branch-ok, .live-line-branch-fail { padding-left: 20px; }
     @keyframes liveIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Plan-card for proposed / updated swarm plans */
+    .live-line-plan-card { padding: 0; margin-top: 8px; margin-bottom: 8px; font-family: inherit; }
+    .plan-card { background: rgba(140,180,240,0.08); border: 1px solid rgba(140,180,240,0.35); border-left: 3px solid rgba(140,180,240,0.85); border-radius: 10px; padding: 12px 16px; color: rgba(255,255,255,0.9); }
+    .plan-card-head { font-size: 13px; margin-bottom: 6px; }
+    .plan-trigger { font-size: 11px; color: rgba(255,255,255,0.55); margin: 2px 0 8px 0; }
+    .plan-branches { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+    .plan-branch { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; padding: 4px 8px; background: rgba(0,0,0,0.15); border-radius: 4px; }
+    .plan-branch b { color: rgba(200,220,255,0.95); }
+    .plan-branch .plan-path, .plan-branch .plan-mode, .plan-branch .plan-files { color: rgba(255,255,255,0.5); margin-left: 6px; }
+    .plan-spec { color: rgba(255,255,255,0.75); margin-top: 3px; font-size: 11px; line-height: 1.5; font-family: inherit; }
+    .plan-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .plan-btn { padding: 6px 14px; font-size: 12px; font-weight: 600; border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.9); cursor: pointer; transition: all 0.15s; }
+    .plan-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.45); }
+    .plan-btn-accept { background: rgba(125,220,155,0.2); border-color: rgba(125,220,155,0.55); }
+    .plan-btn-accept:hover { background: rgba(125,220,155,0.3); }
+    .plan-btn-cancel { background: rgba(240,130,130,0.15); border-color: rgba(240,130,130,0.45); }
+    .plan-btn-cancel:hover { background: rgba(240,130,130,0.25); }
+    .plan-btn:disabled { cursor: default; opacity: 0.55; }
+    .plan-btn:disabled:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.25); }
+    .plan-btn-chosen { opacity: 1 !important; border-color: rgba(255,255,255,0.6) !important; box-shadow: 0 0 0 1px rgba(255,255,255,0.15) inset; }
+    .plan-btn-unchosen { opacity: 0.3 !important; }
+    .plan-card-spent { opacity: 0.75; }
+    .plan-card-spent .plan-hint { display: none; }
+    .plan-hint { font-size: 10px; color: rgba(255,255,255,0.45); margin-top: 8px; font-style: italic; }
+    .live-line-plan-archived { padding-left: 6px; font-size: 12px; }
 
     /* Input — matches app.js */
     .chat-input-area { padding: 16px 20px 20px; border-top: 1px solid var(--glass-border-light); }
@@ -1212,8 +1245,14 @@ router.get("/chat", authenticateLite, async (req, res) => {
       row.className = "live-line live-line-" + classSuffix;
       row.innerHTML = html;
       if (typing) chatMessages.insertBefore(row, typing);
+      // Returning the inserted row lets callers (plan card, branch
+      // tickers) bind click listeners directly without selector
+      // gymnastics — :last-of-type matches by element TYPE, not by
+      // class, and was binding to the wrong element when other divs
+      // followed in chatMessages.
       else chatMessages.appendChild(row);
       chatMessages.scrollTop = chatMessages.scrollHeight;
+      return row;
     }
 
     function oneLineLive(s, max) {
@@ -1346,6 +1385,179 @@ router.get("/chat", authenticateLite, async (req, res) => {
           (err ? ' <span class="live-fail-text">' + escapeHtml(err) + '</span>' : "")
         );
       }
+    });
+
+    // ── Plan-first swarm events (same behavior as /dashboard) ───────
+    function _renderPlanCard(ev, isUpdate) {
+      // Strip any prior spent plan cards from the DOM before rendering
+      // the new one. Without this, clicking Revise leaves the v1 card
+      // visible-but-dimmed next to the fresh v2 card, and the user
+      // can't tell which one is the live proposal. Current live plan
+      // card is always the most recent; spent ones are history that
+      // the chat stream's own scroll already captured. Removing them
+      // doesn't lose anything.
+      try {
+        var stale = chatMessages.querySelectorAll(".plan-card-spent");
+        for (var i = 0; i < stale.length; i++) {
+          var parent = stale[i].closest(".live-line-plan-card") || stale[i];
+          if (parent && parent.parentNode) parent.parentNode.removeChild(parent);
+        }
+      } catch (e) { /* best effort; never block render */ }
+
+      var version = ev && ev.version != null ? "v" + ev.version : "";
+      var branches = (ev && Array.isArray(ev.branches)) ? ev.branches : [];
+      var count = branches.length;
+      var header = isUpdate ? "Updated plan" : "Proposed plan";
+      var trigger = isUpdate && ev && ev.trigger
+        ? '<div class="plan-trigger">\\u21aa ' + escapeHtml(oneLineLive(ev.trigger, 120)) + '</div>'
+        : '';
+      var rows = branches.map(function(b) {
+        var name = escapeHtml(b.name || "?");
+        var path = b.path ? '<span class="plan-path">\\u00b7 path: ' + escapeHtml(b.path) + '</span>' : '';
+        var mode = b.mode ? '<span class="plan-mode">\\u00b7 ' + escapeHtml(b.mode) + '</span>' : '';
+        var files = (Array.isArray(b.files) && b.files.length)
+          ? '<span class="plan-files">\\u00b7 files: ' + escapeHtml(oneLineLive(b.files.join(", "), 80)) + '</span>'
+          : '';
+        var spec = b.spec
+          ? '<div class="plan-spec">' + escapeHtml(oneLineLive(b.spec, 180)) + '</div>'
+          : '';
+        return (
+          '<div class="plan-branch">' +
+            '<div class="plan-branch-head"><b>' + name + '</b> ' + path + ' ' + mode + ' ' + files + '</div>' +
+            spec +
+          '</div>'
+        );
+      }).join("");
+      var buttons = (
+        '<div class="plan-actions">' +
+          '<button class="plan-btn plan-btn-accept">Accept</button>' +
+          '<button class="plan-btn plan-btn-revise">Revise</button>' +
+          '<button class="plan-btn plan-btn-cancel">Cancel</button>' +
+        '</div>'
+      );
+      var card = addLiveLine("plan-card",
+        '<div class="plan-card">' +
+          '<div class="plan-card-head">' +
+            '<span class="live-swarm">\\u232b</span> <b>' + escapeHtml(header) + '</b>' +
+            (version ? ' <span class="live-dim">' + escapeHtml(version) + '</span>' : '') +
+            ' <span class="live-dim">' + count + ' branch' + (count === 1 ? '' : 'es') + '</span>' +
+          '</div>' +
+          trigger +
+          '<div class="plan-branches">' + rows + '</div>' +
+          buttons +
+          '<div class="plan-hint">Reply "yes" to run, or describe what to change. "cancel" to drop.</div>' +
+        '</div>'
+      );
+      if (!card) return;
+      var accept = card.querySelector(".plan-btn-accept");
+      var cancel = card.querySelector(".plan-btn-cancel");
+      var revise = card.querySelector(".plan-btn-revise");
+      function _spendPlanCard(chosen) {
+        // Mark the whole card as settled so it can't be acted on again:
+        // disable every button and dim the card. New proposals (plan v2+)
+        // render fresh cards with live buttons.
+        card.classList.add("plan-card-spent");
+        var all = card.querySelectorAll(".plan-btn");
+        for (var i = 0; i < all.length; i++) {
+          all[i].disabled = true;
+          if (all[i] !== chosen) all[i].classList.add("plan-btn-unchosen");
+        }
+        if (chosen) chosen.classList.add("plan-btn-chosen");
+      }
+      if (accept) accept.addEventListener("click", function() {
+        if (accept.disabled) return;
+        _spendPlanCard(accept);
+        chatInput.value = "yes";
+        sendMessage();
+      });
+      if (cancel) cancel.addEventListener("click", function() {
+        if (cancel.disabled) return;
+        _spendPlanCard(cancel);
+        chatInput.value = "cancel";
+        sendMessage();
+      });
+      if (revise) revise.addEventListener("click", function() {
+        if (revise.disabled) return;
+        _spendPlanCard(revise);
+        chatInput.focus();
+        if (!chatInput.value) chatInput.placeholder = "describe what to change about the plan\\u2026";
+      });
+    }
+
+    socket.on("swarmPlanProposed", function(ev) { _renderPlanCard(ev, false); });
+    socket.on("swarmPlanUpdated",  function(ev) { _renderPlanCard(ev, true); });
+    socket.on("swarmPlanArchived", function(ev) {
+      var count = ev && ev.branchCount != null
+        ? ev.branchCount + " branch" + (ev.branchCount === 1 ? "" : "es")
+        : "plan";
+      var reason = ev && ev.reason ? " \\u00b7 " + escapeHtml(ev.reason) : "";
+      addLiveLine("plan-archived",
+        '<span class="live-dim">\\ud83d\\udce6 archived </span><b>' + escapeHtml(count) + '</b>' +
+        '<span class="live-dim">' + reason + '</span>'
+      );
+    });
+
+    // ── Scout phase events — seam verification after builders finish ──
+    socket.on("swarmScoutsDispatched", function(ev) {
+      var cycle = ev && ev.cycle != null ? " (cycle " + ev.cycle + ")" : "";
+      var n = ev && ev.branchCount != null
+        ? ev.branchCount + " branch" + (ev.branchCount === 1 ? "" : "es")
+        : "project";
+      addLiveLine("scout-dispatch",
+        '<span class="live-scout">\\ud83d\\udd0d</span> dispatching scouts<span class="live-dim">' +
+        escapeHtml(cycle) + ' over ' + escapeHtml(n) + '\\u2026</span>'
+      );
+    });
+    socket.on("swarmScoutReport", function(ev) {
+      var branch = (ev && ev.branch) ? String(ev.branch) : "?";
+      var detail = oneLineLive((ev && ev.detail) || "(no detail)", 180);
+      var counter = (ev && ev.counterpartBranch)
+        ? ' <span class="live-dim">\\u2194 ' + escapeHtml(ev.counterpartBranch) + '</span>'
+        : '';
+      addLiveLine("scout-report",
+        '<span class="live-scout-warn">\\u26a0</span> <b>' + escapeHtml(branch) + '</b>' + counter +
+        '<span class="live-dim">: ' + escapeHtml(detail) + '</span>'
+      );
+    });
+    socket.on("swarmIssuesRouted", function(ev) {
+      var total = (ev && ev.total) || 0;
+      var cycle = ev && ev.cycle != null ? "cycle " + ev.cycle + " \\u00b7 " : "";
+      if (total === 0) {
+        addLiveLine("scout-clean",
+          '<span class="live-ok">\\u2713</span> <span class="live-dim">' + escapeHtml(cycle) + 'no mismatches found</span>'
+        );
+      } else {
+        var affected = (ev && Array.isArray(ev.affectedBranches)) ? ev.affectedBranches : [];
+        var suffix = affected.length
+          ? ' \\u2192 ' + affected.slice(0, 6).join(", ") +
+            (affected.length > 6 ? " +" + (affected.length - 6) : "")
+          : "";
+        addLiveLine("scout-route",
+          '<span class="live-scout-route">\\ud83d\\udcec</span> routing <b>' + total + ' issue' +
+          (total === 1 ? "" : "s") + '</b><span class="live-dim">' + escapeHtml(suffix) + '</span>'
+        );
+      }
+    });
+    socket.on("swarmRedeploying", function(ev) {
+      var cycle = ev && ev.cycle != null ? " (cycle " + (ev.cycle + 1) + ")" : "";
+      var names = (ev && Array.isArray(ev.branches)) ? ev.branches.join(", ") : "";
+      addLiveLine("scout-redeploy",
+        '<span class="live-scout-redeploy">\\ud83d\\udd27</span> redeploying<span class="live-dim">' +
+        escapeHtml(cycle) + ': </span><b>' + escapeHtml(names) + '</b>'
+      );
+    });
+    socket.on("swarmReconciled", function(ev) {
+      var cycles = (ev && ev.cycles != null) ? ev.cycles + " cycle" + (ev.cycles === 1 ? "" : "s") : "";
+      var status = (ev && ev.status) || "done";
+      var total = (ev && ev.totalIssues != null) ? ", " + ev.totalIssues + " issue" + (ev.totalIssues === 1 ? "" : "s") : "";
+      var cls = status === "clean" ? "live-ok"
+        : status === "stuck" ? "live-scout-warn"
+        : status === "capped" ? "live-scout-warn"
+        : "live-dim";
+      addLiveLine("scout-reconciled",
+        '<span class="' + cls + '">\\u2713</span> swarm reconciled<span class="live-dim"> (' +
+        escapeHtml(status) + (cycles ? ' \\u00b7 ' + escapeHtml(cycles) : '') + escapeHtml(total) + ')</span>'
+      );
     });
 
     socket.on("placeResult", ({ stepSummaries, targetPath, generation }) => {
@@ -1779,7 +1991,22 @@ router.get("/chat", authenticateLite, async (req, res) => {
       isSending = true;
       requestGeneration++;
       updateSendBtn();
-      socket.emit("chat", { message: text, username: CONFIG.username, generation: requestGeneration, mode: chatMode });
+      // Include current tree position in the chat payload so the server
+      // routes tree-zone work through the orchestrator even on the very
+      // first message after a reload (before urlChanged has flipped
+      // mode). Matches the CLI payload shape. Without this, the server
+      // chat handler sees missing root/node/zone and falls back to the
+      // home zone, so dispatches built for tree mode land in the wrong
+      // session.
+      socket.emit("chat", {
+        message: text,
+        username: CONFIG.username,
+        generation: requestGeneration,
+        mode: chatMode,
+        rootId: activeRootId || null,
+        currentNodeId: activeRootId || null,
+        zone: activeRootId ? "tree" : "home",
+      });
     }
 
     function updateSendBtn() {

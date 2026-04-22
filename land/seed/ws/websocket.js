@@ -685,7 +685,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         return socket.emit(WS.CHAT_ERROR, { error: "Missing or invalid message", generation });
       }
 
-      log.info("WS", `📨 chat: root=${payloadRootId?.slice?.(0,8) || "-"} node=${payloadNodeId?.slice?.(0,8) || "-"} zone=${payloadZone || "-"} handle=${payloadHandle || "-"}`);
+      // Full context log lives AFTER state resolution (see "📨 chat"
+      // further down). A bare arrival log here would show dashes for the
+      // dashboard path because the browser never includes payload
+      // context — it relies on the socket's persistent session state set
+      // by navigate/switchMode. Logging payload values alone made it look
+      // like context was missing when the socket actually had it.
 
       // Position override from the payload. The CLI is authoritative
       // about where the user is — a server restart wipes session
@@ -807,6 +812,20 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       // it so a @fitness chat doesn't touch @default's state.
       const visitorId = _pvId;
 
+      // Inbound chat log: show the EFFECTIVE context (payload values OR
+      // whatever the socket session already had pinned from prior navigate
+      // events). The dashboard never sends payload context, so falling back
+      // to state is the only way to see where messages are actually landing.
+      const effRoot = payloadRootId || getRootId(visitorId) || null;
+      const effNode = payloadNodeId || getCurrentNodeId(visitorId) || null;
+      const effMode = getCurrentMode(visitorId) || null;
+      const effZone = payloadZone || (effMode?.split(":")[0]) || null;
+      const msgSnippet = message.length > 48 ? message.slice(0, 48) + "…" : message;
+      log.info(
+        "WS",
+        `📨 chat: vid=${visitorId} root=${effRoot?.slice?.(0,8) || "-"} node=${effNode?.slice?.(0,8) || "-"} zone=${effZone || "-"} mode=${effMode || "-"} handle=${_handle || "-"} gen=${generation ?? "-"} · ${JSON.stringify(msgSnippet)}`,
+      );
+
       // LLM access gate
       try {
         if (!(await checkLlmAccess(socket.userId, visitorId))) {
@@ -824,6 +843,10 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       // 2. Idle: debounce callback decides whether to swallow or fall through
       if (socket._onStreamMessage) {
         if (socket._chatAbort) {
+          // A turn is already running — this message merges into it rather
+          // than spawning a new turn. Log the merge so operators can see
+          // mid-flight accumulation instead of silently swallowing chat.
+          log.info("WS", `↺ chat merged into running turn: vid=${visitorId} gen=${generation ?? "-"} · ${JSON.stringify(msgSnippet)}`);
           socket._onStreamMessage(message, safeChatMode, generation);
           return;
         }

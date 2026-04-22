@@ -168,7 +168,8 @@ const SYNC_DEBOUNCE_MS = 250;
  * the tool returns to the agent. When the caller is not inside a branch
  * at all, the path is returned unchanged (project-level calls are fine).
  */
-async function resolveBranchRootedPath(nodeId, filePath) {
+async function resolveBranchRootedPath(nodeId, filePath, options = {}) {
+  const { readMode = false } = options;
   const raw = String(filePath || "").trim();
   if (!raw) return { filePath: raw, isInBranch: false, error: "filePath is empty" };
   if (raw.startsWith("/")) {
@@ -220,6 +221,60 @@ async function resolveBranchRootedPath(nodeId, filePath) {
   if (segments.length === 0) {
     return { filePath: raw, isInBranch: true, error: "filePath has no segments" };
   }
+
+  // Read mode: permissive. The AI can walk into any sibling branch for
+  // reference — the whole point of scout / cross-branch awareness is
+  // that you can SEE what peers wrote. Writes stay confined below;
+  // reads should not. Accept these shapes:
+  //   `../<sibling>/<rest>`       → resolve to <sibling>/<rest>
+  //   `<sibling>/<rest>`          → resolve to <sibling>/<rest>
+  //   `<ownBranchPath>/<rest>`    → strip own prefix (current-branch-scoped)
+  //   `<rest>` (no prefix)        → current-branch-relative
+  if (readMode) {
+    // Handle leading `../` segments — walk up. At most one is meaningful
+    // (branch-to-sibling); more than one leaves the project, reject.
+    let cursor = [...segments];
+    let upHops = 0;
+    while (cursor.length > 0 && cursor[0] === "..") {
+      upHops++;
+      cursor.shift();
+    }
+    if (upHops > 1) {
+      return {
+        filePath: raw, isInBranch: true,
+        error: `path "${raw}" leaves the project root (too many "..")`,
+      };
+    }
+    if (cursor.some((s) => s === ".." || s === ".")) {
+      return {
+        filePath: raw, isInBranch: true,
+        error: `path "${raw}" contains embedded "." or ".." segments after the branch walk; reads must be straight paths`,
+      };
+    }
+    if (cursor.length === 0) {
+      return { filePath: raw, isInBranch: true, error: "path is empty after walking up" };
+    }
+
+    if (upHops === 1) {
+      // `../<something>/<rest>` — already at project-root scope, leave as-is.
+      return { filePath: cursor.join("/"), isInBranch: true, error: null };
+    }
+
+    // No upHops: bare path. Two cases:
+    //   (a) first segment is a sibling branch name → pass through as-is
+    //   (b) first segment is own branch prefix → strip it
+    //   (c) otherwise → current-branch-relative
+    if (siblingNames.has(cursor[0])) {
+      return { filePath: cursor.join("/"), isInBranch: true, error: null };
+    }
+    if (cursor[0] === branchPath) {
+      // Already a fully-qualified path inside own branch; pass through.
+      return { filePath: cursor.join("/"), isInBranch: true, error: null };
+    }
+    return { filePath: `${branchPath}/${cursor.join("/")}`, isInBranch: true, error: null };
+  }
+
+  // Write mode: strict. Paths must stay inside the branch.
   for (const seg of segments) {
     if (seg === "." || seg === "..") {
       return {
@@ -238,8 +293,8 @@ async function resolveBranchRootedPath(nodeId, filePath) {
     const sibling = segments[0];
     const afterSibling = segments.slice(1).join("/");
     const peekHint = afterSibling
-      ? `To read a file from "${sibling}", call workspace-peek-sibling-file with siblingName="${sibling}" filePath="${afterSibling}".`
-      : `To read files from "${sibling}", call workspace-peek-sibling-file with siblingName="${sibling}" filePath="<file in that branch>".`;
+      ? `To read a file from "${sibling}", call workspace-read-file with "${sibling}/${afterSibling}" — cross-branch READS are allowed. Cross-branch WRITES are not.`
+      : `To read files from "${sibling}", call workspace-read-file with "${sibling}/<file>" — cross-branch READS are allowed.`;
     return {
       filePath: raw, isInBranch: true,
       error: `path "${raw}" points into sibling branch "${sibling}". You're in branch "${branchPath}"; "${sibling}" is a peer branch with its own worker. ${peekHint} To reference "${sibling}" at runtime, embed the reference (fetch URL, require path) as a literal string inside your own code — do not write files there.`,
@@ -320,26 +375,73 @@ async function checkProjectRootHasBranches(nodeId, filePath) {
   const firstSegment = filePath.split("/").filter(Boolean)[0] || filePath;
   if (ROOT_ALLOWED_FILES.has(firstSegment)) return null;
   try {
-    const node = await Node.findById(nodeId).select("metadata name").lean();
+    const node = await Node.findById(nodeId).select("metadata name children").lean();
     if (!node) return null;
     const sw = node.metadata instanceof Map
       ? node.metadata.get("swarm")
       : node.metadata?.["swarm"];
-    if (sw?.role !== "project") return null;
-    const branches = sw?.subPlan?.branches;
-    if (!Array.isArray(branches) || branches.length === 0) return null;
-    const branchNames = new Set(branches.map((b) => b?.name).filter(Boolean));
-    // Branch-prefixed path: "backend/server.js" when "backend" is an
-    // existing branch. That's a legitimate scoped write, not an orphan.
-    if (branchNames.has(firstSegment)) return null;
-    const namesList = [...branchNames].join(", ") || "(unknown)";
-    return (
-      `write at project root rejected: "${node.name}" has child branches [${namesList}] and "${firstSegment}" is not one of them. ` +
-      `Either write inside an existing branch by prefixing the path with the branch name ` +
-      `(e.g. "${[...branchNames][0] || "backend"}/${filePath.includes("/") ? filePath.split("/").slice(1).join("/") : filePath}"), ` +
-      `or emit a [[BRANCHES]] block adding "${firstSegment}" as a new branch with [[DONE]]. ` +
-      `Root-level config files (package.json, README.md, tsconfig.json, etc.) are allowed at the root.`
-    );
+    const planMeta = node.metadata instanceof Map
+      ? node.metadata.get("plan")
+      : node.metadata?.["plan"];
+
+    // At a project root OR a fresh uninitialized tree root. Two distinct
+    // reject cases:
+    //
+    //   Case 1 — decomposed root: branch kind plan steps exist. Writes
+    //   outside a branch are orphans; push the AI into either a branch
+    //   scoped write or a new branch declaration.
+    //
+    //   Case 2 — EMPTY root: no children yet, no plan. Without this
+    //   gate, a compound request architect (e.g. "build backend and
+    //   frontend") would dump N module files straight at the root,
+    //   creating orphans that the subsequent [[BRANCHES]] dispatch
+    //   duplicates. The gate blocks that: at an empty root, the AI can
+    //   only write integration shell files (index.html / main.js /
+    //   config) OR emit [[BRANCHES]] to decompose. Forces planning.
+    const role = sw?.role || null;
+    const branches = (planMeta?.steps || []).filter((s) => s.kind === "branch");
+    const hasBranches = branches.length > 0;
+    const childCount = Array.isArray(node.children) ? node.children.length : 0;
+
+    if (hasBranches) {
+      const branchNames = new Set(branches.map((b) => b.title).filter(Boolean));
+      // Branch-prefixed path: "backend/server.js" when "backend" is an
+      // existing branch. That's a legitimate scoped write, not an orphan.
+      if (branchNames.has(firstSegment)) return null;
+      const namesList = [...branchNames].join(", ") || "(unknown)";
+      return (
+        `write at project root rejected: "${node.name}" has child branches [${namesList}] and "${firstSegment}" is not one of them. ` +
+        `Either write inside an existing branch by prefixing the path with the branch name ` +
+        `(e.g. "${[...branchNames][0] || "backend"}/${filePath.includes("/") ? filePath.split("/").slice(1).join("/") : filePath}"), ` +
+        `or emit a [[BRANCHES]] block adding "${firstSegment}" as a new branch with [[DONE]]. ` +
+        `Root-level config files (package.json, README.md, tsconfig.json, etc.) are allowed at the root.`
+      );
+    }
+
+    // Empty-root gate. Active when:
+    //   - role is "project" (initialized) or null (fresh tree root)
+    //   - no branches declared yet
+    //   - no children (no files, no subdirectories)
+    //   - file isn't in ROOT_ALLOWED_FILES (shell + config)
+    const isProjectLike = role === "project" || role == null;
+    if (isProjectLike && childCount === 0) {
+      return (
+        `write at project root rejected: "${node.name}" is empty and has no declared branches yet. ` +
+        `Decide the shape first:\n\n` +
+        `  • COMPOUND request (two or more independent modules)? Emit a [[BRANCHES]] block ` +
+        `declaring one branch per module, close with [[DONE]]. The swarm runs each branch in ` +
+        `its own session; each branch writes its own files in its own subdirectory.\n\n` +
+        `  • SINGLE file or integration shell? Write an allowed root file ` +
+        `(index.html, main.js, app.js, server.js, package.json, etc.). The name "${firstSegment}" ` +
+        `is not one of those.\n\n` +
+        `Root-level module files like "game.js" / "characters.js" land at the root as orphans — ` +
+        `when [[BRANCHES]] later dispatches, the branch workers will write their own copies ` +
+        `under game/game.js and you'll have duplicates in two places. That's the failure mode ` +
+        `this check blocks.`
+      );
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -532,17 +634,26 @@ async function ensureProject({ rootId, currentNodeId, userId, core, name, worksp
     }
   }
 
-  // Priority 3: auto-promote the tree root itself into a workspace.
-  // Fires when no name was supplied OR when the requested name matches
-  // the root's own name (already handled above as priority 1b, but kept
-  // here as a safety net for the no-name path).
-  if (!name && rootId) {
-    trace("ensureProject", "auto-init", `rootId=${rootId}`);
-    const rootNode = await Node.findById(rootId).lean();
-    if (rootNode) {
-      const autoName = rootNode.name || "workspace";
+  // Priority 3: auto-promote the AI's CURRENT POSITION into a workspace.
+  //
+  // Auto-init happens at currentNodeId, NOT rootId. Reason: the user
+  // navigates with `cd` to a sub-node and starts a project there. The
+  // tree root (e.g. "Life") is just the user's parent-of-everything
+  // anchor; promoting Life into a code-workspace project would clobber
+  // the tree's primary purpose and put every subsequent branch under
+  // the WRONG node. Promoting at the position where the user actually
+  // is matches what they meant: "start the project HERE."
+  //
+  // Falls back to rootId only when currentNodeId is missing (e.g.
+  // headless API calls without position context).
+  const promoteId = currentNodeId || rootId;
+  if (!name && promoteId) {
+    trace("ensureProject", "auto-init", `promoteId=${promoteId} (currentNode=${currentNodeId || "none"} rootId=${rootId})`);
+    const promoteNode = await Node.findById(promoteId).lean();
+    if (promoteNode) {
+      const autoName = promoteNode.name || "workspace";
       const initRes = await initProject({
-        projectNodeId: rootId,
+        projectNodeId: promoteId,
         name: autoName,
         description: "Auto-initialized on first code write.",
         workspacePath,
@@ -739,14 +850,27 @@ export default function getWorkspaceTools(core) {
         try {
           const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
           {
-            const resolved = await resolveBranchRootedPath(nodeId, filePath);
+            // Reads are permissive across sibling branches — you can
+            // read any peer's files for reference. Writes stay confined
+            // (see workspace-add-file / workspace-edit-file below).
+            const resolved = await resolveBranchRootedPath(nodeId, filePath, { readMode: true });
             if (resolved.error) return text(`workspace-read-file rejected: ${resolved.error}`);
             filePath = resolved.filePath;
           }
-          const { fileNode, created } = await resolveOrCreateFile({
-            projectNodeId: project._id, relPath: filePath, userId, core,
-          });
-          if (created) return text(`workspace-read-file: ${filePath} did not exist (just created as empty). Write content first.`);
+          // Pure read: look for the file, don't create anything. An
+          // earlier version auto-created empty nodes on missing paths
+          // which littered trees with orphan directory+file nodes every
+          // time an AI guessed at a path that didn't exist. The correct
+          // behavior is to report "not found" and let the AI decide
+          // (usually: emit [[BRANCHES]] or call workspace-add-file).
+          const { findFileByPath } = await import("./workspace.js");
+          const fileNode = await findFileByPath(project._id, filePath);
+          if (!fileNode) {
+            return text(
+              `workspace-read-file: ${filePath} does not exist in project "${project.name}". ` +
+              `Use workspace-list to see what's actually here, or call workspace-add-file to create it.`
+            );
+          }
           const content = await readFileContent(fileNode._id);
           if (!content) return text(`${filePath} is empty.`);
           const slice = sliceByLines(content, startLine || 0, limit || DEFAULT_READ_LINES);

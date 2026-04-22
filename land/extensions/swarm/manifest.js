@@ -30,18 +30,20 @@ export default {
     "file tree, book-workspace as chapter summaries. Branches stop building " +
     "blind to each other. " +
     "\n\n" +
-    "State lives at metadata.swarm on each swarm-aware node: subPlan (branch " +
-    "list + statuses), inbox (lateral signals between siblings), contracts " +
-    "(invariants every branch respects), aggregatedDetail (rolled-up " +
-    "descendant state), events (flat audit log), masterPlan (top-level " +
-    "orchestration state), role (project/branch). Signal payloads are " +
-    "opaque to swarm — domain extensions define their own kinds.",
+    "Branch decomposition state lives in metadata.plan, owned by the plan " +
+    "extension (swarm declares it as a hard dependency). Each branch is a " +
+    "step with kind=branch in plan.steps. Swarm reads, writes status, and " +
+    "dispatches; the plan extension owns the namespace and api. Swarm's own " +
+    "namespace (metadata.swarm) holds execution bookkeeping: role, " +
+    "parentProjectId, aggregatedDetail, inbox, events, contracts. Signal " +
+    "payloads are opaque to swarm; domain extensions define their own kinds.",
 
   territory: "parallel branch dispatch, multi-component projects, compound tasks",
 
   needs: {
     services: ["hooks", "metadata"],
     models: ["Node"],
+    extensions: ["plan"],
   },
 
   optional: {
@@ -51,7 +53,7 @@ export default {
 
   provides: {
     models: {},
-    routes: false,
+    routes: "./routes.js",
     tools: false,
     jobs: false,
     energyActions: {},
@@ -69,8 +71,9 @@ export default {
         "swarm:afterBranchComplete",
         "swarm:afterAllBranchesComplete",
         "swarm:branchRetryNeeded",
+        "swarm:runScouts",
       ],
-      listens: [],
+      listens: ["afterMetadataWrite"],
     },
   },
 };

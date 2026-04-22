@@ -321,7 +321,62 @@ body {
   border: 1px solid rgba(74,222,128,0.3);
 }
 .cc-btn-green:hover { background: rgba(74,222,128,0.25); }
+.cc-btn-yellow {
+  background: rgba(234,179,8,0.12);
+  color: #eab308;
+  border: 1px solid rgba(234,179,8,0.3);
+}
+.cc-btn-yellow:hover { background: rgba(234,179,8,0.22); }
 .cc-toggle-form { display: inline; }
+.cc-actions-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.cc-actions-row .cc-btn { margin-top: 0; }
+
+/* FILTER BAR */
+.cc-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 2px 0;
+}
+.cc-search {
+  flex: 1;
+  min-width: 240px;
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.cc-search:focus { border-color: rgba(74,222,128,0.5); background: rgba(255,255,255,0.06); }
+.cc-search::placeholder { color: rgba(255,255,255,0.3); }
+.cc-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.cc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.5);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cc-chip:hover { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.8); }
+.cc-chip.cc-chip-active {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.25);
+  color: #fff;
+}
+/* Hidden by current filter — collapse and fade out */
+.cc-hidden { display: none !important; }
 
 /* FOOTER */
 .cc-footer {
@@ -379,12 +434,17 @@ body {
       </div>
     </header>
 
-    <!-- KEY -->
+    <!-- KEY + FILTERS -->
     <div class="cc-key">
-      <div class="cc-container cc-key-inner">
-        ${Object.entries(STATUS_COLORS).map(([k, v]) =>
-          `<span class="cc-key-item">${dot(k)} ${v.label}</span>`
-        ).join("")}
+      <div class="cc-container cc-filter-row">
+        <input id="cc-search" class="cc-search" placeholder="Filter by name (extension, tool, mode)…" autocomplete="off" />
+        <div class="cc-chips" role="tablist" aria-label="Status filter">
+          <button class="cc-chip cc-chip-active" data-filter="all" type="button">All</button>
+          <button class="cc-chip" data-filter="active" type="button">${dot("active")}Active</button>
+          <button class="cc-chip" data-filter="restricted" type="button">${dot("restricted")}Read-only</button>
+          <button class="cc-chip" data-filter="confined" type="button">${dot("confined")}Confined</button>
+          <button class="cc-chip" data-filter="blocked" type="button">${dot("blocked")}Blocked</button>
+        </div>
       </div>
     </div>
 
@@ -399,7 +459,7 @@ body {
             const extTools = toolsByExt[ext.name] || [];
             const extModes = modes.filter(m => m.extName === ext.name);
             return `
-            <details class="cc-item">
+            <details class="cc-item" data-name="${esc(ext.name.toLowerCase())}" data-status="${esc(ext.status)}">
               <summary class="cc-item-row">
                 ${dot(ext.status)}
                 <span class="cc-item-name">${esc(ext.name)}</span>
@@ -410,18 +470,47 @@ body {
                 ${ext.description ? `<p class="cc-item-desc">${esc(truncate(ext.description, 200))}</p>` : ""}
                 ${extTools.length > 0 ? `<div class="cc-item-sub"><strong>Tools:</strong> ${extTools.map(t => `<span style="color:${(STATUS_COLORS[t.status]||{}).text||"#888"}">${esc(t.name)}</span>`).join(", ")}</div>` : ""}
                 ${extModes.length > 0 ? `<div class="cc-item-sub"><strong>Modes:</strong> ${extModes.map(m => `<span style="color:${(STATUS_COLORS[m.status]||{}).text||"#888"}">${m.emoji||""} ${esc(m.label || m.key)}</span>`).join(", ")}</div>` : ""}
-                ${ext.status === "active" ? `
-                  <form method="POST" action="/api/v1/node/${nodeId}/extensions${qs}" class="cc-toggle-form">
-                    <input type="hidden" name="block" value="${esc(ext.name)}" />
-                    <button type="submit" class="cc-btn cc-btn-red">Block at this node</button>
-                  </form>
-                ` : ""}
-                ${ext.status === "blocked" ? `
-                  <form method="POST" action="/api/v1/node/${nodeId}/extensions${qs}" class="cc-toggle-form">
-                    <input type="hidden" name="allow" value="${esc(ext.name)}" />
-                    <button type="submit" class="cc-btn cc-btn-green">Unblock</button>
-                  </form>
-                ` : ""}
+                <div class="cc-actions-row">
+                  ${ext.status === "active" && confined.has(ext.name) ? `
+                    <form method="POST" action="/api/v1/node/${nodeId}/extensions${qs}" class="cc-toggle-form">
+                      <input type="hidden" name="unsetAllowed" value="${esc(ext.name)}" />
+                      <button type="submit" class="cc-btn cc-btn-red">Remove from allowed</button>
+                    </form>
+                  ` : ""}
+                  ${ext.status === "active" && !confined.has(ext.name) ? `
+                    <form method="POST" action="/api/v1/node/${nodeId}/extensions${qs}" class="cc-toggle-form">
+                      <input type="hidden" name="restrict" value="${esc(ext.name)}" />
+                      <input type="hidden" name="access" value="read" />
+                      <button type="submit" class="cc-btn cc-btn-yellow">Make read-only</button>
+                    </form>
+                    <form method="POST" action="/api/v1/node/${nodeId}/extensions${qs}" class="cc-toggle-form">
+                      <input type="hidden" name="block" value="${esc(ext.name)}" />
+                      <button type="submit" class="cc-btn cc-btn-red">Block at this node</button>
+                    </form>
+                  ` : ""}
+                  ${ext.status === "restricted" ? `
+                    <form method="POST" action="/api/v1/node/${nodeId}/extensions${qs}" class="cc-toggle-form">
+                      <input type="hidden" name="unrestrict" value="${esc(ext.name)}" />
+                      <button type="submit" class="cc-btn cc-btn-green">Restore full access</button>
+                    </form>
+                    <form method="POST" action="/api/v1/node/${nodeId}/extensions${qs}" class="cc-toggle-form">
+                      <input type="hidden" name="block" value="${esc(ext.name)}" />
+                      <button type="submit" class="cc-btn cc-btn-red">Block at this node</button>
+                    </form>
+                  ` : ""}
+                  ${ext.status === "blocked" ? `
+                    <form method="POST" action="/api/v1/node/${nodeId}/extensions${qs}" class="cc-toggle-form">
+                      <input type="hidden" name="allow" value="${esc(ext.name)}" />
+                      <button type="submit" class="cc-btn cc-btn-green">Unblock</button>
+                    </form>
+                  ` : ""}
+                  ${ext.status === "confined" ? `
+                    <form method="POST" action="/api/v1/node/${nodeId}/extensions${qs}" class="cc-toggle-form">
+                      <input type="hidden" name="setAllowed" value="${esc(ext.name)}" />
+                      <button type="submit" class="cc-btn cc-btn-green">Allow at this node</button>
+                    </form>
+                  ` : ""}
+                </div>
               </div>
             </details>`;
           }).join("")}
@@ -431,10 +520,10 @@ body {
         <section class="cc-col">
           <h2 class="cc-col-title">Tools <span class="cc-count">${activeTools}/${totalTools}</span></h2>
           ${Object.entries(toolsByExt).map(([extName, extTools]) => `
-            <details class="cc-group" ${extTools.some(t => t.status === "active") ? "open" : ""}>
+            <details class="cc-group" data-ext="${esc(extName.toLowerCase())}">
               <summary class="cc-group-header">${esc(extName)} <span class="cc-count">${extTools.filter(t=>t.status==="active").length}/${extTools.length}</span></summary>
               ${extTools.map(t => `
-                <div class="cc-tool-row">
+                <div class="cc-tool-row" data-name="${esc((t.name || "").toLowerCase())}" data-status="${esc(t.status)}">
                   ${dot(t.status)}
                   <div class="cc-tool-info">
                     <span class="cc-tool-name">${esc(t.name)}</span>
@@ -464,12 +553,12 @@ body {
         <section class="cc-col">
           <h2 class="cc-col-title">Modes <span class="cc-count">${activeModes}/${totalModes}</span></h2>
           ${Object.entries(modesByBig).map(([bigMode, bigModes]) => `
-            <details class="cc-group" open>
+            <details class="cc-group" open data-ext="${esc(bigMode.toLowerCase())}">
               <summary class="cc-group-header">${esc(bigMode)} <span class="cc-count">${bigModes.filter(m=>m.status==="active").length}/${bigModes.length}</span></summary>
               ${bigModes.map(m => {
                 const override = modeOverrides?.[m.intent];
                 return `
-                <div class="cc-mode-row">
+                <div class="cc-mode-row" data-name="${esc((m.label || m.key || "").toLowerCase() + " " + (m.extName || "").toLowerCase())}" data-status="${esc(m.status)}">
                   ${dot(m.status)}
                   <span class="cc-mode-emoji">${m.emoji || ""}</span>
                   <div class="cc-mode-info">
@@ -494,7 +583,61 @@ body {
       </div>
     </footer>
 
-  </div>`;
+  </div>
+
+  <script>
+    (function () {
+      const search = document.getElementById("cc-search");
+      const chips = document.querySelectorAll(".cc-chip");
+      // Every filterable row — extensions, tools, modes — carries data-name
+      // and data-status. One pass updates all three columns.
+      const extItems = document.querySelectorAll(".cc-item[data-name]");
+      const toolRows = document.querySelectorAll(".cc-tool-row[data-name]");
+      const modeRows = document.querySelectorAll(".cc-mode-row[data-name]");
+      const toolGroups = document.querySelectorAll(".cc-col:nth-child(2) details.cc-group");
+      const modeGroups = document.querySelectorAll(".cc-col:nth-child(3) details.cc-group");
+
+      let activeFilter = "all";
+      let query = "";
+
+      function apply() {
+        const q = query.trim().toLowerCase();
+        const matchRow = (el) => {
+          const name = el.getAttribute("data-name") || "";
+          const status = el.getAttribute("data-status") || "";
+          const statusOk = activeFilter === "all" || activeFilter === status;
+          const nameOk = !q || name.includes(q);
+          return statusOk && nameOk;
+        };
+
+        extItems.forEach((el) => el.classList.toggle("cc-hidden", !matchRow(el)));
+        toolRows.forEach((el) => el.classList.toggle("cc-hidden", !matchRow(el)));
+        modeRows.forEach((el) => el.classList.toggle("cc-hidden", !matchRow(el)));
+
+        // Hide tool/mode groups whose children are all hidden; auto-expand
+        // groups that still have visible children so the user can read them.
+        const hideEmptyGroups = (groups, rowSel) => {
+          groups.forEach((g) => {
+            const visible = g.querySelectorAll(rowSel + ":not(.cc-hidden)").length;
+            g.classList.toggle("cc-hidden", visible === 0);
+            if (visible > 0 && (q || activeFilter !== "all")) g.open = true;
+          });
+        };
+        hideEmptyGroups(toolGroups, ".cc-tool-row");
+        hideEmptyGroups(modeGroups, ".cc-mode-row");
+      }
+
+      search?.addEventListener("input", (e) => { query = e.target.value; apply(); });
+      chips.forEach((chip) => {
+        chip.addEventListener("click", () => {
+          chips.forEach((c) => c.classList.remove("cc-chip-active"));
+          chip.classList.add("cc-chip-active");
+          activeFilter = chip.getAttribute("data-filter") || "all";
+          apply();
+        });
+      });
+    })();
+  </script>`;
 
   return page({
     title: `Command Center . ${esc(nodeName)}`,
