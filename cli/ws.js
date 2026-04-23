@@ -236,6 +236,10 @@ async function runConversational({ verb, message, rootId = null, currentNodeId =
     socket.on("toolCalled", forward("toolCalled"));
     socket.on("toolResult", forward("toolResult"));
     socket.on("thinking", forward("thinking"));
+    // Stream extension ACK: a mid-flight chat emit was absorbed into the
+    // running turn. The CLI renderer turns this into a subtle "merged"
+    // line so the user can confirm their second message reached the server.
+    socket.on("messageQueued", forward("messageQueued"));
     socket.on("swarmDispatch", forward("swarmDispatch"));
     socket.on("branchStarted", forward("branchStarted"));
     socket.on("branchCompleted", forward("branchCompleted"));

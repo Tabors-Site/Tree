@@ -890,7 +890,8 @@
       "Bash(awk 'NR>=68 { c=1; while\\(c\\) { if\\(prev==\"\\\\\\\\\"\\) {prev=$0; c=0; break;} idx=index\\($0, \"`\"\\); if\\(idx>0\\){print NR\": \"$0; c=0; break;} prev=$0; getline; NR++; }}' /home/tabor/github/Tree/land/extensions/treeos-base/app/app.js)",
       "Bash(grep -n '^\\\\`' /home/tabor/github/Tree/land/extensions/treeos-base/app/app.js)",
       "Bash(grep -cE \"\\\\`\" /home/tabor/github/Tree/land/extensions/treeos-base/app/app.js)",
-      "Bash(kill %1)"
+      "Bash(kill %1)",
+      "Bash(awk '/^\\(async \\)?function |^export \\(async \\)?function /{f=$0}{if\\(NR==908\\){print \"Containing function was:\", f}}' /home/tabor/github/Tree/land/seed/llm/conversation.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

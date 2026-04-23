@@ -685,6 +685,19 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         return socket.emit(WS.CHAT_ERROR, { error: "Missing or invalid message", generation });
       }
 
+      // Snapshot the incoming payload context on the socket so the stream
+      // extension's turn-end follow-up replay can reuse it (the CLI sends
+      // rootId/nodeId/zone/handle on every chat; the browser uses socket
+      // session state so this becomes a shallow copy without meaningful
+      // fields — either way the replay path just spreads whatever's here
+      // and falls through to the socket-state lookup for anything null).
+      socket._lastChatCtx = {
+        rootId: payloadRootId || null,
+        currentNodeId: payloadNodeId || null,
+        zone: payloadZone || null,
+        sessionHandle: payloadHandle || null,
+      };
+
       // Full context log lives AFTER state resolution (see "📨 chat"
       // further down). A bare arrival log here would show dashes for the
       // dashboard path because the browser never includes payload
@@ -965,6 +978,12 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           clearChatContext(socket.visitorId);
         } finally {
           if (socket._chatAbort === abort) socket._chatAbort = null;
+          // Turn ended. Let the stream extension drain any mid-flight
+          // messages that never made it into a tool-loop checkpoint so
+          // they don't bleed into the next chat (see stream/index.js
+          // _onStreamTurnEnd). Fire-and-forget, guarded for backward
+          // compat with sockets that lack the stream extension.
+          try { socket._onStreamTurnEnd?.(); } catch {}
         }
       });
     };

@@ -517,6 +517,28 @@ export async function init(core) {
       getHistory,
       handleMessage,
       resolveSet,
+      // One-line summary used by channels' peer-peek enrichContext.
+      // The caller (channels extension) has already confirmed the message
+      // matches food's vocabulary — this just renders the daily picture
+      // into a compact string the LLM can read without prompt bloat.
+      getBriefForPrompt: async (rootId) => {
+        try {
+          const p = await getDailyPicture(rootId);
+          if (!p) return null;
+          const parts = [];
+          for (const role of (p._valueRoles || ["protein", "carbs", "fats"])) {
+            const m = p[role];
+            if (!m) continue;
+            parts.push(`${m.name || role} ${m.today}/${m.goal}g`);
+          }
+          if (p.calories) parts.push(`cal ${p.calories.today}/${p.calories.goal}`);
+          if (p.recentMeals?.length) {
+            const last = p.recentMeals[0];
+            if (last?.text) parts.push(`last: ${String(last.text).slice(0, 60)}`);
+          }
+          return parts.length > 0 ? `food today — ${parts.join(" · ")}` : null;
+        } catch { return null; }
+      },
     },
     jobs: [
       {

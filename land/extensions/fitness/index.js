@@ -380,6 +380,40 @@ export async function init(core) {
       handleMessage,
       resolveSet,
       scaffold: (await import("./setup.js")).scaffoldFitnessBase,
+      // One-line summary used by channels' peer-peek enrichContext. Caller
+      // has already vocab-matched the message to fitness; this condenses
+      // the exercise state into a compact line for the peer's prompt.
+      getBriefForPrompt: async (rootId) => {
+        try {
+          const state = await getExerciseState(rootId);
+          if (!state) return null;
+          // Collect the 3 most recently worked exercises across all groups.
+          const rows = [];
+          for (const groupData of Object.values(state.groups || {})) {
+            for (const ex of groupData.exercises || []) {
+              const last = (ex.recentHistory || []).slice(-1)[0];
+              if (!last?.date) continue;
+              const fmt = () => {
+                if (groupData.modality === "running") {
+                  const d = last.distance ?? last.weeklyMiles;
+                  return `${d ?? "?"}mi`;
+                }
+                if (Array.isArray(last.sets) && last.sets.length > 0) {
+                  const w = last.sets[0]?.weight;
+                  const reps = last.sets.map(s => s.reps ?? s.duration ?? "?").join("/");
+                  return w != null ? `${w}x${reps}` : reps;
+                }
+                return "logged";
+              };
+              rows.push({ name: ex.name, date: last.date, summary: fmt() });
+            }
+          }
+          if (rows.length === 0) return null;
+          rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+          const top = rows.slice(0, 3);
+          return `fitness recent — ${top.map(r => `${r.name} ${r.summary} (${r.date})`).join(" · ")}`;
+        } catch { return null; }
+      },
     },
   };
 }

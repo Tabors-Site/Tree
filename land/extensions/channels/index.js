@@ -77,9 +77,26 @@ export async function init(core) {
     return { channelDeliveries: results };
   }, "channels");
 
-  // ── enrichContext: surface channel info to the AI ───────────────────
+  // ── enrichContext: surface channel info + peer summaries ────────────
+  //
+  // Two jobs in one handler:
+  //
+  // 1. Light metadata ("channels" field) — the declared subscriptions so
+  //    the AI knows what wires exist off this node.
+  //
+  // 2. Peer-peek ("peers" field) — for every active subscription, resolve
+  //    the domain extension that owns the peer's root. If its vocabulary
+  //    matches the current turn's message, call its getBriefForPrompt()
+  //    and attach the one-line summary. This is how a user at /Fitness
+  //    asking "did I eat protein" gets food's daily macros injected into
+  //    fitness-coach's prompt without bloating every turn: the vocab
+  //    gate is the SAME gate routing uses, so peers only light up when
+  //    they would have claimed the message anyway.
+  //
+  // Fails open: any error on a single peer skips just that peer, never
+  // breaks the turn.
 
-  core.hooks.register("enrichContext", async ({ context, node, meta }) => {
+  core.hooks.register("enrichContext", async ({ context, meta, message }) => {
     const channelMeta = meta.channels;
     if (!channelMeta?.subscriptions?.length) return;
 
@@ -95,6 +112,65 @@ export async function init(core) {
 
     if (channelMeta.pending?.length > 0) {
       context.pendingChannelInvites = channelMeta.pending.length;
+    }
+
+    // ── Peer-peek ─────────────────────────────────────────────────────
+    // Skip when there's no message to vocab-test against (background
+    // scans / dump mode / getContextForAi without a message).
+    if (!message || typeof message !== "string") return;
+
+    let resolveDomainExtensionAtRoot, getExtension, flattenVocabulary;
+    try {
+      const loader = await import("../loader.js");
+      resolveDomainExtensionAtRoot = loader.resolveDomainExtensionAtRoot;
+      getExtension = loader.getExtension;
+      flattenVocabulary = loader.flattenVocabulary;
+    } catch {
+      return;
+    }
+
+    // De-duplicate by peer rootId — if two subscriptions point at the
+    // same peer root (rare, but possible), we only peek once.
+    const seenRoots = new Set();
+    const peers = {};
+    let Node = null;
+
+    for (const sub of active) {
+      const peerRootId = sub?.agent?.rootId || sub?.partnerRootId || null;
+      if (!peerRootId || seenRoots.has(peerRootId)) continue;
+      seenRoots.add(peerRootId);
+
+      try {
+        if (!Node) Node = (await import("../../seed/models/node.js")).default;
+        const peerNode = await Node.findById(peerRootId).select("metadata").lean();
+        if (!peerNode) continue;
+
+        const peerExtName = resolveDomainExtensionAtRoot(peerNode.metadata);
+        if (!peerExtName) continue;
+        if (peers[peerExtName]) continue;  // first peer of this domain wins
+
+        // Vocab gate. If the peer extension's vocabulary doesn't claim
+        // any part of the user's message, don't pay for the brief.
+        const peerExt = getExtension(peerExtName);
+        const peerManifest = peerExt?.manifest;
+        if (!peerManifest) continue;
+        const hints = flattenVocabulary(peerManifest) || [];
+        if (hints.length === 0) continue;
+        if (!hints.some(re => re.test(message))) continue;
+
+        // Peer passes the gate. Ask for its one-line summary.
+        const brief = await peerExt?.exports?.getBriefForPrompt?.(peerRootId);
+        if (typeof brief === "string" && brief.length > 0) {
+          peers[peerExtName] = brief;
+        }
+      } catch (err) {
+        // Single peer failure never aborts the rest of enrichContext.
+        log.debug("Channels", `peer-peek failed for ${peerRootId}: ${err.message}`);
+      }
+    }
+
+    if (Object.keys(peers).length > 0) {
+      context.peers = peers;
     }
   }, "channels");
 

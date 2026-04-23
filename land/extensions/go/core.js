@@ -106,7 +106,17 @@ export async function findDestination(query, userId) {
         for (const [extName, entry] of index) {
           const score = matchScore(target, extName, entry.name, entry.path);
           if (score > 0) {
-            matches.push({ ...entry, extension: extName, score });
+            // Only pull the serializable fields — hints/vocab on the entry
+            // are arrays of RegExp which render as "{}" through JSON and
+            // leak into the CLI output ("[{},{},{},{}]" noise).
+            matches.push({
+              nodeId: entry.nodeId,
+              name: entry.name,
+              path: entry.path,
+              mode: entry.mode,
+              extension: extName,
+              score,
+            });
           }
         }
       }
@@ -133,8 +143,18 @@ export async function findDestination(query, userId) {
     }
   }
 
-  // Sort by score descending
-  matches.sort((a, b) => b.score - a.score);
+  // Dedupe: a single destination can score via both the routing index
+  // entry and the root-name pass. Keep the highest-scoring copy per nodeId.
+  const byNode = new Map();
+  for (const m of matches) {
+    const key = String(m.nodeId || m.path || m.name);
+    const prev = byNode.get(key);
+    if (!prev || m.score > prev.score) byNode.set(key, m);
+  }
+  const unique = [...byNode.values()];
+  unique.sort((a, b) => b.score - a.score);
+  matches.length = 0;
+  for (const m of unique) matches.push(m);
 
   if (matches.length === 0) {
     return { found: false, query: target };
@@ -148,6 +168,10 @@ export async function findDestination(query, userId) {
   // Ambiguous
   return { found: true, ambiguous: true, options: matches.slice(0, 5) };
 }
+
+// Stop words we don't want to match on. "go to food" should match nothing
+// for "go" or "to" — only the content word "food" matters.
+const STOP_WORDS = new Set(["go", "to", "the", "a", "an", "at", "in", "into", "on", "my", "our", "for", "from"]);
 
 function matchScore(target, extName, nodeName, path) {
   const lowerName = (nodeName || "").toLowerCase();
@@ -169,15 +193,25 @@ function matchScore(target, extName, nodeName, path) {
   // Path contains target
   if (lowerPath.includes(target)) return 4;
 
-  // Word match in name
-  const targetWords = target.split(/\s+/);
-  const nameWords = lowerName.split(/[\s\-_\/]+/);
-  const pathWords = lowerPath.split(/[\s\-_\/]+/);
+  // Word-level match. Drop stop words and single-letter tokens from the
+  // query so "go to food" can't score on a tree literally named "t" (which
+  // the old bidirectional containment let through via `"to".includes("t")`).
+  const targetWords = target
+    .split(/\s+/)
+    .filter((w) => w.length >= 2 && !STOP_WORDS.has(w));
+  if (targetWords.length === 0) return 0;
+
+  const nameWords = lowerName.split(/[\s\-_\/]+/).filter(Boolean);
+  const pathWords = lowerPath.split(/[\s\-_\/]+/).filter(Boolean);
   const allWords = [...nameWords, ...pathWords, lowerExt].filter(Boolean);
 
+  // Containment is ONE-WAY: the entity word must contain the target word.
+  // The old reverse direction (tw.includes(w)) matched any entity whose
+  // name was a substring of any target word, which meant single-letter
+  // tree names got credit for multi-letter query words.
   let wordHits = 0;
   for (const tw of targetWords) {
-    if (allWords.some(w => w.includes(tw) || tw.includes(w))) wordHits++;
+    if (allWords.some((w) => w.includes(tw))) wordHits++;
   }
   if (wordHits > 0) return 2 + wordHits;
 

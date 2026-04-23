@@ -15,7 +15,7 @@
  */
 
 import log from "../../seed/log.js";
-import { pushMessage, checkInterrupt } from "./accumulator.js";
+import { pushMessage, checkInterrupt, clear as clearAccumulator } from "./accumulator.js";
 import {
   detectActiveSwarm,
   classifyMidflight,
@@ -103,6 +103,64 @@ export async function init(core) {
       debounceTimers.set(visitorId, timer);
       log.debug("Stream", `Debouncing for ${visitorId} (${DEBOUNCE_MS}ms): "${message.slice(0, 60)}"`);
       return true; // swallow, waiting for debounce window
+    };
+
+    // ── Turn end ──
+    // Called by the kernel when a chat turn finishes (response, error, or
+    // cancel — anything that clears _chatAbort). Two jobs:
+    //
+    // 1. Cancel any pending idle-debounce timer so a "will fire in 500ms"
+    //    replay doesn't race with cleanup.
+    //
+    // 2. Drain the accumulator. If the finished turn was a toolless coach
+    //    reply or any mode that never hit _streamCheckpoint, whatever
+    //    was pushed mid-flight is still sitting there unread. Instead of
+    //    silently dropping it (earlier behavior), treat it as a new
+    //    follow-up turn: re-enter _chatHandler with the combined text.
+    //    Matches the dashboard UX — user fires "nevermind go to food"
+    //    while coach is replying, and as soon as the reply lands, the
+    //    redirect runs as its own turn. Bypass flag prevents re-entry
+    //    from itself accumulating again on the way in.
+    let _followUpBypass = false;
+    socket._onStreamTurnEnd = () => {
+      const timer = debounceTimers.get(visitorId);
+      if (timer) { clearTimeout(timer); debounceTimers.delete(visitorId); }
+
+      const pending = checkInterrupt(visitorId);
+      if (!pending || pending.length === 0) return;
+      const combined = pending.map((m) => m.content).join("\n").trim();
+      if (!combined) return;
+
+      log.info("Stream", `Turn ended with ${pending.length} undelivered mid-flight msg(s) for ${visitorId}; replaying as follow-up turn: "${combined.slice(0, 80)}"`);
+
+      if (!socket._chatHandler) return;
+      if (_followUpBypass) { _followUpBypass = false; return; }
+      _followUpBypass = true;
+      // Re-enter the chat handler on the next tick so the current
+      // response emit fully drains before the new turn starts. We reuse
+      // the most recent context snapshot if debounce captured one; for
+      // socket-state paths (browser dashboard), the handler's own state
+      // lookup fills in the rest.
+      setTimeout(() => {
+        try {
+          // Context priority: the handler's own per-chat snapshot (set on
+          // every chat handler entry) wins because it reflects the most
+          // recent payload the client actually sent. Fall back to the
+          // idle-debounce snapshot for older code paths, then empty.
+          const ctx = socket._lastChatCtx || _ctxSnapshot || {};
+          socket._chatHandler({
+            message: combined,
+            username: socket.username,
+            generation: Date.now(),
+            mode: "chat",
+            ...ctx,
+          });
+        } catch (err) {
+          log.warn("Stream", `follow-up turn replay failed: ${err.message}`);
+        } finally {
+          _followUpBypass = false;
+        }
+      }, 10);
     };
 
     // ── Tool loop checkpoint ──

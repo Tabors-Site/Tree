@@ -2653,6 +2653,14 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
         addTypingIndicator();
         isSending = true;
         lockModeBar(true);
+      } else {
+        // Mid-flight send: a running turn still owns the typing dots.
+        // Move them BELOW the new user bubble so the dots always sit at
+        // the current bottom of the conversation. Without this, the dots
+        // stay frozen at the original spot above every merged message
+        // and the layout looks stale.
+        removeTypingIndicator();
+        addTypingIndicator();
       }
       // Reset the live-event dedupe so the first mode switch /
       // thinking line of the next turn always renders.

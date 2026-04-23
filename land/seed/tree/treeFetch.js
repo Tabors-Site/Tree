@@ -561,7 +561,13 @@ export async function getContextForAi(nodeId, options = {}) {
   }
 
   // Let extensions enrich the context with their data
-  await hooks.run("enrichContext", { context, node, meta, userId: options.userId || null });
+  await hooks.run("enrichContext", {
+    context,
+    node,
+    meta,
+    userId: options.userId || null,
+    message: options.message || null,
+  });
 
   // ---- Notes ----
   if (includeNotes) {

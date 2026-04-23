@@ -681,23 +681,54 @@ const startShell = module.exports.startShell = async () => {
       _history = rl.history || [];
       saveHistory();
 
-      // Fully detach the shell readline and keypress listener so subcommands
-      // that create their own readline (login, register, llm add, passwd)
-      // don't fight over stdin with duplicate listeners
-      process.stdin.removeListener("keypress", _onKeypress);
-      rl.removeListener("close", onClose);
-      rl.close();
-      // While the subcommand runs there is no readline SIGINT handler, so a
-      // bare Ctrl+C would hit Node's default and kill the whole shell. Install
-      // a process-level guard that aborts the in-flight chat instead; if there
-      // is nothing in flight the handler just swallows the signal so the user
-      // drops back to the shell prompt rather than exiting treeos.
-      const subSigint = () => {
-        if (global._treeosInFlight) {
-          global._treeosInFlight.abort();
-        }
-      };
-      process.on("SIGINT", subSigint);
+      // Conversational commands (chat / place / query / be / @handle / any
+      // line that will fall through to `chat`) don't spin up their own
+      // readline — they stream over the websocket while the shell stays
+      // responsive. Keep the shell rl ALIVE for those so mid-flight input
+      // isn't trapped in the TTY buffer; the onLine handler routes it
+      // through ws.sendMidflight while _processing is true.
+      //
+      // Non-conversational commands (login, register, llm add, passwd) DO
+      // create their own interactive readline and would fight stdin with
+      // the shell's rl — those take the close/reopen path.
+      //
+      // Bare messages (e.g. the user types "hi") look like an unknown
+      // command at the top level but get fallback-wrapped to
+      // `chat hi` later inside this try/catch. We have to predict that
+      // BEFORE closing rl, otherwise the mid-flight buffer trap kicks in
+      // for every first-message-without-an-explicit-verb.
+      const firstWord = cleanInput.split(/\s+/)[0]?.toLowerCase() || "";
+      const conversational = new Set(["chat", "place", "query", "be"]);
+      const cliCommandSet = new Set(program.commands.map((c) => c.name()));
+      const shellKeywords = new Set(["exit", "quit", "shell", "start", "help", "?"]);
+      const startsAtHandle = cleanInput.startsWith("@");
+      const willChatFallback = !cliCommandSet.has(firstWord) && !shellKeywords.has(firstWord);
+      const keepShellRl = conversational.has(firstWord) || startsAtHandle || willChatFallback;
+
+      let subSigint = null;
+      if (!keepShellRl) {
+        // Fully detach the shell readline and keypress listener so subcommands
+        // that create their own readline don't fight over stdin with duplicate
+        // listeners.
+        process.stdin.removeListener("keypress", _onKeypress);
+        rl.removeListener("close", onClose);
+        rl.close();
+        // While the subcommand runs there is no readline SIGINT handler, so a
+        // bare Ctrl+C would hit Node's default and kill the whole shell.
+        // Install a process-level guard that aborts the in-flight chat
+        // instead; if there is nothing in flight the handler just swallows
+        // the signal so the user drops back to the shell prompt rather than
+        // exiting treeos.
+        subSigint = () => {
+          if (global._treeosInFlight) {
+            global._treeosInFlight.abort();
+          }
+        };
+        process.on("SIGINT", subSigint);
+      }
+      // else: shell rl stays open. Its existing onSigint handler already
+      // calls global._treeosInFlight.abort() when present, so Ctrl+C still
+      // cancels the chat cleanly.
       try {
         _shellChatFallback = cleanInput;
         global._treeosChatFallback = false;
@@ -723,21 +754,25 @@ const startShell = module.exports.startShell = async () => {
           console.error(chalk.red(e.message));
         }
       } finally {
-        process.removeListener("SIGINT", subSigint);
+        if (subSigint) process.removeListener("SIGINT", subSigint);
       }
-      // Recreate shell readline and reattach listeners
-      rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-        terminal: true,
-        history: _history,
-        historySize: MAX_HISTORY,
-        completer(line) { return [[], line]; },
-      });
-      rl.on("line", onLine);
-      rl.on("close", onClose);
-      rl.on("SIGINT", onSigint);
-      process.stdin.on("keypress", _onKeypress);
+      // Recreate shell readline and reattach listeners — but only if we
+      // tore it down. Conversational commands left rl alive so mid-flight
+      // input could flow through; nothing to rebuild in that case.
+      if (!keepShellRl) {
+        rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+          terminal: true,
+          history: _history,
+          historySize: MAX_HISTORY,
+          completer(line) { return [[], line]; },
+        });
+        rl.on("line", onLine);
+        rl.on("close", onClose);
+        rl.on("SIGINT", onSigint);
+        process.stdin.on("keypress", _onKeypress);
+      }
     }
 
     async function drainQueue() {

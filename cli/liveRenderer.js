@@ -112,6 +112,15 @@ function createLiveRenderer({ stream = process.stdout, verbose = false } = {}) {
         line(chalk.magenta("… ") + chalk.dim(text));
         return;
       }
+      case "messageQueued": {
+        // Stream extension ACK: a mid-flight message was absorbed into
+        // the running turn and will be injected at the next tool-loop
+        // checkpoint. Distinct symbol from ↪/↻/✓ so it doesn't look
+        // like a mode switch or tool result.
+        const snippet = oneLine(ev.message, 80);
+        line(chalk.magenta("↺ ") + chalk.dim("merged mid-flight") + (snippet ? chalk.dim(" — " + snippet) : ""));
+        return;
+      }
       case "toolCalled": {
         const name = ev.tool || "?";
         const hint = formatArgs(ev.args);

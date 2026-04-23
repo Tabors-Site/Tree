@@ -1453,6 +1453,33 @@ export function getLoadedManifests() {
 }
 
 /**
+ * Find the domain extension that owns a tree root.
+ *
+ * A "domain extension" marks its home node with
+ * `metadata.<extName>.initialized = true` during setup — that's the
+ * convention food, fitness, book-workspace, code-workspace and others
+ * already follow. This helper walks that marker and returns the matching
+ * loaded extension name. Returns null when the root isn't owned by any
+ * loaded domain extension.
+ *
+ * Used by the channels peer-peek so it can resolve "what extension lives
+ * at the other end of this channel" without hardcoding a list.
+ */
+export function resolveDomainExtensionAtRoot(rootMetadata) {
+  if (!rootMetadata) return null;
+  const meta = rootMetadata instanceof Map
+    ? Object.fromEntries(rootMetadata)
+    : rootMetadata;
+  for (const [extName, data] of Object.entries(meta)) {
+    if (!data || typeof data !== "object") continue;
+    if (data.initialized !== true) continue;
+    if (!loaded.has(extName)) continue;
+    return extName;
+  }
+  return null;
+}
+
+/**
  * Check if an extension is loaded.
  */
 export function hasExtension(name) {

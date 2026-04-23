@@ -912,6 +912,10 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
             nodeId: posNodeId,
             userId: ctx.userId,
             sessionId: visitorId,
+            // Pass the current turn's user message so handlers that want
+            // to gate their injection on vocabulary (e.g. channels' peer-
+            // peek) can do so. Handlers that don't care just ignore it.
+            message: message || null,
             dumpMode: true,
           });
           session._lastEnrichedContext = enrichedContext;
