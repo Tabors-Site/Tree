@@ -276,11 +276,14 @@ function emptyResult(query) {
  * @param {object} opts - { rootId, similarityThreshold, maxFindingsPerAngle, maxScoutHistory }
  */
 export async function runScout(nodeId, query, userId, username, opts = {}) {
+  // Per-node scout lane — scout passes at the same node chain across runs.
   const rt = new OrchestratorRuntime({
     rootId: opts.rootId || nodeId,
     userId,
     username: username || "system",
-    visitorId: `scout:${userId}:${nodeId}:${Date.now()}`,
+    scope: "tree",
+    purpose: "scout",
+    extra: nodeId,
     sessionType: "SCOUT",
     description: `Scouting: ${query}`,
     modeKeyForLlm: "tree:scout",

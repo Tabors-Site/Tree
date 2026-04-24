@@ -6,6 +6,7 @@
 
 import log from "../log.js";
 import jwt from "jsonwebtoken";
+import { randomUUID } from "node:crypto";
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required");
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -26,6 +27,7 @@ import {
 } from "../ws/sessionRegistry.js";
 import { acquireLock, releaseLock, renewLock } from "./locks.js";
 import { parseJsonSafe } from "./helpers.js";
+import { resolveInternalAiSessionKey } from "../llm/sessionKeys.js";
 
 export { parseJsonSafe };
 
@@ -39,17 +41,36 @@ function mcpConnectRetries() { return Math.max(0, Math.min(Number(getLandConfigV
 
 export class OrchestratorRuntime {
   constructor({
-    rootId, userId, username, visitorId, sessionType, description,
+    rootId, userId, username, sessionType, description,
     modeKeyForLlm, source = "orchestrator", slot = "main",
     lockNamespace, lockKey, llmPriority,
+
+    // Session identity — three ways to specify, in priority order:
+    //   1. `aiSessionKey` — explicit pass-through (attaching to an existing
+    //      session, typically the user's live orchestrator chain).
+    //   2. `scope` + `purpose` (+ optional `extra`) — declare a named
+    //      internal lane. Mirrors runChat's resolver.
+    //   3. Neither — generate `ephemeral:${uuid}` for one-shot pipelines
+    //      that don't need cross-run chat memory.
+    aiSessionKey = null,
+    scope = null,
+    purpose = null,
+    extra = null,
   }) {
     if (!userId) throw new Error("OrchestratorRuntime requires userId");
-    if (!visitorId) throw new Error("OrchestratorRuntime requires visitorId");
+
+    // ── Build the ai-chat session key ─────────────────────────────────
+    // Shares the resolver with runChat so pipelines and one-shot LLM
+    // calls produce identically-shaped keys for the same intent.
+    const { key: resolvedKey } = resolveInternalAiSessionKey({
+      aiSessionKey, scope, purpose, extra, userId, rootId,
+      makeEphemeral: randomUUID,
+    });
 
     this.rootId = rootId;
     this.userId = userId;
     this.username = username || "system";
-    this.visitorId = visitorId;
+    this.visitorId = resolvedKey;
     this.sessionType = sessionType;
     this.description = description || "Pipeline run";
     this.modeKeyForLlm = modeKeyForLlm;
@@ -236,6 +257,13 @@ export class OrchestratorRuntime {
 
     const resolvedTreeContext = typeof treeContext === "function" ? treeContext(parsed) : treeContext;
 
+    // What we record for the chain step. parseJsonSafe returns null for
+    // plain-text answers (e.g., summarize prompts that explicitly ask for
+    // prose). Fall back to raw content so the Chat record gets an end
+    // message — otherwise the step shows "pending" forever in the UI
+    // even though the LLM completed successfully.
+    const trackedOutput = parsed ?? result?.content ?? result?.answer ?? null;
+
     trackChainStep({
       userId: this.userId,
       sessionId: this.sessionId,
@@ -244,7 +272,7 @@ export class OrchestratorRuntime {
       modeKey,
       source: this.source,
       input: input || prompt,
-      output: parsed,
+      output: trackedOutput,
       startTime,
       endTime,
       llmProvider: stepLlm,

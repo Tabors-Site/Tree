@@ -101,6 +101,9 @@ export async function deriveThesis(rootId, userId) {
       mode: "tree:respond",
       rootId,
       slot: "purpose",
+      // Ephemeral: this background call must not share the user's active
+      // chat session at {rootId}:{userId}, or its scoring/thesis prompts
+      // bleed into the user's next turn.
     });
 
     if (!answer) return null;
@@ -165,6 +168,9 @@ export async function checkCoherence(noteContent, rootId, userId) {
       mode: "tree:respond",
       rootId,
       slot: "purpose",
+      // Ephemeral: this background call must not share the user's active
+      // chat session at {rootId}:{userId}, or its scoring/thesis prompts
+      // bleed into the user's next turn.
     });
 
     if (!answer) return null;
@@ -217,6 +223,9 @@ export async function checkCoherenceBatch(notes, rootId, userId) {
       mode: "tree:respond",
       rootId,
       slot: "purpose",
+      // Ephemeral: this background call must not share the user's active
+      // chat session at {rootId}:{userId}, or its scoring/thesis prompts
+      // bleed into the user's next turn.
     });
 
     if (!answer) return [];

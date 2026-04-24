@@ -89,7 +89,10 @@ export async function orchestrateExpand({
     rootId,
     userId,
     username,
-    visitorId: `cleanup-expand:${rootId}:${Date.now()}`,
+    // Tree-scoped cleanup lane — successive cleanup-expand runs on the
+    // same tree chain so the AI remembers what it already expanded.
+    scope: "tree",
+    purpose: "cleanup-expand",
     sessionType: SESSION_TYPES.CLEANUP_EXPAND,
     description: `Cleanup expand: ${rootId}`,
     modeKeyForLlm: "tree:cleanup-expand-scan",

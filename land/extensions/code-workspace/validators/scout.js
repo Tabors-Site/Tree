@@ -100,7 +100,6 @@ export async function runScout({
   let llmAnswer;
   try {
     const { runChat } = await import("../../../seed/llm/conversation.js");
-    const scoutVisitor = `scout:${String(rootProjectNode._id).slice(0, 8)}:c${cycle}`;
     const chatPromise = runChat({
       userId: null,
       username: "scout",
@@ -108,8 +107,7 @@ export async function runScout({
       mode: "tree:code-ask",
       rootId: null,
       nodeId: String(rootProjectNode._id),
-      visitorId: scoutVisitor,
-      ephemeral: true,
+      // Scout validator — each cycle is an independent analysis.
       llmPriority: "INTERACTIVE",
     });
     const timeoutPromise = new Promise((_, reject) =>

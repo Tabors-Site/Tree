@@ -167,6 +167,24 @@ router.get("/chat", authenticateLite, async (req, res) => {
       display: flex; flex-direction: column;
       max-width: 800px; margin: 0 auto;
     }
+    @media (min-width: 1000px) {
+      .container { max-width: 1100px; }
+    }
+
+    /* Scrollable wrapper for the home/trees/land zones so the page
+       scrolls internally instead of overflowing into the header. */
+    .zones {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 12px 0 16px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.18) transparent;
+    }
+    .zones::-webkit-scrollbar { width: 8px; }
+    .zones::-webkit-scrollbar-track { background: transparent; }
+    .zones::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+    .zones::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
 
     /* Header */
     .chat-header {
@@ -224,10 +242,36 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
     /* Zone sections (home, trees, land) */
     .zone-section {
-      margin: 0 12px 16px;
+      margin: 0 12px 12px;
       border: 1px solid var(--border);
       border-radius: 12px;
       overflow: hidden;
+      background: var(--bg);
+    }
+
+    /* Wide-screen layout. Non-admin: home full-width on top, trees below.
+       Admin: home + land sit side-by-side up top, trees spans below. */
+    @media (min-width: 900px) {
+      .zones {
+        display: grid;
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "home"
+          "trees";
+        gap: 0;
+        padding: 12px 0 16px;
+      }
+      #zoneHome  { grid-area: home; }
+      #zoneTrees { grid-area: trees; }
+
+      .zones.zones-admin {
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+          "home  land"
+          "trees trees";
+      }
+      .zones.zones-admin #zoneHome { margin-right: 6px; }
+      .zones.zones-admin #zoneLand { grid-area: land; margin-left: 6px; }
     }
     .zone-label {
       padding: 10px 16px;
@@ -240,13 +284,19 @@ router.get("/chat", authenticateLite, async (req, res) => {
       letter-spacing: 0.02em;
     }
     .zone-messages {
-      max-height: 350px;
+      max-height: 280px;
       overflow-y: auto;
       padding: 12px 16px;
       display: flex;
       flex-direction: column;
       gap: 8px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.15) transparent;
     }
+    .zone-messages::-webkit-scrollbar { width: 6px; }
+    .zone-messages::-webkit-scrollbar-track { background: transparent; }
+    .zone-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+    .zone-messages::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
     .zone-messages:empty::after {
       content: "Say something...";
       color: var(--text-muted);
@@ -330,26 +380,37 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
     /* Tree picker */
     .tree-picker {
-      display: flex; flex-direction: column;
-      padding: 8px 12px; gap: 8px;
-      overflow-y: auto; max-height: 400px;
+      padding: 12px 16px 4px;
     }
-    .tree-list { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 420px; }
+    /* Responsive tree-list grid. Cards self-size; on narrow screens
+       they collapse to one column, on wider screens fill with as many
+       as fit at minmax(220px, 1fr). */
+    .tree-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+      width: 100%;
+    }
     .tree-item {
       background: rgba(var(--glass-rgb), var(--glass-alpha));
-      backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
       border: 1px solid var(--glass-border-light);
-      border-radius: 16px; padding: 18px 22px;
-      cursor: pointer; transition: all var(--transition-fast);
-      display: flex; align-items: center; justify-content: space-between;
+      border-radius: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: background var(--transition-fast), transform var(--transition-fast), border-color var(--transition-fast);
+      display: flex; align-items: center; gap: 12px;
+      min-height: 56px;
       animation: fadeInUp 0.3s ease-out backwards;
     }
-    .tree-item:hover { background: rgba(var(--glass-rgb), 0.42); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
+    .tree-item:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-strong);
+      transform: translateY(-1px);
+    }
     .tree-item:active { transform: translateY(0) scale(0.98); }
-    .tree-item-left { display: flex; align-items: center; gap: 14px; }
-    .tree-item-icon { font-size: 22px; }
-    .tree-item-name { font-size: 15px; font-weight: 500; }
+    .tree-item-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+    .tree-item-icon { font-size: 20px; flex-shrink: 0; }
+    .tree-item-name { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tree-item-meta { font-size: 12px; color: var(--text-muted); }
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(16px); } }
     ${trees.map((_, i) => `.tree-item:nth-child(${i + 1}) { animation-delay: ${i * 0.06}s; }`).join("\n    ")}
@@ -959,6 +1020,11 @@ router.get("/chat", authenticateLite, async (req, res) => {
       </div>
     </div>
 
+    <!-- Scrollable zones wrapper. All home/trees/land sections live here
+         so overflow is contained to this region instead of bleeding
+         into the header on short viewports. -->
+    <div class="zones${user.isAdmin ? " zones-admin" : ""}" id="zonesWrap">
+
     <!-- Home Zone -->
     <div class="zone-section" id="zoneHome">
       <div class="zone-label">~ Home</div>
@@ -1008,6 +1074,8 @@ router.get("/chat", authenticateLite, async (req, res) => {
       </div>
     </div>
     ` : ""}
+
+    </div><!-- /.zones -->
 
     <div class="app-panel" id="appPanel">
       <div class="app-panel-header">
@@ -1755,11 +1823,14 @@ router.get("/chat", authenticateLite, async (req, res) => {
       rootName.classList.add("visible");
       backRow.classList.add("visible");
 
-      // Reset chat
-      const welcome = chatMessages.querySelector(".welcome-message");
-      if (welcome) welcome.style.display = "";
-      chatMessages.querySelectorAll(".message, .typing-indicator, .live-line").forEach(el => el.remove());
+      // Reset chat to the empty/centered state. If we've already chatted
+      // this session, the welcome message was removed from the DOM by
+      // addMessage — rebuilding it is the only way to get the centered
+      // form back. Toggling visibility on a non-existent element was the
+      // bug behind "stuck in the collapse middle form" on second tree.
+      chatMessages.innerHTML = '<div class="welcome-message" id="welcomeMsg"><div class="welcome-icon">🌳</div><h2>Start chatting</h2><p>Just type. Natural language works.</p></div>';
       chatArea.classList.add("empty");
+      document.getElementById("clearChatBtn").classList.remove("visible");
 
       // Tell server about this root
       socket.emit("setActiveRoot", { rootId });
@@ -1934,24 +2005,30 @@ router.get("/chat", authenticateLite, async (req, res) => {
     }
 
     function buildHotbar(treeId) {
-      if (hotbarBuilt) return;
-      const apps = CONFIG.apps || [];
-      if (apps.length === 0) return;
-
-      // Check if this tree is the Life tree (apps are under it)
-      const isLifeTree = apps.some(a => a.treeRootId === treeId);
-      if (!isLifeTree) return;
-
       const hotbar = document.getElementById("appHotbar");
-      const inner = document.getElementById("appHotbarInner");
-      inner.innerHTML = apps.map(a =>
-        '<button class="app-hotbar-item" data-app="' + a.key + '" data-node-id="' + a.id + '" onclick="showAppPanel(\\'' + a.id + '\\',\\'' + a.key + '\\');highlightHotbarItem(\\'' + a.key + '\\')">' +
-          '<span class="app-hotbar-emoji">' + a.emoji + '</span>' +
-          '<span>' + a.label + '</span>' +
-        '</button>'
-      ).join("");
+      if (!hotbar) return;
+
+      const apps = CONFIG.apps || [];
+      // Hotbar belongs to the Life tree only. Any other tree hides it.
+      // The old hotbarBuilt guard short-circuited the function once the
+      // bar was rendered, so switching trees left a stale hotbar visible.
+      const isLifeTree = apps.length > 0 && apps.some(a => a.treeRootId === treeId);
+      if (!isLifeTree) {
+        hotbar.classList.remove("visible");
+        return;
+      }
+
+      if (!hotbarBuilt) {
+        const inner = document.getElementById("appHotbarInner");
+        inner.innerHTML = apps.map(a =>
+          '<button class="app-hotbar-item" data-app="' + a.key + '" data-node-id="' + a.id + '" onclick="showAppPanel(\\'' + a.id + '\\',\\'' + a.key + '\\');highlightHotbarItem(\\'' + a.key + '\\')">' +
+            '<span class="app-hotbar-emoji">' + a.emoji + '</span>' +
+            '<span>' + a.label + '</span>' +
+          '</button>'
+        ).join("");
+        hotbarBuilt = true;
+      }
       hotbar.classList.add("visible");
-      hotbarBuilt = true;
     }
 
     function highlightHotbarItem(appKey) {

@@ -197,6 +197,10 @@ export async function runCompression(nodeId, userId, username) {
       rootId,
       nodeId,
       slot: "codebook",
+      // Named tree-scoped lane per tree. Dictionary data lives per-node in
+      // metadata.codebook so we don't need per-node session fanout here.
+      scope: "tree",
+      purpose: "codebook",
     });
 
     if (!answer) {

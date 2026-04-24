@@ -140,13 +140,8 @@ export async function detectContradictions(nodeId, noteContent, userId, username
       rootId,
       nodeId,
       slot: "contradiction",
-      // Isolate this background LLM call from the user's active chat
-      // session. Without a distinct visitorId, runChat falls back to
-      // `{rootId}:{userId}` and our prompt+response get appended to the
-      // user-visible session.messages[], leaking the JSON output into the
-      // next user turn.
-      visitorId: `contradiction:${nodeId}:${Date.now()}`,
-      ephemeral: true,
+      // Background contradiction check — default ephemeral session
+      // keeps it out of the user's active chat.
     });
 
     if (!answer) return [];

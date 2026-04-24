@@ -226,7 +226,9 @@ export async function orchestrateTreeRequest({
     rootId,
     userId,
     username,
-    visitorId,
+    // Pass-through: we're attaching to the user's live orchestrator
+    // chain, so the runtime uses the same session key as the chat.
+    aiSessionKey: visitorId,
     sessionType: "tree-chat",
     description: message,
     modeKeyForLlm: "tree:librarian",
@@ -568,6 +570,12 @@ export async function orchestrateTreeRequest({
     return runModeAndReturn(visitorId, "tree:converse", message, {
       socket, username, userId, rootId, signal, slot,
       readOnly: true, clearHistory: true, onToolLoopCheckpoint, modesUsed,
+      // Thread the live runtime so downstream steppedMode can open chain
+      // step Chat records against the user's real session. Without these,
+      // rt=null / sessionId=null and startChainStep returns null — the
+      // query produces no visible response.
+      sessionId, rootChatId, rt,
+      skipRespond,
     });
   }
 
@@ -1012,6 +1020,7 @@ export async function orchestrateTreeRequest({
               currentNodeId: effectMatch.targetNodeId,
               onToolLoopCheckpoint, modesUsed,
               sessionId, rootChatId, rt,
+              skipRespond,
             });
           }
         }
@@ -1023,7 +1032,7 @@ export async function orchestrateTreeRequest({
           steps: allMatches.map(m => makeDispatch(m.mode, m.extName, m.targetNodeId, { tense: "present" })),
           source: "multi-extension",
         };
-        return executeGraph(chainGraph, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootChatId, rt });
+        return executeGraph(chainGraph, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootChatId, rt, skipRespond });
       }
     } catch (err) {
       log.debug("Tree Orchestrator", `Chain check failed: ${err.message}`);
@@ -1200,6 +1209,7 @@ export async function orchestrateTreeRequest({
       onToolLoopCheckpoint, modesUsed,
       reroutePrefix, // null unless misroute intercept fired above
       sessionId, rootChatId, rt,
+      skipRespond,
     });
   }
 
@@ -1240,6 +1250,7 @@ export async function orchestrateTreeRequest({
           currentNodeId: single.targetNodeId, clearHistory: true,
           onToolLoopCheckpoint, modesUsed,
           sessionId, rootChatId, rt,
+          skipRespond,
         });
       }
 
@@ -1250,7 +1261,7 @@ export async function orchestrateTreeRequest({
           steps: indexMatches.map(m => makeDispatch(m.mode, m.extName, m.targetNodeId, { tense: "present" })),
           source: "converse-multi",
         };
-        return executeGraph(converseChainGraph, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootChatId, rt });
+        return executeGraph(converseChainGraph, message, visitorId, { socket, username, userId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootChatId, rt, skipRespond });
       }
     } catch (err) {
       log.debug("Tree Orchestrator", `Converse check failed: ${err.message}`);
@@ -1314,6 +1325,7 @@ export async function orchestrateTreeRequest({
       currentNodeId, clearHistory: true,
       onToolLoopCheckpoint, modesUsed,
       sessionId, rootChatId, rt,
+      skipRespond,
     });
   }
 
@@ -1322,6 +1334,10 @@ export async function orchestrateTreeRequest({
     currentNodeId, clearHistory: true,
     onToolLoopCheckpoint, modesUsed,
     treeCapabilities,
+    // Same reason as the query fast path — downstream steppedMode needs
+    // these to open Chat records against the user's live session.
+    sessionId, rootChatId, rt,
+    skipRespond,
   });
 }
 // ─────────────────────────────────────────────────────────────────────────

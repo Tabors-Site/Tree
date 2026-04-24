@@ -256,6 +256,9 @@ export async function generateDigest() {
         mode: "tree:respond",
         rootId: null,
         slot: "digest",
+        // Land-scoped chain — each daily digest sees prior briefings.
+        scope: "land",
+        purpose: "digest",
       });
       if (answer) parsed = parseJsonSafe(answer);
     } catch (err) {

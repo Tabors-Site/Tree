@@ -173,9 +173,18 @@ export async function runModeAndReturn(visitorId, mode, message, {
   fanoutContext = null,
   reroutePrefix = null,
   voice = "active",
+  // Place mode — when true, the LLM must stop after tool execution.
+  // Prevents wasted cycles generating prose the user will never see.
+  skipRespond = false,
 }) {
   modesUsed.push(mode);
   emitStatus(socket, "intent", "");
+
+  // Surface the actual mode that's running so the UI can show the dispatch
+  // hop. The classifier already emits `orchestratorStep` with the intent
+  // result, but when grammar/graph routes onward (e.g., food-coach → food-log)
+  // the client never learns about the destination without this.
+  emitModeResult(socket, mode, { mode, phase: "dispatch" });
 
   // Build conversation memory + grammar modifier injections.
   let memory = formatMemoryContext(visitorId);
@@ -281,6 +290,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
     username, userId, rootId, signal, slot,
     readOnly, onToolLoopCheckpoint, socket,
     sessionId, rootChatId, rt,
+    skipRespond,
   });
 
   emitStatus(socket, "done", "");
@@ -389,15 +399,13 @@ export async function runModeAndReturn(visitorId, mode, message, {
 
             try {
               const { runChat } = await import("../../seed/llm/conversation.js");
-              const retryVisitor = `branch-retry:${String(projectNode._id).slice(0, 8)}:${userId || "anon"}`;
               const retryResult = await runChat({
                 userId, username,
                 message: retryPrompt,
                 mode,
                 rootId,
                 nodeId: String(projectNode._id),
-                visitorId: retryVisitor,
-                ephemeral: true,
+                // Architect retry — one-shot, default ephemeral session.
                 llmPriority: "INTERACTIVE",
                 signal,
               });
@@ -643,9 +651,10 @@ export async function runModeAndReturn(visitorId, mode, message, {
         mode: "tree:code-summarize",
         rootId,
         signal,
-        // Separate visitorId keeps the summarizer session from clobbering
-        // the main builder session's mode + chat context.
-        visitorId: `summarize:${rootId || "nil"}:${userId}`,
+        // Tree-scoped summarizer lane — isolated from the user's chat,
+        // chains across repeated summaries on the same tree.
+        scope: "tree",
+        purpose: "summarize",
         llmPriority: "INTERACTIVE",
       });
       const recap = (summary?.answer || "").trim();
@@ -690,11 +699,9 @@ export async function runModeAndReturn(visitorId, mode, message, {
           rootId,
           nodeId: currentNodeId || targetNodeId || rootId,
           signal,
-          // Dedicated visitorId for handoffs — keeps the plan run isolated
-          // from both the coach session and any concurrent user chats.
-          // Deterministic per-(rootId, userId) so successive handoffs at
-          // the same tree share continuity.
-          visitorId: `handoff:${rootId || "nil"}:${userId}`,
+          // Tree-scoped handoff lane — coach→plan handoffs chain per tree.
+          scope: "tree",
+          purpose: "handoff",
           llmPriority: "INTERACTIVE",
         });
         const planAnswer = (planRun?.answer || "").trim();
@@ -739,7 +746,26 @@ export async function runModeAndReturn(visitorId, mode, message, {
   }
 
   if (answer) pushMemory(visitorId, message, answer);
-  return { success: true, answer, modeKey: mode, modesUsed, rootId, targetNodeId: targetNodeId || currentNodeId };
+
+  // Surface write-tool trace as stepSummaries. Place mode (skipRespond)
+  // uses these to produce its "Placed on: ..." / "Nothing to place"
+  // message. Chat and query ignore them, but including them is cheap.
+  const stepSummaries = (result?._writeTrace || []).map((t) => ({
+    tool: t.tool,
+    hint: t.hint || null,
+    summary: t.summary || t.hint || t.tool,
+  }));
+
+  return {
+    success: true,
+    answer,
+    modeKey: mode,
+    modesUsed,
+    rootId,
+    targetNodeId: targetNodeId || currentNodeId,
+    stepSummaries,
+    lastTargetNodeId: targetNodeId || currentNodeId,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────

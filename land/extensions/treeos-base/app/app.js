@@ -2678,7 +2678,22 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
       const thisGen = requestGeneration;
       updateSendButtons();
 
-      socket.emit("chat", { message, username: CONFIG.username, generation: thisGen, mode: currentModeKey?.split(":").pop()?.split("-")[0] || "chat" });
+      // Always send payload context so the server routes this chat to the
+      // zone-aware ai-chat session key instead of falling back to the
+      // tab-level transport key. Without these fields the server can't
+      // tell which tree/zone the user is in, and urlChanged's state sits
+      // on a different key than the chat reads.
+      const rootIdForChat = getCurrentRootId();
+      const zoneForChat = currentModeKey?.split(":")[0] || (rootIdForChat ? "tree" : "home");
+      socket.emit("chat", {
+        message,
+        username: CONFIG.username,
+        generation: thisGen,
+        mode: currentModeKey?.split(":").pop()?.split("-")[0] || "chat",
+        rootId: rootIdForChat || null,
+        currentNodeId: rootIdForChat || null,
+        zone: zoneForChat,
+      });
     }
 
     function updateSendButtons() {

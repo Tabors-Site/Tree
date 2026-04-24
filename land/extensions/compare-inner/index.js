@@ -124,6 +124,10 @@ async function _compare(rootId, runChat) {
     mode: "tree:respond",
     rootId,
     slot: "compareInner",
+    // Named tree-scoped lane. Persists across weekly runs under
+    // `tree-internal:${rootId}:compare` so each comparison sees prior ones.
+    scope: "tree",
+    purpose: "compare",
   });
 
   if (!answer || answer.length < 20) return;

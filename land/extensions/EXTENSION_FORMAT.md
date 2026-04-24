@@ -259,7 +259,15 @@ When multiple sessions compete for LLM slots, priority determines who goes first
 
 Access via `core.llm.LLM_PRIORITY`. Background jobs should always set `llmPriority: core.llm.LLM_PRIORITY.BACKGROUND` so human interactions never wait behind autonomous work.
 
-Sessions persist within the same zone. `tree:{rootId}:{userId}` gives each tree its own conversation. Switching trees starts fresh.
+## Session identity (runChat and OrchestratorRuntime)
+
+Both `runChat` and `OrchestratorRuntime` route every turn through a single **ai-chat session key**. Three ways to declare intent:
+
+1. **Pass-through** (`aiSessionKey`) — you received a key from an upstream caller and want this sub-call to join that session.
+2. **Declared lane** (`scope` + `purpose` + optional `extra`) — you want a persistent, named internal chain under `tree-internal:${rootId}:${purpose}`, `home-internal:${userId}:${purpose}`, or `land-internal:${purpose}`. Fork parallel sub-chains with `extra`.
+3. **Default** — nothing declared → ephemeral one-shot. No cross-call memory. Safest default for parsers, classifiers, one-shot scorers.
+
+Never mint your own session-key string. The kernel builds the key.
 
 ## Running Multi-Step Pipelines (OrchestratorRuntime)
 
@@ -270,7 +278,7 @@ import { OrchestratorRuntime } from "../../orchestrators/runtime.js";
 
 const rt = new OrchestratorRuntime({
   rootId, userId, username,
-  visitorId: `my-pipeline:${userId}:${Date.now()}`,
+  scope: "tree", purpose: "my-pipeline",  // kernel mints the session key
   sessionType: "my-pipeline",
   description: "Processing tree",
   modeKeyForLlm: "tree:my-mode",

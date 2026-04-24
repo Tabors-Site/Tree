@@ -189,6 +189,8 @@ export async function parseWorkout(message, userId, username, rootId) {
     mode: "tree:fitness-log",
     rootId,
     slot: "fitness",
+    // Parser sub-call inside a coach turn. Takes the default ephemeral
+    // session so the parse prompt never merges into the user's thread.
   });
 
   if (!answer) return null;

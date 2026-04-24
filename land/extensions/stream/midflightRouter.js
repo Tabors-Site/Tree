@@ -142,7 +142,6 @@ export async function classifyMidflight({ message, active, core }) {
       `  - stop: full halt, abandon the build\n\n` +
       `Reply with ONE word only: branch, plan, or stop.`;
 
-    const classifyVisitor = `midflight-classify:${String(active.projectNodeId).slice(0, 8)}`;
     const result = await Promise.race([
       runChat({
         userId: null,
@@ -151,8 +150,7 @@ export async function classifyMidflight({ message, active, core }) {
         mode: "tree:code-ask",
         rootId: null,
         nodeId: active.projectNodeId,
-        visitorId: classifyVisitor,
-        ephemeral: true,
+        // Classifier — each call is independent, default ephemeral.
         llmPriority: "INTERACTIVE",
       }),
       new Promise((_, reject) =>
@@ -324,7 +322,6 @@ export async function triggerPlanPivot({
       `Close with [[DONE]].`;
 
     const { runChat } = await import("../../seed/llm/conversation.js");
-    const pivotVisitor = `midflight-pivot:${String(active.projectNodeId).slice(0, 8)}`;
     const result = await runChat({
       userId,
       username,
@@ -332,8 +329,7 @@ export async function triggerPlanPivot({
       mode: "tree:code-plan",
       rootId,
       nodeId: active.projectNodeId,
-      visitorId: pivotVisitor,
-      ephemeral: true,
+      // Pivot replan — each call independent, default ephemeral.
       llmPriority: "INTERACTIVE",
     });
     const architectAnswer = String(result?.answer || result?.content || "");

@@ -29,12 +29,20 @@ export async function init(core) {
     });
   }, "evolve");
 
-  // afterLLMCall: record interaction patterns
-  core.hooks.register("afterLLMCall", async ({ userId, rootId, mode, hasToolCalls }) => {
+  // afterLLMCall: record interaction patterns. hadAnswer is derived from
+  // responseText (truthy + non-whitespace = answered). Without this the
+  // knowledge-gap pattern detector in core.js (checking s.hadAnswer===false)
+  // never fires because nothing in the recordSignal payload carried an
+  // answer flag. Using responseText instead of passing a separate field
+  // avoids a kernel-side hook-data change.
+  core.hooks.register("afterLLMCall", async ({ userId, rootId, mode, hasToolCalls, responseText }) => {
     if (!userId || userId === "SYSTEM") return;
+
+    const hadAnswer = !!(responseText && String(responseText).trim());
 
     recordSignal({
       type: "llm-response",
+      hadAnswer,
       hadToolCalls: !!hasToolCalls,
       mode: mode || "unknown",
       rootId,

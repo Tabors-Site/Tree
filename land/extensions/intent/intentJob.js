@@ -149,12 +149,14 @@ async function processTree(root) {
   const user = await User.findById(userId).select("username").lean();
   if (!user) return;
 
-  // Create runtime. Intent is a standalone background pipeline.
+  // Tree-scoped intent lane — successive intent cycles on the same tree
+  // chain so the AI remembers prior proposals and their outcomes.
   const rt = new OrchestratorRuntime({
     rootId,
     userId,
     username: user.username,
-    visitorId: `intent:${rootId}:${Date.now()}`,
+    scope: "tree",
+    purpose: "intent",
     sessionType: "INTENT",
     description: `Intent cycle for tree ${root.name}`,
     modeKeyForLlm: "tree:respond",

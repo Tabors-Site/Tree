@@ -154,15 +154,18 @@ export async function orchestrateUnderstanding({
 
   const isChainStep = !!externalSessionId;
   const isSite = fromSite && !isChainStep;
-  const visitorId = `understand:${rootId}:${Date.now()}`;
 
   // OrchestratorRuntime handles: session, MCP, chat, lock, cleanup.
   // Lock namespace "understand" with the run ID as key prevents concurrent runs.
+  // Per-perspective lane — understanding runs with the same perspective on
+  // the same tree chain so the second pass sees the first's compression.
   const rt = new OrchestratorRuntime({
     rootId,
     userId,
     username,
-    visitorId,
+    scope: "tree",
+    purpose: "understand",
+    extra: runPerspective,
     sessionType: SESSION_TYPES.UNDERSTANDING_ORCHESTRATE,
     description: `Understanding: ${runPerspective}`,
     modeKeyForLlm: "tree:understand",

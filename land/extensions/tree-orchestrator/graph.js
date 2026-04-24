@@ -386,6 +386,7 @@ export async function executeGraph(node, message, visitorId, opts) {
       sessionId: opts.sessionId,
       rootChatId: opts.rootChatId,
       rt: opts.rt,
+      skipRespond: opts.skipRespond,
     });
   }
 
@@ -467,7 +468,7 @@ export async function executeGraph(node, message, visitorId, opts) {
         adjectives: node.modifiers.adjectives,
         voice: node.modifiers.voice,
         treeCapabilities: node.modifiers.treeCapabilities || null,
-        sessionId: opts.sessionId, rootChatId: opts.rootChatId, rt: opts.rt,
+        sessionId: opts.sessionId, rootChatId: opts.rootChatId, rt: opts.rt, skipRespond: opts.skipRespond,
       });
     }
 
@@ -511,7 +512,7 @@ export async function executeGraph(node, message, visitorId, opts) {
       voice: node.modifiers.voice,
       treeCapabilities: node.modifiers.treeCapabilities || null,
       fanoutContext: fanoutBlock,
-      sessionId: opts.sessionId, rootChatId: opts.rootChatId, rt: opts.rt,
+      sessionId: opts.sessionId, rootChatId: opts.rootChatId, rt: opts.rt, skipRespond: opts.skipRespond,
     });
   }
 

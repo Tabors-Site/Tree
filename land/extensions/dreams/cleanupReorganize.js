@@ -25,7 +25,9 @@ export async function orchestrateReorganize({
     rootId,
     userId,
     username,
-    visitorId: `cleanup-reorg:${rootId}:${Date.now()}`,
+    // Tree-scoped reorg lane — chains across reorganization passes.
+    scope: "tree",
+    purpose: "cleanup-reorganize",
     sessionType: SESSION_TYPES.CLEANUP_REORGANIZE,
     description: `Cleanup reorganize: ${rootId}`,
     modeKeyForLlm: "tree:cleanup-analyze",

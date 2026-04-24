@@ -96,7 +96,9 @@ function detectPatterns() {
     });
   }
 
-  // Pattern: AI frequently says "I don't have information about..."
+  // Pattern: AI frequently says "I don't have information about..." — the
+  // responseText came back empty. Example falls back to mode since the
+  // raw user query isn't carried in the recordSignal payload.
   const silenceResponses = signalWindow.filter(s =>
     s.type === "llm-response" && s.hadAnswer === false
   );
@@ -106,7 +108,7 @@ function detectPatterns() {
       description: "AI frequently cannot answer questions at certain positions",
       count: silenceResponses.length,
       suggestedExtension: "learn",
-      examples: silenceResponses.slice(-3).map(s => s.query?.slice(0, 80)),
+      examples: silenceResponses.slice(-3).map(s => s.query?.slice(0, 80) || s.mode || "(no-answer)"),
     });
   }
 
@@ -289,6 +291,9 @@ export async function generateProposals() {
           mode: "tree:respond",
           rootId: null,
           slot: "evolve",
+          // Land-scoped chain so each evolve pass sees prior proposals.
+          scope: "land",
+          purpose: "evolve",
         });
 
         const spec = answer ? parseJsonSafe(answer) : null;

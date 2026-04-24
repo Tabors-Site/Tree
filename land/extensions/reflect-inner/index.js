@@ -82,6 +82,11 @@ async function _reflect(rootId, runChat) {
     mode: "tree:respond",
     rootId,
     slot: "reflectInner",
+    // Named tree-scoped lane. Chats chain across nightly runs so later
+    // reflections see prior-reflection history; stays isolated from the
+    // user's active chat under the `tree-internal:${rootId}:reflect` key.
+    scope: "tree",
+    purpose: "reflect",
   });
 
   if (!answer || answer.length < 10) return;

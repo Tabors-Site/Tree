@@ -171,11 +171,13 @@ async function addSemanticResults(matches, rootId, query, userId) {
  * @param {object} opts - { since, minScore, maxResults }
  */
 export async function runTrace(rootId, query, userId, username, opts = {}) {
+  // Tree-wide trace lane — repeated traces on the same tree chain.
   const rt = new OrchestratorRuntime({
     rootId,
     userId,
     username: username || "system",
-    visitorId: `trace:${userId}:${rootId}:${Date.now()}`,
+    scope: "tree",
+    purpose: "trace",
     sessionType: "TRACE",
     description: `Tracing: ${query}`,
     modeKeyForLlm: "tree:trace",

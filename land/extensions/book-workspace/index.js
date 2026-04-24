@@ -579,6 +579,7 @@ export async function handleMessage(message, { userId, username, rootId, targetN
   const cliVisitorId = `book-cli:${userId}:${projectId}`;
   const controller = registerActiveRun({
     nodeId: projectId,
+    projectNodeId: projectId,
     visitorId: cliVisitorId,
     source: "cli",
   });
@@ -593,7 +594,9 @@ export async function handleMessage(message, { userId, username, rootId, targetN
       mode: "tree:intake",
       rootId: rootId || projectId,
       nodeId: projectId,
-      visitorId: `book-intake:${userId}:${projectId}`,
+      // Tree-scoped intake lane — chains across intake runs on this project.
+      scope: "tree",
+      purpose: "intake",
       signal: controller.signal,
       onToolResults: (results) => {
         for (const r of results || []) {
@@ -638,7 +641,7 @@ export async function handleMessage(message, { userId, username, rootId, targetN
     // The shared activeRuns store is for observability + cooperative
     // abort; once we hand off to the orchestrator via { mode: ... },
     // the orchestrator's own session/abort plumbing takes over.
-    unregisterActiveRun({ nodeId: projectId, controller });
+    unregisterActiveRun({ nodeId: projectId, projectNodeId: projectId, controller });
     broadcast(projectId, "update", `intake stage ended`);
   }
 

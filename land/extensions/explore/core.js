@@ -295,12 +295,15 @@ export async function runExplore(nodeId, query, userId, username, opts = {}) {
     }
   }
 
-  // Create runtime. Explore is a standalone pipeline, not part of the user's session.
+  // Per-node explore lane. Each exploration at the same node chains so
+  // repeat explorations see prior findings; different nodes fork via extra.
   const rt = new OrchestratorRuntime({
     rootId: rootId || nodeId,
     userId,
     username: username || "system",
-    visitorId: `explore:${userId}:${nodeId}:${Date.now()}`,
+    scope: "tree",
+    purpose: "explore",
+    extra: nodeId,
     sessionType: "EXPLORE",
     description: `Exploring: ${query}`,
     modeKeyForLlm: "tree:explore",

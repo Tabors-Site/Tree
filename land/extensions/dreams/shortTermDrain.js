@@ -84,7 +84,9 @@ export async function drainTree(rootId) {
     rootId,
     userId,
     username,
-    visitorId: `drain:${rootId}`,
+    // Tree-scoped drain lane — chains across drain passes.
+    scope: "tree",
+    purpose: "drain",
     sessionType: SESSION_TYPES.SHORT_TERM_DRAIN,
     description: `Short-term drain: ${rootNode.name || rootId}`,
     modeKeyForLlm: "tree:drain-cluster",

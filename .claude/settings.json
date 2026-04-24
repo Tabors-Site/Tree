@@ -891,7 +891,20 @@
       "Bash(grep -n '^\\\\`' /home/tabor/github/Tree/land/extensions/treeos-base/app/app.js)",
       "Bash(grep -cE \"\\\\`\" /home/tabor/github/Tree/land/extensions/treeos-base/app/app.js)",
       "Bash(kill %1)",
-      "Bash(awk '/^\\(async \\)?function |^export \\(async \\)?function /{f=$0}{if\\(NR==908\\){print \"Containing function was:\", f}}' /home/tabor/github/Tree/land/seed/llm/conversation.js)"
+      "Bash(awk '/^\\(async \\)?function |^export \\(async \\)?function /{f=$0}{if\\(NR==908\\){print \"Containing function was:\", f}}' /home/tabor/github/Tree/land/seed/llm/conversation.js)",
+      "Bash(mongosh --quiet --eval ' *)",
+      "Bash(grep -rn \"socket.emit.*chat.*{\\\\|\\\\\"chat\\\\\"\\\\s*,\" land/extensions/dashboard/ land/extensions/treeos-base/ --include=\"*.js\" --include=\"*.html\")",
+      "Bash(grep -B5 \"visitorId: \\\\`rawIdea\" land/extensions/raw-ideas/pipeline.js)",
+      "Bash(xargs -I{} grep -l \"runChat\" {})",
+      "Bash(grep -A2 \"\\\\`gateway:\" land/extensions/gateway/input.js)",
+      "Bash(perl -i -pe 's/\\(?<![.{]\\)\\(?<!key: \\)\\\\bvisitorId\\\\b/aiSessionKey/g' land/seed/ws/mcp.js)",
+      "Read(//home/tabor/github/Tree/land/=== visitorId: in runChat/**)",
+      "Read(//home/tabor/github/Tree/land/**)",
+      "Bash(grep -n 'res\\\\.send\\\\|res\\\\.type\\\\|`<!DOCTYPE\\\\|function.*apps' /home/tabor/github/Tree/land/extensions/treeos-base/app/chat.js)",
+      "Bash(grep -n \"return\\\\s*{\\\\|return\\\\s*{$\\\\|_allContent\\\\|_allToolResults\\\\|_internal\\\\|result\\\\s*=\\\\|_places\" /home/tabor/github/Tree/land/extensions/tree-orchestrator/steppedMode.js)",
+      "Bash(cd /home/tabor/github/Tree echo \"=== 1. ephemeral: in extensions ===\" grep -rn \"ephemeral:\" land/extensions --include=\"*.js\")",
+      "Read(//home/tabor/github/Tree/=== 2. visitorId: passed in object args \\(excluding OrchestratorRuntime/registerActiveRun/**)",
+      "Bash(cd /home/tabor/github/Tree echo \"=== 6. extensions importing buildUserAiSessionKey \\(should be zero\\) ===\" grep -rn \"buildUserAiSessionKey\" land/extensions --include=\"*.js\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

@@ -51,11 +51,10 @@ export async function init(core) {
 
   // ── afterSessionEnd: summarize home conversations ─────────────────
   core.hooks.register("afterSessionEnd", async ({ sessionId, userId, type, meta }) => {
-    // Only care about home sessions. The visitorId (stored in session meta
-    // by runOrchestration / websocket.js syncRegistrySession) follows the
-    // pattern "home:{userId}".
-    const visitorId = meta?.visitorId || "";
-    if (!visitorId.startsWith("home:")) return;
+    // Only care about home-zone user sessions. runOrchestration writes
+    // `zone` into session meta — that's the authoritative signal. No
+    // need to parse the visitorId shape.
+    if (meta?.zone !== "home") return;
     if (!userId) return;
 
     // Single in-flight run per user. Prevents stacking when multiple home

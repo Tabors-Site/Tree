@@ -199,6 +199,9 @@ export async function analyzeTree(rootId, userId, username) {
         mode: "tree:respond",
         rootId,
         slot: "evolution",
+        // Named tree-scoped lane. Patterns chain across analysis passes.
+        scope: "tree",
+        purpose: "evolution",
       });
 
       if (answer) {

@@ -1300,15 +1300,12 @@ export async function runBranchSwarm({
               `Keep existing branch names stable where possible so continuity is preserved. ` +
               `Close with [[DONE]].`;
 
-            // runChat fires the architect mode at the project root
-            // with an ephemeral visitorId so it doesn't pollute the
-            // user's chat session. The response comes back as a
-            // string — we parse [[BRANCHES]] ourselves and stash
-            // directly against the USER's visitorId so the user's
-            // next chat message (their "yes" / revision / pivot)
-            // flows through the same orchestrator interception path
-            // Phase 1 built.
-            const replanVisitor = `replan:${String(rootProjectNode._id).slice(0, 8)}:${userId || "anon"}`;
+            // Fire the architect mode at the project root. Default
+            // ephemeral session keeps it out of the user's thread. The
+            // response comes back as a string — we parse [[BRANCHES]]
+            // ourselves and stash the new plan for the user's next
+            // turn, which flows through the orchestrator interception
+            // path built in Phase 1.
             const replanResult = await runChat({
               userId,
               username,
@@ -1316,8 +1313,6 @@ export async function runBranchSwarm({
               mode: "tree:code-plan",
               rootId,
               nodeId: String(rootProjectNode._id),
-              visitorId: replanVisitor,
-              ephemeral: true,
               llmPriority: "INTERACTIVE",
             });
             const architectAnswer = (replanResult?.answer || replanResult?.content || "").toString();

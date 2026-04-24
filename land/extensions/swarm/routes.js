@@ -56,7 +56,7 @@ router.post("/root/:rootId/swarm-plans/branches/:branchName/generate", authentic
       mode: "tree:code-plan",
       rootId,
       nodeId: branchNodeId,
-      visitorId: `user:${username}`,
+      // Sub-plan generation is one-shot — default ephemeral session.
       llmPriority: "INTERACTIVE",
     }).catch((err) =>
       log.warn("Swarm", `sub-plan generation failed for ${branchName}: ${err.message}`),

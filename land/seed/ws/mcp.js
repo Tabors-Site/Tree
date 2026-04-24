@@ -1,9 +1,9 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 // ws/mcp.js
 // MCP client lifecycle management.
-// Each visitorId gets one MCP client. Clients are reused across messages
-// within the same session. Cleanup happens on socket disconnect, session
-// end, or periodic sweep for orphans.
+// Each ai-chat session key (see seed/llm/sessionKeys.js) gets one MCP
+// client. Clients are reused across messages within the same session.
+// Cleanup happens on socket disconnect, session end, or periodic sweep.
 
 import log from "../log.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -21,13 +21,13 @@ const MCP_SERVER_URL = process.env.MCP_SERVER_URL || "http://localhost:3000/mcp"
 // CLIENT MAP
 // ─────────────────────────────────────────────────────────────────────────
 
-// visitorId -> MCP Client instance
+// aiSessionKey -> MCP Client instance
 export const mcpClients = new Map();
 
-// visitorId -> jwtToken (separate from SDK client to avoid mutating it)
+// aiSessionKey -> jwtToken (separate from SDK client to avoid mutating it)
 const clientTokens = new Map();
 
-// visitorId -> timestamp of last use
+// aiSessionKey -> timestamp of last use
 const clientLastUsed = new Map();
 
 import { getLandConfigValue } from "../landConfig.js";
@@ -43,17 +43,17 @@ function mcpStaleMs() { return Number(getLandConfigValue("mcpStaleTimeout")) || 
 // CONNECT
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function connectToMCP(serverUrl, visitorId, jwtToken) {
+export async function connectToMCP(serverUrl, aiSessionKey, jwtToken) {
   // Reuse existing client if token matches
-  const existing = mcpClients.get(visitorId);
-  if (existing && clientTokens.get(visitorId) === jwtToken) {
-    clientLastUsed.set(visitorId, Date.now());
+  const existing = mcpClients.get(aiSessionKey);
+  if (existing && clientTokens.get(aiSessionKey) === jwtToken) {
+    clientLastUsed.set(aiSessionKey, Date.now());
     return existing;
   }
 
   // Close stale client if token changed
   if (existing) {
-    await closeMCPClient(visitorId);
+    await closeMCPClient(aiSessionKey);
   }
 
   // Cap: evict oldest client if at limit
@@ -68,7 +68,7 @@ export async function connectToMCP(serverUrl, visitorId, jwtToken) {
     }
   }
 
-  log.verbose("MCP", `Connecting MCP client for ${visitorId}...`);
+  log.verbose("MCP", `Connecting MCP client for ${aiSessionKey}...`);
 
   const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {
     requestInit: {
@@ -99,11 +99,11 @@ export async function connectToMCP(serverUrl, visitorId, jwtToken) {
     throw new Error(`MCP connection failed: ${err.message}`);
   }
 
-  log.verbose("MCP", `MCP client connected for ${visitorId}`);
+  log.verbose("MCP", `MCP client connected for ${aiSessionKey}`);
 
-  mcpClients.set(visitorId, client);
-  clientTokens.set(visitorId, jwtToken);
-  clientLastUsed.set(visitorId, Date.now());
+  mcpClients.set(aiSessionKey, client);
+  clientTokens.set(aiSessionKey, jwtToken);
+  clientLastUsed.set(aiSessionKey, Date.now());
   return client;
 }
 
@@ -111,11 +111,11 @@ export async function connectToMCP(serverUrl, visitorId, jwtToken) {
 // CLOSE
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function closeMCPClient(visitorId) {
-  const client = mcpClients.get(visitorId);
-  mcpClients.delete(visitorId);
-  clientTokens.delete(visitorId);
-  clientLastUsed.delete(visitorId);
+export async function closeMCPClient(aiSessionKey) {
+  const client = mcpClients.get(aiSessionKey);
+  mcpClients.delete(aiSessionKey);
+  clientTokens.delete(aiSessionKey);
+  clientLastUsed.delete(aiSessionKey);
 
   if (!client) return;
 
@@ -129,9 +129,9 @@ export async function closeMCPClient(visitorId) {
       closePromise,
       new Promise((resolve) => setTimeout(resolve, MCP_CLOSE_TIMEOUT_MS)),
     ]);
-    log.debug("MCP", `Closed MCP client for ${visitorId}`);
+    log.debug("MCP", `Closed MCP client for ${aiSessionKey}`);
   } catch (err) {
-    log.warn("MCP", `Error closing MCP client for ${visitorId}: ${err.message}`);
+    log.warn("MCP", `Error closing MCP client for ${aiSessionKey}: ${err.message}`);
   }
 }
 
@@ -139,9 +139,9 @@ export async function closeMCPClient(visitorId) {
 // QUERY
 // ─────────────────────────────────────────────────────────────────────────
 
-export function getMCPClient(visitorId) {
-  const client = mcpClients.get(visitorId);
-  if (client) clientLastUsed.set(visitorId, Date.now());
+export function getMCPClient(aiSessionKey) {
+  const client = mcpClients.get(aiSessionKey);
+  if (client) clientLastUsed.set(aiSessionKey, Date.now());
   return client || null;
 }
 
@@ -153,9 +153,9 @@ export function getMCPClient(visitorId) {
 setInterval(() => {
   const now = Date.now();
   let swept = 0;
-  for (const [visitorId, lastUsed] of clientLastUsed) {
+  for (const [aiSessionKey, lastUsed] of clientLastUsed) {
     if (now - lastUsed > mcpStaleMs()) {
-      closeMCPClient(visitorId).catch(() => {});
+      closeMCPClient(aiSessionKey).catch(() => {});
       swept++;
     }
   }

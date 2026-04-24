@@ -301,6 +301,9 @@ export async function aiRoute(signals, profiles, userId) {
       message: prompt,
       mode: "home:default",
       slot: "mycelium",
+      // Land-scoped chain — mycelium routing learns across passes.
+      scope: "land",
+      purpose: "mycelium",
     });
     if (!answer) return [];
     return parseJsonSafe(answer) || [];

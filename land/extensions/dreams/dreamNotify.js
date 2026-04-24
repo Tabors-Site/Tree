@@ -63,7 +63,10 @@ export async function orchestrateDreamNotify({
     rootId,
     userId,
     username,
-    visitorId: `dream-notify:${rootId}:${Date.now()}`,
+    // Tree-scoped dream-notify lane — chains nightly so the AI can compare
+    // today's dream to prior dreams on the same tree.
+    scope: "tree",
+    purpose: "dream-notify",
     sessionType: SESSION_TYPES.DREAM_NOTIFY,
     description: `Dream notifications: ${treeName}`,
     modeKeyForLlm: "tree:dream-summary",

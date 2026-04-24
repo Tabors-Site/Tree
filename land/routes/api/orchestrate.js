@@ -75,6 +75,8 @@ router.post("/home/chat", authenticate, async (req, res) => {
       userId: req.userId,
       username: req.username,
       message: message.trim(),
+      device: req.body.device || "http",
+      handle: req.body.handle || req.body.sessionHandle || null,
       res,
       sourceType: "api-home",
     });
@@ -108,7 +110,8 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
       message: message.trim(),
       rootId,
       currentNodeId: currentNodeId || null,
-      sessionHandle: sessionHandle || null,
+      device: req.body.device || "http",
+      handle: sessionHandle || req.body.handle || null,
       res,
       sourceType: "tree-chat",
     });
@@ -151,6 +154,8 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
       message: message.trim(),
       rootId,
       currentNodeId: currentNodeId || null,
+      device: req.body.device || "http",
+      handle: req.body.handle || req.body.sessionHandle || null,
       res,
       sourceType: "tree-place",
       orchestrateFlags: { skipRespond: true },
@@ -259,6 +264,27 @@ async function handleQuery(req, res) {
     }
   }
 
+  // Public / remote queries don't belong in the owner's normal device
+  // sessions. Compose a dedicated device string that identifies the
+  // external visitor — canopy-proxied requests carry sourceLandDomain,
+  // anonymous public visits fall back to IP. Each external visitor gets
+  // their own session; the owner's `web`/`cli` sessions stay untouched.
+  let deviceForQuery;
+  if (isPublicQuery) {
+    if (req.canopy?.sourceLandDomain) {
+      const remoteUserTag = req.userId || req.canopy.remoteUserId || "anon";
+      deviceForQuery = `canopy:${req.canopy.sourceLandDomain}:${remoteUserTag}`;
+    } else if (req.userId) {
+      // Authenticated local visitor on a public tree they don't own.
+      deviceForQuery = `public:${req.userId}`;
+    } else {
+      // Anonymous public visitor.
+      deviceForQuery = `public:anon:${req.ip || "unknown"}`;
+    }
+  } else {
+    deviceForQuery = req.body?.device || "http";
+  }
+
   try {
     const { runOrchestration } = await import("../../seed/llm/conversation.js");
     const result = await runOrchestration({
@@ -268,6 +294,8 @@ async function handleQuery(req, res) {
       message: (message || "").trim(),
       rootId,
       currentNodeId,
+      device: deviceForQuery,
+      handle: req.body?.handle || req.body?.sessionHandle || null,
       res,
       sourceType: "tree-query",
       orchestrateFlags: { forceQueryOnly: true },
@@ -343,6 +371,8 @@ router.post("/root/:rootId/be", authenticate, async (req, res) => {
       message: message.trim(),
       rootId,
       currentNodeId: currentNodeId || null,
+      device: req.body.device || "http",
+      handle: req.body.handle || req.body.sessionHandle || null,
       res,
       sourceType: "tree-be",
       orchestrateFlags: { behavioral: true },

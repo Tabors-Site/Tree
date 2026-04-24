@@ -364,13 +364,21 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         return;
       }
 
-      // Per-connection visitorId. `client:instance` uniquely
-      // identifies this socket within the user, so separate tabs /
-      // CLI shells / room-agent dispatches each get their own
-      // isolated session, MCP connection, and chat memory.
-      // Dedupe still fires — but ONLY on exact-match visitorId, i.e.
-      // a reload in the same tab or a re-exec of the same CLI pid.
-      const visitorId = `user:${username}:${socket.clientKind || "web"}:${socket.clientInstance || socket.id.slice(0, 8)}`;
+      // Per-connection transport key. `clientKind:clientInstance`
+      // uniquely identifies this socket within the user, so separate
+      // tabs / CLI shells / room-agent dispatches each get their own
+      // isolated session, MCP connection, and chat memory. Dedupe at
+      // line 374 fires only on exact-match visitorId — a reload in the
+      // same tab or a re-exec of the same CLI pid.
+      //
+      // Shape matches `buildUserAiSessionKey` in seed/llm/sessionKeys.js:
+      //   user:${userId}:transport:${clientKind}:${clientInstance}
+      // The `transport:` segment distinguishes this tab-level fallback
+      // key from the zone-specific user keys (`user:${userId}:${rootId}:${device}`)
+      // that every chat builds via buildUserAiSessionKey. This fallback
+      // is only reached when the client hasn't yet sent payload context
+      // (urlChanged / first chat). It should eventually be deletable.
+      const visitorId = `user:${userId}:transport:${socket.clientKind || "web"}:${socket.clientInstance || socket.id.slice(0, 8)}`;
       const oldSocketId = userSockets.get(visitorId);
       if (oldSocketId && oldSocketId !== socket.id) {
         io.sockets.sockets.get(oldSocketId)?.disconnect(true);
@@ -435,16 +443,49 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
      * Payload: { url: "/root/abc123", rootId?: "abc123" }
      */
     socket.on("urlChanged", async ({ url, rootId, nodeId } = {}) => {
-      const visitorId = socket.visitorId;
-      if (!visitorId) return;
+      if (!socket.visitorId) return;
       // Cap URL to prevent multi-MB payloads flowing through mode detection and session meta
       if (typeof url === "string" && url.length > 2000) url = url.slice(0, 2000);
       if (rootId && (typeof rootId !== "string" || rootId.length > 36)) rootId = null;
       if (nodeId && (typeof nodeId !== "string" || nodeId.length > 36)) nodeId = null;
 
       const newBigMode = bigModeFromUrl(url);
+
+      // Compute the chat-relevant ai-chat session key for the destination.
+      // This matches what the chat handler will build from payload context,
+      // so state we set here (rootId, currentNodeId, mode) is the state the
+      // next chat reads, and switchBigMode clears the right session.
+      // Without this, urlChanged operates on socket.visitorId (tab-level)
+      // while chat operates on the per-zone key — a mode switch clears the
+      // wrong session and the next chat in the new zone inherits old history.
+      const { buildUserAiSessionKey } = await import("../llm/sessionKeys.js");
+      const _device = socket.clientKind || "web";
+      let visitorId;
+      if (newBigMode === BIG_MODES.TREE && rootId) {
+        visitorId = buildUserAiSessionKey({
+          userId: socket.userId, zone: "tree", rootId, device: _device,
+        });
+      } else if (newBigMode === BIG_MODES.HOME || newBigMode === BIG_MODES.LAND) {
+        visitorId = buildUserAiSessionKey({
+          userId: socket.userId, zone: newBigMode, device: _device,
+        });
+      } else {
+        // Unknown/transitional URL — keep the old fallback.
+        visitorId = socket.visitorId;
+      }
+
       const currentMode = getCurrentMode(visitorId);
       const currentBig = currentMode?.split(":")[0] || null;
+
+      // Detect zone transition at the SOCKET level. Under the per-zone
+      // session keying model, `currentBig` reads off the destination key —
+      // returning to a previously-visited zone would see its own prior
+      // mode still set and `shouldSwitch` would be false, leaving stale
+      // history in place. Tracking the socket's last big mode forces the
+      // reset on any tab-level navigation between zones, matching the
+      // old single-visitor behavior.
+      const prevSocketBig = socket._lastBigMode || currentBig || null;
+      const socketZoneTransition = !!newBigMode && prevSocketBig !== newBigMode;
 
       // Validate tree access before accepting rootId/nodeId from the client.
       // Without this, a crafted WebSocket message could point the AI at another user's tree.
@@ -499,14 +540,15 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         clearMemory(visitorId);
       }
 
-      // Switch if big mode changed or no mode set yet
+      // Switch if big mode changed at the destination key OR the socket
+      // just crossed a zone boundary (see socketZoneTransition above).
       // Only switch to HOME if the URL explicitly matches /user/ routes —
       // don't let bad/invalid tool URLs (which fall through to HOME default)
       // kill an active tree session.
       const isExplicitHome = /^(\/api\/v1)?\/user\//.test(
         (url || "").split("?")[0],
       );
-      const shouldSwitch = currentBig !== newBigMode || !currentMode;
+      const shouldSwitch = socketZoneTransition || currentBig !== newBigMode || !currentMode;
       if (
         shouldSwitch &&
         (newBigMode !== BIG_MODES.HOME || isExplicitHome || !currentMode)
@@ -537,6 +579,10 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           log.error("WS", `Big mode switch failed:`, err.message);
         }
       }
+
+      // Remember the zone the socket is currently in, so the next
+      // urlChanged can detect a boundary crossing at the tab level.
+      if (newBigMode) socket._lastBigMode = newBigMode;
 
       // Look up root name for tree modes
       const activeRootId = getRootId(visitorId);
@@ -573,39 +619,57 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
      * Request available modes for current big mode (e.g., on page load).
      */
     socket.on("getAvailableModes", async ({ url } = {}) => {
-      const visitorId = socket.visitorId;
-      if (!visitorId) return;
-
-      let currentMode = getCurrentMode(visitorId);
+      if (!socket.visitorId) return;
 
       const urlBigMode = url ? bigModeFromUrl(url) : null;
-      const currentBig = currentMode?.split(":")[0] || null;
 
-      // Extract rootId from URL
+      // Extract rootId from URL first so we can build the chat key.
+      let urlRootId = null;
       if (url) {
         const ID =
           "(?:[a-f0-9]{24}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})";
-        const rootMatch = url.match(
-          new RegExp(`(?:/api/v1)?/root/(${ID})`, "i"),
-        );
-        const bareMatch = url.match(
-          new RegExp(`(?:/api/v1)?/(${ID})(?:[?/]|$)`, "i"),
-        );
-        if (rootMatch?.[1]) {
-          setRootId(visitorId, rootMatch[1]);
-        } else if (
-          bareMatch?.[1] &&
-          (currentBig !== urlBigMode || !getRootId(visitorId))
-        ) {
-          setRootId(visitorId, bareMatch[1]);
+        const rootMatch = url.match(new RegExp(`(?:/api/v1)?/root/(${ID})`, "i"));
+        const bareMatch = url.match(new RegExp(`(?:/api/v1)?/(${ID})(?:[?/]|$)`, "i"));
+        urlRootId = rootMatch?.[1] || bareMatch?.[1] || null;
+      }
+
+      // Key on the chat-relevant ai-chat session key so state matches
+      // what the chat handler reads. See urlChanged above.
+      const { buildUserAiSessionKey } = await import("../llm/sessionKeys.js");
+      const _device = socket.clientKind || "web";
+      let visitorId;
+      if (urlBigMode === BIG_MODES.TREE && urlRootId) {
+        visitorId = buildUserAiSessionKey({
+          userId: socket.userId, zone: "tree", rootId: urlRootId, device: _device,
+        });
+      } else if (urlBigMode === BIG_MODES.HOME || urlBigMode === BIG_MODES.LAND) {
+        visitorId = buildUserAiSessionKey({
+          userId: socket.userId, zone: urlBigMode, device: _device,
+        });
+      } else {
+        visitorId = socket.visitorId;
+      }
+
+      let currentMode = getCurrentMode(visitorId);
+      const currentBig = currentMode?.split(":")[0] || null;
+
+      if (url) {
+        if (urlRootId) {
+          setRootId(visitorId, urlRootId);
         }
         if (urlBigMode === BIG_MODES.HOME) {
           setRootId(visitorId, null);
         }
       }
 
-      // If no mode, or big mode doesn't match URL → switch to correct big mode
-      if (!currentMode || (urlBigMode && currentBig !== urlBigMode)) {
+      // Same zone-transition detector as urlChanged (see above). Without
+      // this the destination key's own prior mode would make the switch
+      // look unnecessary and old history would resume on re-entry.
+      const prevSocketBig = socket._lastBigMode || currentBig || null;
+      const socketZoneTransition = !!urlBigMode && prevSocketBig !== urlBigMode;
+
+      // If no mode, big mode doesn't match URL, or socket crossed a zone boundary → switch
+      if (!currentMode || (urlBigMode && currentBig !== urlBigMode) || socketZoneTransition) {
         // Finalize any in-flight chat
         await finalizeOpenChat(socket);
 
@@ -633,6 +697,9 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           log.error("WS", "Failed to initialize/correct mode:", err.message);
         }
       }
+
+      // Track the socket's current zone for boundary detection on future events.
+      if (urlBigMode) socket._lastBigMode = urlBigMode;
 
       const bigMode = currentMode?.split(":")[0] || BIG_MODES.HOME;
       let subModes = getSubModes(bigMode);
@@ -713,36 +780,45 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       // also flip bigMode to "tree" so the zone lookup at line ~667
       // (`currentMode?.split(":")[0] || "home"`) routes correctly.
       //
-      // Per-position visitorId. Same scheme the HTTP path builds in
-      // `runOrchestration` (see llm/conversation.js line ~2370):
+      // Per-position ai-chat session key. Shape is the canonical
+      // user key from seed/llm/sessionKeys.js:
+      //   user:${userId}:${rootId}:${device}[:replaced-by-handle]
+      //   user:${userId}:home:${device}
+      //   user:${userId}:land:${device}
       //
-      //   tree,  no handle  → `${rootId}:${userId}`
-      //   tree,  handle     → `${rootId}:${userId}:${handle}`
-      //   home/land, no h   → `${zone}:${userId}`
-      //   home/land, handle → `${zone}:${userId}:${handle}`
+      // `device` (from socket.clientKind) decouples CLI / dashboard /
+      // mobile automatically — two concurrent reaches on the same tree
+      // produce two sessions, not one merged thread. `handle` replaces
+      // device when the client passes one (explicit merge or side-thread).
       //
-      // This is load-bearing: without it, every CLI chat shares the
-      // socket-level `user:${username}` visitorId, so switching roots
-      // (cd /other-tree) inherits the previous tree's conversation
-      // memory + mode + position. The HTTP path always gave per-tree
-      // isolation; now WS matches.
-      //
-      // When no payload context is present (e.g. a browser socket
-      // that still uses urlChanged for navigation), we fall back to
-      // the socket-level visitorId so the existing website behavior
-      // is preserved.
+      // When no payload context is present (browser using urlChanged for
+      // navigation), fall back to socket.visitorId so the transport-level
+      // state set by urlChanged is still reachable.
+      const { buildUserAiSessionKey } = await import("../llm/sessionKeys.js");
       const _handle = (payloadHandle && typeof payloadHandle === "string" && /^[a-z0-9_-]{1,40}$/i.test(payloadHandle))
         ? payloadHandle
         : null;
-      let _pvId = socket.visitorId || `user:${socket.userId}`;
+      const _device = socket.clientKind || "web";
+      // Fallback = socket.visitorId (set at register; shape
+      // `user:${userId}:transport:${clientKind}:${clientInstance}`). The
+      // secondary fallback below only trips if register hasn't fired
+      // yet — exceedingly rare.
+      let _pvId = socket.visitorId || `user:${socket.userId}:transport:${_device}`;
       if (payloadRootId && typeof payloadRootId === "string" && payloadRootId.length <= 36) {
-        _pvId = _handle
-          ? `${payloadRootId}:${socket.userId}:${_handle}`
-          : `${payloadRootId}:${socket.userId}`;
+        _pvId = buildUserAiSessionKey({
+          userId: socket.userId,
+          zone: "tree",
+          rootId: payloadRootId,
+          device: _device,
+          handle: _handle,
+        });
       } else if (payloadZone === "home" || payloadZone === "land") {
-        _pvId = _handle
-          ? `${payloadZone}:${socket.userId}:${_handle}`
-          : `${payloadZone}:${socket.userId}`;
+        _pvId = buildUserAiSessionKey({
+          userId: socket.userId,
+          zone: payloadZone,
+          device: _device,
+          handle: _handle,
+        });
       }
       if (payloadRootId && typeof payloadRootId === "string" && payloadRootId.length <= 36) {
         try {
@@ -907,9 +983,10 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             message,
             rootId: getRootId(visitorId),
             currentNodeId: getCurrentNodeId(visitorId),
-            visitorId,
+            device: socket.clientKind || "web",
+            handle: payloadHandle || null,
+            aiSessionKey: visitorId,
             sessionId,
-            sessionHandle: payloadHandle || null,
             socket,
             signal: abort.signal,
             chatSource: "user",

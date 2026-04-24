@@ -10,6 +10,7 @@
  *     sessionType: "dream-orchestrate",
  *     modeKeyForLlm: "tree:respond",
  *     lockNamespace: "dream",
+ *     scope: "tree", purpose: "dream",   // chains across runs on same tree
  *     steps: async (pipeline) => {
  *       const { parsed } = await pipeline.step("tree:cleanup-analyze", {
  *         prompt: "Analyze this tree for cleanup opportunities",
@@ -31,16 +32,22 @@ export async function runPipeline({
   steps,
   slot = null,
   llmPriority = null,
+
+  // Session identity (preferred). Extensions declare intent; the kernel
+  // builds the key. Omit both to get a fresh ephemeral session per run.
+  scope = null,
+  purpose = null,
+  extra = null,
 }) {
   if (!userId || !steps) throw new Error("runPipeline requires userId and steps function");
-
-  const visitorId = `pipeline-${lockNamespace || "run"}-${rootId || userId}-${Date.now()}`;
 
   const rt = new OrchestratorRuntime({
     rootId,
     userId,
     username: username || "system",
-    visitorId,
+    scope,
+    purpose,
+    extra,
     sessionType,
     description: description || "Pipeline run",
     modeKeyForLlm,

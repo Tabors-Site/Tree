@@ -425,7 +425,8 @@ async function deliverToAgent({ roomNode, subscription, signalPayload, signalId,
   // programmatic entry point: it owns its Chat record lifecycle (starts +
   // finalizes, visible in the tree's /chats page), switches mode directly
   // to what we ask for (no intent classifier to override modeHint), and
-  // honors ephemeral session isolation. This is the right layer for
+  // defaults to ephemeral session isolation so the agent turn never
+  // collides with a live user chat. This is the right layer for
   // background callers like room-agent delivery — orchestrateTreeRequest
   // would require pre-existing chat plumbing from the caller.
   let runChat;
@@ -484,12 +485,8 @@ ${payloadText}
 Respond briefly as yourself (${agent.label || "agent"}).`;
   const message = preamble;
 
-  // Ephemeral visitorId isolates the agent's turn from any live user chat.
-  // runChat with ephemeral=true also bypasses its own session cache, so
-  // the visitorId below is just a trace-label — not shared with any other
-  // session or reused across turns.
-  const turnIndex = postCount + 1;
-  const visitorId = `room:${String(roomNodeId).slice(0, 8)}:${subscription._subId || "anon"}:${turnIndex}`;
+  // Default ephemeral session isolates each agent turn from any live
+  // user chat and from other agent turns in the same room.
   const mode = agent.modeHint || "tree:converse";
 
   const runResult = await runChat({
@@ -499,8 +496,7 @@ Respond briefly as yourself (${agent.label || "agent"}).`;
     mode,
     rootId: agent.rootId,
     nodeId: agent.nodeId,
-    visitorId,
-    ephemeral: true,
+    // Each agent turn in a room is independent — default ephemeral.
     llmPriority: "INTERACTIVE",
     // Link the agent's chat record to both the tree node it's acting
     // from (so it appears on that node's /chats page) and the room

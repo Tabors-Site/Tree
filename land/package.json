@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node boot.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test seed/**/*.test.js"
   },
   "keywords": ["treeos", "ai", "agents", "kernel", "tree", "federation"],
   "author": "Tabor Holly",

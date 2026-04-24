@@ -50,30 +50,47 @@ const activeRuns = new Map();
  * they must call unregisterActiveRun with the same controller so a
  * newer run on the same node can take over.
  */
-export function registerActiveRun({ nodeId, visitorId, source }) {
-  const key = String(nodeId);
-  const existing = activeRuns.get(key);
-  if (existing) {
-    try { existing.controller.abort(); } catch {}
-    activeRuns.delete(key);
-    broadcast(key, "update", `prior ${existing.source || "run"} stopped (new ${source || "run"} starting)`);
+// Register an active run under BOTH the origin node (where the run was
+// dispatched — could be a chapter for a rewrite) AND the project root
+// (for top-level start / stop from the studio page). Both keys point at
+// the same entry, so stopping at either key aborts the same controller.
+// Without this, a chapter-rewrite run registered at the chapter is
+// invisible to the project-level studio page — user hits "Stop" on the
+// project page, state says no run, button disappears even though the
+// rewrite is still churning in the background.
+export function registerActiveRun({ nodeId, projectNodeId = null, visitorId, source }) {
+  const origin = String(nodeId);
+  const project = projectNodeId ? String(projectNodeId) : null;
+  const keys = project && project !== origin ? [origin, project] : [origin];
+
+  for (const k of keys) {
+    const existing = activeRuns.get(k);
+    if (existing && existing !== activeRuns.get(keys[0])) {
+      try { existing.controller.abort(); } catch {}
+      activeRuns.delete(k);
+      broadcast(k, "update", `prior ${existing.source || "run"} stopped (new ${source || "run"} starting)`);
+    }
   }
   const controller = new AbortController();
-  activeRuns.set(key, {
+  const entry = {
     controller,
     visitorId,
     startedAt: new Date().toISOString(),
     source: source || "run",
-  });
-  broadcast(key, "update", `${source || "run"} started`);
+    origin,
+    project,
+  };
+  for (const k of keys) activeRuns.set(k, entry);
+  broadcast(origin, "update", `${source || "run"} started`);
   return controller;
 }
 
-export function unregisterActiveRun({ nodeId, controller }) {
-  const key = String(nodeId);
-  const current = activeRuns.get(key);
-  if (current?.controller === controller) {
-    activeRuns.delete(key);
+export function unregisterActiveRun({ nodeId, projectNodeId = null, controller }) {
+  const keys = [String(nodeId)];
+  if (projectNodeId && String(projectNodeId) !== String(nodeId)) keys.push(String(projectNodeId));
+  for (const k of keys) {
+    const current = activeRuns.get(k);
+    if (current?.controller === controller) activeRuns.delete(k);
   }
 }
 
@@ -370,8 +387,11 @@ router.post("/:nodeId/bookstudio/contracts", authenticate, express.json(), async
 // ── POST /api/v1/:nodeId/bookstudio/start ───────────────────────
 router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (req, res) => {
   const { nodeId } = req.params;
-  const userId = req.user?._id || req.userId || null;
-  const username = req.user?.username || "operator";
+  // `authenticate` middleware populates req.userId and req.username (not
+  // req.user). Reading req.user?.username here was always undefined →
+  // book chats ended up labeled "operator" instead of the actual user.
+  const userId = req.userId || null;
+  const username = req.username || "operator";
   try {
     const node = await Node.findById(nodeId).lean();
     if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, `node ${nodeId} not found`);
@@ -425,6 +445,7 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
     const visitorId = `bookstudio:${userId}:${nodeId}`;
     const controller = registerActiveRun({
       nodeId,
+      projectNodeId: projectId,
       visitorId,
       source: "studio",
     });
@@ -446,7 +467,11 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
             rootId: projectId,
             nodeId,
             signal: controller.signal,
-            visitorId: `bookstudio-rewrite:${userId}:${nodeId}`,
+            // Per-chapter rewrite lane. Fork by nodeId so different chapters
+            // don't bleed into each other.
+            scope: "tree",
+            purpose: "rewrite",
+            extra: nodeId,
             onToolResults: (results) => {
               for (const r of results || []) {
                 const name = r?.toolName || r?.name || "tool";
@@ -483,7 +508,8 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
               rootId: String(ctx?.project?._id || nodeId),
               nodeId,
               signal: controller.signal,
-              visitorId: `${visitorId}:intake`,
+              scope: "tree",
+              purpose: "intake",
               onToolResults: (results) => {
                 for (const r of results || []) {
                   const name = r?.toolName || r?.name || "tool";
@@ -525,7 +551,11 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
           rootId: String(ctx?.project?._id || nodeId),
           nodeId,
           signal: controller.signal,
-          visitorId,
+          // Architect lane on this project root — per-node so each chapter
+          // root (if dispatched separately) gets its own chain.
+          scope: "tree",
+          purpose: "architect",
+          extra: nodeId,
           onToolResults: (results) => {
             for (const r of results || []) {
               const name = r?.toolName || r?.name || "tool";
@@ -618,7 +648,10 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
               rootId: projectId,
               nodeId: branchNodeId,
               signal: controller.signal,
-              visitorId: `bookstudio-branch:${userId}:${branchNodeId}`,
+              // Per-branch lane — swarm forks each branch into its own chain.
+              scope: "tree",
+              purpose: "branch",
+              extra: branchNodeId,
               onToolResults: (results) => {
                 for (const r of results || []) {
                   const name = r?.toolName || r?.name || "tool";
@@ -644,7 +677,7 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
           broadcast(nodeId, "update", `error: ${err.message}`);
         }
       } finally {
-        unregisterActiveRun({ nodeId, controller });
+        unregisterActiveRun({ nodeId, projectNodeId: projectId, controller });
         broadcast(nodeId, "update", "run ended");
       }
     })();
@@ -721,13 +754,27 @@ router.post("/:nodeId/bookstudio/scout", authenticate, async (req, res) => {
 // ── POST /api/v1/:nodeId/bookstudio/stop ────────────────────────
 router.post("/:nodeId/bookstudio/stop", authenticate, async (req, res) => {
   const { nodeId } = req.params;
-  const entry = activeRuns.get(String(nodeId));
+  // Primary lookup at the requested node. If nothing's there, fall back to
+  // the project root — a chapter rewrite registers at both (chapter +
+  // project) so either lookup finds the same entry. This is what makes
+  // "stop" work from the project page when the actual run was started
+  // from a chapter rewrite.
+  let entry = activeRuns.get(String(nodeId));
+  if (!entry) {
+    try {
+      const ctx = await resolveStudioContext(nodeId);
+      const projectId = ctx?.project?._id ? String(ctx.project._id) : null;
+      if (projectId && projectId !== String(nodeId)) {
+        entry = activeRuns.get(projectId);
+      }
+    } catch {}
+  }
   if (!entry) return sendOk(res, { stopped: false, reason: "no active run" });
-  try {
-    entry.controller.abort();
-  } catch {}
-  activeRuns.delete(String(nodeId));
-  broadcast(nodeId, "update", "stop signal sent");
+  try { entry.controller.abort(); } catch {}
+  // Clear both keys the entry is registered under so a fresh run can start.
+  if (entry.origin) activeRuns.delete(entry.origin);
+  if (entry.project) activeRuns.delete(entry.project);
+  broadcast(entry.origin || nodeId, "update", "stop signal sent");
   return sendOk(res, { stopped: true });
 });
 
@@ -763,7 +810,10 @@ router.get("/:nodeId/bookstudio/state", (req, res, next) => htmlAuth(req, res, n
     const bwMeta = readMeta(node);
     const title = (projectNode && readMeta(projectNode)?.title) || bwMeta?.title || node.name;
 
-    const runEntry = activeRuns.get(String(nodeId));
+    // Same fallback as /stop — if there's no run at this node, check the
+    // project root so the studio page sees chapter-originated runs too.
+    const runEntry = activeRuns.get(String(nodeId))
+      || (projectId && projectId !== String(nodeId) ? activeRuns.get(projectId) : null);
     return sendOk(res, {
       title, contracts, chapters,
       scope: ctx?.scope || "new",

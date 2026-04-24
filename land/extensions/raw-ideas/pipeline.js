@@ -84,7 +84,11 @@ export async function orchestrateRawIdeaPlacement({
     rootId: "pending", // will be set after root selection
     userId,
     username,
-    visitorId: `rawIdea:${rawIdeaId}`,
+    // Per-idea lane under the user's home — each raw idea gets its own
+    // chain so ideas processed in parallel don't cross-contaminate.
+    scope: "home",
+    purpose: "raw-idea",
+    extra: rawIdeaId,
     sessionType,
     description: `Raw idea placement: ${rawIdeaId}`,
     modeKeyForLlm: "tree:librarian", // fallback, chooseRoot is tool-less

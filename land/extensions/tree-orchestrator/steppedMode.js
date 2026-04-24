@@ -25,6 +25,9 @@ export async function runSteppedMode(visitorId, mode, message, {
   parentChatId = null, dispatchOrigin = null,
   sessionId, rootChatId, rt,
   currentNodeId = null,
+  // Place mode — tells processMessage's tool loop to exit after a
+  // successful tool call instead of re-invoking the LLM for prose.
+  skipRespond = false,
 }) {
   // Caller (dispatch.js's swarm runBranch) may pass currentNodeId
   // explicitly so this function can pin position regardless of session
@@ -129,6 +132,11 @@ export async function runSteppedMode(visitorId, mode, message, {
   // probes). Bounded to the last 40 calls so a long chain doesn't eat
   // the summarizer's context.
   const toolTrace = [];
+  // Write-only subset of the trace, used by place mode (skipRespond) to
+  // produce `stepSummaries` — "what the turn actually placed." Read
+  // tools don't count as placements. Surfaced on result._writeTrace so
+  // dispatch can return it; runOrchestration maps it into stepSummaries.
+  const writeTrace = [];
   const TOOL_TRACE_MAX = 40;
   const { isToolReadOnly } = await import("../../seed/tree/extensionScope.js");
 
@@ -137,7 +145,8 @@ export async function runSteppedMode(visitorId, mode, message, {
     for (const r of results) {
       socket?.emit?.(WS.TOOL_RESULT, r);
       if (r?.tool) {
-        if (isToolReadOnly(r.tool)) readCount++;
+        const readOnly = isToolReadOnly(r.tool);
+        if (readOnly) readCount++;
         else writeCount++;
         let hint = "";
         const args = r.args || r.arguments || {};
@@ -145,8 +154,27 @@ export async function runSteppedMode(visitorId, mode, message, {
         else if (args.path && args.method) hint = `${args.method} ${args.path}`;
         else if (args.path) hint = args.path;
         else if (args.name) hint = args.name;
-        toolTrace.push({ tool: r.tool, hint: String(hint || "").slice(0, 120) });
+        // Take a compact summary of the tool result too. For extension
+        // tools like food-log-entry the result text is the user-visible
+        // confirmation ("Logged to snack ..."); surfacing it makes the
+        // place-mode output show what actually got placed.
+        let resultSummary = "";
+        const rawResult = r.result ?? r.content ?? null;
+        if (typeof rawResult === "string") resultSummary = rawResult.slice(0, 200);
+        else if (rawResult && typeof rawResult === "object") {
+          try { resultSummary = JSON.stringify(rawResult).slice(0, 200); } catch {}
+        }
+        const entry = {
+          tool: r.tool,
+          hint: String(hint || "").slice(0, 120),
+          ...(resultSummary ? { summary: resultSummary } : {}),
+        };
+        toolTrace.push(entry);
         if (toolTrace.length > TOOL_TRACE_MAX) toolTrace.shift();
+        if (!readOnly) {
+          writeTrace.push(entry);
+          if (writeTrace.length > TOOL_TRACE_MAX) writeTrace.shift();
+        }
       }
     }
   };
@@ -183,6 +211,7 @@ export async function runSteppedMode(visitorId, mode, message, {
     username, userId, rootId, signal, slot,
     currentNodeId: pmCurrentNodeId,
     readOnly,
+    skipRespond,
     onToolLoopCheckpoint,
     onToolResults,
     onToolCalled,
@@ -462,6 +491,7 @@ export async function runSteppedMode(visitorId, mode, message, {
   // emitted a bare [[DONE]] with no user-facing prose.
   if (result) {
     result._toolTrace = toolTrace;
+    result._writeTrace = writeTrace;
     result._writeCount = writeCount;
     result._readCount = readCount;
     // The last chain-step chatId. Used by dispatch.js to nest branch

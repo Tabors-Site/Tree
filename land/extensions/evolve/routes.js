@@ -1,7 +1,10 @@
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import { getPatterns, getProposals, dismissPattern, approveProposal } from "./core.js";
+import {
+  getPatterns, getProposals, dismissPattern, approveProposal,
+  detectAndStorePatterns, generateProposals,
+} from "./core.js";
 
 const router = express.Router();
 
@@ -47,6 +50,25 @@ router.post("/land/evolve/approve", authenticate, async (req, res) => {
     const result = await approveProposal(id);
     if (!result) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Proposal not found");
     sendOk(res, result);
+  } catch (err) {
+    sendError(res, 500, ERR.INTERNAL, err.message);
+  }
+});
+
+// POST /land/evolve/run - kick a full detection + proposal cycle on demand.
+// Normally runs every 6h via the evolve-cycle job; this lets an operator
+// trigger it immediately for testing or after a burst of activity without
+// waiting for the next scheduled tick. Returns the detected patterns and
+// generated proposals so the caller can see what was written.
+router.post("/land/evolve/run", authenticate, async (req, res) => {
+  try {
+    const patterns = await detectAndStorePatterns();
+    const proposals = await generateProposals();
+    sendOk(res, {
+      patterns,
+      proposals,
+      message: `Detected ${patterns.length} pattern(s), generated ${proposals.length} proposal(s).`,
+    });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
   }

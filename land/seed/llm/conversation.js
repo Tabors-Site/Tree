@@ -580,8 +580,22 @@ export async function userHasLlm(userId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// SESSION STATE (keyed by visitorId)
+// SESSION STATE (keyed by ai-chat session key)
 // ─────────────────────────────────────────────────────────────────────────
+//
+// The parameter/local variable name `visitorId` throughout this file is
+// the ai-chat session key built by seed/llm/sessionKeys.js. We keep the
+// historical `visitorId` name because it's the JWT claim name (wire
+// contract with the MCP server), a field in the runChat/runOrchestration
+// return value (API contract with callers), and a field name in
+// sessionRegistry meta (consumed by hooks). Rename-in-place would break
+// all three. For new code, treat `visitorId` as synonymous with
+// `aiSessionKey` — same string, same meaning.
+//
+// The `socket.visitorId` field (set in ws/websocket.js register handler)
+// is related but distinct: it's the transport-level fallback key used
+// when a chat arrives before payload context is established. It's a
+// real socket field, not a local variable.
 
 // Each session holds: { modeKey, bigMode, messages[], rootId, _lastActive }
 const sessions = new Map();
@@ -1958,6 +1972,16 @@ export async function processMessage(visitorId, message, ctx) {
       ctx.onToolResults(toolResults);
     }
 
+    // Place mode: tool calls are the whole point. Once at least one has
+    // succeeded, stop — don't re-invoke the LLM just to generate prose
+    // the user will never see (place mode hides the answer). Saves a
+    // full LLM round-trip per placement turn and stops the AI from
+    // echoing macros/summaries into a chat record nobody reads.
+    if (ctx.skipRespond && toolResults.some((r) => r?.success !== false)) {
+      continueReason = "place-done";
+      break;
+    }
+
     // Mid-flight checkpoint: let callers inject user updates between tool iterations.
     // Same pattern as onToolResults. Optional callback. Zero overhead if unused.
     if (ctx.onToolLoopCheckpoint) {
@@ -1989,7 +2013,10 @@ export async function processMessage(visitorId, message, ctx) {
   // skip the "ensure final text" call in finalizeResponse — the model was
   // actively tool-calling, not wrapping up. The caller (orchestrator) will
   // re-enter on a new chainIndex step with continuation: true.
-  if (continueReason === "tool-cap") {
+  // Place mode (continueReason === "place-done") also short-circuits here:
+  // the tools ran, the user won't see prose, no reason to spin up another
+  // LLM turn just to generate text we'll discard.
+  if (continueReason === "tool-cap" || continueReason === "place-done") {
     const _internal = {
       modeKey: session.modeKey,
       rootId: session.rootId,
@@ -2003,7 +2030,7 @@ export async function processMessage(visitorId, message, ctx) {
       content: "",
       answer: "",
       _internal,
-      _continue: true,
+      _continue: continueReason === "tool-cap",
       _continueReason: continueReason,
     };
   }
@@ -2131,14 +2158,50 @@ export function sessionCount() {
  * Handles all boilerplate: MCP connection, mode switch, Chat tracking,
  * processMessage, cleanup. One call.
  *
+ * Session routing — three paths in:
+ *   1. `aiSessionKey`: caller provides the key directly (pass-through from
+ *      an upstream runOrchestration that wants this sub-call to join the
+ *      user's session, or an extension joining a named internal lane).
+ *   2. `scope` + `purpose`: declare a named internal lane. Kernel assembles
+ *      `tree-internal:${rootId}:${purpose}[:${extra}]` /
+ *      `home-internal:${userId}:${purpose}[:${extra}]` /
+ *      `land-internal:${purpose}[:${extra}]`. Persists across runs.
+ *   3. Neither: ephemeral. Fresh `ephemeral:${uuid}` per call, one-shot.
+ *
+ * Default is ephemeral. Extensions that want cross-run memory declare it
+ * explicitly via scope/purpose. User keys are built by runOrchestration
+ * (not here) from entry-point ingredients.
+ *
  * Usage:
- *   const { answer, chatId } = await runChat({
- *     userId, username, message, mode: "land:manager",
- *     rootId: null,  // optional, for tree modes
- *     nodeId: null,  // optional, for per-node context
- *   });
+ *   // Fire-and-forget (default)
+ *   await runChat({ userId, message, mode });
+ *
+ *   // Named internal lane with cross-run memory
+ *   await runChat({ userId, message, mode, scope: "tree", purpose: "reflect", rootId });
+ *
+ *   // Parallel chains within a lane
+ *   await runChat({ ..., scope: "tree", purpose: "analyze", extra: "security", rootId });
+ *
+ *   // Join an upstream user session
+ *   await runChat({ ..., aiSessionKey: userKeyFromCaller });
  */
-export async function runChat({ userId, username, message, mode, rootId = null, nodeId = null, signal = null, res = null, llmPriority = null, onToolResults = null, onToolCalled = null, onThinking = null, visitorId: callerVisitorId = null, ephemeral = false, treeContext = null }) {
+export async function runChat({
+  userId, username, message, mode,
+  rootId = null, nodeId = null,
+  signal = null, res = null, llmPriority = null,
+  onToolResults = null, onToolCalled = null, onThinking = null,
+  treeContext = null,
+
+  // AI-chat session routing — three paths:
+  //   aiSessionKey    explicit pass-through (extension joining upstream session)
+  //   scope+purpose   declared internal lane (tree/home/land + optional extra)
+  //   neither         fresh ephemeral key (default)
+  aiSessionKey = null,
+  scope = null,
+  purpose = null,
+  extra = null,
+  source = null,
+}) {
   if (!userId || !message || !mode) {
     throw new Error("runChat requires userId, message, and mode");
   }
@@ -2155,36 +2218,24 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   const { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } = await import("../ws/mcp.js");
   const { startChat, finalizeChat, setChatContext } = await import("./chatTracker.js");
   const { setSessionAbort, clearSessionAbort } = await import("../ws/sessionRegistry.js");
+  const { resolveInternalAiSessionKey } = await import("./sessionKeys.js");
 
   const JWT_SECRET = process.env.JWT_SECRET;
   if (!JWT_SECRET) throw new Error("JWT_SECRET not configured");
 
-  // Session identity: zone + context + user
-  // land:{userId}          - land zone (persistent across land chats)
-  // home:{userId}          - home zone (persistent across home chats)
-  // tree:{rootId}:{userId} - tree zone (new session per tree, persistent within tree)
-  //
-  // `ephemeral: true` bypasses the persistent session cache entirely —
-  // the call gets its own fresh visitorId and sessionId, and neither is
-  // written to _runChatSessions. Used by hook-triggered background LLM
-  // calls (contradiction detector, intent classifier, etc.) so their
-  // prompt/response pairs never leak into the user's active chat
-  // session. Without this, any hook that runs runChat({ rootId, userId })
-  // collides with the user's live chat at `{rootId}:{userId}` and their
-  // messages interleave.
-  const bigMode = mode.split(":")[0];
-  const contextKey = bigMode === "tree" && rootId ? rootId : bigMode;
-  const visitorId = callerVisitorId || (ephemeral
-    ? `ephemeral:${crypto.randomUUID()}`
-    : `${contextKey}:${userId}`);
+  // Resolve the ai-chat session key (shared with OrchestratorRuntime).
+  const { key: resolvedKey, persist: persistSession } = resolveInternalAiSessionKey({
+    aiSessionKey, scope, purpose, extra, userId, rootId,
+  });
 
-  // Persistent sessionId per zone (chains Chats together).
-  // Ephemeral calls get a fresh session that isn't stored; it dies
-  // with the call and cannot pollute a later turn.
+  // Internal alias — the rest of this function keeps the historical name
+  // `visitorId` for the ai-chat session key, since every downstream helper
+  // (setRootId, setCurrentNodeId, MCP cache, abort registry, chatTracker)
+  // already treats it as the session identifier.
+  const visitorId = resolvedKey;
+
   let sessionId;
-  if (ephemeral) {
-    sessionId = crypto.randomUUID();
-  } else {
+  if (persistSession) {
     if (!_runChatSessions.has(visitorId)) {
       if (_runChatSessions.size >= MAX_CONVERSATION_SESSIONS) {
         const first = _runChatSessions.keys().next().value;
@@ -2193,6 +2244,8 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
       _runChatSessions.set(visitorId, crypto.randomUUID());
     }
     sessionId = _runChatSessions.get(visitorId);
+  } else {
+    sessionId = crypto.randomUUID();
   }
 
   // Abort controller for cancellation (Ctrl+C, timeout, etc.)
@@ -2204,8 +2257,8 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
   if (abort) setSessionAbort(visitorId, abort);
 
   // 1. Connect MCP (reuse if already connected)
-  // Skip if caller provided visitorId (they already connected MCP for this session)
-  if (!callerVisitorId && !getMCPClient(visitorId)) {
+  // Skip if caller provided an aiSessionKey (they already connected MCP for this session)
+  if (!aiSessionKey && !getMCPClient(visitorId)) {
     const internalJwt = jwt.sign(
       { userId: userId.toString(), username: username || "unknown", visitorId },
       JWT_SECRET,
@@ -2246,6 +2299,7 @@ export async function runChat({ userId, username, message, mode, rootId = null, 
       sessionId,
       message,
       modeKey: mode,
+      ...(source ? { source } : {}),
       llmProvider: {
         isCustom: clientInfo.isCustom || false,
         model: clientInfo.model || "unknown",
@@ -2340,9 +2394,10 @@ export async function runOrchestration({
   message,                               // required
   rootId = null,                         // required for tree zone
   currentNodeId = null,
-  sessionHandle = null,                  // HTTP can pass to differentiate browser tabs
-  sessionId: providedSessionId = null,   // Websocket passes its existing session
-  visitorId: providedVisitorId = null,   // Websocket passes socket.visitorId
+  device = null,                         // "dashboard" | "cli" | "http" | `${gateway}:${extId}` - per-reach decoupler
+  handle = null,                         // overrides device when present (explicit merge or side-thread)
+  sessionId: providedSessionId = null,   // Websocket passes its existing transport session
+  aiSessionKey: providedAiSessionKey = null,  // explicit key pass-through (websocket's _pvId)
   socket = null,                         // Websocket passes the socket for tool emit
   signal = null,                         // Caller-provided abort signal
   res = null,                            // For HTTP auto-abort on disconnect
@@ -2381,6 +2436,7 @@ export async function runOrchestration({
   const { getOrchestrator } = await import("../orchestrators/registry.js");
   const { nullSocket } = await import("../orchestrators/helpers.js");
   const { ProtocolError, ERR } = await import("../protocol.js");
+  const { buildUserAiSessionKey } = await import("./sessionKeys.js");
 
   const JWT_SECRET = process.env.JWT_SECRET;
   if (!JWT_SECRET) throw new Error("JWT_SECRET not configured");
@@ -2389,19 +2445,20 @@ export async function runOrchestration({
   if (!SESSION_TYPES.API_HOME_CHAT) registerSessionType("API_HOME_CHAT", "api-home-chat");
   if (!SESSION_TYPES.API_LAND_CHAT) registerSessionType("API_LAND_CHAT", "api-land-chat");
 
-  // ── Build visitorId for conversation continuity ───────────────────────
-  // tree: ${rootId}:${userId} (with optional :${handle} for tabs)
-  // home: home:${userId}
-  // land: land:${userId}
-  let visitorId = providedVisitorId;
+  // ── Build ai-chat session key for conversation continuity ─────────────
+  // Canonical shape: user:${userId}:${anchor}:${suffix}
+  // where anchor is rootId (tree) or "home"/"land", and suffix is
+  // `handle` (explicit override) or `device` (default, per-reach split).
+  //
+  // `visitorId` is the historical variable name for the ai-chat session
+  // key throughout this file and its collaborators (MCP cache, session
+  // state, chatTracker, sessionRegistry). See the block comment near
+  // the `sessions` Map declaration for why the name is preserved.
+  //
+  // Priority: providedAiSessionKey (pass-through) > minted from pieces.
+  let visitorId = providedAiSessionKey || null;
   if (!visitorId) {
-    if (zone === "tree") {
-      visitorId = sessionHandle
-        ? `${rootId}:${userId}:${sessionHandle}`
-        : `${rootId}:${userId}`;
-    } else {
-      visitorId = `${zone}:${userId}`;
-    }
+    visitorId = buildUserAiSessionKey({ userId, zone, rootId, device, handle });
   }
 
   // ── Build sessionRegistry session for transport tracking ──────────────
@@ -2412,9 +2469,11 @@ export async function runOrchestration({
   let weCreatedSession = false;
 
   if (!sessionId) {
-    const scopeKey = sessionHandle
-      ? `${userId}:${zone}:${rootId || ""}:${sessionHandle}`
-      : `${userId}:${zone}:${rootId || ""}`;
+    // scopeKey drives idle transport-session reuse. visitorId already
+    // encodes (user, zone, rootId, device/handle) so it's the natural
+    // scope. Two different devices at the same tree get different
+    // visitorIds → different scopeKeys → no crossover.
+    const scopeKey = visitorId;
 
     const sessionType =
       zone === "tree"
@@ -2425,16 +2484,17 @@ export async function runOrchestration({
               : SESSION_TYPES.API_TREE_CHAT)
         : (zone === "home" ? SESSION_TYPES.API_HOME_CHAT : SESSION_TYPES.API_LAND_CHAT);
 
+    const tag = handle || device || null;
     const description = zone === "tree"
-      ? `${zone} ${orchestrateFlags.skipRespond ? "place" : orchestrateFlags.forceQueryOnly ? "query" : "chat"} on root ${rootId}${sessionHandle ? ` [${sessionHandle}]` : ""}${isPublicQuery ? " (public)" : ""}`
-      : `${zone} chat`;
+      ? `${zone} ${orchestrateFlags.skipRespond ? "place" : orchestrateFlags.forceQueryOnly ? "query" : "chat"} on root ${rootId}${tag ? ` [${tag}]` : ""}${isPublicQuery ? " (public)" : ""}`
+      : `${zone} chat${tag ? ` [${tag}]` : ""}`;
 
     const created = createSession({
       userId,
       type: sessionType,
       scopeKey,
       description,
-      meta: { rootId, visitorId, isPublicQuery, sessionHandle, zone },
+      meta: { rootId, visitorId, isPublicQuery, handle, device, zone },
     });
     sessionId = created.sessionId;
     weCreatedSession = true;

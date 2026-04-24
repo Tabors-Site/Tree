@@ -4,6 +4,7 @@
 
 import log from "../../seed/log.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
+import { buildUserAiSessionKey } from "../../seed/llm/sessionKeys.js";
 import GatewayChannel from "./model.js";
 import Node from "../../seed/models/node.js";
 import User from "../../seed/models/user.js";
@@ -167,18 +168,29 @@ export async function processGatewayMessage(
         ? "query"
         : "chat");
 
-  // 10. Enqueue with max concurrent 2
-  const visitorId = `gateway:${channel.type}:${channelId}:${Date.now()}`;
-
   const result = await enqueue(
     queueKey,
     async () => {
-      // Create runtime for session + MCP + Chat lifecycle
+      // Gateway traffic doesn't fit any TreeOS zone cleanly — the sender
+      // might be a human (Telegram, Discord), an email thread, or a
+      // programmatic webhook. We map it to the closest primitive: a user
+      // session under the tree owner (channel.userId), with the external
+      // channel+conversation as the "device" segment. That's who owns
+      // the channel, who pays for the LLM, and whose access gates apply.
+      // Each external conversation (Telegram chat, email thread, webhook
+      // source) gets its own key so parallel conversations stay isolated;
+      // the owner's own `web`/`cli` sessions are untouched.
+      const aiSessionKey = buildUserAiSessionKey({
+        userId: channel.userId,
+        zone: "tree",
+        rootId: channel.rootId,
+        device: `${channel.type}:${channelId}`,
+      });
       const rt = new OrchestratorRuntime({
         rootId: channel.rootId,
         userId: channel.userId,
         username: user.username,
-        visitorId,
+        aiSessionKey,
         sessionType: SESSION_TYPES.GATEWAY_INPUT,
         description: `Gateway ${channel.type} input on root ${channel.rootId}`,
         modeKeyForLlm: modeKey,
@@ -201,7 +213,7 @@ export async function processGatewayMessage(
         const treeOrch = getOrchestrator("tree");
         if (!treeOrch) throw new Error("No tree orchestrator installed");
         const orchResult = await treeOrch.handle({
-          visitorId,
+          visitorId: rt.visitorId,
           message: labeledMessage,
           socket: nullSocket,
           username: user.username,

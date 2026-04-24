@@ -12,29 +12,33 @@ import Contribution from "../models/contribution.js";
 import { createSession, SESSION_TYPES } from "../ws/sessionRegistry.js";
 
 // ─────────────────────────────────────────────────────────────────────────
-// CHAT CONTRIBUTION CONTEXT (in-memory visitorId -> { sessionId, chatId })
+// CHAT CONTRIBUTION CONTEXT (in-memory aiSessionKey -> { sessionId, chatId })
 // Used by handleMcpRequest to inject into tool args so contributions
 // are tagged with the correct chat, not linked by time window.
+//
+// The key is the ai-chat session key (historically called "visitorId"
+// throughout the codebase; conversation.js still uses that name
+// internally).
 // ─────────────────────────────────────────────────────────────────────────
 
 const activeAiContext = new Map();
 function MAX_AI_CONTEXT_ENTRIES() { return Math.max(100, Math.min(Number(getLandConfigValue("maxAiContextEntries")) || 10000, 100000)); }
 
-export function setChatContext(visitorId, sessionId, chatId) {
+export function setChatContext(aiSessionKey, sessionId, chatId) {
   // Cap to prevent unbounded growth if clearChatContext is never called
-  if (activeAiContext.size >= MAX_AI_CONTEXT_ENTRIES() && !activeAiContext.has(String(visitorId))) {
+  if (activeAiContext.size >= MAX_AI_CONTEXT_ENTRIES() && !activeAiContext.has(String(aiSessionKey))) {
     const first = activeAiContext.keys().next().value;
     activeAiContext.delete(first);
   }
-  activeAiContext.set(String(visitorId), { sessionId, chatId: chatId ? String(chatId) : null });
+  activeAiContext.set(String(aiSessionKey), { sessionId, chatId: chatId ? String(chatId) : null });
 }
 
-export function getChatContext(visitorId) {
-  return activeAiContext.get(String(visitorId)) || { sessionId: null, chatId: null };
+export function getChatContext(aiSessionKey) {
+  return activeAiContext.get(String(aiSessionKey)) || { sessionId: null, chatId: null };
 }
 
-export function clearChatContext(visitorId) {
-  activeAiContext.delete(String(visitorId));
+export function clearChatContext(aiSessionKey) {
+  activeAiContext.delete(String(aiSessionKey));
 }
 
 // Periodic sweep: clear entries older than 30 minutes (safety net for missed clears)
@@ -60,9 +64,19 @@ setInterval(() => {
  * Initialize or retrieve the AI session on a socket.
  * Call before each chat. Reuses via scoped session if still within idle TTL.
  * Returns the current sessionId.
+ *
+ * The scopeKey is per-transport (`ws:${socket.visitorId}`), not per-user.
+ * socket.visitorId already encodes (user, clientKind, clientInstance) so
+ * CLI and browser on the same user get independent sessions. A reconnect
+ * in the same tab / CLI pid reuses; a different device doesn't collide.
+ *
+ * This matters because endSession(sessionId) aborts any registered abort
+ * controller on that sessionId (sessionRegistry.js:198-202). If two
+ * devices shared a sessionId, one device's navigate/rotate would abort
+ * the other's in-flight chat.
  */
 export function ensureSession(socket) {
-  const scopeKey = `ws:${socket.userId}`;
+  const scopeKey = `ws:${socket.visitorId || socket.userId}`;
   const { sessionId, reused } = createSession({
     userId: socket.userId,
     type: SESSION_TYPES.WEBSOCKET_CHAT,
@@ -87,7 +101,7 @@ export function rotateSession(socket) {
   const { sessionId } = createSession({
     userId: socket.userId,
     type: SESSION_TYPES.WEBSOCKET_CHAT,
-    scopeKey: `ws:${socket.userId}`,
+    scopeKey: `ws:${socket.visitorId || socket.userId}`,
     idleTTL: 0, // force new session by treating any existing as expired
     description: `Chat session for ${socket.username || "unknown"}`,
     meta: { visitorId: socket.visitorId },
