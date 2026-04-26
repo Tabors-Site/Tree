@@ -27,14 +27,24 @@ export default {
   shouldInject(ctx) {
     // Use the raw view object (localViewData), NOT the formatted string
     // at localView. The string is for prompt rendering; only the raw
-    // shape has .self.role / .self.childCount on it.
+    // shape has .self.role / .self.swarmRole / .self.type / .self.childCount on it.
     const view = ctx?.enrichedContext?.localViewData;
     if (!view) return false;
-    // Project role means we're at an initialized workspace root. If the
-    // role is null, this is a fresh tree root the workspace hasn't
-    // auto-initialized yet — which is ALSO a valid place to branch,
-    // so we accept project OR null. Branch / directory / file
-    // positions skip this facet (they don't decompose further).
+    // Skip for sub-branch builders. Branches sit INSIDE a swarm
+    // dispatch — they don't decompose further; the depth cap rejects
+    // it, and the architect-orientation framing in this facet's text
+    // (the "EMPTY project" warning, the "HARD RULE: branch first"
+    // directive) is misleading noise inside a branch's prompt.
+    // swarmRole comes from metadata.swarm.role (set by initBranchRole).
+    if (view.self?.swarmRole === "branch") return false;
+    // Skip for plan-type nodes themselves — a plan node is the
+    // coordinator, not a decomposition target.
+    if (view.self?.type === "plan") return false;
+    // Project role (code-workspace) means we're at an initialized
+    // workspace root. If the role is null AND we're not inside a
+    // branch (already filtered above), this is a fresh tree root the
+    // workspace hasn't auto-initialized yet — also a valid place to
+    // branch. Code-workspace's directory / file positions skip.
     const selfRole = view.self?.role;
     if (selfRole && selfRole !== "project") return false;
     // Skip the facet if a plan has already been proposed/dispatched at
@@ -191,39 +201,60 @@ all three blocks in your response text, in order:
 *** END CRITICAL ***
 
 Emit a [[CONTRACTS]] block BEFORE [[BRANCHES]]. One line per
-contract. Two kinds:
+contract. Each line declares a NAMESPACE (what kind of thing) and
+a SCOPE (which branches must comply).
 
-  - "message <name>: { <field>: <type>, ... }" — a wire message
-  - "type <name>: { <field>: <type>, ... }" — a shared data shape
+NAMESPACES (the kind of thing the contract constrains):
 
-Example for a realtime multiplayer game:
+  - storage-key       localStorage / IndexedDB / etc. key names
+  - identifier-set    enumerated string IDs (character IDs, role names, status enums)
+  - dom-id            canvas / element id values shared across modules
+  - event-name        custom DOM event / pubsub topic names
+  - message-type      WebSocket / fetch payload type discriminators
+  - method-signature  shared function names + arg shapes between modules
+  - module-export     global names a module attaches to window/exports
+
+SCOPES (who must comply with this contract):
+
+  - global                          every branch under this plan must comply
+  - shared:[branch-a, branch-b]     these specific branches coordinate on this
+  - local:branch-name               just this branch (declared for visibility)
+
+Default scope (omitted): "global". When in doubt, use "global" — the
+runtime filter is a refinement, not a load-bearing rule. Narrow scope
+when you're certain only specific branches will reference it.
+
+Example for a single-page game with four modules + shell:
 
     [[CONTRACTS]]
-    message join: { type: "join", roomId: string }
-    message gameState: { type: "gameState", players: Map<id, Snake>, apples: Apple[], grid: number }
-    message direction: { type: "direction", direction: "up"|"down"|"left"|"right" }
-    message playerId: { type: "playerId", playerId: string }
-    type Snake: { x: number, y: number, direction: string, tail: {x,y}[], dead: boolean }
-    type Apple: { x: number, y: number }
+    identifier-set characterIds: { values: ['yellow','red','blue','green'], scope: global }
+    storage-key flappyState: { shape: '{ totalXP, unlockedChars, highScore }', scope: shared:[game,progression,ui] }
+    dom-id canvasId: { value: 'gameCanvas', scope: shared:[game,shell] }
+    event-name onScore: { detail: '{ score: number }', scope: shared:[game,ui,progression] }
+    method-signature progression.addXP: { args: '(amount: number)', returns: 'totalXP: number', scope: shared:[game,progression] }
+    module-export GameLoop: { globals: 'window.GameLoop = class', scope: shared:[game,shell] }
     [[/CONTRACTS]]
 
 Rules on contracts:
 
-  1. Every message has a "type" field that matches the contract's
-     name. The AI on each branch will send/receive messages by this
-     type string.
-  2. Field names are canonical. Pick one and stick with it. If the
-     backend stores the snake body as "tail", the frontend reads
-     data.tail, not data.pos or data.segments.
-  3. Don't over-design. Declare only the messages that cross branch
-     boundaries. Internal helper types live inside a branch and
-     don't need to be in the contract.
-  4. Contracts are stored on the project root and injected into
-     every branch's system prompt automatically. Branches will see
-     them in their "Declared Contracts" section. If a branch emits
-     a message type not in the contracts or reads a field that
-     isn't declared, the post-swarm validator will flag it and
-     flip that branch to failed for retry.
+  1. Identify SHARED VOCABULARY first — every identifier (key, ID, event
+     name, exported name) that two or more branches will reference in
+     common. Declare it. The reason inter-branch failures happen is
+     each branch invents its own name for the same concept.
+  2. Tag each contract with scope so each branch sees only its slice.
+     The "ui" branch shouldn't see "shared:[backend,worker]" contracts
+     it has no part in. Narrowing scope is how the architecture
+     focuses each builder on what it must comply with.
+  3. Field names are canonical. Pick one and stick with it. If the
+     state object's XP key is "totalXP", every branch reads
+     state.totalXP, not state.xp or state.totalExp.
+  4. Don't over-declare. Internal helpers within a branch don't need
+     contracts. Only declare what crosses branch boundaries.
+  5. The plan stores these on the plan-type node at this scope; each
+     branch's enrichContext walks up the plan chain, gathers all
+     contracts visible at its position, filters to its scoped slice,
+     and renders only those into the builder's prompt. Branches
+     literally cannot see contracts that aren't scoped to them.
 
 After [[/CONTRACTS]], emit [[BRANCHES]] as usual. Close with
 [[DONE]]. The swarm runner parses both blocks from your response

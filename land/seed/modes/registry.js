@@ -378,12 +378,14 @@ export async function buildPromptForMode(modeKey, ctx) {
     log.error("Modes", `buildSystemPrompt for "${modeKey}" threw: ${promptErr.message}`);
     modePrompt = `[Mode: ${modeKey}] (prompt generation failed, assist the user as best you can)`;
   }
-  // Guard against oversized prompts consuming the entire context window.
-  // 32KB is generous for a system prompt. Anything larger is a bug.
+  // Warn loudly when prompts get oversized so bloat doesn't go unnoticed,
+  // but DON'T silently slice — that hides the data from the dashboard
+  // and from anyone trying to debug what the model actually saw. The
+  // whole point of viewing the prompt is to see it. Fix the bloat at the
+  // facet level instead of papering over it with a hard cap here.
   const maxPromptChars = Number(getLandConfigValue("maxSystemPromptChars")) || 32000;
   if (typeof modePrompt === "string" && modePrompt.length > maxPromptChars) {
-    log.warn("Modes", `System prompt for "${modeKey}" is ${modePrompt.length} chars. Truncating to ${maxPromptChars}.`);
-    modePrompt = modePrompt.slice(0, maxPromptChars) + "\n... (system prompt truncated)";
+    log.warn("Modes", `System prompt for "${modeKey}" is ${modePrompt.length} chars (over ${maxPromptChars} budget). Investigate which facets are bloating it.`);
   }
   if (typeof modePrompt !== "string") {
     log.error("Modes", `buildSystemPrompt for "${modeKey}" returned ${typeof modePrompt}, expected string`);

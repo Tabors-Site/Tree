@@ -48,11 +48,41 @@ export async function mutateMeta(nodeId, mutator, _core) {
 }
 
 /**
+ * Write a branch's `childSummary` onto its swarm metadata. Called by
+ * the code-workspace summary-refresh helper whenever a material
+ * change happens in the branch's subtree (file writes, signal
+ * appends, contract updates, completion). The summary is the parent-
+ * view representation of this child — what Pass 2 courts and Pass 3
+ * reputation read when evaluating the subtree.
+ *
+ * Idempotent. Replaces the previous summary wholesale. Callers don't
+ * need to merge — summary generation is deterministic over current
+ * state.
+ */
+export async function setSummary({ nodeId, summary, core }) {
+  if (!nodeId || !summary || typeof summary !== "object") return null;
+  return mutateMeta(nodeId, (draft) => {
+    draft.summary = summary;
+    // Loop guard. The afterMetadataWrite hook in code-workspace
+    // refreshes child summaries on swarm-namespace writes, which
+    // INCLUDES summary writes themselves. Without this flag the
+    // hook would fire a summary write → afterMetadataWrite →
+    // refresh → summary write → ... loop. The debounce in
+    // refreshChildSummary catches it after one hop, but each hop
+    // costs two findById queries; setting this flag short-circuits
+    // the hook before any work happens. Same pattern as plan's
+    // _propagated for recomputeRollup.
+    draft._summaryRefresh = true;
+    return draft;
+  }, core);
+}
+
+/**
  * Mark a node as a swarm PROJECT. Sets role=project, initialized=true,
- * stamps systemSpec (if provided), ensures execution bookkeeping fields
- * exist (aggregatedDetail, inbox, events, archivedPlans is owned by
- * the plan extension but we keep a stub here to satisfy legacy readers
- * during transition). Does NOT touch plan data.
+ * stamps systemSpec (if provided), ensures execution bookkeeping
+ * fields exist (aggregatedDetail, inbox, events). Plan state — steps,
+ * archivedPlans, contracts, ledger, budget — lives in metadata.plan,
+ * owned by the plan extension; this function does NOT touch any of it.
  */
 export async function initProjectRole({ nodeId, systemSpec, core }) {
   return mutateMeta(nodeId, (draft) => {

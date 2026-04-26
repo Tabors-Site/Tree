@@ -1554,6 +1554,120 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
     socket.on("swarmPlanProposed", function(ev) { _renderPlanCard(ev, false); });
     socket.on("swarmPlanUpdated",  function(ev) { _renderPlanCard(ev, true); });
+
+    // Sub-plan card — scoped approval at a worker's scope. The buttons
+    // emit custom WS events directly (swarmSubPlanAccept / Cancel) so
+    // the approval doesn't pollute chat history as synthetic "yes"
+    // messages; the server's registered socket handlers dispatch or
+    // archive using the visitor's active-request runtime.
+    function _renderSubPlanCard(ev) {
+      if (!ev || !ev.subPlanNodeId) return;
+      var subPlanNodeId = String(ev.subPlanNodeId);
+      var scope = ev.scope || {};
+      var branches = Array.isArray(ev.proposedBranches) ? ev.proposedBranches : [];
+      var count = branches.length;
+      var breadcrumb = "";
+      if (scope.qualifiedName) {
+        breadcrumb = '<div class="plan-trigger">\\u21aa sub-plan of ' +
+          escapeHtml(oneLineLive(scope.qualifiedName, 140)) +
+          (scope.rootPlanName ? ' \\u00b7 in ' + escapeHtml(scope.rootPlanName) : '') +
+          '</div>';
+      }
+      var rows = branches.map(function(b) {
+        var name = escapeHtml(b.name || "?");
+        var path = b.path ? '<span class="plan-path">\\u00b7 path: ' + escapeHtml(b.path) + '</span>' : '';
+        var mode = b.mode ? '<span class="plan-mode">\\u00b7 ' + escapeHtml(b.mode) + '</span>' : '';
+        var files = (Array.isArray(b.files) && b.files.length)
+          ? '<span class="plan-files">\\u00b7 files: ' + escapeHtml(oneLineLive(b.files.join(", "), 80)) + '</span>'
+          : '';
+        var spec = b.spec
+          ? '<div class="plan-spec">' + escapeHtml(oneLineLive(b.spec, 180)) + '</div>'
+          : '';
+        return (
+          '<div class="plan-branch">' +
+            '<div class="plan-branch-head"><b>' + name + '</b> ' + path + ' ' + mode + ' ' + files + '</div>' +
+            spec +
+          '</div>'
+        );
+      }).join("");
+      var buttons = (
+        '<div class="plan-actions">' +
+          '<button class="plan-btn plan-btn-accept">Accept</button>' +
+          '<button class="plan-btn plan-btn-cancel">Cancel</button>' +
+        '</div>'
+      );
+      var card = addLiveLine("plan-card",
+        '<div class="plan-card">' +
+          '<div class="plan-card-head">' +
+            '<span class="live-swarm">\\u232b</span> <b>Sub-plan proposed</b>' +
+            ' <span class="live-dim">' + count + ' branch' + (count === 1 ? '' : 'es') + '</span>' +
+          '</div>' +
+          breadcrumb +
+          '<div class="plan-branches">' + rows + '</div>' +
+          buttons +
+          '<div class="plan-hint">A worker discovered compound work at its scope. Accept to dispatch the sub-branches; Cancel to drop them.</div>' +
+        '</div>'
+      );
+      if (!card) return;
+      var accept = card.querySelector(".plan-btn-accept");
+      var cancel = card.querySelector(".plan-btn-cancel");
+      function _spend(chosen) {
+        card.classList.add("plan-card-spent");
+        var all = card.querySelectorAll(".plan-btn");
+        for (var i = 0; i < all.length; i++) {
+          all[i].disabled = true;
+          if (all[i] !== chosen) all[i].classList.add("plan-btn-unchosen");
+        }
+        if (chosen) chosen.classList.add("plan-btn-chosen");
+      }
+      if (accept) accept.addEventListener("click", function() {
+        if (accept.disabled) return;
+        _spend(accept);
+        socket.emit("swarmSubPlanAccept", { subPlanNodeId: subPlanNodeId });
+      });
+      if (cancel) cancel.addEventListener("click", function() {
+        if (cancel.disabled) return;
+        _spend(cancel);
+        socket.emit("swarmSubPlanCancel", { subPlanNodeId: subPlanNodeId, reason: "user-cancel" });
+      });
+    }
+
+    socket.on("swarmSubPlanProposed", function(ev) { _renderSubPlanCard(ev); });
+    socket.on("swarmSubPlanDispatched", function(ev) {
+      var count = ev && ev.branchCount != null
+        ? ev.branchCount + " branch" + (ev.branchCount === 1 ? "" : "es")
+        : "sub-plan";
+      var scope = ev && ev.scopeName ? " under " + escapeHtml(ev.scopeName) : "";
+      addLiveLine("sub-plan-dispatched",
+        '<span class="live-swarm">\\u232b</span> <span class="live-dim">dispatching </span>' +
+        '<b>' + escapeHtml(count) + '</b>' +
+        '<span class="live-dim">' + scope + '</span>'
+      );
+    });
+    socket.on("swarmSubPlanArchived", function(ev) {
+      var reason = ev && ev.reason ? " \\u00b7 " + escapeHtml(ev.reason) : "";
+      addLiveLine("sub-plan-archived",
+        '<span class="live-dim">\\ud83d\\udce6 sub-plan archived</span>' +
+        '<span class="live-dim">' + reason + '</span>'
+      );
+    });
+    socket.on("swarmSubPlanComplete", function(ev) {
+      if (!ev) return;
+      var status = ev.overallStatus || "settled";
+      var subs = Array.isArray(ev.subBranches) ? ev.subBranches : [];
+      var done = 0, failed = 0;
+      for (var i = 0; i < subs.length; i++) {
+        if (subs[i].status === "done") done++;
+        else if (subs[i].status === "failed") failed++;
+      }
+      var icon = status === "settled" ? "\\u2713" : (status === "partial" ? "\\u26a0" : "\\u2197");
+      var summary = done + "/" + subs.length + " done" + (failed > 0 ? ", " + failed + " failed" : "");
+      var scope = ev.scopeName ? " under " + escapeHtml(ev.scopeName) : "";
+      addLiveLine("sub-plan-complete",
+        '<span class="live-swarm">' + icon + '</span> <b>Sub-plan ' + escapeHtml(status) + '</b>' +
+        '<span class="live-dim"> ' + escapeHtml(summary) + scope + '</span>'
+      );
+    });
     socket.on("swarmPlanArchived", function(ev) {
       var count = ev && ev.branchCount != null
         ? ev.branchCount + " branch" + (ev.branchCount === 1 ? "" : "es")

@@ -3,9 +3,9 @@
  *
  * Read only view of the project's current plan + archived plans ring.
  * Reads from the unified metadata.plan namespace via the plan
- * extension. Filters to branch kind steps for the legacy "swarm
- * plans" framing (this page is about decomposition, not local
- * checklist steps).
+ * extension. Filters to branch kind steps because this page is about
+ * decomposition (which branches the architect proposed and how they
+ * landed), not local checklist steps.
  */
 
 import Node from "../../../seed/models/node.js";
@@ -76,9 +76,16 @@ function renderPlanBlock(title, plan, meta) {
 export async function renderSwarmPlansPage({ rootId }) {
   const node = await Node.findById(rootId).select("metadata name").lean();
   if (!node) return `<h1>Not found</h1><p>No project at ${esc(rootId)}.</p>`;
-  const planMeta = node.metadata instanceof Map
-    ? node.metadata.get("plan")
-    : node.metadata?.plan;
+  // Plan discovery routes through the plan extension's canonical
+  // walk-up primitive. For a project root, this finds the plan-type
+  // child (the root's plan). For a deeper scope, it walks up to find
+  // the governing plan. Never reads metadata.plan directly.
+  let planMeta = null;
+  try {
+    const { getExtension } = await import("../../loader.js");
+    const planExt = getExtension("plan")?.exports;
+    if (planExt?.readPlan) planMeta = await planExt.readPlan(rootId);
+  } catch {}
   const current = planMeta || null;
   const archived = Array.isArray(planMeta?.archivedPlans) ? planMeta.archivedPlans : [];
 

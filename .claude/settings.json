@@ -904,7 +904,18 @@
       "Bash(grep -n \"return\\\\s*{\\\\|return\\\\s*{$\\\\|_allContent\\\\|_allToolResults\\\\|_internal\\\\|result\\\\s*=\\\\|_places\" /home/tabor/github/Tree/land/extensions/tree-orchestrator/steppedMode.js)",
       "Bash(cd /home/tabor/github/Tree echo \"=== 1. ephemeral: in extensions ===\" grep -rn \"ephemeral:\" land/extensions --include=\"*.js\")",
       "Read(//home/tabor/github/Tree/=== 2. visitorId: passed in object args \\(excluding OrchestratorRuntime/registerActiveRun/**)",
-      "Bash(cd /home/tabor/github/Tree echo \"=== 6. extensions importing buildUserAiSessionKey \\(should be zero\\) ===\" grep -rn \"buildUserAiSessionKey\" land/extensions --include=\"*.js\")"
+      "Bash(cd /home/tabor/github/Tree echo \"=== 6. extensions importing buildUserAiSessionKey \\(should be zero\\) ===\" grep -rn \"buildUserAiSessionKey\" land/extensions --include=\"*.js\")",
+      "Bash(lsof -i :3000 -sTCP:LISTEN)",
+      "Bash(break)",
+      "Bash(curl -s -H 'x-api-key: 3e57ac3e303f0c87d2ad89d6f1a5f7d8e488fb559805275ae50e5315180fe0a1' http://localhost:3000/api/v1/tree)",
+      "Bash(kill 2487849)",
+      "Bash(ps -p 2487849 -o pid)",
+      "Bash(mongosh land --quiet --eval ' *)",
+      "Bash(awk 'NR<=470 && /^export async function|core\\\\s*=|core,/ {print NR\": \"$0}' /home/tabor/github/Tree/land/extensions/tree-orchestrator/dispatch.js)",
+      "Bash(awk 'NR>=160 && NR<=470 && \\(/^export async function|^async function|^function / || /^\\\\s+core\\\\s*[,}=]/\\) {print NR\": \"$0}' /home/tabor/github/Tree/land/extensions/tree-orchestrator/dispatch.js)",
+      "Bash(awk 'NR>=163 && NR<=950' /home/tabor/github/Tree/land/extensions/tree-orchestrator/dispatch.js)",
+      "Bash(grep -n \"^\\\\s*core,\\\\|^\\\\s*core$\")",
+      "Bash(awk '/spawn\\\\\\(/,/}\\\\\\)$|^  }\\);/' /home/tabor/github/Tree/land/extensions/code-workspace/serve/spawner.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

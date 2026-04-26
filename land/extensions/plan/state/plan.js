@@ -1,5 +1,9 @@
-// Unified plan primitive. Every node can carry a metadata.plan namespace
-// with the shape:
+// Unified plan primitive. Plans live in metadata.plan on plan-type
+// nodes (type==="plan"). Legacy usage attaches metadata.plan to content
+// nodes — still supported, but the authoritative pattern as of Pass 1
+// is a dedicated plan-type node living at the scope it coordinates,
+// sibling to the work-units it governs. Workers walk up via
+// findGoverningPlan(nodeId) to locate their plan.
 //
 //   metadata.plan = {
 //     steps: [
@@ -7,6 +11,7 @@
 //         id: "s_<rand>",           // stable id, rotates when plan re-set
 //         kind: "write" | "edit" | "branch" | "test" | "probe" | "note" |
 //               "chapter" | "scene" | "task" | ...   (open set)
+//         stepType: "simple" | "compound" | "passed-down" | "constraining",
 //         title: string,            // human readable
 //         status: "pending" | "running" | "done" | "failed" | "paused" |
 //                 "blocked" | "pending-approval" |
@@ -14,8 +19,9 @@
 //         createdAt: ISO,
 //         completedAt: ISO | null,
 //         blockedReason: string | null,
-//         // kind specific fields:
-//         //   branch/chapter:  childNodeId, path, spec, files, slot, mode
+//         // kind-specific fields:
+//         //   branch/chapter:  childNodeId, path, spec, files, slot, mode,
+//         //                    branchSignature (stable identity string)
 //         //   test:            command, output, passed
 //         //   probe:           method, url, expectedStatus, actualStatus
 //         //   write/edit:      filePath, bytes
@@ -30,6 +36,40 @@
 //     archivedPlans: [               // bounded history of pivoted plans
 //       { snapshot, reason, archivedAt, finalStatuses }
 //     ],
+//     // Pass 1 additions (populated now, consumed by Passes 2-3):
+//     contracts: [                   // declared agreements at this scope
+//       {
+//         id:        string,         // unique slug within plan
+//         namespace: string,         // see CONTRACT_NAMESPACES (storage-key,
+//                                    //   identifier-set, dom-id, event-name,
+//                                    //   message-type, method-signature,
+//                                    //   module-export, ...)
+//         kind:      string,         // mirrors namespace (Pass 1 invariant)
+//         name:      string,         // human label
+//         value:     any,            // canonical value (object/string/array)
+//         scope:                     // who must comply with this contract:
+//           "global"                 //   every branch under this plan
+//           | { shared: [string] }   //   specific named branches coordinate
+//           | { local:  string }     //   one branch only (declared for visibility)
+//         fields:    [string]        // parsed field names from the body;
+//                                    //   read by validators (contract
+//                                    //   conformance, scout) and by
+//                                    //   prompt renderers
+//         values:    object          // parsed key→value pairs from the
+//                                    //   body; read by domain consumers
+//                                    //   (book pronoun scout, code-ws sdk
+//                                    //   message-type extraction, etc.)
+//         raw:       string          // original architect line; preserved
+//                                    //   for debugging and re-rendering
+//       }
+//     ],
+//     ledger: [                      // append-only execution history; Pass 3 reads
+//       { at: ISO, event: string, detail: object }
+//     ],
+//     budget: {                      // resource allocation; Pass 3 weights
+//       turnsPerStep, retriesPerBranch, depthAllocation,
+//       consumed: { turns, retries, byStepId: {...} }
+//     },
 //     _userEdit?: true,              // transient flag, consumed by hooks
 //     _propagated?: true,            // transient flag, consumed by hooks
 //   }
@@ -43,6 +83,7 @@
 // facets, rollup) can filter or group by status without caring about
 // kind.
 
+import crypto from "crypto";
 import Node from "../../../seed/models/node.js";
 import log from "../../../seed/log.js";
 import { setExtMeta as kernelSetExtMeta, readNs } from "../../../seed/tree/extensionMetadata.js";
@@ -50,8 +91,96 @@ import { setExtMeta as kernelSetExtMeta, readNs } from "../../../seed/tree/exten
 export const NS = "plan";
 
 const ARCHIVED_PLANS_CAP = 10;
+const LEDGER_CAP = 500;
 
 const TRANSIENT_FIELDS = new Set(["_userEdit", "_propagated"]);
+
+const STEP_TYPES = new Set(["simple", "compound", "passed-down", "constraining"]);
+
+// Default budget for a plan. Pass 1 ships uniform allocation; Pass 3
+// will make these reputation-weighted (per branchSignature). Callers
+// may override by passing a budget to initPlan() or mutating directly.
+export const DEFAULT_BUDGET = Object.freeze({
+  turnsPerStep: 20,
+  retriesPerBranch: 1,
+  depthAllocation: 1,     // MVP depth cap: one level of sub-plan (Pass 1 decision)
+  consumed: { turns: 0, retries: 0, byStepId: {} },
+});
+
+/**
+ * Normalize a spec string before hashing so signature stability is
+ * preserved across runs of the same architect prompt. LLM-generated
+ * text drifts by whitespace, punctuation, and case even when the
+ * logical content is identical; sha256 over raw text would treat
+ * those rephrasings as different specs and produce drifting
+ * signatures, breaking Pass 3 reputation aggregation per signature.
+ *
+ * What this normalizes:
+ *   - Lowercases everything.
+ *   - Replaces any run of non-alphanumeric characters (punctuation,
+ *     whitespace, line breaks) with a single space.
+ *   - Trims and collapses repeated spaces.
+ *
+ * What this does NOT normalize:
+ *   - Word order. "build A from B" and "build B from A" still differ.
+ *     This is intentional: token order often carries meaning, and
+ *     sorting tokens would create false collisions between truly
+ *     different specs.
+ *   - Synonyms or rephrasings. If the architect emits "implement"
+ *     in one run and "build" in the next, the signature still drifts.
+ *     That's a deeper problem (semantic stability) deferred to Pass 3
+ *     when canonical embedding-keyed signatures may replace this.
+ *
+ * Net: this kills the noise-floor drift (which is the dominant cause
+ * of cross-run signature instability) without false-collapsing
+ * meaningful prompt changes.
+ */
+function normalizeSpecForSignature(spec) {
+  if (!spec) return "";
+  return String(spec)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Compute a stable identity string for a branch-kind step. The
+ * signature is deterministic over (path, title, normalized-spec-hash),
+ * so two branches at the same position with the same spec across two
+ * runs share a signature. Pass 3 aggregates reputation per signature.
+ *
+ * Shape: `<path-slug>::<title-slug>::<spec-hash-8>`. Readable in logs
+ * and serializes fine through metadata writes.
+ *
+ * Stability: the spec is run through normalizeSpecForSignature before
+ * hashing so that whitespace, punctuation, and case drift across runs
+ * of the same architect prompt don't cause signature drift. See that
+ * helper's docstring for what is and isn't normalized.
+ */
+export function computeBranchSignature({ path, title, spec } = {}) {
+  const slug = (s) => String(s || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "anon";
+  // Path "." (the conventional root-level / shell branch) would slug
+  // to empty → "anon", which collides across runs and namespaces all
+  // root-level branches together. Treat "." (or any pure-punctuation
+  // path) as the special "root" slug so signatures stay stable and
+  // shell branches don't share a signature with arbitrary anon paths.
+  const pathSlug = (() => {
+    const trimmed = String(path || "").trim();
+    if (!trimmed || trimmed === "." || /^[./\\]+$/.test(trimmed)) return "root";
+    return slug(trimmed);
+  })();
+  const specHash = crypto
+    .createHash("sha256")
+    .update(normalizeSpecForSignature(spec))
+    .digest("hex")
+    .slice(0, 8);
+  return `${pathSlug}::${slug(title)}::${specHash}`;
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // LOW LEVEL HELPERS (private)
@@ -77,8 +206,8 @@ async function mutatePlan(nodeId, mutator, _core) {
     const node = await Node.findById(nodeId);
     if (!node) return null;
     const current = (node.metadata instanceof Map ? node.metadata.get(NS) : node.metadata?.[NS]) || null;
-    const draft = current ? JSON.parse(JSON.stringify(current)) : emptyPlan();
-    const out = mutator(draft) || draft;
+    const draft = ensureShape(current ? JSON.parse(JSON.stringify(current)) : emptyPlan());
+    const out = ensureShape(mutator(draft) || draft);
     out.updatedAt = new Date().toISOString();
     // ALWAYS use the unscoped kernel setExtMeta. The plan extension is
     // the declared owner of metadata.plan, and callers pass their own
@@ -108,7 +237,40 @@ function emptyPlan() {
     updatedAt: nowIso,
     systemSpec: null,
     archivedPlans: [],
+    // Pass 1 additions. Populated now, consumed by Passes 2-3.
+    contracts: [],
+    ledger: [],
+    budget: { ...DEFAULT_BUDGET, consumed: { turns: 0, retries: 0, byStepId: {} } },
   };
+}
+
+/**
+ * Upgrade a draft read from an older plan to the current shape.
+ * Existing plans written before Pass 1 fields landed may be missing
+ * `contracts` / `ledger` / `budget`; fill them in with defaults so
+ * readers don't have to guard. Non-destructive: existing fields win.
+ */
+function ensureShape(draft) {
+  if (!draft || typeof draft !== "object") return draft;
+  if (!Array.isArray(draft.contracts)) draft.contracts = [];
+  if (!Array.isArray(draft.ledger)) draft.ledger = [];
+  if (!draft.budget || typeof draft.budget !== "object") {
+    draft.budget = { ...DEFAULT_BUDGET, consumed: { turns: 0, retries: 0, byStepId: {} } };
+  } else {
+    if (typeof draft.budget.turnsPerStep !== "number") draft.budget.turnsPerStep = DEFAULT_BUDGET.turnsPerStep;
+    if (typeof draft.budget.retriesPerBranch !== "number") draft.budget.retriesPerBranch = DEFAULT_BUDGET.retriesPerBranch;
+    if (typeof draft.budget.depthAllocation !== "number") draft.budget.depthAllocation = DEFAULT_BUDGET.depthAllocation;
+    if (!draft.budget.consumed || typeof draft.budget.consumed !== "object") {
+      draft.budget.consumed = { turns: 0, retries: 0, byStepId: {} };
+    } else {
+      if (typeof draft.budget.consumed.turns !== "number") draft.budget.consumed.turns = 0;
+      if (typeof draft.budget.consumed.retries !== "number") draft.budget.consumed.retries = 0;
+      if (!draft.budget.consumed.byStepId || typeof draft.budget.consumed.byStepId !== "object") {
+        draft.budget.consumed.byStepId = {};
+      }
+    }
+  }
+  return draft;
 }
 
 function makeStepId() {
@@ -127,9 +289,17 @@ function normalizeStatus(s) {
 function cleanStep(raw) {
   if (!raw || typeof raw !== "object") return null;
   const nowIso = new Date().toISOString();
+  const kind = String(raw.kind || "task");
+  // stepType is orthogonal to kind. Default: "simple". Branch kinds are
+  // dispatched-work artifacts, not themselves compound — the compound
+  // step lives on the PARENT plan. Callers explicitly set "compound",
+  // "passed-down", or "constraining" when they mean it.
+  const rawStepType = String(raw.stepType || "simple");
+  const stepType = STEP_TYPES.has(rawStepType) ? rawStepType : "simple";
   const step = {
     id: raw.id || makeStepId(),
-    kind: String(raw.kind || "task"),
+    kind,
+    stepType,
     title: String(raw.title || raw.name || "").trim() || "(untitled step)",
     status: normalizeStatus(raw.status),
     createdAt: raw.createdAt || nowIso,
@@ -140,12 +310,22 @@ function cleanStep(raw) {
   // add whatever their kind needs (childNodeId, path, spec, files,
   // command, url, etc.).
   const kindKeys = Object.keys(raw).filter((k) =>
-    k !== "id" && k !== "kind" && k !== "title" && k !== "name" &&
+    k !== "id" && k !== "kind" && k !== "stepType" && k !== "title" && k !== "name" &&
     k !== "status" && k !== "createdAt" && k !== "completedAt" &&
     k !== "blockedReason" && !TRANSIENT_FIELDS.has(k),
   );
   for (const k of kindKeys) {
     step[k] = raw[k];
+  }
+  // Auto-compute branchSignature on branch-kind steps when not provided.
+  // Signatures are stable across runs (derived from path + title +
+  // spec-hash); Pass 3 aggregates reputation per signature.
+  if (kind === "branch" && !step.branchSignature) {
+    step.branchSignature = computeBranchSignature({
+      path: step.path,
+      title: step.title,
+      spec: step.spec,
+    });
   }
   return step;
 }
@@ -190,16 +370,21 @@ async function computeRollup(plan) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Read the plan at nodeId. Returns the plan object or null if the node
- * has no plan. The returned object is a snapshot, safe to read but do
- * not mutate.
+ * Read the plan metadata for a node, delegating to findGoverningPlan
+ * as the single plan-discovery primitive. The starting node can be a
+ * plan-type node directly, a scope node whose plan is a child, or a
+ * descendant deep under a scope. Walk semantics are defined in
+ * state/walkUp.js; readPlan is the metadata accessor on top of that.
+ *
+ * Returns null if no plan is discoverable at or above the node.
+ * Snapshot only — do not mutate.
  */
 export async function readPlan(nodeId) {
   if (!nodeId) return null;
   try {
-    const n = await Node.findById(nodeId).select("metadata").lean();
-    if (!n) return null;
-    return readMeta(n);
+    const { findGoverningPlan } = await import("./walkUp.js");
+    const planNode = await findGoverningPlan(nodeId);
+    return planNode ? readMeta(planNode) : null;
   } catch {
     return null;
   }
@@ -396,18 +581,239 @@ export async function upsertBranchStep(parentNodeId, branch, core) {
 }
 
 /**
+ * Create a plan-type node at the given parent scope and initialize
+ * its plan metadata. This is the canonical constructor for the
+ * "plan as a first-class node" pattern — a dedicated plan-type
+ * node lives at the scope it coordinates, as a sibling of the
+ * work-units it governs. Workers walk up via findGoverningPlan(nodeId)
+ * to locate it.
+ *
+ *   createPlanNode({
+ *     parentNodeId,           // where the plan-type node lives
+ *     userId,                 // required for contribution logging
+ *     name,                   // human-readable, e.g. "game-plan"
+ *     systemSpec,             // originating user request, if this is a
+ *                             //   project-level plan
+ *     steps,                  // optional initial steps array
+ *     budget,                 // optional override of DEFAULT_BUDGET
+ *     stepType,               // default for step cleaning if step omits it
+ *     wasAi,                  // contribution log flag
+ *     chatId, sessionId,      // contribution log context
+ *     core,                   // passed through for mutatePlan
+ *   })
+ *
+ * Returns the new plan Node (Mongoose doc). Throws on creation failure.
+ */
+export async function createPlanNode({
+  parentNodeId,
+  userId,
+  name,
+  systemSpec = null,
+  steps = null,
+  budget = null,
+  wasAi = false,
+  chatId = null,
+  sessionId = null,
+  core = null,
+} = {}) {
+  if (!parentNodeId) throw new Error("createPlanNode requires parentNodeId");
+  if (!userId) throw new Error("createPlanNode requires userId");
+  if (!name || !String(name).trim()) throw new Error("createPlanNode requires name");
+
+  // Structural invariant: a plan-type node cannot be a direct child of
+  // another plan-type node. Between two plans there must be a scope
+  // node (a content node or a branch node) that the inner plan
+  // coordinates. Violating this means the tree no longer expresses
+  // "plan describes work at a scope, work lives alongside the plan"
+  // and every walk-up primitive starts producing wrong answers.
+  const parentDoc = await Node.findById(parentNodeId).select("_id type").lean();
+  if (!parentDoc) throw new Error(`createPlanNode: parent ${parentNodeId} not found`);
+  if (parentDoc.type === "plan") {
+    throw new Error(
+      `createPlanNode: cannot create a plan-type node as a direct child of another plan-type node (${parentNodeId}). ` +
+      `Plans coordinate work at a scope; a scope node (content or branch) must sit between two plans.`,
+    );
+  }
+
+  // Dynamic import to avoid a seed→extension cycle: this file is inside
+  // an extension, and createNode lives in seed. Importing it at module
+  // top level is fine (seed has no back-references) but we do it lazily
+  // to keep plan.js's import list readable.
+  const { createNode } = await import("../../../seed/tree/treeManagement.js");
+  const planNode = await createNode({
+    name: String(name).trim(),
+    parentId: String(parentNodeId),
+    type: "plan",
+    userId,
+    wasAi,
+    chatId,
+    sessionId,
+  });
+  await initPlan(planNode._id, { systemSpec, budget }, core);
+  if (Array.isArray(steps) && steps.length > 0) {
+    await setSteps(planNode._id, steps, core, { bumpVersion: true });
+  }
+  await appendLedger(planNode._id, {
+    event: "plan-created",
+    detail: {
+      parentNodeId: String(parentNodeId),
+      initialStepCount: Array.isArray(steps) ? steps.length : 0,
+      systemSpec: systemSpec ? String(systemSpec).slice(0, 200) : null,
+    },
+  }, core);
+
+  // Orphan plan diagnostic. If a sibling plan-type node already
+  // exists under the same parent, that's a sign of orphaned state
+  // from a prior run that never got cleaned up. Log it explicitly
+  // — Pass 1's data audit needs to know about siblings so the
+  // operator can decide to archive or merge them.
+  try {
+    const siblingPlans = await Node.find({
+      parent: parentNodeId,
+      type: "plan",
+      _id: { $ne: planNode._id },
+    }).select("_id name").lean();
+    if (siblingPlans.length > 0) {
+      log.warn(
+        "Plan",
+        `🪦 Orphan plan(s) detected: ${siblingPlans.length} prior plan-type sibling(s) under parent ${String(parentNodeId).slice(0, 8)}: ` +
+        siblingPlans.map((p) => `"${p.name}" (${String(p._id).slice(0, 8)})`).join(", ") +
+        `. New plan: "${planNode.name}" (${String(planNode._id).slice(0, 8)}). ` +
+        `Operator should archive or merge orphans.`,
+      );
+    }
+  } catch {}
+
+  return planNode;
+}
+
+/**
+ * Find-or-create the plan-type child at a scope. This is the primary
+ * entrypoint for dispatch: callers pass a scope node id and get the
+ * plan node to write steps to.
+ *
+ *   - scopeNodeId IS a plan-type node → return it (idempotent).
+ *   - scopeNodeId has a plan-type child → return that child.
+ *   - Neither → create a new plan-type child via createPlanNode.
+ *
+ * Required: `userId` when creating. Optional: `name` (defaults to
+ * `${scopeName}-plan`), `systemSpec`, `budget`.
+ */
+export async function ensurePlanAtScope(scopeNodeId, {
+  userId,
+  name = null,
+  systemSpec = null,
+  budget = null,
+  wasAi = false,
+  chatId = null,
+  sessionId = null,
+} = {}, core = null) {
+  if (!scopeNodeId) return null;
+  const scopeNode = await Node.findById(scopeNodeId).select("_id name type").lean();
+  if (!scopeNode) return null;
+  if (scopeNode.type === "plan") return scopeNode;
+
+  const existing = await Node.findOne({
+    parent: scopeNodeId,
+    type: "plan",
+  }).select("_id name parent type metadata").lean();
+  if (existing) return existing;
+
+  if (!userId) {
+    throw new Error(
+      "ensurePlanAtScope requires userId to create a plan-type child at a scope that has no existing plan",
+    );
+  }
+  return createPlanNode({
+    parentNodeId: String(scopeNodeId),
+    userId,
+    // Plain "plan" — no coupling to the scope's name. The parent
+    // pointer + type="plan" encode the hierarchy; duplicating the
+    // scope name in the plan's name would go stale the moment the
+    // scope is renamed, and the type field already makes the node
+    // queryable without relying on naming convention.
+    name: name || "plan",
+    systemSpec,
+    budget,
+    wasAi, chatId, sessionId,
+    core,
+  });
+}
+
+/**
  * Initialize (or reinitialize) a plan at the given node. Does NOT
  * clobber existing steps. Stamps systemSpec and createdAt if missing.
  * Called by swarm when a project root first gets decomposed and by
  * extensions setting up a new planning target.
+ *
+ * `budget` may be passed to override the default allocation for this
+ * plan. Pass 3 will compute budgets from signature reputation; Pass 1
+ * callers generally rely on DEFAULT_BUDGET.
  */
-export async function initPlan(nodeId, { systemSpec = null } = {}, core) {
+export async function initPlan(nodeId, { systemSpec = null, budget = null } = {}, core) {
   if (!nodeId) return null;
   return mutatePlan(nodeId, (draft) => {
     if (!draft.createdAt) draft.createdAt = new Date().toISOString();
     if (systemSpec) draft.systemSpec = systemSpec;
     if (!Array.isArray(draft.steps)) draft.steps = [];
     if (!Array.isArray(draft.archivedPlans)) draft.archivedPlans = [];
+    if (budget && typeof budget === "object") {
+      draft.budget = {
+        ...DEFAULT_BUDGET,
+        ...budget,
+        consumed: { turns: 0, retries: 0, byStepId: {}, ...(budget.consumed || {}) },
+      };
+    }
+    return draft;
+  }, core);
+}
+
+/**
+ * Append an entry to the plan's ledger. Ledger is the append-only
+ * execution history for this plan — every dispatch, branch completion,
+ * retry, failure, archive, pivot. Pass 3 aggregates ledger entries
+ * into reputation signals. Capped at LEDGER_CAP; oldest entries drop.
+ *
+ * Entry shape: { event: string, detail?: object }. `at` is stamped
+ * automatically. Callers should pick stable event names so Pass 3's
+ * aggregation works consistently: "plan-created", "plan-dispatched",
+ * "branch-completed", "branch-failed", "plan-archived", etc.
+ */
+export async function appendLedger(nodeId, entry, core) {
+  if (!nodeId || !entry?.event) return null;
+  return mutatePlan(nodeId, (draft) => {
+    if (!Array.isArray(draft.ledger)) draft.ledger = [];
+    draft.ledger.push({
+      at: new Date().toISOString(),
+      event: String(entry.event),
+      detail: entry.detail || null,
+    });
+    if (draft.ledger.length > LEDGER_CAP) {
+      draft.ledger.splice(0, draft.ledger.length - LEDGER_CAP);
+    }
+    return draft;
+  }, core);
+}
+
+/**
+ * Record budget consumption for a specific step. Pass 3 reads the
+ * consumed map to attribute actual work to signatures. No enforcement
+ * in Pass 1 — the budget is advisory. Callers pass { turns, retries }
+ * deltas; both default to 0.
+ */
+export async function recordBudgetConsumption(nodeId, stepId, { turns = 0, retries = 0 } = {}, core) {
+  if (!nodeId || !stepId) return null;
+  if (turns === 0 && retries === 0) return null;
+  return mutatePlan(nodeId, (draft) => {
+    if (!draft.budget) draft.budget = { ...DEFAULT_BUDGET, consumed: { turns: 0, retries: 0, byStepId: {} } };
+    if (!draft.budget.consumed) draft.budget.consumed = { turns: 0, retries: 0, byStepId: {} };
+    draft.budget.consumed.turns = (draft.budget.consumed.turns || 0) + turns;
+    draft.budget.consumed.retries = (draft.budget.consumed.retries || 0) + retries;
+    const existing = draft.budget.consumed.byStepId[stepId] || { turns: 0, retries: 0 };
+    draft.budget.consumed.byStepId[stepId] = {
+      turns: existing.turns + turns,
+      retries: existing.retries + retries,
+    };
     return draft;
   }, core);
 }

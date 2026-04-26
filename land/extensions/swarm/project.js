@@ -5,7 +5,7 @@
 import Node from "../../seed/models/node.js";
 import log from "../../seed/log.js";
 import { readMeta, mutateMeta, initProjectRole } from "./state/meta.js";
-import { plan, upsertBranchStep } from "./state/planAccess.js";
+import { plan } from "./state/planAccess.js";
 
 /**
  * Walk upward from any node, return the nearest swarm project (role=project
@@ -101,11 +101,12 @@ export async function promoteDoneAncestors({ projectNodeId, core }) {
         childStatuses.push(childResult.status || entry.status || "pending");
 
         if (childResult.status && childResult.status !== (entry.status || "pending")) {
-          await upsertBranchStep({
-            parentNodeId: nodeId,
+          const p = await plan();
+          await p.upsertBranchStep(
+            nodeId,
+            { name: entry.title, nodeId: childId, status: childResult.status },
             core,
-            branch: { name: entry.title, nodeId: childId, status: childResult.status },
-          });
+          );
         }
       }
 
@@ -160,8 +161,51 @@ export async function detectResumableSwarm(projectNodeId) {
     const totalCount = { count: 0 };
     const statusCounts = { pending: 0, running: 0, paused: 0, failed: 0, done: 0 };
 
+    // Visited set + sub-plan resolver. The previous implementation used
+    // p.readPlan(entryNodeId) for both the recursion target and the
+    // sub-plan probe. readPlan walks UP the tree (ancestor-fallback)
+    // when the node has no plan-type child of its own, returning the
+    // GOVERNING plan — which for a leaf branch is the parent's plan,
+    // containing the SAME branches we just iterated. That re-iterated
+    // those branches as if they were sub-branches, recursed into each
+    // one, and re-entered the same plan again. Exponential explosion;
+    // 4GB in seconds; the OOM the user hit on every "continue" against
+    // a project with done branches.
+    //
+    // Fix: track visited node ids so we don't revisit, AND use a
+    // direct probe for OWN sub-plans (Node.findOne for a plan-type
+    // child) instead of readPlan's ancestor-fallback. A branch only
+    // has a sub-plan if it owns a plan-type direct child; readPlan
+    // returning anything else means there is no sub-plan.
+    const visitedNodes = new Set();
+
+    const ownSubPlan = async (nodeId) => {
+      if (!nodeId) return null;
+      // Direct probe: a node's OWN sub-plan is a plan-type child of
+      // that node. No ancestor fallback. If none exists, return null.
+      const planChild = await Node.findOne({
+        parent: nodeId,
+        type: "plan",
+      }).select("_id").lean();
+      if (!planChild) return null;
+      return p.readPlan(planChild._id);
+    };
+
     const visit = async (parentNodeId, parentBranchName, depth) => {
-      const parentPlan = await p.readPlan(parentNodeId);
+      const idStr = String(parentNodeId);
+      if (visitedNodes.has(idStr)) return;
+      visitedNodes.add(idStr);
+      // Paranoia depth cap (Pass 1 nesting is depth 1; 16 is well over).
+      if (depth > 16) return;
+
+      // The TOP of the walk uses readPlan because the project root
+      // legitimately doesn't have a plan-type child of its own — its
+      // plan IS the readPlan result via case-2 of findGoverningPlan
+      // (project node has plan-type child). For nested calls, we use
+      // ownSubPlan so we don't fall back to ancestor plans.
+      const parentPlan = depth === 0
+        ? await p.readPlan(parentNodeId)
+        : await ownSubPlan(parentNodeId);
       const branches = (parentPlan?.steps || []).filter((s) => s.kind === "branch");
       if (branches.length === 0) return;
 
@@ -179,11 +223,12 @@ export async function detectResumableSwarm(projectNodeId) {
           continue;
         }
 
-        // Peek at this entry's own plan. If its decomposition ran and
-        // produced done children, descend to pick up the non done ones.
+        // Peek at this entry's own plan (direct sub-plan only, not the
+        // ancestor fallback). If its decomposition ran and produced
+        // done children, descend to pick up the non-done ones.
         let hasDoneChildren = false;
         if (entryNodeId) {
-          const childPlan = await p.readPlan(entryNodeId);
+          const childPlan = await ownSubPlan(entryNodeId);
           const childBranches = (childPlan?.steps || []).filter((s) => s.kind === "branch");
           if (childBranches.length > 0) {
             hasDoneChildren = childBranches.some((c) => c.status === "done");

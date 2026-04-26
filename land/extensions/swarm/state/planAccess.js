@@ -6,6 +6,10 @@
 // and gives us one place to switch implementations later if needed.
 // Throws when the plan extension isn't installed since swarm declares
 // it as a hard dependency in the manifest.
+//
+// upsertBranchStep is NOT re-exported here. Callers go through
+// `(await plan()).upsertBranchStep(parentNodeId, branch, core)`
+// directly so there's exactly one upsert path.
 
 let _cache = null;
 
@@ -22,18 +26,6 @@ export async function plan() {
   } catch (err) {
     throw new Error(`plan extension lookup failed: ${err.message}`);
   }
-}
-
-/**
- * Backwards-compatible wrapper around plan.upsertBranchStep. Earlier
- * swarm code called this local helper before the upsert semantics
- * got promoted into the plan extension itself. Kept thin so any
- * older caller still works, but new call sites should go through
- * `(await plan()).upsertBranchStep(...)` directly.
- */
-export async function upsertBranchStep({ parentNodeId, branch, core }) {
-  const p = await plan();
-  return p.upsertBranchStep(parentNodeId, branch, core);
 }
 
 /**

@@ -39,7 +39,7 @@ import { v4 as uuidv4 } from "uuid";
 import { startChainStep, finalizeChat, setChatContext, getChatContext } from "../../seed/llm/chatTracker.js";
 import { appendSignal } from "./state/signalInbox.js";
 import { readMeta, mutateMeta, initProjectRole, initBranchRole } from "./state/meta.js";
-import { plan, upsertBranchStep, setBranchStatus } from "./state/planAccess.js";
+import { plan, setBranchStatus } from "./state/planAccess.js";
 import { promoteDoneAncestors } from "./project.js";
 import { reconcileProject } from "./reconcile.js";
 import { SWARM_WS_EVENTS } from "./wsEvents.js";
@@ -332,6 +332,24 @@ export function parseContracts(responseText) {
     // them without re-parsing. Pronouns is the critical one.
     const entry = { kind, name, fields: [...fields], values, raw: line };
     if (values.pronouns) entry.pronouns = values.pronouns;
+    // Scope distribution: contracts can be tagged with which branches
+    // are concerned. Architect emits one of:
+    //   scope: global
+    //   scope: shared:[branch-a,branch-b]
+    //   scope: local:branch-name
+    // Default when omitted: "global" (safe — every branch sees it).
+    // Pass 1's distribution layer filters this slice per branch.
+    const rawScope = String(values.scope || "global").trim();
+    entry.scope = parseScope(rawScope);
+    // Stable ID for this contract within its plan. Used by Pass 2's
+    // courts to address the contract directly. Defaults to
+    // `${kind}:${name}` when not explicitly provided.
+    entry.id = String(values.id || `${kind}:${name}`);
+    // Namespace mirrors `kind` for now — the architect's `kind` field
+    // IS the namespace under the new taxonomy. Kept as a separate
+    // field so future code can rely on `entry.namespace` without
+    // having to know that `kind === namespace` is a Pass 1 invariant.
+    entry.namespace = kind;
     contracts.push(entry);
   }
 
@@ -341,13 +359,66 @@ export function parseContracts(responseText) {
   return { contracts, cleaned };
 }
 
+/**
+ * Parse a scope string from a contract's `scope` field into the
+ * canonical structured form:
+ *
+ *   "global"                    → "global"
+ *   "shared:[a,b,c]"            → { shared: ["a", "b", "c"] }
+ *   "shared:a,b,c"              → { shared: ["a", "b", "c"] }
+ *   "local:branch"              → { local: "branch" }
+ *   "local:[branch]"            → { local: "branch" }
+ *
+ * Anything unrecognized → "global" (safe default; the architect can
+ * narrow scope but never accidentally over-narrow). Tolerant of
+ * spaces, brackets, and quotes around branch names.
+ */
+function parseScope(input) {
+  if (input == null) return "global";
+  if (typeof input === "object") {
+    // Already structured (came in pre-parsed).
+    if (input.shared && Array.isArray(input.shared)) return { shared: input.shared.map((s) => String(s).trim()).filter(Boolean) };
+    if (input.local) return { local: String(input.local).trim() };
+    return "global";
+  }
+  const s = String(input).trim().replace(/^['"]|['"]$/g, "");
+  if (!s || /^global$/i.test(s)) return "global";
+  const sharedMatch = s.match(/^shared\s*:\s*\[?\s*(.*?)\s*\]?$/i);
+  if (sharedMatch) {
+    const list = sharedMatch[1]
+      .split(",")
+      .map((b) => b.trim().replace(/^['"]|['"]$/g, ""))
+      .filter(Boolean);
+    return list.length > 0 ? { shared: list } : "global";
+  }
+  const localMatch = s.match(/^local\s*:\s*\[?\s*(.+?)\s*\]?$/i);
+  if (localMatch) {
+    const name = localMatch[1].trim().replace(/^['"]|['"]$/g, "");
+    return name ? { local: name } : "global";
+  }
+  return "global";
+}
+
 function splitTopLevelCommas(s) {
   const parts = [];
   let depth = 0;
+  let quote = null;     // active quote char ('|"|`) or null when not in a string
   let buf = "";
-  for (const ch of s) {
-    if (ch === "{" || ch === "[" || ch === "<") depth++;
-    else if (ch === "}" || ch === "]" || ch === ">") depth--;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    // Quote tracking — commas/colons inside strings must NOT split.
+    // The architect frequently emits values like
+    //   exports: 'start(), stop(), onScore(handler)'
+    // and the comma-split would otherwise truncate to "start()".
+    if (quote) {
+      if (ch === "\\" && i + 1 < s.length) { buf += ch + s[++i]; continue; }
+      if (ch === quote) quote = null;
+      buf += ch;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === "`") { quote = ch; buf += ch; continue; }
+    if (ch === "{" || ch === "[" || ch === "<" || ch === "(") depth++;
+    else if (ch === "}" || ch === "]" || ch === ">" || ch === ")") depth--;
     else if (ch === "," && depth === 0) { parts.push(buf); buf = ""; continue; }
     buf += ch;
   }
@@ -357,10 +428,17 @@ function splitTopLevelCommas(s) {
 
 function findTopLevelColon(s) {
   let depth = 0;
+  let quote = null;
   for (let i = 0; i < s.length; i++) {
     const ch = s[i];
-    if (ch === "{" || ch === "[" || ch === "<") depth++;
-    else if (ch === "}" || ch === "]" || ch === ">") depth--;
+    if (quote) {
+      if (ch === "\\" && i + 1 < s.length) { i++; continue; }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === "`") { quote = ch; continue; }
+    if (ch === "{" || ch === "[" || ch === "<" || ch === "(") depth++;
+    else if (ch === "}" || ch === "]" || ch === ">" || ch === ")") depth--;
     else if (ch === ":" && depth === 0) return i;
   }
   return -1;
@@ -612,6 +690,16 @@ async function retryFailedBranches({
 
   log.info("Swarm", `🔁 Retry: ${failed.length} failed branch(es) get one more shot`);
 
+  // Path B: plan steps live on the plan-type child of the project
+  // scope. Resolve once for all retries in this batch.
+  const p = await plan();
+  const rootPlan = await p.ensurePlanAtScope(
+    rootProjectNode._id,
+    { userId },
+    core,
+  );
+  const rootPlanNodeId = rootPlan ? String(rootPlan._id) : String(rootProjectNode._id);
+
   for (const prev of failed) {
     if (signal?.aborted) break;
     const branch = branches.find((b) => b.name === prev.name || b.name === prev.rawName);
@@ -673,10 +761,9 @@ async function retryFailedBranches({
         };
       }
       await setBranchStatus({ branchNodeId: branchNode._id, status: "done", summary: retryResult?.answer || null, core });
-      await upsertBranchStep({
-        parentNodeId: rootProjectNode._id,
-        core,
-        branch: {
+      await p.upsertBranchStep(
+        rootPlanNodeId,
+        {
           name: branch.name,
           nodeId: String(branchNode._id),
           status: "done",
@@ -684,7 +771,23 @@ async function retryFailedBranches({
           finishedAt: new Date().toISOString(),
           retries: 1,
         },
-      });
+        core,
+      );
+      // Record the retry consumption on the plan's budget. Pass 3
+      // reputation reads per-step consumption to weight signature
+      // trust; tracking retries here ensures root and sub plans
+      // accrue symmetric budget history.
+      try {
+        const rootPlanRead = await p.readPlan(rootPlanNodeId);
+        const retryStep = (rootPlanRead?.steps || []).find(
+          (s) => s.kind === "branch" && String(s.childNodeId || "") === String(branchNode._id),
+        );
+        if (retryStep?.id) {
+          await p.recordBudgetConsumption(rootPlanNodeId, retryStep.id, { retries: 1 }, core);
+        }
+      } catch (budgetErr) {
+        log.debug("Swarm", `recordBudgetConsumption (retry-success) skipped: ${budgetErr.message}`);
+      }
       await recordBranchEvent({ visitorId, branchName: branch.name, from: "failed", to: "done", reason: "retry succeeded" });
 
       if (retryStep && rt && !rt._cleaned) {
@@ -705,10 +808,9 @@ async function retryFailedBranches({
         };
       }
       await setBranchStatus({ branchNodeId: branchNode._id, status: "failed", error: err.message, core });
-      await upsertBranchStep({
-        parentNodeId: rootProjectNode._id,
-        core,
-        branch: {
+      await p.upsertBranchStep(
+        rootPlanNodeId,
+        {
           name: branch.name,
           nodeId: String(branchNode._id),
           status: "failed",
@@ -716,7 +818,21 @@ async function retryFailedBranches({
           finishedAt: new Date().toISOString(),
           retries: 1,
         },
-      });
+        core,
+      );
+      // Record the retry consumption even when retry fails — the
+      // retry attempt consumed budget whether it succeeded or not.
+      try {
+        const rootPlanRead = await p.readPlan(rootPlanNodeId);
+        const retryStep = (rootPlanRead?.steps || []).find(
+          (s) => s.kind === "branch" && String(s.childNodeId || "") === String(branchNode._id),
+        );
+        if (retryStep?.id) {
+          await p.recordBudgetConsumption(rootPlanNodeId, retryStep.id, { retries: 1 }, core);
+        }
+      } catch (budgetErr) {
+        log.debug("Swarm", `recordBudgetConsumption (retry-fail) skipped: ${budgetErr.message}`);
+      }
       await recordBranchEvent({ visitorId, branchName: branch.name, from: "failed", to: "failed", reason: `retry also failed: ${err.message}` });
       if (retryStep && rt && !rt._cleaned) {
         await rt.finishChainStep(retryStep.chatId, {
@@ -812,6 +928,7 @@ async function runScoutLoop({
     const scoutPayload = {
       cycle,
       rootProjectNode,
+      workspaceAnchorNode,
       results,
       branches,
       core,
@@ -913,6 +1030,19 @@ export async function runBranchSwarm({
   visitorId, userId, username, rootId, signal, slot, socket,
   onToolLoopCheckpoint, core, runBranch, emitStatus, userRequest,
   rt, resumeMode = false, defaultBranchMode = null,
+  // workspaceAnchorNode: the node whose content-workspace (the
+  // filesystem directory that holds files) is the root for file I/O
+  // during this swarm run. Distinct from rootProjectNode, which is
+  // the PLAN ANCHOR (where metadata.plan and the signal inbox live).
+  // They converge at top-level project runs (anchor === rootProject)
+  // but diverge for sub-plans (plan anchor = sub-plan scope; workspace
+  // anchor = outer project whose workspaceRoot dir holds files) and
+  // for cross-cutting plans at LCAs (Pass 2+). Callers that don't
+  // specify it inherit resolveWorkspaceRoot(rootProjectNode._id) —
+  // walk-up from the plan anchor to the nearest ancestor with a
+  // workspace. Pass explicitly when plan anchor and workspace anchor
+  // must differ (e.g. Pass 4+ user-context-driven anchors).
+  workspaceAnchorNode = null,
 }) {
   if (!Array.isArray(branches) || branches.length === 0) {
     return { success: true, summary: "No branches to run." };
@@ -946,22 +1076,68 @@ export async function runBranchSwarm({
   // before we read it. The tree is ground truth; subPlan is a cache.
   await reconcileProject({ projectNodeId: rootProjectNode._id, core });
 
+  // Path B: plans live on plan-type child nodes of the scope they
+  // coordinate. Resolve the root plan once (find-or-create) and cache
+  // it; every downstream write for this swarm run uses the cached id.
+  // Nested scopes (sub-plans created by nested [[BRANCHES]] emissions)
+  // populate the cache lazily via planAtScope().
+  const p = await plan();
+  const planAtScopeCache = new Map(); // scopeId → planNodeId
+  const planAtScope = async (scopeId) => {
+    if (!scopeId) return null;
+    const key = String(scopeId);
+    if (planAtScopeCache.has(key)) return planAtScopeCache.get(key);
+    const planNode = await p.ensurePlanAtScope(
+      scopeId,
+      { userId, systemSpec: userRequest },
+      core,
+    );
+    const planNodeId = planNode ? String(planNode._id) : null;
+    if (planNodeId) planAtScopeCache.set(key, planNodeId);
+    return planNodeId;
+  };
+
+  const rootPlanNodeId = await planAtScope(rootProjectNode._id);
+
+  // Stamp the plan's dispatch event on its ledger. Symmetric with the
+  // sub-plan-dispatched / sub-plan-completed / sub-plan-archived
+  // entries stamped by dispatchApprovedSubPlan — plans at ANY scope
+  // log their lifecycle uniformly so Pass 3's reputation aggregation
+  // sees root plans and sub-plans with the same data shape. A stamp
+  // fires on every dispatch (initial AND resume) so the ledger shows
+  // full session history.
+  try {
+    if (rootPlanNodeId && p.appendLedger) {
+      await p.appendLedger(rootPlanNodeId, {
+        event: resumeMode ? "plan-resumed" : "plan-dispatched",
+        detail: {
+          scopeNodeId: String(rootProjectNode._id),
+          scopeName: rootProjectNode.name || null,
+          branchCount: branches.length,
+          branchNames: branches.map((b) => b.name),
+          resume: !!resumeMode,
+        },
+      }, core);
+    }
+  } catch (ledgerErr) {
+    log.debug("Swarm", `plan-dispatched ledger skipped: ${ledgerErr.message}`);
+  }
+
   if (!resumeMode) {
-    // Mark the project (swarm role + execution bookkeeping).
+    // Mark the project (swarm role + execution bookkeeping on the scope
+    // node itself — signal inbox, aggregatedDetail, role, parentage).
+    // Plan steps live on rootPlanNodeId, not on the scope node.
     await initProjectRole({
       nodeId: rootProjectNode._id,
       systemSpec: userRequest,
       core,
     });
-    // Initialize the plan namespace.
-    const p = await plan();
-    await p.initPlan(rootProjectNode._id, { systemSpec: userRequest }, core);
+    await p.initPlan(rootPlanNodeId, { systemSpec: userRequest }, core);
 
     for (const b of branches) {
-      await upsertBranchStep({
-        parentNodeId: rootProjectNode._id,
-        core,
-        branch: {
+      await p.upsertBranchStep(
+        rootPlanNodeId,
+        {
           name: b.name,
           spec: b.spec,
           path: b.path || null,
@@ -970,7 +1146,8 @@ export async function runBranchSwarm({
           mode: b.mode || null,
           status: "pending",
         },
-      });
+        core,
+      );
       await recordBranchEvent({ visitorId, branchName: b.name, from: null, to: "pending", reason: "queued" });
     }
   }
@@ -1031,20 +1208,22 @@ export async function runBranchSwarm({
         `🛑 Aborted after ${processed} branches (${queue.length} still queued). Queued branches stay "pending"; next message at this project can resume them.`,
       );
       for (const q of queue) {
-        const parentForPlan = await resolveBranchParentId({
+        const treeScope = await resolveBranchParentId({
           rootProjectId: rootProjectNode._id,
           parentBranchName: q.parentBranch,
           hint: q.parentNodeId,
         });
-        await upsertBranchStep({
-          parentNodeId: parentForPlan, core,
-          branch: {
+        const planIdForScope = await planAtScope(treeScope);
+        await p.upsertBranchStep(
+          planIdForScope,
+          {
             name: q.name,
             status: "pending",
             pausedAt: new Date().toISOString(),
             abortReason: "parent session aborted",
           },
-        });
+          core,
+        );
         await recordBranchEvent({ visitorId, branchName: q.name, from: "pending", to: "pending", reason: "parent session aborted" });
       }
       break;
@@ -1091,15 +1270,18 @@ export async function runBranchSwarm({
       continue;
     }
 
-    const parentNodeForPlan = await resolveBranchParentId({
+    const treeScopeId = await resolveBranchParentId({
       rootProjectId: rootProjectNode._id,
       parentBranchName: branch.parentBranch,
       hint: branch.parentNodeId,
     });
+    // Path B: resolve the plan-type child of the scope. Branch steps
+    // are written to the plan node, not to the scope node itself.
+    const planNodeForStep = await planAtScope(treeScopeId);
 
-    await upsertBranchStep({
-      parentNodeId: parentNodeForPlan, core,
-      branch: {
+    await p.upsertBranchStep(
+      planNodeForStep,
+      {
         name: branch.name,
         nodeId: String(branchNode._id),
         spec: branch.spec,
@@ -1110,7 +1292,8 @@ export async function runBranchSwarm({
         status: "running",
         startedAt: new Date().toISOString(),
       },
-    });
+      core,
+    );
     await recordBranchEvent({ visitorId, branchName: branch.name, from: "pending", to: "running" });
 
     await fireHook(core, "swarm:beforeBranchRun", {
@@ -1179,16 +1362,37 @@ export async function runBranchSwarm({
         answer: branchResult?.answer || "",
       };
       results.push(resultEntry);
-      await upsertBranchStep({
-        parentNodeId: parentNodeForPlan, core,
-        branch: {
+      await p.upsertBranchStep(
+        planNodeForStep,
+        {
           name: branch.name,
           nodeId: String(branchNode._id),
           status: "done",
           summary: truncate(branchResult?.answer || "", 300),
           finishedAt: new Date().toISOString(),
         },
-      });
+        core,
+      );
+      // Record budget consumption for the completed dispatch. Uses
+      // turnsUsed from runSteppedMode when available; otherwise
+      // attributes a minimum of 1 turn (every branch consumed at
+      // least one LLM turn to emit its terminal marker). Symmetric
+      // for root and sub plans — they both dispatch through this
+      // code path — so Pass 3's reputation read sees uniform data.
+      try {
+        const turnsUsed = Number.isFinite(branchResult?.turnsUsed) && branchResult.turnsUsed > 0
+          ? branchResult.turnsUsed
+          : 1;
+        const planRead = await p.readPlan(planNodeForStep);
+        const completedStep = (planRead?.steps || []).find(
+          (s) => s.kind === "branch" && String(s.childNodeId || "") === String(branchNode._id),
+        );
+        if (completedStep?.id) {
+          await p.recordBudgetConsumption(planNodeForStep, completedStep.id, { turns: turnsUsed }, core);
+        }
+      } catch (budgetErr) {
+        log.debug("Swarm", `recordBudgetConsumption (dispatch) skipped: ${budgetErr.message}`);
+      }
       await recordBranchEvent({ visitorId, branchName: branch.name, from: "running", to: "done" });
 
       // Fire per-branch hook. Handlers (e.g., code-workspace) run
@@ -1196,11 +1400,24 @@ export async function runBranchSwarm({
       // scan). If a handler finds a problem, it can mutate
       // resultEntry.status = "failed" and/or append signals. Swarm
       // checks the status after.
-      await fireHook(core, "swarm:afterBranchComplete", {
-        branchNode, rootProjectNode, branch,
+      const branchCompletePayload = {
+        branchNode, rootProjectNode, workspaceAnchorNode, branch,
         result: resultEntry,
         branchMode,
-      });
+      };
+      await fireHook(core, "swarm:afterBranchComplete", branchCompletePayload);
+      // Declarative validators (Pass 1 strengthening). Run AFTER the
+      // kernel hooks so existing hook-based validators keep their
+      // current effective order, and the new registry is purely
+      // additive. New validators (notably Pass 2's court system) opt
+      // in via swarm.registerValidator and get explicit phase + order
+      // semantics. See state/validators.js.
+      try {
+        const { runValidators } = await import("./state/validators.js");
+        await runValidators("branch-complete", branchCompletePayload);
+      } catch (vErr) {
+        log.debug("Swarm", `branch-complete validators skipped: ${vErr.message}`);
+      }
 
       if (resultEntry.status !== "done") {
         // Handler flipped it. Reflect in metadata + subPlan + event log.
@@ -1210,16 +1427,17 @@ export async function runBranchSwarm({
           error: resultEntry.error || null,
           summary: null, core,
         });
-        await upsertBranchStep({
-          parentNodeId: parentNodeForPlan, core,
-          branch: {
+        await p.upsertBranchStep(
+          planNodeForStep,
+          {
             name: branch.name,
             nodeId: String(branchNode._id),
             status: resultEntry.status,
             error: resultEntry.error || null,
             finishedAt: new Date().toISOString(),
           },
-        });
+          core,
+        );
         await recordBranchEvent({
           visitorId, branchName: branch.name,
           from: "done", to: resultEntry.status,
@@ -1228,172 +1446,171 @@ export async function runBranchSwarm({
         continue;
       }
 
-      // Recursive expansion: nested [[BRANCHES]] inside the response.
-      // Also pre-populate the parent's subPlan with the declared sub-
-      // branches so visibility tools (book-studio, dashboard) see the
-      // planned-but-not-yet-dispatched chapter list as soon as a parent
-      // finishes decomposing. Without this, the studio shows only
-      // dispatched branches mid-run — a 30-chapter book looks like
-      // "4 parts, (no prose yet)" until every chapter has actually
-      // started running, which can be 30+ minutes on a local LLM.
-      if (branch.depth < MAX_DEPTH && branchResult?.answer) {
+      // Nested-branch decomposition (Pass 1 — model-first rewire).
+      //
+      // A worker emits [[BRANCHES]] inside its response. Instead of
+      // bouncing the emission back to the root architect for a whole-
+      // project replan, we land it LOCALLY: create a plan-type node as
+      // a child of the worker's own node, populate its steps with the
+      // proposed sub-branches in pending-approval state, and emit
+      // SUB_PLAN_PROPOSED so the user approves at sub-scope. The
+      // sub-plan INHERITS its anchor from the worker's node — no
+      // parameter threading needed; findGoverningPlan walks up.
+      //
+      // Depth cap: Pass 1 MVP caps at depth 1 (one level of sub-plan).
+      // Sub-branches that themselves emit [[BRANCHES]] have their
+      // emissions ignored with a log line; relaxation is a later pass
+      // once budget semantics are in place. branch.depth=0 is a root-
+      // level branch; its emissions are depth=1 sub-plans. ALLOWED.
+      // branch.depth=1 would be a sub-branch; its further emission
+      // would be depth=2. REJECTED.
+      if (branchResult?.answer) {
         const nested = parseBranches(branchResult.answer);
         if (nested.branches.length > 0) {
-          log.info("Swarm",
-            `🌱 Branch "${qualifiedName}" spawned ${nested.branches.length} sub-branch(es): ${nested.branches.map((s) => s.name).join(", ")}. Pausing for user re-approval.`,
-          );
+          const currentDepth = branch.depth || 0;
+          const MAX_SUB_PLAN_DEPTH = 1;
 
-          // Plan-first: DON'T queue the nested branches directly.
-          // Seed them on the parent's subPlan as pending-nested-approval
-          // so the UI shows "this branch discovered subs, pending user
-          // confirmation" and the ring stays visible. Then re-invoke
-          // the architect to produce a COMPLETE UPDATED PLAN (with
-          // peer adjustments) and stash it for user approval via the
-          // same pendingSwarmPlan path the first dispatch used.
-          for (const sub of nested.branches) {
-            try {
-              await upsertBranchStep({
-                parentNodeId: branchNode._id,
-                core,
-                branch: {
-                  name: sub.name,
-                  spec: sub.spec,
-                  path: sub.path || null,
-                  files: sub.files || [],
-                  slot: sub.slot || null,
-                  mode: sub.mode || null,
-                  status: "pending-nested-approval",
-                },
-              });
-            } catch {}
-          }
+          // Always strip the [[BRANCHES]] block from the worker's
+          // answer so downstream logic (scout, retry, summary) doesn't
+          // re-parse stale nested emissions.
           const cleanAnswer = nested.cleaned;
           const lastIdx = results.length - 1;
           if (lastIdx >= 0) results[lastIdx].answer = cleanAnswer;
 
-          // Re-invoke the architect at the project root to re-emit
-          // the complete updated plan. We pass the current plan
-          // snapshot + the new discoveries so it can decide whether
-          // peer branches need their specs adjusted. The architect's
-          // response is intercepted by dispatch.js (it sees the new
-          // [[BRANCHES]] block and stashes it via setPendingSwarmPlan)
-          // just like the first proposal.
-          try {
-            const { runChat } = await import("../../seed/llm/conversation.js");
-            const p = await plan();
-            const currentPlan = await p.readPlan(rootProjectNode._id);
-            const branchEntries = (currentPlan?.steps || []).filter(s => s.kind === "branch");
-            const planSummary = branchEntries.length > 0
-              ? branchEntries
-                  .map((b) => `  • ${b.title} [${b.status || "?"}]${b.path ? ` (${b.path})` : ""}: ${b.spec || ""}`)
-                  .join("\n")
-              : "(no plan recorded)";
-            const discoveries = nested.branches
-              .map((s) => `  • ${s.name}${s.path ? ` (${s.path})` : ""}: ${s.spec || ""}`)
-              .join("\n");
-            const replanPrompt =
-              `Branch "${qualifiedName}" ran and discovered new sub-components that need their own branches:\n${discoveries}\n\n` +
-              `Current whole plan:\n${planSummary}\n\n` +
-              `Re-emit the COMPLETE updated [[BRANCHES]] block. Include every branch (done, running, and new). ` +
-              `If these new discoveries change what peer branches should own, adjust their specs accordingly — ` +
-              `the user wants to see the whole coherent plan, not a diff. ` +
-              `Keep existing branch names stable where possible so continuity is preserved. ` +
-              `Close with [[DONE]].`;
+          if (currentDepth >= MAX_SUB_PLAN_DEPTH) {
+            log.warn(
+              "Swarm",
+              `🌱 Branch "${qualifiedName}" emitted ${nested.branches.length} nested branch(es) but depth cap (${MAX_SUB_PLAN_DEPTH}) blocks further decomposition. Emission ignored; worker must handle flat.`,
+            );
+          } else {
+            log.info(
+              "Swarm",
+              `🌱 Branch "${qualifiedName}" emitted ${nested.branches.length} sub-branch(es): ${nested.branches.map((s) => s.name).join(", ")}. Creating sub-plan at ${String(branchNode._id).slice(0, 8)}.`,
+            );
 
-            // Fire the architect mode at the project root. Default
-            // ephemeral session keeps it out of the user's thread. The
-            // response comes back as a string — we parse [[BRANCHES]]
-            // ourselves and stash the new plan for the user's next
-            // turn, which flows through the orchestrator interception
-            // path built in Phase 1.
-            const replanResult = await runChat({
-              userId,
-              username,
-              message: replanPrompt,
-              mode: "tree:code-plan",
-              rootId,
-              nodeId: String(rootProjectNode._id),
-              llmPriority: "INTERACTIVE",
-            });
-            const architectAnswer = (replanResult?.answer || replanResult?.content || "").toString();
-            const newParse = parseBranches(architectAnswer);
-            if (newParse.branches.length > 0) {
-              // Bump the plan version and stash for the user. The
-              // user's next message (via chat) triggers the
-              // orchestrator.js pending-swarm interception, same
-              // as the initial proposal.
+            try {
+              const p = await plan();
+
+              // Build initial steps from the nested emission. Status is
+              // pending-approval until the user accepts at sub-scope.
+              // parentBranch links back so rollup and display can trace
+              // the chain to the outermost plan.
+              const subPlanSteps = nested.branches.map((sub) => ({
+                kind: "branch",
+                title: sub.name,
+                spec: sub.spec || null,
+                path: sub.path || null,
+                files: sub.files || [],
+                slot: sub.slot || null,
+                mode: sub.mode || null,
+                stepType: "simple",
+                status: "pending-approval",
+                parentBranch: branch.name,
+              }));
+
+              // Create the sub-plan node as child of the worker's
+              // branch node. INHERITS POSITION: parent = the very node
+              // where decomposition was triggered. findGoverningPlan
+              // from any future sub-branch walks up and lands here.
+              const subPlanNode = await p.createPlanNode({
+                parentNodeId: String(branchNode._id),
+                userId,
+                // Plain "plan" — parent + type="plan" encode the
+                // hierarchy; renaming the worker's branch shouldn't
+                // orphan the sub-plan's name.
+                name: "plan",
+                systemSpec: `Sub-plan for ${qualifiedName}. Triggered mid-build when the worker emitted [[BRANCHES]] discovering compound work.`,
+                steps: subPlanSteps,
+                core,
+              });
+
+              // Mark the parent plan's step (the one this worker was
+              // executing) as having decomposed. Update its stepType
+              // to "compound" and stamp a subPlanNodeId pointer. The
+              // governing plan for the worker's node is whatever plan
+              // holds its branch step — typically the project-root
+              // plan, but could be a higher sub-plan in deeper runs.
               try {
-                const { getPendingSwarmPlan, setPendingSwarmPlan } =
-                  await import("./state/pendingSwarmPlan.js");
+                const parentPlanNode = await p.findGoverningPlan(String(branchNode._id));
+                if (parentPlanNode) {
+                  const parentPlan = await p.readPlan(parentPlanNode._id);
+                  const parentStep = parentPlan?.steps?.find(
+                    (s) => s.kind === "branch" &&
+                      String(s.childNodeId || "") === String(branchNode._id),
+                  );
+                  if (parentStep) {
+                    await p.updateStep(parentPlanNode._id, parentStep.id, {
+                      stepType: "compound",
+                      subPlanNodeId: String(subPlanNode._id),
+                    }, core);
+                  }
+                }
+              } catch (markErr) {
+                log.debug("Swarm", `parent-step compound mark skipped: ${markErr.message}`);
+              }
+
+              // Ledger entry captures that this sub-plan was proposed
+              // and what triggered it. Pass 3 will read ledger entries
+              // to compute signature reputation.
+              try {
+                await p.appendLedger(String(subPlanNode._id), {
+                  event: "sub-plan-proposed",
+                  detail: {
+                    parentBranchName: branch.name,
+                    parentBranchNodeId: String(branchNode._id),
+                    qualifiedName,
+                    stepCount: subPlanSteps.length,
+                    branchNames: nested.branches.map((b) => b.name),
+                  },
+                }, core);
+              } catch {}
+
+              // Emit SUB_PLAN_PROPOSED for the user to approve at
+              // sub-scope. Payload shows ONLY the local sub-plan with
+              // parent context as breadcrumbs — not the whole-project
+              // plan. Scoped cognitive load, aligned with the scope
+              // the decision actually covers.
+              try {
                 const { SWARM_WS_EVENTS } = await import("./wsEvents.js");
-                const prev = getPendingSwarmPlan(visitorId);
-                const nextVersion = (prev?.version || 1) + 1;
-                setPendingSwarmPlan(visitorId, {
-                  branches: newParse.branches,
-                  contracts: prev?.contracts || [],
-                  projectNodeId: String(rootProjectNode._id),
-                  projectName: rootProjectNode.name || null,
-                  userRequest: userRequest || "",
-                  architectChatId: null,
-                  rootChatId,
-                  rootId,
-                  modeKey: "tree:code-plan",
-                  targetNodeId: String(rootProjectNode._id),
-                  version: nextVersion,
-                  cleanedAnswer: newParse.cleaned,
-                  nestedExpansion: true,
-                });
-                socket?.emit?.(SWARM_WS_EVENTS.PLAN_UPDATED, {
-                  version: nextVersion,
-                  projectNodeId: String(rootProjectNode._id),
-                  projectName: rootProjectNode.name || null,
-                  trigger: `nested expansion of ${qualifiedName}`,
-                  branches: newParse.branches.map((b) => ({
+                socket?.emit?.(SWARM_WS_EVENTS.SUB_PLAN_PROPOSED, {
+                  subPlanNodeId: String(subPlanNode._id),
+                  subPlanName: subPlanNode.name || "plan",
+                  scope: {
+                    parentBranchName: branch.name,
+                    parentBranchNodeId: String(branchNode._id),
+                    qualifiedName,
+                    rootPlanNodeId: rootProjectNode?._id ? String(rootProjectNode._id) : null,
+                    rootPlanName: rootProjectNode?.name || null,
+                  },
+                  proposedBranches: nested.branches.map((b) => ({
                     name: b.name,
                     spec: b.spec,
                     path: b.path || null,
                     files: b.files || [],
                     slot: b.slot || null,
                     mode: b.mode || null,
-                    parentBranch: b.parentBranch || null,
+                    parentBranch: branch.name,
                   })),
+                  trigger: `${qualifiedName} discovered ${nested.branches.length} sub-component(s)`,
                 });
-                log.info("Swarm",
-                  `🔁 Replan stashed (v${nextVersion}) with ${newParse.branches.length} branches. Awaiting user approval.`,
-                );
-              } catch (stashErr) {
-                log.warn("Swarm", `stash replan failed: ${stashErr.message}`);
+              } catch (emitErr) {
+                log.debug("Swarm", `SUB_PLAN_PROPOSED emit failed: ${emitErr.message}`);
               }
-            } else {
-              log.warn("Swarm",
-                `Replan architect returned no [[BRANCHES]] block; falling back to auto-queue of discovered subs.`,
+
+              log.info(
+                "Swarm",
+                `📋 Sub-plan ${String(subPlanNode._id).slice(0, 8)} created with ${subPlanSteps.length} pending-approval step(s). Awaiting user approval at sub-scope (parent branch ${branch.name}).`,
               );
-              // Fallback — preserve old behavior if the replan prompt
-              // didn't produce a usable plan.
-              for (const sub of nested.branches) {
-                queue.push({
-                  ...sub,
-                  parentBranch: branch.name,
-                  depth: branch.depth + 1,
-                });
-              }
-            }
-          } catch (replanErr) {
-            log.warn("Swarm", `nested replan failed: ${replanErr.message}. Falling back to auto-queue.`);
-            // Fallback: keep old behavior so the swarm doesn't stall.
-            for (const sub of nested.branches) {
-              queue.push({
-                ...sub,
-                parentBranch: branch.name,
-                depth: branch.depth + 1,
-              });
-              try {
-                await upsertBranchStep({
-                  parentNodeId: branchNode._id,
-                  core,
-                  branch: { name: sub.name, status: "pending" },
-                });
-              } catch {}
+            } catch (subPlanErr) {
+              // Sub-plan creation failed catastrophically (DB error,
+              // permission issue, etc.). Log and skip — don't try to
+              // persist plan state through a broken write path. The
+              // nested [[BRANCHES]] emission is lost from this run but
+              // the outer swarm continues; the user can re-issue.
+              log.error(
+                "Swarm",
+                `Sub-plan creation failed for "${qualifiedName}": ${subPlanErr.message}. Nested emission dropped.`,
+              );
             }
           }
         }
@@ -1405,9 +1622,9 @@ export async function runBranchSwarm({
         `Branch "${qualifiedName}" ${parentAborted ? "paused (aborted)" : "failed"}: ${err.message}`,
       );
       await setBranchStatus({ branchNodeId: branchNode._id, status: resumableStatus, error: err.message, core });
-      await upsertBranchStep({
-        parentNodeId: parentNodeForPlan, core,
-        branch: {
+      await p.upsertBranchStep(
+        planNodeForStep,
+        {
           name: branch.name,
           nodeId: String(branchNode._id),
           status: resumableStatus,
@@ -1415,7 +1632,8 @@ export async function runBranchSwarm({
           finishedAt: new Date().toISOString(),
           ...(parentAborted ? { pausedAt: new Date().toISOString(), abortReason: err.message } : {}),
         },
-      });
+        core,
+      );
       await recordBranchEvent({ visitorId, branchName: branch.name, from: "running", to: resumableStatus, reason: err.message });
       results.push({
         name: qualifiedName,
@@ -1483,9 +1701,20 @@ export async function runBranchSwarm({
   // branches can see the new signals in their next enrichContext.
   if (!signal?.aborted) {
     const statusesBefore = results.map((r) => r.status).join("|");
-    await fireHook(core, "swarm:afterAllBranchesComplete", {
-      rootProjectNode, results, branches, core, signal,
-    });
+    const swarmCompletePayload = {
+      rootProjectNode, workspaceAnchorNode, results, branches, core, signal,
+    };
+    await fireHook(core, "swarm:afterAllBranchesComplete", swarmCompletePayload);
+    // Declarative validators (Pass 1 strengthening). Same shape as the
+    // branch-complete site: run after the kernel hook so existing
+    // handlers keep their effective order, and new validators opt in
+    // via swarm.registerValidator with explicit phase + order.
+    try {
+      const { runValidators } = await import("./state/validators.js");
+      await runValidators("swarm-complete", swarmCompletePayload);
+    } catch (vErr) {
+      log.debug("Swarm", `swarm-complete validators skipped: ${vErr.message}`);
+    }
     const statusesAfter = results.map((r) => r.status).join("|");
 
     if (statusesAfter !== statusesBefore) {
@@ -1537,6 +1766,30 @@ export async function runBranchSwarm({
     summaryLines.join("\n");
 
   log.info("Swarm", `🌿 Finished: ${doneCount}/${results.length} branches succeeded`);
+
+  // Stamp plan-completed on the ledger. Symmetric with the sub-plan
+  // completion lifecycle — every plan at every scope logs its own
+  // start and end events, so Pass 3 reputation sees uniform data.
+  try {
+    if (rootPlanNodeId && p.appendLedger) {
+      const overallStatus = failCount === 0 && results.length > 0
+        ? "settled"
+        : (doneCount > 0 ? "partial" : "failed");
+      await p.appendLedger(rootPlanNodeId, {
+        event: "plan-completed",
+        detail: {
+          scopeNodeId: String(rootProjectNode._id),
+          scopeName: rootProjectNode.name || null,
+          doneCount,
+          failCount,
+          total: results.length,
+          overallStatus,
+        },
+      }, core);
+    }
+  } catch (ledgerErr) {
+    log.debug("Swarm", `plan-completed ledger skipped: ${ledgerErr.message}`);
+  }
 
   return { success: failCount === 0, summary, results };
 }

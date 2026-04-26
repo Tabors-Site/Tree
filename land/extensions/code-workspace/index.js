@@ -1,6 +1,7 @@
 import log from "../../seed/log.js";
 import getWorkspaceTools, { writeFileInBranch, readFileInBranch } from "./tools.js";
-import { readMeta, localNodeView, initProject, getWorkspacePath } from "./workspace.js";
+import { readMeta, localNodeView, initProject, getWorkspacePath, resolveWorkspaceRoot } from "./workspace.js";
+import { refreshChildSummary } from "./summaryRefresh.js";
 import { ensureSourceTree } from "./source.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
 import {
@@ -691,10 +692,32 @@ export async function init(core) {
             return N.findById(nodeId).select("name").lean();
           })(),
         ]);
+        // Resolve the plan-type node so the rendered header names the
+        // SCOPE the plan governs (e.g. "Plan governing dd") rather
+        // than the worker's own name (which previously read as "Plan
+        // for ui" while the steps were actually the project's plan).
+        let planScopeName = nodeDoc?.name || null;
+        try {
+          const { getExtension } = await import("../loader.js");
+          const planExt = getExtension("plan")?.exports;
+          if (planExt?.findGoverningPlan) {
+            const planNode = await planExt.findGoverningPlan(nodeId);
+            if (planNode?.parent) {
+              const N = (await import("../../seed/models/node.js")).default;
+              const parentDoc = await N.findById(planNode.parent).select("name").lean();
+              if (parentDoc?.name) planScopeName = parentDoc.name;
+            }
+          }
+        } catch {}
+        // The worker's own branchName so formatNodePlan can mark its
+        // step with "← YOU".
+        const currentBranchName = swData?.branchName || nodeDoc?.name || null;
         context.nodePlan = formatNodePlan({
           steps: localSteps || [],
           rollup,
-          nodeName: cwData?.name || nodeDoc?.name || null,
+          planScopeName,
+          currentNodeId: nodeId,
+          currentBranchName,
           drift,
         });
       } catch (err) {
@@ -732,19 +755,49 @@ export async function init(core) {
         log.debug("CodeWorkspace", `blocking-error injection skipped: ${err.message}`);
       }
 
-      // Declared contracts. The architect publishes them on the
-      // project root via swarm.setContracts when it emits a
-      // [[CONTRACTS]] block alongside [[BRANCHES]]. Every branch's
-      // session picks them up here.
+      // Declared contracts — SCOPED to this branch.
+      //
+      // Contracts live on plan-type nodes (each plan declares a
+      // slice of shared vocabulary at its scope). For a branch
+      // session, walk up the plan chain via swarm.readScopedContracts
+      // which: (1) collects all contracts at every plan above this
+      // node, (2) filters to the slice scoped to THIS branch
+      // (global + shared:[me] + local:me). Each branch therefore
+      // sees only the vocabulary it must comply with, not the whole
+      // project's contract surface.
+      //
+      // Branch name comes from the swarm metadata's branchName
+      // (preferred — set at dispatch time and stable) or falls back
+      // to the node's own name.
       try {
         const sw = await swarm();
-        if (sw?.readContracts) {
-          let contracts = await sw.readContracts(nodeId);
-          if (!contracts && rootId && rootId !== nodeId) {
-            contracts = await sw.readContracts(rootId);
+        if (sw?.readScopedContracts) {
+          // Resolve THIS node's branch name. Look at swarm metadata
+          // on the node first; fall back to walk-up via
+          // findBranchContext to handle file-node descendants whose
+          // own metadata isn't a branch.
+          let branchName = swData?.branchName || null;
+          if (!branchName && sw.findBranchContext) {
+            try {
+              const ctx = await sw.findBranchContext(nodeId);
+              const bMeta = ctx?.branchNode
+                ? (ctx.branchNode.metadata instanceof Map
+                  ? ctx.branchNode.metadata.get("swarm")
+                  : ctx.branchNode.metadata?.swarm)
+                : null;
+              branchName = bMeta?.branchName || ctx?.branchNode?.name || null;
+            } catch {}
           }
+          const contracts = await sw.readScopedContracts({
+            nodeId,
+            branchName,
+          });
           if (Array.isArray(contracts) && contracts.length > 0) {
             context.declaredContracts = contracts;
+            // Stash branch identity so the consumption-tracking
+            // layer (childSummary) can record which contracts the
+            // branch was scoped to see vs. which it actually used.
+            context.declaredContractsBranchName = branchName || null;
           }
         }
       } catch (err) {
@@ -1233,12 +1286,72 @@ export async function init(core) {
             log.debug("CodeWorkspace", `Contract extraction skipped for ${filePath}: ${err.message}`);
           }
         }
+
+        // Material-change summary refresh. Any file write in a
+        // branch's subtree updates the parent's view of the child.
+        // Summaries feed Pass 2 courts + Pass 3 reputation; stale
+        // summaries silently corrupt downstream decisions.
+        if (branchNode?._id) {
+          try {
+            await refreshChildSummary({
+              branchNode,
+              reason: "afterNote",
+              core,
+            });
+          } catch (refreshErr) {
+            log.debug("CodeWorkspace", `Child summary refresh skipped: ${refreshErr.message}`);
+          }
+        }
       } catch (err) {
         log.debug("CodeWorkspace", `afterNote swarm record failed: ${err.message}`);
       }
     },
     "code-workspace",
   );
+
+  // Material-change: signal arrivals and contract updates on a branch
+  // node also mutate the child's summary. Hook into afterMetadataWrite
+  // and refresh when the write hits a branch-role node's swarm
+  // namespace. The summary itself is also a write to metadata.swarm
+  // — guard against infinite recursion by checking the data shape:
+  // if the only change is the `summary` field we just wrote, skip.
+  //
+  // TEMPORARILY DISABLED while diagnosing an OOM that fires on LLM
+  // message routing. This hook fires on every swarm-namespace metadata
+  // write and triggers refreshChildSummary which walks the branch
+  // subtree reading every file's full content. Under bursts (a swarm
+  // pass writing status updates across many branches in quick succession)
+  // it can spike memory enough to OOM a 4GB heap. Other refresh triggers
+  // (afterNote, swarm:afterBranchComplete) still fire, so summaries
+  // stay reasonably fresh; this hook only added the metadata-write
+  // trigger. Re-enable after addressing the burst-walk pattern (e.g.,
+  // narrowing the trigger to specific field changes, replacing the
+  // subtree walk with an incremental update).
+  // core.hooks.register(
+  //   "afterMetadataWrite",
+  //   async ({ nodeId, extName, data }) => {
+  //     if (extName !== "swarm") return;
+  //     if (!nodeId || !data) return;
+  //     if (data._summaryRefresh) return;
+  //     try {
+  //       const { default: NodeModel } = await import("../../seed/models/node.js");
+  //       const branchNode = await NodeModel.findById(nodeId).select("_id name metadata").lean();
+  //       if (!branchNode) return;
+  //       const meta = branchNode.metadata instanceof Map
+  //         ? branchNode.metadata.get("swarm")
+  //         : branchNode.metadata?.swarm;
+  //       if (meta?.role !== "branch") return;
+  //       await refreshChildSummary({
+  //         branchNode,
+  //         reason: "swarm-metadata-change",
+  //         core,
+  //       });
+  //     } catch (refreshErr) {
+  //       log.debug("CodeWorkspace", `afterMetadataWrite summary refresh skipped: ${refreshErr.message}`);
+  //     }
+  //   },
+  //   "code-workspace",
+  // );
 
   // onCascade listener. The kernel fires this when cascade is enabled on
   // a node and content is written there. Extensions inspect the signal
@@ -1355,7 +1468,7 @@ export async function init(core) {
   // their enrichContext instead of the raw "[[DONE]]" the architect emits.
   core.hooks.register(
     "swarm:afterBranchComplete",
-    async ({ branchNode, rootProjectNode, branch, result }) => {
+    async ({ branchNode, rootProjectNode, workspaceAnchorNode, branch, result }) => {
       if (!rootProjectNode?._id || !branch?.path) return;
       if (result?.status !== "done") return;
 
@@ -1389,41 +1502,35 @@ export async function init(core) {
         }
       }
 
-      // Write a surface summary for siblings, regardless of smoke outcome.
-      // Done BEFORE smoke so a branch that later flips to failed still has
-      // its summary visible for diagnosis.
+      // Child summary refresh on branch completion. This is the
+      // completion-event trigger; the other two triggers (file writes
+      // and metadata changes) are wired via the afterNote and
+      // afterMetadataWrite hooks above. Summary persists on the
+      // branch node's swarm metadata for Pass 2 courts and Pass 3
+      // reputation to read.
       try {
-        const { walkProjectFiles } = await import("./workspace.js");
-        const allFiles = await walkProjectFiles(rootProjectNode._id);
-        const prefix = branch.path.replace(/^\/+/, "").replace(/\/+$/, "") + "/";
-        const branchFiles = allFiles
-          .filter((f) => String(f.filePath || "").startsWith(prefix))
-          .map((f) => ({ filePath: f.filePath.slice(prefix.length), content: f.content || "" }));
-        const summary = branchSummary(branch.name, branchFiles);
-        if (summary) {
-          // Stamp the summary on the parent's branch step via the plan
-          // extension. (Status is already done from swarm's own write
-          // earlier in the dispatch flow.)
-          const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
-          if (planExt?.setBranchStepStatus) {
-            await planExt.setBranchStepStatus({
-              parentNodeId: String(rootProjectNode._id),
-              childNodeId: String(branchNode._id),
-              status: "done",
-              summary,
-              core,
-            });
-          }
-        }
+        await refreshChildSummary({
+          branchNode,
+          planStep: { status: "done" },
+          reason: "afterBranchComplete",
+          core,
+        });
       } catch (sumErr) {
         log.debug("CodeWorkspace", `branch summary skipped: ${sumErr.message}`);
       }
 
       try {
-        const projectDoc = await (await import("../../seed/models/node.js")).default
-          .findById(rootProjectNode._id);
-        if (!projectDoc) return;
-        const workspaceRoot = getWorkspacePath(projectDoc);
+        // Workspace resolution: if the dispatcher explicitly passed
+        // a workspaceAnchorNode, use it. Otherwise walk up from the
+        // plan anchor to find the nearest ancestor that owns a
+        // workspace. The two are separate concerns — the plan anchor
+        // is where plan/signal state lives; the workspace anchor is
+        // where files physically live on disk. They converge at
+        // top-level dispatch but diverge for sub-plans and (Pass 4+)
+        // cross-cutting plans.
+        const anchorId = workspaceAnchorNode?._id || rootProjectNode._id;
+        const workspaceRoot = await resolveWorkspaceRoot(anchorId);
+        if (!workspaceRoot) return;
         const smoke = await smokeBranch({
           workspaceRoot,
           branchPath: branch.path,
@@ -1473,15 +1580,30 @@ export async function init(core) {
   // status to "failed" triggers swarm's retry pass.
   core.hooks.register(
     "swarm:afterAllBranchesComplete",
-    async ({ rootProjectNode, results, branches, signal }) => {
+    async ({ rootProjectNode, workspaceAnchorNode, results, branches, signal }) => {
       if (!rootProjectNode?._id) return;
       if (signal?.aborted) return;
 
-      const NodeModel = (await import("../../seed/models/node.js")).default;
-      const projectDoc = await NodeModel.findById(rootProjectNode._id);
-      if (!projectDoc) return;
-      const workspaceRoot = getWorkspacePath(projectDoc);
       const sw = await swarm();
+      // Two separate anchor concepts:
+      //   rootProjectNode    — PLAN anchor (where metadata.plan,
+      //                        signal inbox, contracts live).
+      //   workspaceAnchorNode — WORKSPACE anchor (where files live
+      //                        on disk). Falls back to walk-up from
+      //                        rootProjectNode when not provided.
+      // `projectDoc` is what behavioral-test + plan.md writer need —
+      // the workspace-owning project node, which may be the plan
+      // anchor (top-level runs) or an outer ancestor (sub-plan runs).
+      const NodeModel = (await import("../../seed/models/node.js")).default;
+      const anchorId = workspaceAnchorNode?._id || rootProjectNode._id;
+      const projectDoc = workspaceAnchorNode
+        || (sw?.findProjectForNode
+          ? (await sw.findProjectForNode(anchorId))
+            || (await NodeModel.findById(anchorId))
+          : await NodeModel.findById(anchorId));
+      if (!projectDoc) return;
+      const workspaceRoot = await resolveWorkspaceRoot(anchorId);
+      if (!workspaceRoot) return;
 
       const branchNodeByName = new Map();
       try {
@@ -1879,13 +2001,15 @@ export async function init(core) {
   core.hooks.register(
     "swarm:runScouts",
     async (payload) => {
-      const { cycle, rootProjectNode, results, branches, socket, issueSummary, signal } = payload;
+      const { cycle, rootProjectNode, workspaceAnchorNode, results, branches, socket, issueSummary, signal } = payload;
       if (!rootProjectNode?._id || signal?.aborted) return;
 
-      const NodeModel = (await import("../../seed/models/node.js")).default;
-      const projectDoc = await NodeModel.findById(rootProjectNode._id);
-      if (!projectDoc) return;
-      const workspaceRoot = getWorkspacePath(projectDoc);
+      // Prefer explicit workspaceAnchorNode when the dispatcher
+      // provided it; otherwise walk up from the plan anchor. The two
+      // are independent concerns — plan scope vs. filesystem location.
+      const anchorId = workspaceAnchorNode?._id || rootProjectNode._id;
+      const workspaceRoot = await resolveWorkspaceRoot(anchorId);
+      if (!workspaceRoot) return;
 
       const sw = await swarm();
       const contracts = sw?.readContracts ? await sw.readContracts(rootProjectNode._id) : [];

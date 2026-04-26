@@ -198,9 +198,15 @@ async function collectSubtreeBranches(startNodeId) {
     // studio render the full TOC as soon as decomposition completes,
     // not only after each chapter dispatches. Skip steps that already
     // appeared as real tree nodes above (deduplicate by name).
-    const planMeta = node.metadata instanceof Map
-      ? node.metadata.get("plan")
-      : node.metadata?.["plan"];
+    // Plan discovery routes through the plan extension's canonical
+    // walk-up primitive. Under Path B the plan lives on a plan-type
+    // child of the scope node.
+    let planMeta = null;
+    try {
+      const { getExtension } = await import("../loader.js");
+      const planExt = getExtension("plan")?.exports;
+      if (planExt?.readPlan) planMeta = await planExt.readPlan(node._id);
+    } catch {}
     const planBranches = (planMeta?.steps || []).filter(
       (s) => s.kind === "branch" || s.kind === "chapter",
     );
@@ -374,7 +380,7 @@ router.post("/:nodeId/bookstudio/contracts", authenticate, express.json(), async
     const merged = new Map();
     for (const c of existing) merged.set(keyOf(c), c);
     for (const c of contracts) merged.set(keyOf(c), c);
-    await swx.setContracts({ projectNodeId: projectId, contracts: [...merged.values()] });
+    await swx.setContracts({ scopeNodeId: projectId, contracts: [...merged.values()] });
     broadcast(nodeId, "update", `contracts saved (${contracts.length} entries)`);
     broadcast(projectId, "update", `contracts saved (${contracts.length} entries)`);
     return sendOk(res, { projectId, contracts: contracts.length });
@@ -589,7 +595,7 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
           const keyOf = (c) => `${c.kind}::${c.name}`;
           for (const c of existing) merged.set(keyOf(c), c);
           for (const c of parsedContracts) merged.set(keyOf(c), c);
-          await swx.setContracts({ projectNodeId: projectId, contracts: [...merged.values()] });
+          await swx.setContracts({ scopeNodeId: projectId, contracts: [...merged.values()], userId });
           broadcast(nodeId, "update", `contracts updated (+${parsedContracts.length})`);
         }
 

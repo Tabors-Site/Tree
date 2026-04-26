@@ -280,6 +280,14 @@ export async function orchestrateTreeRequest({
             readOnly: false, onToolLoopCheckpoint, socket,
             parentChatId: rootChatId || null,
             dispatchOrigin: "branch-swarm",
+            // Thread the live runtime context through. Without these,
+            // runSteppedMode's beginChainStep fallback fires with
+            // sessionId missing → startChainStep returns null → chat
+            // chain steps for resumed branches lack proper attribution
+            // (no session, no rt-managed chainIndex, no parentChat).
+            // The non-resume dispatch path in dispatch.js threads these
+            // through; this path was missed.
+            sessionId, rootChatId, rt,
           });
         },
       });

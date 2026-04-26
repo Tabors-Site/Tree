@@ -181,7 +181,52 @@ function isJsonEscapeError(err) {
   const status = err.status || err.code;
   if (status !== 500 && status !== 400) return false;
   const msg = String(err.message || err.error?.message || "");
-  return /failed to parse JSON|invalid (character|escape).*(escape|string)|unexpected escape|json.*parse.*error/i.test(msg);
+  // ESCAPE-class only: the parser is complaining about an escape
+  // sequence specifically. Match unambiguous escape-error wording from
+  // the major providers / runtimes:
+  //   Go:  "invalid character 'X' in string escape code"
+  //   Go:  "unescaped control character"
+  //   Go:  "invalid \\u escape"
+  //   V8:  "Bad escaped character in JSON"
+  //   V8:  "invalid escape sequence \\g"
+  // Do NOT match the generic "failed to parse JSON" wording — that
+  // catches structural failures too and routes them to the wrong
+  // retry hint. See isJsonStructuralError for that path.
+  return /string escape code|invalid escape sequence|unescaped control|bad escaped character|invalid \\u escape/i.test(msg);
+}
+
+/**
+ * Detect a STRUCTURAL JSON parse failure from the provider — unmatched
+ * brackets, unexpected token at a structural position, truncated
+ * payload, etc. Distinct from isJsonEscapeError: the model's content
+ * was probably fine but the JSON envelope around it broke (often
+ * because the model emitted overly long tool args and got truncated,
+ * or quoting around code blocks went sideways).
+ *
+ * The retry hint for this class is different ("shorten args, split
+ * into multiple tool calls"), so we classify separately to avoid
+ * giving misleading advice about backslashes when the real problem
+ * is a stray bracket.
+ */
+function isJsonStructuralError(err) {
+  if (!err) return false;
+  const status = err.status || err.code;
+  if (status !== 500 && status !== 400) return false;
+  const msg = String(err.message || err.error?.message || "");
+  // Common structural-error signatures across providers:
+  //   "invalid character ')' after object key:value pair"
+  //   "unexpected end of JSON input"
+  //   "unterminated string"
+  //   "expected ',' or '}' after"
+  //   "expected ':' after object key"
+  //   generic "failed to parse JSON" without escape-specific wording
+  if (/invalid character .*(after|in) (object|array)/i.test(msg)) return true;
+  if (/unexpected end of JSON input|unterminated string|unexpected token/i.test(msg)) return true;
+  if (/expected (',' or '}'|':' after|',' or ']')/i.test(msg)) return true;
+  // Generic "failed to parse JSON" / "json parse error" without any
+  // escape keyword is structural by elimination.
+  if (/failed to parse JSON|json.*parse.*error/i.test(msg) && !/escape|control/i.test(msg)) return true;
+  return false;
 }
 
 let _failoverResolver = null;
@@ -1374,30 +1419,80 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorI
         log.error("LLM", `Model invented tool "${inventedTool}" but no usable text could be extracted from failed_generation.`);
         throw apiErr;
       }
-    } else if (isJsonEscapeError(apiErr) && !session._jsonRetryDone) {
-      // Provider rejected the model's tool-call JSON because its content
-      // had invalid escape sequences (raw backslash, backslash-space,
-      // unescaped control chars — small models hit this when they emit
-      // regex patterns, Windows paths, or C-style escapes in a tool
-      // arg). Blind retry of the identical request would fail identically.
-      // So: inject a corrective system message and signal the caller
-      // below to retry ONCE. The retry runs in the same callLLM frame,
-      // releasing and re-acquiring its semaphore slot cleanly.
+    } else if ((isJsonEscapeError(apiErr) || isJsonStructuralError(apiErr)) && !session._jsonRetryDone) {
+      // Provider rejected the model's tool-call JSON. Two distinct
+      // failure modes, two different retry hints. Blind retry of the
+      // identical request would fail identically; so we inject a
+      // corrective system message tailored to the failure class and
+      // signal the caller below to retry ONCE. The retry runs in the
+      // same callLLM frame, releasing and re-acquiring its semaphore
+      // slot cleanly.
       //
       // session._jsonRetryDone is the per-session guard preventing an
       // infinite retry loop if the model can't produce clean output.
       session._jsonRetryDone = true;
       const errMsg = String(apiErr.message || apiErr.error?.message || "").slice(0, 200);
-      log.warn("LLM", `JSON-escape failure on ${MODEL} (${errMsg}). Retrying once with corrective hint.`);
+      const isEscape = isJsonEscapeError(apiErr);
+      const failureClass = isEscape ? "escape" : "structural";
+      log.warn(
+        "LLM",
+        `JSON ${failureClass} failure on ${MODEL} (${errMsg}). Retrying once with corrective hint.`,
+      );
+
+      // Diagnostic: capture what we sent so we can identify whether
+      // upstream truncation is at play. For structural failures the
+      // most useful signals are (a) which model + connection was used,
+      // (b) total chars in the request messages (input load), and
+      // (c) any partial response the upstream returned in
+      // failed_generation. If max_tokens is unset on requestParams,
+      // print "unset" — provider falls back to its own default and
+      // that default is the prime suspect for mid-stream truncation.
+      try {
+        const totalMessageChars = (session.messages || [])
+          .reduce((sum, m) => sum + (typeof m?.content === "string" ? m.content.length : 0), 0);
+        const failedGen = apiErr?.error?.failed_generation || apiErr?.error?.failed_response || null;
+        const failedGenLen = failedGen ? String(failedGen).length : null;
+        const failedGenTail = failedGen
+          ? String(failedGen).slice(-200).replace(/\s+/g, " ")
+          : null;
+        log.warn(
+          "LLM",
+          `↳ diagnostic: model=${MODEL} ` +
+          `connection=${clientEntry?.connectionId ? String(clientEntry.connectionId).slice(0, 8) : "default"} ` +
+          `messages=${(session.messages || []).length} ` +
+          `inputChars=${totalMessageChars} ` +
+          `tools=${tools.length} ` +
+          `max_tokens=${requestParams.max_tokens ?? "unset"} ` +
+          (failedGenLen != null ? `partialOutputChars=${failedGenLen} ` : "") +
+          (failedGenTail ? `tail="${failedGenTail}"` : ""),
+        );
+      } catch (diagErr) {
+        log.debug("LLM", `structural-failure diagnostic skipped: ${diagErr.message}`);
+      }
+
+      const escapeHint =
+        `The provider could not deserialize one of your tool-call arguments because it contained ` +
+        `invalid escape sequences (raw backslashes, backslash followed by a space, or unescaped ` +
+        `control characters). RETRY WITH SIMPLER CONTENT: avoid backslashes entirely in tool ` +
+        `arguments, keep content ASCII where possible, and prefer prose over literal code / regex / ` +
+        `file paths. If you must include code, keep it short and use only simple identifiers.`;
+
+      const structuralHint =
+        `The provider could not deserialize your tool-call payload because the JSON envelope itself ` +
+        `was malformed at a structural position (unmatched bracket, unexpected token after a key/` +
+        `value pair, or a truncated string). This is usually NOT about escape characters — your ` +
+        `previous content may have been fine, but the JSON wrapping around it broke. RETRY by: ` +
+        `(1) keeping tool-call arguments shorter — split a long file into multiple smaller writes ` +
+        `if needed; (2) double-checking that every quote, bracket, and brace in your arguments ` +
+        `is balanced; (3) avoiding embedding raw long strings of code that may have triggered a ` +
+        `truncation. The fix is structural, not lexical — do not strip backslashes or rewrite as ` +
+        `prose unless the content itself was the problem.`;
+
       session.messages.push({
         role: "system",
         content:
-          `Your previous turn failed with a JSON parse error: "${errMsg}". The provider could not ` +
-          `deserialize one of your tool-call arguments because it contained invalid escape sequences ` +
-          `(raw backslashes, backslash followed by a space, or unescaped control characters). ` +
-          `RETRY WITH SIMPLER CONTENT: avoid backslashes entirely in tool arguments, keep content ASCII ` +
-          `where possible, and prefer prose over literal code / regex / file paths. If you must ` +
-          `include code, keep it short and use only simple identifiers.`,
+          `Your previous turn failed with a JSON parse error: "${errMsg}". ` +
+          (isEscape ? escapeHint : structuralHint),
       });
       ctx._retryJsonEscape = true; // signal to the outer wrapper below
     } else {
@@ -2437,6 +2532,28 @@ export async function runOrchestration({
   const { nullSocket } = await import("../orchestrators/helpers.js");
   const { ProtocolError, ERR } = await import("../protocol.js");
   const { buildUserAiSessionKey } = await import("./sessionKeys.js");
+
+  // Phantom-rootId guard. Browser localStorage / session caches can
+  // pin a rootId that points to a deleted (or never-completed) tree.
+  // Subsequent chats then ship that ghost id, the orchestrator stores
+  // it in memory via setRootId, and downstream code paths chew through
+  // null lookups across walks, classifiers, and prompt builders —
+  // observed to allocate without bound and crash a 4GB heap before any
+  // routing log fires. Reject early with a clean error so the client
+  // can clear its cached state instead of pinning the server in a
+  // broken loop. Cheap: one indexed _id lookup per tree-zone request.
+  if (zone === "tree" && rootId) {
+    const rootDoc = await Node.findById(rootId).select("_id").lean();
+    if (!rootDoc) {
+      throw new ProtocolError(
+        404,
+        ERR.TREE_NOT_FOUND,
+        `Tree root ${String(rootId).slice(0, 8)} does not exist. ` +
+        `Your client likely has a stale rootId cached from a deleted ` +
+        `tree — clear browser localStorage / session storage and reconnect.`,
+      );
+    }
+  }
 
   const JWT_SECRET = process.env.JWT_SECRET;
   if (!JWT_SECRET) throw new Error("JWT_SECRET not configured");

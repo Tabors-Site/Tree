@@ -29,6 +29,19 @@ export async function tryResumeSwarm({
 }) {
   if (forceMode || !message || !rootId) return null;
 
+  // Cheap check FIRST. The expensive work (findProjectForNode +
+  // reconcileProject + detectResumableSwarm) walks the project tree
+  // recursively and loads full node metadata at every level — easily
+  // tens of MB on a mature project. Doing that on every chat before
+  // we even know the message is a resume request was burning the heap
+  // on regular conversational turns ("hello", "what's up", a typo
+  // like "contnue" — none of these need the resume path).
+  //
+  // Now: regex first. Only when the message actually looks like a
+  // resume phrase do we pay for the project walk + reconcile.
+  const shortImperative = message.length < 60 && RESUME_CONTINUATION_RE.test(message);
+  if (!shortImperative) return null;
+
   try {
     const searchNodeId = currentNodeId || rootId;
     const projectNode = await findProjectForNode(searchNodeId);
@@ -41,9 +54,6 @@ export async function tryResumeSwarm({
 
     const resumable = await detectResumableSwarm(projectNode._id);
     if (!resumable || resumable.resumable.length === 0) return null;
-
-    const shortImperative = message.length < 60 && RESUME_CONTINUATION_RE.test(message);
-    if (!shortImperative) return null;
 
     log.info("Swarm",
       `▶️  Resume intercept: ${resumable.resumable.length} of ${resumable.total} branches non-done under "${resumable.projectName}" (${JSON.stringify(resumable.statusCounts)}). Skipping classifier, dispatching runBranchSwarm in resume mode.`,

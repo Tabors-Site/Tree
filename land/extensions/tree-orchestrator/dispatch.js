@@ -469,12 +469,31 @@ export async function runModeAndReturn(visitorId, mode, message, {
           // dead contracts to linger when plans got rejected.
           if (parsedContracts && parsedContracts.length > 0) {
             try {
+              // userId is required: setContracts resolves the plan-type
+              // child via ensurePlanAtScope, which CREATES it if none
+              // exists. Without userId, the helper would fall back to
+              // findGoverningPlan and silently no-op when the child
+              // hasn't been created yet (which is always true on a
+              // first dispatch — the plan child is created lazily).
               await sw.setContracts({
-                projectNodeId: projectNode._id,
+                scopeNodeId: projectNode._id,
                 contracts: parsedContracts,
+                userId,
+                // The originating user request — captured in the
+                // plan-created ledger entry if setContracts ends up
+                // creating the plan node. Without it the ledger loses
+                // the trace from plan → spawning request.
+                systemSpec: message,
+                // Explicit null: this site (runModeAndReturn) doesn't
+                // receive a core in its options, and the `core,`
+                // shorthand was a ReferenceError that the try/catch
+                // silently swallowed as "core is not defined".
+                // setContracts goes through the kernel's unscoped
+                // setExtMeta internally, so a null scoped-core is fine.
+                core: null,
               });
               log.info("Tree Orchestrator",
-                `📜 Contracts stored on project root ${String(projectNode._id).slice(0, 8)}`,
+                `📜 Contracts stored on plan at scope ${String(projectNode._id).slice(0, 8)} (${parsedContracts.length} entries)`,
               );
             } catch (ctxErr) {
               log.warn("Tree Orchestrator", `Failed to store contracts: ${ctxErr.message}`);
@@ -886,11 +905,19 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
   }
 
   // Re-persist contracts in case they changed between proposal and accept.
+  // Pass userId through so setContracts → ensurePlanAtScope can create
+  // the plan-type child if it doesn't yet exist on this dispatch path.
   if (Array.isArray(contracts) && contracts.length > 0) {
     try {
       await sw.setContracts({
-        projectNodeId: projectNode._id,
+        scopeNodeId: projectNode._id,
         contracts,
+        userId,
+        systemSpec: userRequest || null,
+        core: { metadata: { setExtMeta: async (node, ns, data) => {
+          const NodeModel = (await import("../../seed/models/node.js")).default;
+          await NodeModel.updateOne({ _id: node._id }, { $set: { [`metadata.${ns}`]: data } });
+        } } },
       });
     } catch (ctxErr) {
       log.warn("Tree Orchestrator", `dispatchSwarmPlan: contracts write failed: ${ctxErr.message}`);
@@ -951,5 +978,395 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
     log.error("Tree Orchestrator", `dispatchSwarmPlan failed: ${err.message}`);
     log.error("Tree Orchestrator", err.stack?.split("\n").slice(0, 5).join("\n"));
     return `Swarm dispatch failed: ${err.message}`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// SUB-PLAN DISPATCH (Pass 1)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Dispatch an approved sub-plan. Called when the user accepts a
+ * SUB_PLAN_PROPOSED card at a worker's scope. The sub-plan already
+ * exists as a plan-type node (created in swarm.js's nested-BRANCHES
+ * rewire); its steps are in "pending-approval" status. This function:
+ *
+ *   1. Flips pending-approval steps to "pending" on the sub-plan.
+ *   2. Derives the branches array from the sub-plan's steps.
+ *   3. Calls runBranchSwarm with resumeMode:true so the existing plan
+ *      state is preserved (no duplicate re-init of role/steps).
+ *   4. Anchors rootProjectNode at the sub-plan's PARENT (the worker's
+ *      branch node, which is the scope). runBranchSwarm internally
+ *      resolves rootPlanNodeId via ensurePlanAtScope which finds the
+ *      existing sub-plan — no new creation.
+ *
+ * The runtime context (socket, signal, runtime, etc.) comes from the
+ * caller (the WS handler reads getActiveRequest for the visitor's
+ * live session).
+ */
+export async function dispatchApprovedSubPlan({ subPlanNodeId, runtimeCtx }) {
+  if (!subPlanNodeId) return "";
+  const sw = await swarmExt();
+  if (!sw) {
+    log.warn("Tree Orchestrator", "dispatchApprovedSubPlan: swarm extension not loaded.");
+    return "";
+  }
+
+  const {
+    visitorId, userId, username, rootId, sessionId, signal,
+    slot, socket, onToolLoopCheckpoint, rt, rootChatId,
+  } = runtimeCtx || {};
+
+  if (!visitorId || !userId) {
+    log.warn("Tree Orchestrator", "dispatchApprovedSubPlan: missing visitorId or userId — no active session");
+    return "";
+  }
+
+  const { getExtension } = await import("../loader.js");
+  const planExt = getExtension("plan")?.exports;
+  if (!planExt?.readPlan) {
+    log.warn("Tree Orchestrator", "dispatchApprovedSubPlan: plan extension not loaded.");
+    return "";
+  }
+
+  // Read the sub-plan and its scope (plan's parent).
+  const NodeModel = (await import("../../seed/models/node.js")).default;
+  const subPlanNode = await NodeModel.findById(subPlanNodeId).select("_id name parent type metadata").lean();
+  if (!subPlanNode || subPlanNode.type !== "plan") {
+    log.warn("Tree Orchestrator", `dispatchApprovedSubPlan: ${subPlanNodeId} is not a plan-type node.`);
+    return "";
+  }
+  const scopeNode = await NodeModel.findById(subPlanNode.parent).lean();
+  if (!scopeNode) {
+    log.warn("Tree Orchestrator", `dispatchApprovedSubPlan: scope node ${subPlanNode.parent} not found.`);
+    return "";
+  }
+
+  const subPlan = await planExt.readPlan(subPlanNodeId);
+  const pendingApproval = (subPlan?.steps || []).filter(
+    (s) => s.kind === "branch" && s.status === "pending-approval",
+  );
+  if (pendingApproval.length === 0) {
+    log.info("Tree Orchestrator", `dispatchApprovedSubPlan: no pending-approval steps on ${subPlanNodeId}; skipping.`);
+    return "";
+  }
+
+  // Flip pending-approval → pending so runBranchSwarm picks them up.
+  for (const step of pendingApproval) {
+    await planExt.updateStep(subPlanNodeId, step.id, { status: "pending" }, null);
+  }
+  await planExt.appendLedger(subPlanNodeId, {
+    event: "sub-plan-approved",
+    detail: {
+      scopeNodeId: String(scopeNode._id),
+      scopeName: scopeNode.name || null,
+      branchCount: pendingApproval.length,
+      approvedBy: username || userId,
+    },
+  }, null);
+
+  // Compute the sub-plan's depth so dispatched branches know how
+  // nested they are. Depth is the length of the plan chain FROM the
+  // scope node upward — how many plan-type ancestors sit between
+  // this sub-plan and the outermost plan. A top-level root plan has
+  // depth 0; its workers emitting nested [[BRANCHES]] create sub-plans
+  // whose branches run at depth 1; their nested emissions would be
+  // depth 2, etc. The depth cap in swarm.js's emission check rejects
+  // emissions where currentDepth >= MAX_SUB_PLAN_DEPTH, so correctly
+  // propagating depth ensures deeper nests hit the cap naturally.
+  //
+  // Implementation: count plan-type ancestors above scopeNode. The
+  // scopeNode's parent is where scopeNode lives; its governing plan
+  // is the outer one. findGoverningPlanChain walks from scopeNode up
+  // through each successive plan parent, returning the chain of
+  // plans. Its length IS the depth.
+  let parentDepth = 0;
+  try {
+    if (planExt.findGoverningPlanChain) {
+      const chain = await planExt.findGoverningPlanChain(String(scopeNode._id));
+      // chain includes the sub-plan we're dispatching (governs scope);
+      // depth for its branches is the count of plans governing THIS
+      // sub-plan (excluding the sub-plan itself — that's us).
+      parentDepth = Math.max(0, (chain?.length || 1) - 1);
+    }
+  } catch (err) {
+    log.debug("Tree Orchestrator", `depth computation skipped: ${err.message}`);
+  }
+  const subBranchDepth = parentDepth + 1;
+
+  // Build branches array from approved steps, each stamped with its
+  // correct depth so the emission check in swarm.js catches further
+  // decomposition attempts at the right level.
+  const branches = pendingApproval.map((s) => ({
+    name: s.title,
+    spec: s.spec || "",
+    path: s.path || null,
+    files: s.files || [],
+    slot: s.slot || null,
+    mode: s.mode || null,
+    parentBranch: s.parentBranch || null,
+    parentNodeId: s.childNodeId || null,
+    depth: subBranchDepth,
+  }));
+
+  // Resolve the workspace anchor: the outer project whose workspace
+  // directory holds the actual files. Plan anchor (scopeNode) and
+  // workspace anchor are separate concerns — sub-plans inherit their
+  // outer project's workspace rather than owning one.
+  let workspaceAnchorNode = null;
+  try {
+    if (sw.findProjectForNode) {
+      workspaceAnchorNode = await sw.findProjectForNode(scopeNode._id);
+    }
+  } catch (err) {
+    log.debug("Tree Orchestrator", `workspace anchor lookup skipped: ${err.message}`);
+  }
+
+  try {
+    const { SWARM_WS_EVENTS } = await import("../swarm/wsEvents.js");
+    socket?.emit?.(SWARM_WS_EVENTS.SUB_PLAN_DISPATCHED, {
+      subPlanNodeId: String(subPlanNodeId),
+      scopeNodeId: String(scopeNode._id),
+      scopeName: scopeNode.name || null,
+      branchCount: branches.length,
+    });
+  } catch {}
+
+  try {
+    const swarmResult = await sw.runBranchSwarm({
+      branches,
+      rootProjectNode: scopeNode,
+      // Workspace anchor is the outer project, distinct from the
+      // plan anchor (scopeNode). Files land at the project workspace;
+      // plan state lives on the sub-plan at scopeNode.
+      workspaceAnchorNode,
+      rootChatId: rootChatId || null,
+      architectChatId: null,
+      sessionId,
+      visitorId,
+      userId,
+      username,
+      rootId,
+      signal,
+      slot,
+      socket,
+      onToolLoopCheckpoint,
+      userRequest: subPlan?.systemSpec || "",
+      rt,
+      // Sub-plan dispatch: the sub-plan already exists with its steps;
+      // skip the init-project-role + initial-enqueue block so we don't
+      // overwrite the worker's branch role.
+      resumeMode: true,
+      core: { metadata: { setExtMeta: async (node, ns, data) => {
+        const NM = (await import("../../seed/models/node.js")).default;
+        await NM.updateOne({ _id: node._id }, { $set: { [`metadata.${ns}`]: data } });
+      } } },
+      emitStatus,
+      runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot, markerChatId }) => {
+        setActiveRequest(visitorId, {
+          socket, username, userId, signal,
+          sessionId, rootId, rootChatId,
+          slot, onToolLoopCheckpoint,
+          rt: (getActiveRequest(visitorId) || {}).rt,
+        });
+        const branchIdStr = await pinBranchPosition(visitorId, branchNodeId, branchMode, {
+          username, userId, rootId,
+        });
+        return runSteppedMode(visitorId, branchMode, branchMessage, {
+          username, userId, rootId, signal, slot: branchSlot,
+          currentNodeId: branchIdStr,
+          readOnly: false, onToolLoopCheckpoint, socket,
+          sessionId, rootChatId, rt,
+          parentChatId: markerChatId || rootChatId || null,
+          dispatchOrigin: "sub-plan",
+        });
+      },
+    });
+
+    // Restore position to the scope node so subsequent chat turns land
+    // on the worker's branch, not the last-running sub-branch.
+    setCurrentNodeId(visitorId, String(scopeNode._id));
+
+    // Parent notification: append a SUB_PLAN_COMPLETE signal to the
+    // scope node's (the worker's branch) inbox so its next turn sees
+    // the rollup of what the decomposition produced. Also fire a WS
+    // event so the client can render a status line.
+    try {
+      const finalPlan = await planExt.readPlan(subPlanNodeId);
+      const subBranchesRollup = (finalPlan?.steps || [])
+        .filter((s) => s.kind === "branch")
+        .map((s) => ({
+          name: s.title,
+          status: s.status || "pending",
+          summary: s.summary || null,
+          error: s.error || null,
+          childNodeId: s.childNodeId || null,
+        }));
+      const doneCount = subBranchesRollup.filter((b) => b.status === "done").length;
+      const failedCount = subBranchesRollup.filter((b) => b.status === "failed").length;
+      const overallStatus = failedCount > 0
+        ? "partial"
+        : (doneCount === subBranchesRollup.length && subBranchesRollup.length > 0)
+          ? "settled"
+          : "escalating";
+
+      const { SIGNAL_KIND } = await import("../code-workspace/swarmEvents.js");
+      await sw.appendSignal({
+        nodeId: String(scopeNode._id),
+        signal: {
+          from: "sub-plan",
+          kind: SIGNAL_KIND.SUB_PLAN_COMPLETE,
+          filePath: null,
+          payload: {
+            subPlanNodeId: String(subPlanNodeId),
+            overallStatus,
+            subBranches: subBranchesRollup,
+          },
+        },
+        core: null,
+      });
+
+      const { SWARM_WS_EVENTS } = await import("../swarm/wsEvents.js");
+      socket?.emit?.(SWARM_WS_EVENTS.SUB_PLAN_COMPLETE, {
+        subPlanNodeId: String(subPlanNodeId),
+        scopeNodeId: String(scopeNode._id),
+        scopeName: scopeNode.name || null,
+        overallStatus,
+        subBranches: subBranchesRollup,
+      });
+
+      await planExt.appendLedger(subPlanNodeId, {
+        event: "sub-plan-completed",
+        detail: { overallStatus, doneCount, failedCount, total: subBranchesRollup.length },
+      }, null);
+
+      // Retry budget exhaustion → SUB_PLAN_ESCALATION. Pass 1's escalation
+      // path: a sub-plan branch that failed AND already hit the per-branch
+      // retry cap (budget.retriesPerBranch, default 1) cannot settle
+      // locally. The parent gets a separate signal alongside the
+      // SUB_PLAN_COMPLETE rollup so its next turn can decide what to do
+      // (revise spec, redispatch with different constraints, surface to
+      // user via [[NO-WRITE: sub-plan blocked]]). Pass 2 will extend the
+      // payload schema for court-driven escalations; until then, this
+      // single trigger keeps the path real, not sketch.
+      const budget = finalPlan?.budget || planExt.DEFAULT_BUDGET || {};
+      const retryCap = Number.isFinite(budget?.retriesPerBranch)
+        ? budget.retriesPerBranch
+        : 1;
+      const exhausted = (finalPlan?.steps || [])
+        .filter((s) =>
+          s.kind === "branch" &&
+          s.status === "failed" &&
+          (s.retries || 0) >= retryCap,
+        )
+        .map((s) => ({
+          name: s.title,
+          error: s.error || null,
+          retries: s.retries || 0,
+          childNodeId: s.childNodeId ? String(s.childNodeId) : null,
+        }));
+
+      if (exhausted.length > 0) {
+        // Best-effort: collect a few recent unresolved signals from each
+        // exhausted branch so the parent has concrete context for what
+        // couldn't be reconciled. Cap total at 10 to avoid prompt bloat.
+        const unresolvedSignals = [];
+        try {
+          for (const ex of exhausted) {
+            if (!ex.childNodeId || unresolvedSignals.length >= 10) break;
+            const sigs = (await sw.readSignals(ex.childNodeId)) || [];
+            for (const s of sigs.slice(-3)) {
+              if (unresolvedSignals.length >= 10) break;
+              const summary = typeof s.payload === "string"
+                ? s.payload.slice(0, 120)
+                : (s.payload?.message || s.payload?.reason || s.payload?.kind || null);
+              unresolvedSignals.push({
+                from: ex.name,
+                kind: s.kind || null,
+                summary: summary ? String(summary).slice(0, 200) : null,
+              });
+            }
+          }
+        } catch (sigErr) {
+          log.debug("Tree Orchestrator", `escalation signal collection skipped: ${sigErr.message}`);
+        }
+
+        await sw.appendSignal({
+          nodeId: String(scopeNode._id),
+          signal: {
+            from: "sub-plan",
+            kind: SIGNAL_KIND.SUB_PLAN_ESCALATION,
+            filePath: null,
+            payload: {
+              subPlanNodeId: String(subPlanNodeId),
+              reason: "retry-budget-exhausted",
+              details:
+                `${exhausted.length} branch(es) failed after ${retryCap} ` +
+                `retry attempt(s); local resolution exhausted`,
+              failedBranches: exhausted,
+              unresolvedSignals,
+            },
+          },
+          core: null,
+        });
+
+        await planExt.appendLedger(subPlanNodeId, {
+          event: "sub-plan-escalation",
+          detail: {
+            reason: "retry-budget-exhausted",
+            exhaustedCount: exhausted.length,
+            retryCap,
+          },
+        }, null);
+
+        log.warn(
+          "Tree Orchestrator",
+          `⚠️  Sub-plan ${String(subPlanNodeId).slice(0, 8)} escalating to parent: ` +
+          `${exhausted.length} branch(es) exhausted retry budget (cap=${retryCap})`,
+        );
+      }
+    } catch (notifErr) {
+      log.debug("Tree Orchestrator", `SUB_PLAN_COMPLETE notify skipped: ${notifErr.message}`);
+    }
+
+    return swarmResult?.summary || "";
+  } catch (err) {
+    log.error("Tree Orchestrator", `dispatchApprovedSubPlan ${subPlanNodeId} failed: ${err.message}`);
+    log.error("Tree Orchestrator", err.stack?.split("\n").slice(0, 5).join("\n"));
+    return `Sub-plan dispatch failed: ${err.message}`;
+  }
+}
+
+/**
+ * Archive a proposed sub-plan (user cancel). Marks the sub-plan's
+ * pending-approval steps as archived and emits SUB_PLAN_ARCHIVED so
+ * the client can dismiss the card. Does not delete the plan node —
+ * the plan's ledger preserves the history of its proposal.
+ */
+export async function archiveSubPlan({ subPlanNodeId, reason = "user-cancel", socket }) {
+  if (!subPlanNodeId) return false;
+  const { getExtension } = await import("../loader.js");
+  const planExt = getExtension("plan")?.exports;
+  if (!planExt?.archivePlan) return false;
+
+  try {
+    await planExt.archivePlan({ nodeId: subPlanNodeId, reason, core: null });
+    await planExt.appendLedger(subPlanNodeId, {
+      event: "sub-plan-archived",
+      detail: { reason },
+    }, null);
+
+    try {
+      const { SWARM_WS_EVENTS } = await import("../swarm/wsEvents.js");
+      socket?.emit?.(SWARM_WS_EVENTS.SUB_PLAN_ARCHIVED, {
+        subPlanNodeId: String(subPlanNodeId),
+        reason,
+      });
+    } catch {}
+
+    return true;
+  } catch (err) {
+    log.warn("Tree Orchestrator", `archiveSubPlan ${subPlanNodeId} failed: ${err.message}`);
+    return false;
   }
 }

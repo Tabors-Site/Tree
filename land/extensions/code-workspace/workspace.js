@@ -600,10 +600,21 @@ export async function writeFileContent({ fileNodeId, content, userId }) {
  */
 export async function localNodeView(nodeId) {
   if (!nodeId) return null;
-  const node = await Node.findById(nodeId).select("_id name parent metadata children").lean();
+  const node = await Node.findById(nodeId).select("_id name parent metadata children type").lean();
   if (!node) return null;
   const selfMeta = readMeta(node);
   const selfRole = selfMeta?.role || null;
+  // Swarm role is set by initBranchRole / initProjectRole on a
+  // separate namespace. Surface it so facets that need to
+  // distinguish branches from project roots from plan-type nodes
+  // (e.g. compoundBranches.shouldInject) can read view.self.swarmRole
+  // without an extra DB query.
+  const readSwarmRole = (n) => {
+    const m = n?.metadata instanceof Map ? n.metadata.get("swarm") : n?.metadata?.swarm;
+    return m?.role || null;
+  };
+  const selfSwarmRole = readSwarmRole(node);
+  const selfNodeType = node.type || null;
 
   const childDocs = Array.isArray(node.children) && node.children.length > 0
     ? await Node.find({ _id: { $in: node.children } })
@@ -646,6 +657,8 @@ export async function localNodeView(nodeId) {
       name: node.name,
       nodeId: String(node._id),
       role: selfRole,
+      swarmRole: selfSwarmRole,
+      type: selfNodeType,
       childCount: Array.isArray(node.children) ? node.children.length : 0,
     },
     parent,
@@ -721,6 +734,50 @@ export function getWorkspacePath(projectNode) {
   const data = readMeta(projectNode);
   if (data?.workspacePath) return data.workspacePath;
   return path.join(DEFAULT_WORKSPACE_ROOT, String(projectNode._id));
+}
+
+/**
+ * Resolve the workspace root directory for an arbitrary node.
+ *
+ * Pass 1 decouples the PLAN ANCHOR (where a swarm run is scoped, which
+ * may be a sub-plan node at depth) from the WORKSPACE ANCHOR (the
+ * top-level project whose directory holds the actual files on disk).
+ * Sub-plans don't own workspaces; their files still land in the outer
+ * project's workspace. This helper walks up via swarm's
+ * findProjectForNode to discover the right anchor, so hook handlers
+ * that receive `rootProjectNode` (which may actually be a sub-plan)
+ * get the correct path without threading a separate parameter.
+ *
+ * Resolution order:
+ *   1. Starting node has workspacePath metadata → use it.
+ *   2. Walk up via findProjectForNode → use the anchor's workspacePath.
+ *   3. Fall back to DEFAULT_WORKSPACE_ROOT + nodeId (matches legacy
+ *      behavior for pre-Pass-1 nodes that never got initialized).
+ *
+ * Returns the workspace path string.
+ */
+export async function resolveWorkspaceRoot(nodeId) {
+  if (!nodeId) return null;
+  try {
+    const node = await Node.findById(nodeId).select("metadata").lean();
+    if (node) {
+      const meta = readMeta(node);
+      if (meta?.workspacePath) return meta.workspacePath;
+    }
+    try {
+      const { getExtension } = await import("../loader.js");
+      const sw = getExtension("swarm")?.exports;
+      if (sw?.findProjectForNode) {
+        const project = await sw.findProjectForNode(nodeId);
+        if (project) return getWorkspacePath(project);
+      }
+    } catch {
+      // Swarm unavailable — very unusual, fall through to default.
+    }
+    return path.join(DEFAULT_WORKSPACE_ROOT, String(nodeId));
+  } catch {
+    return null;
+  }
 }
 
 export { readMeta, NS };

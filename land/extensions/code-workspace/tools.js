@@ -284,10 +284,19 @@ async function resolveBranchRootedPath(nodeId, filePath, options = {}) {
     }
   }
   if (segments[0] === branchPath) {
-    return {
-      filePath: raw, isInBranch: true,
-      error: `path "${raw}" starts with your own branch name "${branchPath}". You are already inside "${branchPath}" — write paths are relative to your branch root, so drop the "${branchPath}/" prefix.`,
-    };
+    // The worker prefixed the path with its own branch name — meant
+    // to scope inside its own branch but added the prefix redundantly.
+    // Intent is unambiguous (the path lands at the same on-disk slot
+    // either way), so accept it instead of bouncing. Without this,
+    // common LLM mistakes like `characters/characters.js` for a worker
+    // on the "characters" branch get rejected on every retry, burning
+    // turns on a path-shape correction the system can do itself.
+    log.debug(
+      "CodeWorkspace",
+      `path "${raw}" was branch-prefixed redundantly; accepting as branch-relative ` +
+      `(branch="${branchPath}", on-disk="${segments.join("/")}")`,
+    );
+    return { filePath: segments.join("/"), isInBranch: true, error: null };
   }
   if (siblingNames.has(segments[0])) {
     const sibling = segments[0];
@@ -357,18 +366,24 @@ const ROOT_ALLOWED_FILES = new Set([
 ]);
 
 /**
- * Reject file writes at a project root that don't belong inside any
- * existing branch. Once a project has decomposed into branches, every
- * file is the responsibility of some branch — a bare "server.js" at
- * the project root is an orphan. But a path like "backend/server.js"
- * is a legitimate branch-scoped write expressed via the full path, so
- * it's allowed. Root-level config files (package.json, README.md,
- * tsconfig.json, etc.) are also allowed.
+ * Gate file writes at a project root.
+ *
+ * Returns one of:
+ *   null                         → OK, write through unchanged
+ *   { rewritePath: "..." }       → adapt: route under the running branch
+ *   { error: "..." }             → reject with a message for the AI
+ *
+ * Adaptive routing: when the project's plan has exactly one branch step
+ * in "running" status and the path's first segment doesn't already
+ * match a branch name, we silently prefix the path with the running
+ * branch's name and let the write proceed. This handles the common
+ * worker case where the session's currentNodeId got clobbered to the
+ * project root — the worker thinks it's writing locally to its branch
+ * (e.g. "game.js" while running on the "game" branch), and now the
+ * system honors that intent instead of bouncing the call.
  *
  * Only runs when nodeId is AT the project root (resolveBranchRootedPath
  * already covered in-branch calls).
- *
- * Returns null on OK, or an error string on reject.
  */
 async function checkProjectRootHasBranches(nodeId, filePath) {
   if (!nodeId || !filePath) return null;
@@ -380,24 +395,16 @@ async function checkProjectRootHasBranches(nodeId, filePath) {
     const sw = node.metadata instanceof Map
       ? node.metadata.get("swarm")
       : node.metadata?.["swarm"];
-    const planMeta = node.metadata instanceof Map
-      ? node.metadata.get("plan")
-      : node.metadata?.["plan"];
+    // Plan discovery routes through the plan extension's canonical
+    // walk-up primitive. Never reads metadata.plan directly — under
+    // Path B the plan lives on a plan-type child of the scope node.
+    let planMeta = null;
+    try {
+      const { getExtension } = await import("../loader.js");
+      const planExt = getExtension("plan")?.exports;
+      if (planExt?.readPlan) planMeta = await planExt.readPlan(nodeId);
+    } catch {}
 
-    // At a project root OR a fresh uninitialized tree root. Two distinct
-    // reject cases:
-    //
-    //   Case 1 — decomposed root: branch kind plan steps exist. Writes
-    //   outside a branch are orphans; push the AI into either a branch
-    //   scoped write or a new branch declaration.
-    //
-    //   Case 2 — EMPTY root: no children yet, no plan. Without this
-    //   gate, a compound request architect (e.g. "build backend and
-    //   frontend") would dump N module files straight at the root,
-    //   creating orphans that the subsequent [[BRANCHES]] dispatch
-    //   duplicates. The gate blocks that: at an empty root, the AI can
-    //   only write integration shell files (index.html / main.js /
-    //   config) OR emit [[BRANCHES]] to decompose. Forces planning.
     const role = sw?.role || null;
     const branches = (planMeta?.steps || []).filter((s) => s.kind === "branch");
     const hasBranches = branches.length > 0;
@@ -406,16 +413,27 @@ async function checkProjectRootHasBranches(nodeId, filePath) {
     if (hasBranches) {
       const branchNames = new Set(branches.map((b) => b.title).filter(Boolean));
       // Branch-prefixed path: "backend/server.js" when "backend" is an
-      // existing branch. That's a legitimate scoped write, not an orphan.
+      // existing branch. Legitimate scoped write, not an orphan.
       if (branchNames.has(firstSegment)) return null;
+
+      // Adaptive route: if exactly one branch is currently running, the
+      // worker is almost certainly that branch — its currentNodeId got
+      // reset somewhere upstream. Prefix the path and let the write go.
+      const running = branches.filter((b) => b.status === "running" && b.title);
+      if (running.length === 1) {
+        const branchName = running[0].title;
+        const rewritePath = `${branchName}/${filePath}`;
+        return { rewritePath };
+      }
+
       const namesList = [...branchNames].join(", ") || "(unknown)";
-      return (
+      return { error:
         `write at project root rejected: "${node.name}" has child branches [${namesList}] and "${firstSegment}" is not one of them. ` +
         `Either write inside an existing branch by prefixing the path with the branch name ` +
         `(e.g. "${[...branchNames][0] || "backend"}/${filePath.includes("/") ? filePath.split("/").slice(1).join("/") : filePath}"), ` +
         `or emit a [[BRANCHES]] block adding "${firstSegment}" as a new branch with [[DONE]]. ` +
         `Root-level config files (package.json, README.md, tsconfig.json, etc.) are allowed at the root.`
-      );
+      };
     }
 
     // Empty-root gate. Active when:
@@ -425,7 +443,7 @@ async function checkProjectRootHasBranches(nodeId, filePath) {
     //   - file isn't in ROOT_ALLOWED_FILES (shell + config)
     const isProjectLike = role === "project" || role == null;
     if (isProjectLike && childCount === 0) {
-      return (
+      return { error:
         `write at project root rejected: "${node.name}" is empty and has no declared branches yet. ` +
         `Decide the shape first:\n\n` +
         `  • COMPOUND request (two or more independent modules)? Emit a [[BRANCHES]] block ` +
@@ -438,7 +456,7 @@ async function checkProjectRootHasBranches(nodeId, filePath) {
         `when [[BRANCHES]] later dispatches, the branch workers will write their own copies ` +
         `under game/game.js and you'll have duplicates in two places. That's the failure mode ` +
         `this check blocks.`
-      );
+      };
     }
 
     return null;
@@ -496,7 +514,16 @@ export async function writeFileInBranch({
   try {
     const resolved = await resolveBranchRootedPath(nodeId, filePath);
     if (resolved.error) return { ok: false, error: resolved.error };
-    const finalPath = resolved.filePath;
+    let finalPath = resolved.filePath;
+
+    // Mirror the orphan gate from the MCP tool handlers. Without this,
+    // strategy wrappers and SDK callers can drop files at the project
+    // root that bypass branch routing entirely.
+    if (!resolved.isInBranch) {
+      const gate = await checkProjectRootHasBranches(nodeId, finalPath);
+      if (gate?.rewritePath) finalPath = gate.rewritePath;
+      else if (gate?.error) return { ok: false, error: gate.error };
+    }
 
     // Locate or auto-init the project. Reuse the same priority chain as
     // the tool handlers by calling findProject / initProject directly —
@@ -773,10 +800,13 @@ export default function getWorkspaceTools(core) {
               filePath = resolved.filePath;
             }
             if (!resolved.isInBranch) {
-              const orphan = await checkProjectRootHasBranches(nodeId, filePath);
-              if (orphan) {
-                trace("workspace-add-file", "ORPHAN-AT-ROOT", orphan.slice(0, 200));
-                return text(`workspace-add-file rejected: ${orphan}`);
+              const gate = await checkProjectRootHasBranches(nodeId, filePath);
+              if (gate?.rewritePath) {
+                trace("workspace-add-file", "AUTO-ROUTE", `${filePath} → ${gate.rewritePath}`);
+                filePath = gate.rewritePath;
+              } else if (gate?.error) {
+                trace("workspace-add-file", "ORPHAN-AT-ROOT", gate.error.slice(0, 200));
+                return text(`workspace-add-file rejected: ${gate.error}`);
               }
             }
           }
@@ -985,10 +1015,13 @@ export default function getWorkspaceTools(core) {
               filePath = resolved.filePath;
             }
             if (!resolved.isInBranch) {
-              const orphan = await checkProjectRootHasBranches(nodeId, filePath);
-              if (orphan) {
-                trace("workspace-edit-file", "ORPHAN-AT-ROOT", orphan.slice(0, 200));
-                return text(`workspace-edit-file rejected: ${orphan}`);
+              const gate = await checkProjectRootHasBranches(nodeId, filePath);
+              if (gate?.rewritePath) {
+                trace("workspace-edit-file", "AUTO-ROUTE", `${filePath} → ${gate.rewritePath}`);
+                filePath = gate.rewritePath;
+              } else if (gate?.error) {
+                trace("workspace-edit-file", "ORPHAN-AT-ROOT", gate.error.slice(0, 200));
+                return text(`workspace-edit-file rejected: ${gate.error}`);
               }
             }
           }
@@ -1826,7 +1859,7 @@ export default function getWorkspaceTools(core) {
             formatNodePlan,
           } = await import("./swarmEvents.js");
 
-          const nodeDoc = await Node.findById(targetNodeId).select("name").lean();
+          const nodeDoc = await Node.findById(targetNodeId).select("name metadata").lean();
           const nodeName = nodeDoc?.name || null;
 
           if (action === "show") {
@@ -1834,7 +1867,37 @@ export default function getWorkspaceTools(core) {
               readNodePlanSteps(targetNodeId),
               readNodeStepRollup(targetNodeId),
             ]);
-            return text(formatNodePlan({ steps: localSteps || [], rollup, nodeName }));
+            // Resolve the actual plan-type node so the header names
+            // the SCOPE the plan governs (its parent), not the
+            // calling worker's own name. Also pass the worker's
+            // identity so formatNodePlan can mark which step is YOU.
+            let planScopeName = nodeName;
+            try {
+              const { getExtension } = await import("../loader.js");
+              const planExt = getExtension("plan")?.exports;
+              if (planExt?.findGoverningPlan) {
+                const planNode = await planExt.findGoverningPlan(targetNodeId);
+                if (planNode?.parent) {
+                  const parentDoc = await Node.findById(planNode.parent).select("name").lean();
+                  if (parentDoc?.name) planScopeName = parentDoc.name;
+                }
+              }
+            } catch {}
+            // The worker's own node identity — for the "← YOU" marker.
+            // For a branch session, the worker's branchName is in its
+            // own swarm metadata (set at dispatch). Fall back to node
+            // name when metadata isn't populated.
+            const swMeta = nodeDoc?.metadata instanceof Map
+              ? nodeDoc.metadata.get("swarm")
+              : nodeDoc?.metadata?.swarm;
+            const currentBranchName = swMeta?.branchName || nodeName || null;
+            return text(formatNodePlan({
+              steps: localSteps || [],
+              rollup,
+              planScopeName,
+              currentNodeId: targetNodeId,
+              currentBranchName,
+            }));
           }
 
           if (action === "set") {

@@ -37,7 +37,14 @@ import {
   pruneSignalsForFile,
   pruneSignalsByKind,
 } from "./state/signalInbox.js";
-import { setContracts, readContracts } from "./state/contracts.js";
+import { setContracts, readContracts, readScopedContracts } from "./state/contracts.js";
+import {
+  registerValidator,
+  unregisterValidatorsForExt,
+  runValidators,
+  listValidators,
+} from "./state/validators.js";
+import { setSummary } from "./state/meta.js";
 import { rollUpDetail, readAggregatedDetail } from "./state/aggregation.js";
 import { recordEvent, readEvents } from "./state/events.js";
 import { plan } from "./state/planAccess.js";
@@ -151,6 +158,17 @@ export async function init(core) {
       pruneSignalsByKind,
       setContracts,
       readContracts,
+      readScopedContracts,
+      // Declarative validator registry (Pass 1 strengthening). Lets
+      // extensions declare validator phase + order explicitly instead
+      // of relying on kernel-hook registration order. Pass 2's court
+      // system uses this to guarantee pre-court / court / post-court
+      // firing semantics. See state/validators.js for full docs.
+      registerValidator,
+      unregisterValidatorsForExt,
+      runValidators,
+      listValidators,
+      setSummary,
       rollUpDetail,
       readAggregatedDetail,
       recordEvent,

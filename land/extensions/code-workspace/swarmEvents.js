@@ -69,6 +69,26 @@ async function getSwarm() {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
+ * Contract namespace taxonomy. Every declared contract belongs to one
+ * namespace — the kind of thing it constrains. Pass 2's courts will
+ * dispatch by namespace (a CharacterID dispute routes differently
+ * from a StorageKey dispute). Orthogonal to scope: a contract has
+ * BOTH a namespace (what it is) AND a scope (who sees it).
+ *
+ * Adding a namespace: add the constant here AND make sure the
+ * architect prompt enumerates it as an option.
+ */
+export const CONTRACT_NAMESPACES = Object.freeze({
+  STORAGE_KEY: "storage-key",        // localStorage / IndexedDB / etc. key names
+  IDENTIFIER_SET: "identifier-set",  // enumerated string IDs (character IDs, role names, status enums)
+  DOM_ID: "dom-id",                  // canvas/element id values shared across modules
+  EVENT_NAME: "event-name",          // custom DOM event / pubsub topic names
+  MESSAGE_TYPE: "message-type",      // WebSocket / fetch payload type discriminators
+  METHOD_SIGNATURE: "method-signature", // shared function names + arg shapes between modules
+  MODULE_EXPORT: "module-export",    // global names a module attaches to window/exports
+});
+
+/**
  * Cascade signal kind enum. Adding a new kind means: (a) add it here,
  * (b) add a renderer branch in formatSignalInbox, (c) emit it from the
  * source path that detects the condition.
@@ -87,6 +107,14 @@ export const SIGNAL_KIND = Object.freeze({
   // should exit cleanly via [[NO-WRITE: superseded by pivot]] rather
   // than keep burning cycles on obsolete work.
   PLAN_PIVOTED: "plan-pivoted",
+  // A sub-plan dispatched from this branch has terminated. Payload
+  // carries the rollup of sub-branches so the parent worker, on its
+  // next turn, can decide whether to continue its own work, retry
+  // sub-branches that failed, or emit [[DONE]].
+  SUB_PLAN_COMPLETE: "sub-plan-complete",
+  // A sub-plan couldn't settle locally (budget exhausted, unresolved
+  // mismatches) and is escalating to the parent plan for attention.
+  SUB_PLAN_ESCALATION: "sub-plan-escalation",
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -290,17 +318,62 @@ export async function readPlanDrift(nodeId) {
 }
 
 /**
- * Render a node's plan (local steps + rolled-up descendant counts) as a
- * readable block for enrichContext injection.
+ * Render a plan as a readable block. Plans live on plan-type nodes;
+ * any node can ask for "the plan governing my work" via readPlan
+ * (walks up). The caller passes in the resolved plan plus optional
+ * worker context so the header is honest about WHICH plan and which
+ * step the worker is supposed to be on.
+ *
+ *   steps:         the plan's branch-kind steps (or any kind)
+ *   rollup:        plan.rollup counts (descendants)
+ *   planScopeName: name of the SCOPE the plan coordinates (e.g. the
+ *                  project root's name, or the parent branch's name
+ *                  for a sub-plan). Used in the header so the worker
+ *                  reads "Plan governing dd (project)" and not
+ *                  "Plan for ui" (which lied — ui is a STEP in that
+ *                  plan, not the plan's owner).
+ *   currentNodeId: the worker's own node id. When passed, we find
+ *                  the step whose childNodeId matches and mark it
+ *                  with "← YOU" so the worker knows which step is
+ *                  theirs.
+ *   currentBranchName: fallback for matching by name when childNodeId
+ *                  isn't populated yet (early-dispatch state).
+ *   drift:         stale-plan warning data
+ *
+ *   nodeName:      legacy fallback (used as planScopeName when the
+ *                  caller didn't pass planScopeName explicitly).
  */
-export function formatNodePlan({ steps, rollup, nodeName, drift }) {
+export function formatNodePlan({
+  steps,
+  rollup,
+  nodeName,
+  planScopeName = null,
+  currentNodeId = null,
+  currentBranchName = null,
+  drift,
+}) {
   const lines = [];
-  const header = nodeName ? `# Plan for ${nodeName}` : "# Plan";
+  const scope = planScopeName || nodeName || null;
+  const header = scope ? `# Plan governing "${scope}"` : "# Plan";
   const local = Array.isArray(steps) ? steps : [];
-  const done = local.filter((s) => s.status === "done").length;
-  const blocked = local.filter((s) => s.status === "blocked").length;
-  const pending = local.filter((s) => s.status === "pending").length;
+
+  // Count every status that exists in the plan, not just done/blocked/
+  // pending. The previous render dropped "running" and "paused" which
+  // produced text like "2/5 done, 1 pending" when the missing 2 steps
+  // were running. Show every non-zero bucket so the count adds up.
+  const buckets = { done: 0, running: 0, pending: 0, blocked: 0, failed: 0, paused: 0 };
+  for (const s of local) {
+    const k = s.status;
+    if (k && Object.prototype.hasOwnProperty.call(buckets, k)) buckets[k] += 1;
+  }
   const total = local.length;
+
+  // Identify the worker's step so the render can mark it.
+  const matchesWorker = (s) => {
+    if (currentNodeId && s.childNodeId && String(s.childNodeId) === String(currentNodeId)) return true;
+    if (currentBranchName && s.title === currentBranchName) return true;
+    return false;
+  };
 
   lines.push(header);
   if (drift?.driftAt) {
@@ -314,25 +387,40 @@ export function formatNodePlan({ steps, rollup, nodeName, drift }) {
   if (total === 0) {
     lines.push("(no local plan yet — set one with workspace-plan action=set)");
   } else {
-    lines.push(`${done}/${total} done${blocked ? `, ${blocked} blocked` : ""}${pending ? `, ${pending} pending` : ""}`);
+    const statusLine = Object.entries(buckets)
+      .filter(([, n]) => n > 0)
+      .map(([k, n]) => `${n} ${k}`)
+      .join(", ");
+    lines.push(`${total} step${total === 1 ? "" : "s"}: ${statusLine}`);
     lines.push("");
     for (const s of local) {
-      const mark = s.status === "done" ? "x" : s.status === "blocked" ? "!" : " ";
+      const mark = s.status === "done" ? "x"
+        : s.status === "running" ? "~"
+        : s.status === "blocked" ? "!"
+        : s.status === "failed" ? "✗"
+        : " ";
       let line = `[${mark}] ${s.title}`;
-      if (s.status === "blocked" && s.blockedReason) {
+      if (s.status === "running") line += "  (running)";
+      else if (s.status === "blocked" && s.blockedReason) {
         line += `  — BLOCKED: ${s.blockedReason}`;
+      } else if (s.status === "failed" && s.error) {
+        line += `  — FAILED: ${String(s.error).slice(0, 80)}`;
       }
       line += `  (${s.id})`;
+      if (matchesWorker(s)) line += "  ← YOU";
       lines.push(line);
     }
   }
 
-  if (rollup && (rollup.pending || rollup.done || rollup.blocked)) {
+  if (rollup && (rollup.pending || rollup.done || rollup.blocked || rollup.running || rollup.failed)) {
     lines.push("");
-    lines.push(
-      `Including descendants: ${rollup.done || 0} done, ` +
-      `${rollup.pending || 0} pending, ${rollup.blocked || 0} blocked`,
-    );
+    const rollupParts = [];
+    if (rollup.done) rollupParts.push(`${rollup.done} done`);
+    if (rollup.running) rollupParts.push(`${rollup.running} running`);
+    if (rollup.pending) rollupParts.push(`${rollup.pending} pending`);
+    if (rollup.blocked) rollupParts.push(`${rollup.blocked} blocked`);
+    if (rollup.failed) rollupParts.push(`${rollup.failed} failed`);
+    lines.push(`Including descendants: ${rollupParts.join(", ")}`);
   }
   return lines.join("\n");
 }
@@ -467,11 +555,14 @@ export function formatSignalInbox(signals) {
   const probeFailures = recent.filter((s) => s.kind === SIGNAL_KIND.PROBE_FAILURE);
   const coherenceGaps = recent.filter((s) => s.kind === SIGNAL_KIND.COHERENCE_GAP);
   const pivots = recent.filter((s) => s.kind === SIGNAL_KIND.PLAN_PIVOTED);
+  const subPlanCompletes = recent.filter((s) => s.kind === SIGNAL_KIND.SUB_PLAN_COMPLETE);
+  const subPlanEscalations = recent.filter((s) => s.kind === SIGNAL_KIND.SUB_PLAN_ESCALATION);
   const other = recent.filter((s) =>
     ![SIGNAL_KIND.SYNTAX_ERROR, SIGNAL_KIND.CONTRACT, SIGNAL_KIND.CONTRACT_MISMATCH,
       SIGNAL_KIND.RUNTIME_ERROR, SIGNAL_KIND.DEAD_RECEIVER, SIGNAL_KIND.TEST_FAILURE,
       SIGNAL_KIND.PROBE_FAILURE, SIGNAL_KIND.COHERENCE_GAP,
-      SIGNAL_KIND.PLAN_PIVOTED].includes(s.kind),
+      SIGNAL_KIND.PLAN_PIVOTED, SIGNAL_KIND.SUB_PLAN_COMPLETE,
+      SIGNAL_KIND.SUB_PLAN_ESCALATION].includes(s.kind),
   );
 
   const blocks = [];
@@ -494,6 +585,130 @@ export function formatSignalInbox(signals) {
       `No tool calls. No explanation. Just the marker. The branch session will ` +
       `exit cleanly and the user's new plan will dispatch fresh branches.`
     );
+  }
+
+  // Sub-plan completion / escalation. Two independent signal kinds
+  // that often co-occur for the same sub-plan: COMPLETE always fires
+  // when a sub-plan terminates; ESCALATION fires alongside when the
+  // termination involved retry-budget exhaustion. If we render them
+  // as separate blocks, the LLM sees contradictory action menus
+  // (COMPLETE says "emit [[DONE]] if scope resolved"; ESCALATION says
+  // "emit [[NO-WRITE: sub-plan blocked]]"). Cross-reference by
+  // subPlanNodeId and render as a unified block with explicit framing
+  // when they pair up. When ESCALATION fires alone (rare; only if
+  // COMPLETE was somehow lost), render with its own framing. When
+  // COMPLETE fires alone, render the original "settled" framing.
+  const renderSubBranchLines = (subBranches) =>
+    subBranches.map((b) => {
+      const icon = b.status === "done" ? "✓" : b.status === "failed" ? "✗" : "•";
+      const err = b.error ? ` (${String(b.error).slice(0, 80)})` : "";
+      return `  ${icon} ${b.name} [${b.status || "?"}]${err}`;
+    }).join("\n") || "  (no sub-branches recorded)";
+
+  const renderEscalationDetails = (esc) => {
+    const lines = [];
+    const failedBranches = Array.isArray(esc.failedBranches) ? esc.failedBranches : [];
+    if (failedBranches.length > 0) {
+      lines.push(`Exhausted branches (retries hit budget cap):`);
+      for (const fb of failedBranches.slice(0, 8)) {
+        const errStr = fb.error ? ` — ${String(fb.error).slice(0, 120)}` : "";
+        lines.push(`  ✗ ${fb.name} [retries: ${fb.retries ?? "?"}]${errStr}`);
+      }
+    }
+    const unresolvedSignals = Array.isArray(esc.unresolvedSignals) ? esc.unresolvedSignals : [];
+    if (unresolvedSignals.length > 0) {
+      lines.push("");
+      lines.push("Unresolved signals from those branches:");
+      for (const s of unresolvedSignals.slice(0, 10)) {
+        const k = s.kind || "signal";
+        const sm = s.summary ? ` — ${s.summary}` : "";
+        lines.push(`  · [${s.from || "?"}] ${k}${sm}`);
+      }
+    }
+    return lines.length > 0 ? lines.join("\n") : null;
+  };
+
+  // Latest signal of each kind, indexed by subPlanNodeId.
+  const completeBySubPlan = new Map();
+  for (const c of subPlanCompletes) {
+    const id = c?.payload?.subPlanNodeId || "(unknown)";
+    completeBySubPlan.set(id, c);
+  }
+  const escalationBySubPlan = new Map();
+  for (const e of subPlanEscalations) {
+    const id = e?.payload?.subPlanNodeId || "(unknown)";
+    escalationBySubPlan.set(id, e);
+  }
+
+  // Render paired (COMPLETE + ESCALATION for same sub-plan).
+  for (const [subPlanNodeId, esc] of escalationBySubPlan) {
+    const cmp = completeBySubPlan.get(subPlanNodeId);
+    if (!cmp) continue;
+    completeBySubPlan.delete(subPlanNodeId);
+
+    const cp = cmp.payload || {};
+    const ep = esc.payload || {};
+    const subBranches = Array.isArray(cp.subBranches) ? cp.subBranches : [];
+    const summary = renderSubBranchLines(subBranches);
+    const reason = ep.reason || "unresolved";
+    const details = ep.details ? `\n\nDetails: ${String(ep.details).slice(0, 400)}` : "";
+    const escDetails = renderEscalationDetails(ep);
+
+    blocks.push(
+      `📋⚠️  SUB-PLAN COMPLETED WITH ESCALATION\n\n` +
+      `The sub-plan you dispatched has terminated AND requested escalation. ` +
+      `These are two views of the same outcome — the sub-plan ran to ` +
+      `completion (status: ${cp.overallStatus || "partial"}), but at least ` +
+      `one branch couldn't settle locally (${reason}) and is now your ` +
+      `responsibility.${details}\n\n` +
+      `Sub-branches (overall):\n${summary}\n\n` +
+      (escDetails ? `${escDetails}\n\n` : "") +
+      `Your move: this is NOT a "scope resolved, emit [[DONE]]" situation. ` +
+      `Decide based on the failure pattern:\n` +
+      `  • If the failures point at a fixable spec issue, revise the parent ` +
+      `plan's spec and let the next dispatch try again.\n` +
+      `  • If a sibling branch in your own plan can absorb the failed work, ` +
+      `do that work yourself in your next turn.\n` +
+      `  • If neither is feasible, emit [[NO-WRITE: sub-plan blocked]] to ` +
+      `surface this to the user. The sub-plan itself is paused pending ` +
+      `your direction; do NOT emit [[DONE]] while branches remain failed.`,
+    );
+  }
+
+  // Remaining COMPLETE signals (no matching escalation): the clean case.
+  if (completeBySubPlan.size > 0) {
+    const latest = Array.from(completeBySubPlan.values()).pop();
+    const p = latest?.payload || {};
+    const subBranches = Array.isArray(p.subBranches) ? p.subBranches : [];
+    const summary = renderSubBranchLines(subBranches);
+    blocks.push(
+      `📋 SUB-PLAN COMPLETE\n\n` +
+      `The sub-plan you dispatched has finished. Status: ${p.overallStatus || "settled"}.\n\n` +
+      `Sub-branches:\n${summary}\n\n` +
+      `Continue your own work, or emit [[DONE]] if your scope is fully resolved. ` +
+      `If any sub-branch failed and needs another pass, handle it in your continuation — ` +
+      `you have full context of what the decomposition produced.`,
+    );
+  }
+
+  // Remaining ESCALATION signals (no matching completion): rare path,
+  // means we lost or never sent the COMPLETE half. Still useful to
+  // surface so the parent isn't blind to the failure.
+  for (const [subPlanNodeId, esc] of escalationBySubPlan) {
+    if (!completeBySubPlan.has(subPlanNodeId) && !subPlanCompletes.find(c => c?.payload?.subPlanNodeId === subPlanNodeId)) {
+      const ep = esc.payload || {};
+      const reason = ep.reason || "unresolved";
+      const details = ep.details ? `\n\nDetails: ${String(ep.details).slice(0, 400)}` : "";
+      const escDetails = renderEscalationDetails(ep);
+      blocks.push(
+        `⚠️ SUB-PLAN ESCALATION\n\n` +
+        `A sub-plan beneath this branch couldn't settle on its own (${reason}).${details}\n\n` +
+        (escDetails ? `${escDetails}\n\n` : "") +
+        `Decide how to handle it: adjust the parent plan's spec, re-dispatch sub-branches ` +
+        `with clearer constraints, or emit [[NO-WRITE: sub-plan blocked]] to surface this ` +
+        `to the user. The sub-plan itself is paused pending your direction.`,
+      );
+    }
   }
 
   if (errors.length > 0) {
@@ -1216,7 +1431,7 @@ export async function replaceContractsFromFile({ projectNodeId, sourceFile, newC
     }
   }
 
-  await sw.setContracts({ projectNodeId, contracts: next, core });
+  await sw.setContracts({ scopeNodeId: projectNodeId, contracts: next, core });
 
   return { added, removed, changed };
 }

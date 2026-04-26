@@ -24,8 +24,15 @@ import {
   branchSteps,
   stepsByKind,
   pendingSteps,
+  appendLedger,
+  recordBudgetConsumption,
+  computeBranchSignature,
+  createPlanNode,
+  ensurePlanAtScope,
+  DEFAULT_BUDGET,
   NS,
 } from "./state/plan.js";
+import { findGoverningPlan, findGoverningPlanChain } from "./state/walkUp.js";
 
 export async function init(core) {
   // Register the plan panel slot on node detail pages. The slot
@@ -42,6 +49,13 @@ export async function init(core) {
         "node-detail-sections",
         "plan",
         ({ node, nodeId, qs }) => {
+          // Show the plan panel only on plan-type nodes. Under Path B,
+          // plans live as dedicated plan-type nodes; scope nodes and
+          // descendants discover their plan via findGoverningPlan and
+          // navigate to it. This slot fires on every node render, so
+          // the cheap check (node.type + its own metadata) is what we
+          // can afford here — no async DB lookups per render.
+          if (node?.type !== "plan") return "";
           try {
             const meta = node?.metadata instanceof Map
               ? node.metadata.get("plan")
@@ -112,6 +126,9 @@ export async function init(core) {
       branchSteps,
       stepsByKind,
       pendingSteps,
+      // Walk-up: find the governing plan for any node's work.
+      findGoverningPlan,
+      findGoverningPlanChain,
       // Writes (all route through per node mutex in state/plan.js)
       setSteps,
       addStep,
@@ -124,6 +141,20 @@ export async function init(core) {
       // Rollup
       recomputeRollup,
       rollupUpward,
+      // Pass 1 ledger + budget (populated now, consumed by Passes 2-3)
+      appendLedger,
+      recordBudgetConsumption,
+      computeBranchSignature,
+      DEFAULT_BUDGET,
+      // Plan-node constructor: the canonical way to create a plan-type
+      // node at a scope. Callers pass parent + user + name; the helper
+      // creates the node, initializes metadata, stamps the ledger.
+      createPlanNode,
+      // ensurePlanAtScope: the Path B dispatch entrypoint. Given a scope
+      // node id, returns the plan-type child of that scope (creating
+      // one if none exists). This is the PRIMARY way swarm / dispatch
+      // resolves "the plan for this scope" before writing steps.
+      ensurePlanAtScope,
       // Namespace constant for reference
       NS,
     },
@@ -148,5 +179,13 @@ export {
   branchSteps,
   stepsByKind,
   pendingSteps,
+  appendLedger,
+  recordBudgetConsumption,
+  computeBranchSignature,
+  createPlanNode,
+  ensurePlanAtScope,
+  DEFAULT_BUDGET,
+  findGoverningPlan,
+  findGoverningPlanChain,
   NS,
 };
