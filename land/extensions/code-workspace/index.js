@@ -226,15 +226,15 @@ function formatLocalView(view) {
     lines.push("(no children yet — this position is empty, a good place to create)");
   }
 
-  if (view.siblings.length > 0) {
-    lines.push("");
-    lines.push("Sibling peers (alongside you — already exist):");
-    for (const s of view.siblings) {
-      const role = s.role ? ` [${s.role}]` : "";
-      lines.push(`  • ${s.name}${role}`);
-    }
-  }
-
+  // Sibling peers intentionally NOT rendered. The two callers of this
+  // view (code-plan / code-coach / code-log via enrichContext) get the
+  // useful sibling info from the dedicated "Sibling Branches" block,
+  // which carries status, file list, exports, and surface line per
+  // sibling — far more useful than a flat name list. The flat list
+  // here was 30+ lines of unrelated peer projects + system nodes
+  // (.config, .extensions, .source, etc.) on every prompt, with zero
+  // build value. Keep the parent + self + children breakdown above;
+  // peers come from the structured sibling-branches block when needed.
   return lines.join("\n");
 }
 
@@ -1045,6 +1045,57 @@ export async function init(core) {
           },
           core,
         });
+
+        // Path-"." attribution. When a file lands at the project root
+        // (no branch ancestor in the structural walk), the rollUpDetail
+        // call above bypasses every branch — but a path-"." integration
+        // branch (e.g. "shell") legitimately OWNS root-level files
+        // under the recursive plan model. Without explicit attribution,
+        // the shell branch's aggregatedDetail.filesWritten stays 0
+        // forever and its rollup says "0 work units" even though it
+        // produced index.html / main.js / etc.
+        //
+        // If branchNode is null AND the file's parent is the project
+        // root, look up the governing plan for a path-"." branch whose
+        // declared files include this filename. If found, bump that
+        // branch's aggregatedDetail directly. Same delta, just attributed
+        // to the right node.
+        if (!branchNode && fileNode && projectNode) {
+          try {
+            const fileParent = await NodeModel.findById(nodeId).select("parent").lean();
+            if (String(fileParent?.parent) === String(projectNode._id)) {
+              const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
+              if (planExt?.readPlan) {
+                const projectPlan = await planExt.readPlan(projectNode._id);
+                const baseName = (filePath.split("/").filter(Boolean).pop() || filePath);
+                const owner = (projectPlan?.steps || []).find((s) =>
+                  s.kind === "branch"
+                  && s.path === "."
+                  && Array.isArray(s.files)
+                  && s.files.some((f) => f === baseName || f === filePath)
+                  && s.childNodeId,
+                );
+                if (owner?.childNodeId) {
+                  await sw.rollUpDetail({
+                    fromNodeId: owner.childNodeId,
+                    delta: {
+                      filesWrittenDelta: 1,
+                      lastActivity: new Date().toISOString(),
+                    },
+                    core,
+                    stopAtProject: false,
+                  });
+                  log.debug(
+                    "CodeWorkspace",
+                    `path-"." attribution: ${filePath} → ${owner.title} (${String(owner.childNodeId).slice(0, 8)})`,
+                  );
+                }
+              }
+            }
+          } catch (attrErr) {
+            log.debug("CodeWorkspace", `path-"." attribution skipped: ${attrErr.message}`);
+          }
+        }
 
         // Lateral propagation: if the write is contract-affecting and the
         // file sits inside a branch, fan the signals to that branch's

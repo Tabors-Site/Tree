@@ -46,5 +46,23 @@ NodeSchema.index({ parent: 1 });
 NodeSchema.index({ rootOwner: 1 });
 NodeSchema.index({ systemRole: 1 }, { sparse: true });
 
+// At most one plan-type child per scope. The "plan governs work at a
+// scope, branches live as siblings under that scope" rule depends on
+// every walk-up primitive resolving to a SINGLE plan; two plan-type
+// children at the same parent splits the system across writers in
+// silent ways (contracts on one plan, steps on another, half the
+// readers see one, half see the other). Database-level invariant so
+// even a buggy code path that bypasses ensurePlanAtScope can't violate
+// it. Partial filter limits the unique constraint to type === "plan";
+// other types of siblings are unaffected.
+NodeSchema.index(
+  { parent: 1, type: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { type: "plan" },
+    name: "unique_plan_per_scope",
+  },
+);
+
 const Node = mongoose.model("Node", NodeSchema);
 export default Node;

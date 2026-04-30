@@ -13,7 +13,7 @@
  */
 
 import nodePlan from "./facets/nodePlan.js";
-import localTreeView from "./facets/localTreeView.js";
+import branchWorker from "./facets/branchWorker.js";
 import rewriteOverEdits from "./facets/rewriteOverEdits.js";
 import blockingError from "./facets/blockingError.js";
 import declaredContracts from "./facets/declaredContracts.js";
@@ -28,7 +28,7 @@ const FACETS = [
   // wire protocol at the top of its prompt.
   declaredContracts,
   siblings,
-  localTreeView,
+  branchWorker,
   nodePlan,
   rewriteOverEdits,
 ];

@@ -105,51 +105,96 @@ export function parseBranches(responseText) {
   if (typeof responseText !== "string" || !responseText) {
     return { branches: [], cleaned: responseText };
   }
-  const openMatch = responseText.match(BRANCHES_OPEN);
-  if (!openMatch) return { branches: [], cleaned: responseText };
 
-  const openEnd = openMatch.index + openMatch[0].length;
-  const rest = responseText.slice(openEnd);
+  // Architects (especially smaller local models) sometimes emit each
+  // branch in its OWN [[BRANCHES]]...[[/BRANCHES]] block instead of
+  // packing all branches into one block. The parser used to take only
+  // the first block, dropping every subsequent branch silently — the
+  // user saw "1 branch" in the proposed plan even though their response
+  // visibly declared four. Iterate: keep scanning the residual text for
+  // additional [[BRANCHES]] regions, accumulate branches from each, and
+  // strip every region from the cleaned output.
+  const allBranches = [];
+  const regions = []; // [{ openStart, closeEnd, body }]
+  let cursor = 0;
 
-  let closeMatch = rest.match(BRANCHES_CLOSE_TIGHT);
-  let closeIdxInRest = closeMatch?.index;
-  let closeLength = closeMatch?.[0]?.length || 0;
+  while (cursor < responseText.length) {
+    const tail = responseText.slice(cursor);
+    const openMatch = tail.match(BRANCHES_OPEN);
+    if (!openMatch) break;
 
-  if (closeIdxInRest == null) {
-    closeMatch = rest.match(BRANCHES_CLOSE_LOOSE);
-    closeIdxInRest = closeMatch?.index;
-    closeLength = closeMatch?.[0]?.length || 0;
-  }
+    const openStart = cursor + openMatch.index;
+    const openEnd = openStart + openMatch[0].length;
+    const rest = responseText.slice(openEnd);
 
-  if (closeIdxInRest == null) {
-    const lines = rest.split("\n");
-    let lastBracketLineIdx = -1;
-    for (let i = lines.length - 1; i >= 0; i--) {
-      if (/^\s*\[\[/.test(lines[i])) {
-        lastBracketLineIdx = i;
-        break;
+    let closeMatch = rest.match(BRANCHES_CLOSE_TIGHT);
+    let closeIdxInRest = closeMatch?.index;
+    let closeLength = closeMatch?.[0]?.length || 0;
+
+    if (closeIdxInRest == null) {
+      closeMatch = rest.match(BRANCHES_CLOSE_LOOSE);
+      closeIdxInRest = closeMatch?.index;
+      closeLength = closeMatch?.[0]?.length || 0;
+    }
+
+    if (closeIdxInRest == null) {
+      const lines = rest.split("\n");
+      let lastBracketLineIdx = -1;
+      for (let i = lines.length - 1; i >= 0; i--) {
+        if (/^\s*\[\[/.test(lines[i])) {
+          lastBracketLineIdx = i;
+          break;
+        }
+      }
+      if (lastBracketLineIdx > 0) {
+        const upToThatLine = lines.slice(0, lastBracketLineIdx).join("\n");
+        closeIdxInRest = upToThatLine.length + 1;
+        closeLength = (lines[lastBracketLineIdx] || "").length;
       }
     }
-    if (lastBracketLineIdx > 0) {
-      const upToThatLine = lines.slice(0, lastBracketLineIdx).join("\n");
-      closeIdxInRest = upToThatLine.length + 1;
-      closeLength = (lines[lastBracketLineIdx] || "").length;
+
+    if (closeIdxInRest == null) {
+      // Unclosed block with branch: lines — small-model failure mode.
+      // Consume to EOF if we can prove the body contains at least one
+      // branch declaration. Empty-branch hallucinations stay rejected.
+      if (/^-?\s*branch\s*:/im.test(rest)) {
+        closeIdxInRest = rest.length;
+        closeLength = 0;
+      } else {
+        // Bail on this position; advance cursor past the open tag to
+        // avoid infinite loops if more text follows without a close.
+        cursor = openEnd;
+        continue;
+      }
     }
+
+    const body = rest.slice(0, closeIdxInRest);
+    const closeEnd = openEnd + closeIdxInRest + closeLength;
+
+    const blockBranches = parseBranchesFromBody(body);
+    allBranches.push(...blockBranches);
+    regions.push({ openStart, closeEnd });
+    cursor = closeEnd;
   }
 
-  if (closeIdxInRest == null) {
-    // Unclosed block with branch: lines — small-model failure mode.
-    // Consume to EOF if we can prove the body contains at least one
-    // branch declaration. Empty-branch hallucinations stay rejected.
-    if (/^-?\s*branch\s*:/im.test(rest)) {
-      closeIdxInRest = rest.length;
-      closeLength = 0;
-    } else {
-      return { branches: [], cleaned: responseText };
-    }
+  if (allBranches.length === 0) {
+    return { branches: [], cleaned: responseText };
   }
 
-  const body = rest.slice(0, closeIdxInRest);
+  // Strip every [[BRANCHES]] region from the cleaned output, last-to-first
+  // so earlier indices stay valid as we splice.
+  let cleaned = responseText;
+  for (let i = regions.length - 1; i >= 0; i--) {
+    const { openStart, closeEnd } = regions[i];
+    cleaned = cleaned.slice(0, openStart) + cleaned.slice(closeEnd);
+  }
+  cleaned = cleaned.trimEnd();
+
+  return { branches: allBranches, cleaned };
+}
+
+// Body parser extracted so the multi-region loop above can reuse it.
+function parseBranchesFromBody(body) {
   const branches = [];
   let current = null;
 
@@ -196,10 +241,7 @@ export function parseBranches(responseText) {
   }
   if (current) branches.push(current);
 
-  const openStart = openMatch.index;
-  const closeEnd = openEnd + closeIdxInRest + closeLength;
-  const cleaned = (responseText.slice(0, openStart) + responseText.slice(closeEnd)).trimEnd();
-  return { branches: branches.filter((b) => b.name && b.spec), cleaned };
+  return branches.filter((b) => b.name && b.spec);
 }
 
 /**
@@ -798,25 +840,37 @@ async function retryFailedBranches({
         });
       }
     } catch (err) {
-      log.error("Swarm", `Retry failed for "${branch.name}": ${err.message}`);
+      // Mirror the main per-branch catch's abort handling (line 1619).
+      // A user-abort during the retry attempt is NOT a retry failure —
+      // it's a pause. Without this check, an aborted retry overwrites
+      // the "paused" status from the first attempt with a terminal
+      // "failed" + retry-cap consumed, leaving the step dead-on-arrival
+      // for resume even though the user just stopped mid-build.
+      const parentAborted = signal?.aborted === true;
+      const resumableStatus = parentAborted ? "paused" : "failed";
+      const errorMsg = parentAborted ? err.message : err.message + " (also failed on retry)";
+      log.error("Swarm",
+        `Retry ${parentAborted ? "paused (aborted)" : "failed"} for "${branch.name}": ${err.message}`,
+      );
       const idx = results.findIndex((r) => r.name === branch.name || r.rawName === branch.name);
       if (idx >= 0) {
         results[idx] = {
           name: branch.name,
-          status: "failed",
-          error: err.message + " (also failed on retry)",
+          status: resumableStatus,
+          error: errorMsg,
         };
       }
-      await setBranchStatus({ branchNodeId: branchNode._id, status: "failed", error: err.message, core });
+      await setBranchStatus({ branchNodeId: branchNode._id, status: resumableStatus, error: errorMsg, core });
       await p.upsertBranchStep(
         rootPlanNodeId,
         {
           name: branch.name,
           nodeId: String(branchNode._id),
-          status: "failed",
-          error: err.message + " (also failed on retry)",
+          status: resumableStatus,
+          error: errorMsg,
           finishedAt: new Date().toISOString(),
           retries: 1,
+          ...(parentAborted ? { pausedAt: new Date().toISOString(), abortReason: err.message } : {}),
         },
         core,
       );
@@ -878,7 +932,8 @@ async function retryFailedBranches({
  * on `swarm:runScouts`, the whole phase is silent.
  */
 async function runScoutLoop({
-  rootProjectNode, results, branches, core, socket, signal,
+  rootProjectNode, workspaceAnchorNode = null,
+  results, branches, core, socket, signal,
   runBranch, sessionId, userId, username, visitorId, rootId,
   slot, onToolLoopCheckpoint, rootChatId, rt, defaultBranchMode,
 }) {
@@ -1639,7 +1694,11 @@ export async function runBranchSwarm({
         name: qualifiedName,
         rawName: branch.name,
         parentBranch: branch.parentBranch,
-        status: "failed",
+        // Mirror the branch node + plan step status. Hardcoding "failed"
+        // here caused retryFailedBranches to pick up paused branches as
+        // failed and re-dispatch them, which then overwrote the
+        // "paused" status with a terminal "failed" via the retry catch.
+        status: resumableStatus,
         error: err.message,
       });
     }
@@ -1741,7 +1800,8 @@ export async function runBranchSwarm({
   if (!signal?.aborted) {
     try {
       const scoutOutcome = await runScoutLoop({
-        rootProjectNode, results, branches, core, socket, signal,
+        rootProjectNode, workspaceAnchorNode,
+        results, branches, core, socket, signal,
         runBranch, sessionId, userId, username, visitorId, rootId,
         slot, onToolLoopCheckpoint, rootChatId, rt, defaultBranchMode,
       });

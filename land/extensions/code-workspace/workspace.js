@@ -499,7 +499,7 @@ async function checkSourceGate(fileNodeId) {
   }
 }
 
-export async function writeFileContent({ fileNodeId, content, userId }) {
+export async function writeFileContent({ fileNodeId, content, userId, partial = false }) {
   await checkSourceGate(fileNodeId);
 
   // Snapshot the existing content BEFORE we delete, so we can detect
@@ -524,6 +524,15 @@ export async function writeFileContent({ fileNodeId, content, userId }) {
   const newSize = Buffer.byteLength(content ?? "", "utf8");
   const sizeKB = Math.ceil(newSize / 1024);
   const deltaKB = Math.ceil((newSize - previousSize) / 1024);
+
+  // Partial mode skips afterNote and contribution logging. Used by
+  // chunked-append writes where intermediate chunks would otherwise
+  // trigger the syntax validator on incomplete code (which would then
+  // block the next chunk via findBlockingSyntaxError) and pollute the
+  // contribution log with one entry per chunk. The caller is expected
+  // to do a final non-partial write that fires hooks on the complete
+  // content.
+  if (partial) return note;
 
   // Fire afterNote so the validators (phase 1-4) see this write. The
   // bypass of beforeNote is intentional — that hook has a size cap for

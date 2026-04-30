@@ -206,15 +206,33 @@ async function resolveBranchRootedPath(nodeId, filePath, options = {}) {
     .replace(/\/+$/, "");
   if (!branchPath) return { filePath: raw, isInBranch: false, error: null };
 
+  // Scope = the immediate parent of the worker's branch node. Under the
+  // recursive plan model, branches live as siblings of their plan under
+  // a shared parent; that parent IS the scope the plan governs. For a
+  // top-level branch the scope == the outer project. For a sub-branch
+  // (one whose plan was emitted by another branch) the scope == the
+  // parent branch. Returning this lets the file-write tools route
+  // path-"." writes (integration shell) to the actual scope instead of
+  // the outermost project. Without this, a nested integration shell
+  // creates files at the project root, which violates the recursive
+  // rule and breaks rollups (the parent branch's subtree is missing
+  // files its plan thinks exist).
+  const branchScopeId = branch.parent ? String(branch.parent) : null;
+
   // Integration / shell branch (path: "."). Its filesystem slot is
-  // the project root, so writes pass through unchanged: "index.html"
-  // stays "index.html", not "./index.html". We still mark it as
-  // isInBranch so sibling-path validation below can refuse writes
-  // into peer branches. But we skip the sibling + self-prefix checks
-  // — shell intentionally names files at the root level that don't
-  // conflict with peer dirs.
+  // the SCOPE root (= branch.parent), not necessarily the outermost
+  // project. For top-level branches that's the same node. For nested
+  // integration shells they differ — the sub-shell's files belong
+  // under the parent branch, alongside the parent's own plan and
+  // sibling sub-branches.
   if (branchPath === ".") {
-    return { filePath: raw, isInBranch: true, error: null };
+    return {
+      filePath: raw,
+      isInBranch: true,
+      error: null,
+      branchScopeId,
+      branchPath,
+    };
   }
 
   const segments = raw.split("/").filter(Boolean);
@@ -310,7 +328,13 @@ async function resolveBranchRootedPath(nodeId, filePath, options = {}) {
     };
   }
 
-  return { filePath: `${branchPath}/${raw}`, isInBranch: true, error: null };
+  return {
+    filePath: `${branchPath}/${raw}`,
+    isInBranch: true,
+    error: null,
+    branchScopeId,
+    branchPath,
+  };
 }
 
 /**
@@ -619,7 +643,26 @@ function scheduleSync(projectId) {
 }
 
 async function ensureProject({ rootId, currentNodeId, userId, core, name, workspacePath }) {
-  // Priority 1: explicit name of an already-existing project.
+  // Priority 1: POSITION WINS. If the worker is standing inside or on
+  // a known project, use that project regardless of what `name` the
+  // caller passed. The LLM frequently hallucinates similar-but-wrong
+  // project names ("eee" when the project is "eeeee") — honoring that
+  // would redirect the write into a phantom directory or a stale peer
+  // project, and the next call (e.g. workspace-edit-file with no
+  // name) would resolve via position and miss the file. Position is
+  // the truth; `name` is a hint at most, never an override.
+  const fromPosition = await findProject(currentNodeId || rootId);
+  if (fromPosition) {
+    if (name && readMeta(fromPosition)?.name !== name) {
+      trace("ensureProject", "name-mismatch-honoring-position",
+        `caller said name="${name}" but position resolves to "${fromPosition.name}" (${fromPosition._id}); using position`);
+    } else {
+      trace("ensureProject", "found-in-ancestors", `${fromPosition.name} (${fromPosition._id})`);
+    }
+    return fromPosition;
+  }
+
+  // Priority 2: no position context. Fall back to explicit name lookup.
   if (name) {
     const existing = await findProjectByName(rootId, name);
     if (existing) {
@@ -628,7 +671,7 @@ async function ensureProject({ rootId, currentNodeId, userId, core, name, worksp
     }
   }
 
-  // Priority 1b: if the requested name matches the TREE ROOT's own name,
+  // Priority 2b: if the requested name matches the TREE ROOT's own name,
   // the user wants the root itself to be the project — not a duplicate
   // child node named after the root. Promote the root in place. This
   // catches the case where the model emits projectName: "tinder2" for
@@ -648,16 +691,6 @@ async function ensureProject({ rootId, currentNodeId, userId, core, name, worksp
         core,
       });
       return initRes.node;
-    }
-  }
-
-  // Priority 2: the user is already standing inside (or on) a workspace
-  // project. Walk the ancestor chain from currentNodeId up to the tree root.
-  const fromPosition = await findProject(currentNodeId || rootId);
-  if (fromPosition) {
-    if (!name || readMeta(fromPosition)?.name === name) {
-      trace("ensureProject", "found-in-ancestors", `${fromPosition.name} (${fromPosition._id})`);
-      return fromPosition;
     }
   }
 
@@ -771,19 +804,34 @@ export default function getWorkspaceTools(core) {
     // ---------------------------------------------------------------
     {
       name: "workspace-add-file",
-      description: "Create or overwrite a file inside the active project. The file becomes a tree node with its content stored as a note, so the AI can navigate to it later. Path is relative to the project root and may include subdirectories (e.g. 'src/lib/util.js') which become directory nodes.",
+      description: "Create or overwrite a file inside the active project. The file becomes a tree node with its content stored as a note, so the AI can navigate to it later. Path is relative to the project root and may include subdirectories (e.g. 'src/lib/util.js') which become directory nodes. For files large enough that a single tool call risks provider-side JSON envelope errors (\"invalid character ')' after object key:value pair\"), use append=true with done=false on each intermediate chunk and append=true with done=true on the final chunk.",
       schema: {
         filePath: z.string().describe("Path inside your workspace. If you're inside a swarm branch, paths are rooted at your branch — drop the branch name, and paths that leave your branch (absolute, '..', sibling-branch name) are rejected."),
-        content: z.string().describe("Full file content. Replaces any previous content on the node."),
+        content: z.string().describe("Full file content (default mode), or a single chunk to append (when append=true)."),
         projectName: z.string().optional().describe("Target project by name if you're not inside one."),
+        append: z.boolean().optional().describe("If true, append `content` to the existing file content instead of overwriting. Use to stream a large file across multiple calls and dodge provider JSON-escape drift. Requires `done` to be set explicitly on every append call."),
+        done: z.boolean().optional().describe("Required when append=true. Set false on intermediate chunks and true on the final chunk. The final call fires validators, schedules sync, and clears edit-drift state. Ignored when append is not set."),
       },
       annotations: { readOnlyHint: false },
-      async handler({ filePath, content, projectName, userId, rootId, nodeId }) {
+      async handler({ filePath, content, projectName, append, done, userId, rootId, nodeId }) {
         const bytes = Buffer.byteLength(content || "", "utf8");
-        trace("workspace-add-file", "CALL", `path=${filePath} bytes=${bytes} rootId=${rootId} nodeId=${nodeId} projectName=${projectName || "(auto)"}`);
+        const appendMode = append === true;
+        if (appendMode && typeof done !== "boolean") {
+          trace("workspace-add-file", "REJECTED", "append=true requires explicit done flag");
+          return text(`workspace-add-file rejected: append=true requires explicit done=true|false on every chunk.`);
+        }
+        const isFinalChunk = !appendMode || done === true;
+        trace("workspace-add-file", "CALL", `path=${filePath} bytes=${bytes} rootId=${rootId} nodeId=${nodeId} projectName=${projectName || "(auto)"}${appendMode ? ` append done=${done}` : ""}`);
         try {
           const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
           trace("workspace-add-file", "project", `${project.name} (${project._id})`);
+          // Tree placement scope. Defaults to the outer project for top-
+          // level branches and project-level calls. For a sub-branch with
+          // path "." (a nested integration shell), we override to the
+          // sub-plan's scope (= the worker's branch.parent) so files
+          // land alongside the sub-plan's branches under the parent
+          // branch — which is what the recursive plan model demands.
+          let scopeNodeId = project._id;
           // Branch-rooted path resolution. If the caller is inside a
           // swarm branch, the path is always resolved relative to that
           // branch's root. Any attempt to leave the branch (absolute,
@@ -798,6 +846,12 @@ export default function getWorkspaceTools(core) {
             if (resolved.filePath !== filePath) {
               trace("workspace-add-file", "branch-root", `${filePath} → ${resolved.filePath}`);
               filePath = resolved.filePath;
+            }
+            if (resolved.branchPath === "." && resolved.branchScopeId
+                && String(resolved.branchScopeId) !== String(project._id)) {
+              trace("workspace-add-file", "sub-shell-scope",
+                `path "." → scope ${resolved.branchScopeId} (not outer project ${project._id})`);
+              scopeNodeId = resolved.branchScopeId;
             }
             if (!resolved.isInBranch) {
               const gate = await checkProjectRootHasBranches(nodeId, filePath);
@@ -835,18 +889,33 @@ export default function getWorkspaceTools(core) {
             }
           }
           const { fileNode, created } = await resolveOrCreateFile({
-            projectNodeId: project._id, relPath: filePath, userId, core,
+            projectNodeId: scopeNodeId, relPath: filePath, userId, core,
           });
           trace("workspace-add-file", "file-node", `${created ? "created" : "reused"} ${filePath} (${fileNode._id})`);
-          await writeFileContent({ fileNodeId: fileNode._id, content, userId });
-          trace("workspace-add-file", "note-saved", `${bytes}b on ${fileNode._id}`);
-          scheduleSync(project._id);
-          trace("workspace-add-file", "OK", `${filePath} scheduled sync`);
-          // Whole-file rewrite: the model's next edit starts from a
-          // clean slate (it submitted the entire file, so line numbers
-          // are whatever it just wrote). Clear drift state.
-          _driftNoteRead(userId, filePath);
-          return text(`${created ? "Created" : "Updated"} ${filePath} (${bytes}b) on node ${fileNode._id} in project "${project.name}". Auto-sync scheduled.`);
+
+          let writeContent = content ?? "";
+          if (appendMode) {
+            const existing = await readFileContent(fileNode._id);
+            writeContent = existing + (content ?? "");
+          }
+          await writeFileContent({
+            fileNodeId: fileNode._id,
+            content: writeContent,
+            userId,
+            partial: !isFinalChunk,
+          });
+          const totalBytes = Buffer.byteLength(writeContent, "utf8");
+          trace("workspace-add-file", "note-saved", `${appendMode ? `chunk=${bytes}b total=${totalBytes}b` : `${bytes}b`} on ${fileNode._id}`);
+          if (isFinalChunk) {
+            scheduleSync(project._id);
+            trace("workspace-add-file", "OK", `${filePath} scheduled sync`);
+            // Whole-file rewrite: the model's next edit starts from a
+            // clean slate (it submitted the entire file, so line numbers
+            // are whatever it just wrote). Clear drift state.
+            _driftNoteRead(userId, filePath);
+            return text(`${created ? "Created" : "Updated"} ${filePath} (${totalBytes}b) on node ${fileNode._id} in project "${project.name}".${appendMode ? " Final chunk." : ""} Auto-sync scheduled.`);
+          }
+          return text(`Appended chunk to ${filePath} (+${bytes}b, ${totalBytes}b total). Send the next chunk with append=true; on the last chunk add done=true.`);
         } catch (e) {
           if (e instanceof SourceWriteRejected) {
             // Clean message for a policy rejection — don't dump a stack.
@@ -1004,6 +1073,9 @@ export default function getWorkspaceTools(core) {
 
         try {
           const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
+          // See workspace-add-file's matching block for the rationale.
+          // Sub-branch path-"." writes go to the sub-plan's scope.
+          let scopeNodeId = project._id;
           {
             const resolved = await resolveBranchRootedPath(nodeId, filePath);
             if (resolved.error) {
@@ -1013,6 +1085,12 @@ export default function getWorkspaceTools(core) {
             if (resolved.filePath !== filePath) {
               trace("workspace-edit-file", "branch-root", `${filePath} → ${resolved.filePath}`);
               filePath = resolved.filePath;
+            }
+            if (resolved.branchPath === "." && resolved.branchScopeId
+                && String(resolved.branchScopeId) !== String(project._id)) {
+              trace("workspace-edit-file", "sub-shell-scope",
+                `path "." → scope ${resolved.branchScopeId} (not outer project ${project._id})`);
+              scopeNodeId = resolved.branchScopeId;
             }
             if (!resolved.isInBranch) {
               const gate = await checkProjectRootHasBranches(nodeId, filePath);
@@ -1077,7 +1155,7 @@ export default function getWorkspaceTools(core) {
           }
 
           const { fileNode, created } = await resolveOrCreateFile({
-            projectNodeId: project._id, relPath: filePath, userId, core,
+            projectNodeId: scopeNodeId, relPath: filePath, userId, core,
           });
           if (created) return text(`workspace-edit-file: ${filePath} did not exist. Use workspace-add-file to create it first.`);
 

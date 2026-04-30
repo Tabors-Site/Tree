@@ -79,11 +79,45 @@ export async function promoteDoneAncestors({ projectNodeId, core }) {
   if (!projectNodeId) return;
   try {
     const p = await plan();
-    const visit = async (nodeId) => {
+
+    // SAME ANTI-PATTERN as the previous OOM in detectResumableSwarm.
+    // readPlan(leafBranchId) walks UP via ancestor fallback when the
+    // branch has no plan-type child of its own, returning the GOVERNING
+    // plan — which IS the parent plan we're already iterating. The
+    // recursion saw "branch X has children" (the same X we just visited)
+    // and re-entered, exponentially. This function fires AFTER all
+    // branches finish (only post-completion code path), which is exactly
+    // when the user reports "server crashes after the plan is done."
+    //
+    // Fix: ownSubPlan probes for a node's OWN plan-type child without
+    // ancestor fallback. A leaf branch with no sub-plan returns null,
+    // and recursion stops. Visited-set guard catches any residual cycle.
+    const visited = new Set();
+    const ownSubPlan = async (nodeId) => {
+      const planChild = await Node.findOne({
+        parent: nodeId,
+        type: "plan",
+      }).select("_id").lean();
+      if (!planChild) return null;
+      return p.readPlan(planChild._id);
+    };
+
+    const visit = async (nodeId, depth = 0) => {
+      const idStr = String(nodeId || "");
+      if (!idStr || visited.has(idStr)) return { status: null, name: null };
+      visited.add(idStr);
+      // Paranoia depth cap (Pass 1 nesting is depth 1; 16 is well over).
+      if (depth > 16) return { status: null, name: null };
+
       const node = await Node.findById(nodeId).select("_id name metadata").lean();
       if (!node) return { status: null, name: null };
       const meta = readMeta(node);
-      const planObj = await p.readPlan(nodeId);
+      // Top of the walk reads the governing plan via readPlan (case-2
+      // resolves a node's own plan-type child). Nested calls use the
+      // direct probe — never fall back to an ancestor's plan.
+      const planObj = depth === 0
+        ? await p.readPlan(nodeId)
+        : await ownSubPlan(nodeId);
       const branches = (planObj?.steps || []).filter((s) => s.kind === "branch");
 
       if (branches.length === 0) {
@@ -97,11 +131,10 @@ export async function promoteDoneAncestors({ projectNodeId, core }) {
           childStatuses.push(entry.status || "pending");
           continue;
         }
-        const childResult = await visit(childId);
+        const childResult = await visit(childId, depth + 1);
         childStatuses.push(childResult.status || entry.status || "pending");
 
         if (childResult.status && childResult.status !== (entry.status || "pending")) {
-          const p = await plan();
           await p.upsertBranchStep(
             nodeId,
             { name: entry.title, nodeId: childId, status: childResult.status },
@@ -127,7 +160,7 @@ export async function promoteDoneAncestors({ projectNodeId, core }) {
       return { status: currentStatus, name: node.name };
     };
 
-    await visit(projectNodeId);
+    await visit(projectNodeId, 0);
   } catch (err) {
     log.warn("Swarm", `promoteDoneAncestors failed: ${err.message}`);
   }

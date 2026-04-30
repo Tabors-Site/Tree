@@ -216,6 +216,16 @@ function renderContractValue(c) {
   if (v.exports != null) return ` → ${formatLiteral(v.exports)}`;
   if (v.shape != null) return ` :: ${formatLiteral(v.shape)}`;
   if (v.args != null) return ` (args: ${formatLiteral(v.args)})`;
+  // module-export contracts: render globals + methods. Without showing
+  // methods, a consumer of `window.GameEngine = class` has no idea what
+  // it can call on instances and either guesses from training data or
+  // reads the sibling's source — exactly what contracts exist to avoid.
+  if (v.globals != null || v.methods != null) {
+    const parts = [];
+    if (v.globals != null) parts.push(formatLiteral(v.globals));
+    if (v.methods != null) parts.push(`methods: ${formatLiteral(v.methods)}`);
+    return ` → ${parts.join(", ")}`;
+  }
   // Last resort: list the field names actually present (excluding
   // scope, which is rendered as the suffix tag).
   const fields = (c.fields || []).filter((f) => f !== "scope");

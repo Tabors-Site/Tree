@@ -915,7 +915,8 @@
       "Bash(awk 'NR>=160 && NR<=470 && \\(/^export async function|^async function|^function / || /^\\\\s+core\\\\s*[,}=]/\\) {print NR\": \"$0}' /home/tabor/github/Tree/land/extensions/tree-orchestrator/dispatch.js)",
       "Bash(awk 'NR>=163 && NR<=950' /home/tabor/github/Tree/land/extensions/tree-orchestrator/dispatch.js)",
       "Bash(grep -n \"^\\\\s*core,\\\\|^\\\\s*core$\")",
-      "Bash(awk '/spawn\\\\\\(/,/}\\\\\\)$|^  }\\);/' /home/tabor/github/Tree/land/extensions/code-workspace/serve/spawner.js)"
+      "Bash(awk '/spawn\\\\\\(/,/}\\\\\\)$|^  }\\);/' /home/tabor/github/Tree/land/extensions/code-workspace/serve/spawner.js)",
+      "Bash(curl -s \"https://treeos.ai/api/v1/root/d6f90d0e-72c6-414c-b196-9a024a4ee133?token=taborhjolly\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

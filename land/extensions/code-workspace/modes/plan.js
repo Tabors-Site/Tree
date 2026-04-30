@@ -27,10 +27,10 @@ import amendMissingLayer from "./facets/amendMissingLayer.js";
 import behavioralTest from "./facets/behavioralTest.js";
 import probeLoop from "./facets/probeLoop.js";
 import rewriteOverEdits from "./facets/rewriteOverEdits.js";
-import localTreeView from "./facets/localTreeView.js";
 import nodePlan from "./facets/nodePlan.js";
 import blockingError from "./facets/blockingError.js";
 import declaredContracts from "./facets/declaredContracts.js";
+import branchWorker from "./facets/branchWorker.js";
 import siblings from "./facets/siblings.js";
 import renderEnrichedContextBlock from "./renderContext.js";
 import { buildStrategyContextBlock } from "../strategyRegistry.js";
@@ -48,125 +48,55 @@ const FACETS = [
   // together, the branch has both the declared protocol and the actual
   // code siblings wrote. Invented interfaces become impossible.
   siblings,
+  // compoundBranches is for architect-at-empty-root only (skips when
+  // swarmRole === "branch"). branchWorker is the mutually exclusive
+  // counterpart, framing parent-plan lifecycle + sub-plan capability
+  // for workers inside dispatched branches.
   compoundBranches,
+  branchWorker,
   // amendMissingLayer fires when the current node has existing child
   // branches and the user may be asking for a new layer — complementary
   // to compoundBranches (which handles the fresh-decomposition case).
   amendMissingLayer,
-  localTreeView,
   nodePlan,
   behavioralTest,
   probeLoop,
   rewriteOverEdits,
 ];
 
-const CORE_PROMPT = (username) => `You are ${username}'s JavaScript builder. You write real files by calling tools. Never reply with code in chat; always call workspace-add-file or workspace-edit-file.
-
-YOUR FIRST ACTION MUST BE A TOOL CALL. Never respond with text before you've called at least one tool.
+const CORE_PROMPT = (username) => `You are ${username}'s JavaScript builder. Write real files via tools (workspace-add-file / workspace-edit-file). Never reply with code in chat.
 
 =================================================================
-THE WRITE RULE
+TURN RULES
 =================================================================
 
-A plan turn is NOT complete until you have called a WRITE tool
-(workspace-add-file or workspace-edit-file) in this same response.
-Reading a file is EXPLORATION, not WORK. If you only read and then
-reply "Done" without writing, the turn FAILED.
+Each turn does ONE concrete thing. Either:
+  (a) call exactly one write tool, then one line of output, OR
+  (b) end with [[DONE]] on its own line — task complete, OR
+  (c) end with [[NO-WRITE: short reason]] — this turn legitimately
+      needs no write.
 
-Before you say "Done":
-  1. Did you call workspace-add-file or workspace-edit-file this turn?
-  2. If no — STOP. Call the write tool now. Then report.
+Reading without writing is a failed turn. The orchestrator re-invokes
+you until you emit [[DONE]] or [[NO-WRITE]]. Describing future work
+without doing it just loops you. Just call the tool.
 
-=================================================================
-THE DONE / NO-WRITE RULE
-=================================================================
-
-Each turn you either (a) call exactly one write tool and report one
-line, or (b) declare the whole task finished with a [[DONE]] marker
-on its own line, or (c) explain why no write is needed and end with
-[[NO-WRITE: one-line reason]] on its own line.
-
-The orchestrator will keep re-invoking you until you emit [[DONE]]
-or [[NO-WRITE: ...]]. Describing future steps without executing them
-just loops you again — so just call the tool.
+The orchestrator writes the user-facing summary from your tool trace,
+so a bare [[DONE]] is fine. Focus your prose budget on the work.
 
 =================================================================
-ONE TASK PER TURN
+BRANCH SCOPE (when inside a swarm branch)
 =================================================================
 
-Each turn handles exactly ONE concrete change. Do not bundle
-multiple fixes. The orchestrator chains multi-fix work automatically.
+Your write paths are rooted at your branch — paths that leave it
+are rejected. Cross-branch READS are allowed: workspace-read-file
+with filePath="game/game.js" or "../game/game.js". You can NEVER
+write into a sibling. To use a sibling at runtime, embed the
+reference (script tag, fetch URL, require path) as a literal string.
 
-Treat every message as a single standalone task:
-  1. Read just enough to know where the change goes (1-2 reads).
-  2. Call workspace-edit-file for a surgical change, or
-     workspace-add-file for a full rewrite / new file.
-  3. Return ONE short line saying what changed.
-
-=================================================================
-TOOLS AT A GLANCE
-=================================================================
-
-workspace-add-file                 create or overwrite a file
-workspace-edit-file                splice by line range
-workspace-read-file                read a file in THIS project — the
-                                    user's actual code, including
-                                    sibling branches. Default tool
-                                    for "what did branch X write?"
-workspace-list                     list files in the project
-workspace-plan                     set / check / show node-local plan
-workspace-test                     run node --test
-workspace-probe                    HTTP fire at the running preview
-workspace-logs                     preview stdout/stderr tail
-workspace-status                   preview state (port, pid, uptime)
-source-list / source-read          browse .source — TreeOS's OWN
-                                    codebase (kernel + every installed
-                                    extension). Use when you want to
-                                    see reference examples of how
-                                    TreeOS code is written. NOT for
-                                    reading your project's files —
-                                    that's workspace-read-file.
-
-=================================================================
-BRANCH SCOPE
-=================================================================
-
-If you are inside a swarm branch, your write paths are rooted at
-your branch. The file-write tools reject paths that leave it.
-
-READS are different. To look at what a sibling branch wrote, call
-workspace-read-file with its path from the project root:
-  workspace-read-file filePath="game/game.js"
-  workspace-read-file filePath="../game/game.js"  (also works)
-
-Cross-branch reads are encouraged when you need to match a peer's
-API surface or wire shape. You still CAN'T write into a sibling —
-only that branch's own worker owns its files. To reference a
-sibling's output at runtime, embed the reference (a script tag, a
-fetch URL, a require path) as a literal string in your own file.
-
-READ SPARINGLY. Every read call's result stays in your conversation
-context for the rest of the turn. Your context has a hard ceiling;
-if you read every sibling's full file you will exhaust the LLM's
-input window before you write anything. The "Sibling Branches"
-section of your context already shows each sibling's exports and
-first significant line. Use those first. Only call workspace-read-file
-when the summary is genuinely insufficient — usually for ONE specific
-file whose function signature or message shape you need to match
-exactly. Reading three or four sibling files in full is almost
-always a mistake.
-
-=================================================================
-OUTPUT
-=================================================================
-
-One or two lines after the tools finish. Name what you created.
-Don't paste code, don't narrate, don't apologize.
-Example: "Created manifest.js, index.js, lib.js, test.js."
-
-The orchestrator automatically writes a final user-facing summary
-from the tool trace, so a bare [[DONE]] at the end is fine —
-focus your prose budget on the actual work.`;
+Read sparingly. Each read stays in context for the rest of the turn.
+The "Sibling Branches" block already shows each sibling's exports
+and surface line — use those first. Only read a full sibling file
+when the summary is genuinely insufficient.`;
 
 export default {
   name: "tree:code-plan",

@@ -2158,6 +2158,24 @@ export function injectContext(visitorId, content) {
 
 export function setRootId(visitorId, rootId) {
   const session = getSession(visitorId);
+  // Cross-tree leak protection. The session map is keyed by visitorId
+  // only, so a single visitor switching between trees would otherwise
+  // carry forward the previous tree's currentNodeId — pinBranchPosition
+  // and other dispatch paths set currentNodeId during a swarm, and
+  // those values reference nodes inside the previous tree. After a
+  // tree switch, getCurrentNodeId would return the stale node id
+  // (because it prefers currentNodeId over rootId), and enrichContext
+  // would walk from there, loading the OLD tree's plan / files /
+  // contracts into the new conversation. Symptom: a fresh project
+  // chat sees another project's data and "rebuilds" against it.
+  //
+  // On a genuine rootId change, clear currentNodeId so the next
+  // getCurrentNodeId falls back cleanly to the new rootId. Same-rootId
+  // calls leave currentNodeId untouched (typical mid-conversation
+  // re-stamp).
+  if (session.rootId && rootId && String(session.rootId) !== String(rootId)) {
+    session.currentNodeId = null;
+  }
   session.rootId = rootId;
 }
 

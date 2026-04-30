@@ -724,20 +724,38 @@ export async function ensurePlanAtScope(scopeNodeId, {
       "ensurePlanAtScope requires userId to create a plan-type child at a scope that has no existing plan",
     );
   }
-  return createPlanNode({
-    parentNodeId: String(scopeNodeId),
-    userId,
-    // Plain "plan" — no coupling to the scope's name. The parent
-    // pointer + type="plan" encode the hierarchy; duplicating the
-    // scope name in the plan's name would go stale the moment the
-    // scope is renamed, and the type field already makes the node
-    // queryable without relying on naming convention.
-    name: name || "plan",
-    systemSpec,
-    budget,
-    wasAi, chatId, sessionId,
-    core,
-  });
+
+  // Race protection. Two writers can both pass the findOne above and
+  // both attempt to create a plan-type child. The unique partial index
+  // on (parent, type) where type === "plan" makes the second insert
+  // fail with E11000 (duplicate key). Catch that, re-read, and return
+  // the winner. Without this, the loser throws an unrelated-looking
+  // error and the caller assumes the create failed entirely.
+  try {
+    return await createPlanNode({
+      parentNodeId: String(scopeNodeId),
+      userId,
+      // Plain "plan" — no coupling to the scope's name. The parent
+      // pointer + type="plan" encode the hierarchy; duplicating the
+      // scope name in the plan's name would go stale the moment the
+      // scope is renamed, and the type field already makes the node
+      // queryable without relying on naming convention.
+      name: name || "plan",
+      systemSpec,
+      budget,
+      wasAi, chatId, sessionId,
+      core,
+    });
+  } catch (err) {
+    if (err?.code === 11000 || /E11000|duplicate key/i.test(err?.message || "")) {
+      const winner = await Node.findOne({
+        parent: scopeNodeId,
+        type: "plan",
+      }).select("_id name parent type metadata").lean();
+      if (winner) return winner;
+    }
+    throw err;
+  }
 }
 
 /**

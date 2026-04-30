@@ -17,13 +17,14 @@ export default {
 
   shouldInject(ctx) {
     if (!ctx?.enrichedContext?.nodePlan) return false;
-    // Defer to compoundBranches on turn 1 at an empty project root.
-    // Otherwise both facets render and the AI gets contradictory
-    // guidance: "set a plan" vs "emit [[BRANCHES]] first". The empty-
-    // root path should go through compoundBranches exclusively so the
-    // AI emits a [[BRANCHES]] block instead of calling workspace-plan
-    // action=set (which now gets rejected by the gate and leaves the
-    // AI with no productive next action).
+    // Skip when the rendered "plan" is just the empty-state placeholder
+    // ("no local plan yet"). The branchWorker facet handles spec-only
+    // workers; injecting plan-advancement rules at an empty plan node
+    // creates contradictions with that.
+    if (/\(no local plan yet\b/.test(ctx.enrichedContext.nodePlan)) return false;
+    // Defer to compoundBranches on turn 1 at an empty project root —
+    // both facets together would tell the AI to "set a plan" AND "emit
+    // [[BRANCHES]] first" at the same turn.
     const view = ctx?.enrichedContext?.localViewData;
     const isFreshProjectRoot =
       ctx?.isFirstTurn === true &&
@@ -34,60 +35,16 @@ export default {
     return true;
   },
 
-  text: `=================================================================
-NODE-LOCAL PLAN — ADVANCE IT, DO NOT IGNORE IT
-=================================================================
-
-A "Plan for ..." block is injected in your context. That is YOUR
-checklist for THIS tree position. It is the canonical record of what
-needs to happen at this scope. Read it first every turn.
-
-How a turn works:
-
-  1. Find the first pending step (one with "[ ]") in your local plan.
-  2. Do that step in exactly one tool call.
-  3. Check it off with workspace-plan action=check stepId=<id>.
-  4. Return one line and stop.
-
-IMPORTANT — stepIds rotate when the plan is re-set. The ids you
-saw in earlier turns are STALE. Read the Plan block in THIS turn's
-CONTEXT FOR THIS TURN section and copy the exact stepId for the
-first "[ ]" entry you see NOW. Do not reuse an id from memory of
-a previous turn.
-
-If the plan shows "(no local plan yet)" AND the task you were handed
-is not a one-line change, your FIRST action this turn is:
-
-    workspace-plan action=set steps=["first step", "second step", ...]
-
-Decompose the task into ONE step per file you intend to write. Do
-not split one file into multiple steps ("set up canvas", "add
-websocket client", "wire input handler" all inside index.html should
-be ONE step: "Write index.html"). A correct plan for a single-file
-branch is a 1-step plan. A branch expected to write three files has a
-3-step plan. Only exceed that when the work genuinely spans more
-files than were listed on the branch.
-
-Each step maps to one file write or one edit. Do not plan in words —
-plan in commits. Only after the plan is set do you begin executing it.
-
-NEVER check off a step without doing its work. If you wrote one file
-that covered what would have been multiple steps, re-set the plan to
-reflect reality before checking any off. Do NOT check off N steps in
-a row on the strength of a single write.
-
-If you hit a problem you cannot resolve, mark the step blocked:
-
-    workspace-plan action=block stepId=<id> reason="short reason"
-
-Do NOT silently skip steps. Do NOT do two steps in one turn. The
-continuation loop will re-invoke you for the next step.
-
-When every step is "[x] done" AND no rollup shows pending descendants,
-end your turn with [[DONE]] on its own line.
-
-If the plan shows "Including descendants: N pending" but your own
-local steps are all done, your job at this node is complete — emit
-[[DONE]] and let the children's sessions continue their own plans.
-You are responsible for YOUR scope, not theirs.`,
+  text: `Plan rules:
+  • Find the first "[ ]" step. Do it in one tool call. Check off
+    with workspace-plan action=check stepId=<id>. One line of output.
+  • stepIds rotate when a plan is re-set — copy the id from THIS
+    turn's plan block, never from memory of a previous turn.
+  • One step per turn. The continuation loop re-invokes for the next.
+  • Don't check off steps you didn't actually do. If one write
+    covered multiple steps, re-set the plan to match reality before
+    checking any off.
+  • Blocked? workspace-plan action=block stepId=<id> reason="..."
+  • All your local steps done → [[DONE]]. Descendant rollup pending
+    is fine — that's their sessions' job, not yours.`,
 };

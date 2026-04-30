@@ -67,281 +67,138 @@ export default {
   },
 
   text: `=================================================================
-COMPOUND TASKS → BRANCH FIRST. THIS IS NOT OPTIONAL.
+COMPOUND TASKS → DECOMPOSE WITH [[BRANCHES]]
 =================================================================
 
-This project is EMPTY (no files, no declared branches). The server
-will REJECT any workspace-add-file / workspace-edit-file call that
-targets a non-shell file at the project root until you either emit
-a [[BRANCHES]] block OR write an allowed root file (index.html,
-main.js, app.js, package.json, style.css, etc.).
+This project is empty. Module file writes at the root will be
+rejected (only shell files are allowed: index.html, main.js,
+app.js, package.json, etc.). If the request names 2+ independent
+layers (backend+frontend, server+client, api+ui+data), your FIRST
+action MUST be a [[CONTRACTS]] + [[BRANCHES]] response. Tests are
+NOT a layer — each branch writes its own tests inline.
 
-Rejected writes return a message explaining the rule. Don't try to
-dump module files like "game.js", "characters.js", "server.js"
-directly at the root — they'll be refused. The intended flow:
-
-  → emit [[BRANCHES]] to decompose the task
-  → swarm dispatches one session per branch
-  → each branch writes its own files under its own subdirectory
-
-Count the layers in the user's request. Two or more independent
-layers means decompose.
-
-A "layer" is a self-contained unit of ownership: a backend, a
-frontend, a persistence layer, a data layer, an auth system, a
-UI theme. Tests are NOT a layer. Each branch writes its own tests
-inline (e.g. backend/tests/). Do NOT create a separate "tests"
-branch unless the user explicitly asks for one. A standalone tests
-branch copies sibling code, bloats context, and duplicates what
-the contract conformance validator already checks automatically.
-
-**HARD RULE**: if the user's request names two or more layers, your
-FIRST action MUST be a [[BRANCHES]] block — NOT workspace-plan,
-NOT workspace-add-file, NOT source-read. Decomposition comes
-first, then every branch builds in its own scope.
-
-Examples of requests that MUST branch (count the layers):
-
-  "backend and frontend"                    → 2 layers
-  "Node server + HTML client"               → 2 layers
-  "API, UI, data layer"                     → 3 layers
-  "auth, swiping, messaging, settings"      → 4 layers
-  "server with persistence"                 → 2 layers
-
-Examples of requests that do NOT branch:
-
-  "add a vowel counter to lib.js"           → 0 layers, one file
-  "fix the off-by-one in index.js"          → 0 layers, one edit
-  "write a JSON parser"                     → 1 layer, small
-  "backend, frontend, and tests"            → 2 layers (tests are inline, not a branch)
-
-If the request names 2+ layers, do NOT attempt a flat plan. A flat
-workspace-plan action=set with 8 mixed backend/frontend/test steps
-is a FAILURE mode — you end up with server code, client code, and
-tests all being written by one session that can't hold all three
-contexts at once. Branches solve this. Do not skip branches because
-it feels faster.
-
-THE path FIELD — READ THIS CAREFULLY, IT IS HOW MOST BRANCH
-PLANS BREAK
-=================================================================
-
-The path on a branch is the SUBDIRECTORY NAME where that branch's
-files live on disk. It is NOT the project name. It is NOT a
-human-readable label. It is a short, lowercase directory name like
-"backend", "frontend", "public", "server", "client", "api", "ui",
-"db", "data", "store", "tests", "docs".
-
-**HARD RULES on path**:
-
-  1. path MUST equal name. The branch name IS the subdirectory
-     name. If the branch is named "backend", path is "backend".
-     If it's named "frontend", path is "frontend". Do not pick a
-     fancy path that differs from the name — the branch tree node
-     is created with the branch's name, and files are stored as
-     descendants of that node. If name and path disagree, files
-     physically land in a sibling directory at the project root
-     instead of under the branch node, breaking the rollup and
-     leaving the branch node empty.
-  2. NEVER use the project's own name as name or path. If the
-     project is called "TronGame", do NOT name a branch "TronGame"
-     or set its path to "TronGame". Pick a name describing the
-     LAYER (backend, frontend, server, client, api, ui, db, data,
-     store, tests, docs).
-  3. Every branch MUST be UNIQUE within the [[BRANCHES]] block.
-     Two branches with the same name/path is a bug — they will
-     compete for the same files.
-  4. Keep it short. Prefer a single directory component. Branch
-     name "backend" not "src/backend", "ui" not "packages/client/ui".
-
-If you break any of these rules, the swarm runner will REJECT
-your [[BRANCHES]] block and make you re-emit it. Don't guess.
+Single-file tasks ("add a vowel counter", "fix off-by-one") do NOT
+branch. Just write the file.
 
 =================================================================
-DESIGN THE SEAM FIRST — EMIT [[CONTRACTS]] BEFORE [[BRANCHES]]
+RESPONSE SHAPE (text blocks, NOT files)
 =================================================================
 
-If your branches will talk to each other (backend serves routes a
-frontend calls, a WebSocket server and client exchange messages, a
-persistence layer has a store format an API writes to), YOU MUST
-first declare the wire contracts they share. Otherwise each branch's
-AI session will independently invent its own names for the same
-concepts and the compound system will be broken from minute one.
-
-*** CRITICAL — READ THIS BEFORE YOU DO ANYTHING ***
-
-[[CONTRACTS]] is a RESPONSE BLOCK, exactly like [[BRANCHES]].
-You MUST emit it as TEXT IN YOUR RESPONSE — not as a file.
-
-  - DO NOT use workspace-add-file to write contracts to disk.
-  - DO NOT create a contracts.md, CONTRACTS.md, or any file
-    containing the contract definitions.
-  - DO NOT write the [[CONTRACTS]] block to ANY file at all.
-
-The swarm runner PARSES your [[CONTRACTS]] block directly from
-your response text, stores the contracts on the project root, and
-injects them into every branch's prompt automatically. If you
-write contracts to a file instead of emitting them in your
-response, the swarm runner never sees them, the contracts are
-never stored, and every branch invents its own wire format.
-
-The correct output shape for a compound task looks like this —
-all three blocks in your response text, in order:
+[[CONTRACTS]] and [[BRANCHES]] are RESPONSE BLOCKS. Emit them as
+text in your reply. Do NOT call workspace-add-file with them. Do
+NOT create contracts.md. The swarm runner parses these blocks from
+your response text directly.
 
     [[CONTRACTS]]
-    ... (wire contracts here)
+    ... wire contracts ...
     [[/CONTRACTS]]
 
     [[BRANCHES]]
-    ... (branch definitions here)
+    ... branch definitions ...
     [[/BRANCHES]]
 
     [[DONE]]
 
-*** END CRITICAL ***
+=================================================================
+[[CONTRACTS]] — declare shared vocabulary BEFORE branches
+=================================================================
 
-Emit a [[CONTRACTS]] block BEFORE [[BRANCHES]]. One line per
-contract. Each line declares a NAMESPACE (what kind of thing) and
-a SCOPE (which branches must comply).
+If branches will reference each other (storage keys, DOM ids, event
+names, exported globals, message types, function signatures), declare
+them here. Without this each branch invents its own names for the
+same concept and integration breaks immediately.
 
-NAMESPACES (the kind of thing the contract constrains):
+One line per contract. Format: NAMESPACE name: { ...values, scope }
 
-  - storage-key       localStorage / IndexedDB / etc. key names
-  - identifier-set    enumerated string IDs (character IDs, role names, status enums)
-  - dom-id            canvas / element id values shared across modules
-  - event-name        custom DOM event / pubsub topic names
-  - message-type      WebSocket / fetch payload type discriminators
-  - method-signature  shared function names + arg shapes between modules
-  - module-export     global names a module attaches to window/exports
+NAMESPACES: storage-key, identifier-set, dom-id, event-name,
+message-type, method-signature, module-export.
 
-SCOPES (who must comply with this contract):
+SCOPES: shared:[branch-a,branch-b], local:branch, global. Default
+to NARROW. Use global ONLY for vocabulary every branch must comply
+with (project-wide storage keys, identifier sets, app-wide events).
+A dom-id that only the branch creating the DOM and the branch
+manipulating it touch is shared:[creator, user] — NOT global.
+Over-globalizing dumps noise into branches that don't reference it.
 
-  - global                          every branch under this plan must comply
-  - shared:[branch-a, branch-b]     these specific branches coordinate on this
-  - local:branch-name               just this branch (declared for visibility)
+CLASS EXPORTS: when the export is a class, declare its public
+methods alongside globals. Without methods, consumers can't tell
+what they're allowed to call without reading your code — which is
+the failure mode contracts exist to prevent.
 
-Default scope (omitted): "global". When in doubt, use "global" — the
-runtime filter is a refinement, not a load-bearing rule. Narrow scope
-when you're certain only specific branches will reference it.
-
-Example for a single-page game with four modules + shell:
+Example:
 
     [[CONTRACTS]]
     identifier-set characterIds: { values: ['yellow','red','blue','green'], scope: global }
-    storage-key flappyState: { shape: '{ totalXP, unlockedChars, highScore }', scope: shared:[game,progression,ui] }
+    storage-key flappyState: { shape: '{ totalXP, unlockedChars, highScore }', scope: shared:[game,progression] }
     dom-id canvasId: { value: 'gameCanvas', scope: shared:[game,shell] }
-    event-name onScore: { detail: '{ score: number }', scope: shared:[game,ui,progression] }
-    method-signature progression.addXP: { args: '(amount: number)', returns: 'totalXP: number', scope: shared:[game,progression] }
-    module-export GameLoop: { globals: 'window.GameLoop = class', scope: shared:[game,shell] }
+    dom-id menuId: { value: 'menuOverlay', scope: shared:[shell,ui] }
+    event-name onScore: { detail: '{ score: number }', scope: shared:[game,ui] }
+    module-export GameEngine: { globals: 'window.GameEngine = class', methods: 'startGame(birdType), stopGame(), on(event, handler)', scope: shared:[game,shell] }
+    module-export ProgressionManager: { globals: 'window.ProgressionManager = { addXP(n), getTotal(), unlock(charId) }', scope: shared:[progression,game,ui] }
     [[/CONTRACTS]]
 
-Rules on contracts:
-
-  1. Identify SHARED VOCABULARY first — every identifier (key, ID, event
-     name, exported name) that two or more branches will reference in
-     common. Declare it. The reason inter-branch failures happen is
-     each branch invents its own name for the same concept.
-  2. Tag each contract with scope so each branch sees only its slice.
-     The "ui" branch shouldn't see "shared:[backend,worker]" contracts
-     it has no part in. Narrowing scope is how the architecture
-     focuses each builder on what it must comply with.
-  3. Field names are canonical. Pick one and stick with it. If the
-     state object's XP key is "totalXP", every branch reads
-     state.totalXP, not state.xp or state.totalExp.
-  4. Don't over-declare. Internal helpers within a branch don't need
-     contracts. Only declare what crosses branch boundaries.
-  5. The plan stores these on the plan-type node at this scope; each
-     branch's enrichContext walks up the plan chain, gathers all
-     contracts visible at its position, filters to its scoped slice,
-     and renders only those into the builder's prompt. Branches
-     literally cannot see contracts that aren't scoped to them.
-
-After [[/CONTRACTS]], emit [[BRANCHES]] as usual. Close with
-[[DONE]]. The swarm runner parses both blocks from your response
-text, stores the contracts, dispatches the branches, and every
-branch session sees the contracts at the top of its prompt.
+Rules: declare shared vocabulary only (not internal helpers).
+Field names are canonical — pick one and every branch uses it
+verbatim.
 
 =================================================================
-[[BRANCHES]] format (emit after [[/CONTRACTS]], then [[DONE]])
+[[BRANCHES]] format
 =================================================================
+
+ALL branches go in ONE [[BRANCHES]] block. Do NOT emit a separate
+[[BRANCHES]]...[[/BRANCHES]] per branch. The parser used to silently
+drop everything past the first block; even now that it's tolerant,
+multiple blocks are wasted tokens and harder to revise.
 
     [[BRANCHES]]
-    branch: <name of the first logical part of THIS project>
-      spec: <one-paragraph spec for this part — what it owns end to end>
+    branch: <name-1>
+      spec: <one paragraph — what this branch owns end to end>
       slot: code-plan
-      path: <subdir name>
-      files: <concrete file names that part will contain>
+      path: <name-1>
+      files: <concrete files this branch will write>
 
-    branch: <name of the next part>
-      spec: <one-paragraph spec — views, state management, etc.>
+    branch: <name-2>
+      spec: ...
       slot: code-plan
-      path: <subdir>
-      files: <concrete file names>
+      path: <name-2>
+      files: ...
 
-    (Choose branch names, paths, and files based on what the PROJECT
-    calls for. A full-stack app might split backend/frontend/tests; a
-    single-page HTML game doesn't need branches at all; a CLI tool
-    might split parser/commands/output. Match the shape to the task,
-    don't force a backend+frontend template.)
-
-    branch: persistence
-      spec: <spec for the persistence layer, files it reads/writes,
-            shape of the on-disk format>
+    branch: <name-3>
+      spec: ...
       slot: code-plan
-      path: persistence
-      files: store.js
-
-    branch: tests
-      spec: <what behaviors the tests verify, which routes, etc.>
-      slot: code-plan
-      path: tests
-      files: room.test.js, persistence.test.js
+      path: <name-3>
+      files: ...
     [[/BRANCHES]]
 
-Every module branch has path equal to its name. That is the
-hard rule for subsystem branches: path MUST match name, letter
-for letter. The one exception is the integration "shell" branch
-below, which lives at the project root (path: ".").
+HARD RULES:
+  • path MUST equal name (letter for letter). Validator rejects
+    anything else. Exception: ONE integration branch with path: "."
+    that owns the root entry file (index.html / main.js / server.js).
+  • NEVER use the project's name as a branch name or path. Use
+    layer names (backend, frontend, ui, api, db, tests, docs).
+  • Branches must be unique. Keep names short and lowercase.
+  • One [[BRANCHES]] block holds every branch. Open once, list all
+    branches inside, close once.
 
-INTEGRATION BRANCH (critical for anything that runs as a single app):
+INTEGRATION BRANCH (required for single-target apps):
 
-If the project has ONE runnable target — an index.html you open in
-a browser, a main.py you invoke, a serve.js you start — exactly ONE
-branch must own that entry point and wire the sibling modules
-together. That branch has path: "." (a single dot, project root)
-and owns the composition file:
+If the project produces ONE runnable thing (an index.html, a
+serve.js, a main.py), exactly ONE branch owns the root entry file
+with path: "." — example:
 
     branch: shell
-      spec: Root-level index.html that loads every sibling module
-            as <script src="<sibling>/<sibling>.js"> tags and
-            boots the app. Owns only the composition; no subsystem
-            logic lives here.
+      spec: Root index.html loading sibling modules via script tags.
       slot: code-plan
       path: .
       files: index.html
 
-Without a shell branch, every module branch writes its own disconnected
-index.html in its own subdirectory and the preview serves one of
-them in isolation — the user sees one subsystem, not the composed
-app. Don't let that happen.
+Module branches produce .js files the shell imports. They MUST NOT
+create their own root index.html — the shell owns composition.
 
-Module branches (game-loop, characters, progression, etc.) MUST NOT
-create their own root-level entry point. They produce the .js files
-the shell branch imports. If a module branch needs a local demo
-harness during development, keep it inside its own subdirectory and
-never at project root.
+Skip the integration branch only if branches genuinely run standalone
+(separate microservices, independent CLIs).
 
-Exception: if each branch genuinely runs standalone (separate
-microservices, independent CLIs), skip the shell branch. But for a
-single-page app, single binary, or single frontend: one shell, many
-modules.
-
-Then end with [[DONE]] for YOUR turn. The swarm runner creates a
-child node per branch and dispatches fresh code-plan sessions at
-each one. Each branch session builds its own plan, sees only its
-own subtree, and signals contracts to its siblings via cascade.
-The root's rollup tracks descendant progress for free.
-
-Only skip [[BRANCHES]] when the task is a single file or a small
-fix. Everything else branches.`,
+Close your response with [[DONE]] after [[/BRANCHES]]. The swarm
+runner creates a child node per branch and dispatches one session
+each. Branches see scoped contracts, not other branches' contracts.`,
 };

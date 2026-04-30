@@ -172,10 +172,73 @@ export async function reconcileProject({ projectNodeId, core }) {
       reconciledBranches.push(merged);
     }
 
-    // Carry forward orphan branch steps (architect-seeded, never
-    // dispatched). They stay pending until dispatched or the user
-    // clears them.
-    for (const orphan of orphanSteps) reconciledBranches.push(orphan);
+    // Orphan branch steps — architect-seeded steps that never got a
+    // childNodeId. Two cases:
+    //   (a) Pre-dispatch: architect just emitted [[BRANCHES]] and the
+    //       swarm runner is about to walk them. The orphans are valid
+    //       work-units waiting to be picked up. Keep them.
+    //   (b) Post-dispatch: the plan was dispatched but the orphan was
+    //       skipped — dispatch errored before reaching it, the LLM
+    //       emitted a name the validator post-rejected, etc. They sit
+    //       in the plan forever, get pushed into resumable detection
+    //       on every continuation, and never make progress because
+    //       there's no tree node to dispatch against.
+    //
+    // Reap (b): for each orphan whose createdAt predates the most
+    // recent "plan-dispatched" ledger entry AND has no startedAt, drop
+    // it from the reconciled list and emit a "plan-orphan-step-reaped"
+    // ledger entry so the operator can see what was discarded. This
+    // is bounded — only stale orphans get reaped, fresh ones (case a)
+    // pass through.
+    let lastDispatchedAt = null;
+    if (Array.isArray(planObj?.ledger)) {
+      for (const entry of planObj.ledger) {
+        if (entry?.event === "plan-dispatched" && entry.at) {
+          // Latest wins (ledger is append-only, ordered).
+          if (!lastDispatchedAt || entry.at > lastDispatchedAt) {
+            lastDispatchedAt = entry.at;
+          }
+        }
+      }
+    }
+    const reaped = [];
+    for (const orphan of orphanSteps) {
+      const createdAt = orphan?.createdAt || null;
+      const startedAt = orphan?.startedAt || null;
+      const isStale = lastDispatchedAt
+        && createdAt
+        && createdAt < lastDispatchedAt
+        && !startedAt;
+      if (isStale) {
+        reaped.push({
+          id: orphan.id,
+          title: orphan.title,
+          createdAt,
+          status: orphan.status || "pending",
+        });
+        continue;
+      }
+      reconciledBranches.push(orphan);
+    }
+    if (reaped.length > 0) {
+      try {
+        await p.appendLedger(planNode._id, {
+          event: "plan-orphan-step-reaped",
+          detail: {
+            count: reaped.length,
+            steps: reaped,
+            lastDispatchedAt,
+          },
+        }, core);
+        log.info(
+          "Swarm",
+          `🪦 reconcile: reaped ${reaped.length} stale orphan step(s) from plan ${String(planNode._id).slice(0, 8)}: ` +
+          reaped.map((r) => `"${r.title}"`).join(", "),
+        );
+      } catch (ledgerErr) {
+        log.debug("Swarm", `orphan-reap ledger entry skipped: ${ledgerErr.message}`);
+      }
+    }
 
     // Count steps dropped (had childNodeId, tree branch gone).
     for (const [prevId] of stepsByChildId) {
