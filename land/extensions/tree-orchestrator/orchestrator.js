@@ -252,17 +252,20 @@ export async function orchestrateTreeRequest({
     setChatContext(visitorId, sessionId, rootChatId);
   }
 
-  // ── Resumable swarm intercept ──
-  // TreeOS knows what it already built: if a code-workspace project has
-  // any non-done branches and the user types a short continuation
-  // ("continue", "keep going", "go"), skip the classifier and resume.
-  // The full logic lives in ./resumeSwarm.js; returns a result when
-  // handled, null otherwise.
+  // ── Ruler resumption intercept ──
+  // The Ruler at the scope is the operational authority for what
+  // happens when work resumes after a pause. When the user types a
+  // short continuation ("continue", "keep going", "go") at a scope
+  // whose plan has pending branches, governing.resumeAtRuler wakes
+  // the Ruler, examines plan + contracts + branch states, and decides
+  // whether to redispatch the pending branches via swarm. Decision
+  // lives in governing; mechanism (parallel dispatch, retry, reconcile)
+  // stays in swarm. Returns a result when handled, null otherwise.
   try {
     const { getExtension } = await import("../loader.js");
-    const sw = getExtension("swarm")?.exports;
-    if (sw?.tryResumeSwarm) {
-      const resumeResult = await sw.tryResumeSwarm({
+    const governing = getExtension("governing")?.exports;
+    if (governing?.resumeAtRuler) {
+      const resumeResult = await governing.resumeAtRuler({
         message, forceMode, rootId, visitorId,
         userId, username, rootChatId, sessionId,
         signal, slot, socket, onToolLoopCheckpoint, rt,

@@ -300,56 +300,84 @@ export async function triggerPlanPivot({
       reason: "user-pivot-midflight",
     });
 
-    // Re-invoke the architect at the project root. The prompt gives
-    // it the original plan + running branch + the user's new
-    // direction and asks for a FRESH whole-plan emission.
+    // Re-invoke the Planner at the project root via governing's
+    // structured-emission path. The Planner emits via governing-emit-plan
+    // which persists a new emission child + planApproval that supersedes
+    // the prior active approval (which was archived above). We then read
+    // the structured emission back to build the dispatch list.
     const branchSummary = snapshot
       .map((b) => `  • ${b.name}${b.path ? ` (${b.path})` : ""} [${b.status}]${b.spec ? `: ${b.spec}` : ""}`)
       .join("\n");
     const runningList = (active.running || []).join(", ") || "(none)";
     const pivotPrompt =
       `The user sent a mid-build message that changes the plan. ` +
-      `Produce a FRESH [[BRANCHES]] plan that incorporates their new direction. ` +
-      `Do not try to diff against the old plan — the user wants to see one ` +
-      `coherent whole.\n\n` +
+      `Produce a FRESH plan via governing-emit-plan that incorporates ` +
+      `their new direction. Do not try to diff against the old plan — ` +
+      `the user wants to see one coherent whole.\n\n` +
       `Previous plan (now archived):\n${branchSummary}\n\n` +
       `Was running: ${runningList}\n\n` +
       `User's new direction:\n"${String(message).slice(0, 2000)}"\n\n` +
-      `Emit one [[BRANCHES]]...[[/BRANCHES]] block with every branch needed ` +
-      `for the updated scope. Preserve branches whose work still applies; ` +
-      `replace or drop branches whose scope is gone; add new ones as needed. ` +
-      `Keep branch names stable where possible so existing work can be reused. ` +
-      `Close with [[DONE]].`;
+      `Emit one structured plan via governing-emit-plan covering the ` +
+      `updated scope. Preserve branch names whose work still applies; ` +
+      `replace or drop sub-domains whose scope is gone; add new ones as ` +
+      `needed. Keep branch names stable where possible so existing work ` +
+      `can be reused. Close with [[DONE]].`;
+
+    const governing = getExtension("governing")?.exports;
+    if (!governing?.readActivePlanEmission) {
+      log.warn("Stream", "pivot: governing extension unavailable, cannot re-emit plan");
+      return;
+    }
+    const priorEmission = await governing.readActivePlanEmission(active.projectNodeId);
+    const priorOrdinal = priorEmission?.ordinal || 0;
 
     const { runChat } = await import("../../seed/llm/conversation.js");
-    const result = await runChat({
+    await runChat({
       userId,
       username,
       message: pivotPrompt,
-      mode: "tree:code-plan",
+      mode: "tree:governing-planner",
       rootId,
       nodeId: active.projectNodeId,
-      // Pivot replan — each call independent, default ephemeral.
       llmPriority: "INTERACTIVE",
     });
-    const architectAnswer = String(result?.answer || result?.content || "");
 
-    const swarm = getExtension("swarm")?.exports;
-    if (!swarm?.parseBranches) {
-      log.warn("Stream", "pivot architect ran but swarm.parseBranches not available");
-      return;
-    }
-    const parsed = swarm.parseBranches(architectAnswer);
-    if (!parsed?.branches?.length) {
-      log.warn("Stream", "pivot architect did not emit [[BRANCHES]]; leaving plan archived");
-      // Surface a text-only ack so the user knows something happened.
+    // Read the structured emission as the source of truth.
+    const newEmission = await governing.readActivePlanEmission(active.projectNodeId);
+    const newOrdinal = newEmission?.ordinal || 0;
+    const plannerEmittedNewPlan = !!newEmission && newOrdinal > priorOrdinal;
+    if (!plannerEmittedNewPlan) {
+      log.warn("Stream", "pivot Planner did not emit a new plan; leaving plan archived");
       socket?.emit?.("chatResponse", {
         success: true,
         answer:
-          `📦 Archived the in-flight plan and reset. The architect couldn't ` +
+          `📦 Archived the in-flight plan and reset. The Planner couldn't ` +
           `re-emit a plan from your new direction — send it again as a fresh ` +
           `request and I'll propose a plan.`,
       });
+      return;
+    }
+
+    // Build branches from the structured emission.
+    const branches = [];
+    for (const step of (newEmission.steps || [])) {
+      if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
+      for (const b of step.branches) {
+        if (!b?.name) continue;
+        branches.push({
+          name: b.name,
+          spec: b.spec || "",
+          path: null,
+          files: [],
+          slot: null,
+          mode: null,
+          parentBranch: null,
+        });
+      }
+    }
+
+    if (branches.length === 0) {
+      log.warn("Stream", "pivot Planner emitted leaf-only plan; nothing to dispatch");
       return;
     }
 
@@ -360,7 +388,7 @@ export async function triggerPlanPivot({
       ? Math.max(nextVersion, prev.version + 1)
       : nextVersion;
     setPendingSwarmPlan(visitorId, {
-      branches: parsed.branches,
+      branches,
       contracts: [],
       projectNodeId: active.projectNodeId,
       projectName: active.projectName,
@@ -371,8 +399,9 @@ export async function triggerPlanPivot({
       modeKey: "tree:code-plan",
       targetNodeId: active.projectNodeId,
       version: stashVersion,
-      cleanedAnswer: parsed.cleaned,
+      cleanedAnswer: "",
       pivot: true,
+      emission: newEmission,
     });
 
     socket?.emit?.(SWARM_WS_EVENTS.PLAN_PROPOSED, {
@@ -380,7 +409,7 @@ export async function triggerPlanPivot({
       projectNodeId: active.projectNodeId,
       projectName: active.projectName,
       trigger: "mid-flight pivot",
-      branches: parsed.branches.map((b) => ({
+      branches: branches.map((b) => ({
         name: b.name,
         spec: b.spec,
         path: b.path || null,
@@ -389,10 +418,11 @@ export async function triggerPlanPivot({
         mode: b.mode || null,
         parentBranch: b.parentBranch || null,
       })),
+      emission: newEmission,
     });
 
     log.info("Stream",
-      `Mid-flight pivot: archived v${active.version}, proposed v${stashVersion} with ${parsed.branches.length} branches`,
+      `Mid-flight pivot: archived v${active.version}, proposed v${stashVersion} with ${branches.length} branches (emission-${newOrdinal})`,
     );
   } catch (err) {
     log.warn("Stream", `triggerPlanPivot failed: ${err.message}`);

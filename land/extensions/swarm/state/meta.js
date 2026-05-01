@@ -78,16 +78,20 @@ export async function setSummary({ nodeId, summary, core }) {
 }
 
 /**
- * Mark a node as a swarm PROJECT. Sets role=project, initialized=true,
- * stamps systemSpec (if provided), ensures execution bookkeeping
- * fields exist (aggregatedDetail, inbox, events). Plan state — steps,
- * archivedPlans, contracts, ledger, budget — lives in metadata.plan,
- * owned by the plan extension; this function does NOT touch any of it.
+ * Initialize swarm-mechanism bookkeeping at a scope. Stamps systemSpec
+ * (if provided) and ensures aggregatedDetail / inbox / events arrays
+ * exist for dispatch. Does NOT set any role — governing's promoteToRuler
+ * owns the role taxonomy. Plan state (steps, archivedPlans, contracts,
+ * ledger, budget) lives in metadata.plan, owned by the plan extension;
+ * this function does NOT touch any of it.
+ *
+ * Replaces the legacy initProjectRole. The "project" role concept was
+ * legacy structure conflicting with the recursive sub-Ruler architecture
+ * (see project_recursive_sub_ruler_dispatch). swarm is mechanism only;
+ * governing owns coordination and roles.
  */
-export async function initProjectRole({ nodeId, systemSpec, core }) {
+export async function ensureScopeBookkeeping({ nodeId, systemSpec, core }) {
   return mutateMeta(nodeId, (draft) => {
-    draft.role = "project";
-    draft.initialized = true;
     if (systemSpec != null) draft.systemSpec = systemSpec || draft.systemSpec || null;
     if (!draft.aggregatedDetail) {
       draft.aggregatedDetail = {

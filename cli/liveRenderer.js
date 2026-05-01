@@ -183,24 +183,88 @@ function createLiveRenderer({ stream = process.stdout, verbose = false } = {}) {
         const isUpdate = ev.type === "swarmPlanUpdated";
         const version = ev.version != null ? `v${ev.version}` : "";
         const branchList = Array.isArray(ev.branches) ? ev.branches : [];
-        const count = branchList.length;
         const header = isUpdate ? "Updated plan" : "Proposed plan";
-        const title = chalk.blue("⎇ ") + chalk.bold(header) + (version ? chalk.dim(" " + version) : "") +
-          chalk.dim(`  ${count} branch${count === 1 ? "" : "es"}`);
-        line(title);
-        if (isUpdate && ev.trigger) {
-          line(chalk.dim("    ↪ " + oneLine(ev.trigger, 120)));
-        }
-        for (const b of branchList) {
-          const name = chalk.bold(b.name || "?");
-          const path = b.path ? chalk.dim(` · path: ${b.path}`) : "";
-          const files = Array.isArray(b.files) && b.files.length
-            ? chalk.dim(" · files: " + oneLine(b.files.join(", "), 80))
-            : "";
-          const mode = b.mode ? chalk.dim(` · ${b.mode}`) : "";
-          line("    " + name + path + mode + files);
-          if (b.spec) {
-            line(chalk.dim("      " + oneLine(b.spec, 140)));
+
+        // Structured emission preferred when present. Falls back to
+        // the legacy branches-only render when emission is absent
+        // (older Planners, non-tool emit paths).
+        const emission = ev.emission && Array.isArray(ev.emission.steps) ? ev.emission : null;
+
+        if (emission) {
+          const totalSteps = emission.steps.length;
+          const leafCount = emission.steps.filter((s) => s?.type === "leaf").length;
+          const branchCount = emission.steps.filter((s) => s?.type === "branch").length;
+          const summary = `${totalSteps} step${totalSteps === 1 ? "" : "s"} · ${leafCount} leaf · ${branchCount} branch`;
+          const title = chalk.blue("⎇ ") + chalk.bold(header) +
+            (version ? chalk.dim(" " + version) : "") +
+            chalk.dim(`  ${summary}`);
+          line(title);
+          if (isUpdate && ev.trigger) {
+            line(chalk.dim("    ↪ " + oneLine(ev.trigger, 120)));
+          }
+          if (emission.reasoning) {
+            line(chalk.dim("    Reasoning"));
+            // Wrap reasoning across multiple lines while preserving
+            // word boundaries; cap each line near 100 cols.
+            const words = String(emission.reasoning).split(/\s+/);
+            let cur = "";
+            for (const w of words) {
+              if ((cur + " " + w).length > 100) {
+                line(chalk.dim("      " + cur.trim()));
+                cur = w;
+              } else {
+                cur = cur ? cur + " " + w : w;
+              }
+            }
+            if (cur.trim()) line(chalk.dim("      " + cur.trim()));
+            line("");
+          }
+          emission.steps.forEach((step, i) => {
+            const idx = chalk.dim(`${i + 1}.`);
+            if (step?.type === "leaf") {
+              const tag = chalk.green.bold("leaf  ");
+              const spec = chalk.white(oneLine(step.spec || "", 140));
+              line("    " + idx + " " + tag + spec);
+              if (step.rationale) {
+                line(chalk.italic.dim("        — " + oneLine(step.rationale, 120)));
+              }
+            } else if (step?.type === "branch") {
+              const tag = chalk.magenta.bold("branch");
+              const subs = Array.isArray(step.branches) ? step.branches : [];
+              const subSummary = chalk.dim(` (${subs.length} sub-Ruler${subs.length === 1 ? "" : "s"})`);
+              line("    " + idx + " " + tag + subSummary);
+              if (step.rationale) {
+                line(chalk.italic.dim("        " + oneLine(step.rationale, 120)));
+              }
+              for (const b of subs) {
+                line("        " + chalk.dim("↳ ") + chalk.bold(b.name || "?"));
+                if (b.spec) {
+                  line(chalk.dim("          " + oneLine(b.spec, 130)));
+                }
+              }
+            }
+          });
+        } else {
+          // Legacy fallback render.
+          const count = branchList.length;
+          const title = chalk.blue("⎇ ") + chalk.bold(header) +
+            (version ? chalk.dim(" " + version) : "") +
+            chalk.dim(`  ${count} branch${count === 1 ? "" : "es"}`);
+          line(title);
+          if (isUpdate && ev.trigger) {
+            line(chalk.dim("    ↪ " + oneLine(ev.trigger, 120)));
+          }
+          for (const b of branchList) {
+            const name = chalk.bold(b.name || "?");
+            const path = b.path ? chalk.dim(` · path: ${b.path}`) : "";
+            const files = Array.isArray(b.files) && b.files.length
+              ? chalk.dim(" · files: " + oneLine(b.files.join(", "), 80))
+              : "";
+            const mode = b.mode ? chalk.dim(` · ${b.mode}`) : "";
+            line("    " + name + path + mode + files);
+            if (b.spec) {
+              line(chalk.dim("      " + oneLine(b.spec, 140)));
+            }
           }
         }
         line(chalk.dim('Reply "yes" to run, or describe what to change. "cancel" to drop.'));

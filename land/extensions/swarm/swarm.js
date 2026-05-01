@@ -38,22 +38,16 @@ import Node from "../../seed/models/node.js";
 import { v4 as uuidv4 } from "uuid";
 import { startChainStep, finalizeChat, setChatContext, getChatContext } from "../../seed/llm/chatTracker.js";
 import { appendSignal } from "./state/signalInbox.js";
-import { readMeta, mutateMeta, initProjectRole, initBranchRole } from "./state/meta.js";
+import { readMeta, mutateMeta, ensureScopeBookkeeping, initBranchRole } from "./state/meta.js";
 import { plan, setBranchStatus } from "./state/planAccess.js";
 import { promoteDoneAncestors } from "./project.js";
 import { reconcileProject } from "./reconcile.js";
 import { SWARM_WS_EVENTS } from "./wsEvents.js";
 
-// Accept one or two square brackets on the markers. Small local models
-// drop a bracket sometimes ([BRANCHES] instead of [[BRANCHES]]); the
-// architect's intent is unambiguous either way, so don't reject the
-// whole swarm dispatch over a bracket count.
-const BRANCHES_OPEN = /\[\[?\s*branches\s*\]?\]/i;
-const BRANCHES_CLOSE_TIGHT = /\[\[?\s*\]?\s*\/\s*branches\s*\]?\]/i;
-const BRANCHES_CLOSE_LOOSE = /\[\[?[^\[\]]*(\/|end)[^\[\]]*branches[^\[\]]*\]?\]/i;
-const CONTRACTS_OPEN = /\[\[?\s*contracts\s*\]?\]/i;
-const CONTRACTS_CLOSE_TIGHT = /\[\[?\s*\]?\s*\/\s*contracts\s*\]?\]/i;
-const CONTRACTS_CLOSE_LOOSE = /\[\[?[^\[\]]*(\/|end)[^\[\]]*contracts[^\[\]]*\]?\]/i;
+// [[BRANCHES]] / [[CONTRACTS]] text-emission regexes deleted in phase 3.
+// All emission flows through governing-emit-plan / governing-emit-contracts;
+// dispatch reads structured emissions via governing.readActivePlanEmission
+// and governing.readContracts.
 
 /**
  * Fire a custom swarm lifecycle hook. Handlers registered by domain
@@ -97,396 +91,6 @@ async function recordBranchEvent({ visitorId, branchName, from, to, reason }) {
 }
 
 /**
- * Parse a [[BRANCHES]] block out of a response. Returns { branches,
- * cleaned }. Closing-tag detection is multi-stage because models emit
- * malformed variants (`[[]/BRANCHES]]`, `[[end branches]]`, etc.).
- */
-export function parseBranches(responseText) {
-  if (typeof responseText !== "string" || !responseText) {
-    return { branches: [], cleaned: responseText };
-  }
-
-  // Architects (especially smaller local models) sometimes emit each
-  // branch in its OWN [[BRANCHES]]...[[/BRANCHES]] block instead of
-  // packing all branches into one block. The parser used to take only
-  // the first block, dropping every subsequent branch silently — the
-  // user saw "1 branch" in the proposed plan even though their response
-  // visibly declared four. Iterate: keep scanning the residual text for
-  // additional [[BRANCHES]] regions, accumulate branches from each, and
-  // strip every region from the cleaned output.
-  const allBranches = [];
-  const regions = []; // [{ openStart, closeEnd, body }]
-  let cursor = 0;
-
-  while (cursor < responseText.length) {
-    const tail = responseText.slice(cursor);
-    const openMatch = tail.match(BRANCHES_OPEN);
-    if (!openMatch) break;
-
-    const openStart = cursor + openMatch.index;
-    const openEnd = openStart + openMatch[0].length;
-    const rest = responseText.slice(openEnd);
-
-    let closeMatch = rest.match(BRANCHES_CLOSE_TIGHT);
-    let closeIdxInRest = closeMatch?.index;
-    let closeLength = closeMatch?.[0]?.length || 0;
-
-    if (closeIdxInRest == null) {
-      closeMatch = rest.match(BRANCHES_CLOSE_LOOSE);
-      closeIdxInRest = closeMatch?.index;
-      closeLength = closeMatch?.[0]?.length || 0;
-    }
-
-    if (closeIdxInRest == null) {
-      const lines = rest.split("\n");
-      let lastBracketLineIdx = -1;
-      for (let i = lines.length - 1; i >= 0; i--) {
-        if (/^\s*\[\[/.test(lines[i])) {
-          lastBracketLineIdx = i;
-          break;
-        }
-      }
-      if (lastBracketLineIdx > 0) {
-        const upToThatLine = lines.slice(0, lastBracketLineIdx).join("\n");
-        closeIdxInRest = upToThatLine.length + 1;
-        closeLength = (lines[lastBracketLineIdx] || "").length;
-      }
-    }
-
-    if (closeIdxInRest == null) {
-      // Unclosed block with branch: lines — small-model failure mode.
-      // Consume to EOF if we can prove the body contains at least one
-      // branch declaration. Empty-branch hallucinations stay rejected.
-      if (/^-?\s*branch\s*:/im.test(rest)) {
-        closeIdxInRest = rest.length;
-        closeLength = 0;
-      } else {
-        // Bail on this position; advance cursor past the open tag to
-        // avoid infinite loops if more text follows without a close.
-        cursor = openEnd;
-        continue;
-      }
-    }
-
-    const body = rest.slice(0, closeIdxInRest);
-    const closeEnd = openEnd + closeIdxInRest + closeLength;
-
-    const blockBranches = parseBranchesFromBody(body);
-    allBranches.push(...blockBranches);
-    regions.push({ openStart, closeEnd });
-    cursor = closeEnd;
-  }
-
-  if (allBranches.length === 0) {
-    return { branches: [], cleaned: responseText };
-  }
-
-  // Strip every [[BRANCHES]] region from the cleaned output, last-to-first
-  // so earlier indices stay valid as we splice.
-  let cleaned = responseText;
-  for (let i = regions.length - 1; i >= 0; i--) {
-    const { openStart, closeEnd } = regions[i];
-    cleaned = cleaned.slice(0, openStart) + cleaned.slice(closeEnd);
-  }
-  cleaned = cleaned.trimEnd();
-
-  return { branches: allBranches, cleaned };
-}
-
-// Body parser extracted so the multi-region loop above can reuse it.
-function parseBranchesFromBody(body) {
-  const branches = [];
-  let current = null;
-
-  const lines = body.split("\n");
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) continue;
-
-    const branchMatch = line.match(/^-?\s*branch\s*:\s*(.+)$/i);
-    if (branchMatch) {
-      if (current) branches.push(current);
-      current = {
-        name: branchMatch[1].trim(),
-        spec: "",
-        slot: null,
-        mode: null,
-        path: null,
-        files: [],
-      };
-      continue;
-    }
-
-    if (!current) continue;
-
-    const kv = line.match(/^(spec|slot|mode|path|files|depends|requires)\s*:\s*(.+)$/i);
-    if (kv) {
-      const key = kv[1].toLowerCase();
-      const value = kv[2].trim();
-      if (key === "spec") current.spec = value;
-      else if (key === "slot") current.slot = value;
-      else if (key === "mode") current.mode = value;
-      else if (key === "path") current.path = value;
-      else if (key === "files") {
-        current.files = value.split(",").map((s) => s.trim()).filter(Boolean);
-      } else if (key === "depends" || key === "requires") {
-        current.depends = value.split(",").map((s) => s.trim()).filter(Boolean);
-      }
-      continue;
-    }
-
-    if (current && !line.match(/^[a-z]+\s*:/i)) {
-      current.spec = current.spec ? current.spec + " " + line : line;
-    }
-  }
-  if (current) branches.push(current);
-
-  return branches.filter((b) => b.name && b.spec);
-}
-
-/**
- * Parse a [[CONTRACTS]] block. Contracts declare invariants every branch
- * must respect. Swarm stores the parsed shape as { kind, name, fields,
- * raw } but doesn't interpret them — domain extensions render / validate
- * them however they like.
- */
-export function parseContracts(responseText) {
-  if (typeof responseText !== "string" || !responseText) {
-    return { contracts: [], cleaned: responseText };
-  }
-  const openMatch = responseText.match(CONTRACTS_OPEN);
-  if (!openMatch) return { contracts: [], cleaned: responseText };
-
-  const openEnd = openMatch.index + openMatch[0].length;
-  const rest = responseText.slice(openEnd);
-
-  let closeMatch = rest.match(CONTRACTS_CLOSE_TIGHT);
-  let closeIdxInRest = closeMatch?.index;
-  let closeLength = closeMatch?.[0]?.length || 0;
-
-  if (closeIdxInRest == null) {
-    closeMatch = rest.match(CONTRACTS_CLOSE_LOOSE);
-    closeIdxInRest = closeMatch?.index;
-    closeLength = closeMatch?.[0]?.length || 0;
-  }
-
-  if (closeIdxInRest == null) {
-    const lines = rest.split("\n");
-    let lastBracketLineIdx = -1;
-    for (let i = lines.length - 1; i >= 0; i--) {
-      if (/^\s*\[\[/.test(lines[i])) {
-        lastBracketLineIdx = i;
-        break;
-      }
-    }
-    if (lastBracketLineIdx > 0) {
-      const upToThatLine = lines.slice(0, lastBracketLineIdx).join("\n");
-      closeIdxInRest = upToThatLine.length + 1;
-      closeLength = (lines[lastBracketLineIdx] || "").length;
-    }
-  }
-
-  if (closeIdxInRest == null) {
-    // Unclosed block — consume to EOF if the body has any
-    // recognizable `<kind> <name>: {...}` or `<kind>: {...}` entry.
-    // (Was message|type only; now accepts any kind so book/research/
-    // curriculum contracts survive — character, setting, voice, theme,
-    // chapter, etc.)
-    if (/^\s*[a-zA-Z][\w-]*(\s+[A-Za-z_][\w-]*)?\s*:\s*[\{"]/m.test(rest)) {
-      closeIdxInRest = rest.length;
-      closeLength = 0;
-    } else {
-      return { contracts: [], cleaned: responseText };
-    }
-  }
-
-  const body = rest.slice(0, closeIdxInRest);
-  const contracts = [];
-
-  const lines = body.split("\n");
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) continue;
-    if (line.startsWith("#") || line.startsWith("//")) continue;
-    if (line.startsWith("[[")) continue;
-    // Domain-neutral contract parsing. Accept BOTH shapes:
-    //   "character Tabor: { pronouns: 'he/him', ... }"     → named entry
-    //   "setting: { timelineSpan: '...' }"                 → unnamed entry
-    //   "message join: { roomId, playerName }"             → code-style named
-    // The kind is any word; the name is the second word if present.
-    let kind, name, rhs;
-    const namedMatch = line.match(/^([a-zA-Z][a-zA-Z-]*)\s+([A-Za-z_][\w-]*)\s*:\s*(.+)$/);
-    const unnamedMatch = !namedMatch && line.match(/^([a-zA-Z][a-zA-Z-]*)\s*:\s*(.+)$/);
-    if (namedMatch) {
-      kind = namedMatch[1].toLowerCase();
-      name = namedMatch[2];
-      rhs = namedMatch[3].trim();
-    } else if (unnamedMatch) {
-      kind = unnamedMatch[1].toLowerCase();
-      name = kind; // unnamed entries use kind as name (setting/voice/theme pattern)
-      rhs = unnamedMatch[2].trim();
-    } else {
-      continue;
-    }
-
-    const fields = new Set();
-    const values = {}; // key -> raw value string; preserves data the scout can use
-    const braceIdx = rhs.indexOf("{");
-    if (braceIdx !== -1) {
-      let depth = 0;
-      let closeIdx = -1;
-      for (let i = braceIdx; i < rhs.length; i++) {
-        if (rhs[i] === "{") depth++;
-        else if (rhs[i] === "}") {
-          depth--;
-          if (depth === 0) { closeIdx = i; break; }
-        }
-      }
-      if (closeIdx !== -1) {
-        const inner = rhs.slice(braceIdx + 1, closeIdx);
-        const parts = splitTopLevelCommas(inner);
-        for (const part of parts) {
-          const trimmed = part.trim();
-          if (!trimmed) continue;
-          const colonIdx = findTopLevelColon(trimmed);
-          const nameStr = colonIdx !== -1 ? trimmed.slice(0, colonIdx).trim() : trimmed;
-          const clean = nameStr.replace(/\?$/, "").trim();
-          if (/^['"]?[A-Za-z_$][\w$-]*['"]?$/.test(clean)) {
-            const fieldName = clean.replace(/^['"]|['"]$/g, "");
-            fields.add(fieldName);
-            // Also preserve the VALUE so downstream consumers (book
-            // scout's pronoun detector, form repopulation, etc.) can
-            // read "he/him" not just "pronouns". Strip quotes on the
-            // value side the same way.
-            if (colonIdx !== -1) {
-              const rawVal = trimmed.slice(colonIdx + 1).trim().replace(/,\s*$/, "");
-              const cleanVal = rawVal.replace(/^['"]|['"]$/g, "").trim();
-              if (cleanVal) values[fieldName] = cleanVal;
-            }
-          }
-        }
-      }
-    }
-
-    fields.delete("type");
-    // Lift common scout-accessible fields to the top-level entry so
-    // the book-workspace pronoun scout and form repopulation can read
-    // them without re-parsing. Pronouns is the critical one.
-    const entry = { kind, name, fields: [...fields], values, raw: line };
-    if (values.pronouns) entry.pronouns = values.pronouns;
-    // Scope distribution: contracts can be tagged with which branches
-    // are concerned. Architect emits one of:
-    //   scope: global
-    //   scope: shared:[branch-a,branch-b]
-    //   scope: local:branch-name
-    // Default when omitted: "global" (safe — every branch sees it).
-    // Pass 1's distribution layer filters this slice per branch.
-    const rawScope = String(values.scope || "global").trim();
-    entry.scope = parseScope(rawScope);
-    // Stable ID for this contract within its plan. Used by Pass 2's
-    // courts to address the contract directly. Defaults to
-    // `${kind}:${name}` when not explicitly provided.
-    entry.id = String(values.id || `${kind}:${name}`);
-    // Namespace mirrors `kind` for now — the architect's `kind` field
-    // IS the namespace under the new taxonomy. Kept as a separate
-    // field so future code can rely on `entry.namespace` without
-    // having to know that `kind === namespace` is a Pass 1 invariant.
-    entry.namespace = kind;
-    contracts.push(entry);
-  }
-
-  const openStart = openMatch.index;
-  const closeEnd = openEnd + closeIdxInRest + closeLength;
-  const cleaned = (responseText.slice(0, openStart) + responseText.slice(closeEnd)).trimEnd();
-  return { contracts, cleaned };
-}
-
-/**
- * Parse a scope string from a contract's `scope` field into the
- * canonical structured form:
- *
- *   "global"                    → "global"
- *   "shared:[a,b,c]"            → { shared: ["a", "b", "c"] }
- *   "shared:a,b,c"              → { shared: ["a", "b", "c"] }
- *   "local:branch"              → { local: "branch" }
- *   "local:[branch]"            → { local: "branch" }
- *
- * Anything unrecognized → "global" (safe default; the architect can
- * narrow scope but never accidentally over-narrow). Tolerant of
- * spaces, brackets, and quotes around branch names.
- */
-function parseScope(input) {
-  if (input == null) return "global";
-  if (typeof input === "object") {
-    // Already structured (came in pre-parsed).
-    if (input.shared && Array.isArray(input.shared)) return { shared: input.shared.map((s) => String(s).trim()).filter(Boolean) };
-    if (input.local) return { local: String(input.local).trim() };
-    return "global";
-  }
-  const s = String(input).trim().replace(/^['"]|['"]$/g, "");
-  if (!s || /^global$/i.test(s)) return "global";
-  const sharedMatch = s.match(/^shared\s*:\s*\[?\s*(.*?)\s*\]?$/i);
-  if (sharedMatch) {
-    const list = sharedMatch[1]
-      .split(",")
-      .map((b) => b.trim().replace(/^['"]|['"]$/g, ""))
-      .filter(Boolean);
-    return list.length > 0 ? { shared: list } : "global";
-  }
-  const localMatch = s.match(/^local\s*:\s*\[?\s*(.+?)\s*\]?$/i);
-  if (localMatch) {
-    const name = localMatch[1].trim().replace(/^['"]|['"]$/g, "");
-    return name ? { local: name } : "global";
-  }
-  return "global";
-}
-
-function splitTopLevelCommas(s) {
-  const parts = [];
-  let depth = 0;
-  let quote = null;     // active quote char ('|"|`) or null when not in a string
-  let buf = "";
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    // Quote tracking — commas/colons inside strings must NOT split.
-    // The architect frequently emits values like
-    //   exports: 'start(), stop(), onScore(handler)'
-    // and the comma-split would otherwise truncate to "start()".
-    if (quote) {
-      if (ch === "\\" && i + 1 < s.length) { buf += ch + s[++i]; continue; }
-      if (ch === quote) quote = null;
-      buf += ch;
-      continue;
-    }
-    if (ch === "'" || ch === '"' || ch === "`") { quote = ch; buf += ch; continue; }
-    if (ch === "{" || ch === "[" || ch === "<" || ch === "(") depth++;
-    else if (ch === "}" || ch === "]" || ch === ">" || ch === ")") depth--;
-    else if (ch === "," && depth === 0) { parts.push(buf); buf = ""; continue; }
-    buf += ch;
-  }
-  if (buf.trim()) parts.push(buf);
-  return parts;
-}
-
-function findTopLevelColon(s) {
-  let depth = 0;
-  let quote = null;
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    if (quote) {
-      if (ch === "\\" && i + 1 < s.length) { i++; continue; }
-      if (ch === quote) quote = null;
-      continue;
-    }
-    if (ch === "'" || ch === '"' || ch === "`") { quote = ch; continue; }
-    if (ch === "{" || ch === "[" || ch === "<" || ch === "(") depth++;
-    else if (ch === "}" || ch === "]" || ch === ">" || ch === ")") depth--;
-    else if (ch === ":" && depth === 0) return i;
-  }
-  return -1;
-}
-
-/**
  * Validate a parsed [[BRANCHES]] list against the seam rules every
  * compound-task architect output must respect. Returns an array of
  * error strings — empty array means valid.
@@ -501,65 +105,37 @@ export function validateBranches(branches, projectName) {
   const errors = [];
   if (!Array.isArray(branches) || branches.length === 0) return { errors };
 
-  const normalize = (s) => String(s || "").trim().toLowerCase().replace(/^\/+|\/+$/g, "");
+  const normalize = (s) => String(s || "").trim().toLowerCase();
   const normProject = normalize(projectName);
 
-  const seenPaths = new Map();
+  const seenNames = new Map();
   for (const b of branches) {
-    const pathRaw = b.path || "";
-    const pathNorm = normalize(pathRaw);
+    const nameRaw = b.name || "";
+    const nameNorm = normalize(nameRaw);
 
-    if (!pathNorm) {
-      errors.push(`Branch "${b.name}" has no path. Every branch must declare a path field naming its subdirectory (e.g. path: backend).`);
+    if (!nameNorm) {
+      errors.push("Branch has no name. Every branch must declare a name field.");
       continue;
     }
 
-    if (normProject && pathNorm === normProject) {
+    if (normProject && nameNorm === normProject) {
       errors.push(
-        `Branch "${b.name}" has path "${pathRaw}" which is the project's own name. ` +
-        `Use a subdirectory name that describes the LAYER, not the project name.`
+        `Branch "${nameRaw}" uses the project's own name. ` +
+        `Use a name that describes the LAYER (backend, frontend, ui, api, db), ` +
+        `not the project name.`
       );
       continue;
     }
 
-    if (seenPaths.has(pathNorm)) {
+    if (seenNames.has(nameNorm)) {
       errors.push(
-        `Branch "${b.name}" has path "${pathRaw}" which is already used by branch ` +
-        `"${seenPaths.get(pathNorm)}". Each branch must have a unique path.`
+        `Branch "${nameRaw}" duplicates an earlier branch name. ` +
+        `Each branch must have a unique name.`
       );
       continue;
     }
 
-    // Integration / shell branch: path "." means "project root". The
-    // architect uses this for the one branch that owns the top-level
-    // entry file (index.html, main.py, etc.) and wires siblings
-    // together. At most one such branch per swarm. Name doesn't have
-    // to match path for this special case.
-    const isShell = pathNorm === "." || pathRaw === ".";
-    if (isShell) {
-      const existingShell = [...seenPaths.entries()].find(([p]) => p === "." || p === "");
-      if (existingShell) {
-        errors.push(
-          `Branch "${b.name}" has path "." but branch "${existingShell[1]}" already owns the project root. ` +
-          `Only one branch can have path "." (the integration/shell branch that wires siblings together).`
-        );
-        continue;
-      }
-      seenPaths.set(".", b.name);
-      continue;
-    }
-
-    const nameNorm = normalize(b.name);
-    if (nameNorm && nameNorm !== pathNorm) {
-      errors.push(
-        `Branch "${b.name}" has path "${pathRaw}" which does not match its name. ` +
-        `Set path equal to name (rename the branch or change its path), or use path: "." ` +
-        `if this is the integration branch that owns the project root.`
-      );
-      continue;
-    }
-
-    seenPaths.set(pathNorm, b.name);
+    seenNames.set(nameNorm, nameRaw);
   }
 
   return { errors };
@@ -653,6 +229,27 @@ async function ensureBranchNode({ rootProjectId, branch, userId, core }) {
     core,
   });
 
+  // Self-promote the branch node to Ruler. Every branch dispatch creates
+  // a sub-Ruler at the child scope. The recursive Planner/Contractor/
+  // Worker cycle runs at the new Ruler. Idempotent: re-dispatching an
+  // existing branch returns the prior promotion record without changing
+  // acceptedAt. See governing/state/role.js and project_recursive_sub_
+  // ruler_dispatch memory for the architecture.
+  try {
+    const { getExtension } = await import("../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (governing?.promoteToRuler) {
+      await governing.promoteToRuler({
+        nodeId: branchNode._id,
+        reason: `parent Ruler declared sub-Ruler "${branch.name}" via swarm`,
+        promotedFrom: governing.PROMOTED_FROM?.BRANCH_DISPATCH || "branch-dispatch",
+        core,
+      });
+    }
+  } catch (err) {
+    log.debug("Swarm", `governing.promoteToRuler skipped on branch ${branch.name}: ${err.message}`);
+  }
+
   // Enable cascade on branch nodes so file writes inside fire propagation.
   try {
     const cascadeData = {
@@ -687,8 +284,13 @@ async function resolveBranchMode({ branch, defaultBranchMode, branchNodeId }) {
   if (branch.mode) return branch.mode;
   if (defaultBranchMode) return defaultBranchMode;
 
+  // Walk ancestors looking for an extension whose metadata is present
+  // at the position. The first ext with a `*-plan` mode wins. Skips
+  // governing itself (its mode is `*-planner` not `*-plan`, and
+  // governing-planner is what the runRulerCycle dispatches anyway —
+  // the fallback we want here is the WORKSPACE worker mode).
   try {
-    const { getModeOwner, getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
+    const { getModesOwnedBy } = await import("../../seed/tree/extensionScope.js");
     let cursor = String(branchNodeId || "");
     let guard = 0;
     while (cursor && guard < 64) {
@@ -697,7 +299,7 @@ async function resolveBranchMode({ branch, defaultBranchMode, branchNodeId }) {
       const md = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
       for (const [extName, extData] of Object.entries(md)) {
         if (!extData || typeof extData !== "object") continue;
-        if (!extData.role && !extData.initialized) continue;
+        if (extName === "governing") continue;
         const planModes = getModesOwnedBy(extName).filter((m) => m.endsWith("-plan"));
         if (planModes.length > 0) return planModes[0];
       }
@@ -708,7 +310,10 @@ async function resolveBranchMode({ branch, defaultBranchMode, branchNodeId }) {
   } catch (err) {
     log.debug("Swarm", `resolveBranchMode ancestor walk failed: ${err.message}`);
   }
-  return null;
+  // Final fallback: governing-planner. Each branch is a sub-Ruler;
+  // governing-planner enters the Ruler cycle and dispatches a Worker
+  // for leaf work via the runRulerCycle fallthrough.
+  return "tree:governing-planner";
 }
 
 /**
@@ -1179,10 +784,12 @@ export async function runBranchSwarm({
   }
 
   if (!resumeMode) {
-    // Mark the project (swarm role + execution bookkeeping on the scope
-    // node itself — signal inbox, aggregatedDetail, role, parentage).
-    // Plan steps live on rootPlanNodeId, not on the scope node.
-    await initProjectRole({
+    // Initialize swarm-mechanism bookkeeping at the scope (signal inbox,
+    // aggregatedDetail, events, systemSpec, createdAt). The scope's role
+    // is governing's responsibility (Ruler) and was already promoted by
+    // runRulerCycle before swarm.runBranchSwarm was called. Plan steps
+    // live on rootPlanNodeId, not on the scope node.
+    await ensureScopeBookkeeping({
       nodeId: rootProjectNode._id,
       systemSpec: userRequest,
       core,
@@ -1255,7 +862,11 @@ export async function runBranchSwarm({
   }));
   let processed = 0;
   const MAX_BRANCHES = 60;
-  const MAX_DEPTH = 4;
+  // Recursive sub-Ruler dispatch is the normal pattern (see project_
+  // recursive_sub_ruler_dispatch memory). Depth cap is paranoia only.
+  // 32 matches plan/walkUp's guard. Surface real performance / context
+  // concerns if they appear under deeper trees.
+  const MAX_DEPTH = 32;
 
   while (queue.length > 0 && processed < MAX_BRANCHES) {
     if (signal?.aborted) {
@@ -1468,7 +1079,7 @@ export async function runBranchSwarm({
       // in via swarm.registerValidator and get explicit phase + order
       // semantics. See state/validators.js.
       try {
-        const { runValidators } = await import("./state/validators.js");
+        const { runValidators } = await import("../governing/state/validators.js");
         await runValidators("branch-complete", branchCompletePayload);
       } catch (vErr) {
         log.debug("Swarm", `branch-complete validators skipped: ${vErr.message}`);
@@ -1520,10 +1131,45 @@ export async function runBranchSwarm({
       // branch.depth=1 would be a sub-branch; its further emission
       // would be depth=2. REJECTED.
       if (branchResult?.answer) {
-        const nested = parseBranches(branchResult.answer);
+        // Source-of-truth for nested decomposition: the sub-Ruler's
+        // structured plan emission. The sub-Ruler's runRulerCycle
+        // persisted it via governing-emit-plan; we read it back via
+        // governing.readActivePlanEmission.
+        let nested = { branches: [], cleaned: branchResult.answer };
+        try {
+          const { getExtension } = await import("../loader.js");
+          const governing = getExtension("governing")?.exports;
+          if (governing?.readActivePlanEmission && branchNode?._id) {
+            const subEmission = await governing.readActivePlanEmission(branchNode._id);
+            if (subEmission?.steps?.length) {
+              const branchEntries = [];
+              for (const step of subEmission.steps) {
+                if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
+                for (const b of step.branches) {
+                  if (!b?.name) continue;
+                  branchEntries.push({
+                    name: b.name,
+                    spec: b.spec || "",
+                    path: null,
+                    files: [],
+                    slot: null,
+                    mode: null,
+                  });
+                }
+              }
+              if (branchEntries.length > 0) {
+                nested = { branches: branchEntries, cleaned: branchResult.answer };
+              }
+            }
+          }
+        } catch (err) {
+          log.debug("Swarm", `nested structured-emission read skipped: ${err.message}`);
+        }
         if (nested.branches.length > 0) {
           const currentDepth = branch.depth || 0;
-          const MAX_SUB_PLAN_DEPTH = 1;
+          // Recursive sub-Ruler dispatch is normal; deep nesting is
+          // expected. Cap matches MAX_DEPTH for the same paranoia reason.
+          const MAX_SUB_PLAN_DEPTH = 32;
 
           // Always strip the [[BRANCHES]] block from the worker's
           // answer so downstream logic (scout, retry, summary) doesn't
@@ -1769,7 +1415,7 @@ export async function runBranchSwarm({
     // handlers keep their effective order, and new validators opt in
     // via swarm.registerValidator with explicit phase + order.
     try {
-      const { runValidators } = await import("./state/validators.js");
+      const { runValidators } = await import("../governing/state/validators.js");
       await runValidators("swarm-complete", swarmCompletePayload);
     } catch (vErr) {
       log.debug("Swarm", `swarm-complete validators skipped: ${vErr.message}`);

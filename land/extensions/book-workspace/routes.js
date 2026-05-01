@@ -329,9 +329,18 @@ router.post("/:nodeId/bookstudio/contracts", authenticate, express.json(), async
           await Node.updateOne({ _id: n._id }, { $set: { [`metadata.${ns}`]: data } });
         } } },
       });
-      if (swx.ensureProject) {
-        await swx.ensureProject({ rootId: nodeId, systemSpec: body.premise || null, owner: "book-workspace" });
-      }
+      // Self-promote the new node to Ruler via governing.
+      try {
+        const { getExtension: getExt } = await import("../loader.js");
+        const governing = getExt("governing")?.exports;
+        if (governing?.promoteToRuler) {
+          await governing.promoteToRuler({
+            nodeId,
+            reason: `book-workspace route init: ${String(body.premise || "").slice(0, 80)}`,
+            promotedFrom: governing.PROMOTED_FROM?.ROOT,
+          });
+        }
+      } catch {}
       projectId = nodeId;
     }
 
@@ -547,20 +556,64 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
           }
         }
 
-        // STAGE 2 — ARCHITECT.
-        broadcast(nodeId, "update", `architect thinking (tree:book-plan)…`);
+        // STAGE 2 — RULER CYCLE (Planner → Contractor → swarm dispatch).
+        //
+        // Replicates dispatch.js's runRulerCycle locally so the book-
+        // studio background flow uses the same governing primitives the
+        // architect-entry path uses. The flow:
+        //
+        //   1. Promote the project node to Ruler (idempotent).
+        //   2. Ensure the plan trio member exists.
+        //   3. Run governing-planner — it emits via governing-emit-plan,
+        //      persisting a plan-emission child + planApproval ledger
+        //      entry. We read the structured emission back; that's the
+        //      source of truth for compound vs leaf and for branch
+        //      dispatch.
+        //   4. If branch steps are present, run governing-contractor —
+        //      it emits via governing-emit-contracts, persisting
+        //      contracts to the contracts trio member + contractApprovals.
+        //   5. Build the dispatch list from structured emission and call
+        //      runBranchSwarm.
+        //
+        // No [[BRANCHES]] / [[CONTRACTS]] text parsing. The Planner is
+        // domain-neutral; book-specific work happens in the Worker
+        // (tree:book-write) dispatched per branch.
+        const governing = getExtension("governing")?.exports;
+        if (!governing) {
+          broadcast(nodeId, "update", "governing extension not loaded — book studio cannot dispatch");
+          return;
+        }
 
-        const result = await runChat({
+        // Promote + trio bootstrap.
+        try {
+          await governing.promoteToRuler({
+            nodeId: projectId,
+            reason: `book studio user request: ${String(architectInput || userMsg || "").slice(0, 80)}`,
+            promotedFrom: governing.PROMOTED_FROM?.ROOT,
+          });
+          await governing.ensurePlanAtScope({
+            scopeNodeId: projectId,
+            userId,
+            systemSpec: typeof architectInput === "string" ? architectInput.slice(0, 500) : null,
+          });
+        } catch (err) {
+          log.warn("BookWorkspace/routes", `Ruler-trio bootstrap skipped: ${err.message}`);
+        }
+
+        // STAGE 2a — PLANNER.
+        broadcast(nodeId, "update", `planner thinking (tree:governing-planner)…`);
+        const priorEmission = await governing.readActivePlanEmission(projectId);
+        const priorOrdinal = priorEmission?.ordinal || 0;
+
+        const plannerResult = await runChat({
           userId, username,
           message: architectInput,
-          mode: "tree:book-plan",
+          mode: "tree:governing-planner",
           rootId: String(ctx?.project?._id || nodeId),
-          nodeId,
+          nodeId: String(projectId),
           signal: controller.signal,
-          // Architect lane on this project root — per-node so each chapter
-          // root (if dispatched separately) gets its own chain.
           scope: "tree",
-          purpose: "architect",
+          purpose: "planner",
           extra: nodeId,
           onToolResults: (results) => {
             for (const r of results || []) {
@@ -570,38 +623,51 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
           },
         });
 
-        const answer = (result?.answer || result?.content || "").trim();
-        if (answer) {
-          const preview = answer.length > 240 ? answer.slice(0, 240) + "…" : answer;
-          broadcast(nodeId, "update", `architect: ${preview.replace(/\n/g, " ")}`);
-        }
-        broadcast(nodeId, "update", "architect turn complete");
-
-        // The architect emitted [[CONTRACTS]] / [[BRANCHES]] blocks in its
-        // response. runChat is a pure LLM-turn API — it doesn't know about
-        // swarm dispatch (that lives in the tree-orchestrator's dispatch
-        // path). So we do it ourselves here: parse, store contracts,
-        // validate branches, call runBranchSwarm with a per-branch runChat
-        // closure. This is the code path dispatch.js fires automatically
-        // when the orchestrator runs a mode — we replicate for background
-        // book-studio runs.
-        const swx = sw();
-        if (!swx || !answer) return;
-
-        const { contracts: parsedContracts } = swx.parseContracts(answer);
-        if (parsedContracts.length > 0) {
-          const existing = (await swx.readContracts(projectId)) || [];
-          const merged = new Map();
-          const keyOf = (c) => `${c.kind}::${c.name}`;
-          for (const c of existing) merged.set(keyOf(c), c);
-          for (const c of parsedContracts) merged.set(keyOf(c), c);
-          await swx.setContracts({ scopeNodeId: projectId, contracts: [...merged.values()], userId });
-          broadcast(nodeId, "update", `contracts updated (+${parsedContracts.length})`);
+        const plannerAnswer = (plannerResult?.answer || plannerResult?.content || "").trim();
+        if (plannerAnswer) {
+          const preview = plannerAnswer.length > 240 ? plannerAnswer.slice(0, 240) + "…" : plannerAnswer;
+          broadcast(nodeId, "update", `planner: ${preview.replace(/\n/g, " ")}`);
         }
 
-        const { branches: parsedBranches } = swx.parseBranches(answer);
+        // Read structured emission as the source of truth.
+        const emission = await governing.readActivePlanEmission(projectId);
+        const newOrdinal = emission?.ordinal || 0;
+        const plannerEmittedNewPlan = !!emission && newOrdinal > priorOrdinal;
+
+        if (!plannerEmittedNewPlan) {
+          broadcast(nodeId, "update",
+            priorOrdinal > 0
+              ? `planner ran but emitted no new plan (still on emission-${priorOrdinal}); nothing to dispatch`
+              : "planner emitted no plan — book studio has nothing to dispatch");
+          return;
+        }
+
+        // Pull branch steps directly from the structured emission.
+        const branchSteps = (emission.steps || []).filter((s) => s?.type === "branch" && Array.isArray(s.branches));
+        const parsedBranches = [];
+        for (const step of branchSteps) {
+          for (const b of step.branches) {
+            if (!b?.name) continue;
+            parsedBranches.push({
+              name: b.name,
+              spec: b.spec || "",
+              path: null,
+              files: [],
+              slot: null,
+              mode: null,
+              parentBranch: null,
+            });
+          }
+        }
+
         if (parsedBranches.length === 0) {
-          broadcast(nodeId, "update", "architect returned no branches — nothing to dispatch");
+          broadcast(nodeId, "update", "planner emitted leaf-only plan — no sub-domains to dispatch");
+          return;
+        }
+
+        const swx = sw();
+        if (!swx) {
+          broadcast(nodeId, "update", "swarm extension unavailable — cannot dispatch branches");
           return;
         }
 
@@ -610,6 +676,49 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
         if (validation.errors.length > 0) {
           broadcast(nodeId, "update", `branch validation failed: ${validation.errors[0]}`);
           return;
+        }
+
+        // STAGE 2b — CONTRACTOR (compound only).
+        broadcast(nodeId, "update", `contractor thinking (tree:governing-contractor)…`);
+        const branchNamesList = parsedBranches.map((b) => b.name).join(", ");
+        const contractorMessage =
+          `The Ruler at this scope approved this plan:\n\n${plannerAnswer}\n\n` +
+          `Sub-domain branches: ${branchNamesList}. Identify shared vocabulary ` +
+          `(events, storage keys, message types, function signatures) the named ` +
+          `sub-domains must agree on. Emit via governing-emit-contracts.`;
+        try {
+          const contractorResult = await runChat({
+            userId, username,
+            message: contractorMessage,
+            mode: "tree:governing-contractor",
+            rootId: String(ctx?.project?._id || nodeId),
+            nodeId: String(projectId),
+            signal: controller.signal,
+            scope: "tree",
+            purpose: "contractor",
+            extra: nodeId,
+            onToolResults: (results) => {
+              for (const r of results || []) {
+                const name = r?.toolName || r?.name || "tool";
+                broadcast(nodeId, "update", `tool: ${name}`);
+              }
+            },
+          });
+          const contractorAnswer = (contractorResult?.answer || contractorResult?.content || "").trim();
+          if (contractorAnswer) {
+            const preview = contractorAnswer.length > 240 ? contractorAnswer.slice(0, 240) + "…" : contractorAnswer;
+            broadcast(nodeId, "update", `contractor: ${preview.replace(/\n/g, " ")}`);
+          }
+        } catch (err) {
+          if (!controller.signal.aborted) {
+            log.warn("BookWorkspace/routes", `contractor stage failed: ${err.message}`);
+            broadcast(nodeId, "update", `contractor failed: ${err.message} — proceeding without contracts`);
+          }
+        }
+
+        const activeContracts = await governing.readContracts(projectId);
+        if (Array.isArray(activeContracts) && activeContracts.length > 0) {
+          broadcast(nodeId, "update", `contracts ratified: ${activeContracts.length}`);
         }
 
         broadcast(nodeId, "update", `dispatching ${parsedBranches.length} branches…`);

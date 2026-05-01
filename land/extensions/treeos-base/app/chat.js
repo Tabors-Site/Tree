@@ -567,6 +567,27 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .plan-branch b { color: rgba(200,220,255,0.95); }
     .plan-branch .plan-path, .plan-branch .plan-mode, .plan-branch .plan-files { color: rgba(255,255,255,0.5); margin-left: 6px; }
     .plan-spec { color: rgba(255,255,255,0.75); margin-top: 3px; font-size: 11px; line-height: 1.5; font-family: inherit; }
+    /* Phase 2 prototype: structured-emission plan card. Reasoning section
+       at top, every step shown in numerical order, leaves and branches
+       distinguished, branch sub-domains nested under the parent step. */
+    .plan-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(200,220,255,0.55); margin-bottom: 4px; }
+    .plan-reasoning { margin: 8px 0 12px 0; padding: 8px 10px; background: rgba(0,0,0,0.18); border-left: 2px solid rgba(200,220,255,0.4); border-radius: 4px; }
+    .plan-reasoning-text { font-size: 12px; line-height: 1.55; color: rgba(255,255,255,0.85); }
+    .plan-steps { display: flex; flex-direction: column; gap: 6px; margin: 4px 0; }
+    .plan-step { padding: 7px 10px; background: rgba(0,0,0,0.15); border-radius: 5px; border-left: 2px solid transparent; }
+    .plan-step-leaf { border-left-color: rgba(180,200,160,0.55); }
+    .plan-step-branch { border-left-color: rgba(180,150,220,0.65); }
+    .plan-step-head { font-size: 11px; margin-bottom: 3px; }
+    .plan-step-idx { color: rgba(255,255,255,0.55); margin-right: 6px; }
+    .plan-step-type { display: inline-block; padding: 1px 7px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 3px; }
+    .plan-step-type-leaf { background: rgba(180,200,160,0.18); color: rgba(200,220,180,0.95); }
+    .plan-step-type-branch { background: rgba(180,150,220,0.2); color: rgba(220,200,240,0.95); }
+    .plan-step-spec { font-size: 12px; line-height: 1.45; color: rgba(255,255,255,0.85); margin-top: 3px; }
+    .plan-step-rationale { font-size: 11px; line-height: 1.5; color: rgba(255,255,255,0.7); margin-top: 4px; font-style: italic; }
+    .plan-subdomains { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; padding-left: 8px; }
+    .plan-subdomain { padding: 4px 8px; background: rgba(0,0,0,0.18); border-radius: 4px; }
+    .plan-subdomain-name { font-size: 11px; color: rgba(220,200,240,0.95); }
+    .plan-subdomain-spec { font-size: 11px; color: rgba(255,255,255,0.72); margin-top: 2px; line-height: 1.4; }
     .plan-actions { display: flex; gap: 8px; margin-top: 10px; }
     .plan-btn { padding: 6px 14px; font-size: 12px; font-weight: 600; border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.9); cursor: pointer; transition: all 0.15s; }
     .plan-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.45); }
@@ -1479,23 +1500,97 @@ router.get("/chat", authenticateLite, async (req, res) => {
       var trigger = isUpdate && ev && ev.trigger
         ? '<div class="plan-trigger">\\u21aa ' + escapeHtml(oneLineLive(ev.trigger, 120)) + '</div>'
         : '';
-      var rows = branches.map(function(b) {
-        var name = escapeHtml(b.name || "?");
-        var path = b.path ? '<span class="plan-path">\\u00b7 path: ' + escapeHtml(b.path) + '</span>' : '';
-        var mode = b.mode ? '<span class="plan-mode">\\u00b7 ' + escapeHtml(b.mode) + '</span>' : '';
-        var files = (Array.isArray(b.files) && b.files.length)
-          ? '<span class="plan-files">\\u00b7 files: ' + escapeHtml(oneLineLive(b.files.join(", "), 80)) + '</span>'
+
+      // Structured emission preferred when present. Carries reasoning,
+      // every step (leaves + branches), and branch rationales. Falls
+      // back to legacy branches-only view when emission is absent.
+      var emission = ev && ev.emission && Array.isArray(ev.emission.steps) ? ev.emission : null;
+      var bodyHtml = "";
+      var totalSteps = 0;
+      var branchStepCount = 0;
+      var leafStepCount = 0;
+
+      if (emission) {
+        var reasoningHtml = emission.reasoning
+          ? '<div class="plan-reasoning"><div class="plan-section-label">Reasoning</div><div class="plan-reasoning-text">' +
+              escapeHtml(emission.reasoning) +
+            '</div></div>'
           : '';
-        var spec = b.spec
-          ? '<div class="plan-spec">' + escapeHtml(oneLineLive(b.spec, 180)) + '</div>'
-          : '';
-        return (
-          '<div class="plan-branch">' +
-            '<div class="plan-branch-head"><b>' + name + '</b> ' + path + ' ' + mode + ' ' + files + '</div>' +
-            spec +
-          '</div>'
-        );
-      }).join("");
+
+        var stepsHtml = emission.steps.map(function(step, i) {
+          var idx = i + 1;
+          totalSteps++;
+          if (step && step.type === "leaf") {
+            leafStepCount++;
+            var leafSpec = step.spec
+              ? '<div class="plan-step-spec">' + escapeHtml(step.spec) + '</div>'
+              : '';
+            var leafRationale = step.rationale
+              ? '<div class="plan-step-rationale">\\u2014 ' + escapeHtml(step.rationale) + '</div>'
+              : '';
+            return (
+              '<div class="plan-step plan-step-leaf">' +
+                '<div class="plan-step-head"><span class="plan-step-idx">' + idx + '.</span> ' +
+                  '<span class="plan-step-type plan-step-type-leaf">leaf</span></div>' +
+                leafSpec + leafRationale +
+              '</div>'
+            );
+          }
+          if (step && step.type === "branch") {
+            branchStepCount++;
+            var branchRationale = step.rationale
+              ? '<div class="plan-step-rationale">' + escapeHtml(step.rationale) + '</div>'
+              : '';
+            var subDomains = Array.isArray(step.branches) ? step.branches : [];
+            var subRows = subDomains.map(function(b) {
+              return (
+                '<div class="plan-subdomain">' +
+                  '<div class="plan-subdomain-name">\\u21B3 <b>' + escapeHtml(b.name || "?") + '</b></div>' +
+                  (b.spec ? '<div class="plan-subdomain-spec">' + escapeHtml(b.spec) + '</div>' : '') +
+                '</div>'
+              );
+            }).join("");
+            return (
+              '<div class="plan-step plan-step-branch">' +
+                '<div class="plan-step-head"><span class="plan-step-idx">' + idx + '.</span> ' +
+                  '<span class="plan-step-type plan-step-type-branch">branch</span> ' +
+                  '<span class="live-dim">' + subDomains.length + ' sub-Ruler' + (subDomains.length === 1 ? '' : 's') + '</span></div>' +
+                branchRationale +
+                '<div class="plan-subdomains">' + subRows + '</div>' +
+              '</div>'
+            );
+          }
+          return '';
+        }).join("");
+
+        bodyHtml = reasoningHtml + '<div class="plan-steps">' + stepsHtml + '</div>';
+      } else {
+        // Legacy fallback: emission missing, render branches only.
+        var rows = branches.map(function(b) {
+          var name = escapeHtml(b.name || "?");
+          var path = b.path ? '<span class="plan-path">\\u00b7 path: ' + escapeHtml(b.path) + '</span>' : '';
+          var mode = b.mode ? '<span class="plan-mode">\\u00b7 ' + escapeHtml(b.mode) + '</span>' : '';
+          var files = (Array.isArray(b.files) && b.files.length)
+            ? '<span class="plan-files">\\u00b7 files: ' + escapeHtml(oneLineLive(b.files.join(", "), 80)) + '</span>'
+            : '';
+          var spec = b.spec
+            ? '<div class="plan-spec">' + escapeHtml(oneLineLive(b.spec, 180)) + '</div>'
+            : '';
+          return (
+            '<div class="plan-branch">' +
+              '<div class="plan-branch-head"><b>' + name + '</b> ' + path + ' ' + mode + ' ' + files + '</div>' +
+              spec +
+            '</div>'
+          );
+        }).join("");
+        bodyHtml = '<div class="plan-branches">' + rows + '</div>';
+      }
+
+      var summaryBits = emission
+        ? totalSteps + ' step' + (totalSteps === 1 ? '' : 's') +
+          ' \\u00b7 ' + leafStepCount + ' leaf \\u00b7 ' + branchStepCount + ' branch'
+        : count + ' branch' + (count === 1 ? '' : 'es');
+
       var buttons = (
         '<div class="plan-actions">' +
           '<button class="plan-btn plan-btn-accept">Accept</button>' +
@@ -1508,10 +1603,10 @@ router.get("/chat", authenticateLite, async (req, res) => {
           '<div class="plan-card-head">' +
             '<span class="live-swarm">\\u232b</span> <b>' + escapeHtml(header) + '</b>' +
             (version ? ' <span class="live-dim">' + escapeHtml(version) + '</span>' : '') +
-            ' <span class="live-dim">' + count + ' branch' + (count === 1 ? '' : 'es') + '</span>' +
+            ' <span class="live-dim">' + summaryBits + '</span>' +
           '</div>' +
           trigger +
-          '<div class="plan-branches">' + rows + '</div>' +
+          bodyHtml +
           buttons +
           '<div class="plan-hint">Reply "yes" to run, or describe what to change. "cancel" to drop.</div>' +
         '</div>'

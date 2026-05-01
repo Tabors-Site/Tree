@@ -59,6 +59,32 @@ function currentPath(cfg) {
   return remote + "/" + parts.join("/");
 }
 
+/**
+ * Like currentPath, but returns structured segments so callers (notably
+ * the prompt renderer) can apply per-segment styling — yellow for Ruler
+ * scopes, dim for everything else. Each segment is { name, isRuler }.
+ *
+ *   { remote, segments: [{name, isRuler}, ...] }
+ *
+ * The remote prefix and the leading slash are returned separately so
+ * the renderer can keep them dim while highlighting only segment names.
+ */
+function currentPathSegments(cfg) {
+  const remote = cfg.remoteDomain ? `/@${cfg.remoteDomain}` : "";
+  if (!cfg.activeRootId) {
+    if (remote) return { remote, segments: [] };
+    return { remote: "", segments: [{ name: cfg.atHome ? "~" : "", isRuler: false, root: true }] };
+  }
+  const segments = [
+    // Active root: no isRuler stored on cfg in current setters; treat
+    // as not-ruler unless cfg.activeRootIsRuler was stamped (forward-
+    // compat for future cd-to-root paths that do the metadata fetch).
+    { name: cfg.activeRootName, isRuler: !!cfg.activeRootIsRuler, root: true },
+    ...cfg.pathStack.map((n) => ({ name: n.name, isRuler: !!n.isRuler })),
+  ];
+  return { remote, segments };
+}
+
 function currentLand(cfg) {
   return cfg.landUrl ? cfg.landUrl.replace(/^https?:\/\//, "").replace(/:\d+$/, "").replace(/\/+$/, "") : "local";
 }
@@ -153,7 +179,7 @@ function currentZone(cfg) {
 }
 
 module.exports = {
-  load, save, requireAuth, currentNodeId, currentPath, currentLand, currentZone,
+  load, save, requireAuth, currentNodeId, currentPath, currentPathSegments, currentLand, currentZone,
   isRemoteSession, hasExtension, getProtocolCli,
   getSession, createSession: createSession, switchSession, killSession,
   listSessions, resolveSessionTarget,

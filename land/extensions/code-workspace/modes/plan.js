@@ -22,15 +22,20 @@
  * and the core alone carries the turn.
  */
 
-import compoundBranches from "./facets/compoundBranches.js";
-import amendMissingLayer from "./facets/amendMissingLayer.js";
+// compoundBranches, branchWorker, and amendMissingLayer facets retired
+// with the recursive sub-Ruler + structured-emission cutover.
+// governing-planner owns architect-shaped behavior (compound decisions,
+// adding-a-missing-layer); governing-worker owns the worker base.
+// tree:code-plan is dispatched only as the code-specific Worker (after
+// governing-planner finds leaf work at this scope), so the
+// architect/worker facet matrix is no longer needed here. See
+// project_recursive_sub_ruler_dispatch.
 import behavioralTest from "./facets/behavioralTest.js";
 import probeLoop from "./facets/probeLoop.js";
 import rewriteOverEdits from "./facets/rewriteOverEdits.js";
 import nodePlan from "./facets/nodePlan.js";
 import blockingError from "./facets/blockingError.js";
 import declaredContracts from "./facets/declaredContracts.js";
-import branchWorker from "./facets/branchWorker.js";
 import siblings from "./facets/siblings.js";
 import renderEnrichedContextBlock from "./renderContext.js";
 import { buildStrategyContextBlock } from "../strategyRegistry.js";
@@ -40,24 +45,14 @@ const FACETS = [
   // AI reads when a file is unparseable. Every other instruction is
   // irrelevant until the blocker clears.
   blockingError,
-  // declaredContracts goes next — every branch session must see the
-  // architect's wire protocol at the top of its prompt, not buried
-  // under local planning guidance.
+  // declaredContracts goes next — the Worker must see the contracts
+  // governing this scope at the top of its prompt, not buried under
+  // local planning guidance.
   declaredContracts,
   // siblings immediately after — with sibling visibility + contracts
-  // together, the branch has both the declared protocol and the actual
+  // together, the Worker has both the declared protocol and the actual
   // code siblings wrote. Invented interfaces become impossible.
   siblings,
-  // compoundBranches is for architect-at-empty-root only (skips when
-  // swarmRole === "branch"). branchWorker is the mutually exclusive
-  // counterpart, framing parent-plan lifecycle + sub-plan capability
-  // for workers inside dispatched branches.
-  compoundBranches,
-  branchWorker,
-  // amendMissingLayer fires when the current node has existing child
-  // branches and the user may be asking for a new layer — complementary
-  // to compoundBranches (which handles the fresh-decomposition case).
-  amendMissingLayer,
   nodePlan,
   behavioralTest,
   probeLoop,

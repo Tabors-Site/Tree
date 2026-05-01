@@ -1,18 +1,19 @@
 /**
  * Declared contracts facet.
  *
- * Fires whenever the architect emitted a [[CONTRACTS]] block for the
- * current project and this session is running inside that project.
- * Renders the contracts as a top-of-prompt "YOU MUST IMPLEMENT THESE"
- * block so branch sessions see the exact wire protocol they must
- * build against, not an independently invented one.
+ * Fires whenever a Ruler above (or at) this scope has ratified
+ * contracts and this session is running inside that domain. Renders
+ * the active contracts as a top-of-prompt "YOU MUST IMPLEMENT THESE"
+ * block so the Worker sees the exact wire protocol it must build
+ * against, not an independently invented one.
  *
- * This is the other half of the contract-first architect pattern:
+ * This is the consumer-side of the contract trio:
  *
- *   1. Architect declares contracts in [[CONTRACTS]]
- *   2. Swarm runner stores them on the project root
- *   3. Every branch's enrichContext reads them (code-workspace/index.js)
- *   4. This facet injects them into the branch's system prompt
+ *   1. Contractor emits via governing-emit-contracts → contracts node
+ *   2. Ruler appends contractApprovals (the active ledger)
+ *   3. Every Worker's enrichContext walks the Ruler chain via
+ *      governing.readScopedContracts (code-workspace/index.js)
+ *   4. This facet injects the resolved contracts into the system prompt
  *   5. Post-swarm validator cross-checks actual code against them
  *
  * Without step 4 the contracts would sit on metadata nobody reads.

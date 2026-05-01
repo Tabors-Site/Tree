@@ -328,8 +328,15 @@ async function resolveBranchRootedPath(nodeId, filePath, options = {}) {
     };
   }
 
+  // Recursive sub-Ruler model: each branch IS its own workspace project
+  // (governing.promoteToRuler + code-workspace's Priority 1.5 promote-
+  // in-place). Files write at the branch's own scope without a branch-
+  // name prefix. The legacy `<branchPath>/<file>` rewrite belonged to
+  // the shared-project-with-subdir-branches model and produced nested
+  // duplicates (engine/engine/engine.js) when the branch was both
+  // workspace project AND its own files' parent.
   return {
-    filePath: `${branchPath}/${raw}`,
+    filePath: raw,
     isInBranch: true,
     error: null,
     branchScopeId,
@@ -409,6 +416,110 @@ const ROOT_ALLOWED_FILES = new Set([
  * Only runs when nodeId is AT the project root (resolveBranchRootedPath
  * already covered in-branch calls).
  */
+/**
+ * Ruler-scope write guard. A Worker can only write within its hiring
+ * Ruler's scope. Sub-domains under that scope are NOT in the Worker's
+ * domain — each sub-Ruler hires its OWN Worker for its OWN scope. Only
+ * governing roles (Planner, Contractor) reach deeper, and they don't
+ * write work products; they emit plans and contracts that result in
+ * sub-Ruler dispatch.
+ *
+ * The guard rejects writes whose first directory segment matches any
+ * sub-domain under the writer's Ruler. Two sources of sub-domain names:
+ *
+ *   1. EXISTING children of the Ruler scope that carry governing role
+ *      "ruler" (already promoted) or swarm role "branch" (dispatched
+ *      but mid-promote). Once a sub-Ruler exists, its directory is
+ *      forever off-limits to the parent's Worker.
+ *
+ *   2. FORWARD-DECLARED sub-domains in the Ruler's active plan
+ *      emission. Names from branch-step entries are reserved even
+ *      before swarm dispatches them — the Ruler-own integration
+ *      phase fires BEFORE branch dispatch and would otherwise let the
+ *      Worker squat on those directories.
+ *
+ * Returns null if the write is allowed, or { error } when the path
+ * encroaches on a sub-Ruler scope. Caller fails the tool call so the
+ * Worker sees the architectural reason and stops.
+ *
+ * Performance: one DB query (children) + one read (plan emission) per
+ * write. Both are small; the cost is negligible compared to the write
+ * itself. Skipped when filePath has no directory segment.
+ */
+async function checkRulerScopeWriteGuard(nodeId, filePath) {
+  if (!nodeId || !filePath) return null;
+  const firstSegment = String(filePath).split("/").filter(Boolean)[0] || "";
+  if (!firstSegment) return null;
+  // Only meaningful when the path is INSIDE a directory. A bare
+  // single-segment write at this scope is by definition not deeper.
+  if (!String(filePath).includes("/")) return null;
+
+  try {
+    const { getExtension } = await import("../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (!governing?.findRulerScope) return null;
+
+    // Resolve the nearest Ruler scope upward from the writer's position.
+    const ruler = await governing.findRulerScope(nodeId);
+    if (!ruler) return null;
+
+    const subDomainNames = new Set();
+
+    // Source 1: existing children of the Ruler with governing/swarm
+    // role markers. Includes both promoted sub-Rulers and branch nodes
+    // mid-promotion.
+    try {
+      const children = await Node.find({ parent: ruler._id })
+        .select("_id name metadata")
+        .lean();
+      for (const c of children) {
+        if (!c?.name) continue;
+        const md = c.metadata instanceof Map
+          ? Object.fromEntries(c.metadata)
+          : (c.metadata || {});
+        const isRuler = md.governing?.role === "ruler";
+        const isBranch = md.swarm?.role === "branch";
+        if (isRuler || isBranch) subDomainNames.add(String(c.name).toLowerCase());
+      }
+    } catch {}
+
+    // Source 2: forward-declared sub-domains in the active plan
+    // emission. Reserves the names BEFORE swarm dispatches them, so
+    // the Ruler-own integration phase can't squat on them.
+    try {
+      if (governing.readActivePlanEmission) {
+        const emission = await governing.readActivePlanEmission(ruler._id);
+        if (emission?.steps?.length) {
+          for (const step of emission.steps) {
+            if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
+            for (const b of step.branches) {
+              if (b?.name) subDomainNames.add(String(b.name).toLowerCase());
+            }
+          }
+        }
+      }
+    } catch {}
+
+    if (subDomainNames.size === 0) return null;
+
+    const lowerFirst = firstSegment.toLowerCase();
+    if (subDomainNames.has(lowerFirst)) {
+      return { error:
+        `path "${filePath}" writes inside the "${firstSegment}/" sub-domain. ` +
+        `That directory is a sub-Ruler's scope — its own Worker owns those ` +
+        `files. The Worker at this Ruler can only write at this Ruler's own ` +
+        `scope; deeper domains belong to their own Rulers. If ` +
+        `"${firstSegment}/${String(filePath).split("/").slice(1).join("/")}" ` +
+        `should exist, it belongs in the "${firstSegment}" sub-Ruler's plan, ` +
+        `not here.`
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function checkProjectRootHasBranches(nodeId, filePath) {
   if (!nodeId || !filePath) return null;
   const firstSegment = filePath.split("/").filter(Boolean)[0] || filePath;
@@ -544,6 +655,11 @@ export async function writeFileInBranch({
     // strategy wrappers and SDK callers can drop files at the project
     // root that bypass branch routing entirely.
     if (!resolved.isInBranch) {
+      // Sub-Ruler scope guard fires before the orphan rewrite — a
+      // path into a sub-Ruler directory should be rejected with the
+      // architectural reason, not silently re-routed.
+      const subRulerGate = await checkRulerScopeWriteGuard(nodeId, finalPath);
+      if (subRulerGate?.error) return { ok: false, error: subRulerGate.error };
       const gate = await checkProjectRootHasBranches(nodeId, finalPath);
       if (gate?.rewritePath) finalPath = gate.rewritePath;
       else if (gate?.error) return { ok: false, error: gate.error };
@@ -643,6 +759,53 @@ function scheduleSync(projectId) {
 }
 
 async function ensureProject({ rootId, currentNodeId, userId, core, name, workspacePath }) {
+  // Priority 0: A RULER SCOPE IS ITS OWN WORKSPACE.
+  //
+  // Every Ruler-promoted node owns the files at its own scope; sub-
+  // Rulers do NOT inherit their parent Ruler's workspace. When the
+  // current position is a Ruler scope (governing.role === "ruler") or
+  // a swarm-dispatched branch waiting to be promoted, initialize the
+  // workspace IN PLACE at that scope rather than walking ancestors to
+  // find a parent project. Without this, a sub-Ruler's Worker calling
+  // workspace-add-file would walk up via findProject, hit the root's
+  // already-initialized workspace, and write into the root's directory
+  // — collapsing the per-Ruler file boundary that the architecture
+  // depends on.
+  //
+  // This MUST run before Priority 1's ancestor walk, because the
+  // ancestor walk would short-circuit the Ruler boundary by finding
+  // the root workspace first. The Ruler check is the boundary.
+  if (currentNodeId) {
+    const posNode = await Node.findById(currentNodeId).select("_id name parent metadata").lean();
+    if (posNode) {
+      const md = posNode.metadata instanceof Map
+        ? Object.fromEntries(posNode.metadata)
+        : (posNode.metadata || {});
+      const isBranch = md.swarm?.role === "branch";
+      const isRuler = md.governing?.role === "ruler";
+      if (isBranch || isRuler) {
+        // Already initialized as a workspace at this position? Return
+        // it directly (idempotent re-entry).
+        const existing = await findProject(currentNodeId);
+        if (existing && String(existing._id) === String(currentNodeId)) {
+          trace("ensureProject", "ruler-scope-already-init", `${posNode.name} (${currentNodeId})`);
+          return existing;
+        }
+        const reason = isRuler ? "governing Ruler scope owns its own files" : "swarm-dispatched branch is its own workspace";
+        trace("ensureProject", "ruler-scope-promote-in-place", `${posNode.name} (${currentNodeId}); ${reason}`);
+        const initRes = await initProject({
+          projectNodeId: currentNodeId,
+          name: name || posNode.name,
+          description: `Auto-initialized: ${reason}.`,
+          workspacePath,
+          userId,
+          core,
+        });
+        return initRes.node;
+      }
+    }
+  }
+
   // Priority 1: POSITION WINS. If the worker is standing inside or on
   // a known project, use that project regardless of what `name` the
   // caller passed. The LLM frequently hallucinates similar-but-wrong
@@ -660,6 +823,28 @@ async function ensureProject({ rootId, currentNodeId, userId, core, name, worksp
       trace("ensureProject", "found-in-ancestors", `${fromPosition.name} (${fromPosition._id})`);
     }
     return fromPosition;
+  }
+
+  // Priority 1.5: position matches the requested name. Auto-initialize
+  // the workspace in place at currentNodeId rather than creating a
+  // duplicate child. The Ruler/branch case is handled by Priority 0
+  // above; this catches the legacy "name-matches-current-position"
+  // shortcut for non-Ruler positions (rare in the current substrate
+  // but kept for back-compat).
+  if (currentNodeId && name) {
+    const posNode = await Node.findById(currentNodeId).select("_id name parent metadata").lean();
+    if (posNode && posNode.name === name) {
+      trace("ensureProject", "promote-name-match-in-place", `${posNode.name} (${currentNodeId})`);
+      const initRes = await initProject({
+        projectNodeId: currentNodeId,
+        name,
+        description: `Auto-initialized: position name matched requested project name.`,
+        workspacePath,
+        userId,
+        core,
+      });
+      return initRes.node;
+    }
   }
 
   // Priority 2: no position context. Fall back to explicit name lookup.
@@ -854,6 +1039,17 @@ export default function getWorkspaceTools(core) {
               scopeNodeId = resolved.branchScopeId;
             }
             if (!resolved.isInBranch) {
+              // Sub-Ruler scope guard. A Ruler's Worker can't write
+              // into directories that are (or will be) sub-Ruler
+              // scopes. Reads the active plan emission to find sub-
+              // domain names; rejects paths starting with them. Fires
+              // BEFORE the orphan-gate so the Worker sees the
+              // architectural reason rather than the orphan rewrite.
+              const subRulerGate = await checkRulerScopeWriteGuard(nodeId, filePath);
+              if (subRulerGate?.error) {
+                trace("workspace-add-file", "SUB-RULER-SCOPE", subRulerGate.error.slice(0, 200));
+                return text(`workspace-add-file rejected: ${subRulerGate.error}`);
+              }
               const gate = await checkProjectRootHasBranches(nodeId, filePath);
               if (gate?.rewritePath) {
                 trace("workspace-add-file", "AUTO-ROUTE", `${filePath} → ${gate.rewritePath}`);
@@ -1093,6 +1289,11 @@ export default function getWorkspaceTools(core) {
               scopeNodeId = resolved.branchScopeId;
             }
             if (!resolved.isInBranch) {
+              const subRulerGate = await checkRulerScopeWriteGuard(nodeId, filePath);
+              if (subRulerGate?.error) {
+                trace("workspace-edit-file", "SUB-RULER-SCOPE", subRulerGate.error.slice(0, 200));
+                return text(`workspace-edit-file rejected: ${subRulerGate.error}`);
+              }
               const gate = await checkProjectRootHasBranches(nodeId, filePath);
               if (gate?.rewritePath) {
                 trace("workspace-edit-file", "AUTO-ROUTE", `${filePath} → ${gate.rewritePath}`);
@@ -1278,6 +1479,14 @@ export default function getWorkspaceTools(core) {
       annotations: { readOnlyHint: false },
       async handler({ filePath, projectName, userId, rootId, nodeId }) {
         try {
+          // Ruler-scope write guard: deletion is a write. A Worker
+          // cannot delete files inside a sub-Ruler's scope; that
+          // sub-Ruler owns its own files.
+          const subRulerGate = await checkRulerScopeWriteGuard(nodeId, filePath);
+          if (subRulerGate?.error) {
+            trace("workspace-delete-file", "SUB-RULER-SCOPE", subRulerGate.error.slice(0, 200));
+            return text(`workspace-delete-file rejected: ${subRulerGate.error}`);
+          }
           const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
           const { fileNode, created } = await resolveOrCreateFile({
             projectNodeId: project._id, relPath: filePath, userId, core,
@@ -2037,20 +2246,18 @@ export default function getWorkspaceTools(core) {
                   `Copy this structure verbatim, filling in real specs for the task:\n\n` +
                   `    [[BRANCHES]]\n` +
                   `    branch: backend\n` +
-                  `      spec: <one paragraph — what backend owns, routes/payloads/state>\n` +
-                  `      slot: code-plan\n` +
-                  `      path: backend\n` +
+                  `      spec: <one paragraph, what backend owns, routes/payloads/state>\n` +
                   `      files: package.json, server.js\n` +
                   `\n` +
                   `    branch: frontend\n` +
-                  `      spec: <one paragraph — views, state, what backend calls it makes>\n` +
-                  `      slot: code-plan\n` +
-                  `      path: frontend\n` +
+                  `      spec: <one paragraph, views, state, what backend calls it makes>\n` +
                   `      files: index.html, app.js\n` +
                   `    [[/BRANCHES]]\n` +
                   `    [[DONE]]\n\n` +
-                  `Rules: every branch name MUST equal its path. Never use the project's ` +
-                  `own name as a branch name. Each branch must have a unique name/path.\n\n` +
+                  `Rules: branch name IS the directory name and the scope name. Never use ` +
+                  `the project's own name as a branch name. Each branch must have a unique ` +
+                  `name. Integration files (the root entry, bootstrap script) are this ` +
+                  `Ruler's own files at THIS scope, not a separate branch.\n\n` +
                   `If the task is genuinely a single file or a small fix, skip the plan ` +
                   `and call workspace-add-file directly for that file. You do not need ` +
                   `a plan for one file.\n\n` +

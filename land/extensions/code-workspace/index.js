@@ -732,9 +732,11 @@ export async function init(core) {
       // rejected at submit time.
       try {
         const sw = await swarm();
+        const { getExtension } = await import("../loader.js");
+        const governing = getExtension("governing")?.exports;
         const projectNode = role === "project"
           ? { _id: nodeId, name: cwData?.name || null }
-          : (sw?.findProjectForNode ? await sw.findProjectForNode(nodeId) : null);
+          : (governing?.findRulerScope ? await governing.findRulerScope(nodeId) : null);
         if (projectNode?._id) {
           const blocker = await findBlockingSyntaxError({
             projectNodeId: projectNode._id,
@@ -1647,9 +1649,11 @@ export async function init(core) {
       // anchor (top-level runs) or an outer ancestor (sub-plan runs).
       const NodeModel = (await import("../../seed/models/node.js")).default;
       const anchorId = workspaceAnchorNode?._id || rootProjectNode._id;
+      const { getExtension: getExt2 } = await import("../loader.js");
+      const governing2 = getExt2("governing")?.exports;
       const projectDoc = workspaceAnchorNode
-        || (sw?.findProjectForNode
-          ? (await sw.findProjectForNode(anchorId))
+        || (governing2?.findRulerScope
+          ? (await governing2.findRulerScope(anchorId))
             || (await NodeModel.findById(anchorId))
           : await NodeModel.findById(anchorId));
       if (!projectDoc) return;

@@ -47,7 +47,7 @@ router.post("/root/:rootId/swarm-plans/branches/:branchName/generate", authentic
       `Generate a [[BRANCHES]] plan for this branch's scope:\n\n` +
       `Branch: ${branchName}\n` +
       `Spec: ${spec}\n\n` +
-      `Emit the complete [[BRANCHES]] block (with a shell branch at path: "." if the branch needs an integration file). Close with [[DONE]].`;
+      `Emit the complete [[BRANCHES]] block. If the branch needs an integration file at this scope, write it as this Ruler's own file (do not create a separate branch for it). Close with [[DONE]].`;
 
     runChat({
       userId,

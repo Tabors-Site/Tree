@@ -4,6 +4,13 @@ function printNode(node, indent = 0, isLast = true) {
   const prefix =
     indent === 0 ? "" : "  ".repeat(indent - 1) + (isLast ? "└─ " : "├─ ");
   const status = node.status || "active";
+
+  // Ruler scopes (governing extension promotion) render gold/yellow with
+  // a crown. Marker only present when the governing extension is
+  // installed and has promoted this node — natural feature flag.
+  const meta = node.metadata || {};
+  const isRuler = meta?.governing?.role === "ruler";
+
   const statusColor =
     {
       active: chalk.green,
@@ -12,7 +19,13 @@ function printNode(node, indent = 0, isLast = true) {
     }[status] || chalk.white;
 
   const nodeId = node._id || node.id || "";
-  const name = statusColor(node.name || "unnamed");
+  const baseName = node.name || "unnamed";
+  // Ruler styling wins over status color (a Ruler is structurally
+  // distinct; status remains visible via the crown's absence/presence
+  // chains in deeper fields). Crown emoji prefixes the name.
+  const name = isRuler
+    ? chalk.yellow.bold(`👑 ${baseName}`)
+    : statusColor(baseName);
   const id = chalk.dim(`(${nodeId})`);
   console.log(prefix + name + "  " + id);
 

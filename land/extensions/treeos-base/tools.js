@@ -453,13 +453,13 @@ const TOOL_DEFS = {
   function: {
     name: "get-tree-context",
     description:
-      "Reads node data with configurable scope. Returns notes, and optionally siblings, parent chain, scripts.",
+      "Reads node data with configurable scope. Returns notes, and optionally siblings, parent chain, scripts. Requires a UUID. Names are rejected; use navigate-tree to resolve a name first.",
     parameters: {
       type: "object",
       properties: {
         nodeId: {
           type: "string",
-          description: "Node ID to read.",
+          description: "Node UUID (8-4-4-4-12 hex). Names like 'i' or 'frontend' are rejected.",
         },
         includeNotes: {
           type: "boolean",

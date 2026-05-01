@@ -320,13 +320,12 @@ export async function init(core) {
     const targetNodeId = args?.nodeId || args?.branchId || null;
     if (!targetNodeId) return;
 
-    // Reject notes containing swarm control markers — these are CONTROL
-    // SYNTAX (consumed by parseBranches / parseContracts) and should
-    // never land in a note body. If they do, the book compiler renders
-    // them verbatim and the reader sees "[[BRANCHES]] branch: ch06..."
-    // as literal text in the book. Cancel the tool call with a redirect
-    // instruction so the model re-emits without markers OR rewrites its
-    // turn entirely to use Path B (branches-only, no prose).
+    // Reject notes containing swarm control markers — these are legacy
+    // CONTROL SYNTAX from before the structured-emission cutover and
+    // should never land in a note body. If they do, the book compiler
+    // renders them verbatim and the reader sees "[[BRANCHES]] branch:
+    // ch06..." as literal text in the book. Cancel the tool call so
+    // the model re-emits without markers.
     const content = typeof args?.content === "string" ? args.content : null;
     if (content && /\[\[\s*\/?\s*(branches|contracts|premise)\s*\]\]/i.test(content)) {
       cancel(
@@ -554,12 +553,15 @@ export async function handleMessage(message, { userId, username, rootId, targetN
           await NodeModel.updateOne({ _id: n._id }, { $set: { [`metadata.${ns}`]: data } });
         } } },
       });
-      const sw = getExtension("swarm")?.exports;
-      if (sw?.ensureProject) {
-        await sw.ensureProject({
-          rootId: projectId,
-          systemSpec: message.slice(0, 500),
-          owner: "book-workspace",
+      // Self-promote the project to Ruler via governing. swarm-mechanism
+      // bookkeeping (inbox, aggregatedDetail, events) initializes when
+      // swarm.runBranchSwarm dispatches branches at this scope.
+      const governing = getExtension("governing")?.exports;
+      if (governing?.promoteToRuler) {
+        await governing.promoteToRuler({
+          nodeId: projectId,
+          reason: `book-workspace project init: ${message.slice(0, 80)}`,
+          promotedFrom: governing.PROMOTED_FROM?.ROOT,
         });
       }
     }

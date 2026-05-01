@@ -15,19 +15,17 @@
 //   swarm:runScouts              scout phase cycle (scout extensions hook here)
 
 import {
-  parseBranches,
-  parseContracts,
   validateBranches,
   runBranchSwarm,
 } from "./swarm.js";
-import { tryResumeSwarm } from "./resumeSwarm.js";
+// Resumption decision moved to governing.resumeAtRuler. swarm exposes
+// runBranchSwarm as the dispatch primitive; the decision of WHAT to
+// dispatch on resume is the Ruler's, owned by governing.
 import {
-  findProjectForNode,
   findBranchContext,
   findBranchSiblings,
   promoteDoneAncestors,
   detectResumableSwarm,
-  ensureProject as _ensureProject,
 } from "./project.js";
 import { reconcileProject } from "./reconcile.js";
 import { readSiblingBranches, readSiblingNode } from "./siblingRead.js";
@@ -37,13 +35,18 @@ import {
   pruneSignalsForFile,
   pruneSignalsByKind,
 } from "./state/signalInbox.js";
-import { setContracts, readContracts, readScopedContracts } from "./state/contracts.js";
+// Contracts and validators APIs moved to the governing extension. Swarm
+// re-exports them transitionally so callers using getExtension("swarm")
+// keep working while consumers migrate to getExtension("governing"). The
+// module-level imports below are the only places swarm itself reaches
+// into governing.
+import { setContracts, readContracts, readScopedContracts } from "../governing/state/contracts.js";
 import {
   registerValidator,
   unregisterValidatorsForExt,
   runValidators,
   listValidators,
-} from "./state/validators.js";
+} from "../governing/state/validators.js";
 import { setSummary } from "./state/meta.js";
 import { rollUpDetail, readAggregatedDetail } from "./state/aggregation.js";
 import { recordEvent, readEvents } from "./state/events.js";
@@ -138,17 +141,12 @@ export async function init(core) {
   return {
     router,
     exports: {
-      parseBranches,
-      parseContracts,
       validateBranches,
       runBranchSwarm,
-      tryResumeSwarm,
-      findProjectForNode,
       findBranchContext,
       findBranchSiblings,
       promoteDoneAncestors,
       detectResumableSwarm,
-      ensureProject,
       reconcileProject,
       readSiblingBranches,
       readSiblingNode,
@@ -187,28 +185,19 @@ export async function init(core) {
   };
 }
 
-async function ensureProject({ rootId, systemSpec, owner }) {
-  return _ensureProject({
-    rootId,
-    systemSpec,
-    owner,
-    core: _core,
-    fireHook: (name, payload) => _core?.hooks?.run?.(name, payload),
-  });
-}
+// ensureProject removed. The work it did splits cleanly: governing's
+// promoteToRuler owns role assignment, swarm's ensureScopeBookkeeping
+// owns mechanism-state init at dispatch time, plan.ensurePlanAtScope
+// owns plan-namespace setup. Callers reach for those primitives
+// directly instead of asking swarm to "ensure a project."
 
 export {
-  parseBranches,
-  parseContracts,
   validateBranches,
   runBranchSwarm,
-  tryResumeSwarm,
-  findProjectForNode,
   findBranchContext,
   findBranchSiblings,
   promoteDoneAncestors,
   detectResumableSwarm,
-  ensureProject,
   reconcileProject,
   readSiblingBranches,
   readSiblingNode,

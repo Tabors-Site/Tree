@@ -137,11 +137,20 @@ export async function getTreeForAi(rootId, filter = null) {
 /**
  * Get tree structure (lightweight, just IDs, names, types, status).
  * Uses iterative traversal with depth and node caps.
+ *
+ * filters.includeMetadata: when true, attaches the node's metadata
+ * to each entry. Default off (the structure stays slim for callers
+ * that just want the shape). HTML overview pages and the CLI tree
+ * view opt in so they can render Ruler crowns and other extension
+ * markers (governing.role, swarm.role, etc.).
  */
 export async function getTreeStructure(rootId, filters = {}) {
   if (!rootId) throw new Error("Root node ID is required");
 
-  const FIELDS = "_id name type status children parent systemRole";
+  const includeMetadata = filters.includeMetadata === true;
+  const FIELDS = includeMetadata
+    ? "_id name type status children parent systemRole metadata"
+    : "_id name type status children parent systemRole";
   const depthCap = maxTreeDepth() + 2; // structure needs slightly more depth than AI summary
   const nodeCap = maxTreeNodes() * 5; // structure serves HTML, needs more nodes
 
@@ -173,7 +182,9 @@ export async function getTreeStructure(rootId, filters = {}) {
     // Filter: skip nodes with wrong status and no children (never skip the root)
     if (depth > 0 && !allowedStatuses.includes(status) && children.length === 0) return null;
 
-    return { _id: node._id, name: node.name, type: node.type || null, status, parent: node.parent, children };
+    const out = { _id: node._id, name: node.name, type: node.type || null, status, parent: node.parent, children };
+    if (includeMetadata && node.metadata) out.metadata = node.metadata;
+    return out;
   }
 
   const rootNode = await buildNode(rootId, 0);

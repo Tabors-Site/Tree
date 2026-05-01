@@ -36,8 +36,6 @@ honor them.
   [[BRANCHES]]
   branch: 01-the-stale-kitchen
     spec: Chef's present-day kitchen. Establish his craft AND his coldness. ~3500 words. Close third on Chef. End with the jump trigger.
-    mode: tree:book-write
-    path: 01-the-stale-kitchen
   [[/BRANCHES]]
 
 Rules:

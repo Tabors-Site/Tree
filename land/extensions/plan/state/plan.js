@@ -86,7 +86,7 @@
 import crypto from "crypto";
 import Node from "../../../seed/models/node.js";
 import log from "../../../seed/log.js";
-import { setExtMeta as kernelSetExtMeta, readNs } from "../../../seed/tree/extensionMetadata.js";
+import { readNs } from "../../../seed/tree/extensionMetadata.js";
 
 export const NS = "plan";
 
@@ -202,29 +202,68 @@ function readMeta(node) {
  */
 async function mutatePlan(nodeId, mutator, _core) {
   if (!nodeId || typeof mutator !== "function") return null;
-  try {
-    const node = await Node.findById(nodeId);
-    if (!node) return null;
-    const current = (node.metadata instanceof Map ? node.metadata.get(NS) : node.metadata?.[NS]) || null;
-    const draft = ensureShape(current ? JSON.parse(JSON.stringify(current)) : emptyPlan());
-    const out = ensureShape(mutator(draft) || draft);
-    out.updatedAt = new Date().toISOString();
-    // ALWAYS use the unscoped kernel setExtMeta. The plan extension is
-    // the declared owner of metadata.plan, and callers pass their own
-    // scoped `core` (from swarm, code-workspace, book-workspace, etc.)
-    // which enforces a per-extension namespace whitelist and REJECTS
-    // cross-namespace writes. The scope check is the right default for
-    // extensions writing into THEIR OWN namespace; here the plan
-    // extension is acting on its OWN behalf on behalf of the caller,
-    // so we bypass the caller's scope wrapper. Using kernelSetExtMeta
-    // directly keeps the atomic $set, the afterMetadataWrite hook fire,
-    // and the cache invalidation intact. Caller's core arg is ignored.
-    await kernelSetExtMeta(node, NS, out);
-    return out;
-  } catch (err) {
-    log.warn("Plan", `mutatePlan ${nodeId} failed: ${err.message}`);
-    return null;
+  // Optimistic concurrency control. Two branches finishing in parallel
+  // both READ the current plan, both compute an `out` from that baseline,
+  // both attempt to WRITE. Without a CAS check the second writer's $set
+  // overwrites the first, silently losing whatever the first writer
+  // changed. The _writeSeq field is a CAS token: every successful write
+  // stamps a fresh UUID, and the conditional update requires the existing
+  // _writeSeq to still match what we read. If a concurrent writer
+  // advanced it between our read and write, matchedCount is zero and we
+  // retry from a fresh read with the bounded retry budget.
+  //
+  // Caller's `core` arg is ignored. The plan extension owns metadata.plan
+  // and writes through the unscoped path; scoped wrappers from caller
+  // extensions would reject cross-namespace writes.
+  const MAX_RETRIES = 5;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const node = await Node.findById(nodeId).lean();
+      if (!node) return null;
+      const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
+      const current = meta[NS] || null;
+      const expectedSeq = current?._writeSeq || null;
+      const baseDraft = current ? JSON.parse(JSON.stringify(current)) : emptyPlan();
+      const draft = ensureShape(baseDraft);
+      const out = ensureShape(mutator(draft) || draft);
+      out.updatedAt = new Date().toISOString();
+      out._writeSeq = crypto.randomUUID();
+
+      // Filter requires the existing _writeSeq to still match what we
+      // read. The $in:[null] branch covers both first-write (no namespace
+      // yet) and existing plans that predate the CAS field — they receive
+      // a _writeSeq on their first mutation under the new code path.
+      const filter = expectedSeq
+        ? { _id: nodeId, [`metadata.${NS}._writeSeq`]: expectedSeq }
+        : { _id: nodeId, [`metadata.${NS}._writeSeq`]: { $in: [null] } };
+      const result = await Node.updateOne(
+        filter,
+        { $set: { [`metadata.${NS}`]: out } },
+      );
+      if (result.matchedCount > 0) {
+        // Replicate the side effects that kernelSetExtMeta does for us:
+        // ancestor cache invalidation and afterMetadataWrite hook fire.
+        try {
+          const { invalidateNode } = await import("../../../seed/tree/ancestorCache.js");
+          invalidateNode(String(nodeId));
+        } catch {}
+        try {
+          const { hooks } = await import("../../../seed/hooks.js");
+          hooks.run("afterMetadataWrite", { nodeId, extName: NS, data: out }).catch(() => {});
+        } catch {}
+        return out;
+      }
+      // CAS conflict; loop and retry from a fresh read of the current
+      // state, applying the mutator on top of whatever the winning
+      // writer left behind.
+      log.debug("Plan", `mutatePlan ${nodeId} CAS retry ${attempt + 1}/${MAX_RETRIES}`);
+    } catch (err) {
+      log.warn("Plan", `mutatePlan ${nodeId} failed: ${err.message}`);
+      return null;
+    }
   }
+  log.warn("Plan", `mutatePlan ${nodeId} gave up after ${MAX_RETRIES} retries (high contention)`);
+  return null;
 }
 
 function emptyPlan() {

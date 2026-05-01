@@ -358,7 +358,7 @@ module.exports = (program) => {
                     console.log(chalk.yellow(`Stopped at ${currentPath(cfg)} — no child matching "${seg}"`));
                     break;
                   }
-                  cfg.pathStack.push({ id: child._id, name: child.name });
+                  cfg.pathStack.push({ id: child._id, name: child.name, isRuler: child?.metadata?.governing?.role === "ruler" });
                   save(cfg);
                 } catch (e) {
                   console.error(chalk.red(e.message));
@@ -470,7 +470,7 @@ module.exports = (program) => {
               console.log(chalk.yellow(`Stopped at ${currentPath(cfg)} — no child matching "${seg}"`));
               break;
             }
-            cfg.pathStack.push({ id: target._id, name: target.name });
+            cfg.pathStack.push({ id: target._id, name: target.name, isRuler: target?.metadata?.governing?.role === "ruler" });
             save(cfg);
           } catch (e) {
             console.error(chalk.red(e.message));
@@ -535,7 +535,7 @@ module.exports = (program) => {
           return;
         }
 
-        cfg.pathStack.push({ id: target._id, name: target.name });
+        cfg.pathStack.push({ id: target._id, name: target.name, isRuler: target?.metadata?.governing?.role === "ruler" });
         save(cfg);
       } catch (e) {
         console.error(chalk.red(e.message));

@@ -405,8 +405,12 @@ router.get("/node/:nodeId", authenticate, async (req, res) => {
 
     if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
+    // Children include the governing namespace so CLI / dashboard
+    // consumers can detect Ruler scopes without a second fetch per
+    // child. Only governing is selected; other extension namespaces
+    // stay slim.
     const children = await Node.find({ _id: { $in: node.children } })
-      .select("name _id status")
+      .select("name _id status metadata.governing")
       .lean();
     node.children = children;
 

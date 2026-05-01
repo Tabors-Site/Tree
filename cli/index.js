@@ -3,7 +3,28 @@
 const { Command } = require("commander");
 const chalk = require("chalk");
 const { version } = require("./package.json");
-const { load, currentPath, currentLand, getProtocolCli, currentZone, currentNodeId } = require("./config");
+const { load, currentPath, currentPathSegments, currentLand, getProtocolCli, currentZone, currentNodeId } = require("./config");
+
+/**
+ * Render a path with per-segment coloring. Ruler scopes (segments where
+ * isRuler is true) render in yellow; everything else stays dim. Returns
+ * an ANSI-colored string ready to drop into the prompt.
+ *
+ * Falls back to plain dim path when segments are absent (no active
+ * root) so the empty / ~ paths stay dim as before.
+ */
+function renderColoredPath(cfg) {
+  const { remote, segments } = currentPathSegments(cfg);
+  if (!segments.length) {
+    // No active root — keep the legacy dim rendering.
+    return chalk.dim(currentPath(cfg));
+  }
+  const parts = segments.map((s) => {
+    if (!s.name) return "";
+    return s.isRuler ? chalk.yellow(s.name) : chalk.dim(s.name);
+  });
+  return chalk.dim(remote + "/") + parts.join(chalk.dim("/"));
+}
 const { getApi } = require("./helpers");
 
 const program = new Command();
@@ -449,7 +470,7 @@ const startShell = module.exports.startShell = async () => {
       const user = cfg.username || cfg.userId || "?";
       const land = currentLand(cfg);
       const session = cfg.activeSession ? chalk.magenta(` @${cfg.activeSession}`) : "";
-      const p = chalk.green(user) + chalk.dim("@") + chalk.dim(land) + chalk.dim(currentPath(cfg)) + session + chalk.bold.cyan(" \u203a ");
+      const p = chalk.green(user) + chalk.dim("@") + chalk.dim(land) + renderColoredPath(cfg) + session + chalk.bold.cyan(" \u203a ");
       // Show hint inline after the command text (dim, same line)
       // Truncate hint so it never wraps to the next line
       let hint = "";
@@ -620,7 +641,7 @@ const startShell = module.exports.startShell = async () => {
       const user = cfg.username || cfg.userId || "?";
       const land = currentLand(cfg);
       const session = cfg.activeSession ? chalk.magenta(` @${cfg.activeSession}`) : "";
-      const p = chalk.green(user) + chalk.dim("@") + chalk.dim(land) + chalk.dim(currentPath(cfg)) + session + chalk.bold.cyan(" › ");
+      const p = chalk.green(user) + chalk.dim("@") + chalk.dim(land) + renderColoredPath(cfg) + session + chalk.bold.cyan(" › ");
       rl.setPrompt(p);
       rl.prompt();
     };

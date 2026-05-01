@@ -27,7 +27,7 @@ const MAX_VERIFIED_ENDPOINTS = 80;
  * Walk from a leaf node upward, merging a delta into every ancestor's
  * aggregatedDetail. Stops at the project root once reached.
  */
-export async function rollUpDetail({ fromNodeId, delta, core, stopAtProject = true }) {
+export async function rollUpDetail({ fromNodeId, delta, core, stopAtProject = true, stopAtRuler = stopAtProject }) {
   if (!fromNodeId || !delta) return;
   let cursor = String(fromNodeId);
   let guard = 0;
@@ -35,7 +35,13 @@ export async function rollUpDetail({ fromNodeId, delta, core, stopAtProject = tr
     const n = await Node.findById(cursor).select("_id parent metadata").lean();
     if (!n) return;
     const meta = readMeta(n);
-    if (meta && (meta.role === "branch" || meta.role === "project")) {
+    // Aggregate at branch nodes (swarm-mechanism marker) and at Ruler
+    // scopes (governing's role). The legacy "project" role is gone.
+    const governingMeta = n.metadata instanceof Map
+      ? n.metadata.get("governing")
+      : n.metadata?.governing;
+    const isRulerScope = governingMeta?.role === "ruler";
+    if (meta && (meta.role === "branch" || isRulerScope)) {
       await mutateMeta(n._id, (draft) => {
         if (!draft.aggregatedDetail) {
           draft.aggregatedDetail = {
@@ -91,7 +97,9 @@ export async function rollUpDetail({ fromNodeId, delta, core, stopAtProject = tr
         return draft;
       }, core);
 
-      if (stopAtProject && meta.role === "project") return;
+      // Stop at the nearest Ruler scope. Roll-up never crosses Ruler
+      // boundaries: each Ruler aggregates its own subtree.
+      if (stopAtRuler && isRulerScope) return;
     }
     if (!n.parent) return;
     cursor = String(n.parent);

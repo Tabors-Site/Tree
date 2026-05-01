@@ -22,6 +22,11 @@ router.get("/root/:nodeId", authenticate, async (req, res) => {
       active: req.query.active !== "false",
       trimmed: req.query.trimmed === "true",
       completed: req.query.completed !== "false",
+      // Include metadata so the CLI tree view (display.printNode) can
+      // detect Ruler scopes via metadata.governing.role and render the
+      // crown / gold styling. Heavier than the slim default but fine
+      // for /root JSON which is already a non-hot path.
+      includeMetadata: true,
     });
 
     const rootMeta = await Node.findById(nodeId)

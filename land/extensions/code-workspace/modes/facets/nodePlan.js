@@ -18,13 +18,13 @@ export default {
   shouldInject(ctx) {
     if (!ctx?.enrichedContext?.nodePlan) return false;
     // Skip when the rendered "plan" is just the empty-state placeholder
-    // ("no local plan yet"). The branchWorker facet handles spec-only
-    // workers; injecting plan-advancement rules at an empty plan node
-    // creates contradictions with that.
+    // ("no local plan yet"). At an empty plan node the Planner has not
+    // yet emitted; injecting plan-advancement rules into that turn
+    // would contradict the Planner's own work.
     if (/\(no local plan yet\b/.test(ctx.enrichedContext.nodePlan)) return false;
-    // Defer to compoundBranches on turn 1 at an empty project root —
-    // both facets together would tell the AI to "set a plan" AND "emit
-    // [[BRANCHES]] first" at the same turn.
+    // Skip on turn 1 at a fresh project root. The Ruler-cycle is about
+    // to dispatch the Planner; the Worker shouldn't see plan-advancement
+    // rules before the plan exists.
     const view = ctx?.enrichedContext?.localViewData;
     const isFreshProjectRoot =
       ctx?.isFirstTurn === true &&

@@ -775,13 +775,13 @@ export async function resolveWorkspaceRoot(nodeId) {
     }
     try {
       const { getExtension } = await import("../loader.js");
-      const sw = getExtension("swarm")?.exports;
-      if (sw?.findProjectForNode) {
-        const project = await sw.findProjectForNode(nodeId);
-        if (project) return getWorkspacePath(project);
+      const governing = getExtension("governing")?.exports;
+      if (governing?.findRulerScope) {
+        const scope = await governing.findRulerScope(nodeId);
+        if (scope) return getWorkspacePath(scope);
       }
     } catch {
-      // Swarm unavailable — very unusual, fall through to default.
+      // Governing unavailable — fall through to default.
     }
     return path.join(DEFAULT_WORKSPACE_ROOT, String(nodeId));
   } catch {

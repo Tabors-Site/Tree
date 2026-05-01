@@ -43,7 +43,7 @@ export default {
   needs: {
     services: ["hooks", "metadata"],
     models: ["Node"],
-    extensions: ["plan"],
+    extensions: ["plan", "governing"],
   },
 
   optional: {

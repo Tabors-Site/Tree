@@ -1,4 +1,4 @@
-// Declarative validator registry for the swarm.
+// Declarative validator registry for governing.
 //
 // Pass 1's existing validators (smoke test, contract conformance, scout
 // loop, chapter validation) register through the kernel hook system on
@@ -9,17 +9,17 @@
 // post-court (after a ruling has been applied). Implicit registration
 // order can't express that.
 //
-// This module adds a parallel, declarative registry that the swarm fires
+// This module owns the parallel, declarative registry that swarm fires
 // alongside its kernel hooks. Validators registered here carry an
 // explicit `phase` (pre | main | post) and `order` (numeric tiebreaker;
-// lower = innermost = fires first within the phase). The swarm sorts by
+// lower = innermost = fires first within the phase). Callers sort by
 // (phase, order) before invocation, so registration order doesn't affect
 // semantics.
 //
 // Backward-compatible by design: extensions that don't register here
 // continue to fire through their kernel hook subscriptions exactly as
 // before. New validators (especially Pass 2's court system) opt into
-// declarative ordering by calling `swarm.registerValidator(...)`.
+// declarative ordering by calling registerValidator(...).
 //
 // Scope vocabulary (Pass 1):
 //   "branch-complete"  - fires per branch after termination
@@ -32,8 +32,8 @@
 //   "post"  - reactive cleanup; runs after main validators settle
 //
 // Validators may mutate the payload (e.g., flip `result.status` to
-// "failed" on the branch-complete payload to force a retry); swarm
-// preserves that contract from the existing hook-based path.
+// "failed" on the branch-complete payload to force a retry); callers
+// preserve that contract.
 
 import log from "../../../seed/log.js";
 
@@ -127,7 +127,7 @@ export async function runValidators(scope, payload) {
       await entry.fn(payload);
     } catch (err) {
       log.warn(
-        "SwarmValidators",
+        "GoverningValidators",
         `[${scope}] ${entry.ext} (phase=${entry.phase}, order=${entry.order}) ` +
         `threw: ${err.message}`,
       );
@@ -137,7 +137,7 @@ export async function runValidators(scope, payload) {
 
 /**
  * Diagnostic: return the registered validators for a scope in firing
- * order. Useful for boot-time logging and the swarm-plans page.
+ * order. Useful for boot-time logging and admin pages.
  */
 export function listValidators(scope) {
   const list = _registry.get(scope);

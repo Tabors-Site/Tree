@@ -29,7 +29,7 @@ const MAX_NAMESPACE_KEY_LENGTH = 50;
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 function MAX_NESTING_DEPTH() {
-  return Math.max(2, Math.min(Number(getLandConfigValue("metadataMaxNestingDepth")) || 5, 20));
+  return Math.max(2, Math.min(Number(getLandConfigValue("metadataMaxNestingDepth")) || 8, 20));
 }
 
 // ─────────────────────────────────────────────────────────────────────────

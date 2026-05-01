@@ -812,6 +812,11 @@ export function buildTreeosHtmlRoutes() {
         active: req.query.active !== "false",
         trimmed: req.query.trimmed === "true",
         completed: req.query.completed !== "false",
+        // Include metadata so renderTree can detect Ruler nodes
+        // (metadata.governing.role) for crown / gold-border styling.
+        // Heavier than the slim default but acceptable for HTML
+        // rendering which already produces large pages.
+        includeMetadata: true,
       });
 
       const rootMeta = await Node.findById(nodeId)

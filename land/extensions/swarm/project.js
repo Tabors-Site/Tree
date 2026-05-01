@@ -1,35 +1,37 @@
-// Project/branch tree-walk primitives. Swarm-native. Finds the nearest
-// swarm project by walking ancestors for metadata.swarm.role === "project",
-// and enumerates resumable branches for pickup detection.
+// Branch / Ruler tree-walk primitives. Swarm-native mechanism helpers.
+// The "project role" is gone; swarm is mechanism only and governing
+// owns coordination. findBranchContext walks for the nearest Ruler
+// (metadata.governing.role === "ruler") instead of the legacy project
+// marker. detectResumableSwarm and promoteDoneAncestors continue to do
+// branch-mechanism work and accept a scope nodeId argument that may
+// be any node where dispatch happened.
 
 import Node from "../../seed/models/node.js";
 import log from "../../seed/log.js";
-import { readMeta, mutateMeta, initProjectRole } from "./state/meta.js";
+import { readMeta, mutateMeta } from "./state/meta.js";
 import { plan } from "./state/planAccess.js";
 
 /**
- * Walk upward from any node, return the nearest swarm project (role=project
- * + initialized). Null if none found before hitting root.
+ * Read governing metadata directly without a getExtension hop. The
+ * walks below need to recognize Ruler scopes; importing governing
+ * here would create a circular dependency at module load. Reading the
+ * raw metadata namespace gives us the role marker without coupling.
  */
-export async function findProjectForNode(nodeId) {
-  let cursor = String(nodeId || "");
-  let guard = 0;
-  while (cursor && guard < 64) {
-    const n = await Node.findById(cursor).select("_id name parent metadata").lean();
-    if (!n) return null;
-    const meta = readMeta(n);
-    if (meta?.role === "project" && meta?.initialized) return n;
-    if (!n.parent) return null;
-    cursor = String(n.parent);
-    guard++;
-  }
-  return null;
+function readGoverningRole(node) {
+  const meta = node.metadata instanceof Map
+    ? node.metadata.get("governing")
+    : node.metadata?.["governing"];
+  return meta?.role || null;
 }
 
 /**
- * Walk upward, return { projectNode, branchNode } where branchNode is
- * the nearest ancestor with role=branch (may be null if the node lies
- * directly under the project root).
+ * Walk upward, return { projectNode, branchNode } where projectNode is
+ * the nearest Ruler scope ancestor (or self) and branchNode is the
+ * nearest ancestor with role=branch (may be null if the node lies
+ * directly under the Ruler scope).
+ *
+ * Field name `projectNode` is kept for caller back-compat while the
+ * code-workspace migration to "scope" vocabulary catches up.
  */
 export async function findBranchContext(nodeId) {
   let cursor = String(nodeId || "");
@@ -40,7 +42,7 @@ export async function findBranchContext(nodeId) {
     if (!n) return null;
     const meta = readMeta(n);
     if (!branch && meta?.role === "branch") branch = n;
-    if (meta?.role === "project" && meta?.initialized) {
+    if (readGoverningRole(n) === "ruler") {
       return { projectNode: n, branchNode: branch };
     }
     if (!n.parent) return null;
@@ -309,34 +311,11 @@ export async function detectResumableSwarm(projectNodeId) {
   }
 }
 
-/**
- * Ensure `rootId` is initialized as a swarm project. Sets
- * metadata.swarm.role = "project" + initialized = true, stamps swarm
- * execution bookkeeping (aggregatedDetail, inbox, events), and
- * initializes the plan namespace via the plan extension. Fires
- * `swarm:afterProjectInit` so domain extensions can do their own init.
- * Idempotent — safe to call when the project already exists.
- */
-export async function ensureProject({ rootId, systemSpec, owner, core, fireHook }) {
-  if (!rootId) return null;
-  const existing = await Node.findById(rootId).select("_id name metadata").lean();
-  if (!existing) return null;
-
-  await initProjectRole({ nodeId: rootId, systemSpec: systemSpec || null, core });
-  const p = await plan();
-  await p.initPlan(rootId, { systemSpec: systemSpec || null }, core);
-
-  const projectNode = await Node.findById(rootId).select("_id name metadata").lean();
-  if (typeof fireHook === "function") {
-    try {
-      await fireHook("swarm:afterProjectInit", {
-        projectNode,
-        owner: owner || null,
-        systemSpec: systemSpec || null,
-      });
-    } catch (err) {
-      log.warn("Swarm", `afterProjectInit listener error: ${err.message}`);
-    }
-  }
-  return projectNode;
-}
+// ensureProject removed (legacy). The work it did splits cleanly:
+//   - Role: governing.promoteToRuler (called from runRulerCycle entry).
+//   - Mechanism bookkeeping: ensureScopeBookkeeping, called from
+//     swarm.runBranchSwarm at dispatch time.
+//   - Plan initialization: plan.ensurePlanAtScope, called by
+//     governing.setContracts and other plan-touching paths.
+// Callers should reach for governing primitives + plan extension API
+// instead of asking swarm to "ensure a project."

@@ -1047,7 +1047,9 @@ export function dashboardJS() {
         function place(node, depth, xL, xR, pid) {
           var x = (xL + xR) / 2;
           var isLeaf = !node.children || !node.children.length;
-          nodes.push({ id: node.id, name: node.name, status: node.status || "active", prestige: 0 || 0, x: x, depth: depth, pid: pid, isLeaf: isLeaf });
+          // isRuler flows from the dashboard's simplify() (which reads
+          // metadata.governing.role). Drives gold fill + crown overlay.
+          nodes.push({ id: node.id, name: node.name, status: node.status || "active", prestige: 0 || 0, x: x, depth: depth, pid: pid, isLeaf: isLeaf, isRuler: !!node.isRuler });
           if (!isLeaf) {
             var tw = vtreeWidth(node);
             var cur = xL;
@@ -1095,18 +1097,36 @@ export function dashboardJS() {
         for (var i = 0; i < nodes.length; i++) {
           var n = nodes[i];
           var fill;
-          if (n.status === "trimmed") fill = "rgba(120,120,120,0.45)";
+          // Ruler scope wins on color: gold fill, gold stroke, slightly
+          // larger ring. Status (trimmed/completed) still applies if set,
+          // so a completed Ruler darkens to amber. Otherwise default to
+          // the gold #FFD700.
+          if (n.isRuler && n.status !== "trimmed" && n.status !== "completed") {
+            fill = "rgba(255, 215, 0, 0.85)";
+          }
+          else if (n.status === "trimmed") fill = "rgba(120,120,120,0.45)";
           else if (n.status === "completed") fill = "rgba(234,179,8,0.65)";
           else if (n.isLeaf) fill = "rgba(34,197,94,0.75)";
           else fill = "rgba(16,185,129,0.55)";
           var r = (n.pid === null) ? nodeR * 1.2 : nodeR;
+          var stroke = n.isRuler ? "rgba(255, 215, 0, 0.95)" : "rgba(255,255,255,0.15)";
+          var strokeW = n.isRuler ? 2 : 1;
 
-          s += '<g class="vtree-node" data-node-id="' + n.id + '" data-name="' + dashEscape(n.name) + '" data-status="' + n.status + '" data-prestige="' + n.prestige + '">';
+          s += '<g class="vtree-node' + (n.isRuler ? ' ruler-node' : '') + '" data-node-id="' + n.id + '" data-name="' + dashEscape(n.name) + '" data-status="' + n.status + '" data-prestige="' + n.prestige + '"' + (n.isRuler ? ' data-ruler="true"' : '') + '>';
           s += '<circle class="vtree-highlight-ring" cx="' + n.sx + '" cy="' + n.sy + '" r="' + (r + 5) + '" fill="none" stroke="transparent" stroke-width="2"/>';
-          s += '<circle class="vtree-main" cx="' + n.sx + '" cy="' + n.sy + '" r="' + r + '" fill="' + fill + '" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>';
+          s += '<circle class="vtree-main" cx="' + n.sx + '" cy="' + n.sy + '" r="' + r + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="' + strokeW + '"/>';
           if (fontSize > 0) {
             var lbl = n.name.length > 14 ? n.name.slice(0, 12) + ".." : n.name;
-            s += '<text x="' + n.sx + '" y="' + (n.sy - r - 6) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="' + fontSize + '" style="pointer-events:none">' + dashEscape(lbl) + '</text>';
+            // Crown emoji floats above the label for Ruler scopes.
+            // Sized relative to fontSize so dense trees stay readable.
+            if (n.isRuler) {
+              s += '<text x="' + n.sx + '" y="' + (n.sy - r - 6 - fontSize - 2) + '" text-anchor="middle" font-size="' + (fontSize + 2) + '" style="pointer-events:none">👑</text>';
+            }
+            s += '<text x="' + n.sx + '" y="' + (n.sy - r - 6) + '" text-anchor="middle" fill="' + (n.isRuler ? '#FFD700' : 'var(--text-secondary)') + '" font-size="' + fontSize + '" style="pointer-events:none' + (n.isRuler ? ';font-weight:600' : '') + '">' + dashEscape(lbl) + '</text>';
+          } else if (n.isRuler) {
+            // No labels in dense mode, but still show the crown above
+            // small Ruler nodes so the role stays visible.
+            s += '<text x="' + n.sx + '" y="' + (n.sy - r - 4) + '" text-anchor="middle" font-size="' + (r + 2) + '" style="pointer-events:none">👑</text>';
           }
           s += '</g>';
         }

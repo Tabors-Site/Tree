@@ -13,22 +13,23 @@
  */
 
 import nodePlan from "./facets/nodePlan.js";
-import branchWorker from "./facets/branchWorker.js";
 import rewriteOverEdits from "./facets/rewriteOverEdits.js";
 import blockingError from "./facets/blockingError.js";
 import declaredContracts from "./facets/declaredContracts.js";
 import siblings from "./facets/siblings.js";
 import renderEnrichedContextBlock from "./renderContext.js";
 
+// branchWorker facet retired with the recursive sub-Ruler dispatch
+// cutover. governing-worker owns the worker base; log.js now consumes
+// the workspace-specific facets only. See project_recursive_sub_ruler_dispatch.
 const FACETS = [
   // blockingError first so an unparseable file is the first thing the
   // AI reads. Every other instruction is irrelevant until it clears.
   blockingError,
-  // declaredContracts next — any branch session must see the architect's
-  // wire protocol at the top of its prompt.
+  // declaredContracts next — any worker session must see the contracts
+  // governing this scope at the top of its prompt.
   declaredContracts,
   siblings,
-  branchWorker,
   nodePlan,
   rewriteOverEdits,
 ];

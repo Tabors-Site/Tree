@@ -668,9 +668,9 @@ export function buildTools() {
     {
       name: "get-tree-context",
       description:
-        "Reads node data with configurable scope. Returns current version, notes, and optionally siblings, parent chain, scripts.",
+        "Reads node data with configurable scope. Returns current version, notes, and optionally siblings, parent chain, scripts. Requires a UUID node id (8-4-4-4-12 hex). Node names are NOT accepted; resolve a name to an id with navigate-tree first.",
       schema: {
-        nodeId: z.string().describe("Node ID to read."),
+        nodeId: z.string().describe("Node UUID (8-4-4-4-12 hex) to read. Names like 'i' or 'frontend' are rejected; use navigate-tree to resolve a name first."),
         includeNotes: z
           .boolean()
           .optional()
@@ -699,6 +699,17 @@ export function buildTools() {
         openWorldHint: false,
       },
       handler: async ({ nodeId, ...flags }) => {
+        // Reject node names (single letters, words). Tool requires a UUID.
+        // The LLM frequently passes a node name like "c" or "frontend"
+        // expecting the tool to resolve; that path silently 404s on the
+        // ancestor walk and confuses the model. Be explicit instead.
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (typeof nodeId !== "string" || !UUID_RE.test(nodeId)) {
+          return error(
+            `nodeId must be a UUID (8-4-4-4-12 hex). Got "${String(nodeId).slice(0, 60)}". ` +
+            `If you have a node name (e.g. "frontend"), call navigate-tree first to resolve it to a UUID.`
+          );
+        }
         try {
           const context = await getContextForAi(nodeId, flags);
           return json(context);

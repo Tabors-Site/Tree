@@ -74,13 +74,28 @@ export function renderRootOverview({
 
   const renderTree = (node, depth = 0) => {
     const color = rainbow[depth % rainbow.length];
+    // Ruler badge: nodes promoted by the governing extension carry
+    // metadata.governing.role === "ruler". Render a crown to make the
+    // role visible at a glance. Renders only when governing actually
+    // wrote the marker — natural feature flag (governing not installed
+    // means no Ruler markers exist, no crowns appear). The Ruler badge
+    // has no special styling on its own; sub-styling (gold border) is
+    // applied by the live view, not the static overview.
+    const governingMeta = node?.metadata instanceof Map
+      ? node.metadata.get("governing")
+      : node?.metadata?.governing;
+    const isRuler = governingMeta?.role === "ruler";
+    const rulerBadge = isRuler
+      ? `<span class="ruler-crown" title="Ruler scope" style="margin-right:4px;">👑</span>`
+      : "";
     let html = `
     <li
-      class="tree-node"
+      class="tree-node${isRuler ? " ruler-node" : ""}"
         data-node-id="${node._id}"
+        ${isRuler ? 'data-ruler="true"' : ""}
 
       style="
-        border-left: 4px solid ${color};
+        border-left: 4px solid ${isRuler ? "#FFD700" : color};
         padding-left: 12px;
         margin: 6px 0;
       "
@@ -88,7 +103,7 @@ export function renderRootOverview({
 
 
       <a href="/api/v1/node/${node._id}/${0}${queryString}">
-        ${escapeHtml(node.name)}
+        ${rulerBadge}${escapeHtml(node.name)}
       </a>
   `;
     if (node.children && node.children.length > 0) {
@@ -326,13 +341,27 @@ ${ownerConnections.length === 0
     ? `<ul>${allData.children.map((c) => renderTree(c)).join("")}</ul>`
     : ``;
 
+  // Crown / gold border for the root node when it's a Ruler — the
+  // recursive renderTree handles descendants, but the root entry has
+  // its own block here. allData.metadata is included when the route
+  // calls getTreeStructure with includeMetadata: true.
+  const rootGoverningMeta = allData?.metadata instanceof Map
+    ? allData.metadata.get("governing")
+    : allData?.metadata?.governing;
+  const rootIsRuler = rootGoverningMeta?.role === "ruler";
+  const rootBorderColor = rootIsRuler ? "#FFD700" : rootNameColor;
+  const rootRulerBadge = rootIsRuler
+    ? `<span class="ruler-crown" title="Ruler scope" style="margin-right:4px;">👑</span>`
+    : "";
+
   const treeHtml = `
       <ul class="tree-root" style="padding-left:0;">
-        <li class="tree-node root-entry"
+        <li class="tree-node root-entry${rootIsRuler ? " ruler-node" : ""}"
             data-node-id="${allData._id}"
-            style="border-left: 4px solid ${rootNameColor}; padding-left: 6px; margin: 6px 0;">
+            ${rootIsRuler ? 'data-ruler="true"' : ""}
+            style="border-left: 4px solid ${rootBorderColor}; padding-left: 6px; margin: 6px 0;">
           <a href="/api/v1/node/${allData._id}/0${queryString}">
-            ${escapeHtml(allData.name)}
+            ${rootRulerBadge}${escapeHtml(allData.name)}
           </a>
           ${childrenInner}
         </li>

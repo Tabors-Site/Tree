@@ -21,10 +21,18 @@ export async function init(core) {
     await populateChildren(root);
     const simplify = (n) => {
       const obj = typeof n.toObject === "function" ? n.toObject() : n;
+      // Ruler marker for the live view. Only set when the governing
+      // extension is installed and has promoted this node — natural
+      // feature flag (no governing → no markers → no gold styling).
+      const meta = obj.metadata instanceof Map
+        ? Object.fromEntries(obj.metadata)
+        : (obj.metadata || {});
+      const isRuler = meta.governing?.role === "ruler";
       return {
         id: String(obj._id),
         name: obj.name,
         status: obj.status || "active",
+        isRuler,
         children: (obj.children || []).map((c) =>
           simplify(
             typeof c === "object" && c !== null
