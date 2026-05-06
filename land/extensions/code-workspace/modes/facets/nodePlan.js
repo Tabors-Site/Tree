@@ -36,15 +36,20 @@ export default {
   },
 
   text: `Plan rules:
-  • Find the first "[ ]" step. Do it in one tool call. Check off
-    with workspace-plan action=check stepId=<id>. One line of output.
-  • stepIds rotate when a plan is re-set — copy the id from THIS
-    turn's plan block, never from memory of a previous turn.
+  • The plan above is the Planner's emission, tracked by the Foreman.
+    Find the first "[ ]" step that names work YOU should execute at
+    this scope, do it in one tool call, then return one line of output.
+    The Foreman flips status to "running" / "done" automatically as
+    branches dispatch and complete.
+  • stepIds are stable for the life of an emission. If the Planner
+    re-emits, status carries to a new emission via supersedes; do not
+    rely on stepIds across re-plan boundaries.
   • One step per turn. The continuation loop re-invokes for the next.
-  • Don't check off steps you didn't actually do. If one write
-    covered multiple steps, re-set the plan to match reality before
-    checking any off.
-  • Blocked? workspace-plan action=block stepId=<id> reason="..."
+  • Don't claim work you didn't do. If one write covered multiple
+    steps, say so in your one-line output; the Foreman will credit
+    appropriately on the next pass.
+  • Blocked? Surface the obstruction in your output; the Foreman
+    decides retry vs. escalate.
   • All your local steps done → [[DONE]]. Descendant rollup pending
     is fine — that's their sessions' job, not yours.`,
 };

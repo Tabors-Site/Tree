@@ -252,255 +252,30 @@ export async function orchestrateTreeRequest({
     setChatContext(visitorId, sessionId, rootChatId);
   }
 
-  // ── Ruler resumption intercept ──
-  // The Ruler at the scope is the operational authority for what
-  // happens when work resumes after a pause. When the user types a
-  // short continuation ("continue", "keep going", "go") at a scope
-  // whose plan has pending branches, governing.resumeAtRuler wakes
-  // the Ruler, examines plan + contracts + branch states, and decides
-  // whether to redispatch the pending branches via swarm. Decision
-  // lives in governing; mechanism (parallel dispatch, retry, reconcile)
-  // stays in swarm. Returns a result when handled, null otherwise.
-  try {
-    const { getExtension } = await import("../loader.js");
-    const governing = getExtension("governing")?.exports;
-    if (governing?.resumeAtRuler) {
-      const resumeResult = await governing.resumeAtRuler({
-        message, forceMode, rootId, visitorId,
-        userId, username, rootChatId, sessionId,
-        signal, slot, socket, onToolLoopCheckpoint, rt,
-        currentNodeId: getCurrentNodeId(visitorId) || rootId,
-        emitStatus,
-        runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot }) => {
-          setCurrentNodeId(visitorId, branchNodeId);
-          await switchMode(visitorId, branchMode, {
-            username, userId, rootId,
-            currentNodeId: branchNodeId,
-            clearHistory: true,
-          });
-          return runSteppedMode(visitorId, branchMode, branchMessage, {
-            username, userId, rootId, signal, slot: branchSlot,
-            readOnly: false, onToolLoopCheckpoint, socket,
-            parentChatId: rootChatId || null,
-            dispatchOrigin: "branch-swarm",
-            // Thread the live runtime context through. Without these,
-            // runSteppedMode's beginChainStep fallback fires with
-            // sessionId missing → startChainStep returns null → chat
-            // chain steps for resumed branches lack proper attribution
-            // (no session, no rt-managed chainIndex, no parentChat).
-            // The non-resume dispatch path in dispatch.js threads these
-            // through; this path was missed.
-            sessionId, rootChatId, rt,
-          });
-        },
-      });
-      if (resumeResult) return resumeResult;
-    }
-  } catch (err) {
-    log.debug("Tree Orchestrator", `Resume intercept skipped: ${err.message}`);
-  }
+  // The legacy resumeAtRuler intercept lived here. With the Ruler
+  // now alive on every turn at a Ruler scope, "continue", "keep going",
+  // and other resume-shaped messages route naturally through the Ruler
+  // — the Ruler reads its snapshot (which shows pending execution
+  // status), decides governing-route-to-foreman, the Foreman wakes and
+  // makes the resume judgment via foreman-retry-branch /
+  // foreman-resume-record / foreman-escalate-to-ruler. No regex gate,
+  // no deterministic shortcut; the same machinery that handles every
+  // other turn handles resume.
 
-  // ── Pending swarm-plan interception ──
-  // A prior architect turn may have proposed a [[BRANCHES]] plan that's
-  // waiting for approval. Outcomes on this next turn:
-  //   affirmative            → dispatch stashed plan via dispatchSwarmPlan
-  //   cancel                 → archive the plan, return
-  //   pivot-confirm pending
-  //     affirmative          → archive, then re-run orchestration using
-  //                            the stashed pivot message (not the "yes")
-  //     anything else        → treat as keeping the plan, fall through
-  //                            to revision flow
-  //   pivot detected fresh   → stash pivotProposedMessage on the swarm
-  //                            plan, return "archive the plan?" prompt
-  //   revision               → re-call architect with user feedback; its
-  //                            next [[BRANCHES]] block replaces the stash
-  if (!forceMode && message) {
-    const { getPendingSwarmPlan, setPendingSwarmPlan, clearPendingSwarmPlan } =
-      await import("../swarm/state/pendingSwarmPlan.js");
-    const pendingSwarm = getPendingSwarmPlan(visitorId);
-
-    if (pendingSwarm) {
-      const trimmed = message.trim();
-      const isCancel = /^\s*(cancel|no|abort|drop|discard|nevermind|never\s*mind)\s*[.!]*$/i.test(trimmed);
-
-      // Helper: archive the current plan and emit PLAN_ARCHIVED.
-      const archiveCurrentPlan = async (reason) => {
-        try {
-          const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
-          const { SWARM_WS_EVENTS } = await import("../swarm/wsEvents.js");
-          if (planExt?.archivePlan) {
-            await planExt.archivePlan({
-              nodeId: pendingSwarm.projectNodeId,
-              reason,
-              core: null,
-            });
-          }
-          socket?.emit?.(SWARM_WS_EVENTS.PLAN_ARCHIVED, {
-            projectNodeId: pendingSwarm.projectNodeId,
-            projectName: pendingSwarm.projectName || null,
-            reason,
-            branchCount: pendingSwarm.branches.length,
-          });
-        } catch (archiveErr) {
-          log.warn("Tree Orchestrator", `archive(${reason}) failed: ${archiveErr.message}`);
-        }
-      };
-
-      // ── Pivot-confirm step (second turn of the pivot dialog) ──
-      // If the stash carries pivotProposedMessage, we asked the user
-      // "archive and proceed?" last turn and we're now receiving
-      // their answer. Yes → archive + reprocess the original pivot
-      // message. No / unclear → drop the pivot offer, continue as
-      // if user is actively revising the plan.
-      if (pendingSwarm.pivotProposedMessage) {
-        if (isAffirmative(message)) {
-          log.info("Tree Orchestrator",
-            `🔀 Pivot confirmed. Archiving plan (${pendingSwarm.branches.length} branches) and re-running on: "${pendingSwarm.pivotProposedMessage.slice(0, 80)}"`,
-          );
-          await archiveCurrentPlan("user-pivot");
-          const pivotMsg = pendingSwarm.pivotProposedMessage;
-          clearPendingSwarmPlan(visitorId);
-          // Overwrite the current message with the pivot text so the
-          // remainder of this orchestrator turn classifies and runs
-          // THAT (not the bare "yes" confirmation).
-          message = pivotMsg;
-          // Fall through to normal classification below.
-        } else {
-          // User backed out of the pivot. Drop the pivot marker; keep
-          // the plan; treat this message as a revision (if non-cancel)
-          // or as a no-op (if cancel).
-          log.info("Tree Orchestrator", `🔀 Pivot declined; keeping plan v${pendingSwarm.version || 1}.`);
-          setPendingSwarmPlan(visitorId, { ...pendingSwarm, pivotProposedMessage: undefined });
-          if (!isCancel && !isAffirmative(message)) {
-            // Treat as revision feedback below.
-          }
-          // Fall through into the affirmative/cancel/revision branches
-          // with the pivotProposedMessage cleared.
-        }
-      }
-
-      // Re-read the (possibly mutated) stash so the affirmative branch
-      // picks up a cleared pivot state if we just reset it.
-      const stash = getPendingSwarmPlan(visitorId);
-
-      if (stash) {
-        if (isAffirmative(message)) {
-          log.info("Tree Orchestrator",
-            `▶️  Accepted swarm plan v${stash.version || 1}: ${stash.branches.length} branches (project=${String(stash.projectNodeId || "").slice(0, 8)})`,
-          );
-          clearPendingSwarmPlan(visitorId);
-          const { dispatchSwarmPlan } = await import("./dispatch.js");
-          const summary = await dispatchSwarmPlan(stash, {
-            visitorId, userId, username,
-            rootId: stash.rootId || rootId,
-            sessionId, signal, slot, socket, onToolLoopCheckpoint, rt,
-            rootChatId,
-          });
-          return {
-            success: true,
-            answer: summary || "Plan dispatched.",
-            modeKey: stash.modeKey || "tree:code-plan",
-            modesUsed: ["tree:code-plan"],
-            rootId: stash.rootId || rootId,
-            targetNodeId: stash.targetNodeId || null,
-          };
-        }
-
-        if (isCancel) {
-          log.info("Tree Orchestrator",
-            `🛑 Canceled swarm plan v${stash.version || 1} (${stash.branches.length} branches)`,
-          );
-          await archiveCurrentPlan("user-cancel");
-          clearPendingSwarmPlan(visitorId);
-          return {
-            success: true,
-            answer: "Plan dropped. What would you like instead?",
-            modeKey: stash.modeKey || "tree:code-plan",
-            modesUsed: [],
-            rootId: stash.rootId || rootId,
-            targetNodeId: stash.targetNodeId || null,
-          };
-        }
-
-        // Classify the message to distinguish revision (stays inside
-        // tree:code-* territory) from pivot (routes to a different
-        // extension, e.g. fitness / food / kb).
-        let pivot = false;
-        try {
-          const classification = await localClassify(
-            message,
-            stash.targetNodeId || stash.projectNodeId || rootId,
-            rootId,
-            userId,
-          );
-          if (
-            classification?.intent === "extension" &&
-            classification.mode &&
-            !classification.mode.startsWith("tree:code-")
-          ) {
-            pivot = true;
-            log.info("Tree Orchestrator",
-              `🔀 Pivot detected on pending swarm plan: new message routes to ${classification.mode}`,
-            );
-          }
-        } catch {}
-
-        if (pivot) {
-          // Stash the pivot message and ask for confirmation. Next
-          // turn's handler (above) picks it up.
-          setPendingSwarmPlan(visitorId, { ...stash, pivotProposedMessage: message });
-          return {
-            success: true,
-            answer:
-              `Looks like a different direction. Archive the pending plan ` +
-              `(${stash.branches.length} branches) and start fresh? ` +
-              `Reply "yes" to pivot, or anything else to keep the plan open.`,
-            modeKey: stash.modeKey || "tree:code-plan",
-            modesUsed: [],
-            rootId: stash.rootId || rootId,
-            targetNodeId: stash.targetNodeId || null,
-          };
-        }
-
-        // Revision path: re-call the architect with user feedback.
-        // Architect's next [[BRANCHES]] block will flow through
-        // dispatch.js and replace the stash.
-        log.info("Tree Orchestrator",
-          `✍️  Revising swarm plan v${stash.version || 1} with: "${message.slice(0, 80)}"`,
-        );
-        // Phrase this as an IMPERATIVE instruction, not past-tense
-        // ("Revise …"). The grammar tense parser runs even under a
-        // forceMode and will re-route past-tense messages to a
-        // `-review` mode, bypassing our architect. "Build a new …
-        // incorporating …" keeps the verb imperative so the parser
-        // stays on `-plan`.
-        const revisionMsg =
-          `Build a new [[BRANCHES]] plan incorporating this feedback from the user: ${message}\n\n` +
-          `Current plan to update:\n${stash.branches.map((b) => `  • ${b.name}${b.path ? ` (${b.path})` : ""}: ${b.spec || ""}`).join("\n")}\n\n` +
-          `Emit the COMPLETE updated [[BRANCHES]] block (every branch, not a diff). ` +
-          `Keep branch names stable where possible so continuity is preserved. ` +
-          `Close with [[DONE]].`;
-        // Bump version so the re-emitted plan's stash reflects history.
-        // Carry the user's actual revision text as `revisionTrigger` so
-        // dispatch.js can surface it on the PLAN_UPDATED event's
-        // `trigger` field — the chat plan card renders it as
-        // "↪ Revised from: <user text>", which preserves the causal
-        // link between the user's ask and the architect's new plan.
-        // Without this the chat looks like the architect spontaneously
-        // re-planned.
-        setPendingSwarmPlan(visitorId, {
-          ...stash,
-          version: (stash.version || 1) + 1,
-          revisionTrigger: String(message).slice(0, 400),
-        });
-        // Replace the user's message with the architect-directed
-        // revision prompt, force the architect mode so classifier
-        // doesn't send this elsewhere.
-        message = revisionMsg;
-        forceMode = stash.modeKey || "tree:code-plan";
-      }
-    }
-  }
+  // The legacy pending-swarm-plan intercept lived here. It detected
+  // user "yes/cancel/pivot/revise" responses to a stashed plan and
+  // ran dispatchSwarmPlan / archived / re-invoked the architect
+  // outside the Ruler's awareness. With the chain-nested
+  // architecture, all of those decisions are the Ruler's:
+  //   user "yes" → Ruler reads lifecycle.awaiting === "contracts"
+  //                or "dispatch", calls hire-contractor / dispatch-
+  //                execution accordingly.
+  //   user "no/cancel" → Ruler calls archive-plan.
+  //   user revision text → Ruler calls revise-plan with the user's
+  //                feedback as the revision reason.
+  // The pendingSwarmPlan stash still gets written when a plan card
+  // emits (for UI continuity), but no orchestrator-level intercept
+  // reads it. The Ruler's snapshot reads governing metadata directly.
 
   // ── Pending-plan expand ──
   // If a prior review/audit stashed a structured plan and this message is

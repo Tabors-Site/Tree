@@ -3552,9 +3552,15 @@ function injectIframeParamForwarding() {
       });
     }
 
-    socket.on("swarmPlanProposed", function(ev) { _renderPlanCard(ev, false); });
-    socket.on("swarmPlanUpdated",  function(ev) { _renderPlanCard(ev, true); });
-    socket.on("swarmPlanArchived", function(ev) {
+    // Listen on both governing's namespace (current) and swarm's
+    // legacy names (transitional). Plan/contracts/execution lifecycle
+    // is governing's territory; the swarm names persist for any
+    // emitter that hasn't migrated yet.
+    socket.on("governingPlanProposed", function(ev) { _renderPlanCard(ev, false); });
+    socket.on("governingPlanUpdated",  function(ev) { _renderPlanCard(ev, true); });
+    socket.on("swarmPlanProposed",     function(ev) { _renderPlanCard(ev, false); });
+    socket.on("swarmPlanUpdated",      function(ev) { _renderPlanCard(ev, true); });
+    function _renderPlanArchivedApp(ev) {
       var count = ev && ev.branchCount != null
         ? ev.branchCount + " branch" + (ev.branchCount === 1 ? "" : "es")
         : "plan";
@@ -3563,7 +3569,9 @@ function injectIframeParamForwarding() {
         '<span class="live-dim">\\ud83d\\udce6 archived </span><b>' + escapeHtml(count) + '</b>' +
         '<span class="live-dim">' + reason + '</span>'
       );
-    });
+    }
+    socket.on("governingPlanArchived", _renderPlanArchivedApp);
+    socket.on("swarmPlanArchived",     _renderPlanArchivedApp);
 
     // ── Scout phase events — seam verification after builders finish ──
     socket.on("swarmScoutsDispatched", function(ev) {

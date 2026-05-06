@@ -1,28 +1,56 @@
 // tree:governing-foreman
 //
 // The Foreman is the fourth governing role. The Ruler holds authority
-// and approval; the Planner drafts the plan; the Contractor draws
-// the contracts; the Foreman OPERATES — deploys workers per the
-// active plan emission, redeploys on retry, tracks what's been done
-// as a mutable execution ledger, freezes records on completion or
-// supersession, and (in later passes) hands off to courts when
-// ambiguous failures require adjudication.
+// and approval; the Planner drafts the plan; the Contractor draws the
+// contracts; the Foreman OPERATES — judges in-progress execution and
+// decides retry / mark-failed / freeze / pause / resume / cancel /
+// advance / escalate.
 //
-// Pass 1 scope (this file): structural slot only. The mode is
-// registered so the dispatch substrate, the dashboard, and Pass 2
-// court infrastructure have a stable role taxonomy to plug into.
-// The execution-node and execution-record machinery (state/foreman.js
-// and state/executionNode.js) is wired and operating; what's NOT yet
-// active is the LLM reasoning surface for the Foreman — most
-// execution decisions today (retry policy, dispatch order,
-// reconciliation) are deterministic and live in the swarm mechanism
-// layer. The Foreman mode's reasoning surface — the active prompt
-// that decides retry-vs-escalate, when to convene a court, when to
-// freeze an in-flight record — lands in Pass 2 alongside the court
-// system.
+// TOOL COUNT: 12 tools.
+//   3 step-level     : retry-branch, mark-failed, freeze-record
+//   5 stack-op       : cancel-subtree, propagate-cancel-to-children,
+//                      pause-frame, resume-frame, advance-step
+//   1 batch          : judge-batch (multi-failure wave decisions)
+//   2 meta           : escalate-to-ruler, respond-directly
+//   1 inspection     : read-branch-detail (does not end the turn)
 //
-// Domain-neutral. Workspaces (code-workspace, book-workspace, etc.)
-// do not specialize the Foreman; execution oversight is universal.
+// History: Phase B shipped 13 (the above + 2 deprecated aliases
+// pause-record / resume-record). Phase D dropped the aliases and
+// added judge-batch — net 12.
+//
+// TWO-STEP FALLBACK (documented; not built):
+// If model picks miss reliability — i.e. the Foreman picks valid
+// tools but not the RIGHT tool for the situation (e.g. always picks
+// mark-failed when escalate-to-ruler is the architecturally correct
+// move) — the fallback is a two-step Foreman:
+//
+//   Turn 1: Foreman picks a DECISION CLASS — terminal | retry | stack
+//           | escalate | respond.
+//   Turn 2: Foreman picks the specific tool within that class.
+//
+// This trades 1 LLM call for sharper discrimination. Don't pre-build.
+// Boot-test on realistic scenarios first; measure picking accuracy
+// (Scenario C — sibling failure — and Scenario D — deep stall — exercise
+// the discrimination, not just the picking). Only build the two-step
+// pattern if measurement shows the model can't reliably distinguish
+// situations that warrant different tools.
+//
+// The Foreman is narrower than the Ruler. It does not plan, contract,
+// or hire. It does not decide what to build. It judges the in-flight
+// work itself — whether a failure is transient or terminal, whether a
+// record should freeze "completed" or "failed", whether the situation
+// has gotten ambiguous enough that the Ruler should re-judge.
+//
+// The Foreman wakes for one of these reasons:
+//   • The Ruler routed a user message via governing-route-to-foreman.
+//   • A swarm hook fired (branch-failed, swarm-completed, resume-requested).
+//
+// Either way, the wakeupReason + payload lands in the Foreman's
+// system prompt, alongside the active execution-record state and the
+// Ruler's snapshot. The Foreman picks one decision tool and exits.
+// runForemanTurn applies the action.
+
+import { renderExecutionStack } from "../state/executionStack.js";
 
 export default {
   name: "tree:governing-foreman",
@@ -30,54 +58,219 @@ export default {
   label: "Foreman",
   bigMode: "tree",
 
-  maxMessagesBeforeLoop: 4,
-  preserveContextOnLoop: false,
-  maxToolCallsPerStep: 1,
+  maxMessagesBeforeLoop: 6,
+  preserveContextOnLoop: true,
+  // 2-3 calls so foreman-read-branch-detail can run before the
+  // decision tool when the snapshot summary isn't enough.
+  maxToolCallsPerStep: 3,
 
   toolNames: [
-    "get-tree-context",
+    // Step-level decisions (per-failure judgment).
+    "foreman-retry-branch",
+    "foreman-mark-failed",
+    "foreman-freeze-record",
+    // Stack-op decisions (call-stack management).
+    "foreman-cancel-subtree",
+    "foreman-propagate-cancel-to-children",
+    "foreman-pause-frame",
+    "foreman-resume-frame",
+    "foreman-advance-step",
+    // Batch judgment for multi-failure waves (e.g., when validators
+    // flip several branches simultaneously). Reads the failures as a
+    // set and emits one decision per branch in a single tool call.
+    "foreman-judge-batch",
+    // Meta decisions.
+    "foreman-escalate-to-ruler",
+    "foreman-respond-directly",
+    // Inspection (does not end the turn).
+    "foreman-read-branch-detail",
   ],
 
-  buildSystemPrompt({ username }) {
-    return `You are the Foreman role at ${username}'s Ruler scope.
+  async buildSystemPrompt(ctx) {
+    const { username, currentNodeId, rootId } = ctx;
+    const e = ctx.enrichedContext || {};
 
-PASS 1 STATUS
+    // The Foreman runs at the Ruler scope (not at the execution-node
+    // or a record child). currentNodeId is the canonical anchor. The
+    // execution-stack snapshot is the Foreman's lens — call-stack
+    // shaped, walks down through sub-Rulers, surfaces blockedOn +
+    // decisionHints. The Ruler's own snapshot stays separate (the
+    // Ruler reads its own lens).
+    const scopeNodeId = currentNodeId || rootId;
+    let snapshotBlock = "";
+    try {
+      snapshotBlock = await renderExecutionStack(scopeNodeId);
+    } catch {
+      // No snapshot: Foreman still runs, decides from wakeup reason alone.
+    }
 
-Pass 1 establishes the Foreman role's data home and structural slot.
-Most execution oversight today is deterministic — swarm dispatches
-branches, retries on failure, reconciles cached state against the
-tree, and writes step status updates onto the active execution-record.
-The LLM reasoning surface for the Foreman (retry-vs-escalate
-decisions, when to convene a court for ambiguous failure, when to
-freeze an in-flight record) lands in Pass 2.
+    // Wakeup data lives on a per-visitor side-channel populated by
+    // runForemanTurn. We don't have visitorId in ctx (the kernel
+    // doesn't thread it into mode prompts), but sessionId is the same
+    // identifier — every Foreman turn runs inside one session.
+    let foremanWakeup = null;
+    try {
+      const { getForemanWakeup } = await import("../../tree-orchestrator/ruling.js");
+      foremanWakeup = getForemanWakeup(ctx.sessionId || ctx.visitorId);
+    } catch {
+      // Side-channel module not loaded (Foreman invoked outside the
+      // ruling.js path) — proceed without wakeup context.
+    }
 
-If you have been invoked, the request likely arrived here by
-position (someone navigated to an execution-node or execution-record
-and chatted). Answer the user's question briefly with what you can
-read from the active execution-record at this scope, and surface
-that the active reasoning surface is not yet wired.
+    const ancestorBlocks = [
+      e.governingLineage,
+      e.governingParentPlan,
+      e.governingContracts,
+    ].filter(Boolean).join("\n\n");
 
-DATA YOU CAN INSPECT
+    // Wakeup context: what woke the Foreman. Always present when
+    // invoked via runForemanTurn; absent when the user navigated
+    // directly to a Ruler scope and the Ruler routed (in which case
+    // the user message is the wakeup, surfaced separately).
+    const wakeup = foremanWakeup
+      ? `=================================================================
+WAKEUP REASON
+=================================================================
 
-  • The Ruler's metadata.governing.executionApprovals ledger — which
-    execution-record is active, the supersedes chain.
-  • The active execution-record's metadata.governing.execution payload —
-    stepStatuses, planEmissionRef, contractsEmissionRef, startedAt,
-    completedAt, status.
-  • The plan-emission referenced by planEmissionRef — the structured
-    plan this run is realizing.
-  • The contracts-emission referenced by contractsEmissionRef — the
-    contracts this run is bound by.
-  • Sub-Ruler scopes and their own execution-records (recursive).
+reason: ${foremanWakeup.reason || "(unspecified)"}
+${foremanWakeup.payload ? `\ndetail:\n${foremanWakeup.payload}\n` : ""}`
+      : "";
 
-WHAT YOU DO NOT DO IN PASS 1
+    const prelude = ancestorBlocks ? `${ancestorBlocks}\n\n` : "";
+    const stateBlock = snapshotBlock ? `${snapshotBlock}\n\n` : "";
+    const wakeupBlock = wakeup ? `${wakeup}\n\n` : "";
 
-  • Do not write code or move files. The Worker does that.
-  • Do not retry or redispatch branches yourself. swarm does that.
-  • Do not freeze execution-records. The Ruler-cycle does that on
-    supersession.
-  • Do not draft plans or contracts. The Planner and Contractor do that.
+    return prelude + stateBlock + wakeupBlock + `You are the Foreman at ${username}'s Ruler scope. You judge the
+work in progress.
 
-Close with [[DONE]] on its own line and exit.`.trim();
+You are NOT the Planner; you do not redecompose. You are NOT the
+Worker; you do not write code. You watch the execution-record at
+this scope and decide whether in-flight work should retry, fail,
+pause, freeze, resume, or escalate to the Ruler.
+
+The Ruler hired you because the situation calls for execution
+judgment, not new planning. You hold authority over execution state:
+flipping step statuses, freezing records, pausing dispatch. You do
+NOT hold authority over planning or contracting — those decisions
+belong to the Ruler. When you see the wrong PLAN, escalate. When
+you see the wrong EXECUTION (a step that should retry, a record
+that should freeze), decide.
+
+WHAT YOU CAN SEE
+
+The block above titled "EXECUTION STACK" is your call-stack lens —
+where the work is across nested sub-Rulers, what's running, what's
+blocked, what's queued. Frames descend by depth; depth 0 is your own
+scope. Each active frame shows its current step + step-by-step
+status. Done frames collapse to a one-liner.
+
+"WAITING ON" rolls up what's holding the stack right now. Each entry
+names a frame, what's blocking it, and the action category. These
+are not commands — read them as the situation, not the prescription.
+
+"DECISION POINTS" lists candidate moves derived from what's blocked.
+Read them, weigh them, but choose by judgment. The hints can be
+ignored when your read of the stack differs.
+
+If your snapshot doesn't carry enough detail about a specific
+sub-Ruler's failure, call foreman-read-branch-detail with that
+sub-Ruler's nodeId before deciding. That tool does not end your turn.
+
+JUDGMENT BY SITUATION
+
+  • Single branch failed, retries left, error class looks transient
+    (network, contract test flake, sibling-dependency timing):
+    → foreman-retry-branch
+
+  • MULTIPLE branches failed at once (validators flipped a wave,
+    or several siblings finished as failed in the same pass):
+    → foreman-judge-batch
+    Read the failures as a SET. Are they coupled (same root cause,
+    contract mismatch, missing producer)? Or independent? Coupled
+    failures often warrant retrying the producer first and waiting
+    on the consumers; independent ones can be judged separately.
+    Per-branch decisions: retry | mark-failed | wait.
+
+  • Branch failed, retries exhausted OR contract violated OR
+    error class makes retry pointless:
+    → foreman-mark-failed
+    Then decide: freeze the whole record (failed)? Or escalate
+    to the Ruler if the right move is replanning, not failure?
+
+  • All steps reached terminal state (or every recoverable path
+    exhausted):
+    → foreman-freeze-record with the right terminalStatus
+    "completed" if no failures, "failed" if any non-recoverable.
+
+  • Operator wants the work to STOP, not just pause:
+    → foreman-cancel-subtree (cancels this frame and every descendant
+    sub-Ruler. Distinct from mark-failed: cancel means decided-not-
+    to-finish; failed means tried-and-couldn't.)
+
+  • One subtree should stop, but other steps at this scope should
+    keep going (rare):
+    → foreman-propagate-cancel-to-children
+
+  • Operator wants to pause for external info or court decision:
+    → foreman-pause-frame
+    (atStepIndex optional: omit for immediate pause; provide for
+    deferred-pause-at-step-boundary)
+
+  • Operator wants to resume after a pause:
+    → foreman-resume-frame (re-dispatches pending work from saved
+    step index)
+
+  • A step is genuinely stuck in non-terminal state and you have
+    judgment that its work is settled out-of-band (RARE):
+    → foreman-advance-step (override; reason field required for audit)
+
+  • Situation exceeds your authority — contracts conflict, plan
+    looks fundamentally wrong, ambiguous failure that retrying
+    won't fix, sub-Ruler stalled in a way that needs reframing:
+    → foreman-escalate-to-ruler with a specific signal + payload
+
+  • Operator asked a status question that doesn't need any action:
+    → foreman-respond-directly
+
+HOW YOUR TURN WORKS
+
+You were spawned as a chainstep child of the Ruler's turn. Your
+chainstep ends when you exit; whatever you produce flows back to
+the Ruler as the result of its tool call.
+
+The tools you have:
+
+  Inspection: foreman-read-branch-detail (read deeper before deciding;
+  doesn't end your turn).
+
+  Spawn-and-await: foreman-retry-branch synchronously runs the
+  branch's Ruler retry as a chainstep below you, awaits, returns
+  outcome. Use when you have a single decisive retry judgment.
+
+  State-write decisions: foreman-mark-failed, foreman-freeze-record,
+  foreman-cancel-subtree, foreman-propagate-cancel-to-children,
+  foreman-pause-frame, foreman-resume-frame, foreman-advance-step,
+  foreman-judge-batch. These write metadata and return.
+
+  Exit-tools: foreman-respond-directly and foreman-escalate-to-ruler.
+  Their tool result text BECOMES your exit payload that the Ruler
+  reads. Use respond-directly for status answers and outcome
+  summaries; use escalate-to-ruler when judgment exceeds your
+  authority.
+
+After a state-write tool returns, you should typically follow up
+with foreman-respond-directly or foreman-escalate-to-ruler so your
+chainstep ends with a clear payload the Ruler can read. A turn
+that calls only a state-write tool and exits silently leaves the
+Ruler with nothing to synthesize.
+
+For straightforward cases (just a status query), one tool call
+(foreman-respond-directly) is sufficient.
+
+Coherence-of-execution is your concern. Do not retry blindly. Do
+not freeze prematurely. Do not escalate trivia. Read the state,
+form a judgment, act, exit with a clear payload. The audit trail
+records your decision; Pass 2 courts (when they land) will read
+your reasoning.`.trim();
   },
 };

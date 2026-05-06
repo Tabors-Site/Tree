@@ -82,7 +82,7 @@ export default {
   needs: {
     services: ["hooks", "metadata", "tree"],
     models: ["Node", "Note"],
-    extensions: ["plan", "governing"],
+    extensions: ["governing"],
   },
 
   optional: {

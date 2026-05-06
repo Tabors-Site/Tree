@@ -178,9 +178,12 @@ function createLiveRenderer({ stream = process.stdout, verbose = false } = {}) {
       }
 
       // ── Plan-first swarm events ────────────────────────────────
+      case "governingPlanProposed":
+      case "governingPlanUpdated":
       case "swarmPlanProposed":
       case "swarmPlanUpdated": {
-        const isUpdate = ev.type === "swarmPlanUpdated";
+        const isUpdate = ev.type === "swarmPlanUpdated"
+          || ev.type === "governingPlanUpdated";
         const version = ev.version != null ? `v${ev.version}` : "";
         const branchList = Array.isArray(ev.branches) ? ev.branches : [];
         const header = isUpdate ? "Updated plan" : "Proposed plan";
@@ -270,6 +273,7 @@ function createLiveRenderer({ stream = process.stdout, verbose = false } = {}) {
         line(chalk.dim('Reply "yes" to run, or describe what to change. "cancel" to drop.'));
         return;
       }
+      case "governingPlanArchived":
       case "swarmPlanArchived": {
         const count = ev.branchCount != null ? `${ev.branchCount} branch${ev.branchCount === 1 ? "" : "es"}` : "a plan";
         const reason = ev.reason ? ` (${ev.reason})` : "";

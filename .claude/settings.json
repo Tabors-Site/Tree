@@ -936,7 +936,16 @@
       "Bash(awk 'NR>=530 && /^function parseScope/{p=1} p; p && /^}$/{p=0; print \"END_AT:\"NR; exit}' /home/tabor/github/Tree/land/extensions/swarm/swarm.js)",
       "Bash(awk 'NR>=550 && /^function splitTopLevelCommas/{p=1} p; p && /^}$/{p=0; print \"END_AT:\"NR; exit}' /home/tabor/github/Tree/land/extensions/swarm/swarm.js)",
       "Bash(awk 'NR==585,NR==600' /home/tabor/github/Tree/land/extensions/swarm/swarm.js)",
-      "Bash(awk 'NR>=576,NR==620' /home/tabor/github/Tree/land/extensions/swarm/swarm.js)"
+      "Bash(awk 'NR>=576,NR==620' /home/tabor/github/Tree/land/extensions/swarm/swarm.js)",
+      "Bash(awk 'NR==799,NR==810' /home/tabor/github/Tree/land/extensions/swarm/swarm.js)",
+      "Bash(awk 'NR==1325,NR==1340' /home/tabor/github/Tree/land/extensions/swarm/swarm.js)",
+      "Bash(awk '/^\\\\/\\\\*\\\\*$/{c=NR} /^export async function dispatchApprovedSubPlan/{print \"START_AT:\"c} /^\\\\/\\\\*\\\\*$/{c=NR} /^export async function archiveSubPlan/{print \"ARCH_AT:\"c}' /home/tabor/github/Tree/land/extensions/tree-orchestrator/dispatch.js)",
+      "Bash(grep -n \"^export async function dispatchApprovedSubPlan\\\\|^export async function archiveSubPlan\\\\|^}\\\\s*$\" /home/tabor/github/Tree/land/extensions/tree-orchestrator/dispatch.js)",
+      "Bash(awk '/^      name: \"workspace-plan\"/{found=1; start=NR} found && /^    },\\\\s*$/{depth++; if\\(depth>=1\\){print \"END_AT:\"NR; exit}}' /home/tabor/github/Tree/land/extensions/code-workspace/tools.js)",
+      "Bash(grep -n \"name: \\\\\"workspace-plan\\\\\"\\\\|name: \\\\\"workspace-list\\\\\"\\\\|name: \\\\\"workspace-delete-file\\\\\"\\\\|^    {$\\\\|^    },$\" /home/tabor/github/Tree/land/extensions/code-workspace/tools.js)",
+      "Bash(grep -n \"^export async function setNodePlanSteps\\\\|^export async function addNodePlanStep\\\\|^export async function updateNodePlanStep\\\\|^export async function clearNodePlanSteps\\\\|^export async function readNodePlanSteps\\\\|^/\\\\\\\\*\\\\\\\\*$\\\\|^}$\\\\|^ \\\\\\\\* Phase E removed\" /home/tabor/github/Tree/land/extensions/code-workspace/swarmEvents.js)",
+      "Bash(awk ' *)",
+      "Bash(grep -rn \"↪.*\\\\${\\\\\\\\|↪'\\\\\\\\|↪\\\\\"\\\\\\\\|emit.*↪\" /home/tabor/github/Tree/land/extensions)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

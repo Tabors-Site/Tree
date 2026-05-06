@@ -19,11 +19,42 @@ import plannerMode from "./modes/planner.js";
 import contractorMode from "./modes/contractor.js";
 import workerMode from "./modes/worker.js";
 import foremanMode from "./modes/foreman.js";
+import rulerMode from "./modes/ruler.js";
+import {
+  buildRulerSnapshot,
+  formatRulerSnapshot,
+  renderRulerSnapshot,
+} from "./state/rulerSnapshot.js";
+import {
+  buildExecutionStackSnapshot,
+  formatExecutionStack,
+  renderExecutionStack,
+} from "./state/executionStack.js";
+import {
+  setRulerDecision,
+  getRulerDecision,
+  clearRulerDecision,
+} from "./state/rulerDecisions.js";
+import {
+  setForemanDecision,
+  getForemanDecision,
+  clearForemanDecision,
+} from "./state/foremanDecisions.js";
 import { promoteToRuler, readRole, isRuler, findRulerScope, PROMOTED_FROM, NS } from "./state/role.js";
 import { findLCA, ancestorChain, isAncestorOrSelf, validateScopeAuthority } from "./state/lca.js";
-import { setContracts, readContracts, readScopedContracts, readApprovalsAtRuler } from "./state/contracts.js";
-import { ensureContractsNode, readContractsMap, readApprovalLedger, parseContractRef, buildContractRef } from "./state/contractsNode.js";
-import { ensurePlanAtScope } from "./state/planNode.js";
+import { setContracts, readContracts, readScopedContracts, readApprovalsAtRuler, readActiveContractsEmission } from "./state/contracts.js";
+import { ensureContractsNode } from "./state/contractsNode.js";
+import {
+  ensurePlanAtScope,
+  createPlanNode,
+  readPlan,
+  initPlan,
+  appendLedger,
+  findGoverningPlan,
+  findGoverningPlanChain,
+  DEFAULT_BUDGET,
+  NS as PLAN_NS,
+} from "./state/planNode.js";
 import {
   appendPlanApproval,
   readPlanApprovalsAtRuler,
@@ -49,17 +80,94 @@ import {
   readActiveExecutionApproval,
   readActiveExecutionRecord,
   updateStepStatus,
+  updateStepStatusByBranchName,
   freezeExecutionRecord,
   buildExecutionRef,
   parseExecutionRef,
 } from "./state/foreman.js";
-import { resumeAtRuler } from "./state/resume.js";
 import {
   registerValidator,
   unregisterValidatorsForExt,
   runValidators,
   listValidators,
 } from "./state/validators.js";
+
+// Format ancestor-Ruler contracts as a prompt-ready block. Surfaces
+// every contract reachable upward through readContracts (which walks
+// ruler-role nodes); the AI sees the SHARED VOCABULARY it is bound
+// to, with kind/name/scope/details/rationale per entry. Sub-Rulers
+// reuse these names verbatim instead of inventing parallel terms.
+function formatGoverningContracts(contracts) {
+  if (!Array.isArray(contracts) || contracts.length === 0) return null;
+  const lines = [
+    "## CONTRACTS IN FORCE AT THIS SCOPE",
+    "These are the canonical names and shapes ancestor Rulers ratified.",
+    "When you write code, plans, or sub-decompositions, use these EXACT names.",
+    "Do not invent parallel terms; do not rename existing ones.",
+    "",
+  ];
+  for (const c of contracts) {
+    const kind = c.kind || "contract";
+    const name = c.name || "(unnamed)";
+    let scopeStr = "global";
+    if (c.scope === "global") scopeStr = "global";
+    else if (c.scope && typeof c.scope === "object") {
+      if (Array.isArray(c.scope.shared)) scopeStr = `shared:[${c.scope.shared.join(",")}]`;
+      else if (c.scope.local) {
+        const locals = Array.isArray(c.scope.local) ? c.scope.local : [c.scope.local];
+        scopeStr = `local:${locals.join(",")}`;
+      }
+    }
+    lines.push(`• [${kind}] ${name}  (scope: ${scopeStr})`);
+    if (c.details) {
+      const detail = String(c.details).split("\n").map((l) => `    ${l}`).join("\n");
+      lines.push(detail);
+    }
+    if (c.rationale) lines.push(`    why: ${c.rationale}`);
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+// Format the parent Ruler's active plan emission so a sub-Ruler can
+// see WHERE it sits in the upstream decomposition. Highlights the
+// specific branch step this sub-Ruler is expanding (if known via
+// lineage), and lists every other step in the parent plan so the
+// sub-Ruler doesn't redo work owned elsewhere.
+function formatParentPlanEmission(emission, lineage) {
+  if (!emission?.steps) return null;
+  const lines = [
+    "## PARENT RULER'S APPROVED PLAN",
+    "Your parent Ruler decomposed its scope into the steps below.",
+    "Your sub-Ruler scope is one of these branches; build on this plan, do not duplicate sibling work.",
+    "",
+  ];
+  if (emission.reasoning) {
+    lines.push("### Parent reasoning");
+    lines.push(emission.reasoning);
+    lines.push("");
+  }
+  lines.push("### Parent steps");
+  emission.steps.forEach((step, i) => {
+    const idx = i + 1;
+    const isYou = lineage?.parentStepIndex === idx;
+    const marker = isYou ? "  ← YOU" : "";
+    if (step.type === "leaf") {
+      lines.push(`${idx}. [leaf] ${step.spec || ""}${marker}`);
+    } else if (step.type === "branch") {
+      lines.push(`${idx}. [branch] ${step.rationale || ""}${marker}`);
+      const subs = Array.isArray(step.branches) ? step.branches : [];
+      subs.forEach((b) => {
+        const bMark = isYou && lineage?.parentBranchEntryName
+          && String(b.name).toLowerCase() === String(lineage.parentBranchEntryName).toLowerCase()
+          ? "  ← YOU"
+          : "";
+        lines.push(`     - ${b.name}: ${b.spec || ""}${bMark}`);
+      });
+    }
+  });
+  return lines.join("\n");
+}
 
 export {
   promoteToRuler,
@@ -86,23 +194,139 @@ export async function init(core) {
   // manifest.provides.modes is informational/declarative and does not
   // self-register. Pattern matches code-workspace's init().
   if (core?.modes?.registerMode) {
+    core.modes.registerMode("tree:governing-ruler", rulerMode, "governing");
     core.modes.registerMode("tree:governing-planner", plannerMode, "governing");
     core.modes.registerMode("tree:governing-contractor", contractorMode, "governing");
     core.modes.registerMode("tree:governing-worker", workerMode, "governing");
     core.modes.registerMode("tree:governing-foreman", foremanMode, "governing");
-    log.verbose("Governing", "Registered modes: tree:governing-{planner, contractor, worker, foreman}");
+    log.verbose("Governing", "Registered modes: tree:governing-{ruler, planner, contractor, worker, foreman}");
   } else {
     log.warn("Governing", "core.modes.registerMode not available; modes NOT registered");
   }
 
-  // Phase 2 prototype: governing-emit-plan. Single tool, structured
-  // args, replaces the [[BRANCHES]] text emission for plans. Dispatch
-  // still reads metadata.plan.steps[] this round; only the emission
-  // half is swapped while we verify the local model can hit the shape.
+  // Tools: emission tools (governing-emit-plan, governing-emit-contracts),
+  // Ruler decision tools (hire-planner, route-to-foreman, respond-
+  // directly, revise-plan, archive-plan, pause-execution, resume-
+  // execution, read-plan-detail, convene-court), and Foreman decision
+  // tools (retry-branch, mark-failed, freeze-record, pause-record,
+  // resume-record, escalate-to-ruler, respond-directly, read-branch-detail).
   const { default: getGoverningTools } = await import("./tools.js");
-  const tools = getGoverningTools(core);
+  const { default: getRulerTools } = await import("./rulerTools.js");
+  const { default: getForemanTools } = await import("./foremanTools.js");
+  const tools = [
+    ...getGoverningTools(core),
+    ...getRulerTools(core),
+    ...getForemanTools(core),
+  ];
+
+  // Plan panel slot. Registers a placeholder div on plan-type nodes
+  // that fetches the rendered HTML fragment from the panel route.
+  // Phase F absorbed this from the deleted plan extension.
+  try {
+    const { getExtension } = await import("../loader.js");
+    const treeos = getExtension("treeos-base");
+    if (treeos?.exports?.registerSlot) {
+      treeos.exports.registerSlot(
+        "node-detail-sections",
+        "governing-plan",
+        ({ node, nodeId, qs }) => {
+          if (node?.type !== "plan") return "";
+          const id = `plan-panel-${String(nodeId).slice(0, 8)}`;
+          return `
+            <div id="${id}" data-slot="node-detail-sections" data-ext="governing">
+              <div style="padding:12px;color:rgba(255,255,255,0.4);font-size:11px;">Loading plan…</div>
+            </div>
+            <script>
+              (async function() {
+                try {
+                  var res = await fetch("/api/v1/governing/plan/${nodeId}/panel.html${qs || ""}", { credentials: "include" });
+                  if (res.ok) {
+                    var html = await res.text();
+                    var el = document.getElementById("${id}");
+                    if (el) el.outerHTML = html;
+                  }
+                } catch (e) {}
+              })();
+            </script>`;
+        },
+        { priority: 40 },
+      );
+    }
+  } catch (err) {
+    log.debug("Governing", `plan panel slot registration skipped: ${err.message}`);
+  }
+
+  // enrichContext: surface ancestor-Ruler contracts, parent plan
+  // emission, and lineage on every conversation turn at any scope under
+  // a Ruler. Without this hook a sub-Ruler's Planner / Contractor /
+  // Worker has no visibility into the parent Ruler's vocabulary —
+  // sub-domain decompositions diverge and contract names get
+  // re-invented per branch instead of building off the parent's.
+  // readContracts already walks the ancestor chain via ruler-role
+  // markers; we just format and inject.
+  if (core?.hooks?.register) {
+    core.hooks.register(
+      "enrichContext",
+      async ({ context, nodeId }) => {
+        if (!context || !nodeId) return;
+        try {
+          const all = await readContracts(nodeId);
+          if (Array.isArray(all) && all.length > 0) {
+            context.governingContracts = formatGoverningContracts(all);
+          }
+        } catch (err) {
+          log.debug("Governing", `enrichContext contracts skipped: ${err.message}`);
+        }
+        try {
+          const lineage = await readLineage(nodeId);
+          if (lineage?.parentRulerId) {
+            const parts = [
+              "## SUB-RULER LINEAGE",
+              `You are a sub-Ruler dispatched by an ancestor Ruler.`,
+              lineage.parentBranchEntryName
+                ? `You are expanding the branch entry "${lineage.parentBranchEntryName}"` +
+                  (typeof lineage.parentStepIndex === "number"
+                    ? ` (step ${lineage.parentStepIndex})`
+                    : "") +
+                  ` from your parent Ruler's active plan.`
+                : `You inherit your scope from your parent Ruler.`,
+              lineage.expandingFromSpec
+                ? `Parent's spec for you: "${lineage.expandingFromSpec}"`
+                : null,
+              `Your decomposition must build on the parent's plan, not contradict it. ` +
+              `If your parent's contracts (above) name shared vocabulary, your sub-domains must reuse those names verbatim — do not invent parallel terms.`,
+            ].filter(Boolean);
+            context.governingLineage = parts.join("\n");
+          }
+        } catch (err) {
+          log.debug("Governing", `enrichContext lineage skipped: ${err.message}`);
+        }
+        try {
+          const lineage = await readLineage(nodeId);
+          if (lineage?.parentRulerId && lineage?.parentPlanEmissionId) {
+            const NodeModel = (await import("../../seed/models/node.js")).default;
+            const emissionNode = await NodeModel.findById(lineage.parentPlanEmissionId)
+              .select("_id metadata").lean();
+            const meta = emissionNode?.metadata instanceof Map
+              ? emissionNode.metadata.get("governing")
+              : emissionNode?.metadata?.governing;
+            const emission = meta?.emission;
+            if (emission) {
+              context.governingParentPlan = formatParentPlanEmission(emission, lineage);
+            }
+          }
+        } catch (err) {
+          log.debug("Governing", `enrichContext parent plan skipped: ${err.message}`);
+        }
+      },
+    );
+  }
+
+  // Mount the plan panel route + plan read endpoint at /api/v1/governing/*.
+  const { default: router } = await import("./routes.js");
 
   return {
+    router,
     // Mode handlers (also exposed for cross-extension reuse, e.g.
     // workspaces extending the Worker base prompt).
     modes: [plannerMode, contractorMode, workerMode, foremanMode],
@@ -120,15 +344,23 @@ export async function init(core) {
       // Contracts (trio: contracts-type node holds emissions, Ruler holds
       // approval ledger). See project_contracts_node_architecture.
       setContracts, readContracts, readScopedContracts, readApprovalsAtRuler,
-      ensureContractsNode, readContractsMap, readApprovalLedger,
-      parseContractRef, buildContractRef,
-      // Plan trio member. ensurePlanAtScope wraps plan.ensurePlanAtScope
-      // and stamps governing's role marker + Planner mode assignment, so
-      // every Ruler scope materializes its plan-type child the same way
-      // it materializes its contracts-type child. Phase 1 of the trio
-      // migration: structural shape only — dispatch still reads
-      // metadata.plan.steps[]. Phase 2 will swap the dispatch source.
+      readActiveContractsEmission,
+      ensureContractsNode,
+      // Plan trio member primitive (Phase F absorbed from the plan
+      // extension). governing now owns plan-type node creation +
+      // role/mode stamping directly, parallel to contracts-type and
+      // execution-type. Plan-emission ring records (immutable per
+      // Planner invocation) live as children; the Ruler's planApprovals
+      // ledger tracks the active emission.
+      createPlanNode,
       ensurePlanAtScope,
+      readPlan,
+      initPlan,
+      appendLedger,
+      findGoverningPlan,
+      findGoverningPlanChain,
+      DEFAULT_BUDGET,
+      PLAN_NS,
       // Plan approval ledger, parallel to contractApprovals. The Ruler
       // appends a planApproval entry when it accepts the Planner's
       // emission, before invoking the Contractor.
@@ -156,14 +388,36 @@ export async function init(core) {
       appendExecutionRecord, appendExecutionApproval,
       readExecutionApprovalsAtRuler, readActiveExecutionApproval,
       readActiveExecutionRecord,
-      updateStepStatus, freezeExecutionRecord,
+      updateStepStatus, updateStepStatusByBranchName,
+      freezeExecutionRecord,
       buildExecutionRef, parseExecutionRef,
       // Validator registry
       registerValidator, unregisterValidatorsForExt, runValidators, listValidators,
-      // Ruler resumption decision (replaces swarm.tryResumeSwarm).
-      // The Ruler examines plan/contracts/branches and decides; swarm
-      // executes the dispatch when the decision is "redispatch pending."
-      resumeAtRuler,
+      // Ruler-as-being primitive. The Ruler mode runs every turn at a
+      // Ruler scope and decides what to do; rulerSnapshot assembles its
+      // per-turn state context; rulerDecisions is the per-visitor
+      // register that captures "what the Ruler chose this turn." Phase C
+      // (runRulerTurn in tree-orchestrator) reads decisions to dispatch
+      // the chosen role.
+      buildRulerSnapshot,
+      formatRulerSnapshot,
+      renderRulerSnapshot,
+      // Execution-stack snapshot — the Foreman's call-stack lens.
+      // Distinct from the Ruler's domain snapshot. Walks down through
+      // sub-Rulers (depth cap 8), walks up via lineage, surfaces
+      // blockedOn rollup and non-prescriptive decision hints.
+      buildExecutionStackSnapshot,
+      formatExecutionStack,
+      renderExecutionStack,
+      setRulerDecision,
+      getRulerDecision,
+      clearRulerDecision,
+      // Foreman decision register. Phase C runForemanTurn reads here
+      // after the Foreman exits and applies the action (retry, mark-
+      // failed, freeze, pause, resume, escalate, respond).
+      setForemanDecision,
+      getForemanDecision,
+      clearForemanDecision,
     },
   };
 }

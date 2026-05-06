@@ -530,43 +530,84 @@ async function checkProjectRootHasBranches(nodeId, filePath) {
     const sw = node.metadata instanceof Map
       ? node.metadata.get("swarm")
       : node.metadata?.["swarm"];
-    // Plan discovery routes through the plan extension's canonical
-    // walk-up primitive. Never reads metadata.plan directly — under
-    // Path B the plan lives on a plan-type child of the scope node.
-    let planMeta = null;
+
+    // Branch detection reads two sources, in priority:
+    //   1. Existing children with governing role "ruler" or swarm role
+    //      "branch" — sub-Rulers/branches actually in the tree.
+    //   2. Forward-declared sub-domains in the active plan emission at
+    //      this scope's Ruler — names reserved before swarm dispatches
+    //      them (covers the Ruler-own integration phase window).
+    const childRulers = new Map();   // name → { childNodeId, status }
+    if (Array.isArray(node.children) && node.children.length > 0) {
+      const kids = await Node.find({ _id: { $in: node.children } })
+        .select("_id name metadata")
+        .lean();
+      for (const k of kids) {
+        if (!k.name) continue;
+        const md = k.metadata instanceof Map
+          ? Object.fromEntries(k.metadata)
+          : (k.metadata || {});
+        const isRuler = md.governing?.role === "ruler";
+        const isBranch = md.swarm?.role === "branch";
+        if (isRuler || isBranch) {
+          childRulers.set(k.name, {
+            childNodeId: String(k._id),
+            status: md.swarm?.status || "running",
+          });
+        }
+      }
+    }
+
+    let plannedBranches = [];
     try {
       const { getExtension } = await import("../loader.js");
-      const planExt = getExtension("plan")?.exports;
-      if (planExt?.readPlan) planMeta = await planExt.readPlan(nodeId);
+      const governing = getExtension("governing")?.exports;
+      if (governing?.readActiveExecutionRecord) {
+        const record = await governing.readActiveExecutionRecord(nodeId);
+        for (const step of (record?.stepStatuses || [])) {
+          if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
+          for (const entry of step.branches) {
+            if (!entry?.name) continue;
+            plannedBranches.push({
+              name: entry.name,
+              status: entry.status || "pending",
+              childNodeId: entry.childNodeId || null,
+            });
+          }
+        }
+      }
     } catch {}
 
     const role = sw?.role || null;
-    const branches = (planMeta?.steps || []).filter((s) => s.kind === "branch");
-    const hasBranches = branches.length > 0;
     const childCount = Array.isArray(node.children) ? node.children.length : 0;
 
+    const allBranchNames = new Set([
+      ...childRulers.keys(),
+      ...plannedBranches.map((b) => b.name),
+    ]);
+    const hasBranches = allBranchNames.size > 0;
+
     if (hasBranches) {
-      const branchNames = new Set(branches.map((b) => b.title).filter(Boolean));
-      // Branch-prefixed path: "backend/server.js" when "backend" is an
-      // existing branch. Legitimate scoped write, not an orphan.
-      if (branchNames.has(firstSegment)) return null;
+      // Branch-prefixed path: legitimate scoped write, not an orphan.
+      if (allBranchNames.has(firstSegment)) return null;
 
       // Adaptive route: if exactly one branch is currently running, the
       // worker is almost certainly that branch — its currentNodeId got
       // reset somewhere upstream. Prefix the path and let the write go.
-      const running = branches.filter((b) => b.status === "running" && b.title);
+      const running = plannedBranches.filter((b) => b.status === "running" && b.name);
       if (running.length === 1) {
-        const branchName = running[0].title;
+        const branchName = running[0].name;
         const rewritePath = `${branchName}/${filePath}`;
         return { rewritePath };
       }
 
-      const namesList = [...branchNames].join(", ") || "(unknown)";
+      const namesList = [...allBranchNames].join(", ") || "(unknown)";
+      const sample = [...allBranchNames][0] || "backend";
       return { error:
         `write at project root rejected: "${node.name}" has child branches [${namesList}] and "${firstSegment}" is not one of them. ` +
         `Either write inside an existing branch by prefixing the path with the branch name ` +
-        `(e.g. "${[...branchNames][0] || "backend"}/${filePath.includes("/") ? filePath.split("/").slice(1).join("/") : filePath}"), ` +
-        `or emit a [[BRANCHES]] block adding "${firstSegment}" as a new branch with [[DONE]]. ` +
+        `(e.g. "${sample}/${filePath.includes("/") ? filePath.split("/").slice(1).join("/") : filePath}"), ` +
+        `or have the Planner re-emit with "${firstSegment}" as a new branch step. ` +
         `Root-level config files (package.json, README.md, tsconfig.json, etc.) are allowed at the root.`
       };
     }
@@ -581,16 +622,15 @@ async function checkProjectRootHasBranches(nodeId, filePath) {
       return { error:
         `write at project root rejected: "${node.name}" is empty and has no declared branches yet. ` +
         `Decide the shape first:\n\n` +
-        `  • COMPOUND request (two or more independent modules)? Emit a [[BRANCHES]] block ` +
-        `declaring one branch per module, close with [[DONE]]. The swarm runs each branch in ` +
-        `its own session; each branch writes its own files in its own subdirectory.\n\n` +
+        `  • COMPOUND request (two or more independent modules)? The Planner should ` +
+        `emit a structured plan with branch steps via governing-emit-plan. Each branch ` +
+        `becomes a sub-Ruler with its own scope.\n\n` +
         `  • SINGLE file or integration shell? Write an allowed root file ` +
         `(index.html, main.js, app.js, server.js, package.json, etc.). The name "${firstSegment}" ` +
         `is not one of those.\n\n` +
         `Root-level module files like "game.js" / "characters.js" land at the root as orphans — ` +
-        `when [[BRANCHES]] later dispatches, the branch workers will write their own copies ` +
-        `under game/game.js and you'll have duplicates in two places. That's the failure mode ` +
-        `this check blocks.`
+        `when sub-Rulers later dispatch, their workers will write their own copies under their ` +
+        `own scopes and you'll have duplicates. That's the failure mode this check blocks.`
       };
     }
 
@@ -2106,226 +2146,6 @@ export default function getWorkspaceTools(core) {
       },
     },
 
-    // ---------------------------------------------------------------
-    // workspace-plan: node-local checklist. Every node can plan for
-    // its own scope. Actions:
-    //   set    — overwrite the checklist with a new step list
-    //   add    — append one step
-    //   check  — mark one step done
-    //   block  — mark one step blocked with a reason
-    //   clear  — remove all steps on this node
-    //   show   — read the current plan
-    //
-    // Steps are scoped to the node the tool is called FROM (the session's
-    // currentNodeId). Rollup of descendants' step counts happens
-    // automatically after any mutation — no extra calls needed.
-    // ---------------------------------------------------------------
-    {
-      name: "workspace-plan",
-      description: "Manage a node-local plan checklist for the current tree position. Every node has its own scope; children's counts roll up to parents. Actions: 'set' overwrites with new steps, 'add' appends one, 'check' marks done, 'block' marks blocked with a reason, 'clear' removes all, 'show' reads the plan. Use this to decompose a task into checkable steps and advance one per turn.",
-      schema: {
-        action: z.enum(["set", "add", "check", "block", "clear", "show"]).describe("What to do with the plan."),
-        steps: z.array(z.string()).optional().describe("For action=set: the list of step titles. Each string becomes one step."),
-        title: z.string().optional().describe("For action=add: the title of the new step."),
-        stepId: z.string().optional().describe("For action=check or block: the id of the step (e.g. 's_ab12cd') as shown by action=show."),
-        reason: z.string().optional().describe("For action=block: why this step is blocked."),
-      },
-      annotations: { readOnlyHint: false },
-      async handler({ action, steps, title, stepId, reason, userId, rootId, nodeId }) {
-        try {
-          const targetNodeId = nodeId || rootId;
-          if (!targetNodeId) return text("workspace-plan: no current node to plan for.");
-
-          const {
-            setNodePlanSteps,
-            addNodePlanStep,
-            updateNodePlanStep,
-            clearNodePlanSteps,
-            readNodePlanSteps,
-            readNodeStepRollup,
-            formatNodePlan,
-          } = await import("./swarmEvents.js");
-
-          const nodeDoc = await Node.findById(targetNodeId).select("name metadata").lean();
-          const nodeName = nodeDoc?.name || null;
-
-          if (action === "show") {
-            const [localSteps, rollup] = await Promise.all([
-              readNodePlanSteps(targetNodeId),
-              readNodeStepRollup(targetNodeId),
-            ]);
-            // Resolve the actual plan-type node so the header names
-            // the SCOPE the plan governs (its parent), not the
-            // calling worker's own name. Also pass the worker's
-            // identity so formatNodePlan can mark which step is YOU.
-            let planScopeName = nodeName;
-            try {
-              const { getExtension } = await import("../loader.js");
-              const planExt = getExtension("plan")?.exports;
-              if (planExt?.findGoverningPlan) {
-                const planNode = await planExt.findGoverningPlan(targetNodeId);
-                if (planNode?.parent) {
-                  const parentDoc = await Node.findById(planNode.parent).select("name").lean();
-                  if (parentDoc?.name) planScopeName = parentDoc.name;
-                }
-              }
-            } catch {}
-            // The worker's own node identity — for the "← YOU" marker.
-            // For a branch session, the worker's branchName is in its
-            // own swarm metadata (set at dispatch). Fall back to node
-            // name when metadata isn't populated.
-            const swMeta = nodeDoc?.metadata instanceof Map
-              ? nodeDoc.metadata.get("swarm")
-              : nodeDoc?.metadata?.swarm;
-            const currentBranchName = swMeta?.branchName || nodeName || null;
-            return text(formatNodePlan({
-              steps: localSteps || [],
-              rollup,
-              planScopeName,
-              currentNodeId: targetNodeId,
-              currentBranchName,
-            }));
-          }
-
-          if (action === "set") {
-            if (!Array.isArray(steps) || steps.length === 0) {
-              return text("workspace-plan set: requires non-empty steps[] array of titles.");
-            }
-
-            // Empty-root gate. When the caller is at a project root that
-            // has no children AND no local plan yet, flat `workspace-plan
-            // action=set` is almost always the wrong move for a compound
-            // task — the AI ignores the compoundBranches facet and bangs
-            // out a 7-step flat plan instead of decomposing. Reject here
-            // and force the AI to emit [[BRANCHES]] first. If the task
-            // is genuinely a single file, the AI can skip the plan and
-            // call workspace-add-file directly; the gate doesn't touch
-            // that path.
-            try {
-              const targetDoc = await Node.findById(targetNodeId).select("children metadata").lean();
-              const cwTargetMeta = targetDoc?.metadata instanceof Map
-                ? targetDoc.metadata.get("code-workspace")
-                : targetDoc?.metadata?.["code-workspace"];
-              const swTargetMeta = targetDoc?.metadata instanceof Map
-                ? targetDoc.metadata.get("swarm")
-                : targetDoc?.metadata?.["swarm"];
-              const role = swTargetMeta?.role || cwTargetMeta?.role;
-              const isProjectRole = role === "project" || role == null;
-              const hasChildren = Array.isArray(targetDoc?.children) && targetDoc.children.length > 0;
-              const existingStepCount = cwTargetMeta?.plan?.steps?.length || 0;
-              const filesWritten = swTargetMeta?.aggregatedDetail?.filesWritten || 0;
-
-              // Only reject at the empty-root decision point: project
-              // role, no children, no prior files, no prior plan, AND
-              // the AI is trying to set a multi-step plan. A 1-2 step
-              // plan is a weak signal for a small task so we let it
-              // through.
-              if (
-                isProjectRole &&
-                !hasChildren &&
-                existingStepCount === 0 &&
-                filesWritten === 0 &&
-                steps.length >= 3
-              ) {
-                trace(
-                  "workspace-plan",
-                  "BLOCKED-EMPTY-ROOT-SET",
-                  `${steps.length}-step flat plan at empty project root ${String(targetNodeId).slice(0, 8)}`,
-                );
-                return text(
-                  `workspace-plan action=set REJECTED at empty project root.\n\n` +
-                  `You attempted a ${steps.length}-step flat plan at a fresh project root. ` +
-                  `That is the failure mode for compound tasks — the plan would carry ` +
-                  `backend, frontend, and test steps all in one session that can't hold ` +
-                  `all three contexts at once.\n\n` +
-                  `YOUR NEXT ACTION: emit this [[BRANCHES]] block as plain text (no tool ` +
-                  `call), then [[DONE]] on its own line. DO NOT call any more tools this ` +
-                  `turn. The swarm runner will parse the block and dispatch one fresh ` +
-                  `code-plan session per branch. Each branch builds its own scope with ` +
-                  `its own plan — that is how compound tasks succeed.\n\n` +
-                  `Copy this structure verbatim, filling in real specs for the task:\n\n` +
-                  `    [[BRANCHES]]\n` +
-                  `    branch: backend\n` +
-                  `      spec: <one paragraph, what backend owns, routes/payloads/state>\n` +
-                  `      files: package.json, server.js\n` +
-                  `\n` +
-                  `    branch: frontend\n` +
-                  `      spec: <one paragraph, views, state, what backend calls it makes>\n` +
-                  `      files: index.html, app.js\n` +
-                  `    [[/BRANCHES]]\n` +
-                  `    [[DONE]]\n\n` +
-                  `Rules: branch name IS the directory name and the scope name. Never use ` +
-                  `the project's own name as a branch name. Each branch must have a unique ` +
-                  `name. Integration files (the root entry, bootstrap script) are this ` +
-                  `Ruler's own files at THIS scope, not a separate branch.\n\n` +
-                  `If the task is genuinely a single file or a small fix, skip the plan ` +
-                  `and call workspace-add-file directly for that file. You do not need ` +
-                  `a plan for one file.\n\n` +
-                  `This block lifts the moment you emit [[BRANCHES]] or write a file.`
-                );
-              }
-            } catch (gateErr) {
-              log.debug("CodeWorkspace", `workspace-plan empty-root gate skipped: ${gateErr.message}`);
-            }
-
-            const shaped = steps.map((t) => ({ title: String(t).trim() })).filter((s) => s.title);
-            const written = await setNodePlanSteps({ nodeId: targetNodeId, steps: shaped, core });
-            const rollup = await readNodeStepRollup(targetNodeId);
-            return text(
-              `Set ${written?.length || 0} steps on ${nodeName || targetNodeId}.\n\n` +
-              formatNodePlan({ steps: written || [], rollup, nodeName }),
-            );
-          }
-
-          if (action === "add") {
-            if (!title || !title.trim()) {
-              return text("workspace-plan add: requires title.");
-            }
-            const step = await addNodePlanStep({ nodeId: targetNodeId, title: title.trim(), core });
-            return text(`Added step ${step?.id}: ${step?.title}`);
-          }
-
-          if (action === "check") {
-            if (!stepId) return text("workspace-plan check: requires stepId.");
-            const updated = await updateNodePlanStep({
-              nodeId: targetNodeId,
-              stepId,
-              patch: { status: "done" },
-              core,
-            });
-            if (!updated) return text(`workspace-plan check: no step with id ${stepId} on this node.`);
-            const rollup = await readNodeStepRollup(targetNodeId);
-            const localSteps = await readNodePlanSteps(targetNodeId);
-            return text(
-              `✓ ${updated.title}\n\n` +
-              formatNodePlan({ steps: localSteps || [], rollup, nodeName }),
-            );
-          }
-
-          if (action === "block") {
-            if (!stepId) return text("workspace-plan block: requires stepId.");
-            const updated = await updateNodePlanStep({
-              nodeId: targetNodeId,
-              stepId,
-              patch: { status: "blocked", blockedReason: reason || "unspecified" },
-              core,
-            });
-            if (!updated) return text(`workspace-plan block: no step with id ${stepId} on this node.`);
-            return text(`Blocked step ${stepId}: ${updated.blockedReason}`);
-          }
-
-          if (action === "clear") {
-            await clearNodePlanSteps({ nodeId: targetNodeId, core });
-            return text(`Cleared plan on ${nodeName || targetNodeId}.`);
-          }
-
-          return text(`workspace-plan: unknown action "${action}".`);
-        } catch (e) {
-          log.warn("CodeWorkspace", `workspace-plan failed: ${e.message}`);
-          return text(`workspace-plan failed: ${e.message}`);
-        }
-      },
-    },
 
     // ---------------------------------------------------------------
     // workspace-show-context: dump the enrichContext the AI is seeing.

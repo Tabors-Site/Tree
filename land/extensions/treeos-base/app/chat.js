@@ -1647,8 +1647,14 @@ router.get("/chat", authenticateLite, async (req, res) => {
       });
     }
 
-    socket.on("swarmPlanProposed", function(ev) { _renderPlanCard(ev, false); });
-    socket.on("swarmPlanUpdated",  function(ev) { _renderPlanCard(ev, true); });
+    // Listen on both governing's namespace (current) and swarm's
+    // legacy names (transitional, for any emitter that hasn't
+    // migrated). Both fire the same payload shape so the renderer
+    // doesn't care which event it came from.
+    socket.on("governingPlanProposed", function(ev) { _renderPlanCard(ev, false); });
+    socket.on("governingPlanUpdated",  function(ev) { _renderPlanCard(ev, true); });
+    socket.on("swarmPlanProposed",     function(ev) { _renderPlanCard(ev, false); });
+    socket.on("swarmPlanUpdated",      function(ev) { _renderPlanCard(ev, true); });
 
     // Sub-plan card — scoped approval at a worker's scope. The buttons
     // emit custom WS events directly (swarmSubPlanAccept / Cancel) so
@@ -1763,7 +1769,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
         '<span class="live-dim"> ' + escapeHtml(summary) + scope + '</span>'
       );
     });
-    socket.on("swarmPlanArchived", function(ev) {
+    function _renderPlanArchived(ev) {
       var count = ev && ev.branchCount != null
         ? ev.branchCount + " branch" + (ev.branchCount === 1 ? "" : "es")
         : "plan";
@@ -1772,7 +1778,9 @@ router.get("/chat", authenticateLite, async (req, res) => {
         '<span class="live-dim">\\ud83d\\udce6 archived </span><b>' + escapeHtml(count) + '</b>' +
         '<span class="live-dim">' + reason + '</span>'
       );
-    });
+    }
+    socket.on("governingPlanArchived", _renderPlanArchived);
+    socket.on("swarmPlanArchived",     _renderPlanArchived);
 
     // ── Scout phase events — seam verification after builders finish ──
     socket.on("swarmScoutsDispatched", function(ev) {

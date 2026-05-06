@@ -13,7 +13,7 @@
  * (if applicable), save PATCHes /api/v1/plan/node/:nodeId/steps/:stepId.
  */
 
-import { NS } from "../state/plan.js";
+import { NS } from "../state/planNode.js";
 
 function esc(s) {
   return String(s == null ? "" : s)
@@ -160,26 +160,128 @@ function renderStepRow(step, ctx) {
     </div>`;
 }
 
+/**
+ * Resolve plan steps + count summary for the panel from the active
+ * execution-record at the parent Ruler scope. The panel mounts on a
+ * plan-type node; that node's parent is the Ruler. The Ruler holds
+ * the executionApprovals ledger pointing at the active record, whose
+ * stepStatuses[] is the source of truth for status display.
+ *
+ * Returns { steps, countBuckets } in the legacy renderStepRow shape
+ * so the existing per-row template keeps working unchanged.
+ */
+/**
+ * Walk the active execution-record under a Ruler scope plus all
+ * descendant Ruler scopes' active records, summing status counts.
+ * Powers the panel's "Including descendants:" trailer line.
+ */
+async function readRollupFromExecutionRecord(rulerNodeId) {
+  if (!rulerNodeId) return null;
+  try {
+    const { getExtension } = await import("../../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (!governing?.readActiveExecutionRecord) return null;
+
+    const counts = { pending: 0, running: 0, done: 0, blocked: 0, failed: 0, paused: 0, total: 0 };
+    const visited = new Set();
+
+    const walk = async (scopeId, depth) => {
+      if (depth > 16) return;
+      const idStr = String(scopeId);
+      if (visited.has(idStr)) return;
+      visited.add(idStr);
+      const record = await governing.readActiveExecutionRecord(scopeId);
+      if (!record) return;
+      for (const step of (record.stepStatuses || [])) {
+        if (step?.type === "leaf") {
+          const k = step.status || "pending";
+          if (k in counts) counts[k]++;
+          counts.total++;
+        } else if (step?.type === "branch" && Array.isArray(step.branches)) {
+          for (const entry of step.branches) {
+            const k = entry.status || "pending";
+            if (k in counts) counts[k]++;
+            counts.total++;
+            if (entry.childNodeId) await walk(entry.childNodeId, depth + 1);
+          }
+        }
+      }
+    };
+    await walk(rulerNodeId, 0);
+    return counts;
+  } catch {
+    return null;
+  }
+}
+
+async function readStepsFromExecutionRecord(planNode) {
+  if (!planNode?.parent) return { steps: [], countBuckets: {} };
+  try {
+    const { getExtension } = await import("../../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (!governing?.readActiveExecutionRecord) return { steps: [], countBuckets: {} };
+    const record = await governing.readActiveExecutionRecord(planNode.parent);
+    if (!record) return { steps: [], countBuckets: {} };
+
+    const out = [];
+    const counts = {};
+    for (const step of (record.stepStatuses || [])) {
+      if (step?.type === "leaf") {
+        const status = step.status || "pending";
+        counts[status] = (counts[status] || 0) + 1;
+        out.push({
+          id: `step-${step.stepIndex}`,
+          kind: "leaf",
+          title: (step.spec || "").slice(0, 80),
+          status,
+          error: step.error || null,
+          blockedReason: step.blockedReason || null,
+        });
+      } else if (step?.type === "branch" && Array.isArray(step.branches)) {
+        for (const entry of step.branches) {
+          const status = entry.status || "pending";
+          counts[status] = (counts[status] || 0) + 1;
+          out.push({
+            id: `step-${step.stepIndex}-${entry.name}`,
+            kind: "branch",
+            title: entry.name,
+            status,
+            childNodeId: entry.childNodeId || null,
+            error: entry.error || null,
+            blockedReason: entry.blockedReason || null,
+          });
+        }
+      }
+    }
+    return { steps: out, countBuckets: counts };
+  } catch {
+    return { steps: [], countBuckets: {} };
+  }
+}
+
 export async function renderPlanPanel({ node, nodeId, qs, isPublicAccess }) {
   try {
     if (!node) return "";
-    const plan = readPlanMeta(node);
-    const steps = Array.isArray(plan?.steps) ? plan.steps : [];
+
+    const { steps, countBuckets } = await readStepsFromExecutionRecord(node);
     if (steps.length === 0) return "";
 
     // Pre index direct children by BOTH _id and name so branch / chapter
-    // rows can resolve their "open plan" links quickly. Some callers
-    // seed childNodeId on the step, some only have the title.
+    // rows can resolve their "open plan" links quickly. The plan-type
+    // node is a sibling of the Ruler's other children; we look at the
+    // RULER's children (the plan node's siblings) to find branch
+    // childNodeId targets.
     const childrenIndex = new Map();
     try {
       const Node = (await import("../../../seed/models/node.js")).default;
-      if (Array.isArray(node.children) && node.children.length > 0) {
-        const kids = await Node.find({ _id: { $in: node.children } })
-          .select("_id name metadata.plan")
+      const rulerNode = await Node.findById(node.parent).select("_id children").lean();
+      if (rulerNode && Array.isArray(rulerNode.children) && rulerNode.children.length > 0) {
+        const kids = await Node.find({ _id: { $in: rulerNode.children } })
+          .select("_id name metadata.governing")
           .lean();
         for (const k of kids) {
-          const kPlan = k.metadata instanceof Map ? k.metadata.get(NS) : k.metadata?.[NS];
-          const hasPlan = !!(kPlan?.steps?.length);
+          const kgov = k.metadata instanceof Map ? k.metadata.get("governing") : k.metadata?.governing;
+          const hasPlan = kgov?.role === "ruler";
           const entry = { nodeId: String(k._id), hasPlan };
           childrenIndex.set(String(k._id), entry);
           childrenIndex.set(k.name, entry);
@@ -187,13 +289,7 @@ export async function renderPlanPanel({ node, nodeId, qs, isPublicAccess }) {
       }
     } catch {}
 
-    const version = plan.version != null ? `v${plan.version}` : "";
-    const counts = steps.reduce((acc, s) => {
-      const k = s.status || "unknown";
-      acc[k] = (acc[k] || 0) + 1;
-      return acc;
-    }, {});
-    const countBar = Object.entries(counts)
+    const countBar = Object.entries(countBuckets)
       .map(([s, n]) => `<span class="pp-count pp-count-${esc(s)}">${n} ${esc(s)}</span>`)
       .join(" ");
 
@@ -201,13 +297,15 @@ export async function renderPlanPanel({ node, nodeId, qs, isPublicAccess }) {
       .map((s) => renderStepRow(s, { qs, isPublicAccess, childrenIndex }))
       .join("");
 
-    const archivedCount = Array.isArray(plan.archivedPlans) ? plan.archivedPlans.length : 0;
-    const archivedLabel = archivedCount > 0
-      ? `<span class="pp-meta">· ${archivedCount} archived</span>`
-      : "";
+    const archivedLabel = "";
+    const version = "";
 
-    const rollup = plan.rollup || null;
-    const rollupLine = rollup && rollup.total > 0
+    // Rollup line: aggregated across this scope + descendant Rulers'
+    // execution-records. Computed by walking the active records under
+    // the parent Ruler scope.
+    const rollupCounts = await readRollupFromExecutionRecord(node.parent);
+    const rollup = rollupCounts && rollupCounts.total > 0 ? rollupCounts : null;
+    const rollupLine = rollup
       ? `<div class="pp-rollup">Including descendants: ${rollup.done || 0} done, ${rollup.running || 0} running, ${rollup.pending || 0} pending, ${rollup.blocked || 0} blocked, ${rollup.failed || 0} failed</div>`
       : "";
 

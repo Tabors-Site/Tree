@@ -68,36 +68,38 @@ export async function detectActiveSwarm({ rootId, currentNodeId }) {
   if (!anchor) return null;
   try {
     const { getExtension } = await import("../loader.js");
-    const swarm = getExtension("swarm")?.exports;
-    const planExt = getExtension("plan")?.exports;
-    if (!swarm?.findProjectForNode || !planExt?.readPlan) return null;
+    const governing = getExtension("governing")?.exports;
+    if (!governing?.findRulerScope || !governing?.readActiveExecutionRecord) return null;
 
-    const project = await swarm.findProjectForNode(anchor);
-    if (!project) return null;
-    const planObj = await planExt.readPlan(project._id);
-    const branches = (planObj?.steps || [])
-      .filter((s) => s.kind === "branch" || s.kind === "chapter")
-      .map((s) => ({
-        name: s.title,
-        status: s.status,
-        spec: s.spec || null,
-        path: s.path || null,
-        // Preserve childNodeId so callers can target running branch
-        // sessions directly (e.g. to drop a PLAN_PIVOTED signal into
-        // each running branch's inbox on a user pivot).
-        childNodeId: s.childNodeId || null,
-      }));
+    const ruler = await governing.findRulerScope(anchor);
+    if (!ruler) return null;
+    const record = await governing.readActiveExecutionRecord(ruler._id);
+    if (!record) return null;
+
+    const branches = [];
+    for (const step of (record.stepStatuses || [])) {
+      if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
+      for (const entry of step.branches) {
+        branches.push({
+          name: entry.name,
+          status: entry.status,
+          spec: entry.spec || null,
+          path: null,
+          childNodeId: entry.childNodeId || null,
+        });
+      }
+    }
     if (branches.length === 0) return null;
-    const running = branches.filter((b) =>
-      b.status === "running" || b.status === "pending"
-    );
+
+    const running = branches.filter((b) => b.status === "running" || b.status === "pending");
     if (running.length === 0) return null;
+
     return {
-      projectNodeId: String(project._id),
-      projectName: project.name || null,
+      projectNodeId: String(ruler._id),
+      projectName: ruler.name || null,
       branches,
       running: running.map((b) => b.name),
-      version: planObj?.version || 1,
+      version: record.ordinal || 1,
     };
   } catch (err) {
     log.debug("Stream", `detectActiveSwarm failed: ${err.message}`);
@@ -175,15 +177,12 @@ export async function classifyMidflight({ message, active, core }) {
 export async function triggerStop({ active, socket }) {
   if (!active) return;
   try {
-    const { getExtension } = await import("../loader.js");
-    const planExt = getExtension("plan")?.exports;
-    if (!planExt) return;
-
-    await planExt.archivePlan({
-      nodeId: active.projectNodeId,
-      reason: "user-cancelled-midflight",
-      core: null,
-    });
+    // Phase E: archivePlan removed. The execution-record's status flips
+    // to "superseded" automatically on the next Planner re-invocation;
+    // for a plain stop without re-emission, the user can either resume
+    // ("continue") or send a fresh request that triggers a new
+    // emission. We only do the WS emit here so the dashboard knows
+    // the active plan was cancelled.
 
     const { SWARM_WS_EVENTS } = await import("../swarm/wsEvents.js");
     socket?.emit?.(SWARM_WS_EVENTS.PLAN_ARCHIVED, {
@@ -229,7 +228,7 @@ export async function triggerPlanPivot({
   try {
     const { SWARM_WS_EVENTS } = await import("../swarm/wsEvents.js");
     const { getExtension } = await import("../loader.js");
-    const planExt = getExtension("plan")?.exports;
+    const planExt = getExtension("governing")?.exports;
     const { setPendingSwarmPlan, getPendingSwarmPlan } = await import("../swarm/state/pendingSwarmPlan.js");
 
     // Snapshot the running state BEFORE we archive so the architect
@@ -286,13 +285,9 @@ export async function triggerPlanPivot({
       }
     }
 
-    if (planExt?.archivePlan) {
-      await planExt.archivePlan({
-        nodeId: active.projectNodeId,
-        reason: "user-pivot-midflight",
-        core: null,
-      });
-    }
+    // Phase E: explicit archivePlan call removed. The Planner
+    // re-invocation below produces emission-2 which auto-supersedes
+    // the prior approval ledger entry and freezes prior records.
     socket?.emit?.(SWARM_WS_EVENTS.PLAN_ARCHIVED, {
       projectNodeId: active.projectNodeId,
       projectName: active.projectName,

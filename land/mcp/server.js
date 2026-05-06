@@ -231,6 +231,12 @@ async function handleMcpRequest(req, res) {
         });
       }
       requestArgs.userId = req.userId;
+      // Visitor identity. Tools that maintain per-conversation
+      // transient state (governing's Ruler/Foreman decision registers)
+      // need this to key writes that runRulerTurn/runForemanTurn read
+      // back after the LLM call resolves. Falls back to userId for
+      // backwards compatibility with non-WebSocket callers.
+      if (req.visitorId) requestArgs.visitorId = req.visitorId;
 
       // Inject AI chat context
       const contextKey = req.visitorId || req.userId;

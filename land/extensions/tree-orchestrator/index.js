@@ -2,7 +2,9 @@ import { orchestrateTreeRequest, clearMemory, getLastRouting, getLastRoutingRing
 import { setClearMemoryFn, registerSocketHandler } from "../../seed/ws/websocket.js";
 import { rebuildAll, rebuildIndexForRoot, invalidateRoot, getIndexForRoot, getAllIndexedRoots } from "./routingIndex.js";
 import { resolveRootNode } from "../../seed/tree/treeFetch.js";
-import { dispatchApprovedSubPlan, archiveSubPlan } from "./dispatch.js";
+// Sub-plan dispatch / archive removed in Phase E. Recursive sub-Ruler
+// dispatch + Planner re-invocation handle every case the sub-plan
+// flow was originally designed for.
 import log from "../../seed/log.js";
 
 export async function init(core) {
@@ -169,50 +171,12 @@ export async function init(core) {
     } catch {}
   }, "tree-orchestrator");
 
-  // ── Sub-plan approval handlers ────────────────────────────────────
-  // A SUB_PLAN_PROPOSED card in chat gives the user Accept / Cancel
-  // buttons scoped to that specific sub-plan. Button click emits one
-  // of these events with the sub-plan's node id; the server dispatches
-  // (Accept) or archives (Cancel) without needing a chat-message
-  // round-trip. Runtime context (socket, signal, rt, slot) comes from
-  // the visitor's active request — the session that originally spawned
-  // the swarm.
-  registerSocketHandler("swarmSubPlanAccept", async ({ socket, userId, visitorId, data }) => {
-    const subPlanNodeId = data?.subPlanNodeId;
-    if (!subPlanNodeId) return;
-    const active = getActiveRequest(visitorId) || {};
-    const runtimeCtx = {
-      visitorId,
-      userId: active.userId || userId,
-      username: active.username || null,
-      rootId: active.rootId || null,
-      sessionId: active.sessionId || null,
-      signal: active.signal || null,
-      slot: active.slot || null,
-      socket: active.socket || socket,
-      onToolLoopCheckpoint: active.onToolLoopCheckpoint || null,
-      rt: active.rt || null,
-      rootChatId: active.rootChatId || null,
-    };
-    // Fire-and-forget. The dispatch's own emits (SUB_PLAN_DISPATCHED,
-    // scout events, branch completion events) surface progress to the
-    // user. If dispatch fails the error is logged on the server.
-    dispatchApprovedSubPlan({ subPlanNodeId, runtimeCtx }).catch((err) => {
-      log.error("TreeOrchestrator", `swarmSubPlanAccept dispatch failed: ${err.message}`);
-    });
-  });
-
-  registerSocketHandler("swarmSubPlanCancel", async ({ socket, data }) => {
-    const subPlanNodeId = data?.subPlanNodeId;
-    if (!subPlanNodeId) return;
-    await archiveSubPlan({
-      subPlanNodeId,
-      reason: data?.reason || "user-cancel",
-      socket,
-    }).catch((err) => {
-      log.error("TreeOrchestrator", `swarmSubPlanCancel failed: ${err.message}`);
-    });
-  });
+  // Sub-plan approval handlers removed in Phase E. The sub-plan layer
+  // (SUB_PLAN_PROPOSED card with Accept/Cancel) was a swarm-era wrap
+  // around mid-build worker decompositions. Recursive sub-Ruler
+  // dispatch handles compound work directly: a sub-Ruler emits its
+  // own structured plan via governing-emit-plan and dispatches its
+  // own children through the same runBranchSwarm path.
 
   // Register LLM slots for semantic routing
   // Operators assign cheap/fast models to these for routing decisions

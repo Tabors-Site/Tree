@@ -37,6 +37,39 @@ import { ensureExecutionNode, findExecutionNode } from "./executionNode.js";
 
 const NS = "governing";
 
+// Step-status semantic sets. Used by code that needs to discriminate
+// between "settled with progress" vs "settled without progress" vs
+// "tried-and-couldn't" vs "deliberate stop." Single source of truth
+// so readers don't drift.
+//
+//   done       — work completed normally, output produced, contracts met
+//   advanced   — Foreman explicit override; step's work deemed
+//                complete-enough or non-blocking. Distinct from done:
+//                reputation will weigh advanced steps against the
+//                Foreman's track record (judgment was applied).
+//   skipped    — step bypassed (precondition unmet, work not needed).
+//                Distinct from done: nothing was produced; consumers
+//                that need step output (e.g., file-import validators)
+//                must NOT treat skipped as done.
+//   failed     — tried, couldn't. Errored out.
+//   cancelled  — decided not to finish. Operator/court intent.
+//   superseded — replaced by a newer emission.
+//   blocked    — waiting on something external.
+//   paused     — paused, will resume.
+//   running / pending — non-terminal.
+export const STEP_TERMINAL_STATUSES = new Set([
+  "done", "advanced", "skipped", "failed", "cancelled", "superseded",
+]);
+// "Settled with progress" — the work is considered to have happened
+// in some form, whether normally or by override. Used by parent
+// rollups that need to know "are all my children settled (no
+// failure, no in-flight)?"
+export const STEP_PROGRESSED_STATUSES = new Set(["done", "advanced", "skipped"]);
+// Strictly "produced output." Used by readers that depend on the
+// step's actual artifact (file produced, chapter written, etc.).
+// advanced/skipped do NOT belong here.
+export const STEP_OUTPUT_PRODUCED_STATUSES = new Set(["done"]);
+
 /**
  * Build an executionRef string. Same shape as planRef / contractRef:
  * "<executionNodeId>:<recordId>".
@@ -453,11 +486,64 @@ export async function updateStepStatus({
 }
 
 /**
+ * Convenience wrapper for swarm: locate the active execution-record
+ * at a Ruler scope, find the step containing a branch with this name,
+ * and apply the status update. Returns the updated execution payload
+ * or null if no record / step / branch matches.
+ *
+ * Used by the swarm dual-write path during Phase B (status changes
+ * write to both metadata.plan.steps[] legacy field and the active
+ * execution-record's stepStatuses). Phase E removes the legacy write;
+ * the structured execution-record becomes the sole status home.
+ *
+ * Matching: case-insensitive on branch name. If multiple branch
+ * steps contain branches with the same name (a substrate bug — the
+ * Planner's own validator forbids duplicate names), the first match
+ * wins.
+ */
+export async function updateStepStatusByBranchName({
+  rulerNodeId,
+  branchName,
+  updates,
+}) {
+  if (!rulerNodeId || !branchName || !updates) return null;
+  const active = await readActiveExecutionRecord(rulerNodeId);
+  if (!active?._recordNodeId) return null;
+  const lowerBranch = String(branchName).trim().toLowerCase();
+  const stepStatuses = Array.isArray(active.stepStatuses) ? active.stepStatuses : [];
+  for (const step of stepStatuses) {
+    if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
+    const match = step.branches.find((b) => String(b?.name || "").toLowerCase() === lowerBranch);
+    if (match) {
+      return updateStepStatus({
+        recordNodeId: active._recordNodeId,
+        stepIndex: step.stepIndex,
+        branchName,
+        updates,
+      });
+    }
+  }
+  return null;
+}
+
+/**
  * Freeze an execution-record. Flips its status to a terminal value
- * ("completed" | "failed" | "superseded" | "paused") and stamps
- * completedAt. Phase A uses this for supersession handling; later
- * phases wire swarm to call freezeExecutionRecord on natural
- * completion.
+ * ("completed" | "failed" | "superseded" | "paused" | "cancelled")
+ * and stamps completedAt.
+ *
+ * Fires a per-status hook so Pass 2 courts and Pass 3 reputation can
+ * discriminate cleanly: `governing:executionCompleted`,
+ * `governing:executionFailed`, `governing:executionCancelled`,
+ * `governing:executionPaused`, `governing:executionSuperseded`.
+ *
+ * Distinct hook names matter because:
+ *   - Cancelled (decided-not-to-finish) shouldn't trigger court
+ *     adjudication the way Failed (tried-and-couldn't) might.
+ *   - Reputation accounting treats them differently — failure dings
+ *     the Ruler's track record; cancellation doesn't (operator
+ *     intent isn't a Ruler failure).
+ *   - Plan refinement triggers should fire on cancellation differently
+ *     from failure (replan-around vs recover-from).
  */
 export async function freezeExecutionRecord({
   recordNodeId,
@@ -472,6 +558,7 @@ export async function freezeExecutionRecord({
     : node.metadata?.[NS];
   if (meta?.role !== "execution-record" || !meta?.execution) return null;
 
+  const priorStatus = meta.execution.status;
   const execution = {
     ...meta.execution,
     status: nextStatus,
@@ -483,5 +570,34 @@ export async function freezeExecutionRecord({
     ...(meta || {}),
     execution,
   });
+
+  // Per-terminal-status hook fires. Fire only on actual transition
+  // to a terminal state (idempotent re-freezes don't re-fire).
+  if (nextStatus !== priorStatus) {
+    const hookMap = {
+      completed: "governing:executionCompleted",
+      failed: "governing:executionFailed",
+      cancelled: "governing:executionCancelled",
+      paused: "governing:executionPaused",
+      superseded: "governing:executionSuperseded",
+    };
+    const hookName = hookMap[nextStatus];
+    if (hookName) {
+      try {
+        const { hooks } = await import("../../../seed/hooks.js");
+        hooks.run(hookName, {
+          recordNodeId: String(recordNodeId),
+          priorStatus,
+          completedAt: execution.completedAt,
+          ordinal: execution.ordinal,
+          planEmissionRef: execution.planEmissionRef,
+          contractsEmissionRef: execution.contractsEmissionRef,
+        }).catch(() => {});
+      } catch (err) {
+        log.debug("Governing", `${hookName} fire failed: ${err.message}`);
+      }
+    }
+  }
+
   return execution;
 }

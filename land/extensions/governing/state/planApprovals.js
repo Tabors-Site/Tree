@@ -181,22 +181,37 @@ export async function readActivePlanApproval(rulerNodeId) {
  */
 export async function readActivePlanEmission(rulerNodeId) {
   const active = await readActivePlanApproval(rulerNodeId);
-  if (!active?.planRef) return null;
+  if (!active?.planRef) {
+    log.debug("Governing",
+      `readActivePlanEmission(${String(rulerNodeId).slice(0, 8)}): no active planApproval`);
+    return null;
+  }
   const parsed = parsePlanRef(active.planRef);
-  if (!parsed) return null;
-  // The planRef points at whatever node the approval was anchored to.
-  // Phase 1 anchored at the plan trio member id; phase 2 prototype
-  // anchors at the emission child id. Read the node and look for the
-  // emission payload either at metadata.governing.emission (emission
-  // child) or null (older phase-1 ref pointing at the workspace node).
-  const node = await Node.findById(parsed.planNodeId).select("_id metadata").lean();
-  if (!node) return null;
+  if (!parsed) {
+    log.warn("Governing",
+      `readActivePlanEmission(${String(rulerNodeId).slice(0, 8)}): unparseable planRef "${active.planRef}"`);
+    return null;
+  }
+  const node = await Node.findById(parsed.planNodeId).select("_id type metadata").lean();
+  if (!node) {
+    log.warn("Governing",
+      `readActivePlanEmission(${String(rulerNodeId).slice(0, 8)}): planRef points at missing node ${String(parsed.planNodeId).slice(0, 8)}`);
+    return null;
+  }
   const meta = node.metadata instanceof Map
     ? node.metadata.get(NS)
     : node.metadata?.[NS];
-  if (meta?.role !== "plan-emission") return null;
+  if (meta?.role !== "plan-emission") {
+    log.warn("Governing",
+      `readActivePlanEmission(${String(rulerNodeId).slice(0, 8)}): planRef points at node ${String(parsed.planNodeId).slice(0, 8)} ` +
+      `(type=${node.type}) with governing.role=${meta?.role || "(none)"}, expected "plan-emission"`);
+    return null;
+  }
   if (meta?.emission) {
     return { ...meta.emission, _emissionNodeId: String(node._id) };
   }
+  log.warn("Governing",
+    `readActivePlanEmission(${String(rulerNodeId).slice(0, 8)}): emission node ${String(parsed.planNodeId).slice(0, 8)} ` +
+    `has role=plan-emission but no metadata.governing.emission payload (likely depth-cap rejection during stamp)`);
   return null;
 }

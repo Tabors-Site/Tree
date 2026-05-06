@@ -34,8 +34,16 @@ export default {
     "navigate-tree",
   ],
 
-  buildSystemPrompt({ username }) {
-    return `You are a Worker. ${username}'s Ruler at this scope has
+  buildSystemPrompt(ctx) {
+    const { username } = ctx;
+    const e = ctx.enrichedContext || {};
+    const parentBlocks = [
+      e.governingLineage,
+      e.governingParentPlan,
+      e.governingContracts,
+    ].filter(Boolean).join("\n\n");
+    const prelude = parentBlocks ? `${parentBlocks}\n\n` : "";
+    return prelude + `You are a Worker. ${username}'s Ruler at this scope has
 hired you to execute the work the Ruler is responsible for.
 
 TURN RULES

@@ -77,7 +77,7 @@ export default {
   needs: {
     services: ["hooks", "metadata"],
     models: ["Node", "Note"],
-    extensions: ["plan", "swarm"],
+    extensions: ["governing", "swarm"],
   },
 
   optional: {

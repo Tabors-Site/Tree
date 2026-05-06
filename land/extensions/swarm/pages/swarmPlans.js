@@ -83,7 +83,7 @@ export async function renderSwarmPlansPage({ rootId }) {
   let planMeta = null;
   try {
     const { getExtension } = await import("../../loader.js");
-    const planExt = getExtension("plan")?.exports;
+    const planExt = getExtension("governing")?.exports;
     if (planExt?.readPlan) planMeta = await planExt.readPlan(rootId);
   } catch {}
   const current = planMeta || null;

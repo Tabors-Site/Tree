@@ -182,6 +182,12 @@ export async function startChat({
   treeContext,
   systemPrompt = null,
   enrichedContext = null,
+  // Chain linkage. When this chat is spawned from inside another
+  // chat's tool handler (e.g., Ruler's hire-planner spawning a
+  // Planner chainstep), pass the parent chatId. We resolve the
+  // parent's rootChatId so the spawned chat sits in the same chain
+  // hierarchy under the original user message.
+  parentChatId = null,
 }) {
   const safeModeKey = modeKey || "home:default";
   const colonIdx = safeModeKey.indexOf(":");
@@ -194,13 +200,38 @@ export async function startChat({
     ? message.slice(0, maxContent) + "... (truncated)"
     : message;
 
+  // Resolve rootChatId: when there's a parent, the new chat inherits
+  // its rootChatId so audit walks see the whole chain rooted at the
+  // user's original message. Without a parent (top-level chat), the
+  // chat IS its own root.
   const chatId = uuidv4();
+  let resolvedRootChatId = chatId;
+  let resolvedChainIndex = 0;
+  if (parentChatId) {
+    try {
+      const parent = await Chat.findById(parentChatId).select("rootChatId chainIndex").lean();
+      if (parent) {
+        resolvedRootChatId = parent.rootChatId || parentChatId;
+        // Increment chainIndex from parent so ordering reflects depth.
+        resolvedChainIndex = (parent.chainIndex || 0) + 1;
+      } else {
+        // Parent not found — fall back to using parentChatId as root.
+        // The link is still useful for audit walks even if the parent
+        // record is gone.
+        resolvedRootChatId = parentChatId;
+      }
+    } catch {
+      resolvedRootChatId = parentChatId;
+    }
+  }
+
   const chat = await Chat.create({
     _id: chatId,
     userId,
     sessionId: sessionId || uuidv4(),
-    chainIndex: 0,
-    rootChatId: chatId,
+    chainIndex: resolvedChainIndex,
+    rootChatId: resolvedRootChatId,
+    parentChatId: parentChatId || null,
     startMessage: {
       content: safeMessage,
       source,

@@ -165,7 +165,7 @@ export async function init(core) {
         const project = bwData.role === "project"
           ? { _id: nodeId }
           : await findProjectForNode(nodeId);
-        const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
+        const planExt = (await import("../loader.js")).getExtension("governing")?.exports;
         if (project && planExt?.readPlan) {
           const planObj = await planExt.readPlan(project._id);
           const chapters = (planObj?.steps || [])
@@ -391,7 +391,7 @@ export async function init(core) {
       // chapters, repetition loops, under-target drafts, pronoun drift).
       try {
         const sw = (await import("../loader.js")).getExtension("swarm")?.exports;
-        const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
+        const planExt = (await import("../loader.js")).getExtension("governing")?.exports;
         const contracts = sw?.readContracts ? await sw.readContracts(project._id) : [];
         const planObj = planExt?.readPlan ? await planExt.readPlan(project._id) : null;
         const scout = await scanChapters({ projectNodeId: project._id, contracts, plan: planObj });

@@ -226,7 +226,15 @@ export function clearLastRouting(visitorId) {
 // ─────────────────────────────────────────────────────────────────────────
 
 const _activeRequests = new Map();
-const ACTIVE_REQUEST_TTL_MS = 30 * 1000;
+// TTL for orphaned-cleanup of active-request entries. The active
+// request represents "the user's currently-in-flight turn"; entries
+// should live as long as the turn does. Spawn-and-await tools (e.g.,
+// hire-planner spawning a Planner LLM call) can run multiple minutes,
+// during which downstream callers (emitPlanCard, getCallerAbortSignal,
+// getCallerSocket) need to find the entry. 30 minutes covers
+// realistic turn durations; orphaned entries past this point are
+// cleanup-eligible (the user disconnected or the process died mid-turn).
+const ACTIVE_REQUEST_TTL_MS = 30 * 60 * 1000;
 
 export function setActiveRequest(visitorId, ctx) {
   if (!visitorId) return;

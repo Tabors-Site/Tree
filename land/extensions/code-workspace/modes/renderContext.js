@@ -28,6 +28,15 @@ export default function renderEnrichedContextBlock(enriched) {
     );
   }
 
+  // Governing trio context — sub-Ruler lineage, parent Ruler's
+  // approved plan, and the union of ancestor-Ruler contracts. Lands
+  // near the top because these constrain every decision the AI makes
+  // at this scope: which work belongs here, what vocabulary to reuse,
+  // which sibling sub-Rulers own which directories.
+  if (enriched.governingLineage) sections.push(enriched.governingLineage);
+  if (enriched.governingParentPlan) sections.push(enriched.governingParentPlan);
+  if (enriched.governingContracts) sections.push(enriched.governingContracts);
+
   // Declared contracts — scoped to this branch (filtered upstream
   // by readScopedContracts; this renderer just lays them out by
   // namespace). Lands near the TOP so the wire protocol is the

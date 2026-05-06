@@ -40,6 +40,7 @@ import { startChainStep, finalizeChat, setChatContext, getChatContext } from "..
 import { appendSignal } from "./state/signalInbox.js";
 import { readMeta, mutateMeta, ensureScopeBookkeeping, initBranchRole } from "./state/meta.js";
 import { plan, setBranchStatus } from "./state/planAccess.js";
+import { dualWriteBranchStep } from "./state/dualWriteStatus.js";
 import { promoteDoneAncestors } from "./project.js";
 import { reconcileProject } from "./reconcile.js";
 import { SWARM_WS_EVENTS } from "./wsEvents.js";
@@ -335,7 +336,133 @@ async function retryFailedBranches({
   const failed = results.filter((r) => r.status === "failed" || r.status === "error");
   if (failed.length === 0) return { retried: 0 };
 
-  log.info("Swarm", `🔁 Retry: ${failed.length} failed branch(es) get one more shot`);
+  // Foreman batch judgment. One Foreman turn sees all failures at
+  // once and decides per-branch via foreman-judge-batch. Set-framing
+  // matters: per-failure Foreman calls can miss coupling between
+  // failures (e.g., several branches failing because they all
+  // consumed the same missing contract). The batch tool surfaces the
+  // failure list together and lets the Foreman reason about retry
+  // ordering — fix the producer first, wait on the consumers, etc.
+  //
+  // Token cost: 1 Foreman call instead of M. For M=1 the savings are
+  // zero; for M=3+ the savings compound. The batch tool description
+  // also tells the Foreman that single failures should still use the
+  // per-failure tools — judge-batch is gated on "wakeup lists 2 or
+  // more failures."
+  //
+  // Outcome decisions per branch:
+  //   "retry"       — retry this branch on the upcoming retry pass
+  //   "mark-failed" — leave failed terminally; do NOT retry
+  //   "wait"        — defer; revisit next pass after other retries
+  //                   finish (handled identically to "mark-failed" for
+  //                   the current retry pass — the branch isn't
+  //                   retried this time. The "wait" semantic surfaces
+  //                   in the audit trail and may inform Pass 3.)
+  //
+  // If the Foreman picks anything OTHER than judge-batch (escalate /
+  // freeze / respond), no retries fire — the Foreman's decision was
+  // turn-level and applies to the whole situation.
+  let approvedForRetry = null;  // null = no Foreman available (legacy path: retry all)
+  try {
+    const { runForemanTurn } = await import("../tree-orchestrator/ruling.js");
+    const { getExtension } = await import("../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (runForemanTurn && governing?.findRulerScope) {
+      const rulerScope = await governing.findRulerScope(rootProjectNode._id);
+      if (rulerScope) {
+        // Build the wakeup payload as a structured failure list so the
+        // Foreman can reason about it as a SET.
+        const failureList = failed.map((prev) => {
+          const errStr = String(prev.error || "(unknown error)").slice(0, 500);
+          return `- branch: ${prev.name || prev.rawName}\n  ` +
+                 `error: ${errStr}\n  ` +
+                 `prior retries: ${prev.retries || 0}`;
+        }).join("\n");
+
+        const wakeup = {
+          reason: failed.length === 1 ? "branch-failed" : "branch-batch-failed",
+          payload:
+            `${failed.length} branch failure${failed.length === 1 ? "" : "s"} ` +
+            `to judge:\n\n${failureList}\n\n` +
+            (failed.length > 1
+              ? "Read these as a SET. Are they coupled (shared root cause, " +
+                "missing producer, contract mismatch)? Or independent? " +
+                "Coupled failures often warrant retrying the producer " +
+                "first and waiting on the consumers — use foreman-judge-batch " +
+                "with action='wait' for the consumers."
+              : "Single failure — judge per the standard retry-vs-mark-failed " +
+                "matrix in your prompt."),
+        };
+
+        log.info("Swarm",
+          `🔁 Foreman batch judgment: ${failed.length} failure${failed.length === 1 ? "" : "s"}`);
+
+        try {
+          const foremanResult = await runForemanTurn({
+            visitorId,
+            message:
+              `${failed.length} branch${failed.length === 1 ? "" : "es"} ` +
+              `failed during execution. Decide retry / mark-failed / wait per branch, ` +
+              `or escalate the whole situation to the Ruler.`,
+            username, userId, rootId,
+            currentNodeId: String(rulerScope._id),
+            signal, slot, socket,
+            sessionId, rootChatId, rt,
+            readOnly: false, onToolLoopCheckpoint,
+            wakeup,
+          });
+
+          const decision = foremanResult?._foremanDecision;
+          approvedForRetry = new Set();
+          if (decision?.kind === "judge-batch" && Array.isArray(decision.decisions)) {
+            // Foreman emitted batch decisions. The mark-failed writes
+            // already happened inside the judge-batch dispatch case
+            // in ruling.js; here we just collect retry approvals.
+            // "wait" entries get no immediate action; the branch
+            // keeps its failed status and the next pass reconsiders.
+            for (const d of decision.decisions) {
+              if (d.action === "retry") approvedForRetry.add(d.branchName);
+            }
+            log.info("Swarm",
+              `🔁 Foreman batch: ${decision.decisions.map((d) => `${d.branchName}:${d.action}`).join(", ")}`);
+          } else if (decision?.kind === "retry-branch") {
+            // Foreman called the single-branch tool — only one
+            // failure or Foreman judged this batch as a single case.
+            approvedForRetry.add(decision.branchName);
+          } else if (decision?.kind === "mark-failed"
+                  || decision?.kind === "freeze-record"
+                  || decision?.kind === "escalate-to-ruler"
+                  || decision?.kind === "cancel-subtree"
+                  || decision?.kind === "pause-frame"
+                  || decision?.kind === "respond-directly") {
+            // Turn-level decision — applies to the whole situation.
+            // No retries this pass.
+            log.info("Swarm",
+              `🔁 Foreman: ${decision.kind} (turn-level); no retries this pass`);
+          } else {
+            // No decision recognized — treat as no retries (safer
+            // than blind-retrying everything when judgment didn't land).
+            log.warn("Swarm",
+              `🔁 Foreman returned unrecognized decision (${decision?.kind || "(none)"}); ` +
+              `no retries this pass`);
+          }
+        } catch (err) {
+          log.warn("Swarm",
+            `Foreman batch invocation failed: ${err.message}; falling back to retry-all`);
+          approvedForRetry = null;
+        }
+      }
+    }
+  } catch (err) {
+    log.debug("Swarm", `Foreman bridge unavailable: ${err.message}; falling back to retry-all`);
+    approvedForRetry = null;
+  }
+
+  log.info("Swarm",
+    `🔁 Retry: ${failed.length} failed branch(es); ` +
+    (approvedForRetry === null
+      ? `legacy unconditional retry`
+      : `Foreman approved ${approvedForRetry.size} of ${failed.length}`));
 
   // Path B: plan steps live on the plan-type child of the project
   // scope. Resolve once for all retries in this batch.
@@ -351,6 +478,15 @@ async function retryFailedBranches({
     if (signal?.aborted) break;
     const branch = branches.find((b) => b.name === prev.name || b.name === prev.rawName);
     if (!branch) continue;
+
+    // Foreman gate: if a Foreman was invoked above, only retry the
+    // branches it approved. Branches the Foreman left alone or
+    // explicitly mark-failed get skipped here.
+    if (approvedForRetry !== null && !approvedForRetry.has(branch.name)) {
+      log.info("Swarm",
+        `🔁 Skipping retry of "${branch.name}" (Foreman did not approve)`);
+      continue;
+    }
 
     emitStatus?.(socket, "intent", `Retry: ${branch.name}`);
 
@@ -408,7 +544,7 @@ async function retryFailedBranches({
         };
       }
       await setBranchStatus({ branchNodeId: branchNode._id, status: "done", summary: retryResult?.answer || null, core });
-      await p.upsertBranchStep(
+      await dualWriteBranchStep(
         rootPlanNodeId,
         {
           name: branch.name,
@@ -420,30 +556,13 @@ async function retryFailedBranches({
         },
         core,
       );
-      // Record the retry consumption on the plan's budget. Pass 3
-      // reputation reads per-step consumption to weight signature
-      // trust; tracking retries here ensures root and sub plans
-      // accrue symmetric budget history.
-      try {
-        const rootPlanRead = await p.readPlan(rootPlanNodeId);
-        const retryStep = (rootPlanRead?.steps || []).find(
-          (s) => s.kind === "branch" && String(s.childNodeId || "") === String(branchNode._id),
-        );
-        if (retryStep?.id) {
-          await p.recordBudgetConsumption(rootPlanNodeId, retryStep.id, { retries: 1 }, core);
-        }
-      } catch (budgetErr) {
-        log.debug("Swarm", `recordBudgetConsumption (retry-success) skipped: ${budgetErr.message}`);
-      }
+      // Phase E removed the recordBudgetConsumption call (Pass 3
+      // budget tracking lived on metadata.plan.steps[]; that field
+      // is gone). Retry-side finishChainStep UI tracking also
+      // dropped — chatId was read from the legacy step entry.
+      // Pass 3 budget tracking lands on execution-record stepStatuses
+      // when reputation work resumes.
       await recordBranchEvent({ visitorId, branchName: branch.name, from: "failed", to: "done", reason: "retry succeeded" });
-
-      if (retryStep && rt && !rt._cleaned) {
-        await rt.finishChainStep(retryStep.chatId, {
-          output: `✓ ${branch.name} (retry): ${truncate(retryResult?.answer || "done", 200)}`,
-          stopped: signal?.aborted || false,
-          modeKey: branchMode,
-        });
-      }
     } catch (err) {
       // Mirror the main per-branch catch's abort handling (line 1619).
       // A user-abort during the retry attempt is NOT a retry failure —
@@ -466,7 +585,7 @@ async function retryFailedBranches({
         };
       }
       await setBranchStatus({ branchNodeId: branchNode._id, status: resumableStatus, error: errorMsg, core });
-      await p.upsertBranchStep(
+      await dualWriteBranchStep(
         rootPlanNodeId,
         {
           name: branch.name,
@@ -479,27 +598,10 @@ async function retryFailedBranches({
         },
         core,
       );
-      // Record the retry consumption even when retry fails — the
-      // retry attempt consumed budget whether it succeeded or not.
-      try {
-        const rootPlanRead = await p.readPlan(rootPlanNodeId);
-        const retryStep = (rootPlanRead?.steps || []).find(
-          (s) => s.kind === "branch" && String(s.childNodeId || "") === String(branchNode._id),
-        );
-        if (retryStep?.id) {
-          await p.recordBudgetConsumption(rootPlanNodeId, retryStep.id, { retries: 1 }, core);
-        }
-      } catch (budgetErr) {
-        log.debug("Swarm", `recordBudgetConsumption (retry-fail) skipped: ${budgetErr.message}`);
-      }
+      // Phase E: budget consumption + retry finishChainStep UI tracking
+      // removed (relied on metadata.plan.steps[]). Pass 3 budget land
+      // when reputation work resumes; retry runtime UI degrades cleanly.
       await recordBranchEvent({ visitorId, branchName: branch.name, from: "failed", to: "failed", reason: `retry also failed: ${err.message}` });
-      if (retryStep && rt && !rt._cleaned) {
-        await rt.finishChainStep(retryStep.chatId, {
-          output: `✗ ${branch.name} (retry): ${err.message}`,
-          stopped: true,
-          modeKey: branchMode,
-        });
-      }
     }
   }
 
@@ -797,7 +899,7 @@ export async function runBranchSwarm({
     await p.initPlan(rootPlanNodeId, { systemSpec: userRequest }, core);
 
     for (const b of branches) {
-      await p.upsertBranchStep(
+      await dualWriteBranchStep(
         rootPlanNodeId,
         {
           name: b.name,
@@ -868,11 +970,101 @@ export async function runBranchSwarm({
   // concerns if they appear under deeper trees.
   const MAX_DEPTH = 32;
 
+  // Foreman halt-marker cache. The Foreman writes pendingCancel /
+  // pendingPauseAt / status=cancelled|paused on the active execution-
+  // record; this loop reads them between branches to decide whether
+  // to halt the queue. A 500ms cache means we don't hammer the
+  // metadata read when the loop iterates fast (small leaf branches),
+  // but we still pick up halt-markers within half a second of when
+  // they're written.
+  //
+  // User-experienced latency window: from "user types stop" to "queue
+  // actually halts" is approximately 1-2 seconds in the worst case.
+  // Decomposition: ~0-500ms cache wait + the LLM abort itself (~0.5-1s
+  // until the in-flight model call returns AbortError) + Foreman turn
+  // shutdown (negligible). The cache is the smallest of these; tighten
+  // to 100ms only if profiling shows the cache window dominates.
+  // Tightening below ~100ms risks a tight inner loop pinning Mongo.
+  const HALT_CACHE_TTL_MS = 500;
+  let cachedHaltCheck = null;
+  let cachedHaltCheckAt = 0;
+  async function readHaltMarkers() {
+    const now = Date.now();
+    if (cachedHaltCheck && (now - cachedHaltCheckAt) < HALT_CACHE_TTL_MS) {
+      return cachedHaltCheck;
+    }
+    try {
+      const { getExtension } = await import("../loader.js");
+      const governing = getExtension("governing")?.exports;
+      if (!governing?.readActiveExecutionRecord) {
+        cachedHaltCheck = { status: null, pendingCancel: null, pendingPauseAt: null };
+        cachedHaltCheckAt = now;
+        return cachedHaltCheck;
+      }
+      const record = await governing.readActiveExecutionRecord(rootProjectNode._id);
+      cachedHaltCheck = {
+        status: record?.status || null,
+        pendingCancel: record?.pendingCancel || null,
+        pendingPauseAt: typeof record?.pendingPauseAt === "number" ? record.pendingPauseAt : null,
+      };
+      cachedHaltCheckAt = now;
+      return cachedHaltCheck;
+    } catch (err) {
+      log.debug("Swarm", `halt-marker read skipped: ${err.message}`);
+      return { status: null, pendingCancel: null, pendingPauseAt: null };
+    }
+  }
+  // Helper: write the abort-style metadata on the queued branches
+  // when we halt. Mirrors the signal.aborted block below — same
+  // bookkeeping, different reason text.
+  async function markQueuedAsHalted(haltReason) {
+    for (const q of queue) {
+      const treeScope = await resolveBranchParentId({
+        rootProjectId: rootProjectNode._id,
+        parentBranchName: q.parentBranch,
+        hint: q.parentNodeId,
+      });
+      const planIdForScope = await planAtScope(treeScope);
+      await dualWriteBranchStep(
+        planIdForScope,
+        {
+          name: q.name,
+          status: "pending",
+          pausedAt: new Date().toISOString(),
+          abortReason: haltReason,
+        },
+        core,
+      );
+      await recordBranchEvent({
+        visitorId, branchName: q.name,
+        from: "pending", to: "pending",
+        reason: haltReason,
+      });
+    }
+  }
+
   while (queue.length > 0 && processed < MAX_BRANCHES) {
     if (signal?.aborted) {
       log.warn("Swarm",
         `🛑 Aborted after ${processed} branches (${queue.length} still queued). Queued branches stay "pending"; next message at this project can resume them.`,
       );
+      await markQueuedAsHalted("parent session aborted");
+      break;
+    }
+
+    // Foreman halt-marker check. cancel-subtree / pause-frame write
+    // markers on the execution-record; this check halts the queue
+    // when any halt-condition is set. The Foreman's writes already
+    // froze descendant records and (for cancel) aborted in-flight
+    // controllers via abortRegistry; this loop's job is to stop
+    // dispatching MORE work.
+    const halt = await readHaltMarkers();
+    if (halt.status === "cancelled" || halt.pendingCancel) {
+      log.warn("Swarm",
+        `🛑 Cancelled by Foreman after ${processed} branches (${queue.length} queued). ` +
+        `Queued branches marked cancelled.`);
+      // Cancelled queued branches go to status=cancelled, not pending —
+      // they're not resumable.
       for (const q of queue) {
         const treeScope = await resolveBranchParentId({
           rootProjectId: rootProjectNode._id,
@@ -880,18 +1072,60 @@ export async function runBranchSwarm({
           hint: q.parentNodeId,
         });
         const planIdForScope = await planAtScope(treeScope);
-        await p.upsertBranchStep(
+        await dualWriteBranchStep(
           planIdForScope,
           {
             name: q.name,
-            status: "pending",
-            pausedAt: new Date().toISOString(),
-            abortReason: "parent session aborted",
+            status: "cancelled",
+            finishedAt: new Date().toISOString(),
+            abortReason: halt.pendingCancel?.reason || "cancel-subtree",
           },
           core,
         );
-        await recordBranchEvent({ visitorId, branchName: q.name, from: "pending", to: "pending", reason: "parent session aborted" });
+        await recordBranchEvent({
+          visitorId, branchName: q.name,
+          from: "pending", to: "cancelled",
+          reason: halt.pendingCancel?.reason || "cancel-subtree",
+        });
       }
+      break;
+    }
+    if (halt.status === "paused") {
+      log.warn("Swarm",
+        `⏸ Paused by Foreman after ${processed} branches (${queue.length} queued). ` +
+        `Queued branches stay pending; resume re-dispatches them.`);
+      await markQueuedAsHalted("foreman paused execution");
+      break;
+    }
+    // Deferred-pause: pause when the queue is about to dispatch the
+    // step indicated by pendingPauseAt. processed+1 is the upcoming
+    // (1-based) branch index in the queue's view; comparing to the
+    // step boundary is approximate (step indices come from plan
+    // emission, branch indices from queue order — they aren't always
+    // 1:1 in nested cases). For Phase C we treat them as aligned
+    // when the step matches the upcoming branch's parent-step; if
+    // the alignment misses, the next iteration's halt check still
+    // fires once the Foreman flips status to paused.
+    if (halt.pendingPauseAt && halt.pendingPauseAt === processed + 1) {
+      log.warn("Swarm",
+        `⏸ Deferred-pause boundary reached (step ${halt.pendingPauseAt}); ` +
+        `flipping execution-record to paused and halting.`);
+      try {
+        const { getExtension } = await import("../loader.js");
+        const governing = getExtension("governing")?.exports;
+        if (governing?.readActiveExecutionRecord && governing?.freezeExecutionRecord) {
+          const record = await governing.readActiveExecutionRecord(rootProjectNode._id);
+          if (record?._recordNodeId) {
+            await governing.freezeExecutionRecord({
+              recordNodeId: record._recordNodeId,
+              nextStatus: "paused",
+            });
+          }
+        }
+      } catch (err) {
+        log.debug("Swarm", `deferred-pause freeze skipped: ${err.message}`);
+      }
+      await markQueuedAsHalted("foreman deferred-pause boundary");
       break;
     }
 
@@ -945,7 +1179,7 @@ export async function runBranchSwarm({
     // are written to the plan node, not to the scope node itself.
     const planNodeForStep = await planAtScope(treeScopeId);
 
-    await p.upsertBranchStep(
+    await dualWriteBranchStep(
       planNodeForStep,
       {
         name: branch.name,
@@ -997,6 +1231,25 @@ export async function runBranchSwarm({
           signal.addEventListener("abort", parentAbortListener, { once: true });
         }
       }
+      // Register the controller so cancel-subtree can abort in-flight
+      // LLM calls under this scope. Deregistration happens in the
+      // finally-block.
+      let deregisterBranchAbort = () => {};
+      try {
+        const { registerController } = await import("../tree-orchestrator/abortRegistry.js");
+        deregisterBranchAbort = registerController({
+          visitorId,
+          // Scope is the branch's RULER scope (the branch node itself,
+          // since each branch is promoted to Ruler at dispatch time).
+          // cancel-subtree from a higher scope walks down and includes
+          // this id in its abort set; signal abort propagates here.
+          scopeNodeId: branchNode._id,
+          branchName: branch.name,
+          controller: branchAbort,
+        });
+      } catch (regErr) {
+        log.debug("Swarm", `abortRegistry register skipped: ${regErr.message}`);
+      }
       try {
         branchResult = await runBranch({
           mode: branchMode,
@@ -1015,6 +1268,7 @@ export async function runBranchSwarm({
         if (parentAbortListener && signal) {
           try { signal.removeEventListener("abort", parentAbortListener); } catch {}
         }
+        try { deregisterBranchAbort(); } catch {}
       }
 
       // Mark done provisionally. Hook subscribers can flip it to failed
@@ -1028,7 +1282,7 @@ export async function runBranchSwarm({
         answer: branchResult?.answer || "",
       };
       results.push(resultEntry);
-      await p.upsertBranchStep(
+      await dualWriteBranchStep(
         planNodeForStep,
         {
           name: branch.name,
@@ -1045,20 +1299,9 @@ export async function runBranchSwarm({
       // least one LLM turn to emit its terminal marker). Symmetric
       // for root and sub plans — they both dispatch through this
       // code path — so Pass 3's reputation read sees uniform data.
-      try {
-        const turnsUsed = Number.isFinite(branchResult?.turnsUsed) && branchResult.turnsUsed > 0
-          ? branchResult.turnsUsed
-          : 1;
-        const planRead = await p.readPlan(planNodeForStep);
-        const completedStep = (planRead?.steps || []).find(
-          (s) => s.kind === "branch" && String(s.childNodeId || "") === String(branchNode._id),
-        );
-        if (completedStep?.id) {
-          await p.recordBudgetConsumption(planNodeForStep, completedStep.id, { turns: turnsUsed }, core);
-        }
-      } catch (budgetErr) {
-        log.debug("Swarm", `recordBudgetConsumption (dispatch) skipped: ${budgetErr.message}`);
-      }
+      // Phase E: dispatch-side budget tracking removed (relied on
+      // metadata.plan.steps[]). Pass 3 reputation land on
+      // execution-record stepStatuses when that work resumes.
       await recordBranchEvent({ visitorId, branchName: branch.name, from: "running", to: "done" });
 
       // Fire per-branch hook. Handlers (e.g., code-workspace) run
@@ -1093,7 +1336,7 @@ export async function runBranchSwarm({
           error: resultEntry.error || null,
           summary: null, core,
         });
-        await p.upsertBranchStep(
+        await dualWriteBranchStep(
           planNodeForStep,
           {
             name: branch.name,
@@ -1112,210 +1355,17 @@ export async function runBranchSwarm({
         continue;
       }
 
-      // Nested-branch decomposition (Pass 1 — model-first rewire).
-      //
-      // A worker emits [[BRANCHES]] inside its response. Instead of
-      // bouncing the emission back to the root architect for a whole-
-      // project replan, we land it LOCALLY: create a plan-type node as
-      // a child of the worker's own node, populate its steps with the
-      // proposed sub-branches in pending-approval state, and emit
-      // SUB_PLAN_PROPOSED so the user approves at sub-scope. The
-      // sub-plan INHERITS its anchor from the worker's node — no
-      // parameter threading needed; findGoverningPlan walks up.
-      //
-      // Depth cap: Pass 1 MVP caps at depth 1 (one level of sub-plan).
-      // Sub-branches that themselves emit [[BRANCHES]] have their
-      // emissions ignored with a log line; relaxation is a later pass
-      // once budget semantics are in place. branch.depth=0 is a root-
-      // level branch; its emissions are depth=1 sub-plans. ALLOWED.
-      // branch.depth=1 would be a sub-branch; its further emission
-      // would be depth=2. REJECTED.
-      if (branchResult?.answer) {
-        // Source-of-truth for nested decomposition: the sub-Ruler's
-        // structured plan emission. The sub-Ruler's runRulerCycle
-        // persisted it via governing-emit-plan; we read it back via
-        // governing.readActivePlanEmission.
-        let nested = { branches: [], cleaned: branchResult.answer };
-        try {
-          const { getExtension } = await import("../loader.js");
-          const governing = getExtension("governing")?.exports;
-          if (governing?.readActivePlanEmission && branchNode?._id) {
-            const subEmission = await governing.readActivePlanEmission(branchNode._id);
-            if (subEmission?.steps?.length) {
-              const branchEntries = [];
-              for (const step of subEmission.steps) {
-                if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
-                for (const b of step.branches) {
-                  if (!b?.name) continue;
-                  branchEntries.push({
-                    name: b.name,
-                    spec: b.spec || "",
-                    path: null,
-                    files: [],
-                    slot: null,
-                    mode: null,
-                  });
-                }
-              }
-              if (branchEntries.length > 0) {
-                nested = { branches: branchEntries, cleaned: branchResult.answer };
-              }
-            }
-          }
-        } catch (err) {
-          log.debug("Swarm", `nested structured-emission read skipped: ${err.message}`);
-        }
-        if (nested.branches.length > 0) {
-          const currentDepth = branch.depth || 0;
-          // Recursive sub-Ruler dispatch is normal; deep nesting is
-          // expected. Cap matches MAX_DEPTH for the same paranoia reason.
-          const MAX_SUB_PLAN_DEPTH = 32;
-
-          // Always strip the [[BRANCHES]] block from the worker's
-          // answer so downstream logic (scout, retry, summary) doesn't
-          // re-parse stale nested emissions.
-          const cleanAnswer = nested.cleaned;
-          const lastIdx = results.length - 1;
-          if (lastIdx >= 0) results[lastIdx].answer = cleanAnswer;
-
-          if (currentDepth >= MAX_SUB_PLAN_DEPTH) {
-            log.warn(
-              "Swarm",
-              `🌱 Branch "${qualifiedName}" emitted ${nested.branches.length} nested branch(es) but depth cap (${MAX_SUB_PLAN_DEPTH}) blocks further decomposition. Emission ignored; worker must handle flat.`,
-            );
-          } else {
-            log.info(
-              "Swarm",
-              `🌱 Branch "${qualifiedName}" emitted ${nested.branches.length} sub-branch(es): ${nested.branches.map((s) => s.name).join(", ")}. Creating sub-plan at ${String(branchNode._id).slice(0, 8)}.`,
-            );
-
-            try {
-              const p = await plan();
-
-              // Build initial steps from the nested emission. Status is
-              // pending-approval until the user accepts at sub-scope.
-              // parentBranch links back so rollup and display can trace
-              // the chain to the outermost plan.
-              const subPlanSteps = nested.branches.map((sub) => ({
-                kind: "branch",
-                title: sub.name,
-                spec: sub.spec || null,
-                path: sub.path || null,
-                files: sub.files || [],
-                slot: sub.slot || null,
-                mode: sub.mode || null,
-                stepType: "simple",
-                status: "pending-approval",
-                parentBranch: branch.name,
-              }));
-
-              // Create the sub-plan node as child of the worker's
-              // branch node. INHERITS POSITION: parent = the very node
-              // where decomposition was triggered. findGoverningPlan
-              // from any future sub-branch walks up and lands here.
-              const subPlanNode = await p.createPlanNode({
-                parentNodeId: String(branchNode._id),
-                userId,
-                // Plain "plan" — parent + type="plan" encode the
-                // hierarchy; renaming the worker's branch shouldn't
-                // orphan the sub-plan's name.
-                name: "plan",
-                systemSpec: `Sub-plan for ${qualifiedName}. Triggered mid-build when the worker emitted [[BRANCHES]] discovering compound work.`,
-                steps: subPlanSteps,
-                core,
-              });
-
-              // Mark the parent plan's step (the one this worker was
-              // executing) as having decomposed. Update its stepType
-              // to "compound" and stamp a subPlanNodeId pointer. The
-              // governing plan for the worker's node is whatever plan
-              // holds its branch step — typically the project-root
-              // plan, but could be a higher sub-plan in deeper runs.
-              try {
-                const parentPlanNode = await p.findGoverningPlan(String(branchNode._id));
-                if (parentPlanNode) {
-                  const parentPlan = await p.readPlan(parentPlanNode._id);
-                  const parentStep = parentPlan?.steps?.find(
-                    (s) => s.kind === "branch" &&
-                      String(s.childNodeId || "") === String(branchNode._id),
-                  );
-                  if (parentStep) {
-                    await p.updateStep(parentPlanNode._id, parentStep.id, {
-                      stepType: "compound",
-                      subPlanNodeId: String(subPlanNode._id),
-                    }, core);
-                  }
-                }
-              } catch (markErr) {
-                log.debug("Swarm", `parent-step compound mark skipped: ${markErr.message}`);
-              }
-
-              // Ledger entry captures that this sub-plan was proposed
-              // and what triggered it. Pass 3 will read ledger entries
-              // to compute signature reputation.
-              try {
-                await p.appendLedger(String(subPlanNode._id), {
-                  event: "sub-plan-proposed",
-                  detail: {
-                    parentBranchName: branch.name,
-                    parentBranchNodeId: String(branchNode._id),
-                    qualifiedName,
-                    stepCount: subPlanSteps.length,
-                    branchNames: nested.branches.map((b) => b.name),
-                  },
-                }, core);
-              } catch {}
-
-              // Emit SUB_PLAN_PROPOSED for the user to approve at
-              // sub-scope. Payload shows ONLY the local sub-plan with
-              // parent context as breadcrumbs — not the whole-project
-              // plan. Scoped cognitive load, aligned with the scope
-              // the decision actually covers.
-              try {
-                const { SWARM_WS_EVENTS } = await import("./wsEvents.js");
-                socket?.emit?.(SWARM_WS_EVENTS.SUB_PLAN_PROPOSED, {
-                  subPlanNodeId: String(subPlanNode._id),
-                  subPlanName: subPlanNode.name || "plan",
-                  scope: {
-                    parentBranchName: branch.name,
-                    parentBranchNodeId: String(branchNode._id),
-                    qualifiedName,
-                    rootPlanNodeId: rootProjectNode?._id ? String(rootProjectNode._id) : null,
-                    rootPlanName: rootProjectNode?.name || null,
-                  },
-                  proposedBranches: nested.branches.map((b) => ({
-                    name: b.name,
-                    spec: b.spec,
-                    path: b.path || null,
-                    files: b.files || [],
-                    slot: b.slot || null,
-                    mode: b.mode || null,
-                    parentBranch: branch.name,
-                  })),
-                  trigger: `${qualifiedName} discovered ${nested.branches.length} sub-component(s)`,
-                });
-              } catch (emitErr) {
-                log.debug("Swarm", `SUB_PLAN_PROPOSED emit failed: ${emitErr.message}`);
-              }
-
-              log.info(
-                "Swarm",
-                `📋 Sub-plan ${String(subPlanNode._id).slice(0, 8)} created with ${subPlanSteps.length} pending-approval step(s). Awaiting user approval at sub-scope (parent branch ${branch.name}).`,
-              );
-            } catch (subPlanErr) {
-              // Sub-plan creation failed catastrophically (DB error,
-              // permission issue, etc.). Log and skip — don't try to
-              // persist plan state through a broken write path. The
-              // nested [[BRANCHES]] emission is lost from this run but
-              // the outer swarm continues; the user can re-issue.
-              log.error(
-                "Swarm",
-                `Sub-plan creation failed for "${qualifiedName}": ${subPlanErr.message}. Nested emission dropped.`,
-              );
-            }
-          }
-        }
-      }
+      // Nested-branch decomposition is handled by recursive sub-Ruler
+      // dispatch, not by a swarm-level sub-plan + user-approval layer.
+      // When this branch's runRulerCycle ran, the sub-Ruler at
+      // branchNode promoted itself, ran its own Planner (which emitted
+      // a structured plan), ran its own Contractor if compound, and —
+      // if compound — recursively dispatched its own sub-branches via
+      // the same runBranchSwarm path that brought us here. The whole
+      // sub-plan + SUB_PLAN_PROPOSED + dispatchApprovedSubPlan flow
+      // from the pre-Phase-A architecture is gone: re-invocation of
+      // the Planner at an existing Ruler scope handles the "missing
+      // layer" case the sub-plan flow was originally designed for.
     } catch (err) {
       const parentAborted = signal?.aborted === true;
       const resumableStatus = parentAborted ? "paused" : "failed";
@@ -1323,7 +1373,7 @@ export async function runBranchSwarm({
         `Branch "${qualifiedName}" ${parentAborted ? "paused (aborted)" : "failed"}: ${err.message}`,
       );
       await setBranchStatus({ branchNodeId: branchNode._id, status: resumableStatus, error: err.message, core });
-      await p.upsertBranchStep(
+      await dualWriteBranchStep(
         planNodeForStep,
         {
           name: branch.name,

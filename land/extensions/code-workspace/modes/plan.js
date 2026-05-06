@@ -119,7 +119,6 @@ export default {
     "workspace-probe",
     "workspace-logs",
     "workspace-status",
-    "workspace-plan",
     "source-read",
     "source-list",
     "get-tree-context",

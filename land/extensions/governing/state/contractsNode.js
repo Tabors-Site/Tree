@@ -1,13 +1,15 @@
-// Contracts-type node management. The contracts-type node is the
-// Contractor's emission at a Ruler scope, parallel to how plan-type
-// nodes are the Planner's emission. The contracts node holds the
-// emitted contracts in metadata.governing.contracts (keyed by id with
-// version chain via supersedes); the Ruler scope itself holds the
-// approval ledger as metadata.governing.contractApprovals.
+// Contracts trio member management. The contracts node is the
+// Contractor's emission surface at a Ruler scope — symmetric with the
+// plan node (Planner's surface) and the execution node (Foreman's
+// surface). Each Contractor invocation creates a `contracts-emission-N`
+// child node under this node carrying the structured contract set;
+// the Ruler scope holds metadata.governing.contractApprovals as the
+// approval ledger pointing at the active emission.
 //
-// This shape replaces the legacy metadata.plan.contracts blob from
-// the swarm-to-governing migration. See
-// project_contracts_node_architecture.md for the full model.
+// This file owns the trio-member node primitive (find/create with
+// role + mode stamping). The ring-record machinery — emission
+// creation, approval ledger, idempotency, readActive, readContracts —
+// lives in contracts.js.
 
 import Node from "../../../seed/models/node.js";
 import log from "../../../seed/log.js";
@@ -107,52 +109,10 @@ export async function ensureContractsNode({ scopeNodeId, userId, core }) {
   return created;
 }
 
-/**
- * Read the contracts map from a contracts-type node. Returns
- * {[id]: contractEntry} or empty object if the node has no contracts.
- */
-export function readContractsMap(contractsNode) {
-  if (!contractsNode) return {};
-  const meta = contractsNode.metadata instanceof Map
-    ? contractsNode.metadata.get(NS)
-    : contractsNode.metadata?.[NS];
-  return (meta?.contracts && typeof meta.contracts === "object") ? meta.contracts : {};
-}
-
-/**
- * Read the approval ledger from a Ruler scope. Returns the array of
- * approval entries or empty array.
- *
- * Each entry shape:
- *   { contractRef: "<nodeId>:<contractId>", approvedAt, status, supersedes?, reason? }
- */
-export function readApprovalLedger(rulerNode) {
-  if (!rulerNode) return [];
-  const meta = rulerNode.metadata instanceof Map
-    ? rulerNode.metadata.get(NS)
-    : rulerNode.metadata?.[NS];
-  return Array.isArray(meta?.contractApprovals) ? meta.contractApprovals : [];
-}
-
-/**
- * Parse a contractRef into { nodeId, contractId }. Returns null on bad
- * shape. The ref format is "<nodeId>:<contractId>" where contractId
- * may itself contain colons (everything after the FIRST colon is the
- * contract id).
- */
-export function parseContractRef(ref) {
-  if (typeof ref !== "string" || !ref) return null;
-  const idx = ref.indexOf(":");
-  if (idx <= 0) return null;
-  const nodeId = ref.slice(0, idx);
-  const contractId = ref.slice(idx + 1);
-  if (!nodeId || !contractId) return null;
-  return { nodeId, contractId };
-}
-
-/**
- * Build a contractRef string. Inverse of parseContractRef.
- */
-export function buildContractRef(nodeId, contractId) {
-  return `${String(nodeId)}:${String(contractId)}`;
-}
+// readContractsMap, readApprovalLedger, parseContractRef,
+// buildContractRef removed in the contracts ring refactor. Each
+// Contractor invocation now creates a contracts-emission-N child node
+// (same shape as plan-emission-N and execution-record-N); the
+// approval ledger uses single-emission entries with `contractsRef:
+// <emissionNodeId>`. Read paths live in contracts.js as
+// readActiveContractsEmission + readContracts + readScopedContracts.

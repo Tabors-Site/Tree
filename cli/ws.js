@@ -243,7 +243,14 @@ async function runConversational({ verb, message, rootId = null, currentNodeId =
     socket.on("swarmDispatch", forward("swarmDispatch"));
     socket.on("branchStarted", forward("branchStarted"));
     socket.on("branchCompleted", forward("branchCompleted"));
-    // Plan-first swarm events.
+    // Plan / contracts / execution lifecycle events.
+    // Governing-namespace names are the current home; swarm-namespace
+    // names are legacy and listen here transitionally so any emitter
+    // that hasn't migrated yet still surfaces the card. Renderer in
+    // liveRenderer.js handles both event types with the same logic.
+    socket.on("governingPlanProposed", forward("governingPlanProposed"));
+    socket.on("governingPlanUpdated",  forward("governingPlanUpdated"));
+    socket.on("governingPlanArchived", forward("governingPlanArchived"));
     socket.on("swarmPlanProposed", forward("swarmPlanProposed"));
     socket.on("swarmPlanUpdated", forward("swarmPlanUpdated"));
     socket.on("swarmPlanArchived", forward("swarmPlanArchived"));

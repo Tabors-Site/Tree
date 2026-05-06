@@ -488,17 +488,20 @@ async function writeSwarmPlan({ projectNode, userRequest, userId, core }) {
 
       lines.push("");
 
-      // Walk children via the unified plan namespace (branch kind steps).
+      // Walk children via the active execution-record at this scope's
+      // Ruler. Each branch step's branches[].childNodeId becomes a
+      // recursion target for the renderer.
       try {
-        const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
-        const planObj = planExt ? await planExt.readPlan(nodeId) : null;
-        const branchSteps = (planObj?.steps || []).filter((s) => s.kind === "branch");
-        if (branchSteps.length > 0 && depth < 6) {
-          for (const child of branchSteps) {
-            const childId = child.childNodeId;
-            if (!childId) continue;
-            const childLines = await renderNodeSection(childId, depth + 1);
-            lines.push(...childLines);
+        const governing = (await import("../loader.js")).getExtension("governing")?.exports;
+        if (governing?.readActiveExecutionRecord && depth < 6) {
+          const record = await governing.readActiveExecutionRecord(nodeId);
+          for (const step of (record?.stepStatuses || [])) {
+            if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
+            for (const entry of step.branches) {
+              if (!entry?.childNodeId) continue;
+              const childLines = await renderNodeSection(entry.childNodeId, depth + 1);
+              lines.push(...childLines);
+            }
           }
         }
       } catch {}
@@ -699,7 +702,7 @@ export async function init(core) {
         let planScopeName = nodeDoc?.name || null;
         try {
           const { getExtension } = await import("../loader.js");
-          const planExt = getExtension("plan")?.exports;
+          const planExt = getExtension("governing")?.exports;
           if (planExt?.findGoverningPlan) {
             const planNode = await planExt.findGoverningPlan(nodeId);
             if (planNode?.parent) {
@@ -957,20 +960,31 @@ export async function init(core) {
           }
         }
 
-        // Plan — the decomposition beneath this level. Read branch kind
-        // steps from the unified plan namespace.
-        const planMeta = meta?.plan;
-        const planBranches = (planMeta?.steps || []).filter((s) => s.kind === "branch");
-        if (planBranches.length > 0) {
-          const lines = ["Direct sub-branches under this level:"];
-          for (const b of planBranches.slice(0, 20)) {
-            const icon =
-              b.status === "done" ? "✓" :
-              b.status === "failed" ? "✗" :
-              b.status === "running" ? "▶" : "·";
-            lines.push(`  ${icon} ${b.title}${b.summary ? " — " + String(b.summary).slice(0, 120) : ""}`);
+        // Plan — the decomposition beneath this level. Read branch
+        // entries from the active execution-record at this Ruler scope.
+        try {
+          const governing = (await import("../loader.js")).getExtension("governing")?.exports;
+          if (governing?.readActiveExecutionRecord) {
+            const record = await governing.readActiveExecutionRecord(nodeId);
+            const planBranches = [];
+            for (const step of (record?.stepStatuses || [])) {
+              if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
+              for (const entry of step.branches) planBranches.push(entry);
+            }
+            if (planBranches.length > 0) {
+              const lines = ["Direct sub-branches under this level:"];
+              for (const b of planBranches.slice(0, 20)) {
+                const icon =
+                  b.status === "done" ? "✓" :
+                  b.status === "failed" ? "✗" :
+                  b.status === "running" ? "▶" : "·";
+                lines.push(`  ${icon} ${b.name}${b.summary ? " — " + String(b.summary).slice(0, 120) : ""}`);
+              }
+              context.planSummary = lines.join("\n");
+            }
           }
-          context.planSummary = lines.join("\n");
+        } catch (err) {
+          log.debug("CodeWorkspace", `planSummary enrichContext skipped: ${err.message}`);
         }
       } else if (cwData?.role === "file") {
         context.code = {
@@ -1057,47 +1071,11 @@ export async function init(core) {
         // forever and its rollup says "0 work units" even though it
         // produced index.html / main.js / etc.
         //
-        // If branchNode is null AND the file's parent is the project
-        // root, look up the governing plan for a path-"." branch whose
-        // declared files include this filename. If found, bump that
-        // branch's aggregatedDetail directly. Same delta, just attributed
-        // to the right node.
-        if (!branchNode && fileNode && projectNode) {
-          try {
-            const fileParent = await NodeModel.findById(nodeId).select("parent").lean();
-            if (String(fileParent?.parent) === String(projectNode._id)) {
-              const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
-              if (planExt?.readPlan) {
-                const projectPlan = await planExt.readPlan(projectNode._id);
-                const baseName = (filePath.split("/").filter(Boolean).pop() || filePath);
-                const owner = (projectPlan?.steps || []).find((s) =>
-                  s.kind === "branch"
-                  && s.path === "."
-                  && Array.isArray(s.files)
-                  && s.files.some((f) => f === baseName || f === filePath)
-                  && s.childNodeId,
-                );
-                if (owner?.childNodeId) {
-                  await sw.rollUpDetail({
-                    fromNodeId: owner.childNodeId,
-                    delta: {
-                      filesWrittenDelta: 1,
-                      lastActivity: new Date().toISOString(),
-                    },
-                    core,
-                    stopAtProject: false,
-                  });
-                  log.debug(
-                    "CodeWorkspace",
-                    `path-"." attribution: ${filePath} → ${owner.title} (${String(owner.childNodeId).slice(0, 8)})`,
-                  );
-                }
-              }
-            }
-          } catch (attrErr) {
-            log.debug("CodeWorkspace", `path-"." attribution skipped: ${attrErr.message}`);
-          }
-        }
+        // path-"." integration-shell attribution removed in Phase C.
+        // The structured plan emission no longer carries a per-branch
+        // path/files declaration; the Ruler's own integration files
+        // are leaf steps at the Ruler's scope, attributed to the Ruler
+        // directly via the parent rollUpDetail walk above.
 
         // Lateral propagation: if the write is contract-affecting and the
         // file sits inside a branch, fan the signals to that branch's
@@ -1662,12 +1640,15 @@ export async function init(core) {
 
       const branchNodeByName = new Map();
       try {
-        const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
-        if (planExt?.readPlan) {
-          const rootPlan = await planExt.readPlan(rootProjectNode._id);
-          for (const s of rootPlan?.steps || []) {
-            if (s.kind === "branch" && s.title && s.childNodeId) {
-              branchNodeByName.set(s.title, s.childNodeId);
+        const governing = (await import("../loader.js")).getExtension("governing")?.exports;
+        if (governing?.readActiveExecutionRecord) {
+          const record = await governing.readActiveExecutionRecord(rootProjectNode._id);
+          for (const step of (record?.stepStatuses || [])) {
+            if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
+            for (const entry of step.branches) {
+              if (entry?.name && entry?.childNodeId) {
+                branchNodeByName.set(entry.name, entry.childNodeId);
+              }
             }
           }
         }
@@ -1954,11 +1935,16 @@ export async function init(core) {
                 const orig = branches.find((bb) => bb.name === b.rawName);
                 if (orig?.nodeId) branchNodeByName.set(b.rawName, orig.nodeId);
               }
-              const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
-              const planObj = planExt ? await planExt.readPlan(rootProjectNode._id) : null;
-              for (const s of planObj?.steps || []) {
-                if (s.kind === "branch" && s.title && s.childNodeId) {
-                  branchNodeByName.set(s.title, s.childNodeId);
+              const governing = (await import("../loader.js")).getExtension("governing")?.exports;
+              if (governing?.readActiveExecutionRecord) {
+                const record = await governing.readActiveExecutionRecord(rootProjectNode._id);
+                for (const step of (record?.stepStatuses || [])) {
+                  if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
+                  for (const entry of step.branches) {
+                    if (entry?.name && entry?.childNodeId) {
+                      branchNodeByName.set(entry.name, entry.childNodeId);
+                    }
+                  }
                 }
               }
               for (const gap of scout.gaps) {
@@ -2071,12 +2057,15 @@ export async function init(core) {
 
       const branchNodeByName = new Map();
       try {
-        const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
-        if (planExt?.readPlan) {
-          const planObj = await planExt.readPlan(rootProjectNode._id);
-          for (const s of planObj?.steps || []) {
-            if (s.kind === "branch" && s.title && s.childNodeId) {
-              branchNodeByName.set(s.title, s.childNodeId);
+        const governing = (await import("../loader.js")).getExtension("governing")?.exports;
+        if (governing?.readActiveExecutionRecord) {
+          const record = await governing.readActiveExecutionRecord(rootProjectNode._id);
+          for (const step of (record?.stepStatuses || [])) {
+            if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
+            for (const entry of step.branches) {
+              if (entry?.name && entry?.childNodeId) {
+                branchNodeByName.set(entry.name, entry.childNodeId);
+              }
             }
           }
         }

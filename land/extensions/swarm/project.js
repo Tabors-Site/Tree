@@ -10,6 +10,7 @@ import Node from "../../seed/models/node.js";
 import log from "../../seed/log.js";
 import { readMeta, mutateMeta } from "./state/meta.js";
 import { plan } from "./state/planAccess.js";
+import { dualWriteBranchStep } from "./state/dualWriteStatus.js";
 
 /**
  * Read governing metadata directly without a getExtension hop. The
@@ -137,7 +138,7 @@ export async function promoteDoneAncestors({ projectNodeId, core }) {
         childStatuses.push(childResult.status || entry.status || "pending");
 
         if (childResult.status && childResult.status !== (entry.status || "pending")) {
-          await p.upsertBranchStep(
+          await dualWriteBranchStep(
             nodeId,
             { name: entry.title, nodeId: childId, status: childResult.status },
             core,
@@ -186,109 +187,118 @@ export async function detectResumableSwarm(projectNodeId) {
     const project = await Node.findById(projectNodeId).select("_id name metadata").lean();
     if (!project) return null;
     const meta = readMeta(project);
-    const p = await plan();
-    const topPlan = await p.readPlan(projectNodeId);
-    const topBranches = (topPlan?.steps || []).filter((s) => s.kind === "branch");
-    if (topBranches.length === 0) return null;
+
+    // Resume detection reads from the active execution-record under
+    // the Ruler scope's execution-node. Each Ruler holds its own
+    // record; recursion descends into sub-Ruler scopes by following
+    // the childNodeId on each branch entry. No legacy steps[] read,
+    // no ancestor fallback.
+    const { getExtension } = await import("../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (!governing?.readActiveExecutionRecord) return null;
+
+    const topRecord = await governing.readActiveExecutionRecord(projectNodeId);
+    if (!topRecord) return null;
+    const topBranchSteps = (topRecord.stepStatuses || []).filter((s) => s?.type === "branch");
+    if (topBranchSteps.length === 0) return null;
 
     const resumable = [];
     const doneCount = { count: 0 };
     const totalCount = { count: 0 };
-    const statusCounts = { pending: 0, running: 0, paused: 0, failed: 0, done: 0 };
+    const statusCounts = {
+      pending: 0, running: 0, paused: 0,
+      failed: 0, done: 0, advanced: 0, skipped: 0,
+      cancelled: 0, superseded: 0,
+    };
+    // Statuses that are settled-with-progress: don't resume, but
+    // descend into children to see if any of THEIR work is pending.
+    // done = work completed; advanced = Foreman override (settled);
+    // skipped = bypassed (settled).
+    const SETTLED_WITH_PROGRESS = new Set(["done", "advanced", "skipped"]);
+    // Terminal statuses that are NOT resumable AND have no children
+    // worth descending into. "cancelled" is a deliberate stop —
+    // resuming it would betray operator intent. "superseded" means a
+    // newer emission replaced this one — the active emission's
+    // resumable list is what matters, not this record's.
+    const TERMINAL_NOT_RESUMABLE = new Set(["cancelled", "superseded"]);
 
-    // Visited set + sub-plan resolver. The previous implementation used
-    // p.readPlan(entryNodeId) for both the recursion target and the
-    // sub-plan probe. readPlan walks UP the tree (ancestor-fallback)
-    // when the node has no plan-type child of its own, returning the
-    // GOVERNING plan — which for a leaf branch is the parent's plan,
-    // containing the SAME branches we just iterated. That re-iterated
-    // those branches as if they were sub-branches, recursed into each
-    // one, and re-entered the same plan again. Exponential explosion;
-    // 4GB in seconds; the OOM the user hit on every "continue" against
-    // a project with done branches.
-    //
-    // Fix: track visited node ids so we don't revisit, AND use a
-    // direct probe for OWN sub-plans (Node.findOne for a plan-type
-    // child) instead of readPlan's ancestor-fallback. A branch only
-    // has a sub-plan if it owns a plan-type direct child; readPlan
-    // returning anything else means there is no sub-plan.
+    // Visited set guards against cycles in the descent. Each Ruler
+    // scope has its own execution-record; we walk into a sub-Ruler
+    // by reading its active record (not its parent's).
     const visitedNodes = new Set();
 
-    const ownSubPlan = async (nodeId) => {
-      if (!nodeId) return null;
-      // Direct probe: a node's OWN sub-plan is a plan-type child of
-      // that node. No ancestor fallback. If none exists, return null.
-      const planChild = await Node.findOne({
-        parent: nodeId,
-        type: "plan",
-      }).select("_id").lean();
-      if (!planChild) return null;
-      return p.readPlan(planChild._id);
-    };
-
-    const visit = async (parentNodeId, parentBranchName, depth) => {
-      const idStr = String(parentNodeId);
+    const visit = async (rulerScopeId, parentBranchName, depth) => {
+      const idStr = String(rulerScopeId);
       if (visitedNodes.has(idStr)) return;
       visitedNodes.add(idStr);
-      // Paranoia depth cap (Pass 1 nesting is depth 1; 16 is well over).
       if (depth > 16) return;
 
-      // The TOP of the walk uses readPlan because the project root
-      // legitimately doesn't have a plan-type child of its own — its
-      // plan IS the readPlan result via case-2 of findGoverningPlan
-      // (project node has plan-type child). For nested calls, we use
-      // ownSubPlan so we don't fall back to ancestor plans.
-      const parentPlan = depth === 0
-        ? await p.readPlan(parentNodeId)
-        : await ownSubPlan(parentNodeId);
-      const branches = (parentPlan?.steps || []).filter((s) => s.kind === "branch");
-      if (branches.length === 0) return;
+      const record = await governing.readActiveExecutionRecord(rulerScopeId);
+      if (!record) return;
+      const branchSteps = (record.stepStatuses || []).filter((s) => s?.type === "branch");
+      if (branchSteps.length === 0) return;
 
-      for (const entry of branches) {
-        totalCount.count++;
-        const status = entry.status || "pending";
-        statusCounts[status] = (statusCounts[status] || 0) + 1;
-        const entryNodeId = entry.childNodeId || null;
+      for (const step of branchSteps) {
+        const entries = Array.isArray(step.branches) ? step.branches : [];
+        for (const entry of entries) {
+          totalCount.count++;
+          const status = entry.status || "pending";
+          statusCounts[status] = (statusCounts[status] || 0) + 1;
+          const entryNodeId = entry.childNodeId || null;
 
-        if (status === "done") {
-          doneCount.count++;
+          // Settled-with-progress: don't resume the branch itself
+          // (its work is settled), but descend into its sub-Ruler
+          // children to find any pending work below. doneCount is
+          // success-only so reporting metrics stay honest; advanced
+          // and skipped don't bump it.
+          if (SETTLED_WITH_PROGRESS.has(status)) {
+            if (status === "done") doneCount.count++;
+            if (entryNodeId) await visit(entryNodeId, entry.name, depth + 1);
+            continue;
+          }
+
+          // Terminal-not-resumable branches stay in place; we don't
+          // descend into them and we don't add them to the resumable
+          // list. Cancelled work is a deliberate stop; superseded
+          // work belongs to a replaced emission.
+          if (TERMINAL_NOT_RESUMABLE.has(status)) continue;
+
+          // If the sub-Ruler has its own execution-record with done
+          // children, descend so we resume only the non-done ones.
+          let hasDoneChildren = false;
           if (entryNodeId) {
-            await visit(entryNodeId, entry.title, depth + 1);
+            const childRecord = await governing.readActiveExecutionRecord(entryNodeId);
+            const childBranchSteps = (childRecord?.stepStatuses || []).filter((s) => s?.type === "branch");
+            if (childBranchSteps.length > 0) {
+              hasDoneChildren = childBranchSteps.some((cs) =>
+                (cs.branches || []).some((b) => b.status === "done"),
+              );
+            }
           }
-          continue;
-        }
 
-        // Peek at this entry's own plan (direct sub-plan only, not the
-        // ancestor fallback). If its decomposition ran and produced
-        // done children, descend to pick up the non-done ones.
-        let hasDoneChildren = false;
-        if (entryNodeId) {
-          const childPlan = await ownSubPlan(entryNodeId);
-          const childBranches = (childPlan?.steps || []).filter((s) => s.kind === "branch");
-          if (childBranches.length > 0) {
-            hasDoneChildren = childBranches.some((c) => c.status === "done");
+          if (hasDoneChildren) {
+            if (entryNodeId) await visit(entryNodeId, entry.name, depth + 1);
+            continue;
           }
-        }
 
-        if (hasDoneChildren) {
-          if (entryNodeId) await visit(entryNodeId, entry.title, depth + 1);
-          continue;
+          resumable.push({
+            name: entry.name,
+            nodeId: entryNodeId,
+            spec: entry.spec,
+            // path/files/slot/mode are swarm-era artifacts the
+            // structured emission drops; default null/empty so
+            // runBranchSwarm's defaults apply.
+            path: null,
+            files: [],
+            slot: null,
+            mode: null,
+            parentBranch: parentBranchName,
+            depth,
+            priorStatus: status,
+            priorError: entry.error || null,
+            retries: entry.retries || 0,
+          });
         }
-
-        resumable.push({
-          name: entry.title,
-          nodeId: entryNodeId,
-          spec: entry.spec,
-          path: entry.path || null,
-          files: entry.files || [],
-          slot: entry.slot || null,
-          mode: entry.mode || null,
-          parentBranch: parentBranchName,
-          depth,
-          priorStatus: status,
-          priorError: entry.error || null,
-          retries: entry.retries || 0,
-        });
       }
     };
 

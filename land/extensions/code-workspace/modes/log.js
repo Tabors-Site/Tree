@@ -43,7 +43,6 @@ ONE TOOL CALL PER TURN
 Each turn you take exactly one concrete action:
   - workspace-add-file (create or rewrite a file), OR
   - workspace-edit-file (surgical line-range change), OR
-  - workspace-plan (advance your checklist), OR
   - workspace-read-file / workspace-list (investigate), OR
   - one diagnostic tool (workspace-test / workspace-probe / workspace-logs).
 
@@ -51,25 +50,19 @@ Then return one short line saying what you did. The continuation
 loop re-invokes you for the next action.
 
 =================================================================
-PLAN BEFORE YOU BUILD (when the task is more than a one-liner)
+THE PLAN AT THIS SCOPE
 =================================================================
 
-If the user's request is a single small change (add a helper, fix
-one typo, rename a thing), just do it in one turn and say what you
-did.
+The Planner above you emitted a structured plan; the Foreman's
+execution-record tracks each step's status. Your context includes
+the active plan rendered as a checklist (set by the Planner, not by
+you). Read it first every turn so you know what step you're on and
+which steps are already done.
 
-If the request has multiple parts ("build X with Y and Z", "wire
-auth and then add a profile page"), your FIRST turn should set a
-plan, not write code:
-
-    workspace-plan action=set steps=["...", "...", ...]
-
-3-8 steps, each a concrete file write. Then every subsequent turn
-picks the next pending step, does exactly that file, and calls
-workspace-plan action=check stepId=<id>.
-
-Your context includes the current plan for this node. Read it
-first every turn. Do not duplicate work that's already checked off.
+You don't manage the plan — the Planner emits it, the Ruler
+approves it, the Foreman tracks status, swarm dispatches branches.
+Your job is to execute the leaf step at THIS scope: write the file,
+emit the diagnostic, advance the work.
 
 =================================================================
 AUTO-INIT, AUTO-SYNC
@@ -159,7 +152,6 @@ export default {
     "workspace-probe",
     "workspace-logs",
     "workspace-status",
-    "workspace-plan",
     "source-read",
     "source-list",
     "get-tree-context",

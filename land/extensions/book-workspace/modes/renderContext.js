@@ -8,6 +8,15 @@ export default function renderEnrichedContextBlock(enriched) {
   if (!enriched || typeof enriched !== "object") return "";
   const sections = [];
 
+  // Governing trio context — sub-Ruler lineage, parent Ruler's
+  // approved plan, and the union of ancestor-Ruler contracts. Lands
+  // before the intake premise because lineage constrains what the
+  // premise even applies to (a sub-chapter Ruler shouldn't replan
+  // the whole book).
+  if (enriched.governingLineage) sections.push(enriched.governingLineage);
+  if (enriched.governingParentPlan) sections.push(enriched.governingParentPlan);
+  if (enriched.governingContracts) sections.push(enriched.governingContracts);
+
   // Incoming premise from the intake drone goes FIRST — the architect
   // should see this before anything else. It's the distilled version of
   // the user's raw input (URLs fetched, long text summarized, ambiguity

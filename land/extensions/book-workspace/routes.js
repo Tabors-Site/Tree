@@ -198,30 +198,41 @@ async function collectSubtreeBranches(startNodeId) {
     // studio render the full TOC as soon as decomposition completes,
     // not only after each chapter dispatches. Skip steps that already
     // appeared as real tree nodes above (deduplicate by name).
-    // Plan discovery routes through the plan extension's canonical
-    // walk-up primitive. Under Path B the plan lives on a plan-type
-    // child of the scope node.
-    let planMeta = null;
+    // Read the active execution-record at this scope's Ruler. Branch
+    // entries that don't yet have a childNodeId are pending — surface
+    // them in the studio dashboard so the user sees the planned shape
+    // before dispatch creates the tree nodes.
+    let planBranches = [];
     try {
       const { getExtension } = await import("../loader.js");
-      const planExt = getExtension("plan")?.exports;
-      if (planExt?.readPlan) planMeta = await planExt.readPlan(node._id);
+      const governing = getExtension("governing")?.exports;
+      if (governing?.readActiveExecutionRecord) {
+        const record = await governing.readActiveExecutionRecord(node._id);
+        for (const step of (record?.stepStatuses || [])) {
+          if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
+          for (const entry of step.branches) {
+            planBranches.push({
+              name: entry.name,
+              status: entry.status || "pending",
+              spec: entry.spec || null,
+              childNodeId: entry.childNodeId || null,
+            });
+          }
+        }
+      }
     } catch {}
-    const planBranches = (planMeta?.steps || []).filter(
-      (s) => s.kind === "branch" || s.kind === "chapter",
-    );
     if (planBranches.length > 0) {
-      for (const step of planBranches) {
-        if (step.childNodeId) continue; // will appear (or already did) via tree walk
-        if (seenNames.has(step.title)) continue;
-        seenNames.add(step.title);
+      for (const entry of planBranches) {
+        if (entry.childNodeId) continue; // will appear via tree walk
+        if (seenNames.has(entry.name)) continue;
+        seenNames.add(entry.name);
         out.push({
           nodeId: null,
-          name: step.title,
-          role: step.mode === "tree:book-plan" ? "part" : "chapter",
-          status: step.status || "pending",
-          spec: step.spec || null,
-          path: step.path || null,
+          name: entry.name,
+          role: "chapter",
+          status: entry.status,
+          spec: entry.spec,
+          path: null,
           summary: null,
           notes: [],
         });
@@ -817,7 +828,7 @@ router.post("/:nodeId/bookstudio/scout", authenticate, async (req, res) => {
     const ctx = await resolveStudioContext(nodeId);
     const projectId = ctx?.project?._id ? String(ctx.project._id) : nodeId;
     const swx = sw();
-    const planExt = (await import("../loader.js")).getExtension("plan")?.exports;
+    const planExt = (await import("../loader.js")).getExtension("governing")?.exports;
     const contracts = swx?.readContracts ? (await swx.readContracts(projectId) || []) : [];
     const planObj = planExt?.readPlan ? await planExt.readPlan(projectId) : null;
 

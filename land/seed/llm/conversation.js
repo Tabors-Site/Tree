@@ -64,7 +64,18 @@ export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
 // Excess callers queue with abort signal support.
 let LLM_MAX_CONCURRENT = 20;
 let FAILOVER_TIMEOUT_MS = 15000;
-let TOOL_CALL_TIMEOUT_MS = 60000;
+// Default tool-call timeout. Most tools complete in well under a
+// minute; a small handful (extensions running another LLM call
+// inside their handler — e.g., governing's spawn-and-await tools)
+// can legitimately take several minutes. 10 minutes is generous
+// enough to cover those cases without making the kernel aware of
+// which tools they are. Operators can tighten or extend per-node
+// via the toolCallTimeout config key.
+//
+// Cancellation runs through the caller's abort signal, not this
+// timeout — the timeout exists to prevent stuck-forever tool calls
+// from blocking the conversation loop, not as the cancellation path.
+let TOOL_CALL_TIMEOUT_MS = 600000;
 // Cap each tool result that lands in session.messages. The AI still
 // sees the full result for its immediate reasoning; only what we
 // remember in the context window is truncated. Previously 50KB per
@@ -1709,8 +1720,27 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
     };
   }
 
-  // Auto-inject userId
+  // Auto-inject standard tool-context args. Mirrors what mcp/server.js
+  // injects for HTTP-path tool calls, so in-process and HTTP paths
+  // present the same args shape to handlers.
+  //   userId       — the calling user
+  //   visitorId    — the calling visitor's session id (per-conversation
+  //                  transient registers key on this)
+  //   chatId       — the calling chat's id; tools that spawn child
+  //                  chainsteps (Ruler's hire-planner, etc.) thread
+  //                  this through as parentChatId so the chain
+  //                  hierarchy is preserved for audit walks
+  //   sessionId    — for chatTracker context
+  //   rootId       — tree root the call originates from
+  //   nodeId       — current node position
   args.userId = ctx.userId;
+  if (visitorId) args.visitorId = visitorId;
+  const _chatCtx = getChatContext(visitorId) || {};
+  if (_chatCtx.chatId && !args.chatId) args.chatId = _chatCtx.chatId;
+  if (_chatCtx.sessionId && !args.sessionId) args.sessionId = _chatCtx.sessionId;
+  if (ctx.rootId && !args.rootId) args.rootId = ctx.rootId;
+  const _curNode = session.currentNodeId || ctx.rootId || null;
+  if (_curNode && !args.nodeId) args.nodeId = _curNode;
 
   // Tool circuit breaker: if this tool has failed too many times in this session, skip it.
   // The tool disappears from the AI's perspective. It adapts by using other tools.
@@ -1773,14 +1803,25 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
   }
 
   try {
-    // Tool call timeout: individual tools should not hang longer than the LLM timeout.
-    // Most tools complete in < 5s. A 60s ceiling prevents a single tool from blocking
-    // the entire conversation loop.
-    const toolPromise = client.callTool({
-      name: resolvedToolName,
-      arguments: args,
-    });
+    // Tool call timeout: individual tools should not hang longer
+    // than the LLM timeout. Default 10 minutes covers both
+    // fast-finishing tools (most) and the small handful that run
+    // another LLM call inside their handler (extension-defined,
+    // kernel-agnostic). Operators can tighten or extend per-node.
+    //
+    // CRITICAL: the MCP SDK has its own internal request timeout
+    // (DEFAULT_REQUEST_TIMEOUT_MSEC = 60s) that fires error -32001
+    // independently of any wrapper. Passing { timeout } to callTool
+    // overrides the SDK's default; without it, the wrapper Promise
+    // .race below never fires because MCP throws first. We pass the
+    // configured value to BOTH the SDK's option and the race ceiling
+    // so a hung MCP layer can still be unstuck by the wrapper.
     const nodeToolTimeout = session._nodeLlmConfig?.toolCallTimeout ?? TOOL_CALL_TIMEOUT_MS;
+    const toolPromise = client.callTool(
+      { name: resolvedToolName, arguments: args },
+      undefined,
+      { timeout: nodeToolTimeout },
+    );
     const result = await Promise.race([
       toolPromise,
       new Promise((_, reject) =>
@@ -2314,6 +2355,26 @@ export async function runChat({
   purpose = null,
   extra = null,
   source = null,
+
+  // Chain linkage. When runChat is invoked from inside another LLM
+  // call's tool handler (e.g., the Ruler's hire-planner tool spawning
+  // a Planner chainstep), pass the calling chat's chatId here. The
+  // spawned chat's parentChatId is set in chatTracker so audit walks
+  // and Pass 2 court hearings can reconstruct the chain hierarchy
+  // (user message → Ruler chat → Planner chat → ...).
+  parentChatId = null,
+
+  // Explicit sessionId override. When set, the chat record this
+  // runChat creates will use this sessionId instead of deriving one.
+  // Used by spawn-and-await tools so the spawned chat shares the
+  // caller's sessionId — the chats UI groups by sessionId and the
+  // renderer's nesting logic only nests children that are in the
+  // same session group as their parent. Without this, ephemeral
+  // spawns appear as orphan top-level chats. The in-memory
+  // `sessions` Map is keyed by visitorId (NOT sessionId), so the
+  // spawned role still gets its own context window — what's shared
+  // is purely the chat-record-level sessionId for UI grouping.
+  parentSessionId = null,
 }) {
   if (!userId || !message || !mode) {
     throw new Error("runChat requires userId, message, and mode");
@@ -2348,7 +2409,11 @@ export async function runChat({
   const visitorId = resolvedKey;
 
   let sessionId;
-  if (persistSession) {
+  if (parentSessionId) {
+    // Explicit override: use the caller's sessionId so the spawned
+    // chat sits in the same session group for UI rendering.
+    sessionId = parentSessionId;
+  } else if (persistSession) {
     if (!_runChatSessions.has(visitorId)) {
       if (_runChatSessions.size >= MAX_CONVERSATION_SESSIONS) {
         const first = _runChatSessions.keys().next().value;
@@ -2419,6 +2484,10 @@ export async function runChat({
         connectionId: clientInfo.connectionId || null,
       },
       treeContext: mergedTreeContext,
+      // Pass parentChatId through to startChat. When set, the new
+      // chat is linked to its parent for audit-walk and reputation
+      // queries downstream.
+      ...(parentChatId ? { parentChatId } : {}),
     });
     if (chat) setChatContext(visitorId, sessionId, chat._id);
   } catch (err) {

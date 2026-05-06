@@ -19,11 +19,16 @@ import { z } from "zod";
 import Node from "../../seed/models/node.js";
 import log from "../../seed/log.js";
 
-const SPEC_CAP = 500;          // hard cap per step's spec
-const REASONING_CAP = 800;     // hard cap on top-level reasoning
-const RATIONALE_CAP = 400;     // hard cap on per-step rationale
-const NAME_CAP = 60;           // sub-domain branch name cap
-const MIN_BRANCH_SIBLINGS = 2; // branch step requires 2+ sub-domains
+// Caps are sanity bounds, not formatting rules. The prompt asks the
+// model to be concise; these only catch runaway emissions (a 50KB
+// reasoning isn't reasoning, it's a generation loop). The model
+// should be free to write 1200 chars when its decomposition warrants
+// it without the tool rejecting and forcing a re-emit at 800.
+const SPEC_CAP = 2000;          // sanity bound per step's spec
+const REASONING_CAP = 4000;     // sanity bound on top-level reasoning
+const RATIONALE_CAP = 2000;     // sanity bound on per-step rationale
+const NAME_CAP = 60;            // sub-domain branch name cap (kept tight — names are identifiers)
+const MIN_BRANCH_SIBLINGS = 2;  // branch step requires 2+ sub-domains
 
 function text(s) {
   return { content: [{ type: "text", text: String(s) }] };
@@ -43,8 +48,8 @@ function validatePlanArgs(args) {
   }
 
   const reasoning = typeof args.reasoning === "string" ? args.reasoning.trim() : "";
-  if (!reasoning) errors.push("`reasoning` is required (2-6 sentences explaining why this plan takes this shape)");
-  else if (reasoning.length > REASONING_CAP) errors.push(`\`reasoning\` exceeds ${REASONING_CAP} chars (got ${reasoning.length}); compress to 2-6 sentences of architectural reasoning`);
+  if (!reasoning) errors.push("`reasoning` is required (explain why this plan takes this shape)");
+  else if (reasoning.length > REASONING_CAP) errors.push(`\`reasoning\` exceeds ${REASONING_CAP} chars (got ${reasoning.length}); this looks like a generation loop, not reasoning — emit only the architectural explanation, no boilerplate or repeated phrases`);
 
   const steps = Array.isArray(args.steps) ? args.steps : null;
   if (!steps || steps.length === 0) errors.push("`steps` must be a non-empty array");
@@ -258,8 +263,10 @@ async function resolveConsumerNodeIds(rulerNodeId, names) {
  * strict shape check, errors phrased as instructions the model can
  * act on directly.
  */
-const CONTRACT_DETAILS_CAP = 800;
-const CONTRACT_RATIONALE_CAP = 400;
+// Contract caps are sanity bounds, not formatting rules. See plan
+// caps above for rationale.
+const CONTRACT_DETAILS_CAP = 4000;
+const CONTRACT_RATIONALE_CAP = 2000;
 const CONTRACT_NAME_CAP = 80;
 const CONTRACT_KIND_CAP = 40;
 
@@ -272,8 +279,8 @@ function validateContractsArgs(args) {
   }
 
   const reasoning = typeof args.reasoning === "string" ? args.reasoning.trim() : "";
-  if (!reasoning) errors.push("`reasoning` is required (2-6 sentences explaining why this contract set takes this shape)");
-  else if (reasoning.length > REASONING_CAP) errors.push(`\`reasoning\` exceeds ${REASONING_CAP} chars (got ${reasoning.length}); compress to high-level rationale for the contract SET`);
+  if (!reasoning) errors.push("`reasoning` is required (explain why this contract set takes this shape)");
+  else if (reasoning.length > REASONING_CAP) errors.push(`\`reasoning\` exceeds ${REASONING_CAP} chars (got ${reasoning.length}); this looks like a generation loop — emit only the architectural explanation`);
 
   const contracts = Array.isArray(args.contracts) ? args.contracts : null;
   if (!contracts || contracts.length === 0) errors.push("`contracts` must be a non-empty array. If no contracts are needed, do not call this tool — exit instead.");
@@ -324,11 +331,11 @@ function validateContractsArgs(args) {
 
       const details = typeof c.details === "string" ? c.details.trim() : "";
       if (!details) errors.push(`${where} requires \`details\` (the contract content — schema, signatures, payload shapes, etc.)`);
-      else if (details.length > CONTRACT_DETAILS_CAP) errors.push(`${where} \`details\` exceeds ${CONTRACT_DETAILS_CAP} chars; compress to canonical shape, push examples elsewhere`);
+      else if (details.length > CONTRACT_DETAILS_CAP) errors.push(`${where} \`details\` exceeds ${CONTRACT_DETAILS_CAP} chars; this looks like a generation loop — emit only the canonical contract shape`);
 
       const rationale = typeof c.rationale === "string" ? c.rationale.trim() : "";
-      if (!rationale) errors.push(`${where} REQUIRES \`rationale\` — explain WHY this contract specifically exists (1-3 sentences). Pass 2 courts read this when adjudicating contract conformance.`);
-      else if (rationale.length > CONTRACT_RATIONALE_CAP) errors.push(`${where} \`rationale\` exceeds ${CONTRACT_RATIONALE_CAP} chars; trim to 1-3 sentences`);
+      if (!rationale) errors.push(`${where} REQUIRES \`rationale\` — explain WHY this contract specifically exists. Pass 2 courts read this when adjudicating contract conformance.`);
+      else if (rationale.length > CONTRACT_RATIONALE_CAP) errors.push(`${where} \`rationale\` exceeds ${CONTRACT_RATIONALE_CAP} chars; this looks like a generation loop`);
     });
   }
 
@@ -347,35 +354,38 @@ export default function getGoverningTools(core) {
       name: "governing-emit-plan",
       description:
         "Emit the structured plan for this Ruler scope. Use ONCE per Planner invocation. " +
-        "Args carry the full plan: a top-level `reasoning` field (2-6 sentences explaining " +
-        "why this decomposition), then a `steps` array where each step is `type: \"leaf\"` " +
-        "(work this scope's Worker executes directly, with a concrete one-sentence `spec`) " +
+        "Args carry the full plan: a top-level `reasoning` field explaining why this " +
+        "decomposition, then a `steps` array where each step is `type: \"leaf\"` " +
+        "(work this scope's Worker executes directly, with a concrete `spec`) " +
         "or `type: \"branch\"` (delegation to 2+ sibling sub-Rulers, with a `rationale` " +
         "explaining the decomposition and a `branches` array of `{name, spec}` entries). " +
         "Single-branch is rejected — if only one delegation is needed, use a leaf with a " +
-        "domain-shaped spec and let the worker self-promote if it compounds. Spec cap 500 " +
-        "chars; reasoning cap 800; rationale cap 400. The server materializes a plan-emission " +
-        "child node under this Ruler's plan node and records a planApproval entry. Returns " +
-        "{ok, emissionId, planRef}. After this tool succeeds, you are done — exit.",
+        "domain-shaped spec and let the worker self-promote if it compounds. Be as " +
+        "thorough as the work warrants; padding and repetition are rejected. The server " +
+        "materializes a plan-emission child node under this Ruler's plan node and records " +
+        "a planApproval entry. Returns {ok, emissionId, planRef}. After this tool succeeds, " +
+        "you are done — exit.",
       schema: {
         reasoning: z.string().describe(
-          "2-6 sentences. Why this plan takes this shape. What constraints from the tree state, " +
+          "Why this plan takes this shape. What constraints from the tree state, " +
           "available extensions, and the request shaped the decomposition. Name the trade-offs " +
-          "considered. Reasoning is what the Ruler approves, not just step names.",
+          "considered. Reasoning is what the Ruler approves, not just step names. Be as thorough " +
+          "as the decomposition warrants — a routine plan needs a few sentences, an architecturally " +
+          "consequential one may need a paragraph or two. Don't pad.",
         ),
         steps: z.array(z.object({
           type: z.enum(["leaf", "branch"]).describe(
             "leaf = Worker at this scope executes directly. branch = 2+ sibling sub-Rulers each get their own scope and Planner.",
           ),
           spec: z.string().optional().describe(
-            "Required for leaf steps. One concrete sentence describing the work. Cap 500 chars.",
+            "Required for leaf steps. Concrete description of the work — usually one sentence, longer when warranted.",
           ),
           rationale: z.string().optional().describe(
-            "Optional for leaf (1-2 sentences for non-obvious leaves). REQUIRED for branch (why these sub-domains, not one). Cap 400.",
+            "Optional for leaf (1-2 sentences for non-obvious leaves). REQUIRED for branch (why these sub-domains, not one).",
           ),
           branches: z.array(z.object({
             name: z.string().describe("Sub-domain name. Becomes the directory/node name. Lowercase-kebab preferred."),
-            spec: z.string().describe("One concrete sentence describing what this sub-domain owns end-to-end. Cap 500 chars."),
+            spec: z.string().describe("Concrete description of what this sub-domain owns end-to-end."),
           })).optional().describe(
             "Required for branch steps. 2+ entries. Each entry becomes a sub-Ruler.",
           ),
@@ -662,7 +672,7 @@ export default function getGoverningTools(core) {
             scopeNodeId: ruler._id,
             contracts: incoming,
             userId,
-            systemSpec: validation.value.reasoning.slice(0, 200),
+            reasoning: validation.value.reasoning,
             core,
           });
         } catch (err) {
@@ -690,6 +700,7 @@ export default function getGoverningTools(core) {
           ok: rejected.length === 0,
           rulerNodeId: String(ruler._id),
           contractsNodeId: result?.contractsNode?._id ? String(result.contractsNode._id) : null,
+          emissionId: result?.emissionNode?._id ? String(result.emissionNode._id) : null,
           accepted: accepted.map((c) => ({ id: c.id, kind: c.kind, name: c.name, scope: c.scope })),
           rejected: rejected.map((r) => ({
             kind: r.kind || r.namespace,
@@ -700,7 +711,7 @@ export default function getGoverningTools(core) {
           skipped: skipped.map((s) => ({
             kind: s.kind || s.namespace,
             name: s.name,
-            existingId: s._existingId,
+            existingEmissionOrdinal: s._existingEmissionOrdinal,
           })),
         }));
       },

@@ -140,117 +140,120 @@ export const SIGNAL_KIND = Object.freeze({
 
 async function planExt() {
   const { getExtension } = await import("../loader.js");
-  const ext = getExtension("plan");
+  const ext = getExtension("governing");
   if (!ext?.exports) throw new Error("plan extension required by code-workspace");
   return ext.exports;
 }
 
 /**
- * Overwrite a node's plan steps. Accepts a raw step array and fills in
- * id/status/createdAt defaults via the plan extension. Treats raw
- * entries with only a title as `kind: "task"` write style steps.
+ * Phase E removed setNodePlanSteps / addNodePlanStep /
+ * updateNodePlanStep / clearNodePlanSteps and the workspace-plan
+ * tool that called them. The Foreman's execution-record is the
+ * canonical step status home; Workers no longer maintain a separate
+ * local checklist. If sub-leaf granularity is needed later, it will
+ * land as a Foreman tool that updates stepStatuses directly.
  */
-export async function setNodePlanSteps({ nodeId, steps, core }) {
-  if (!nodeId || !Array.isArray(steps)) return null;
-  const p = await planExt();
-  const before = await p.readPlan(nodeId);
-  const beforeCount = before?.steps?.length || 0;
-  const normalized = steps.map((raw) => ({
-    id: raw?.id,
-    kind: raw?.kind || "task",
-    title: String(raw?.title || "").trim() || "(untitled step)",
-    status: raw?.status || "pending",
-    createdAt: raw?.createdAt,
-    completedAt: raw?.completedAt,
-    blockedReason: raw?.blockedReason || null,
-    note: raw?.note || null,
-  }));
-  await p.setSteps(nodeId, normalized, core);
-  const after = await p.readPlan(nodeId);
 
-  const afterCount = normalized.length;
-  const reason = beforeCount === 0
-    ? `set plan (${afterCount} steps)`
-    : `replanned ${beforeCount} → ${afterCount} steps`;
-  // Reset drift on this node since we just wrote it.
-  await clearPlanDrift({ nodeId, core });
-  await maybeDriftParentOnStructuralChange({ childNodeId: nodeId, reason, core });
-
-  return after?.steps || null;
-}
 
 /**
- * Append a single step. Returns the new step.
- */
-export async function addNodePlanStep({ nodeId, title, note, kind, core }) {
-  if (!nodeId || !title) return null;
-  const p = await planExt();
-  const step = await p.addStep(nodeId, {
-    kind: kind || "task",
-    title: String(title).trim(),
-    status: "pending",
-    note: note || null,
-  }, core);
-  await clearPlanDrift({ nodeId, core });
-  await maybeDriftParentOnStructuralChange({
-    childNodeId: nodeId,
-    reason: `added step "${step?.title?.slice(0, 60) || ""}"`,
-    core,
-  });
-  return step;
-}
-
-/**
- * Patch a single step by id. `patch` may set status, blockedReason,
- * note, or title.
- */
-export async function updateNodePlanStep({ nodeId, stepId, patch, core }) {
-  if (!nodeId || !stepId || !patch) return null;
-  const p = await planExt();
-  const cleaned = {};
-  if (patch.title != null) cleaned.title = String(patch.title).trim();
-  if (patch.note != null) cleaned.note = patch.note || null;
-  if (patch.status != null) cleaned.status = patch.status;
-  if (patch.blockedReason != null) cleaned.blockedReason = patch.blockedReason;
-  if (patch.kind != null) cleaned.kind = patch.kind;
-  const result = await p.updateStep(nodeId, stepId, cleaned, core);
-  if (result?.changed) await clearPlanDrift({ nodeId, core });
-  return result?.step || null;
-}
-
-/**
- * Read a node's plan steps (local only, no rollup).
+ * Read a node's plan steps from the active execution-record at the
+ * nearest Ruler scope. Returns a flattened legacy-shape array so the
+ * existing formatNodePlan renderer keeps working unchanged: each
+ * branch entry in a branch step becomes one step row, leaf steps
+ * become one row each.
+ *
+ * Returns null when no Ruler scope is reachable or no
+ * execution-record is active. No fallback to metadata.plan.steps[];
+ * Phase B writes both stores in parallel and Phase C readers commit
+ * to the new one.
  */
 export async function readNodePlanSteps(nodeId) {
   if (!nodeId) return null;
-  const p = await planExt();
-  const plan = await p.readPlan(nodeId);
-  return plan?.steps || null;
+  const { getExtension } = await import("../loader.js");
+  const governing = getExtension("governing")?.exports;
+  if (!governing?.findRulerScope || !governing?.readActiveExecutionRecord) return null;
+
+  const ruler = await governing.findRulerScope(nodeId);
+  if (!ruler) return null;
+  const record = await governing.readActiveExecutionRecord(ruler._id);
+  if (!record) return null;
+
+  const out = [];
+  for (const step of (record.stepStatuses || [])) {
+    if (step?.type === "leaf") {
+      out.push({
+        id: `step-${step.stepIndex}`,
+        kind: "leaf",
+        title: (step.spec || "").slice(0, 80),
+        spec: step.spec || "",
+        status: step.status || "pending",
+        childNodeId: null,
+        error: step.error || null,
+        blockedReason: step.blockedReason || null,
+      });
+    } else if (step?.type === "branch" && Array.isArray(step.branches)) {
+      for (const entry of step.branches) {
+        out.push({
+          id: `step-${step.stepIndex}-${entry.name}`,
+          kind: "branch",
+          title: entry.name,
+          spec: entry.spec || "",
+          status: entry.status || "pending",
+          childNodeId: entry.childNodeId || null,
+          error: entry.error || null,
+          blockedReason: entry.blockedReason || null,
+        });
+      }
+    }
+  }
+  return out;
 }
 
 /**
- * Read a node's rolled up step counts.
+ * Read a node's rolled-up step counts from the active execution-record
+ * + descendant Ruler scopes' execution-records. Computed on-demand
+ * from stepStatuses; the legacy plan.rollup field is no longer
+ * consulted.
  */
 export async function readNodeStepRollup(nodeId) {
   if (!nodeId) return null;
-  const p = await planExt();
-  return p.readRollup(nodeId);
-}
+  const { getExtension } = await import("../loader.js");
+  const governing = getExtension("governing")?.exports;
+  if (!governing?.findRulerScope || !governing?.readActiveExecutionRecord) return null;
 
-/**
- * Drop all steps from a node's plan.
- */
-export async function clearNodePlanSteps({ nodeId, core }) {
-  if (!nodeId) return null;
-  const p = await planExt();
-  await p.setSteps(nodeId, [], core);
-  await clearPlanDrift({ nodeId, core });
-  await maybeDriftParentOnStructuralChange({
-    childNodeId: nodeId,
-    reason: "cleared its plan",
-    core,
-  });
-  return true;
+  const ruler = await governing.findRulerScope(nodeId);
+  if (!ruler) return null;
+
+  const counts = { pending: 0, running: 0, done: 0, blocked: 0, failed: 0, paused: 0 };
+  const visited = new Set();
+
+  const walk = async (scopeId, depth) => {
+    if (depth > 16) return;
+    const idStr = String(scopeId);
+    if (visited.has(idStr)) return;
+    visited.add(idStr);
+
+    const record = await governing.readActiveExecutionRecord(scopeId);
+    if (!record) return;
+
+    for (const step of (record.stepStatuses || [])) {
+      if (step?.type === "leaf") {
+        const k = step.status || "pending";
+        if (k in counts) counts[k]++;
+      } else if (step?.type === "branch" && Array.isArray(step.branches)) {
+        for (const entry of step.branches) {
+          const k = entry.status || "pending";
+          if (k in counts) counts[k]++;
+          if (entry.childNodeId) {
+            await walk(entry.childNodeId, depth + 1);
+          }
+        }
+      }
+    }
+  };
+
+  await walk(ruler._id, 0);
+  return counts;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -385,7 +388,7 @@ export function formatNodePlan({
     );
   }
   if (total === 0) {
-    lines.push("(no local plan yet — set one with workspace-plan action=set)");
+    lines.push("(no local plan yet — Planner has not emitted at this scope)");
   } else {
     const statusLine = Object.entries(buckets)
       .filter(([, n]) => n > 0)
