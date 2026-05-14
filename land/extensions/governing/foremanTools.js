@@ -14,6 +14,11 @@ import { z } from "zod";
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
 import { setForemanDecision } from "./state/foremanDecisions.js";
+import {
+  tryClaim as tryClaimSpawn,
+  release as releaseSpawn,
+  buildPendingResponse as buildSpawnPending,
+} from "./state/inFlightSpawns.js";
 
 function text(s) {
   return { content: [{ type: "text", text: String(s) }] };
@@ -120,6 +125,26 @@ export default function getForemanTools(_core) {
           `🔁 Foreman retrying branch "${branchName}" at ${String(branchScopeId).slice(0, 8)} ` +
           `(prior retries: ${priorRetries})`);
 
+        // In-flight guard. If the LLM hit an MCP timeout on a prior
+        // foreman-retry-branch and is retrying, refuse the duplicate
+        // — the original retry chain is still running and a second
+        // would double-dispatch the branch Ruler.
+        const claim = tryClaimSpawn({
+          rulerNodeId: branchScopeId,
+          kind: "foreman-retry-branch",
+          visitorId,
+          briefing: r,
+        });
+        if (!claim.ok) {
+          log.info("Governing",
+            `⏳ Foreman retry-branch "${branchName}" at ${String(branchScopeId).slice(0, 8)} ` +
+            `refused: already in-flight (${claim.since})`);
+          return text(JSON.stringify(
+            buildSpawnPending({ existing: claim.existing, kind: "foreman-retry-branch" }),
+            null, 2,
+          ));
+        }
+
         // Spawn the branch's Ruler as a chainstep. The branch Ruler
         // re-runs its cycle with retry-context as the inherited
         // message. Its decisions (hire planner with revision, etc.)
@@ -145,8 +170,14 @@ export default function getForemanTools(_core) {
           callerSocket = active?.socket || null;
         } catch {}
 
-        const { spawnRoleAsChainstep } = await import("../tree-orchestrator/ruling.js");
-        const retryAnswer = await spawnRoleAsChainstep({
+        // Fire-and-forget. The branch retry spawns its own Ruler turn
+        // recursively (which itself can hire-planner / hire-contractor /
+        // dispatch-execution — all of those are now fire-and-forget too).
+        // governing:branchRetried fires when the branch Ruler's turn
+        // settles. The Foreman that initiated this retry wakes in a
+        // fresh turn from that hook and synthesizes the outcome.
+        const { spawnRoleAsChainstepAsync } = await import("../tree-orchestrator/ruling.js");
+        const spawn = spawnRoleAsChainstepAsync({
           modeKey: "tree:governing-ruler",
           message: briefing,
           userId,
@@ -158,17 +189,38 @@ export default function getForemanTools(_core) {
           signal: callerSignal,
           socket: callerSocket,
           source: "foreman-retry-branch",
+          kind: "foreman-retry-branch",
+          completionHookName: "governing:branchRetried",
+          hookPayload: {
+            branchName,
+            stepIndex,
+            branchScopeId: String(branchScopeId),
+            recordNodeId,
+          },
+          releaseClaimKey: claim.key,
         });
+        if (!spawn?.spawnId) {
+          releaseSpawn(claim.key);
+          return text(JSON.stringify({
+            ok: false,
+            decision: "retry-branch",
+            error: "spawn-failed-to-start",
+          }, null, 2));
+        }
 
         return text(JSON.stringify({
-          ok: true,
+          status: "spawned",
           decision: "retry-branch",
+          spawnId: spawn.spawnId,
           branchName,
           stepIndex,
-          retryAnswer: typeof retryAnswer === "string" && retryAnswer.length > 800
-            ? retryAnswer.slice(0, 800) + "…"
-            : retryAnswer,
-          note: "Branch retry ran. Synthesize an outcome summary in your final message.",
+          branchScopeId: String(branchScopeId),
+          note:
+            "Branch retry started in the background. This turn ends now. " +
+            `Synthesize one short sentence — 'Retry of "${branchName}" initiated.' — ` +
+            "and stop. When the retry settles, governing:branchRetried wakes " +
+            "you in a fresh turn; you'll see the new execution state and " +
+            "synthesize the actual outcome THEN.",
         }, null, 2));
       },
     },

@@ -1283,6 +1283,51 @@ export function getExtension(name) {
 }
 
 /**
+ * Scope-aware lookup. Returns the extension's instance ONLY when the
+ * extension is active at the given tree position (not blocked by the
+ * spatial scope resolver). Returns null when blocked, not installed,
+ * or when the lookup fails.
+ *
+ * This is the principled way for one extension to reach into another:
+ *   const cw = await core.scope.getExtensionAtScope("code-workspace", nodeId);
+ *   if (!cw?.exports?.someApi) return; // not active here
+ *   await cw.exports.someApi(...);
+ *
+ * Without this, callers do `getExtension(name).exports.foo()` which
+ * silently bypasses spatial scoping — a blocked extension's data and
+ * code stays callable even at scopes where the operator said no. That
+ * is the single largest "scope is advisory not enforced" hole in the
+ * kernel, and this function closes it for the callers that opt in.
+ *
+ * The legacy getExtension() stays for kernel-internal use (the loader
+ * itself, the route mounting code, etc.) where scope doesn't apply.
+ * Extensions reaching across should migrate to this helper over time.
+ *
+ * @param {string} name    extension name
+ * @param {string} nodeId  the tree position whose scope governs
+ * @returns {object|null}  the extension instance, or null when blocked/missing
+ */
+export async function getExtensionAtScope(name, nodeId) {
+  if (!name || !nodeId) return null;
+  const entry = loaded.get(name);
+  if (!entry) return null;
+  try {
+    const { isExtensionBlockedAtNode } = await import(
+      "../seed/tree/extensionScope.js"
+    );
+    const blocked = await isExtensionBlockedAtNode(name, nodeId);
+    if (blocked) return null;
+  } catch {
+    // If scope resolution fails (e.g., node not found), be
+    // conservative and return null rather than handing back the
+    // instance. Callers can fall back to the legacy getExtension
+    // for kernel-internal cases where scope doesn't apply.
+    return null;
+  }
+  return entry.instance ?? null;
+}
+
+/**
  * Get a loaded extension's manifest by name.
  */
 export function getExtensionManifest(name) {

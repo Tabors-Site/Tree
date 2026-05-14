@@ -945,7 +945,13 @@
       "Bash(grep -n \"name: \\\\\"workspace-plan\\\\\"\\\\|name: \\\\\"workspace-list\\\\\"\\\\|name: \\\\\"workspace-delete-file\\\\\"\\\\|^    {$\\\\|^    },$\" /home/tabor/github/Tree/land/extensions/code-workspace/tools.js)",
       "Bash(grep -n \"^export async function setNodePlanSteps\\\\|^export async function addNodePlanStep\\\\|^export async function updateNodePlanStep\\\\|^export async function clearNodePlanSteps\\\\|^export async function readNodePlanSteps\\\\|^/\\\\\\\\*\\\\\\\\*$\\\\|^}$\\\\|^ \\\\\\\\* Phase E removed\" /home/tabor/github/Tree/land/extensions/code-workspace/swarmEvents.js)",
       "Bash(awk ' *)",
-      "Bash(grep -rn \"↪.*\\\\${\\\\\\\\|↪'\\\\\\\\|↪\\\\\"\\\\\\\\|emit.*↪\" /home/tabor/github/Tree/land/extensions)"
+      "Bash(grep -rn \"↪.*\\\\${\\\\\\\\|↪'\\\\\\\\|↪\\\\\"\\\\\\\\|emit.*↪\" /home/tabor/github/Tree/land/extensions)",
+      "Bash(JWT_SECRET=test node --input-type=module -e ' *)",
+      "Bash(JWT_SECRET=test MONGODB_URI=mongodb://localhost:27017/test node --input-type=module -e ' *)",
+      "Bash(grep -n \"username\\\\|\\\\\\\\\\\\${username}\\\\|operator\\\\b\" land/extensions/governing/modes/ruler.js land/extensions/governing/modes/planner.js land/extensions/governing/modes/contractor.js land/extensions/governing/modes/foreman.js land/extensions/governing/rulerTools.js)",
+      "Bash(grep -nE '\"[^\"]*\\\\\\\\b\\(user|operator\\)\\\\\\\\b[^\"]*\"|`[^`]*\\\\\\\\b\\(user|operator\\)\\\\\\\\b[^`]*`' land/extensions/governing/modes/ruler.js land/extensions/governing/modes/planner.js land/extensions/governing/modes/contractor.js land/extensions/governing/modes/foreman.js land/extensions/governing/rulerTools.js)",
+      "Bash(grep -nE '\"[^\"]*\\\\b\\(the user|operator\\)\\\\b[^\"]*\"|`[^`]*\\\\b\\(the user|operator\\)\\\\b[^`]*`' land/extensions/governing/modes/ruler.js land/extensions/governing/modes/planner.js land/extensions/governing/modes/contractor.js land/extensions/governing/modes/foreman.js land/extensions/governing/rulerTools.js)",
+      "Bash(grep -nE '\"[^\"]*\\\\b\\(the user|to the user|operator\\)\\\\b[^\"]*\"|`[^`]*\\\\b\\(the user|to the user|operator\\)\\\\b[^`]*`' land/extensions/governing/modes/ruler.js land/extensions/governing/modes/planner.js land/extensions/governing/modes/contractor.js land/extensions/governing/modes/foreman.js land/extensions/governing/rulerTools.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

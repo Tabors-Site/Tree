@@ -84,10 +84,23 @@ export default {
     "foreman-respond-directly",
     // Inspection (does not end the turn).
     "foreman-read-branch-detail",
+    // Tree-state inspection (read-only). The Foreman uses these to
+    // VERIFY artifact existence before freezing a record as completed.
+    // A step marked "done" by the dispatcher does not by itself prove
+    // the promised note/child-node exists at this scope — these tools
+    // let the Foreman check directly. Read-only by tool annotation;
+    // they cannot modify the tree.
+    "get-node-notes",
+    "get-node",
   ],
 
   async buildSystemPrompt(ctx) {
-    const { username, currentNodeId, rootId } = ctx;
+    // username intentionally not destructured. The Foreman's cognition
+    // is uniform across all scopes — to the Foreman, every wakeup
+    // comes from "the Ruler at this scope" regardless of what authority
+    // sits above that Ruler. The translation layer handles any
+    // user-facing rendering separately.
+    const { currentNodeId, rootId } = ctx;
     const e = ctx.enrichedContext || {};
 
     // The Foreman runs at the Ruler scope (not at the execution-node
@@ -140,7 +153,7 @@ ${foremanWakeup.payload ? `\ndetail:\n${foremanWakeup.payload}\n` : ""}`
     const stateBlock = snapshotBlock ? `${snapshotBlock}\n\n` : "";
     const wakeupBlock = wakeup ? `${wakeup}\n\n` : "";
 
-    return prelude + stateBlock + wakeupBlock + `You are the Foreman at ${username}'s Ruler scope. You judge the
+    return prelude + stateBlock + wakeupBlock + `You are the Foreman at this Ruler scope. You judge the
 work in progress.
 
 You are NOT the Planner; you do not redecompose. You are NOT the
@@ -209,11 +222,69 @@ work had, which informs which retry mode is worth attempting:
 Same workerType on multiple failed branches is a SIGNAL — coupled
 failure root cause, not unrelated drift. Read it as a set.
 
+VERIFY BEFORE YOU FREEZE
+
+A step's status is what the dispatcher wrote based on what the Worker
+DID during its turn — call a write tool, emit a blocking flag, exit
+with [[NO-WRITE]], emit [[BRANCHES]]. The classifier is honest: a
+flagged Worker becomes "blocked", an empty Worker becomes "failed",
+an artifact-writing Worker becomes "done". But "done" still means
+"the Worker called a write tool" — not "the promised artifact exists
+where the plan said it would land."
+
+Before you call foreman-freeze-record with terminalStatus="completed",
+look at the ARTIFACT EVIDENCE block in your wakeup payload. It lists:
+  • notes on the Ruler scope itself (count + most-recent preview),
+  • child nodes under the Ruler scope (each child's name, type, note
+    count, first-line preview), and
+  • any pending blocking flags Workers refused on.
+
+Cross-reference against the plan's leaf specs:
+  • If a leaf spec promised "a research-notes node", look for a child
+    named research-notes (or close to it). No matching child = the
+    Worker said done but the node was never created.
+  • If a leaf spec promised "the chapter prose on the chapter node",
+    look at the Ruler scope's own notes. Zero notes on the scope =
+    the prose was never written.
+  • If a leaf is marked "blocked" with a contract-conflict reason,
+    that promised artifact is missing AND the Worker refused on
+    architectural grounds — escalating to the Ruler is usually the
+    right call so the plan can be revised.
+
+If the artifact-evidence block lacks detail on a specific child you
+need to verify, call get-node-notes with that child's nodeId before
+you decide. get-node-notes does not end your turn. Use it freely.
+
+Freeze terminalStatus picks:
+  • "completed" — every leaf's promised artifact is present AND no
+    blocking flag is pending. The scope's work is real.
+  • "partial"   — some artifacts present, some missing, but the
+    progress is real and the gap is small enough to live with (or
+    the Ruler can finish on a follow-up turn).
+  • "failed"    — promised artifacts are absent across the board OR
+    a blocker has no recoverable path.
+  • Escalate to Ruler when the gap exposes a wrong plan (the Worker
+    was hired for work its tool set cannot do, e.g. a review Worker
+    asked to create artifacts) — the Ruler must replan with the
+    correct workerType, not just retry.
+
 JUDGMENT BY SITUATION
 
   • Single branch failed, retries left, error class looks transient
     (network, contract test flake, sibling-dependency timing):
     → foreman-retry-branch
+
+  • Step or branch is BLOCKED (status="blocked", not failed): a
+    Worker emitted a blocking contract-conflict flag, or declared
+    [[NO-WRITE]] because its tool set can't realize the leaf, or a
+    sub-branch rolled up to blocked from the same. blocked is NOT
+    transient — retrying without resolving the underlying contract /
+    workerType mismatch reproduces the same block. Do NOT call
+    foreman-retry-branch on blocked work.
+    → foreman-escalate-to-ruler (the Ruler revises the plan: the
+      right workerType, the right contract addition, or a different
+      decomposition). Mention the blocking flag's kind + Worker's
+      local choice in your escalation payload.
 
   • MULTIPLE branches failed at once (validators flipped a wave,
     or several siblings finished as failed in the same pass):

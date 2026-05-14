@@ -189,6 +189,12 @@ export default {
         "governing:executionPaused",
         "governing:executionSuperseded",
         "governing:courtConvened",
+        // Fires when a Worker calls governing-flag-issue and a new
+        // flag lands on a Ruler's pendingContractIssues queue. The
+        // governance dashboard subscribes here for live updates;
+        // Pass 2 court adjudicators will subscribe to convene when
+        // the queue accumulates judgable material.
+        "governing:flagAppended",
       ],
       listens: [],
     },

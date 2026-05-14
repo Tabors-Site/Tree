@@ -143,8 +143,22 @@ export function onListen() {
     await syncExtensionsToTree(getLoadedManifests());
 
     // Load confined extensions set from .extensions registry before any scope resolution
-    const { loadConfinedExtensions } = await import("./seed/tree/extensionScope.js");
+    const { loadConfinedExtensions, setExtensionInstanceLookup } = await import("./seed/tree/extensionScope.js");
     await loadConfinedExtensions();
+
+    // Register the loader's instance lookup with the kernel so
+    // core.scope.getExtensionAtScope can resolve names without the
+    // seed importing from extensions/loader.js (which would violate
+    // the one-way layering rule). Looked up lazily so we don't pull
+    // the loader module unnecessarily on lands that skip it.
+    try {
+      const { getExtension } = await import("./extensions/loader.js");
+      setExtensionInstanceLookup(getExtension);
+    } catch {
+      // Loader unavailable (test rig, kernel-only boot, etc.) —
+      // getExtensionAtScope will return null in that environment.
+      // Callers fall back gracefully.
+    }
 
     await runExtensionMigrations();
 

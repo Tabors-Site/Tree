@@ -22,7 +22,42 @@ Each turn does ONE concrete thing. Either:
 
 Reading without writing is a failed turn. The orchestrator re-invokes
 you until you emit [[DONE]] or [[NO-WRITE]]. Describing future work
-without doing it just loops you. Just call the tool.`;
+without doing it just loops you. Just call the tool.
+
+EVERY WORKER TURN MUST END WITH ONE OF THESE FOUR SHAPES
+
+The dispatcher classifies your turn against these four; anything
+else lands you in "failed" with no leaf realized:
+
+  1. A write tool call that produces the promised artifact
+     (create-node-note, edit-node-note, create-new-node-branch,
+     workspace-add-file, workspace-edit-file, etc.). Workspace
+     write tools count; governance/flag/foreman tools do NOT — the
+     dispatcher excludes coordination tools from the "artifact
+     produced" check. Status: done.
+
+  2. governing-flag-issue with severity="blocking" when you can
+     identify the structural reason this leaf cannot be done as
+     specified (the contract is wrong, your tool set can't produce
+     what's asked, two contracts collide). Status: blocked. The
+     Ruler reads the flag and decides whether to replan or
+     escalate. Do NOT also emit [[DONE]] in the same turn — the
+     blocking flag IS your exit.
+
+  3. [[NO-WRITE: <one-line reason>]] when the leaf is satisfied
+     without a write (the artifact already exists exactly as
+     specified, or the spec was for an inspection-only step).
+     Status: blocked-with-reason. Cheap exit when the work is
+     genuinely a no-op.
+
+  4. [[BRANCHES]] block when the leaf is compound and should be a
+     scope (see SCOPE UNDERSHOOT below). Status: advanced. The
+     dispatcher promotes this node to Ruler and recurses; your
+     turn ended with the work moved, not finished here.
+
+A turn with only reads and no write/flag/marker is a SUBSTRATE
+VIOLATION — the dispatcher classifies it as "failed" and the leaf
+status reflects that. Do not end on reads.`;
 
 const COMMON_CONTRACTS_BLOCK = `CONTRACTS IN FORCE
 

@@ -1856,6 +1856,15 @@ body.show-bg-messages .mobile-mode-bar {
     let modeBarOpen = false;
     let requestGeneration = 0;
 
+    // Lifecycle tracking for fire-and-forget governance spawns. Same
+    // shape as chat.js: rulerNodeId → Set<spawnId>. While any spawn
+    // is in flight, the chat shows a persistent "Ruler active" chip
+    // AND keeps the typing dots visible across hook-wakeup turns so
+    // the conversation doesn't appear to freeze between spawn settle
+    // and the next Ruler turn.
+    const activeSpawns = new Map();
+    const lifecyclePhases = new Map();
+
     // Recent roots state
     let recentRoots = [];
     let recentRootsOpen = false;
@@ -1956,6 +1965,151 @@ function buildIframeUrl(raw) {
         isSending = false;
         lockModeBar(false);
         updateSendButtons();
+      }
+    });
+
+    // Lifecycle activity signal — fire-and-forget governance spawns
+    // emit active=true on start and active=false on settle. Chat panel
+    // renders a persistent "Ruler active — <phase>" chip while any
+    // spawn is in flight AND sustains the typing dots so the panel
+    // doesn't appear frozen between hook-wakeup turns. Independent
+    // of the per-request isSending lock; the input bar stays open.
+    socket.on("lifecycleActive", function(payload) {
+      try {
+        var rulerNodeId = payload && payload.rulerNodeId;
+        if (!rulerNodeId) return;
+        var spawnId = payload && payload.spawnId;
+        if (!activeSpawns.has(rulerNodeId)) activeSpawns.set(rulerNodeId, new Set());
+        var slot = activeSpawns.get(rulerNodeId);
+        if (payload && payload.active && spawnId) {
+          slot.add(spawnId);
+          if (payload.phase) lifecyclePhases.set(rulerNodeId, payload.phase);
+        } else if (spawnId) {
+          slot["delete"](spawnId);
+          if (slot.size === 0) {
+            activeSpawns["delete"](rulerNodeId);
+            lifecyclePhases["delete"](rulerNodeId);
+          }
+        }
+        refreshLifecycleChip();
+        syncLifecycleTyping();
+      } catch (err) {
+        console.debug("[lifecycleActive] handler skipped:", err && err.message);
+      }
+    });
+
+    // Lifecycle chip lives INSIDE the typing-indicator bubble at the
+    // bottom of the conversation — it scrolls with the messages,
+    // appears next to the dots, and doesn't carve out a header band.
+    // The chip text updates as the phase changes; the bubble itself
+    // is the same typing indicator (dots + chip) repositioned to
+    // always anchor at the bottom by virtue of being appended last.
+    function refreshLifecycleChip() {
+      // The chip is rendered alongside the typing dots — see
+      // syncLifecycleTyping. This function just updates the phase
+      // text if a chip is already present.
+      var phaseLabel = null;
+      for (var v of lifecyclePhases.values()) { phaseLabel = v; break; }
+      var phaseText = phaseLabel ? ("Ruler active — " + phaseLabel) : "Ruler active";
+      document.querySelectorAll(".lifecycle-chip-inline .lifecycle-text").forEach(function(el) {
+        el.textContent = phaseText;
+      });
+    }
+
+    // Sustain or clear the typing dots based on lifecycle state. The
+    // typing bubble now ALWAYS appends at the bottom and contains
+    // both the dots AND (if a lifecycle is active) an inline "Ruler
+    // active — <phase>" chip pill. As new messages append below,
+    // we move the bubble down so it stays as the last entry.
+    function syncLifecycleTyping() {
+      var anyActive = activeSpawns.size > 0;
+      // Remove any stale typing bubbles first — there can be at most
+      // one per container at a time.
+      document.querySelectorAll(".typing-indicator").forEach(function(el) {
+        el.closest(".message")?.remove();
+      });
+      if (!anyActive) return;
+      var phaseLabel = null;
+      for (var v of lifecyclePhases.values()) { phaseLabel = v; break; }
+      var phaseText = phaseLabel ? ("Ruler active — " + phaseLabel) : "Ruler active";
+      ["chatMessages", "mobileChatMessages"].forEach(function(containerId) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+        var msg = document.createElement("div");
+        msg.className = "message assistant";
+        msg.innerHTML =
+          '<div class="message-avatar">\\ud83c\\udf33</div>' +
+          '<div class="message-content" style="display:flex;align-items:center;gap:10px">' +
+            '<div class="typing-indicator">' +
+              '<div class="typing-dot"></div>' +
+              '<div class="typing-dot"></div>' +
+              '<div class="typing-dot"></div>' +
+            '</div>' +
+            '<div class="lifecycle-chip-inline" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;background:rgba(125,211,133,0.12);color:#9ce0a2;border:1px solid rgba(125,211,133,0.4);border-radius:12px;font-size:11px;font-weight:500;letter-spacing:0.3px">' +
+              '<span style="width:6px;height:6px;border-radius:50%;background:#7dd385;animation:lifecyclePulse 1.4s ease-in-out infinite"></span>' +
+              '<span class="lifecycle-text"></span>' +
+            '</div>' +
+          '</div>';
+        msg.querySelector(".lifecycle-text").textContent = phaseText;
+        container.appendChild(msg);
+        container.scrollTop = container.scrollHeight;
+      });
+      if (!document.getElementById("lifecycleChipStyles")) {
+        var styleEl = document.createElement("style");
+        styleEl.id = "lifecycleChipStyles";
+        styleEl.textContent = "@keyframes lifecyclePulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }";
+        document.head.appendChild(styleEl);
+      }
+    }
+
+    // Chainstep completion — Planner / Contractor / Foreman exit text
+    // (or synthesized summary for marker-only exits). Renders inline
+    // between user turns so the user can see what each sub-role
+    // produced. Server-side gates this for governance sub-roles only.
+    socket.on("chainstepCompleted", function(ev) {
+      try {
+        var role = (ev && ev.role) || "role";
+        var exitText = (ev && ev.exitText) || "";
+        if (!exitText.trim()) return;
+        var icon =
+          role === "planner" ? "\\uD83E\\uDDED" :    // 🧭
+          role === "contractor" ? "\\uD83D\\uDCDC" : // 📜
+          role === "foreman" ? "\\uD83D\\uDD27" :    // 🔧
+          "\\u21aa";                                  // ↪
+        var durationMs = (ev && ev.durationMs) || 0;
+        var durationLabel = durationMs > 0
+          ? (durationMs < 1000 ? durationMs + "ms" :
+             durationMs < 60000 ? Math.round(durationMs / 100) / 10 + "s" :
+             Math.round(durationMs / 6000) / 10 + "m")
+          : "";
+        // Render into both desktop + mobile message containers.
+        ["chatMessages", "mobileChatMessages"].forEach(function(containerId) {
+          var container = document.getElementById(containerId);
+          if (!container) return;
+          var bubble = document.createElement("div");
+          bubble.className = "message assistant chainstep-bubble role-" + role;
+          bubble.style.cssText = "padding:8px 12px;margin:4px 12px;background:rgba(120,140,180,0.08);border-left:3px solid rgba(120,140,180,0.6);border-radius:8px;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.55";
+          if (role === "planner")    bubble.style.borderLeftColor = "rgba(99,102,241,0.7)";
+          if (role === "contractor") bubble.style.borderLeftColor = "rgba(168,85,247,0.7)";
+          if (role === "foreman")    bubble.style.borderLeftColor = "rgba(245,158,11,0.7)";
+          var head = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px">' +
+            '<span style="font-size:13px">' + icon + '</span>' +
+            '<span style="font-weight:600;text-transform:capitalize;color:rgba(255,255,255,0.9)">' + escapeHtml(role) + '</span>' +
+            (durationLabel ? ('<span style="color:rgba(255,255,255,0.45);margin-left:auto">' + durationLabel + '</span>') : '') +
+            '</div>';
+          var body = '<div style="white-space:pre-wrap;word-break:break-word">' + escapeHtml(exitText) + '</div>';
+          bubble.innerHTML = head + body;
+          // Insert before the typing indicator if present, else append.
+          var typing = container.querySelector(".typing-indicator");
+          if (typing && typing.closest(".message")) {
+            container.insertBefore(bubble, typing.closest(".message"));
+          } else {
+            container.appendChild(bubble);
+          }
+          container.scrollTop = container.scrollHeight;
+        });
+      } catch (err) {
+        console.debug("[chainstepCompleted] render skipped:", err && err.message);
       }
     });
 
@@ -2682,7 +2836,18 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
           });
         }
 
-        container.appendChild(msg);
+        // Insert ABOVE the typing-indicator bubble (which carries the
+        // lifecycle chip) so the dots-and-chip pair always remains
+        // the last entry in the conversation. Without this, new
+        // messages would push the typing bubble up out of the
+        // bottom and the lifecycle signal would look misplaced.
+        var typingMsg = container.querySelector(".typing-indicator");
+        var typingHost = typingMsg ? typingMsg.closest(".message") : null;
+        if (typingHost) {
+          container.insertBefore(msg, typingHost);
+        } else {
+          container.appendChild(msg);
+        }
         container.scrollTop = container.scrollHeight;
       });
 
@@ -2752,7 +2917,12 @@ if (activeRootId) window.history.replaceState({}, "", "/dashboard");
       });
     }
 
-    function removeTypingIndicator() {
+    function removeTypingIndicator(force) {
+      // Sustain the dots while any governance lifecycle is active —
+      // hook-driven Ruler turns are still firing in the background.
+      // force=true bypasses the gate (used by syncLifecycleTyping
+      // when the last spawn settles).
+      if (!force && activeSpawns.size > 0) return;
       document.querySelectorAll(".typing-indicator").forEach(el => el.closest(".message")?.remove());
     }
 
@@ -3475,17 +3645,20 @@ function injectIframeParamForwarding() {
       var name = ev && ev.tool ? String(ev.tool) : "?";
       var ok = !(ev && (ev.success === false || ev.error));
       if (ok) {
+        // Bumped preview cap from 120 → 400 chars so governance tool
+        // results show their full first line (emissionId, counts, etc.)
+        // instead of truncating at the opening brace.
         var preview = "";
         if (ev && typeof ev.result === "string" && ev.result.trim()) {
           var firstLine = ev.result.split("\\n").find(function(l) { return l.trim(); }) || "";
-          preview = _liveOneLine(firstLine, 120);
+          preview = _liveOneLine(firstLine, 400);
         }
         _liveAddLine("tool-ok",
           '<span class="live-ok">\\u2713</span> <span class="live-dim">' + escapeHtml(name) + '</span>' +
           (preview ? ' <span class="live-dim">\\u2014 ' + escapeHtml(preview) + '</span>' : "")
         );
       } else {
-        var err = _liveOneLine((ev && ev.error) || "failed", 160);
+        var err = _liveOneLine((ev && ev.error) || "failed", 400);
         _liveAddLine("tool-fail",
           '<span class="live-fail">\\u2717</span> <span class="live-dim">' + escapeHtml(name) + '</span>' +
           (err ? ' <span class="live-fail-text">' + escapeHtml(err) + '</span>' : "")

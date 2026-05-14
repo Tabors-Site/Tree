@@ -532,6 +532,10 @@ function formatFrame(frame, indent) {
         lines.push(`${stepPad}${icon} step ${step.stepIndex} [leaf${wt}]${spec}`);
         if (step.status === "failed" && step.error) {
           lines.push(`${stepPad}    error: ${truncate(step.error, 200)}`);
+        } else if (step.status === "blocked" && (step.reason || step.error)) {
+          lines.push(`${stepPad}    blocked: ${truncate(step.reason || step.error, 200)}`);
+        } else if (step.status === "advanced" && step.reason) {
+          lines.push(`${stepPad}    advanced: ${truncate(step.reason, 200)}`);
         }
       } else if (step?.type === "branch") {
         const rationale = step.rationale ? `: ${truncate(step.rationale, 100)}` : "";
@@ -679,4 +683,220 @@ export async function renderExecutionStack(rulerNodeId) {
   const snapshot = await buildExecutionStackSnapshot(rulerNodeId);
   if (!snapshot) return "";
   return formatExecutionStack(snapshot);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ARTIFACT EVIDENCE (Foreman wakeup payload)
+// ─────────────────────────────────────────────────────────────────────
+//
+// The Foreman's stack snapshot tells it WHAT THE STATUSES SAY. The
+// artifact-evidence block tells it WHAT'S ACTUALLY ON THE TREE — note
+// counts at the Ruler scope, child-node names with their own note
+// counts, and any pending blocking flags. Without this block the
+// Foreman judges only against step.status (which the dispatcher writes)
+// and never against tree reality (notes / children / artifacts).
+//
+// All reads are best-effort. If a probe fails the Foreman just sees
+// the evidence it could collect; the snapshot keeps rendering.
+
+const EVIDENCE_NOTE_PREVIEW_CHARS = 160;
+const EVIDENCE_CHILDREN_RENDER_CAP = 16;
+const EVIDENCE_FLAGS_RENDER_CAP = 5;
+
+/**
+ * Probe the Ruler scope node + its children + its pending flags and
+ * build a compact data structure the Foreman can scan.
+ *
+ * Returns null when the node isn't found.
+ */
+export async function buildArtifactEvidence(rulerNodeId) {
+  if (!rulerNodeId) return null;
+  let node;
+  try {
+    node = await Node.findById(rulerNodeId)
+      .select("_id name type children")
+      .lean();
+  } catch (err) {
+    log.debug("Governing/Evidence", `node lookup failed: ${err.message}`);
+    return null;
+  }
+  if (!node) return null;
+
+  // Probe the Ruler scope's own notes. getNotes returns { notes: [...] }.
+  let scopeNotes = [];
+  try {
+    const { getNotes } = await import("../../../seed/tree/notes.js");
+    const got = await getNotes({ nodeId: String(node._id), limit: 50 });
+    scopeNotes = Array.isArray(got?.notes) ? got.notes : [];
+  } catch (err) {
+    log.debug("Governing/Evidence", `scope notes fetch failed: ${err.message}`);
+  }
+
+  // Probe each child: name + note count. We cap the work at a
+  // reasonable number of children so a wide scope doesn't blow up the
+  // probe. Children beyond the cap collapse to a count line.
+  const childIds = Array.isArray(node.children) ? node.children.map(String) : [];
+  const childRows = [];
+  try {
+    if (childIds.length > 0) {
+      const probeIds = childIds.slice(0, EVIDENCE_CHILDREN_RENDER_CAP * 2);
+      const childNodes = await Node.find({ _id: { $in: probeIds } })
+        .select("_id name type")
+        .lean();
+      const byId = new Map(childNodes.map((c) => [String(c._id), c]));
+      const { getNotes } = await import("../../../seed/tree/notes.js");
+      for (const cid of probeIds) {
+        const c = byId.get(cid);
+        if (!c) continue;
+        let noteCount = 0;
+        let firstNotePreview = null;
+        try {
+          const got = await getNotes({ nodeId: cid, limit: 5 });
+          const notes = Array.isArray(got?.notes) ? got.notes : [];
+          noteCount = notes.length;
+          // getNotes orders DESC by createdAt — most recent first.
+          // The "first line" preview is the most recent note's opener.
+          if (notes[0]?.content) {
+            firstNotePreview = String(notes[0].content)
+              .split("\n").filter((l) => l.trim().length > 0)[0] || "";
+            if (firstNotePreview.length > EVIDENCE_NOTE_PREVIEW_CHARS) {
+              firstNotePreview = firstNotePreview.slice(0, EVIDENCE_NOTE_PREVIEW_CHARS - 1) + "…";
+            }
+          }
+        } catch {}
+        childRows.push({
+          nodeId: cid,
+          name: c.name || "(unnamed)",
+          type: c.type || null,
+          noteCount,
+          firstNotePreview,
+        });
+      }
+    }
+  } catch (err) {
+    log.debug("Governing/Evidence", `children probe failed: ${err.message}`);
+  }
+
+  // Pending blocking flags at this Ruler — surfaces refusals the
+  // Worker emitted during dispatch.
+  let pendingFlags = [];
+  try {
+    const { readPendingIssues } = await import("./flagQueue.js");
+    const all = await readPendingIssues(rulerNodeId);
+    pendingFlags = Array.isArray(all) ? all : [];
+  } catch (err) {
+    log.debug("Governing/Evidence", `pending flags fetch failed: ${err.message}`);
+  }
+
+  // Pick the most-recent scope-note preview the same way as for
+  // children — first non-empty line of the newest note.
+  let scopeFirstNotePreview = null;
+  let scopeMostRecentAt = null;
+  if (scopeNotes[0]?.content) {
+    scopeFirstNotePreview = String(scopeNotes[0].content)
+      .split("\n").filter((l) => l.trim().length > 0)[0] || "";
+    if (scopeFirstNotePreview.length > EVIDENCE_NOTE_PREVIEW_CHARS) {
+      scopeFirstNotePreview = scopeFirstNotePreview.slice(0, EVIDENCE_NOTE_PREVIEW_CHARS - 1) + "…";
+    }
+    scopeMostRecentAt = scopeNotes[0].createdAt || null;
+  }
+
+  return {
+    rulerNodeId: String(node._id),
+    rulerName: node.name || "(unnamed)",
+    rulerType: node.type || null,
+    scopeNoteCount: scopeNotes.length,
+    scopeFirstNotePreview,
+    scopeMostRecentAt,
+    totalChildren: childIds.length,
+    childrenRendered: childRows.slice(0, EVIDENCE_CHILDREN_RENDER_CAP),
+    childrenTruncated: childIds.length > EVIDENCE_CHILDREN_RENDER_CAP,
+    pendingFlags,
+  };
+}
+
+/**
+ * Render the artifact-evidence block as a prompt-ready string. Returns
+ * "" when nothing useful was collected (caller can drop the section).
+ */
+export function formatArtifactEvidence(evidence) {
+  if (!evidence) return "";
+  const lines = [];
+  lines.push("=================================================================");
+  lines.push("ARTIFACT EVIDENCE AT THIS SCOPE");
+  lines.push("=================================================================");
+  lines.push("");
+  lines.push(`Ruler scope: ${evidence.rulerName} (${evidence.rulerType || "node"})`);
+  lines.push("");
+
+  // Scope-level notes.
+  if (evidence.scopeNoteCount > 0) {
+    lines.push(`Notes on the Ruler scope itself: ${evidence.scopeNoteCount}`);
+    if (evidence.scopeFirstNotePreview) {
+      lines.push(`  most-recent preview: "${evidence.scopeFirstNotePreview}"`);
+    }
+  } else {
+    lines.push("Notes on the Ruler scope itself: 0  (no scope-level artifact present)");
+  }
+  lines.push("");
+
+  // Children. A scope-decomposed plan often promises child nodes per
+  // leaf (a chapter-outline node, a research-notes node, a works-cited
+  // node). If those names are missing here, the Worker that "did" the
+  // step didn't actually create what it promised.
+  if (evidence.totalChildren > 0) {
+    lines.push(`Child nodes under this scope: ${evidence.totalChildren}` +
+      (evidence.childrenTruncated ? ` (showing first ${evidence.childrenRendered.length})` : ""));
+    for (const c of evidence.childrenRendered) {
+      const noteTag = c.noteCount > 0 ? ` — ${c.noteCount} note${c.noteCount === 1 ? "" : "s"}` : " — 0 notes (empty)";
+      const typeTag = c.type ? ` [${c.type}]` : "";
+      lines.push(`  • ${c.name}${typeTag}${noteTag}`);
+      if (c.firstNotePreview) {
+        lines.push(`      preview: "${c.firstNotePreview}"`);
+      }
+    }
+  } else {
+    lines.push("Child nodes under this scope: 0  (no sub-artifacts created)");
+  }
+  lines.push("");
+
+  // Pending blocking flags — Workers refused these.
+  const blockers = (evidence.pendingFlags || []).filter((f) => f && f.blocking);
+  if (blockers.length > 0) {
+    lines.push(`PENDING BLOCKING FLAGS: ${blockers.length}`);
+    for (const f of blockers.slice(0, EVIDENCE_FLAGS_RENDER_CAP)) {
+      const wt = f.sourceWorker?.workerType ? ` (${f.sourceWorker.workerType})` : "";
+      const where = f.artifactContext?.scope
+        ? `${f.artifactContext.scope}${f.artifactContext.file ? "/" + f.artifactContext.file : ""}`
+        : (f.artifactContext?.file || "?");
+      lines.push(`  • ${f.kind}${wt} at ${where}`);
+      const choice = String(f.localChoice || "").slice(0, 200);
+      if (choice) lines.push(`      Worker said: ${choice}`);
+      if (f.proposedResolution) {
+        lines.push(`      proposed:    ${String(f.proposedResolution).slice(0, 200)}`);
+      }
+    }
+    if (blockers.length > EVIDENCE_FLAGS_RENDER_CAP) {
+      lines.push(`  ... and ${blockers.length - EVIDENCE_FLAGS_RENDER_CAP} more`);
+    }
+    lines.push("");
+  }
+
+  lines.push("READ THIS BEFORE YOU FREEZE: a step marked done WITHOUT a");
+  lines.push("matching note or child node above is a status lie — the Worker's");
+  lines.push("turn ended but the promised artifact does not exist. If the plan");
+  lines.push("promised a 'chapter-1-outline' node and there's no child by that");
+  lines.push("name, do NOT freeze the record as completed. Use get-node-notes");
+  lines.push("on specific children to verify deeper, then freeze as 'partial'");
+  lines.push("or escalate to the Ruler.");
+  return lines.join("\n");
+}
+
+/**
+ * Convenience: build + format the artifact-evidence block.
+ */
+export async function renderArtifactEvidence(rulerNodeId) {
+  const evidence = await buildArtifactEvidence(rulerNodeId);
+  if (!evidence) return "";
+  return formatArtifactEvidence(evidence);
 }

@@ -5,11 +5,19 @@ import Particles from "./Particles.jsx";
 // GoverningPage. Overview of the five governing layers.
 //
 // Top-level orientation page for anyone landing on TreeOS and trying to
-// understand how it coordinates work. Establishes two framings: domains
-// are held by Rulers (the OS analogy), and governing is the glue of
-// seams (what it actually does day to day). Lists the five layers with
-// click-through to their detail pages. Pass 1 (Rulership) is shipped;
-// the rest are in design.
+// understand how it coordinates work. Six inline-SVG diagrams carry the
+// architectural story so the page reads as an at-a-glance system poster
+// instead of a text wall. Each diagram is paired with the narrative
+// content it visualizes, so a video demo can pan between the chat panel
+// and any diagram to anchor what's being explained.
+
+const ROLE_COLORS = {
+  ruler: "#facc15",      // gold
+  planner: "#60a5fa",    // blue
+  contractor: "#c084fc", // purple
+  foreman: "#fb923c",    // orange
+  worker: "#4ade80",     // green
+};
 
 const GoverningPage = () => {
   return (
@@ -37,25 +45,94 @@ const GoverningPage = () => {
         </div>
       </section>
 
+      {/* DIAGRAM 1: RULERSHIP TREE-OF-SCOPES */}
+      <section className="lp-section" style={{paddingTop: 40, paddingBottom: 40}}>
+        <div className="lp-container">
+          <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center", marginBottom: 24, fontSize: 15, color: "rgba(255,255,255,0.55)"}}>
+            Every scope is a domain. Every domain has a Ruler. Sub-Rulers nest under parent Rulers.
+          </p>
+          <div className="gov-diagram-wrap">
+            <svg viewBox="0 0 920 360" className="gov-diagram" role="img" aria-label="Rulership tree of scopes">
+              {/* connection lines: root → 3 sub-Rulers */}
+              <g stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none">
+                <path d="M460 68 L240 140" />
+                <path d="M460 68 L460 140" />
+                <path d="M460 68 L680 140" />
+                {/* leftmost sub-Ruler (center bottom 240,188) → 4 roles (top center 90, 185, 280, 375 at y=280) */}
+                <path d="M240 188 L 90 280" />
+                <path d="M240 188 L185 280" />
+                <path d="M240 188 L280 280" />
+                <path d="M240 188 L375 280" />
+                {/* middle sub-Ruler (460,188) → 2 deeper sub-Rulers (430,280 and 510,280) */}
+                <path d="M460 188 L430 280" />
+                <path d="M460 188 L510 280" />
+                {/* right sub-Ruler (680,188) → 1 deeper sub (680,280) */}
+                <path d="M680 188 L680 280" />
+              </g>
+
+              {/* Root Ruler (center x = 460) */}
+              <RulerNode x={380} y={20} w={160} h={48} label="Root Ruler" sub="/MyProject" />
+
+              {/* Sub-Rulers */}
+              <RulerNode x={160} y={140} w={160} h={48} label="Sub-Ruler" sub="/MyProject/api" />
+              <RulerNode x={380} y={140} w={160} h={48} label="Sub-Ruler" sub="/MyProject/ui" />
+              <RulerNode x={600} y={140} w={160} h={48} label="Sub-Ruler" sub="/MyProject/db" />
+
+              {/* 4 roles under the leftmost sub-Ruler. Width 80, centers at 90/185/280/375 */}
+              <RoleNode x={50}  y={280} label="Planner"    glyph="📋" color={ROLE_COLORS.planner} />
+              <RoleNode x={145} y={280} label="Contractor" glyph="📜" color={ROLE_COLORS.contractor} />
+              <RoleNode x={240} y={280} label="Foreman"    glyph="🏗️" color={ROLE_COLORS.foreman} />
+              <RoleNode x={335} y={280} label="Worker"     glyph="🔨" color={ROLE_COLORS.worker} />
+
+              {/* middle sub-Ruler: 2 deeper sub-Rulers. Width 60, centers at 430 and 510 */}
+              <RulerNode x={400} y={280} w={60} h={36} label="Sub" sub="…" small />
+              <RulerNode x={480} y={280} w={60} h={36} label="Sub" sub="…" small />
+
+              {/* right sub-Ruler: 1 deeper (center x=680, width 60) */}
+              <RulerNode x={650} y={280} w={60} h={36} label="Sub" sub="…" small />
+            </svg>
+
+            <div className="gov-legend">
+              <span style={{color: ROLE_COLORS.ruler}}>👑 Ruler</span>
+              <span style={{color: ROLE_COLORS.planner}}>📋 Planner</span>
+              <span style={{color: ROLE_COLORS.contractor}}>📜 Contractor</span>
+              <span style={{color: ROLE_COLORS.foreman}}>🏗️ Foreman</span>
+              <span style={{color: ROLE_COLORS.worker}}>🔨 Worker</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* DOMAINS ARE RULERS */}
       <section className="lp-section">
-        <div className="lp-container" style={{maxWidth: 760}}>
+        <div className="lp-container" style={{maxWidth: 880}}>
           <h2 className="lp-section-title">Domains, not directories</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            A traditional OS holds files in directories. Permissions and
-            ownership decorate the tree, but a directory itself doesn't decide
-            anything. It's just a place where files live.
+            A traditional OS holds files in directories. TreeOS holds work in
+            domains. Same shape with judgment added.
           </p>
-          <p className="lp-section-sub lp-section-sub-wide">
-            TreeOS holds work in domains. A domain is the same kind of place
-            but with a being who governs it: the Ruler. Every Ruler scope is
-            addressable, holds authority for its work, hires roles, ratifies
-            contracts, decides what happens at that depth. The directory
-            becomes a domain the moment a Ruler accepts authority for it.
-          </p>
-          <p className="lp-section-sub lp-section-sub-wide">
-            The mental bridge is short. If you know directories with files,
-            you know domains with Rulers. Same shape, with judgment added.
+          <div className="gov-compare">
+            <div className="gov-compare-col">
+              <h4>📁 Traditional OS</h4>
+              <ul>
+                <li>Directory holds files</li>
+                <li>Permissions decorate the tree</li>
+                <li>Directory doesn't decide</li>
+                <li>Just a place</li>
+              </ul>
+            </div>
+            <div className="gov-compare-col gov-compare-col-accent">
+              <h4>🌳 TreeOS</h4>
+              <ul>
+                <li>Domain holds work</li>
+                <li>Ruler accepts authority</li>
+                <li>Domain has judgment</li>
+                <li>A place with a being</li>
+              </ul>
+            </div>
+          </div>
+          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 24, textAlign: "center"}}>
+            The directory becomes a domain the moment a Ruler accepts authority for it.
           </p>
         </div>
       </section>
@@ -81,108 +158,122 @@ const GoverningPage = () => {
 
       {/* AUTHORITY IS ACCEPTED (Thread 2) */}
       <section className="lp-section">
-        <div className="lp-container" style={{maxWidth: 760}}>
-          <h2 className="lp-section-title">Authority is accepted, not assigned</h2>
-          <p className="lp-section-sub lp-section-sub-wide">
-            A node becomes a Ruler the moment it accepts authority for its
-            domain. Not by external decree. By acceptance at the scope where
-            the work happens.
-          </p>
-          <p className="lp-section-sub lp-section-sub-wide">
-            Three uniform call sites. A root node accepts authority when a
-            user request arrives. A branch accepts authority when dispatched
-            as a sub Ruler. A Worker accepts authority retroactively when it
-            discovers its work is compound. Same lifecycle event at every
-            depth. Authority emerges where accountability sits, never from
-            above.
-          </p>
-        </div>
-      </section>
-
-      {/* THE FIVE LAYERS */}
-      <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">The five layers</h2>
-          <p className="lp-section-sub lp-section-sub-wide">
-            Governing composes in layers. Each pass adds machinery on top of
-            the previous. Rulership is the foundation. Everything else builds
-            on it.
+          <h2 className="lp-section-title">Authority is accepted, not assigned</h2>
+          <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center", maxWidth: 720, margin: "0 auto 32px"}}>
+            Three uniform call sites. Same lifecycle event at every depth.
           </p>
-          <p className="lp-section-sub lp-section-sub-wide">
-            Aliveness at every layer is uniform. A sub Ruler at depth five
-            governs its domain with the same authority a root Ruler has over
-            the whole tree. TreeOS distributes authority to where work
-            happens rather than concentrating it at the top.
-          </p>
-          <div className="lp-cards">
-            <a className="lp-card" href="/governing/rulership" style={{textDecoration: "none", color: "inherit", display: "block"}}>
-              <h3>👑 Rulership</h3>
-              <p>
-                Who decides what happens at each scope. Ruler hears, considers,
-                routes work to Planner, Contractor, Foreman, or Worker. Every
-                scope has an addressable being holding authority.
-              </p>
-              <p style={{color: "#4ade80", fontSize: "0.85em", fontWeight: 600, marginTop: 12}}>
-                Pass 1. Shipped. &nbsp;→
-              </p>
-            </a>
-            <div className="lp-card">
-              <h3>⚖️ Courts</h3>
-              <p>
-                How disagreements get adjudicated. When sub Rulers conflict,
-                contracts get violated, or work fails for ambiguous reasons,
-                a court convenes to weigh evidence and rule.
-              </p>
-              <p style={{color: "#888", fontSize: "0.85em", fontWeight: 600, marginTop: 12}}>
-                Pass 2. Designed.
-              </p>
-            </div>
-            <div className="lp-card">
-              <h3>📊 Reputation</h3>
-              <p>
-                How accumulated track record shapes future decisions. Branches
-                that consistently deliver gain weight. Ones that drift lose
-                it. Reputation is governing's memory.
-              </p>
-              <p style={{color: "#888", fontSize: "0.85em", fontWeight: 600, marginTop: 12}}>
-                Pass 3. Designed.
-              </p>
-            </div>
-            <div className="lp-card">
-              <h3>🔧 Structural Remedies</h3>
-              <p>
-                The conservative corrective tool. When reputation signal
-                says a position is failing repeatedly, or a court rules
-                that something at the structural level needs fixing,
-                Rulership can act through structural remedies.
-                Quarantines isolate a misbehaving scope. Replacements
-                swap an occupant while the position continues.
-                Decommissioning retires a position whose work is no
-                longer needed. Reserved for cases where things have
-                actually gone wrong. Used rarely and deliberately, not
-                as a routine motion.
-              </p>
-              <p style={{color: "#888", fontSize: "0.85em", fontWeight: 600, marginTop: 12}}>
-                Pass 4. Designed.
-              </p>
-            </div>
-            <div className="lp-card">
-              <h3>💰 Economy</h3>
-              <p>
-                How resources flow through the tree. Branches bid for work,
-                coalitions form around contracts, budgets route attention to
-                where outcomes warrant it.
-              </p>
-              <p style={{color: "#888", fontSize: "0.85em", fontWeight: 600, marginTop: 12}}>
-                Pass 5. Designed.
-              </p>
-            </div>
+
+          {/* DIAGRAM 2: three call sites converging on a new Ruler */}
+          <div className="gov-diagram-wrap">
+            <svg viewBox="0 0 760 360" className="gov-diagram" role="img" aria-label="Three call sites that accept authority">
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.4)" />
+                </marker>
+              </defs>
+
+              <CallSiteLane x={60}  label="user request"           accept="accept @ root"      ruler="👑 new Ruler" color="#4ade80" />
+              <CallSiteLane x={300} label="branch dispatched"      accept="accept @ branch"    ruler="👑 new Ruler" color="#60a5fa" />
+              <CallSiteLane x={540} label="worker finds compound"  accept="accept retroactive" ruler="👑 new Ruler" color="#c084fc" />
+
+              {/* unifying caption below the three lanes */}
+              <line x1="120" y1="320" x2="640" y2="320" stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeDasharray="4,4" />
+              <text x="380" y="345" textAnchor="middle" fill="rgba(255,255,255,0.55)" fontSize="13" fontStyle="italic">
+                Same lifecycle event at every depth. Authority emerges where accountability sits.
+              </text>
+            </svg>
           </div>
         </div>
       </section>
 
-      {/* GLUE OF SEAMS */}
+      {/* DIAGRAM 3: THE FIVE LAYERS AS A STACK */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container">
+          <h2 className="lp-section-title">The five layers</h2>
+          <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center", maxWidth: 720, margin: "0 auto 32px"}}>
+            Governing composes in layers. Rulership is the foundation. Each pass builds on the previous.
+          </p>
+
+          <div className="gov-stack">
+            <div className="gov-layer gov-layer-future">
+              <span className="gov-layer-icon">💰</span>
+              <span className="gov-layer-name">Economy</span>
+              <span className="gov-layer-desc">Resources flow through the tree. Bids, coalitions, budgets.</span>
+              <span className="gov-layer-pass">Pass 5 · Designed</span>
+            </div>
+            <div className="gov-layer gov-layer-future">
+              <span className="gov-layer-icon">🔧</span>
+              <span className="gov-layer-name">Structural Remedies</span>
+              <span className="gov-layer-desc">Quarantine. Replace. Decommission. Rare and deliberate.</span>
+              <span className="gov-layer-pass">Pass 4 · Designed</span>
+            </div>
+            <div className="gov-layer gov-layer-future">
+              <span className="gov-layer-icon">📊</span>
+              <span className="gov-layer-name">Reputation</span>
+              <span className="gov-layer-desc">Track record shapes future weight. Governing's memory.</span>
+              <span className="gov-layer-pass">Pass 3 · Designed</span>
+            </div>
+            <div className="gov-layer gov-layer-future">
+              <span className="gov-layer-icon">⚖️</span>
+              <span className="gov-layer-name">Courts</span>
+              <span className="gov-layer-desc">Adjudicate disagreements. Weigh evidence. Rule.</span>
+              <span className="gov-layer-pass">Pass 2 · Designed</span>
+            </div>
+            <a className="gov-layer gov-layer-shipped" href="/governing/rulership">
+              <span className="gov-layer-icon">👑</span>
+              <span className="gov-layer-name">Rulership</span>
+              <span className="gov-layer-desc">Who decides at each scope. Hires roles. Ratifies contracts.</span>
+              <span className="gov-layer-pass">Pass 1 · Shipped ✓</span>
+            </a>
+          </div>
+          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 28, textAlign: "center", fontSize: 15, color: "rgba(255,255,255,0.6)"}}>
+            Aliveness is uniform. A sub-Ruler at depth five governs its domain with the same authority a root Ruler has over the whole tree.
+          </p>
+        </div>
+      </section>
+
+      {/* DIAGRAM 4: ROLES INSIDE A RULER (exploded view) */}
       <section className="lp-section">
+        <div className="lp-container">
+          <h2 className="lp-section-title">Roles inside a Ruler scope</h2>
+          <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center", maxWidth: 720, margin: "0 auto 32px"}}>
+            The Ruler holds the scope. Four named roles do the work the Ruler ratifies.
+          </p>
+
+          <div className="gov-diagram-wrap">
+            <svg viewBox="0 0 880 280" className="gov-diagram" role="img" aria-label="The four roles inside a Ruler scope">
+              {/* connection lines from Ruler to 4 roles */}
+              <g stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none">
+                <path d="M440 80 L110 170" />
+                <path d="M440 80 L330 170" />
+                <path d="M440 80 L550 170" />
+                <path d="M440 80 L770 170" />
+              </g>
+
+              {/* Ruler box */}
+              <g>
+                <rect x="320" y="20" width="240" height="60" rx="12"
+                  fill="rgba(250, 204, 21, 0.10)" stroke={ROLE_COLORS.ruler} strokeWidth="2" />
+                <text x="440" y="48" textAnchor="middle" fill="#fde68a" fontSize="18" fontWeight="600">👑 Ruler</text>
+                <text x="440" y="68" textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="11">hears · considers · routes · ratifies</text>
+              </g>
+
+              {/* 4 role boxes */}
+              <RoleBigNode x={30}  y={170} label="Planner"    glyph="📋" color={ROLE_COLORS.planner}    desc="drafts plans" />
+              <RoleBigNode x={250} y={170} label="Contractor" glyph="📜" color={ROLE_COLORS.contractor} desc="ratifies contracts" />
+              <RoleBigNode x={470} y={170} label="Foreman"    glyph="🏗️" color={ROLE_COLORS.foreman}    desc="call stack discipline" />
+              <RoleBigNode x={690} y={170} label="Worker"     glyph="🔨" color={ROLE_COLORS.worker}     desc="executes in domain" />
+            </svg>
+          </div>
+          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 16, textAlign: "center", fontSize: 15, color: "rgba(255,255,255,0.6)"}}>
+            Workspaces specialize the Worker. Ruler, Planner, Contractor, Foreman stay domain-neutral.
+          </p>
+        </div>
+      </section>
+
+      {/* GLUE OF SEAMS */}
+      <section className="lp-section lp-section-alt">
         <div className="lp-container">
           <h2 className="lp-section-title">Glue of seams</h2>
           <p className="lp-section-sub lp-section-sub-wide">
@@ -191,7 +282,7 @@ const GoverningPage = () => {
           </p>
           <div className="lp-cards">
             <div className="lp-card lp-card-sm">
-              <h4>Shared names</h4>
+              <h4>🏷️ Shared names</h4>
               <p>
                 When two branches need to share something like an event, a
                 type, or a storage key, governing places the contract for that
@@ -199,7 +290,7 @@ const GoverningPage = () => {
               </p>
             </div>
             <div className="lp-card lp-card-sm">
-              <h4>Conflict resolution</h4>
+              <h4>⚖️ Conflict resolution</h4>
               <p>
                 When sub Rulers produce work that's individually consistent
                 but jointly inconsistent, governing surfaces the contradiction
@@ -207,7 +298,7 @@ const GoverningPage = () => {
               </p>
             </div>
             <div className="lp-card lp-card-sm">
-              <h4>Failure judgment</h4>
+              <h4>🩹 Failure judgment</h4>
               <p>
                 When a branch fails, governing decides what happens. Retry,
                 escalate to the parent Ruler, pause the subtree, freeze the
@@ -215,7 +306,7 @@ const GoverningPage = () => {
               </p>
             </div>
             <div className="lp-card lp-card-sm">
-              <h4>Frame discipline</h4>
+              <h4>📚 Frame discipline</h4>
               <p>
                 Trees execute like call stacks. Step N+1 doesn't start until
                 step N's entire descendant subtree settles. Governing is what
@@ -223,7 +314,7 @@ const GoverningPage = () => {
               </p>
             </div>
             <div className="lp-card lp-card-sm">
-              <h4>Scope correctness</h4>
+              <h4>🎯 Scope correctness</h4>
               <p>
                 A contract emitted at scope A can't claim authority over work
                 at scope B unless A contains B. Governing rejects scope
@@ -232,7 +323,7 @@ const GoverningPage = () => {
               </p>
             </div>
             <div className="lp-card lp-card-sm">
-              <h4>Lifecycle ratification</h4>
+              <h4>🗂️ Lifecycle ratification</h4>
               <p>
                 Plans, contracts, executions all pass through Ruler approval
                 ledgers. Nothing advances without a Ruler signing off. That's
@@ -244,7 +335,7 @@ const GoverningPage = () => {
       </section>
 
       {/* COHERENCE OVER SPEED (Thread 4) */}
-      <section className="lp-section lp-section-alt">
+      <section className="lp-section">
         <div className="lp-container" style={{maxWidth: 760}}>
           <h2 className="lp-section-title">Coherence over speed</h2>
           <p className="lp-section-sub lp-section-sub-wide">
@@ -261,60 +352,49 @@ const GoverningPage = () => {
         </div>
       </section>
 
-      {/* GENERAL SUBSTRATE */}
-      <section className="lp-section">
+      {/* DIAGRAM 6: WORKSPACE SPECIALIZATION */}
+      <section className="lp-section lp-section-alt">
         <div className="lp-container">
           <h2 className="lp-section-title">A general substrate</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            Governing isn't a workspace. It's the substrate workspaces
-            consume. Any extension that needs multi branch coordination plugs
-            into governing rather than reimplementing it. The Worker is the
-            part each workspace specializes. The rest of the roles (Ruler,
-            Planner, Contractor, Foreman) stay domain neutral and come from
-            governing uniformly.
+            Governing isn't a workspace. It's the substrate workspaces consume.
+            The top of every workspace is identical. The Worker is what each
+            workspace specializes.
           </p>
-          <div className="lp-cards">
-            <div className="lp-card lp-card-sm">
-              <h4>💻 code workspace</h4>
-              <p>
-                Consumes governing for code projects. The Worker adds file
-                editing tools, build pipelines, and code validators (syntax,
-                smoke, contract conformance). The seams are file imports, type
-                signatures, wire protocols.
-              </p>
-            </div>
-            <div className="lp-card lp-card-sm">
-              <h4>📖 book workspace</h4>
-              <p>
-                Consumes governing for prose and long form work. The Worker
-                adds chapter writing tools and prose validators (voice,
-                continuity, character consistency). The seams are character
-                arcs, timeline, terminology.
-              </p>
-            </div>
-            <div className="lp-card lp-card-sm">
-              <h4>🏛️ civilization</h4>
-              <p>
-                Consumes governing for civic and community coordination. The
-                Worker adds civic action tools and community norm validators.
-                The seams are agreements, jurisdictions, shared resources.
-                Governing isn't just for engineering work.
-              </p>
-            </div>
+
+          <div className="gov-workspaces">
+            <WorkspaceCol
+              name="code workspace"
+              icon="💻"
+              workerLabel="🔨 file edits + validators"
+              workerDetail="syntax · smoke · contract conformance"
+              color="#60a5fa"
+            />
+            <WorkspaceCol
+              name="book workspace"
+              icon="📖"
+              workerLabel="🔨 prose + continuity"
+              workerDetail="voice · timeline · character consistency"
+              color="#fb923c"
+            />
+            <WorkspaceCol
+              name="civilization"
+              icon="🏛️"
+              workerLabel="🔨 civic action"
+              workerDetail="agreements · jurisdictions · shared resources"
+              color="#c084fc"
+            />
           </div>
-          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 24}}>
-            That's why a single TreeOS instance can host code projects,
-            books, civic work, research collaboratives, and design studios
-            all in the same substrate without each domain reinventing how
-            branches coordinate. Governing owns the coordination surface.
-            Workspaces keep their domain specific surface. The pattern is
-            uniform. The content varies.
+          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 28, textAlign: "center"}}>
+            One TreeOS instance can host code projects, books, civic work, research
+            collaboratives — all in the same substrate. Governing owns coordination.
+            Workspaces keep their domain.
           </p>
         </div>
       </section>
 
       {/* SUBSTRATE FOR BECOMING (Thread 5) */}
-      <section className="lp-section lp-section-alt">
+      <section className="lp-section">
         <div className="lp-container" style={{maxWidth: 760}}>
           <h2 className="lp-section-title">Substrate for becoming</h2>
           <p className="lp-section-sub lp-section-sub-wide">
@@ -390,5 +470,104 @@ const GoverningPage = () => {
     </div>
   );
 };
+
+// ── SVG sub-components ─────────────────────────────────────────────
+
+function RulerNode({ x, y, w, h, label, sub, small = false }) {
+  const fontSize = small ? 12 : 16;
+  const subSize = small ? 9 : 11;
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} rx={small ? 8 : 10}
+        fill="rgba(250, 204, 21, 0.10)" stroke={ROLE_COLORS.ruler} strokeWidth="1.5" />
+      <text x={x + w / 2} y={y + (small ? 16 : 22)} textAnchor="middle"
+        fill="#fde68a" fontSize={fontSize} fontWeight="600">
+        👑 {label}
+      </text>
+      <text x={x + w / 2} y={y + h - (small ? 8 : 14)} textAnchor="middle"
+        fill="rgba(255,255,255,0.55)" fontSize={subSize}>
+        {sub}
+      </text>
+    </g>
+  );
+}
+
+function RoleNode({ x, y, label, glyph, color }) {
+  return (
+    <g>
+      <rect x={x} y={y} width={80} height={40} rx="8"
+        fill={`${color}1A`} stroke={color} strokeWidth="1.5" />
+      <text x={x + 40} y={y + 24} textAnchor="middle" fill="rgba(255,255,255,0.92)" fontSize="13">
+        {glyph} {label}
+      </text>
+    </g>
+  );
+}
+
+function RoleBigNode({ x, y, label, glyph, color, desc }) {
+  return (
+    <g>
+      <rect x={x} y={y} width={160} height={84} rx="12"
+        fill={`${color}14`} stroke={color} strokeWidth="2" />
+      <text x={x + 80} y={y + 32} textAnchor="middle" fill="rgba(255,255,255,0.95)" fontSize="17" fontWeight="600">
+        {glyph} {label}
+      </text>
+      <text x={x + 80} y={y + 58} textAnchor="middle" fill="rgba(255,255,255,0.65)" fontSize="12">
+        {desc}
+      </text>
+    </g>
+  );
+}
+
+function CallSiteLane({ x, label, accept, ruler, color }) {
+  return (
+    <g>
+      {/* top: entry point */}
+      <rect x={x} y={20} width={160} height={48} rx="10"
+        fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" />
+      <text x={x + 80} y={50} textAnchor="middle" fill="rgba(255,255,255,0.85)" fontSize="13">
+        {label}
+      </text>
+
+      {/* arrow down */}
+      <path d={`M${x + 80} 76 L${x + 80} 110`} stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" fill="none" markerEnd="url(#arrow)" />
+
+      {/* middle: accept */}
+      <rect x={x} y={118} width={160} height={48} rx="10"
+        fill={`${color}1A`} stroke={color} strokeWidth="1.5" />
+      <text x={x + 80} y={148} textAnchor="middle" fill="rgba(255,255,255,0.9)" fontSize="13">
+        {accept}
+      </text>
+
+      {/* arrow down */}
+      <path d={`M${x + 80} 174 L${x + 80} 208`} stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" fill="none" markerEnd="url(#arrow)" />
+
+      {/* bottom: new Ruler */}
+      <rect x={x} y={216} width={160} height={56} rx="10"
+        fill="rgba(250, 204, 21, 0.10)" stroke={ROLE_COLORS.ruler} strokeWidth="2" />
+      <text x={x + 80} y={250} textAnchor="middle" fill="#fde68a" fontSize="15" fontWeight="600">
+        {ruler}
+      </text>
+    </g>
+  );
+}
+
+function WorkspaceCol({ name, icon, workerLabel, workerDetail, color }) {
+  return (
+    <div className="gov-workspace-col">
+      <div className="gov-workspace-name">{icon} {name}</div>
+      <div className="gov-workspace-gov">
+        <div className="gov-workspace-gov-title">governing (uniform)</div>
+        <div className="gov-workspace-gov-roles">
+          <span>👑</span><span>📋</span><span>📜</span><span>🏗️</span>
+        </div>
+      </div>
+      <div className="gov-workspace-worker" style={{borderColor: color}}>
+        <div className="gov-workspace-worker-label" style={{color}}>{workerLabel}</div>
+        <div className="gov-workspace-worker-detail">{workerDetail}</div>
+      </div>
+    </div>
+  );
+}
 
 export default GoverningPage;

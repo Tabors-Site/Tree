@@ -168,6 +168,22 @@ export async function appendFlag({
     `scope=${flag.artifactContext.scope || "?"}, ` +
     `queueSize=${queue.length}`);
 
+  // Fire the lifecycle hook so the governance dashboard's SSE stream
+  // (and any future court adjudicator) picks up new flags without
+  // polling. Fire-and-forget; subscribers handle their own errors.
+  try {
+    const { hooks } = await import("../../../seed/hooks.js");
+    hooks.run("governing:flagAppended", {
+      rulerNodeId: String(rulerNodeId),
+      flagId: flag.id,
+      kind: flag.kind,
+      blocking: flag.blocking,
+      sourceWorkerScopeId: flag.sourceWorker?.scopeId || null,
+    }).catch(() => {});
+  } catch (err) {
+    log.debug("Governing/Flags", `governing:flagAppended fire skipped: ${err.message}`);
+  }
+
   return flag;
 }
 

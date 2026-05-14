@@ -66,11 +66,18 @@ let LLM_MAX_CONCURRENT = 20;
 let FAILOVER_TIMEOUT_MS = 15000;
 // Default tool-call timeout. Most tools complete in well under a
 // minute; a small handful (extensions running another LLM call
-// inside their handler — e.g., governing's spawn-and-await tools)
-// can legitimately take several minutes. 10 minutes is generous
+// inside their handler — single Planner/Contractor/Foreman turns)
+// can legitimately take a few minutes. 10 minutes is generous
 // enough to cover those cases without making the kernel aware of
 // which tools they are. Operators can tighten or extend per-node
 // via the toolCallTimeout config key.
+//
+// As of the fire-and-forget refactor in governing, the long-running
+// recursive spawn tools (hire-planner, hire-contractor, revise-plan,
+// dispatch-execution, route-to-foreman, foreman-retry-branch) return
+// in milliseconds — the spawned chainstep runs in the background and
+// completion hooks wake the Ruler in a fresh turn. The 10-minute
+// budget is now well above what any honest tool call needs.
 //
 // Cancellation runs through the caller's abort signal, not this
 // timeout — the timeout exists to prevent stuck-forever tool calls
@@ -756,9 +763,14 @@ export async function switchMode(visitorId, newModeKey, ctx) {
         : [];
   }
 
-  // Build new system prompt
+  // Build new system prompt. Pass visitorId in ctx so extension
+  // modes can resolve per-visitor side-channels (e.g. governing's
+  // Ruler/Foreman wakeup carriers) from inside buildSystemPrompt.
+  // The kernel doesn't read these side-channels; it just plumbs the
+  // identifier through.
   const systemPrompt = await buildPromptForMode(newModeKey, {
     ...ctx,
+    visitorId,
     rootId: session.rootId || ctx.rootId,
     currentNodeId: ctx.currentNodeId || session.currentNodeId,
     enrichedContext: session._lastEnrichedContext || null,
@@ -942,6 +954,7 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     const systemPrompt = await buildPromptForMode(session.modeKey, {
       username: ctx.username,
       userId: ctx.userId,
+      visitorId,
       rootId: session.rootId,
       currentNodeId: session.currentNodeId,
       enrichedContext: session._lastEnrichedContext || null,
@@ -998,6 +1011,7 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     const systemPrompt = await buildPromptForMode(session.modeKey, {
       username: ctx.username,
       userId: ctx.userId,
+      visitorId,
       rootId: session.rootId,
       currentNodeId: session.currentNodeId,
       enrichedContext: enrichedContext || session._lastEnrichedContext || null,
@@ -2299,6 +2313,7 @@ export async function resetConversation(visitorId, ctx) {
   const systemPrompt = await buildPromptForMode(session.modeKey, {
     username: ctx.username,
     userId: ctx.userId,
+    visitorId,
     rootId: session.rootId,
     currentNodeId: session.currentNodeId,
     enrichedContext: session._lastEnrichedContext || null,

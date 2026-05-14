@@ -124,6 +124,85 @@ export async function isRuler(nodeId) {
 }
 
 /**
+ * Walk DOWN from a root node, collecting every Ruler scope in the
+ * subtree. Returns a flat ordered list with depth attached, in
+ * tree-walk order (parents before children, depth-first). The root
+ * appears at depth=0 if it's itself a Ruler.
+ *
+ * Used by the governance dashboard to render the full rulership tree
+ * on one page. The single-step buildRulerSnapshot walks 1 level down
+ * (immediate sub-Rulers); this helper produces the full recursive
+ * list so the dashboard can render an indented tree.
+ *
+ * MAX_RULERS is a runaway-protection ceiling. Real trees have at
+ * most a few dozen Ruler scopes; 256 is paranoia. Hitting the cap
+ * suggests a bug (cycle, exploded sub-Ruler dispatch) and is logged
+ * once when the walk terminates.
+ */
+const MAX_RULERS = 256;
+
+export async function walkRulers(rootId) {
+  if (!rootId) return [];
+  const Node = (await import("../../../seed/models/node.js")).default;
+  const out = [];
+  const visited = new Set();
+
+  async function visit(nodeId, depth) {
+    if (out.length >= MAX_RULERS) return;
+    if (!nodeId) return;
+    const idStr = String(nodeId);
+    if (visited.has(idStr)) return;
+    visited.add(idStr);
+
+    const node = await Node.findById(idStr).select("_id name metadata children").lean();
+    if (!node) return;
+    const meta = node.metadata instanceof Map
+      ? Object.fromEntries(node.metadata)
+      : (node.metadata || {});
+    if (meta[NS]?.role === "ruler") {
+      out.push({
+        depth,
+        rulerNodeId: idStr,
+        name: node.name || "(unnamed)",
+      });
+      // Only descend below Ruler scopes — non-Ruler descendants of a
+      // non-Ruler ancestor can't host Ruler grandchildren in this
+      // architecture (Rulers are stamped at scope dispatch time, so
+      // sub-Rulers always have a Ruler parent).
+      const childIds = Array.isArray(node.children) ? node.children.map(String) : [];
+      for (const cid of childIds) {
+        await visit(cid, depth + 1);
+      }
+    } else if (depth === 0) {
+      // Root that isn't a Ruler yet — common for fresh trees before
+      // first user message. Walk children defensively in case an
+      // earlier session promoted a sub-tree without promoting the
+      // root. Doesn't recurse deeper than direct children for
+      // non-Ruler nodes to avoid scanning entire trees.
+      const childIds = Array.isArray(node.children) ? node.children.map(String) : [];
+      for (const cid of childIds) {
+        const child = await Node.findById(cid).select("_id metadata").lean();
+        if (!child) continue;
+        const cmeta = child.metadata instanceof Map
+          ? Object.fromEntries(child.metadata)
+          : (child.metadata || {});
+        if (cmeta[NS]?.role === "ruler") {
+          await visit(cid, 1);
+        }
+      }
+    }
+  }
+
+  await visit(rootId, 0);
+  if (out.length >= MAX_RULERS) {
+    log.warn("Governing/walkRulers",
+      `walkRulers hit MAX_RULERS=${MAX_RULERS} starting from ${String(rootId).slice(0, 8)}; ` +
+      `truncated. Indicates a runaway dispatch or cycle worth investigating.`);
+  }
+  return out;
+}
+
+/**
  * Walk upward from a node, return the nearest ancestor (or self) marked
  * as Ruler. Returns the lean Node document, or null if no Ruler found
  * before reaching the tree root.

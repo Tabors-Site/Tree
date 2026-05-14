@@ -591,6 +591,23 @@ router.get("/chat", authenticateLite, async (req, res) => {
     .live-line-branch-ok, .live-line-branch-fail { padding-left: 20px; }
     @keyframes liveIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
 
+    /* Chainstep sub-bubble — Planner / Contractor / Foreman exit text
+       rendered inline between the user's message and the Ruler's final
+       synthesis. Surfaces the internal dialogue between Ruler and its
+       hired sub-roles. Styled as a distinct sub-bubble (indented, role
+       color, multi-line readable) so it reads as conversational, not
+       as a one-line progress event. */
+    .live-line-chainstep { padding: 0; margin: 6px 0 6px 24px; font-family: inherit; }
+    .chainstep-bubble { background: rgba(120,140,180,0.08); border: 1px solid rgba(120,140,180,0.2); border-left: 3px solid rgba(120,140,180,0.6); border-radius: 8px; padding: 8px 12px; color: rgba(255,255,255,0.85); font-size: 12px; line-height: 1.55; }
+    .chainstep-bubble.role-planner    { border-left-color: rgba(99,102,241,0.7); background: rgba(99,102,241,0.06); }
+    .chainstep-bubble.role-contractor { border-left-color: rgba(168,85,247,0.7); background: rgba(168,85,247,0.06); }
+    .chainstep-bubble.role-foreman    { border-left-color: rgba(245,158,11,0.7); background: rgba(245,158,11,0.06); }
+    .chainstep-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; font-size: 11px; }
+    .chainstep-icon { font-size: 13px; }
+    .chainstep-role { font-weight: 600; color: rgba(255,255,255,0.9); text-transform: capitalize; }
+    .chainstep-meta { color: rgba(255,255,255,0.45); margin-left: auto; }
+    .chainstep-body { white-space: pre-wrap; word-break: break-word; color: rgba(255,255,255,0.85); }
+
     /* Plan-card for proposed / updated swarm plans */
     .live-line-plan-card { padding: 0; margin-top: 8px; margin-bottom: 8px; font-family: inherit; }
     .plan-card { background: rgba(140,180,240,0.08); border: 1px solid rgba(140,180,240,0.35); border-left: 3px solid rgba(140,180,240,0.85); border-radius: 10px; padding: 12px 16px; color: rgba(255,255,255,0.9); }
@@ -1194,6 +1211,15 @@ router.get("/chat", authenticateLite, async (req, res) => {
     let isSending = false;
     let requestGeneration = 0;
     let chatMode = "chat";
+    // Lifecycle tracking — set of active spawnIds per Ruler scope.
+    // When any spawn is in flight the chat panel renders a persistent
+    // "Ruler active" chip and keeps the input enabled (no isSending
+    // disable). This is the always-open surface model that fire-and-
+    // forget requires: the user can interject at any time, the Ruler
+    // emits messages whenever hook-wakeups fire, no "loading" state
+    // gates the conversation.
+    const activeSpawns = new Map(); // rulerNodeId → Set<spawnId>
+    const lifecyclePhases = new Map(); // rulerNodeId → latest phase label
 
     // Mode toggle
     const modeToggle = document.getElementById("modeToggle");
@@ -1351,14 +1377,104 @@ router.get("/chat", authenticateLite, async (req, res) => {
       if (generation !== undefined && generation < requestGeneration) return;
       removeTyping();
       addMessage(answer, "assistant");
+      // Only release the input lock if no Ruler-scope lifecycle is in
+      // flight. With fire-and-forget, the first Ruler turn returns
+      // quickly but the lifecycle keeps progressing via hook wakeups;
+      // we want the user to be able to keep typing while that happens,
+      // not see a permanently-blocked input.
       isSending = false;
       updateSendBtn();
+      refreshLifecycleChip();
 
       // Surface app dashboard if the response routed to an extension node
       if (targetNodeId && targetNodeId !== activeRootId) {
         surfaceApp(targetNodeId);
       }
     });
+
+    // Lifecycle activity signal. Fire-and-forget spawn tools emit
+    // "active=true" when starting, "active=false" when settling. The
+    // chat panel keeps a per-Ruler set of in-flight spawnIds; the
+    // persistent chip stays visible while any are tracked. The chip
+    // is informational only — it doesn't gate user input.
+    socket.on("lifecycleActive", (payload) => {
+      try {
+        const rulerNodeId = payload?.rulerNodeId;
+        if (!rulerNodeId) return;
+        const spawnId = payload?.spawnId;
+        if (!activeSpawns.has(rulerNodeId)) activeSpawns.set(rulerNodeId, new Set());
+        const slot = activeSpawns.get(rulerNodeId);
+        if (payload?.active && spawnId) {
+          slot.add(spawnId);
+          if (payload?.phase) lifecyclePhases.set(rulerNodeId, payload.phase);
+        } else if (spawnId) {
+          slot.delete(spawnId);
+          if (slot.size === 0) {
+            activeSpawns.delete(rulerNodeId);
+            lifecyclePhases.delete(rulerNodeId);
+          }
+        }
+        refreshLifecycleChip();
+        // Sustain or clear the typing-dots indicator based on whether
+        // any lifecycle is in flight. Dots stay visible across hook-
+        // wakeup turns so the chat panel doesn't look frozen between
+        // spawns.
+        syncLifecycleTyping();
+      } catch (err) {
+        console.debug("[lifecycleActive] handler skipped:", err && err.message);
+      }
+    });
+
+    // Render the chip into a slot inside the chat header. Adds it on
+    // first activity, hides it when no spawns remain. Phase label is
+    // the most recently reported phase across all in-flight spawns at
+    // the active root.
+    function refreshLifecycleChip() {
+      const chatHeader = document.querySelector(".chat-header") || document.querySelector(".chat-bar") || document.getElementById("chatArea");
+      if (!chatHeader) return;
+      let chip = document.getElementById("lifecycleChip");
+      const anyActive = activeSpawns.size > 0;
+      if (!anyActive) {
+        if (chip) chip.remove();
+        return;
+      }
+      // Pick the phase to surface. Prefer the active root's, else any.
+      let phaseLabel = activeRootId && lifecyclePhases.get(activeRootId);
+      if (!phaseLabel) {
+        for (const v of lifecyclePhases.values()) { phaseLabel = v; break; }
+      }
+      const phaseText = phaseLabel ? ("Ruler active — " + phaseLabel) : "Ruler active";
+      if (!chip) {
+        chip = document.createElement("div");
+        chip.id = "lifecycleChip";
+        chip.style.cssText = [
+          "position:relative",
+          "display:inline-flex",
+          "align-items:center",
+          "gap:6px",
+          "margin:6px 10px",
+          "padding:4px 10px",
+          "background:rgba(125,211,133,0.12)",
+          "color:#9ce0a2",
+          "border:1px solid rgba(125,211,133,0.4)",
+          "border-radius:14px",
+          "font-size:11px",
+          "font-weight:500",
+          "letter-spacing:0.3px",
+        ].join(";");
+        chip.innerHTML = '<span class="lifecycle-pulse" style="width:6px;height:6px;border-radius:50%;background:#7dd385;animation:lifecyclePulse 1.4s ease-in-out infinite"></span><span class="lifecycle-text"></span>';
+        // Inject the keyframes once.
+        if (!document.getElementById("lifecycleChipStyles")) {
+          const styleEl = document.createElement("style");
+          styleEl.id = "lifecycleChipStyles";
+          styleEl.textContent = "@keyframes lifecyclePulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }";
+          document.head.appendChild(styleEl);
+        }
+        chatHeader.prepend(chip);
+      }
+      const textNode = chip.querySelector(".lifecycle-text");
+      if (textNode) textNode.textContent = phaseText;
+    }
 
     // ── Live reasoning stream ───────────────────────────────────────
     // Mirrors the CLI liveRenderer: the moment a message is sent, a
@@ -1469,17 +1585,22 @@ router.get("/chat", authenticateLite, async (req, res) => {
       var name = ev && ev.tool ? String(ev.tool) : "?";
       var ok = !(ev && (ev.success === false || ev.error));
       if (ok) {
+        // Bumped preview cap from 120 → 400 chars so the user can
+        // actually read what the tool returned. The live-line CSS
+        // wraps long text; truncation at 120 was hiding most
+        // governance tool results (which return structured JSON with
+        // emissionId, ratification counts, etc.).
         var preview = "";
         if (ev && typeof ev.result === "string" && ev.result.trim()) {
           var firstLine = ev.result.split("\\n").find(function(l) { return l.trim(); }) || "";
-          preview = oneLineLive(firstLine, 120);
+          preview = oneLineLive(firstLine, 400);
         }
         addLiveLine("tool-ok",
           '<span class="live-ok">\\u2713</span> <span class="live-dim">' + escapeHtml(name) + '</span>' +
           (preview ? ' <span class="live-dim">\\u2014 ' + escapeHtml(preview) + '</span>' : "")
         );
       } else {
-        var err = oneLineLive((ev && ev.error) || "failed", 160);
+        var err = oneLineLive((ev && ev.error) || "failed", 400);
         addLiveLine("tool-fail",
           '<span class="live-fail">\\u2717</span> <span class="live-dim">' + escapeHtml(name) + '</span>' +
           (err ? ' <span class="live-fail-text">' + escapeHtml(err) + '</span>' : "")
@@ -1502,6 +1623,42 @@ router.get("/chat", authenticateLite, async (req, res) => {
       var pos = (ev && ev.index != null && ev.total != null) ? " " + ev.index + "/" + ev.total : "";
       addLiveLine("branch-start",
         '<span class="live-branch">\\u25b6</span> <b>' + escapeHtml(name) + '</b><span class="live-dim">' + pos + '</span>'
+      );
+    });
+
+    // Chainstep completion sub-bubble. Surfaces the Planner /
+    // Contractor / Foreman exit text inline between the user's
+    // message and the Ruler's final synthesis — exposing the
+    // internal dialogue between Ruler and its hired roles. Server
+    // emits this from spawnRoleAsChainstep only for governance
+    // sub-roles; typed Workers don't emit (their work is visible
+    // through tool calls + artifacts).
+    socket.on("chainstepCompleted", function(ev) {
+      var role = (ev && ev.role) || "role";
+      var exitText = (ev && ev.exitText) || "";
+      if (!exitText.trim()) return;
+      var icon =
+        role === "planner" ? "\\uD83E\\uDDED" :    // 🧭
+        role === "contractor" ? "\\uD83D\\uDCDC" : // 📜
+        role === "foreman" ? "\\uD83D\\uDD27" :    // 🔧
+        "\\u21aa";                                  // ↪
+      var durationMs = (ev && ev.durationMs) || 0;
+      var durationLabel = durationMs > 0
+        ? (durationMs < 1000 ? durationMs + "ms" :
+           durationMs < 60000 ? Math.round(durationMs / 100) / 10 + "s" :
+           Math.round(durationMs / 6000) / 10 + "m")
+        : "";
+      // Escape the exit text — model output is untrusted markup.
+      var body = escapeHtml(exitText);
+      addLiveLine("chainstep",
+        '<div class="chainstep-bubble role-' + escapeHtml(role) + '">' +
+        '<div class="chainstep-head">' +
+        '<span class="chainstep-icon">' + icon + '</span>' +
+        '<span class="chainstep-role">' + escapeHtml(role) + '</span>' +
+        (durationLabel ? '<span class="chainstep-meta">' + durationLabel + '</span>' : '') +
+        '</div>' +
+        '<div class="chainstep-body">' + body + '</div>' +
+        '</div>'
       );
     });
 
@@ -2241,8 +2398,38 @@ router.get("/chat", authenticateLite, async (req, res) => {
     }
 
     function removeTyping() {
+      // Always-open surface: keep the typing indicator visible while
+      // any governance lifecycle is active at the user's current
+      // scope. Even though THIS request's chatResponse has arrived,
+      // hook-driven Ruler turns are still flowing. The dots are the
+      // user-facing signal that "agent is still working in the
+      // background." Cleared explicitly when activeSpawns empties.
+      if (activeSpawns.size > 0) return;
       const el = document.getElementById("typingIndicator");
       if (el) el.remove();
+    }
+
+    // Repaint dots whenever lifecycle state changes — if a spawn
+    // started, ensure dots are visible; if the last spawn settled,
+    // remove them. Called from the lifecycleActive socket handler.
+    function syncLifecycleTyping() {
+      const anyActive = activeSpawns.size > 0;
+      const existing = document.getElementById("typingIndicator");
+      if (anyActive && !existing) {
+        // Re-add typing without the early-return guard. Build the
+        // indicator inline so we don't recurse into addTyping (which
+        // calls removeTyping which would now short-circuit).
+        const msg = document.createElement("div");
+        msg.className = "message assistant";
+        msg.id = "typingIndicator";
+        msg.innerHTML =
+          '<div class="message-avatar">\\ud83c\\udf33</div>' +
+          '<div class="message-content typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+        chatMessages.appendChild(msg);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      } else if (!anyActive && existing) {
+        existing.remove();
+      }
     }
 
     // ── App Dashboard Panel ──────────────────────────────────────────
@@ -2389,6 +2576,14 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
     function updateSendBtn() {
       const hasText = chatInput.value.trim().length > 0;
+      // Always-open behavior: an active lifecycle (governance fire-and-
+      // forget spawns running in the background) does NOT block the
+      // input. The user can interject at any time. isSending is only
+      // true during the current request's outbound LLM call; once
+      // chatResponse fires it flips off, even if hook-wakeup turns
+      // are still firing afterwards. The lifecycle chip carries the
+      // "agent active" signal; the input bar carries the "you can
+      // send right now" signal. They are independent surfaces.
       if (isSending) {
         sendBtn.classList.add("stop-mode");
         sendBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';

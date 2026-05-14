@@ -33,6 +33,23 @@ import { hooks } from "../hooks.js";
 // Set of extension names with scope: "confined". Loaded once at boot.
 let _confinedExtensions = new Set();
 
+// Loader-provided extension-instance lookup. Registered at boot so the
+// kernel can offer a scope-aware getExtensionAtScope without importing
+// from extensions/loader.js (which would violate the one-way layering
+// rule). Null until the loader calls setExtensionInstanceLookup; if a
+// caller hits getExtensionAtScope before boot completes, the function
+// returns null defensively rather than throwing.
+let _extensionInstanceLookup = null;
+
+/**
+ * Called by the loader at boot to register the in-memory extension
+ * instance lookup. The kernel uses this only via getExtensionAtScope;
+ * extensions never call it.
+ */
+export function setExtensionInstanceLookup(fn) {
+  _extensionInstanceLookup = typeof fn === "function" ? fn : null;
+}
+
 /**
  * Load confined extension names from .extensions system node.
  * Called once during extension loading, after syncExtensionsToTree.
@@ -84,6 +101,47 @@ export async function isExtensionBlockedAtNode(extName, nodeId) {
   if (!nodeId) return false;
   const { blocked } = await getBlockedExtensionsAtNode(nodeId);
   return blocked.has(extName);
+}
+
+/**
+ * Scope-aware extension lookup. Returns the extension's instance ONLY
+ * when the extension is active at the given tree position (not
+ * blocked by spatial scope resolution). Returns null when blocked,
+ * not installed, or when the loader hasn't registered its lookup yet.
+ *
+ * This is the principled way for one extension to reach into another:
+ *
+ *   const cw = await core.scope.getExtensionAtScope("code-workspace", nodeId);
+ *   if (!cw?.exports?.someApi) return; // not active here
+ *   await cw.exports.someApi(...);
+ *
+ * The legacy getExtension() (in extensions/loader.js) stays for
+ * kernel-internal use and for cases where scope is genuinely
+ * irrelevant. Extensions reaching across should migrate to this
+ * helper over time — it closes the "blocked extension is still
+ * callable through getExtension(...).exports" hole.
+ *
+ * @param {string} extName  extension name
+ * @param {string} nodeId   the tree position whose scope governs
+ * @returns {object|null}   the extension's loaded instance, or null
+ */
+export async function getExtensionAtScope(extName, nodeId) {
+  if (!extName || !nodeId) return null;
+  if (typeof _extensionInstanceLookup !== "function") return null;
+  try {
+    const blocked = await isExtensionBlockedAtNode(extName, nodeId);
+    if (blocked) return null;
+  } catch {
+    // If scope resolution fails (e.g., node not found), be
+    // conservative — return null. Callers that genuinely need the
+    // instance without scope can use the loader's getExtension.
+    return null;
+  }
+  try {
+    return _extensionInstanceLookup(extName) || null;
+  } catch {
+    return null;
+  }
 }
 
 /**

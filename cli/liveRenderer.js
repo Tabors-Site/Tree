@@ -127,6 +127,24 @@ function createLiveRenderer({ stream = process.stdout, verbose = false } = {}) {
         line(chalk.yellow("  · ") + chalk.bold(name) + (hint ? chalk.dim(" (" + hint + ")") : ""));
         return;
       }
+      case "chainstepCompleted": {
+        // A governance sub-role (Planner / Contractor / Foreman)
+        // spawned as a chainstep finished. Render its exit text as
+        // an indented sub-bubble between the user's message and the
+        // Ruler's final synthesis — surfaces the internal dialogue
+        // between Ruler and its hired roles.
+        const role = ev.role || "role";
+        const text = oneLine(ev.exitText || "", 220);
+        // Icon per role: Planner = compass, Contractor = scroll,
+        // Foreman = wrench. Matches the role emojis on the mode
+        // pages so the user can read the chain by glyph.
+        const icon =
+          role === "planner" ? "🧭" :
+          role === "contractor" ? "📜" :
+          role === "foreman" ? "🔧" : "↪";
+        line(chalk.cyan("  " + icon + " ") + chalk.dim(`${role}: `) + text);
+        return;
+      }
       case "toolResult": {
         const name = ev.tool || "?";
         const ok = ev.success !== false && !ev.error;

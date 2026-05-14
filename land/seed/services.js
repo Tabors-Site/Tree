@@ -54,7 +54,7 @@ import { deliverCascade } from "./tree/cascade.js";
 import { isUserRoot, getLandRootId } from "./landRoot.js";
 import { createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType } from "./tree/treeManagement.js";
 import { createNote, editNote, deleteNoteAndFile, transferNote, getNotes } from "./tree/notes.js";
-import { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, isToolReadOnly, getToolOwner, getModeOwner, getModesOwnedBy } from "./tree/extensionScope.js";
+import { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, getExtensionAtScope, isToolReadOnly, getToolOwner, getModeOwner, getModesOwnedBy } from "./tree/extensionScope.js";
 import {
   addContributor, removeContributor,
   setOwner, removeOwner, transferOwnership,
@@ -194,7 +194,14 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     userMetadata: { getUserMeta, setUserMeta, incUserMeta, pushUserMeta, batchSetUserMeta, unsetUserMeta, addToUserMetaSet },
 
     // --- Extension scope (check blocked/allowed status at positions) ---
-    scope: { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, isToolReadOnly, getToolOwner, getModeOwner, getModesOwnedBy },
+    //
+    // getExtensionAtScope is the principled way to reach across into
+    // another extension. Returns null when the target is blocked at
+    // this position, closing the "extension X's exports stay callable
+    // even when X is blocked" hole. Prefer this over the legacy
+    // getExtension(name) from the loader when you're already operating
+    // at a known tree position.
+    scope: { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, getExtensionAtScope, isToolReadOnly, getToolOwner, getModeOwner, getModesOwnedBy },
 
     // --- Cascade (extensions call deliverCascade to propagate signals) ---
     cascade: { deliverCascade },

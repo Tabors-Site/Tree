@@ -243,6 +243,10 @@ async function runConversational({ verb, message, rootId = null, currentNodeId =
     socket.on("swarmDispatch", forward("swarmDispatch"));
     socket.on("branchStarted", forward("branchStarted"));
     socket.on("branchCompleted", forward("branchCompleted"));
+    // Governance chainstep completions (Planner / Contractor / Foreman
+    // exit text). Renders as an indented sub-bubble in the CLI; sits
+    // between the user's message and the Ruler's final synthesis.
+    socket.on("chainstepCompleted", forward("chainstepCompleted"));
     // Plan / contracts / execution lifecycle events.
     // Governing-namespace names are the current home; swarm-namespace
     // names are legacy and listen here transitionally so any emitter

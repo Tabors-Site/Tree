@@ -423,41 +423,35 @@ export async function runRulerCycle({
     log.info("Tree Orchestrator",
       `🔨 Ruler cycle: Planner found leaf work, dispatching ${originalMode} as Worker`);
     await switchMode(visitorId, originalMode, switchOpts);
-    const workerResult = await runSteppedMode(visitorId, originalMode, message, baseOpts);
 
-    // Mark leaf steps done on the active execution-record.
-    if (governing?.readActiveExecutionRecord && governing?.updateStepStatus && currentNodeId) {
+    // Flag-queue snapshot around the Worker turn so the classifier
+    // can detect a blocking flag emitted by this Worker.
+    const flagsBefore = await snapshotFlagQueue(governing, currentNodeId);
+    const workerResult = await runSteppedMode(visitorId, originalMode, message, baseOpts);
+    const flagsAfter = await snapshotFlagQueue(governing, currentNodeId);
+
+    // Classify what the Worker actually did and write the honest
+    // outcome to every still-running leaf in the active record.
+    if (currentNodeId) {
       try {
-        const record = await governing.readActiveExecutionRecord(currentNodeId);
-        if (record?._recordNodeId) {
-          const completedAt = new Date().toISOString();
-          let marked = 0;
-          // Skip any leaf that's already in a terminal status —
-          // failed, cancelled, advanced (Foreman override), and
-          // skipped should NOT be re-marked as done. Only pending
-          // / running leaves get auto-marked done after the Worker
-          // phase.
-          const TERMINAL = new Set(["done", "failed", "cancelled", "advanced", "skipped", "superseded"]);
-          for (const step of (record.stepStatuses || [])) {
-            if (step?.type !== "leaf" || TERMINAL.has(step.status)) continue;
-            await governing.updateStepStatus({
-              recordNodeId: record._recordNodeId,
-              stepIndex: step.stepIndex,
-              updates: {
-                status: "done",
-                startedAt: step.startedAt || completedAt,
-                completedAt,
-              },
-            });
-            marked++;
-          }
-          if (marked > 0) {
-            log.info("Tree Orchestrator",
-              `🔧 Leaf cycle: marked ${marked} leaf step(s) done at ${String(currentNodeId).slice(0, 8)}`);
-          }
+        const outcome = await classifyWorkerOutcome({
+          workerResult,
+          flagsBefore,
+          flagsAfter,
+        });
+        const marked = await applyLeafOutcomeToRecord({
+          governing,
+          rulerNodeId: currentNodeId,
+          targetIndices: null,
+          outcome,
+        });
+        if (marked > 0) {
+          const reasonHint = outcome.reason ? ` (${String(outcome.reason).slice(0, 120)})` : "";
+          log.info("Tree Orchestrator",
+            `🔧 Leaf cycle: classified ${marked} leaf step(s) at ${String(currentNodeId).slice(0, 8)} as ${outcome.status}${reasonHint}`);
         }
       } catch (err) {
-        log.debug("Tree Orchestrator", `leaf-cycle auto-mark skipped: ${err.message}`);
+        log.debug("Tree Orchestrator", `leaf-cycle classify skipped: ${err.message}`);
       }
     }
 
@@ -1256,33 +1250,151 @@ function groupStepsForExecution(steps) {
   return groups;
 }
 
+// Terminal step statuses (a step in any of these is settled; the
+// auto-mark loops skip over them so prior decisions aren't clobbered).
+// `blocked` joins the set in the Worker-outcome classification pass —
+// a step blocked by a Worker's contract-conflict flag is settled until
+// the Foreman or Ruler decides otherwise.
+const TERMINAL_LEAF_STATUSES = new Set([
+  "done", "failed", "cancelled", "blocked", "advanced", "skipped", "superseded",
+]);
+
 /**
- * Resolve the worker mode key for a given workerType. Two paths,
- * both authoritative:
+ * Classifier import lives in governing/state/workerOutcome.js so the
+ * dispatcher, Pass 2 court adjudication, and any future audit surface
+ * call the same function. Pure — no tree reads, no state writes.
  *
- *   1. governing.lookupWorkerMode — workspaces register typed Workers
- *      with governing at init time (e.g. code-workspace registers
- *      tree:code-worker-build for the "build" type). First match wins;
- *      registry insertion order disambiguates if multiple workspaces
- *      claim the same type.
- *   2. governing.WORKER_TYPE_MODE_KEYS — governing's own base typed
- *      modes, used when no workspace specialized this type at this
- *      land.
- *
- * Returns null when neither path resolves. Callers MUST handle null
- * with a logged error; there is no legacy fallback. The pre-typed-
- * worker substrate routed leaf batches through the workspace's plan
- * mode (tree:code-plan etc.); that path is gone — the typed worker
- * substrate is the only Worker dispatch path.
+ * Resolved lazily because dispatch.js loads before governing's exports
+ * are wired through getExtension. Cached after the first successful
+ * resolution.
  */
-async function resolveWorkerModeForType(workerType) {
+let _classifierCache = null;
+async function classifyWorkerOutcome(args) {
+  if (!_classifierCache) {
+    const mod = await import("../governing/state/workerOutcome.js");
+    _classifierCache = mod.classifyWorkerOutcome;
+  }
+  return _classifierCache(args);
+}
+
+/**
+ * Apply the classification result to every still-running leaf step in
+ * the active execution-record at a Ruler scope. Targets the leaf
+ * batch's step indices (so an `advanced` outcome from one batch does
+ * not affect a different batch). Skips terminal statuses.
+ *
+ * targetIndices semantics:
+ *   • null / undefined — legacy "all pending leaves" mode (runRulerCycle's
+ *     single-dispatch leaf path).
+ *   • Set with entries  — filter: only leaves whose stepIndex is in the
+ *     set get classified.
+ *   • Set with zero entries — SUBSTRATE BUG. The caller meant to filter
+ *     but lost step identity. Refuse to classify any leaves and log a
+ *     warning rather than leaking the batch's outcome onto unrelated
+ *     pending leaves (the bug that lit up when emission.steps lacked
+ *     stepIndex and targetIndices fell through to an empty set).
+ */
+async function applyLeafOutcomeToRecord({
+  governing,
+  rulerNodeId,
+  targetIndices,
+  outcome,
+}) {
+  if (!governing?.readActiveExecutionRecord || !governing?.updateStepStatus) return 0;
+  if (targetIndices && targetIndices.size === 0) {
+    log.warn("Tree Orchestrator",
+      `applyLeafOutcomeToRecord: empty targetIndices at ${String(rulerNodeId).slice(0, 8)} — ` +
+      `refusing to classify (substrate bug: leaf-batch caller passed Set with no entries; ` +
+      `would leak '${outcome?.status}' onto every pending leaf). Marking nothing.`);
+    return 0;
+  }
+  const record = await governing.readActiveExecutionRecord(rulerNodeId);
+  if (!record?._recordNodeId) return 0;
+  const completedAt = new Date().toISOString();
+  let marked = 0;
+  for (const step of (record.stepStatuses || [])) {
+    if (step?.type !== "leaf") continue;
+    if (TERMINAL_LEAF_STATUSES.has(step.status)) continue;
+    if (targetIndices && !targetIndices.has(step.stepIndex)) continue;
+    const updates = {
+      status: outcome.status,
+      startedAt: step.startedAt || completedAt,
+      completedAt,
+    };
+    if (outcome.reason) {
+      updates.reason = String(outcome.reason).slice(0, 500);
+      // Mirror into `error` for failed/blocked so the existing
+      // executionStack renderer's "error: ..." line surfaces it
+      // without needing a renderer change. Done steps don't get an
+      // error field.
+      if (outcome.status === "failed" || outcome.status === "blocked") {
+        updates.error = String(outcome.reason).slice(0, 500);
+      }
+    }
+    await governing.updateStepStatus({
+      recordNodeId: record._recordNodeId,
+      stepIndex: step.stepIndex,
+      updates,
+    });
+    marked++;
+  }
+  return marked;
+}
+
+/**
+ * Read pending flags off a Ruler scope. Wraps the governing export
+ * with a try/catch — flag queue read failure must NEVER break a
+ * Worker dispatch.
+ */
+async function snapshotFlagQueue(governing, rulerNodeId) {
+  try {
+    if (governing?.readPendingIssues && rulerNodeId) {
+      const flags = await governing.readPendingIssues(rulerNodeId);
+      return Array.isArray(flags) ? flags : [];
+    }
+  } catch {}
+  return [];
+}
+
+/**
+ * Resolve the worker mode key for a given workerType at a specific
+ * Ruler scope. Three paths, in order:
+ *
+ *   1. governing.lookupWorkerMode with preferWorkspace inferred from
+ *      the scope's ext-allow chain. The workspace currently active
+ *      at this scope (code-workspace at a code project, book-workspace
+ *      at a book project) wins. Critical: without this, the registry's
+ *      insertion-order first-match means whichever workspace loaded
+ *      first wins for every leaf, regardless of where dispatch is
+ *      happening — a code project at a code-workspace scope would
+ *      route every "build" leaf to book-workspace's worker simply
+ *      because book-workspace registered first at boot.
+ *   2. governing.lookupWorkerMode without preference — first registry
+ *      match. Used when no workspace is allowed at the scope (rare,
+ *      but it's the fallback for governing-alone lands).
+ *   3. governing.WORKER_TYPE_MODE_KEYS — governing's own base typed
+ *      modes. Used when no workspace registered for this type at all.
+ *
+ * Returns null when nothing resolves. Callers MUST handle null with
+ * a logged error.
+ */
+async function resolveWorkerModeForType(workerType, { scopeNodeId } = {}) {
   const type = typeof workerType === "string" ? workerType : "build";
 
   try {
     const { getExtension } = await import("../loader.js");
     const governing = getExtension("governing")?.exports;
+
+    // Find the workspace ext-allow'd at this scope so the registry
+    // lookup prefers it. Without this, multi-workspace lands route
+    // every leaf to whichever workspace happened to register first.
+    let preferWorkspace = null;
+    if (scopeNodeId && governing?.findActiveWorkspaceAtScope) {
+      preferWorkspace = await governing.findActiveWorkspaceAtScope(scopeNodeId);
+    }
+
     if (governing?.lookupWorkerMode) {
-      const hit = governing.lookupWorkerMode(type);
+      const hit = governing.lookupWorkerMode(type, preferWorkspace ? { preferWorkspace } : {});
       if (hit?.modeKey) return hit.modeKey;
     }
     if (governing?.WORKER_TYPE_MODE_KEYS?.[type]) {
@@ -1313,11 +1425,14 @@ async function runLeafGroupAtScope({
 }) {
   const resolvedType = typeof workerType === "string" ? workerType : "build";
 
-  // Resolve the worker mode key for this group's type. Workspace
-  // override (if registered) wins; otherwise governing's typed base
-  // mode. There is no legacy fallback — the typed-worker substrate
-  // is the only Worker dispatch path.
-  const modeKey = await resolveWorkerModeForType(resolvedType);
+  // Resolve the worker mode key for this group's type. The active
+  // workspace at projectNode's scope determines which workspace's
+  // typed Worker handles this leaf (code project → code Workers,
+  // book project → book Workers). Falls back to governing base
+  // typed modes when no workspace is registered for the type.
+  const modeKey = await resolveWorkerModeForType(resolvedType, {
+    scopeNodeId: projectNode?._id ? String(projectNode._id) : null,
+  });
 
   log.info("Tree Orchestrator",
     `🔨 runLeafGroupAtScope entered at ${String(projectNode?._id || "?").slice(0, 8)}: ` +
@@ -1460,7 +1575,18 @@ async function runLeafGroupAtScope({
   log.info("Tree Orchestrator",
     `🔨 Leaf batch at ${String(projectNode._id).slice(0, 8)}: dispatching ${modeKey} as ${resolvedType} Worker ` +
     `(${leafSpecs.length} leaf step(s); ${(allBranchNames?.length || 0)} forbidden sub-domain(s))`);
-  await runSteppedMode(visitorId, modeKey, rulerWorkerMessage, {
+
+  // Capture flag queue + dispatch + classify outcome. The leaf status
+  // each step lands in reflects WHAT THE WORKER ACTUALLY DID — not
+  // "the Worker's turn ended." See classifyWorkerOutcome above.
+  let governing = null;
+  try {
+    const { getExtension } = await import("../loader.js");
+    governing = getExtension("governing")?.exports || null;
+  } catch {}
+  const flagsBefore = await snapshotFlagQueue(governing, projectNode._id);
+
+  const workerResult = await runSteppedMode(visitorId, modeKey, rulerWorkerMessage, {
     username, userId, rootId, signal, slot,
     readOnly: false, onToolLoopCheckpoint, socket,
     sessionId, rootChatId, rt,
@@ -1469,43 +1595,30 @@ async function runLeafGroupAtScope({
     dispatchOrigin: `ruler-own-integration-${resolvedType}`,
   });
 
-  // Mark this group's leaf steps "done." Foreman overrides (advanced)
-  // and bypasses (skipped) and explicit failures stay where they are.
+  const flagsAfter = await snapshotFlagQueue(governing, projectNode._id);
+  const outcome = await classifyWorkerOutcome({
+    workerResult,
+    flagsBefore,
+    flagsAfter,
+  });
+
+  // Apply the classified outcome to every still-running leaf step in
+  // this group. Foreman overrides (advanced) / bypasses (skipped) /
+  // prior failures stay where they are — TERMINAL_LEAF_STATUSES guards.
   try {
-    const { getExtension } = await import("../loader.js");
-    const governing = getExtension("governing")?.exports;
-    if (governing?.readActiveExecutionRecord && governing?.updateStepStatus) {
-      const record = await governing.readActiveExecutionRecord(projectNode._id);
-      if (record?._recordNodeId) {
-        const completedAt = new Date().toISOString();
-        const TERMINAL_LEAF = new Set([
-          "done", "failed", "cancelled", "advanced", "skipped", "superseded",
-        ]);
-        let marked = 0;
-        for (const step of (record.stepStatuses || [])) {
-          if (step?.type !== "leaf") continue;
-          if (TERMINAL_LEAF.has(step.status)) continue;
-          if (targetIndices.size > 0 && !targetIndices.has(step.stepIndex)) continue;
-          await governing.updateStepStatus({
-            recordNodeId: record._recordNodeId,
-            stepIndex: step.stepIndex,
-            updates: {
-              status: "done",
-              startedAt: step.startedAt || completedAt,
-              completedAt,
-            },
-          });
-          marked++;
-        }
-        if (marked > 0) {
-          log.info("Tree Orchestrator",
-            `🔧 Leaf batch: marked ${marked} leaf step(s) done at ` +
-            `${String(projectNode._id).slice(0, 8)}`);
-        }
-      }
+    const marked = await applyLeafOutcomeToRecord({
+      governing,
+      rulerNodeId: projectNode._id,
+      targetIndices,
+      outcome,
+    });
+    if (marked > 0) {
+      const reasonHint = outcome.reason ? ` (${String(outcome.reason).slice(0, 120)})` : "";
+      log.info("Tree Orchestrator",
+        `🔧 Leaf batch: classified ${marked} leaf step(s) at ${String(projectNode._id).slice(0, 8)} as ${outcome.status}${reasonHint}`);
     }
   } catch (err) {
-    log.debug("Tree Orchestrator", `auto-mark leaf done skipped: ${err.message}`);
+    log.debug("Tree Orchestrator", `auto-mark leaf classify skipped: ${err.message}`);
   }
 }
 
@@ -1996,8 +2109,18 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
     if (governing?.readActivePlanEmission) {
       const emission = await governing.readActivePlanEmission(projectNode._id);
       if (emission?.steps?.length) {
-        planSteps = emission.steps;
-        allBranchNames = emission.steps
+        // Hydrate stepIndex (1-based) onto each emission step. The
+        // emission itself doesn't carry stepIndex — that field is only
+        // written on the execution-record's stepStatuses (see
+        // governing/state/foreman.js#buildInitialStepStatuses). Without
+        // hydration, runLeafGroupAtScope's targetIndices set is empty
+        // and the auto-mark loop falls off its per-batch filter — the
+        // first batch's classification then leaks onto every still-
+        // pending leaf, regardless of which batch they belong to.
+        // Hydrating once at dispatch entry keeps the downstream comment
+        // contract ("each group has a 1-based stepIndex") true.
+        planSteps = emission.steps.map((s, i) => ({ ...s, stepIndex: i + 1 }));
+        allBranchNames = planSteps
           .filter((s) => s?.type === "branch" && Array.isArray(s.branches))
           .flatMap((s) => s.branches.map((b) => b?.name).filter(Boolean));
       }
@@ -2315,21 +2438,57 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
 
           // Foreman invocation: the judgment is "should this record
           // freeze, and at what terminal status?" The Foreman reads
-          // the rolled-up state and decides via foreman-freeze-record
-          // (or foreman-escalate-to-ruler if the situation needs
-          // re-planning).
+          // the rolled-up state AND the artifact-evidence block —
+          // notes/children/blocking-flags on the tree at this scope —
+          // so the freeze decision is grounded in what's actually
+          // present, not just step status. Then decides via foreman-
+          // freeze-record (or foreman-escalate-to-ruler if the
+          // situation needs re-planning).
           const { runForemanTurn } = await import("./ruling.js");
           const post = await governing.readActiveExecutionRecord(projectNode._id);
-          const counts = { done: 0, failed: 0, blocked: 0, pending: 0, running: 0 };
+          const counts = { done: 0, failed: 0, blocked: 0, advanced: 0, pending: 0, running: 0 };
           for (const s of (post?.stepStatuses || [])) {
             counts[s?.status] = (counts[s?.status] || 0) + 1;
           }
+          // Per-leaf outcome breakdown — what each step settled to,
+          // with the Worker's classification reason. The Foreman uses
+          // this alongside the evidence block to judge whether a "done"
+          // is real or a status lie.
+          const leafLines = [];
+          for (const s of (post?.stepStatuses || [])) {
+            if (s?.type !== "leaf") continue;
+            const wt = s.workerType ? `${s.workerType} ` : "";
+            const spec = s.spec ? `: ${String(s.spec).slice(0, 120)}` : "";
+            const tail = s.reason
+              ? `  → ${String(s.reason).slice(0, 200)}`
+              : (s.error ? `  → ${String(s.error).slice(0, 200)}` : "");
+            leafLines.push(`  step ${s.stepIndex} [${wt}${s.status}]${spec}${tail}`);
+          }
+          const leafBlock = leafLines.length > 0
+            ? `\nPer-leaf outcomes:\n${leafLines.join("\n")}\n`
+            : "";
+
+          let evidenceBlock = "";
+          try {
+            if (governing?.renderArtifactEvidence) {
+              evidenceBlock = await governing.renderArtifactEvidence(projectNode._id);
+            }
+          } catch (err) {
+            log.debug("Tree Orchestrator", `artifact-evidence render skipped: ${err.message}`);
+          }
+
           const summary =
             `Swarm dispatch returned. Step rollup: ${counts.done || 0} done, ` +
             `${counts.failed || 0} failed, ${counts.blocked || 0} blocked, ` +
-            `${counts.pending || 0} pending, ${counts.running || 0} running. ` +
-            `Decide whether to freeze the execution-record (and at what status) ` +
-            `or escalate to the Ruler.`;
+            `${counts.advanced || 0} advanced, ` +
+            `${counts.pending || 0} pending, ${counts.running || 0} running.` +
+            leafBlock +
+            (evidenceBlock ? `\n${evidenceBlock}\n` : "") +
+            `\nDecide whether to freeze the execution-record (and at what status) ` +
+            `or escalate to the Ruler. VERIFY artifact existence at children ` +
+            `named by leaf specs before freezing as completed — a leaf marked ` +
+            `done with no matching artifact above means the Worker ended its ` +
+            `turn without producing the promised output.`;
           try {
             await runForemanTurn({
               visitorId,

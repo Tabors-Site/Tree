@@ -366,7 +366,8 @@ router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
     if (node.systemRole) return sendError(res, 400, ERR.INVALID_INPUT, "Cannot modify system nodes");
 
     const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
-    const { clearScopeCache, notifyScopeChange } = await import("../../seed/tree/extensionScope.js");
+    const { clearScopeCache, notifyScopeChange, getBlockedExtensionsAtNode } = await import("../../seed/tree/extensionScope.js");
+    const { getExtensionManifest, getLoadedExtensionNames } = await import("../../extensions/loader.js");
 
     const config = {};
     if (Array.isArray(blocked) && blocked.length > 0) {
@@ -379,6 +380,118 @@ router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
       config.allowed = allowed.filter(a => typeof a === "string");
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // DEP-AWARE VALIDATION
+    //
+    // ext-allow X at scope S requires that every name in
+    // X.manifest.needs.extensions is ALSO active at S after this
+    // config applies. Without this check the operator can create
+    // a state where workspace X is allowed here but its hard-
+    // dependency Y is blocked here, then watch X's tools fail at
+    // runtime with confusing "Y unavailable" errors.
+    //
+    // ext-block Y at scope S where some dependent X is active at
+    // S or downstream is a softer concern: orphaning dependents
+    // can be a legitimate diagnostic move ("block governing here
+    // to see what breaks"). Warn but don't reject. The warning
+    // surfaces in the response so the CLI / dashboard can show it.
+    // ─────────────────────────────────────────────────────────────
+
+    const newAllowed = new Set(config.allowed || []);
+    const newBlocked = new Set(config.blocked || []);
+
+    // Compute the EFFECTIVE blocked set after this config applies.
+    // Combine: existing-upstream blocked + the proposed newBlocked
+    // + confined-not-in-allowed (per the scope resolver's rules).
+    // newAllowed un-blocks anything in upstream blocked, but we treat
+    // upstream blocks as "still blocked unless the newAllowed at THIS
+    // scope un-blocks it" — symmetric with how the resolver works.
+    let upstreamBlocked = new Set();
+    let upstreamAllowed = new Set();
+    try {
+      // Read the parent's effective state (not this node's, since we're
+      // about to overwrite this node's metadata.extensions).
+      if (node.parent) {
+        const parentResolution = await getBlockedExtensionsAtNode(String(node.parent));
+        upstreamBlocked = parentResolution.blocked || new Set();
+        upstreamAllowed = parentResolution.allowed || new Set();
+      }
+    } catch {}
+
+    const effectiveAllowed = new Set([...upstreamAllowed, ...newAllowed]);
+    const effectiveBlocked = new Set(
+      [...upstreamBlocked, ...newBlocked].filter((n) => !newAllowed.has(n)),
+    );
+
+    // Reject ext-allow with blocked deps. Walk every NEWLY allowed
+    // extension's needs.extensions; if any of those are in the
+    // effective-blocked set at this scope, refuse with a clear reason.
+    if (newAllowed.size > 0) {
+      const violations = [];
+      for (const name of newAllowed) {
+        const manifest = getExtensionManifest(name);
+        if (!manifest) continue;  // unknown extension; let it pass — error will surface elsewhere
+        const deps = Array.isArray(manifest?.needs?.extensions)
+          ? manifest.needs.extensions
+          : [];
+        for (const dep of deps) {
+          if (effectiveBlocked.has(dep)) {
+            violations.push(
+              `${name} depends on ${dep}, but ${dep} is blocked at this scope. ` +
+              `ext-allow ${dep} here first, then re-run.`,
+            );
+          }
+        }
+      }
+      if (violations.length > 0) {
+        return sendError(
+          res,
+          400,
+          ERR.INVALID_INPUT,
+          "Extension dependency violation:\n  - " + violations.join("\n  - "),
+        );
+      }
+    }
+
+    // Warn (non-fatal) when blocking would orphan dependents. We
+    // check installed extensions whose needs.extensions includes
+    // anything in newBlocked AND that extension is currently active
+    // upstream (in effectiveAllowed or a global that's not blocked).
+    // The warning lands in the response payload so CLI / dashboard
+    // surfaces it; the write still proceeds (operator may want this
+    // for diagnostic purposes).
+    const warnings = [];
+    if (newBlocked.size > 0) {
+      try {
+        for (const installedName of getLoadedExtensionNames()) {
+          const manifest = getExtensionManifest(installedName);
+          if (!manifest) continue;
+          const deps = Array.isArray(manifest?.needs?.extensions)
+            ? manifest.needs.extensions
+            : [];
+          const broken = deps.filter((d) => newBlocked.has(d));
+          if (broken.length === 0) continue;
+          // Is this dependent active here-or-below? It's active here if
+          // it's in effectiveAllowed (confined ext-allow'd upstream or
+          // here) OR if it's a global and not in effectiveBlocked.
+          const isConfined = !!manifest?.scope && manifest.scope === "confined";
+          const activeHere = isConfined
+            ? effectiveAllowed.has(installedName) && !effectiveBlocked.has(installedName)
+            : !effectiveBlocked.has(installedName);
+          if (activeHere) {
+            warnings.push(
+              `${installedName} depends on ${broken.join(", ")} and is active at this scope. ` +
+              `Blocking ${broken.join(", ")} here will leave ${installedName} unable to call its dependency.`,
+            );
+          }
+        }
+      } catch {
+        // Warning computation failures are non-fatal; the write
+        // proceeds. The kernel's own integrity checks will catch
+        // anything load-bearing.
+      }
+    }
+
     if (Object.keys(config).length === 0) {
       await setExtMeta(node, "extensions", null);
     } else {
@@ -387,7 +500,11 @@ router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
     await node.save();
     notifyScopeChange({ nodeId, blocked: config.blocked, restricted: config.restricted, allowed: config.allowed, userId: req.userId });
 
-    sendOk(res, { blocked: config.blocked || [], allowed: config.allowed || [] });
+    sendOk(res, {
+      blocked: config.blocked || [],
+      allowed: config.allowed || [],
+      ...(warnings.length > 0 ? { warnings } : {}),
+    });
   } catch (err) {
     log.error("API", "editExtensions error:", err.message);
     sendError(res, 400, ERR.INVALID_INPUT, err.message);

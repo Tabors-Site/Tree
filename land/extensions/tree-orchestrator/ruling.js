@@ -16,6 +16,7 @@
 // difference between root Ruler and sub-Ruler is what their snapshot
 // reads (sub-Rulers see lineage; roots don't).
 
+import crypto from "crypto";
 import log from "../../seed/log.js";
 import { switchMode } from "../../seed/llm/conversation.js";
 import { runSteppedMode } from "./steppedMode.js";
@@ -69,6 +70,59 @@ async function governingExports() {
  * Returns: the role's final answer text (string), or null if the
  * spawn failed.
  */
+// Governance sub-roles whose exit text is worth surfacing as an
+// inline sub-bubble in the chat UI. The Ruler spawns these as
+// chainstep children; their prose is the internal dialogue between
+// the position and its hired roles. Typed Workers are deliberately
+// excluded — their work is visible through tool calls + artifact
+// creation, and adding bubbles for them would be redundant noise.
+const SUB_BUBBLE_ROLES = new Set([
+  "planner",
+  "contractor",
+  "foreman",
+]);
+
+function roleLabelFromModeKey(modeKey) {
+  if (typeof modeKey !== "string") return "role";
+  // Mode keys follow the convention "tree:<scope>-<role>" (e.g.,
+  // "tree:governing-foreman"). Take the last hyphen-separated
+  // segment.
+  const tail = modeKey.split(":").pop() || "";
+  const dash = tail.lastIndexOf("-");
+  return dash >= 0 ? tail.slice(dash + 1) : tail;
+}
+
+function isGovernanceSubRole(modeKey) {
+  return SUB_BUBBLE_ROLES.has(roleLabelFromModeKey(modeKey));
+}
+
+// Strip marker tokens (Worker / Planner / Contractor exit signals)
+// from a piece of prose. Used by the chainstep sub-bubble filter to
+// decide whether the role's exit text has anything worth showing
+// inline. The marker tokens are control syntax — they tell the
+// orchestrator the role is done, but they're not content the
+// authority above this scope needs to read.
+function stripMarkerTokens(text) {
+  if (typeof text !== "string") return "";
+  return text
+    .replace(/\[\[DONE\]\]/g, "")
+    .replace(/\[\[NO-WRITE:[^\]]*\]\]/g, "")
+    .replace(/\[\[BRANCHES\]\][\s\S]*?\[\[\/BRANCHES\]\]/g, "")
+    .replace(/\[\[ESCALATION TO RULER\]\]/g, "")
+    .trim();
+}
+
+// Does this exit text have content worth surfacing as a sub-bubble?
+// Marker-only exits (the Planner's bare "[[DONE]]", a Worker's
+// "[[NO-WRITE: reason]]") strip down to nothing useful. We require
+// at least 20 chars of remaining prose — enough to fit a single
+// meaningful sentence. The Foreman's escalations and direct
+// responses are well above this threshold; the Planner / Contractor
+// bare-marker exits fall below.
+function hasSubstantiveProse(text) {
+  return stripMarkerTokens(text).length > 20;
+}
+
 export async function spawnRoleAsChainstep({
   modeKey,
   message,
@@ -149,13 +203,362 @@ export async function spawnRoleAsChainstep({
     log.info("Ruling",
       `↩️  spawnRoleAsChainstep done: ${modeKey} in ${ms}ms ` +
       `(answer length: ${result?.answer?.length || 0}c)`);
-    return result?.answer || result?.content || result?._allContent || null;
+
+    // Emit chainstep-completed event so the chat UI can render the
+    // spawned role's exit text inline as a sub-bubble between the
+    // user's message and the Ruler's final synthesis. Surfaces the
+    // internal dialogue (Ruler ↔ Foreman / Planner / Contractor) that
+    // would otherwise live only inside collapsed chainstep cards.
+    //
+    // Scope: governance sub-roles only. Typed Workers don't emit here
+    // — their work is visible via tool calls + artifact creation, so
+    // an additional bubble would be redundant noise. The governance
+    // roles' prose is the actual "internal conversation" worth
+    // surfacing.
+    //
+    // FILTER: marker-only exits don't make useful bubbles. The Planner
+    // and Contractor exit with bare "[[DONE]]" by their prompts'
+    // design — their value is in the structured emissions (plan card,
+    // contracts emission), not in exit prose. A sub-bubble showing
+    // "[[DONE]]" is noise. The Foreman, in contrast, exits with
+    // substantive prose (especially when escalating); those bubbles
+    // ARE valuable. hasSubstantiveProse() strips marker tokens and
+    // checks if any meaningful content remains.
+    //
+    // Best-effort: failures emitting the event don't affect the
+    // chainstep's outcome — the answer is what flows back regardless.
+    const exitText = result?.answer || result?.content || result?._allContent || null;
+    if (
+      socket?.emit &&
+      exitText &&
+      isGovernanceSubRole(modeKey) &&
+      hasSubstantiveProse(exitText)
+    ) {
+      try {
+        const { WS } = await import("../../seed/protocol.js");
+        socket.emit(WS.CHAINSTEP_COMPLETED, {
+          role: roleLabelFromModeKey(modeKey),
+          modeKey,
+          exitText: stripMarkerTokens(String(exitText)).slice(0, 4000),
+          parentChatId: parentChatId || null,
+          source: source || null,
+          durationMs: ms,
+          at: new Date().toISOString(),
+        });
+      } catch (emitErr) {
+        log.debug("Ruling", `chainstepCompleted emit skipped: ${emitErr.message}`);
+      }
+    }
+
+    return exitText;
   } catch (err) {
     const ms = Date.now() - startedAt;
     log.warn("Ruling",
       `spawnRoleAsChainstep(${modeKey}) failed after ${ms}ms: ${err.message}`);
     return null;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// FIRE-AND-FORGET SPAWN — sibling to spawnRoleAsChainstep
+// ─────────────────────────────────────────────────────────────────────────
+//
+// Same shape as spawnRoleAsChainstep, but returns immediately with a
+// spawnId. The underlying runChat promise runs in the background; on
+// settle (success or failure), the supplied completionHook fires with
+// the payload { spawnId, rulerNodeId, kind, exitText, durationMs,
+// error }. Used by governing's six spawn-and-await tools to escape
+// the MCP request/response timeout — the tool handler returns in
+// milliseconds, the chainstep keeps running, the Ruler wakes when
+// the hook fires.
+//
+// The socket bridge is preserved: the spawned role's tool-call and
+// thinking events still emit to the user's socket while the chain
+// runs. The user's chat panel sees live progression.
+//
+// Why a separate function (not a flag on spawnRoleAsChainstep): the
+// caller's contract is fundamentally different. Sync version returns
+// exit text; async version returns a spawnId. Splitting keeps the
+// type story honest at the call site.
+
+export function spawnRoleAsChainstepAsync({
+  modeKey,
+  message,
+  userId,
+  username,
+  rootId,
+  nodeId,
+  parentChatId,
+  parentSessionId,
+  signal,
+  source,
+  socket,
+  // The kind label used when firing the completion hook. Governing
+  // emits "planner-completed", "contractor-completed", etc.
+  kind,
+  // The completion hook NAME (e.g., "governing:plannerCompleted").
+  // Required — without it, the hook subscriber can't wake the Ruler.
+  completionHookName,
+  // Optional extra payload merged into the hook's data on settle.
+  hookPayload = {},
+  // Optional in-flight claim key. When set, the claim is released
+  // on settle (success OR failure) BEFORE the completion hook fires.
+  // Lets the Ruler that wakes on the hook see a clean in-flight slot
+  // and decide whether to re-spawn if needed.
+  releaseClaimKey = null,
+}) {
+  if (!modeKey || !userId) {
+    log.warn("Ruling", "spawnRoleAsChainstepAsync: modeKey and userId required");
+    return null;
+  }
+  if (!completionHookName) {
+    log.warn("Ruling",
+      `spawnRoleAsChainstepAsync(${modeKey}): completionHookName required; refusing to spawn`);
+    return null;
+  }
+
+  const spawnId = `spawn_${Date.now().toString(36)}_${crypto.randomBytes(4).toString("hex")}`;
+  const startedAt = Date.now();
+  log.info("Ruling",
+    `↪️  spawnAsync ${spawnId.slice(0, 16)}: ${modeKey} ` +
+    `(kind=${kind || "(unset)"}, completionHook=${completionHookName}, source=${source || "(unset)"})`);
+
+  // LIFECYCLE_ACTIVE — emit "active=true" so the chat panel renders
+  // a persistent "Ruler active" chip. Cleared in the settle block
+  // below once this spawn finishes AND the in-flight registry shows
+  // no other spawns running at this scope. The chip is the user-
+  // facing complement to fire-and-forget: with no synchronous wait,
+  // the chat panel has no other signal that work is in progress.
+  if (socket?.emit && nodeId) {
+    try {
+      // Lazy-import to avoid a circular dep — protocol is in seed.
+      import("../../seed/protocol.js").then(({ WS }) => {
+        socket.emit(WS.LIFECYCLE_ACTIVE, {
+          active: true,
+          rulerNodeId: String(nodeId),
+          rootId: rootId ? String(rootId) : null,
+          phase: kind || "spawn",
+          spawnId,
+          modeKey,
+          at: new Date().toISOString(),
+        });
+      }).catch(() => {});
+    } catch (err) {
+      log.debug("Ruling", `LIFECYCLE_ACTIVE emit (start) skipped: ${err.message}`);
+    }
+  }
+
+  // Build socket bridge so the spawned role's events flow to the
+  // parent's socket — same shape as spawnRoleAsChainstep. The bridge
+  // emits to the user's WebSocket, which outlives the calling Ruler
+  // turn, so events continue streaming after the tool handler returns.
+  const bridgeReady = (async () => {
+    if (!socket?.emit) return {};
+    try {
+      const { buildSocketBridge } = await import("./dispatch.js");
+      return buildSocketBridge(socket, signal) || {};
+    } catch (err) {
+      log.debug("Ruling", `socket bridge build skipped: ${err.message}`);
+      return {};
+    }
+  })();
+
+  // Fire-and-forget: kick off the underlying chain, attach hook firing
+  // on settle. Note: this entire chain is NOT awaited by the caller.
+  // Any throws inside are caught by the .catch and surfaced as a
+  // hook payload with error set; they do not propagate up.
+  (async () => {
+    const bridgeCallbacks = await bridgeReady;
+    let exitText = null;
+    let error = null;
+    try {
+      const { runChat } = await import("../../seed/llm/conversation.js");
+      const result = await runChat({
+        userId,
+        username,
+        message: message || "(no briefing)",
+        mode: modeKey,
+        rootId: rootId || null,
+        nodeId: nodeId || null,
+        signal: signal || null,
+        parentChatId: parentChatId || null,
+        parentSessionId: parentSessionId || null,
+        source: source || `spawn:${modeKey}`,
+        onToolResults: bridgeCallbacks.onToolResults || null,
+        onToolCalled: bridgeCallbacks.onToolCalled || null,
+        onThinking: bridgeCallbacks.onThinking || null,
+      });
+      exitText = result?.answer || result?.content || result?._allContent || null;
+    } catch (err) {
+      error = String(err?.message || err);
+      log.warn("Ruling",
+        `spawnAsync ${spawnId.slice(0, 16)} (${modeKey}) failed: ${error}`);
+    }
+
+    const ms = Date.now() - startedAt;
+    log.info("Ruling",
+      `↩️  spawnAsync ${spawnId.slice(0, 16)} settled in ${ms}ms ` +
+      `(${error ? "error" : "ok"}, exitTextLen=${exitText?.length || 0})`);
+
+    // Sub-bubble emit for governance sub-roles. Two shapes:
+    //
+    //   (a) Substantive prose exit (Foreman escalations, respond-
+    //       directly text): emit as before — exitText becomes the
+    //       bubble body.
+    //
+    //   (b) Marker-only exit (Planner / Contractor exit with bare
+    //       [[DONE]] by their prompt's design): synthesize a brief
+    //       summary FROM the emission (plan: "5-step plan emitted —
+    //       3 build leaves + 1 branch with 4 chapters"; contracts:
+    //       "10 contracts ratified — 1 global, 5 shared, 4 local").
+    //       Without (b), the user only sees a tool-call line and
+    //       no readable account of what was produced.
+    if (socket?.emit && isGovernanceSubRole(modeKey) && !error) {
+      try {
+        const { WS } = await import("../../seed/protocol.js");
+        const role = roleLabelFromModeKey(modeKey);
+        let bubbleText = null;
+        if (exitText && hasSubstantiveProse(exitText)) {
+          bubbleText = stripMarkerTokens(String(exitText)).slice(0, 4000);
+        } else if (nodeId && (role === "planner" || role === "contractor")) {
+          // Synthesize a summary from the emission. Best-effort: a
+          // failed read just means no bubble — same as the prior
+          // filter behavior.
+          try {
+            const { getExtension } = await import("../loader.js");
+            const governing = getExtension("governing")?.exports;
+            if (role === "planner" && governing?.readActivePlanEmission) {
+              const emission = await governing.readActivePlanEmission(String(nodeId));
+              if (emission?.steps) {
+                const leaves = emission.steps.filter((s) => s?.type === "leaf");
+                const branches = emission.steps.filter((s) => s?.type === "branch");
+                const subBranchCount = branches.reduce(
+                  (n, s) => n + ((s.branches || []).length || 0),
+                  0,
+                );
+                const leafTypes = leaves.reduce((acc, s) => {
+                  const t = s.workerType || "build";
+                  acc[t] = (acc[t] || 0) + 1;
+                  return acc;
+                }, {});
+                const leafMix = Object.entries(leafTypes)
+                  .map(([t, n]) => `${n} ${t}`)
+                  .join(", ");
+                const parts = [];
+                parts.push(`${emission.steps.length}-step plan emitted`);
+                if (leaves.length > 0) parts.push(`${leaves.length} leaf${leaves.length === 1 ? "" : "s"}${leafMix ? ` (${leafMix})` : ""}`);
+                if (branches.length > 0) parts.push(`${branches.length} branch step${branches.length === 1 ? "" : "es"} → ${subBranchCount} sub-Ruler${subBranchCount === 1 ? "" : "s"}`);
+                bubbleText = parts.join(" · ");
+                const reasoning = String(emission.reasoning || "").trim();
+                if (reasoning) {
+                  bubbleText += "\n\n" + reasoning.slice(0, 1200);
+                }
+              }
+            } else if (role === "contractor" && governing?.readActiveContractsEmission) {
+              const emission = await governing.readActiveContractsEmission(String(nodeId));
+              if (emission?.contracts) {
+                const buckets = emission.contracts.reduce((acc, c) => {
+                  const scope = typeof c?.scope === "string" ? c.scope
+                    : (c?.scope?.shared ? "shared" : (c?.scope?.local ? "local" : "other"));
+                  acc[scope] = (acc[scope] || 0) + 1;
+                  return acc;
+                }, {});
+                const mix = Object.entries(buckets)
+                  .map(([k, n]) => `${n} ${k}`)
+                  .join(", ");
+                bubbleText = `${emission.contracts.length} contract${emission.contracts.length === 1 ? "" : "s"} ratified${mix ? ` (${mix})` : ""}`;
+                const reasoning = String(emission.reasoning || "").trim();
+                if (reasoning) {
+                  bubbleText += "\n\n" + reasoning.slice(0, 1200);
+                }
+              }
+            }
+          } catch (summaryErr) {
+            log.debug("Ruling", `sub-bubble summary skipped: ${summaryErr.message}`);
+          }
+        }
+        if (bubbleText) {
+          socket.emit(WS.CHAINSTEP_COMPLETED, {
+            role,
+            modeKey,
+            exitText: bubbleText,
+            parentChatId: parentChatId || null,
+            source: source || null,
+            durationMs: ms,
+            at: new Date().toISOString(),
+          });
+        }
+      } catch (emitErr) {
+        log.debug("Ruling", `chainstepCompleted emit (async) skipped: ${emitErr.message}`);
+      }
+    }
+
+    // Release the in-flight claim BEFORE firing the hook. The Ruler
+    // that wakes on the hook can then re-spawn if it judges that
+    // necessary, without bumping into a stale claim.
+    if (releaseClaimKey) {
+      try {
+        const { release } = await import("../governing/state/inFlightSpawns.js");
+        release(releaseClaimKey);
+      } catch (relErr) {
+        log.debug("Ruling", `releaseClaimKey skipped: ${relErr.message}`);
+      }
+    }
+
+    // LIFECYCLE_ACTIVE clear — emit "active=false" so the chat panel
+    // can take down its "Ruler active" chip if no other spawns are
+    // still in flight at this scope. The chat panel does its own
+    // book-keeping (spawnId set + count), so we just emit the per-
+    // spawn settle event; the panel removes the chip when the set
+    // empties. Without this paired emit, the chip would stay
+    // forever after the lifecycle completes.
+    if (socket?.emit && nodeId) {
+      try {
+        const { WS } = await import("../../seed/protocol.js");
+        socket.emit(WS.LIFECYCLE_ACTIVE, {
+          active: false,
+          rulerNodeId: String(nodeId),
+          rootId: rootId ? String(rootId) : null,
+          phase: kind || "spawn",
+          spawnId,
+          modeKey,
+          error,
+          durationMs: ms,
+          at: new Date().toISOString(),
+        });
+      } catch (clearErr) {
+        log.debug("Ruling", `LIFECYCLE_ACTIVE emit (clear) skipped: ${clearErr.message}`);
+      }
+    }
+
+    // Fire the completion hook. Subscribers (governing/index.js)
+    // wake the Ruler at the spawn's scope with the appropriate
+    // wakeReason and source="hook-wakeup".
+    try {
+      const { hooks } = await import("../../seed/hooks.js");
+      hooks.run(completionHookName, {
+        spawnId,
+        rulerNodeId: nodeId ? String(nodeId) : null,
+        rootId: rootId ? String(rootId) : null,
+        userId: userId ? String(userId) : null,
+        username: username || null,
+        kind: kind || null,
+        parentChatId: parentChatId || null,
+        parentSessionId: parentSessionId || null,
+        socket: socket || null,
+        signal: signal || null,
+        source: source || null,
+        exitText: exitText ? String(exitText).slice(0, 4000) : null,
+        durationMs: ms,
+        error,
+        ...hookPayload,
+      }).catch(() => {});
+    } catch (err) {
+      log.debug("Ruling", `${completionHookName} fire skipped: ${err.message}`);
+    }
+  })();
+
+  return { spawnId, startedAt };
 }
 
 /**
@@ -361,6 +764,15 @@ export async function runRulerTurn({
   // (rather than computed from lineage every turn) so timing the turn
   // doesn't itself add a tree walk.
   depth = 0,
+  // Optional wakeup payload. Set by the spawn-completion hook
+  // subscribers in governing/index.js when waking the Ruler in
+  // response to a fire-and-forget tool's settle. The Ruler mode's
+  // buildSystemPrompt reads this via getRulerWakeup to differentiate
+  // hook-driven turns from user-driven turns. source field shapes
+  // synthesis behavior: "hook-wakeup" (continue in-progress work),
+  // "user-message" (answer the user), "parent-dispatch" (execute
+  // inherited briefing).
+  wakeup = null,
 }) {
   const scopeNodeId = currentNodeId || rootId;
   if (!scopeNodeId) {
@@ -368,11 +780,20 @@ export async function runRulerTurn({
     return { success: false, answer: "Internal error: no scope.", modeKey: null };
   }
 
+  // Stash wakeup for the Ruler mode's buildSystemPrompt to read.
+  // Cleared at the end of the turn so a subsequent turn (user message
+  // arriving while a hook-wakeup turn is in flight) doesn't inherit
+  // stale wakeup state.
+  if (wakeup && visitorId) {
+    setRulerWakeup(visitorId, wakeup);
+  }
+
   const governing = await ensureRulerScope({
     scopeNodeId, userId, message, dispatchOrigin,
   });
   if (!governing) {
     log.warn("Ruling", "governing extension unavailable; cannot run Ruler turn");
+    if (visitorId) clearRulerWakeup(visitorId);
     return { success: false, answer: "Internal error: governing unavailable.", modeKey: null };
   }
 
@@ -448,16 +869,33 @@ export async function runRulerTurn({
   // any) and return the Ruler's synthesis.
   const decision = governing.getRulerDecision?.(visitorId) || null;
   governing.clearRulerDecision?.(visitorId);
+  // Clear the wakeup side-channel so the next turn doesn't inherit
+  // stale state. The Ruler mode's buildSystemPrompt has already read
+  // it by this point.
+  if (visitorId) clearRulerWakeup(visitorId);
 
   if (decision) {
     log.info("Ruling",
       `👑 Ruler decision recorded: ${decision.kind} at ${String(scopeNodeId).slice(0, 8)}`);
   }
 
-  const finalAnswer = rulerResult?._allContent
-    || rulerResult?.answer
-    || rulerResult?.content
-    || "";
+  // Compute the user-facing answer. Priority:
+  //   1. respond-directly decision: the Ruler's tool argument IS the
+  //      response. runSteppedMode's accumulated content typically only
+  //      captures pre-tool-call "thinking" prose, not the response
+  //      stored in the tool arg. Without surfacing decision.response,
+  //      respond-directly turns silently produce "(no response)".
+  //   2. _allContent / answer / content from runSteppedMode — the
+  //      Ruler's closing prose after spawn-tools, foreman routes, etc.
+  let finalAnswer = "";
+  if (decision?.kind === "respond-directly" && typeof decision.response === "string" && decision.response.trim()) {
+    finalAnswer = decision.response.trim();
+  } else {
+    finalAnswer = rulerResult?._allContent
+      || rulerResult?.answer
+      || rulerResult?.content
+      || "";
+  }
 
   if (!finalAnswer) {
     log.warn("Ruling",
@@ -1208,4 +1646,31 @@ export function getForemanWakeup(visitorId) {
 export function clearForemanWakeup(visitorId) {
   if (!visitorId) return;
   foremanWakeups.delete(String(visitorId));
+}
+
+// Ruler wakeup side-channel. Parallel to the Foreman pattern above.
+// runRulerTurn writes here when invoked by a hook subscriber (the
+// spawn-completion fan-out in governing/index.js); the Ruler mode's
+// buildSystemPrompt reads back to differentiate hook-driven turns
+// from user-driven turns. The source field ("hook-wakeup",
+// "user-message", "parent-dispatch") shapes synthesis behavior: a
+// hook-woken Ruler continues in-progress work; a user-woken Ruler
+// answers the message; a parent-dispatched sub-Ruler executes the
+// inherited briefing.
+
+const rulerWakeups = new Map();
+
+export function setRulerWakeup(visitorId, wakeup) {
+  if (!visitorId || !wakeup) return;
+  rulerWakeups.set(String(visitorId), wakeup);
+}
+
+export function getRulerWakeup(visitorId) {
+  if (!visitorId) return null;
+  return rulerWakeups.get(String(visitorId)) || null;
+}
+
+export function clearRulerWakeup(visitorId) {
+  if (!visitorId) return;
+  rulerWakeups.delete(String(visitorId));
 }

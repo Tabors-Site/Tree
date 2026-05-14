@@ -37,6 +37,7 @@ import {
   lookupWorkerMode,
   listWorkerTypeRegistrations,
   shouldGovernAtScope,
+  findActiveWorkspaceAtScope,
 } from "./state/workerTypeRegistry.js";
 import {
   FLAG_KINDS,
@@ -56,7 +57,11 @@ import {
   buildExecutionStackSnapshot,
   formatExecutionStack,
   renderExecutionStack,
+  buildArtifactEvidence,
+  formatArtifactEvidence,
+  renderArtifactEvidence,
 } from "./state/executionStack.js";
+import { classifyWorkerOutcome } from "./state/workerOutcome.js";
 import {
   setRulerDecision,
   getRulerDecision,
@@ -67,7 +72,8 @@ import {
   getForemanDecision,
   clearForemanDecision,
 } from "./state/foremanDecisions.js";
-import { promoteToRuler, readRole, isRuler, findRulerScope, PROMOTED_FROM, NS } from "./state/role.js";
+import { promoteToRuler, readRole, isRuler, findRulerScope, walkRulers, PROMOTED_FROM, NS } from "./state/role.js";
+import { buildDashboardData, isTreeGoverned } from "./state/dashboardData.js";
 import { findLCA, ancestorChain, isAncestorOrSelf, validateScopeAuthority } from "./state/lca.js";
 import { setContracts, readContracts, readScopedContracts, readApprovalsAtRuler, readActiveContractsEmission } from "./state/contracts.js";
 import { ensureContractsNode } from "./state/contractsNode.js";
@@ -259,6 +265,31 @@ export async function init(core) {
     ...getFlagTools(core),
   ];
 
+  // Tree quick-link slot. Adds a "Governance" link to every tree
+  // root's overview page. Clicking navigates the dashboard's right
+  // iframe to /api/v1/root/:rootId/governance which renders the
+  // full rulership tree (plans, contracts, runs, workers, flags) on
+  // one observational surface.
+  try {
+    const { getExtension } = await import("../loader.js");
+    const treeos = getExtension("treeos-base");
+    if (treeos?.exports?.registerSlot) {
+      treeos.exports.registerSlot(
+        "tree-quick-links",
+        "governing",
+        ({ rootId, queryString }) => {
+          if (!rootId) return "";
+          const qs = queryString || "";
+          const href = `/api/v1/root/${rootId}/governance${qs ? `?${qs}&inApp=1` : "?inApp=1"}`;
+          return `<a class="quick-link" href="${href}" data-ext="governing">⚖ Governance</a>`;
+        },
+        { priority: 35 },
+      );
+    }
+  } catch (err) {
+    log.debug("Governing", `tree-quick-links slot registration skipped: ${err.message}`);
+  }
+
   // Plan panel slot. Registers a placeholder div on plan-type nodes
   // that fetches the rendered HTML fragment from the panel route.
   // Phase F absorbed this from the deleted plan extension.
@@ -358,12 +389,304 @@ export async function init(core) {
         } catch (err) {
           log.debug("Governing", `enrichContext parent plan skipped: ${err.message}`);
         }
+
+        // Active-workspace surface. The Planner at this scope picks
+        // leaf types / artifact shapes based on what kind of project
+        // this is — code (files in a directory tree) vs book (prose
+        // notes on tree nodes) vs other workspaces. Without this
+        // surface the Planner has no signal which workspace is
+        // active and tends to default to whichever shape its training
+        // saw most (usually code). Surfacing the workspace identity
+        // + its node-types + its typed Workers' tool sets lets the
+        // Planner choose artifact shapes the active workspace's
+        // Workers can actually produce.
+        try {
+          const ws = await findActiveWorkspaceAtScope(nodeId);
+          if (ws) {
+            const registrations = (typeof listWorkerTypeRegistrations === "function"
+              ? listWorkerTypeRegistrations()
+              : []) || [];
+            const typedWorkers = registrations
+              .filter((r) => r.workspace === ws)
+              .map((r) => `${r.workerType} → ${r.modeKey}`)
+              .join(", ");
+            // Workspace-specific hints. These name the SHAPE the
+            // workspace produces so the Planner doesn't generalize
+            // wrong. Adding a new workspace adds an entry here.
+            const WORKSPACE_HINTS = {
+              "book-workspace":
+                "Prose artifacts. Workers write text as NOTES on tree nodes (create-node-note), " +
+                "not as files. The 'book' compiler walks the tree and assembles the final document. " +
+                "Plan leaves should produce prose at scopes: chapters as branch steps (sub-Rulers), " +
+                "sections as either branch sub-Rulers (if substantial) or leaf prose. NO 'package.json,' " +
+                "NO 'index.html,' NO source files. Artifacts are NODES with NOTES (research-notes, " +
+                "chapter-outline, final-prose, references). Branch names are chapter/section identifiers " +
+                "(chapter-01-origins, section-introduction), NOT directory names. Use the contracted " +
+                "vocabulary from parent contracts verbatim.",
+              "code-workspace":
+                "Code artifacts. Workers create + edit FILES via workspace-add-file / workspace-edit-file. " +
+                "Plan leaves should name concrete file paths (package.json, server/index.js, etc.). " +
+                "Branch steps are directories (each becomes a sub-Ruler with its own scope). " +
+                "DO NOT plan prose notes here — code-workspace's Workers don't write notes.",
+            };
+            const hint = WORKSPACE_HINTS[ws] || `Workspace "${ws}" is active.`;
+            context.governingActiveWorkspace =
+              "## ACTIVE WORKSPACE AT THIS SCOPE\n\n" +
+              `Workspace: **${ws}**\n` +
+              (typedWorkers ? `Typed Workers available: ${typedWorkers}\n\n` : "\n") +
+              hint;
+          }
+        } catch (err) {
+          log.debug("Governing", `enrichContext active-workspace skipped: ${err.message}`);
+        }
       },
     );
   }
 
+  // Governance dashboard SSE broadcasts. Subscribe to every governing
+  // lifecycle event; on each, resolve the affected node's tree root
+  // and broadcast a `update` SSE frame to every dashboard subscriber
+  // for that root. The dashboard's client-side bootstrap refetches
+  // the page fragment in response.
+  //
+  // Resolve-rootId helper: walk up from a nodeId to the tree root by
+  // following `.parent` chains. Returns null on degenerate trees.
+  // Cached per turn would be a future optimization; for now the
+  // ~5-step walk per event is cheap enough.
+  async function resolveRootForNode(nodeId) {
+    if (!nodeId) return null;
+    try {
+      const NodeModel = (await import("../../seed/models/node.js")).default;
+      let cursor = String(nodeId);
+      const visited = new Set();
+      for (let i = 0; i < 64; i++) {
+        if (visited.has(cursor)) return null;
+        visited.add(cursor);
+        const n = await NodeModel.findById(cursor).select("_id parent").lean();
+        if (!n) return null;
+        if (!n.parent) return String(n._id);
+        cursor = String(n.parent);
+      }
+    } catch {}
+    return null;
+  }
+
+  if (core?.hooks?.register) {
+    const { broadcastGovernanceUpdate } = await import("./routes.js");
+    const dashboardEvents = [
+      "governing:rulerPromoted",
+      "governing:planRatified",
+      "governing:contractRatified",
+      "governing:executionRatified",
+      "governing:executionCompleted",
+      "governing:executionFailed",
+      "governing:executionCancelled",
+      "governing:executionPaused",
+      "governing:executionSuperseded",
+      "governing:flagAppended",
+      // Spawn-completion hooks. Same dashboard broadcast shape; the
+      // dashboard SSE consumers re-fetch the governance fragment when
+      // any of these fire.
+      "governing:plannerCompleted",
+      "governing:contractorCompleted",
+      "governing:planRevised",
+      "governing:swarmDispatched",
+      "governing:foremanRouted",
+      "governing:branchRetried",
+    ];
+    for (const eventName of dashboardEvents) {
+      core.hooks.register(eventName, async (payload) => {
+        try {
+          // Payload field varies per hook; try the common ones.
+          const candidateNodeId =
+            payload?.nodeId ||
+            payload?.rulerNodeId ||
+            payload?.recordNodeId ||
+            payload?.scopeNodeId ||
+            null;
+          if (!candidateNodeId) return;
+          const rootId = await resolveRootForNode(candidateNodeId);
+          if (!rootId) return;
+          const delivered = broadcastGovernanceUpdate(rootId, eventName);
+          if (delivered > 0) {
+            log.debug("Governing/Dashboard",
+              `📡 broadcast ${eventName} → ${delivered} subscriber(s) at root ${rootId.slice(0, 8)}`);
+          }
+        } catch (err) {
+          log.debug("Governing/Dashboard", `${eventName} broadcast skipped: ${err.message}`);
+        }
+      });
+    }
+    log.verbose("Governing", `Dashboard SSE: subscribed to ${dashboardEvents.length} lifecycle events`);
+
+    // ─────────────────────────────────────────────────────────────────
+    // Spawn-completion Ruler wakeups.
+    //
+    // Each of the six fire-and-forget tools fires a corresponding
+    // completion hook when its background chainstep settles. The
+    // subscriber below wakes the Ruler at the spawn's scope with a
+    // synthetic empty user message and a wakeup payload carrying
+    // source="hook-wakeup" + the spawn's kind/result/error.
+    //
+    // The Ruler's prompt reads source="hook-wakeup" and adapts its
+    // synthesis behavior: continuation-of-in-progress-work, NOT
+    // response-to-user-question. The lifecycle decision matrix is
+    // unchanged — the Ruler reads its snapshot (which now reflects
+    // the spawn's outcome) and chooses the next move.
+    // ─────────────────────────────────────────────────────────────────
+    const SPAWN_COMPLETION_EVENTS = {
+      "governing:plannerCompleted":    "planner-completed",
+      "governing:contractorCompleted": "contractor-completed",
+      "governing:planRevised":         "plan-revised",
+      "governing:swarmDispatched":     "swarm-dispatched",
+      "governing:foremanRouted":       "foreman-routed",
+      "governing:branchRetried":       "branch-retried",
+    };
+    // Events where a plan emission lands at the Ruler scope. At
+    // entry-scope (no parent Ruler), these need a user ratification
+    // gate — the plan card — and MUST NOT auto-advance. At sub-scope,
+    // the parent cycle implicitly ratifies and we wake the Ruler so
+    // it chains forward.
+    const PLAN_EMITTING_EVENTS = new Set([
+      "governing:plannerCompleted",
+      "governing:planRevised",
+    ]);
+    for (const [eventName, wakeReason] of Object.entries(SPAWN_COMPLETION_EVENTS)) {
+      core.hooks.register(eventName, async (payload) => {
+        try {
+          if (!payload?.rulerNodeId || !payload?.userId) return;
+          // Don't synchronously block the hook fanout chain. Wake the
+          // Ruler in a microtask so failures inside runRulerTurn don't
+          // back-propagate into the hook caller's settle path.
+          queueMicrotask(async () => {
+            try {
+              // Entry-scope vs sub-Ruler gate. The hire-planner /
+              // revise-plan path used to call emitPlanCard inline
+              // after the Planner finished; the fire-and-forget
+              // refactor moved that responsibility here, where the
+              // settle happens. For entry-scope plan emissions we
+              // emit the card and STOP — wait for the user's "yes"
+              // / "cancel" / revise instruction to advance. For sub-
+              // scope, we wake the Ruler so it chains forward (the
+              // parent cycle is the implicit ratification).
+              if (PLAN_EMITTING_EVENTS.has(eventName) && !payload.error) {
+                try {
+                  const { readLineage } = await import("./state/lineage.js");
+                  const lineage = await readLineage(payload.rulerNodeId);
+                  const isEntryScope = !lineage?.parentRulerId;
+                  if (isEntryScope) {
+                    // Emit the plan card. Read the active emission
+                    // and the Ruler node for the card payload.
+                    const NodeModel = (await import("../../seed/models/node.js")).default;
+                    const ruler = await NodeModel.findById(payload.rulerNodeId)
+                      .select("_id name").lean();
+                    const { readActivePlanEmission } = await import("./state/planApprovals.js");
+                    const emission = await readActivePlanEmission(payload.rulerNodeId);
+                    if (ruler && emission) {
+                      // Build the same payload emitPlanCard built; do
+                      // it inline here because we don't have visitorId
+                      // through getActiveRequest (the user's request
+                      // chain has already returned). Use the socket
+                      // attached to the hook payload directly.
+                      const branches = [];
+                      for (const step of (emission.steps || [])) {
+                        if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
+                        for (const b of step.branches) {
+                          if (!b?.name) continue;
+                          branches.push({
+                            name: b.name,
+                            spec: b.spec || "",
+                            path: null, files: [], slot: null, mode: null, parentBranch: null,
+                          });
+                        }
+                      }
+                      const { GOVERNING_WS_EVENTS } = await import("./wsEvents.js");
+                      const isRevision = eventName === "governing:planRevised";
+                      const cardEvent = isRevision
+                        ? GOVERNING_WS_EVENTS.PLAN_UPDATED
+                        : GOVERNING_WS_EVENTS.PLAN_PROPOSED;
+                      const cardPayload = {
+                        version: emission.ordinal || 1,
+                        projectNodeId: String(ruler._id),
+                        projectName: ruler.name || null,
+                        branches,
+                        contracts: [],
+                        emission,
+                        ...(isRevision ? { trigger: "revision" } : {}),
+                      };
+                      if (payload.socket?.emit) {
+                        payload.socket.emit(cardEvent, cardPayload);
+                        log.info("Governing",
+                          `🎴 ${isRevision ? "PLAN_UPDATED" : "PLAN_PROPOSED"} (hook-driven) ` +
+                          `emitted at entry-scope ${String(ruler._id).slice(0, 8)} ` +
+                          `(emission-${emission.ordinal}, ${branches.length} branches, ${emission.steps?.length || 0} steps)`);
+                      }
+                      // Entry-scope ratification gate: STOP here. Do
+                      // not wake the Ruler. The user reads the plan
+                      // card and replies "yes" / "cancel" / revise.
+                      // That user message becomes the next Ruler turn.
+                      return;
+                    }
+                  }
+                  // Sub-scope: fall through to wake the Ruler.
+                } catch (gateErr) {
+                  log.debug("Governing",
+                    `entry-scope plan-card gate skipped for ${eventName}: ${gateErr.message}`);
+                  // Fall through to wake (over-show on transient errors).
+                }
+              }
+
+              const { runRulerTurn } = await import("../tree-orchestrator/ruling.js");
+              await runRulerTurn({
+                visitorId: payload.userId,  // visitorId reuses userId for hook-driven wakeups
+                userId: payload.userId,
+                username: payload.username || null,
+                rootId: payload.rootId || null,
+                currentNodeId: payload.rulerNodeId,
+                message: "",  // synthetic empty user message
+                signal: payload.signal || null,
+                socket: payload.socket || null,
+                sessionId: payload.parentSessionId || null,
+                rootChatId: payload.parentChatId || null,
+                wakeup: {
+                  source: "hook-wakeup",
+                  reason: wakeReason,
+                  spawnId: payload.spawnId || null,
+                  kind: payload.kind || null,
+                  exitText: payload.exitText || null,
+                  error: payload.error || null,
+                  durationMs: payload.durationMs || null,
+                  // Per-hook extras (e.g., dispatch's branch count,
+                  // retry-branch's branchName) flow through.
+                  ...payload,
+                },
+              });
+            } catch (err) {
+              log.warn("Governing",
+                `Hook-wakeup Ruler turn failed for ${eventName} at ${String(payload.rulerNodeId).slice(0, 8)}: ${err.message}`);
+            }
+          });
+        } catch (err) {
+          log.debug("Governing", `${eventName} subscriber skipped: ${err.message}`);
+        }
+      });
+    }
+    log.verbose("Governing",
+      `Spawn-completion subscribers: ${Object.keys(SPAWN_COMPLETION_EVENTS).length} hooks wake the Ruler on settle`);
+  }
+
   // Mount the plan panel route + plan read endpoint at /api/v1/governing/*.
   const { default: router } = await import("./routes.js");
+
+  // Resolve html-rendering's urlAuth so the dashboard page accepts
+  // the iframe's token query param. Best-effort: if html-rendering
+  // isn't installed, the route falls back to Bearer authenticate.
+  try {
+    const { resolveHtmlAuth } = await import("./routes.js");
+    resolveHtmlAuth();
+  } catch (err) {
+    log.debug("Governing", `htmlAuth resolution skipped: ${err.message}`);
+  }
 
   return {
     router,
@@ -387,7 +710,11 @@ export async function init(core) {
     // dispatch.runRulerCycle, future Pass 2 court hooks) reach for these.
     exports: {
       // Role lifecycle
-      promoteToRuler, readRole, isRuler, findRulerScope, PROMOTED_FROM, NS,
+      promoteToRuler, readRole, isRuler, findRulerScope, walkRulers, PROMOTED_FROM, NS,
+      // Dashboard data orchestrator + tree-governance predicate.
+      // The governance page calls buildDashboardData; isTreeGoverned
+      // is a cheap probe other extensions can use.
+      buildDashboardData, isTreeGoverned,
       // LCA / scope authority
       findLCA, ancestorChain, isAncestorOrSelf, validateScopeAuthority,
       // Contracts (trio: contracts-type node holds emissions, Ruler holds
@@ -471,6 +798,14 @@ export async function init(core) {
       // (governing-alone land). Replaces the legacy
       // isWorkspacePlanMode mode-key check.
       shouldGovernAtScope,
+      // findActiveWorkspaceAtScope returns the workspace name
+      // currently ext-allow'd at a scope (code-workspace,
+      // book-workspace, etc.). Dispatch passes it to lookupWorkerMode
+      // as preferWorkspace so code projects get code Workers and
+      // book projects get book Workers — without it the registry's
+      // insertion-order first-match picks whichever workspace loaded
+      // first, regardless of where dispatch is happening.
+      findActiveWorkspaceAtScope,
       // Worker flag queue. Workers call appendFlag (via the
       // governing-flag-issue tool) when they encounter a contract
       // issue; the Ruler reads via readPendingIssues. The snapshot
@@ -500,6 +835,21 @@ export async function init(core) {
       buildExecutionStackSnapshot,
       formatExecutionStack,
       renderExecutionStack,
+      // Artifact evidence — the Foreman's "what's actually on the tree"
+      // probe. Lists notes on the Ruler scope + child nodes with
+      // per-child note counts + pending blocking flags. The Foreman
+      // wakeup payload includes this so freeze decisions are informed
+      // by tree reality, not just step status.
+      buildArtifactEvidence,
+      formatArtifactEvidence,
+      renderArtifactEvidence,
+      // Worker-outcome classifier. Pure function — given a worker
+      // turn's result + the Ruler's flag queue delta, returns the
+      // honest leaf-step status (done/blocked/advanced/failed). The
+      // dispatcher calls this on every Worker turn exit; Pass 2 court
+      // adjudication calls the same function on archived turns so
+      // dispatcher live + court replay agree on classification.
+      classifyWorkerOutcome,
       setRulerDecision,
       getRulerDecision,
       clearRulerDecision,

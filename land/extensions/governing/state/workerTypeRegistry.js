@@ -100,6 +100,38 @@ export function listWorkerTypeRegistrations() {
 }
 
 /**
+ * Find which registered workspace is active at a tree scope.
+ *
+ * Reads the scope's effective ext-allow chain (via the kernel's
+ * scope resolver) and returns the first registered workspace name
+ * that appears in the allowed set. Returns null when no workspace
+ * is allowed here.
+ *
+ * Used by dispatch's resolveWorkerModeForType to pick the RIGHT
+ * workspace's typed Worker per scope — without this, the registry's
+ * insertion-order first-match wins, which means lands with multiple
+ * workspaces registered route every leaf to whichever workspace
+ * loaded first. A code project at a code-workspace scope would
+ * then dispatch book-workspace's typed Worker (note-creating) even
+ * though code-workspace is the active workspace here.
+ */
+export async function findActiveWorkspaceAtScope(nodeId) {
+  if (!nodeId) return null;
+  if (REGISTRY.size === 0) return null;
+  try {
+    const { getBlockedExtensionsAtNode } = await import(
+      "../../../seed/tree/extensionScope.js"
+    );
+    const { allowed } = await getBlockedExtensionsAtNode(nodeId);
+    if (!allowed || allowed.size === 0) return null;
+    for (const name of REGISTRY.keys()) {
+      if (allowed.has(name)) return name;
+    }
+  } catch {}
+  return null;
+}
+
+/**
  * Decide whether governance should take over at this tree scope.
  *
  * Two cases return true:
