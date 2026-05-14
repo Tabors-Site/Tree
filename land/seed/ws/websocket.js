@@ -3,7 +3,7 @@
 // WebSocket server - handles socket events, delegates to conversation manager
 
 import log from "../log.js";
-import { WS } from "../protocol.js";
+import { WS, ERR } from "../protocol.js";
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import path from "path";
@@ -23,6 +23,15 @@ import Node from "../models/node.js";
 import { resolveTreeAccess } from "../tree/treeAccess.js";
 // orchestrateTreeRequest loaded via registry (tree-orchestrator extension)
 import { enqueue } from "./requestQueue.js";
+import {
+  registerInFlight,
+  attachSocket as attachInFlight,
+  detachSocket as detachInFlight,
+  recordEvent as recordInFlightEvent,
+  getInFlight,
+  clearInFlight,
+  deferSessionEnd,
+} from "./inFlightChats.js";
 import {
   switchMode,
   switchBigMode,
@@ -224,6 +233,202 @@ function emitNavigatorStatus(socket) {
   }
 }
 
+
+// ============================================================================
+// CHAT-HANDLER HELPERS
+//
+// These factor the websocket "chat" event handler into pure-ish steps with
+// clear ownership. The handler runs as: validate → resolve session →
+// enforce limits → route to stream extension → enqueue (begin turn →
+// orchestrate → end turn). Each helper does one thing; behavior matches
+// the pre-refactor inline code.
+// ============================================================================
+
+const SAFE_CHAT_MODES = new Set(["chat", "place", "query", "be"]);
+
+// Reject chat payloads that don't carry the minimum required fields.
+// Returns null on success or a string error to emit back to the client.
+function validateChatPayload(args) {
+  if (!args || typeof args !== "object") return "Missing or invalid message";
+  const { message, username } = args;
+  if (!message || typeof message !== "string") return "Missing or invalid message";
+  if (!username || typeof username !== "string" || username.length > 200) {
+    return "Missing or invalid message";
+  }
+  return null;
+}
+
+// Compose the per-position visitor id from the socket and chat payload.
+// Tree messages get a tree-zone key; explicit zone payloads (home/land)
+// get a zone-prefixed key; anything else falls back to the socket's
+// transport-level visitor id. All inputs are length-checked at the
+// boundary.
+async function resolvePerPositionVisitorId(socket, payload) {
+  const { buildUserAiSessionKey } = await import("../llm/sessionKeys.js");
+  const handle = (typeof payload.sessionHandle === "string"
+    && /^[a-z0-9_-]{1,40}$/i.test(payload.sessionHandle))
+    ? payload.sessionHandle
+    : null;
+  const device = socket.clientKind || "web";
+  const fallback = socket.visitorId || `user:${socket.userId}:transport:${device}`;
+
+  if (typeof payload.rootId === "string" && payload.rootId.length > 0 && payload.rootId.length <= 36) {
+    return buildUserAiSessionKey({
+      userId: socket.userId,
+      zone: "tree",
+      rootId: payload.rootId,
+      device,
+      handle,
+    });
+  }
+  if (payload.zone === "home" || payload.zone === "land") {
+    return buildUserAiSessionKey({
+      userId: socket.userId,
+      zone: payload.zone,
+      device,
+      handle,
+    });
+  }
+  return fallback;
+}
+
+// Apply position state writes (setRootId/setCurrentNodeId) and any
+// big-mode switchMode side effects implied by the payload. Tree access
+// is verified before any state is written when a rootId is supplied.
+// Errors are logged at warn level but never thrown — chat falls through
+// with whatever state was successfully applied.
+async function applyChatPositionFromPayload(visitorId, socket, payload, username) {
+  const { rootId, nodeId, zone } = payload;
+
+  if (typeof rootId === "string" && rootId.length > 0 && rootId.length <= 36) {
+    let access = null;
+    try {
+      access = await resolveTreeAccess(rootId, socket.userId);
+    } catch (err) {
+      log.warn("WS", `resolveTreeAccess errored: ${err.message}`);
+      return;
+    }
+    if (!access?.ok) {
+      log.warn("WS", `tree access denied for root ${rootId}: ok=${access?.ok}`);
+      return;
+    }
+    setRootId(visitorId, rootId);
+    const resolvedNode = (typeof nodeId === "string" && nodeId.length > 0 && nodeId.length <= 36)
+      ? nodeId
+      : rootId;
+    setCurrentNodeId(visitorId, resolvedNode);
+    try {
+      const curr = getCurrentMode(visitorId);
+      if ((curr?.split(":")[0] || null) !== "tree") {
+        await switchMode(visitorId, "tree:converse", {
+          username, userId: socket.userId, rootId, currentNodeId: resolvedNode,
+        });
+        log.info("WS", `🌳 ${visitorId} → tree:converse (was ${curr || "unset"})`);
+      }
+    } catch (modeErr) {
+      log.warn("WS", `tree-mode switch FAILED on ${visitorId}: ${modeErr.message}`);
+    }
+    return;
+  }
+
+  if (typeof nodeId === "string" && nodeId.length > 0 && nodeId.length <= 36) {
+    setCurrentNodeId(visitorId, nodeId);
+    return;
+  }
+
+  if (zone === "home" || zone === "land") {
+    setRootId(visitorId, null);
+    setCurrentNodeId(visitorId, null);
+    const zoneBaseMode = zone === "land" ? "land:manager" : "home:default";
+    try {
+      const curr = getCurrentMode(visitorId);
+      if ((curr?.split(":")[0] || null) !== zone) {
+        await switchMode(visitorId, zoneBaseMode, { username, userId: socket.userId });
+        log.info("WS", `🏠 ${visitorId} → ${zoneBaseMode} (was ${curr || "unset"})`);
+      }
+    } catch (err) {
+      log.warn("WS", `${zone}-mode switch FAILED on ${visitorId}: ${err.message}`);
+    }
+  }
+}
+
+// Open the in-flight turn: cancel any prior abort on this socket, create
+// a new abort controller, register the turn in the cross-socket
+// in-flight registry, build the tee-emitter the orchestrator uses to
+// fan out streaming events, and stamp the socket fields urlChanged /
+// getAvailableModes consult. Symmetric tear-down lives in endChatTurn.
+function beginChatTurn(socket, visitorId, bigMode) {
+  if (socket._chatAbort) socket._chatAbort.abort();
+  const abort = new AbortController();
+  socket._chatAbort = abort;
+
+  const inFlightRootId = bigMode === "tree" ? (getRootId(visitorId) || null) : null;
+  socket._inFlightStableKey = visitorId;
+  socket._inFlightZone = bigMode;
+  socket._inFlightRootId = inFlightRootId;
+
+  const inFlightEntry = registerInFlight(visitorId, abort, socket);
+  const teeEmit = (event, data) => {
+    recordInFlightEvent(visitorId, event, data);
+    if (abort.signal.aborted) return;
+    // Snapshot the socket set on each emit so a concurrent
+    // attach/detach can't mutate during iteration. The set is small
+    // (typically 1 socket) so the copy cost is negligible.
+    const sockets = inFlightEntry?.sockets;
+    if (sockets && sockets.size) {
+      for (const s of sockets) {
+        try { s.emit(event, data); } catch {}
+      }
+    }
+    // No socket attached (mid-disconnect): the event still landed
+    // in the buffer above and replays on re-attach.
+  };
+
+  return { abort, teeEmit };
+}
+
+// Close the in-flight turn. Clears the socket-level abort marker (only
+// if we still own it — a later turn may have replaced it), drops the
+// cross-socket registry entry, clears the zone/rootId stamps, and lets
+// the stream extension drain mid-flight messages so they don't bleed
+// into the next chat.
+function endChatTurn(socket, abort, visitorId) {
+  if (socket._chatAbort === abort) socket._chatAbort = null;
+  clearInFlight(visitorId);
+  if (socket._inFlightStableKey === visitorId) {
+    socket._inFlightStableKey = null;
+    socket._inFlightZone = null;
+    socket._inFlightRootId = null;
+  }
+  try { socket._onStreamTurnEnd?.(); } catch {}
+}
+
+// Emit a chat error matching the seed's HTTP error contract. Carries
+// a semantic ERR code (so consumers can branch / telemetry can group)
+// alongside the human-readable message that legacy listeners read as
+// `error`. Field order:
+//   code       — ERR.* semantic identifier (e.g. "RATE_LIMITED")
+//   error      — human-readable message (legacy field; existing
+//                consumers in chat.js, app.js, cli/ws.js destructure
+//                this and keep working unchanged)
+//   detail     — optional structured payload (caps, retry hints, etc.)
+//   generation — echoed from the client for response correlation
+function emitChatError(socket, code, message, generation, detail) {
+  const payload = { code, error: message, generation };
+  if (detail !== undefined) payload.detail = detail;
+  socket.emit(WS.CHAT_ERROR, payload);
+}
+
+// Map a chat mode to the orchestrator's source-type tag. Defaults to
+// "tree-chat" so an unrecognized mode still routes correctly.
+function chatSourceTypeFor(safeChatMode) {
+  switch (safeChatMode) {
+    case "place": return "ws-tree-place";
+    case "query": return "ws-tree-query";
+    case "be":    return "ws-tree-be";
+    default:      return "tree-chat";
+  }
+}
 
 // ============================================================================
 // WEBSOCKET SERVER
@@ -433,7 +638,10 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         });
         socket.emit(WS.MODE_SWITCHED, result);
       } catch (err) {
-        socket.emit(WS.CHAT_ERROR, { error: err.message });
+        // switchMode failures are user-facing config issues (unknown
+        // mode key, missing extension, etc.) — surface as INVALID_INPUT
+        // so consumers can group them with other client-side errors.
+        emitChatError(socket, ERR.INVALID_INPUT, err.message, undefined);
       }
     });
 
@@ -549,6 +757,21 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         (url || "").split("?")[0],
       );
       const shouldSwitch = socketZoneTransition || currentBig !== newBigMode || !currentMode;
+
+      // Abort decoupled from mode-switch. The chat dies only when the
+      // user has truly left the chat's home: zone changed (tree →
+      // home/land) or rootId differs (tree A → tree B). Within-tree
+      // node nav lands here with rootId=null (frontend doesn't always
+      // know the rootId for a /node/ URL), so a missing rootId is
+      // treated as "stay" not "abort". Transitional URLs with null
+      // newBigMode are ignored.
+      const shouldAbort = !!newBigMode
+        && socket._inFlightZone
+        && (
+          newBigMode !== socket._inFlightZone
+          || (newBigMode === BIG_MODES.TREE && rootId && socket._inFlightRootId && rootId !== socket._inFlightRootId)
+        );
+
       if (
         shouldSwitch &&
         (newBigMode !== BIG_MODES.HOME || isExplicitHome || !currentMode)
@@ -556,8 +779,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         // Finalize any in-flight chat
         await finalizeOpenChat(socket);
 
-        // Abort any in-flight LLM request
-        if (socket._chatAbort) {
+        if (shouldAbort && socket._chatAbort) {
           socket._chatAbort.abort();
           socket._chatAbort = null;
         }
@@ -668,12 +890,42 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
       const prevSocketBig = socket._lastBigMode || currentBig || null;
       const socketZoneTransition = !!urlBigMode && prevSocketBig !== urlBigMode;
 
+      // Re-attach to an in-flight chat for this URL's stable key (refresh
+      // path). When a browser refresh lands here with a tree URL whose
+      // chat is still running on the server, bind the new socket to the
+      // existing entry, replay the buffered tail so the user sees the
+      // running log, and share the abort controller so the Stop button
+      // still works through the freshly mounted page.
+      const inFlightForKey = getInFlight(visitorId);
+      if (inFlightForKey) {
+        attachInFlight(visitorId, socket);
+        socket._inFlightStableKey = visitorId;
+        socket._inFlightZone = urlBigMode || null;
+        socket._inFlightRootId = (urlBigMode === BIG_MODES.TREE) ? (urlRootId || null) : null;
+        socket._chatAbort = inFlightForKey.abort;
+        for (const ev of inFlightForKey.buffer) {
+          try { socket.emit(ev.event, ev.data); } catch {}
+        }
+      }
+
+      // Abort decoupled from mode-switch (same logic as urlChanged):
+      // compare zone + rootId structurally instead of relying on
+      // visitorId-string equality. Within-tree node nav lands here
+      // with urlRootId=null, which under string compare would falsely
+      // abort. Treating missing rootId as "stay" keeps the chat alive.
+      const shouldAbort = !!urlBigMode
+        && socket._inFlightZone
+        && (
+          urlBigMode !== socket._inFlightZone
+          || (urlBigMode === BIG_MODES.TREE && urlRootId && socket._inFlightRootId && urlRootId !== socket._inFlightRootId)
+        );
+
       // If no mode, big mode doesn't match URL, or socket crossed a zone boundary → switch
       if (!currentMode || (urlBigMode && currentBig !== urlBigMode) || socketZoneTransition) {
         // Finalize any in-flight chat
         await finalizeOpenChat(socket);
 
-        if (socket._chatAbort) {
+        if (shouldAbort && socket._chatAbort) {
           socket._chatAbort.abort();
           socket._chatAbort = null;
         }
@@ -746,18 +998,36 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     const CHAT_RATE_WINDOW_MS = Number(getLandConfigValue("chatRateWindowMs")) || 60000; // 1 min
     const _chatTimestamps = [];
 
-    // Named handler so extensions can call socket._chatHandler() for debounce
-    const _chatHandler = async ({ message, username, generation, mode: chatMode, rootId: payloadRootId, currentNodeId: payloadNodeId, zone: payloadZone, sessionHandle: payloadHandle }) => {
-      if (!message || typeof message !== "string" || !username || typeof username !== "string" || username.length > 200) {
-        return socket.emit(WS.CHAT_ERROR, { error: "Missing or invalid message", generation });
+    // Named handler so extensions can call socket._chatHandler() for debounce.
+    //
+    // Pipeline:
+    //   1. Validate payload (boundary check; reject malformed input).
+    //   2. Snapshot last chat context so the stream extension's
+    //      turn-end replay can carry it forward.
+    //   3. Resolve the per-position visitor id (`visitorId` below).
+    //   4. Apply position state side effects (setRootId, switchMode, etc).
+    //   5. Enforce length + rate limits.
+    //   6. Effective-context log line.
+    //   7. Authorize (LLM access gate).
+    //   8. Route to stream extension if it claims the message.
+    //   9. Enqueue the orchestration turn (begin → run → end).
+    const _chatHandler = async (rawArgs) => {
+      const args = rawArgs || {};
+      const {
+        message, username, generation, mode: chatMode,
+        rootId: payloadRootId, currentNodeId: payloadNodeId,
+        zone: payloadZone, sessionHandle: payloadHandle,
+      } = args;
+
+      // 1. Validate.
+      const validationError = validateChatPayload(args);
+      if (validationError) {
+        return emitChatError(socket, ERR.INVALID_INPUT, validationError, generation);
       }
 
-      // Snapshot the incoming payload context on the socket so the stream
-      // extension's turn-end follow-up replay can reuse it (the CLI sends
-      // rootId/nodeId/zone/handle on every chat; the browser uses socket
-      // session state so this becomes a shallow copy without meaningful
-      // fields — either way the replay path just spreads whatever's here
-      // and falls through to the socket-state lookup for anything null).
+      // 2. Snapshot the incoming payload context. The stream extension's
+      //    turn-end follow-up replay reuses this when re-entering the
+      //    handler so position state survives the debounce hop.
       socket._lastChatCtx = {
         rootId: payloadRootId || null,
         currentNodeId: payloadNodeId || null,
@@ -765,187 +1035,93 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         sessionHandle: payloadHandle || null,
       };
 
-      // Full context log lives AFTER state resolution (see "📨 chat"
-      // further down). A bare arrival log here would show dashes for the
-      // dashboard path because the browser never includes payload
-      // context — it relies on the socket's persistent session state set
-      // by navigate/switchMode. Logging payload values alone made it look
-      // like context was missing when the socket actually had it.
+      // 3. Compute per-position visitor id. This is the per-zone /
+      //    per-tree session key (e.g. user:<uid>:tree:<rootId>:web).
+      //    Every downstream state read uses it so a @fitness chat
+      //    doesn't touch @default's state.
+      const visitorId = await resolvePerPositionVisitorId(socket, {
+        rootId: payloadRootId,
+        zone: payloadZone,
+        sessionHandle: payloadHandle,
+      });
 
-      // Position override from the payload. The CLI is authoritative
-      // about where the user is — a server restart wipes session
-      // state, and without this override the orchestrator would fall
-      // back to "home" zone for every first message after reboot. We
-      // still validate tree access before trusting the IDs, and we
-      // also flip bigMode to "tree" so the zone lookup at line ~667
-      // (`currentMode?.split(":")[0] || "home"`) routes correctly.
-      //
-      // Per-position ai-chat session key. Shape is the canonical
-      // user key from seed/llm/sessionKeys.js:
-      //   user:${userId}:${rootId}:${device}[:replaced-by-handle]
-      //   user:${userId}:home:${device}
-      //   user:${userId}:land:${device}
-      //
-      // `device` (from socket.clientKind) decouples CLI / dashboard /
-      // mobile automatically — two concurrent reaches on the same tree
-      // produce two sessions, not one merged thread. `handle` replaces
-      // device when the client passes one (explicit merge or side-thread).
-      //
-      // When no payload context is present (browser using urlChanged for
-      // navigation), fall back to socket.visitorId so the transport-level
-      // state set by urlChanged is still reachable.
-      const { buildUserAiSessionKey } = await import("../llm/sessionKeys.js");
-      const _handle = (payloadHandle && typeof payloadHandle === "string" && /^[a-z0-9_-]{1,40}$/i.test(payloadHandle))
-        ? payloadHandle
-        : null;
-      const _device = socket.clientKind || "web";
-      // Fallback = socket.visitorId (set at register; shape
-      // `user:${userId}:transport:${clientKind}:${clientInstance}`). The
-      // secondary fallback below only trips if register hasn't fired
-      // yet — exceedingly rare.
-      let _pvId = socket.visitorId || `user:${socket.userId}:transport:${_device}`;
-      if (payloadRootId && typeof payloadRootId === "string" && payloadRootId.length <= 36) {
-        _pvId = buildUserAiSessionKey({
-          userId: socket.userId,
-          zone: "tree",
-          rootId: payloadRootId,
-          device: _device,
-          handle: _handle,
-        });
-      } else if (payloadZone === "home" || payloadZone === "land") {
-        _pvId = buildUserAiSessionKey({
-          userId: socket.userId,
-          zone: payloadZone,
-          device: _device,
-          handle: _handle,
-        });
-      }
-      if (payloadRootId && typeof payloadRootId === "string" && payloadRootId.length <= 36) {
-        try {
-          const access = await resolveTreeAccess(payloadRootId, socket.userId);
-          if (access?.ok) {
-            setRootId(_pvId, payloadRootId);
-            const nId = payloadNodeId && typeof payloadNodeId === "string" && payloadNodeId.length <= 36
-              ? payloadNodeId
-              : payloadRootId;
-            setCurrentNodeId(_pvId, nId);
-            // Ensure the session is in tree mode. Without this the
-            // chat handler below still sees `home:default` (or
-            // whatever stuck from the prior message) and routes to
-            // the home orchestrator. Use the base "tree:chat" mode;
-            // the tree orchestrator classifier takes over from there.
-            try {
-              const curr = getCurrentMode(_pvId);
-              const currBig = curr?.split(":")[0] || null;
-              if (currBig !== "tree") {
-                await switchMode(_pvId, "tree:converse", {
-                  username, userId: socket.userId, rootId: payloadRootId,
-                  currentNodeId: nId,
-                });
-                log.info("WS", `🌳 ${_pvId} → tree:converse (was ${curr || "unset"})`);
-              }
-            } catch (modeErr) {
-              log.warn("WS", `tree-mode switch FAILED on ${_pvId}: ${modeErr.message}`);
-            }
-          } else {
-            log.warn("WS", `tree access denied for root ${payloadRootId}: ok=${access?.ok}`);
-          }
-        } catch (e) {
-          log.warn("WS", `resolveTreeAccess errored: ${e.message}`);
-        }
-      } else if (payloadNodeId && typeof payloadNodeId === "string" && payloadNodeId.length <= 36) {
-        // Node-only update (same tree, different position).
-        setCurrentNodeId(_pvId, payloadNodeId);
-      } else if (payloadZone === "home" || payloadZone === "land") {
-        // Non-tree zones: the CLI tells us which one. Clear any
-        // stale tree position from a previous message and force the
-        // matching big-mode so the chat handler below routes to the
-        // right orchestrator. Zone → mode: home uses `home:default`
-        // (treeos-base), land uses `land:manager` (land-manager). The
-        // orchestrator treats the mode's zone prefix as the routing
-        // key, so both entries land in the right orchestrator.
-        setRootId(_pvId, null);
-        setCurrentNodeId(_pvId, null);
-        const zoneBaseMode = payloadZone === "land" ? "land:manager" : "home:default";
-        try {
-          const curr = getCurrentMode(_pvId);
-          const currBig = curr?.split(":")[0] || null;
-          if (currBig !== payloadZone) {
-            await switchMode(_pvId, zoneBaseMode, {
-              username, userId: socket.userId,
-            });
-            log.info("WS", `🏠 ${_pvId} → ${zoneBaseMode} (was ${curr || "unset"})`);
-          }
-        } catch (modeErr) {
-          log.warn("WS", `${payloadZone}-mode switch FAILED on ${_pvId}: ${modeErr.message}`);
-        }
-      }
+      // 4. Apply position state writes + switchMode side effects. Tree
+      //    access is verified before any writes when a rootId is given.
+      await applyChatPositionFromPayload(visitorId, socket, {
+        rootId: payloadRootId,
+        nodeId: payloadNodeId,
+        zone: payloadZone,
+      }, username);
+
+      // 5. Length cap + sliding-window rate limit.
       const maxChatChars = Number(getLandConfigValue("maxChatMessageChars")) || 5000;
       if (message.length > maxChatChars) {
-        return socket.emit(WS.CHAT_ERROR, { error: `Message must be under ${maxChatChars} characters.`, generation });
+        return emitChatError(
+          socket,
+          ERR.INVALID_INPUT,
+          `Message must be under ${maxChatChars} characters.`,
+          generation,
+          { maxChars: maxChatChars, actualChars: message.length },
+        );
       }
-
-      // Rate limit: sliding window per socket
       const now = Date.now();
       while (_chatTimestamps.length > 0 && _chatTimestamps[0] <= now - CHAT_RATE_WINDOW_MS) {
         _chatTimestamps.shift();
       }
       if (_chatTimestamps.length >= CHAT_RATE_LIMIT) {
-        return socket.emit(WS.CHAT_ERROR, { error: "Too many messages. Please wait before sending another.", generation });
+        return emitChatError(
+          socket,
+          ERR.RATE_LIMITED,
+          "Too many messages. Please wait before sending another.",
+          generation,
+          { limit: CHAT_RATE_LIMIT, windowMs: CHAT_RATE_WINDOW_MS },
+        );
       }
       _chatTimestamps.push(now);
 
-      const safeChatMode = ["chat", "place", "query", "be"].includes(chatMode) ? chatMode : "chat";
-      // `_pvId` was computed above from the session-handle scheme.
-      // Every downstream state read (position, mode, LLM access) uses
-      // it so a @fitness chat doesn't touch @default's state.
-      const visitorId = _pvId;
+      const safeChatMode = SAFE_CHAT_MODES.has(chatMode) ? chatMode : "chat";
 
-      // Inbound chat log: show the EFFECTIVE context (payload values OR
-      // whatever the socket session already had pinned from prior navigate
-      // events). The dashboard never sends payload context, so falling back
-      // to state is the only way to see where messages are actually landing.
+      // 6. Effective-context log. Shows what state the orchestrator will
+      //    actually run with — a mix of payload values and socket
+      //    session state pinned by prior navigate events.
       const effRoot = payloadRootId || getRootId(visitorId) || null;
       const effNode = payloadNodeId || getCurrentNodeId(visitorId) || null;
       const effMode = getCurrentMode(visitorId) || null;
       const effZone = payloadZone || (effMode?.split(":")[0]) || null;
+      const handleTag = (typeof payloadHandle === "string" && /^[a-z0-9_-]{1,40}$/i.test(payloadHandle))
+        ? payloadHandle
+        : "-";
       const msgSnippet = message.length > 48 ? message.slice(0, 48) + "…" : message;
       log.info(
         "WS",
-        `📨 chat: vid=${visitorId} root=${effRoot?.slice?.(0,8) || "-"} node=${effNode?.slice?.(0,8) || "-"} zone=${effZone || "-"} mode=${effMode || "-"} handle=${_handle || "-"} gen=${generation ?? "-"} · ${JSON.stringify(msgSnippet)}`,
+        `📨 chat: vid=${visitorId} root=${effRoot?.slice?.(0, 8) || "-"} node=${effNode?.slice?.(0, 8) || "-"} zone=${effZone || "-"} mode=${effMode || "-"} handle=${handleTag} gen=${generation ?? "-"} · ${JSON.stringify(msgSnippet)}`,
       );
 
-      // LLM access gate
+      // 7. LLM access gate.
       try {
         if (!(await checkLlmAccess(socket.userId, visitorId))) {
-          return socket.emit(WS.CHAT_ERROR, {
-            error: "You need to set up a custom LLM connection before chatting. Visit /setup to connect one.",
+          return emitChatError(
+            socket,
+            ERR.LLM_NOT_CONFIGURED,
+            "You need to set up a custom LLM connection before chatting. Visit /setup to connect one.",
             generation,
-          });
+          );
         }
       } catch (err) {
-        return socket.emit(WS.CHAT_ERROR, { error: err.message, generation });
+        return emitChatError(socket, ERR.INTERNAL, err.message, generation);
       }
 
-      // Stream extension: two modes.
-      // 1. In-flight (processing): accumulate for mid-tool-loop injection
-      // 2. Idle: debounce callback decides whether to swallow or fall through
+      // 8. Stream extension routing. Two modes:
+      //    in-flight (processing) → merge into the running turn,
+      //    idle → debounce callback may swallow the message.
       if (socket._onStreamMessage) {
         if (socket._chatAbort) {
-          // A turn is already running — this message merges into it rather
-          // than spawning a new turn. Log the merge so operators can see
-          // mid-flight accumulation instead of silently swallowing chat.
-          log.info("WS", `↺ chat merged into running turn: vid=${visitorId} gen=${generation ?? "-"} · ${JSON.stringify(msgSnippet)}`);
+          log.info("WS",
+            `↺ chat merged into running turn: vid=${visitorId} gen=${generation ?? "-"} · ${JSON.stringify(msgSnippet)}`);
           socket._onStreamMessage(message, safeChatMode, generation);
           return;
         }
         if (socket._onStreamIdle) {
-          // Pass the full payload context so the stream extension's
-          // debounced replay carries rootId/nodeId/zone/sessionHandle
-          // forward. Without this, the replay re-enters _chatHandler
-          // with bare args, _pvId falls back to the socket-level
-          // visitor, and the session's tree-mode state is missed —
-          // every debounced message lands in home:default.
           const handled = socket._onStreamIdle(message, safeChatMode, generation, {
             rootId: payloadRootId,
             currentNodeId: payloadNodeId,
@@ -956,23 +1132,23 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         }
       }
 
-      // Serialize per visitorId. Previous message must finish before next starts.
+      // 9. Serialize per visitorId. Previous message must finish first.
       await enqueue(visitorId, async () => {
-        if (socket._chatAbort) socket._chatAbort.abort();
-        const abort = new AbortController();
-        socket._chatAbort = abort;
+        // Resolve bigMode once at the top of the turn. Used by both
+        // beginChatTurn (in-flight registry zone stamp) and the
+        // orchestrator (zone arg). getCurrentMode is a session-keyed
+        // read that returns undefined for fresh sessions; "home" is
+        // the safe default for the unset case.
+        const bigMode = (getCurrentMode(visitorId)?.split(":")[0]) || "home";
+        const { abort, teeEmit } = beginChatTurn(socket, visitorId, bigMode);
 
-        // Finalize any leftover in-flight chat from a previous interrupted message
+        // Finalize any leftover chat from a prior interrupted message.
         await finalizeOpenChat(socket);
 
-        // Make sure the websocket has its persistent session
+        // Persistent session + chat-record context.
         ensureSession(socket);
         syncRegistrySession(socket);
         const sessionId = socket._registrySessionId;
-
-        // Determine zone from the current conversation mode (defaults to home)
-        const currentMode = getCurrentMode(visitorId);
-        const bigMode = currentMode?.split(":")[0] || "home";
 
         try {
           const { runOrchestration } = await import("../llm/conversation.js");
@@ -990,13 +1166,7 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             socket,
             signal: abort.signal,
             chatSource: "user",
-            sourceType: safeChatMode === "place"
-              ? "ws-tree-place"
-              : safeChatMode === "query"
-                ? "ws-tree-query"
-                : safeChatMode === "be"
-                  ? "ws-tree-be"
-                  : "tree-chat",
+            sourceType: chatSourceTypeFor(safeChatMode),
             orchestrateFlags: {
               skipRespond: safeChatMode === "place",
               forceQueryOnly: safeChatMode === "query",
@@ -1006,14 +1176,10 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
               setActiveChat(socket, chat._id, chat.startMessage.time);
             },
             onToolResults: (results) => {
-              if (!abort.signal.aborted) for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+              for (const r of results) teeEmit(WS.TOOL_RESULT, r);
             },
-            onToolCalled: (call) => {
-              if (!abort.signal.aborted) socket.emit(WS.TOOL_CALLED, call);
-            },
-            onThinking: (thought) => {
-              if (!abort.signal.aborted) socket.emit(WS.THINKING, thought);
-            },
+            onToolCalled: (call) => { teeEmit(WS.TOOL_CALLED, call); },
+            onThinking:   (thought) => { teeEmit(WS.THINKING,    thought); },
             onToolLoopCheckpoint: socket._streamCheckpoint || null,
           });
 
@@ -1023,14 +1189,14 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
           }
 
           if (safeChatMode === "place") {
-            socket.emit(WS.PLACE_RESULT, {
+            teeEmit(WS.PLACE_RESULT, {
               success: result.success,
               stepSummaries: result.stepSummaries || [],
               targetPath: result.lastTargetPath || null,
               generation,
             });
           } else {
-            socket.emit(WS.CHAT_RESPONSE, {
+            teeEmit(WS.CHAT_RESPONSE, {
               success: result.success,
               answer: result.answer,
               generation,
@@ -1038,8 +1204,8 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             });
           }
 
-          // runOrchestration already finalized the Chat record. Just clear the
-          // socket-level marker so finalizeOpenChat doesn't double-finalize.
+          // runOrchestration finalized the Chat record. Clear the
+          // socket-level marker so finalizeOpenChat doesn't re-finalize.
           clearActiveChat(socket);
           clearChatContext(socket.visitorId);
         } catch (err) {
@@ -1049,18 +1215,18 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
             return;
           }
           log.error("WS", `Chat error: ${err.message}`);
-          socket.emit(WS.CHAT_ERROR, { error: err.message, generation });
-          // runOrchestration handles finalization on error too
+          // Route through teeEmit so the error replays to any
+          // reconnecting client too (the in-flight ring buffer keeps
+          // it). Same {code, error, generation} shape as emitChatError.
+          // Choose code by the error name when the orchestrator stamps
+          // one; default to INTERNAL.
+          const errCode = (err && typeof err.errCode === "string" && err.errCode)
+            || (err && err.name === "AbortError" ? ERR.HOOK_CANCELLED : ERR.INTERNAL);
+          teeEmit(WS.CHAT_ERROR, { code: errCode, error: err.message, generation });
           clearActiveChat(socket);
           clearChatContext(socket.visitorId);
         } finally {
-          if (socket._chatAbort === abort) socket._chatAbort = null;
-          // Turn ended. Let the stream extension drain any mid-flight
-          // messages that never made it into a tool-loop checkpoint so
-          // they don't bleed into the next chat (see stream/index.js
-          // _onStreamTurnEnd). Fire-and-forget, guarded for backward
-          // compat with sockets that lack the stream extension.
-          try { socket._onStreamTurnEnd?.(); } catch {}
+          endChatTurn(socket, abort, visitorId);
         }
       });
     };
@@ -1203,18 +1369,49 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
     socket.on("disconnect", async (reason) => {
       log.debug("WS", `Disconnected: ${socket.id} (${reason})`);
 
-      // Finalize any in-flight chat
-      await finalizeOpenChat(socket);
+      const inFlightKey = socket._inFlightStableKey || null;
+      const hadInFlight = !!inFlightKey;
 
-      // Clean up session registry
-      if (socket._registrySessionId) {
-        endSession(socket._registrySessionId);
+      // Detach from the in-flight chat registry instead of aborting.
+      // The chat keeps running so a refreshed/reconnected client can
+      // re-attach and replay the buffered tail. If no socket
+      // re-attaches within the orphan TTL (60s), the registry's own
+      // timer aborts the controller and clears the entry.
+      if (hadInFlight) {
+        detachInFlight(inFlightKey, socket);
+        socket._inFlightStableKey = null;
+        socket._inFlightZone = null;
+        socket._inFlightRootId = null;
       }
 
-      // Abort any in-flight LLM request
-      if (socket._chatAbort) {
-        socket._chatAbort.abort();
-        socket._chatAbort = null;
+      // Finalize any in-flight chat — but only when no chat is actually
+      // still running. finalizeOpenChat writes `stopped: true` to the
+      // Chat record, which mis-labels a chat we left running on
+      // purpose. When the chat completes naturally, runOrchestration
+      // finalizes the record itself.
+      if (!hadInFlight) {
+        await finalizeOpenChat(socket);
+      }
+
+      // Drop the per-socket abort handle. The controller still lives
+      // in the registry entry so cancelRequest from a re-attached
+      // socket still works.
+      socket._chatAbort = null;
+
+      // Clean up session registry. endSession() unconditionally aborts
+      // the AbortController that runOrchestration registered against
+      // this session, which is the same controller the in-flight chat
+      // is using. When a chat IS in flight, we hand the sessionId to
+      // the in-flight registry instead — clearInFlight (chat completes)
+      // or the orphan timer (no reconnect) will end it then. Either
+      // way the session is cleaned up promptly without killing the
+      // chat we want to keep alive.
+      if (socket._registrySessionId) {
+        if (hadInFlight) {
+          deferSessionEnd(inFlightKey, socket._registrySessionId);
+        } else {
+          endSession(socket._registrySessionId);
+        }
       }
 
       if (userId) {

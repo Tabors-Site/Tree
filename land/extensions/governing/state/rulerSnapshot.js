@@ -43,6 +43,7 @@ import {
   readActivePlanEmission,
   readPlanApprovalsAtRuler,
 } from "./planApprovals.js";
+import { slugifyEmission } from "./slugifyEmission.js";
 import {
   readActiveContractsEmission,
   readApprovalsAtRuler as readContractApprovalsAtRuler,
@@ -53,6 +54,11 @@ import {
   readExecutionApprovalsAtRuler,
 } from "./foreman.js";
 import { readLineage } from "./lineage.js";
+import {
+  readPendingIssues,
+  summarizeFlags,
+  formatFlagSummary,
+} from "./flagQueue.js";
 
 const LEDGER_TAIL = 3;
 
@@ -170,6 +176,7 @@ export async function buildRulerSnapshot(rulerNodeId) {
         Array.isArray(s.branches) ? s.branches.map((b) => b?.name).filter(Boolean) : []);
       out.plan = {
         ordinal: emission.ordinal,
+        slug: slugifyEmission(emission.reasoning, emission.ordinal),
         emittedAt: emission.emittedAt || null,
         reasoning: emission.reasoning || "",
         leafCount,
@@ -197,11 +204,20 @@ export async function buildRulerSnapshot(rulerNodeId) {
       }
       out.contracts = {
         ordinal: ownEmission.ordinal,
+        slug: slugifyEmission(ownEmission.reasoning, ownEmission.ordinal),
         ratifiedAt: ownEmission.ratifiedAt || null,
         count: ownEmission.contracts.length,
         byKind,
         names,
         emissionNodeId: ownEmission._emissionNodeId || null,
+        // Inheritance declaration form. When the Contractor emitted an
+        // inheritance commitment instead of new contracts, these fields
+        // describe the ratified state. Renderer shows "inherits from
+        // parent" rather than the misleading "0 contracts."
+        inheritsFrom: ownEmission.inheritsFrom || null,
+        parentContractsApplied: Array.isArray(ownEmission.parentContractsApplied)
+          ? ownEmission.parentContractsApplied
+          : [],
       };
     }
   } catch (err) {
@@ -256,8 +272,14 @@ export async function buildRulerSnapshot(rulerNodeId) {
           });
         }
       }
+      // Run records inherit the slug of the plan emission they
+      // dispatched (see appendExecutionRecord in foreman.js). Re-use
+      // the plan's slug for consistency; falls back to ordinal-only
+      // when no active plan emission could be read.
+      const runSlug = out.plan?.slug || `record-${record.ordinal}`;
       out.execution = {
         ordinal: record.ordinal,
+        slug: runSlug,
         status: record.status,
         startedAt: record.startedAt,
         completedAt: record.completedAt,
@@ -292,6 +314,20 @@ export async function buildRulerSnapshot(rulerNodeId) {
   // sub-Ruler trees) is intentionally NOT done here — each Ruler
   // sees its own children, not its grandchildren. Coherence is a
   // local property propagated through the chain.
+  //
+  // Sub-Rulers are full Rulers at narrower scope, not abbreviated
+  // entities. Their emissions are slugged the same way the parent's
+  // are, so the parent's snapshot collects reasoning headlines and
+  // derives the same slug labels (single-react-component-... vs.
+  // emission-N). The probe re-reads each child's active plan and
+  // contracts emissions to get the reasoning text. Run records
+  // inherit the plan's slug since that's how appendExecutionRecord
+  // names them. Cost is one Node.findById per emission per child;
+  // small at reasonable tree depth. If this becomes hot at very
+  // deep trees, the optimization is to cache slugs in metadata at
+  // emission time so the probe doesn't recompute — but the
+  // architectural correctness ships first, the optimization comes
+  // when measured.
   try {
     const childIds = Array.isArray(rulerNode.children) ? rulerNode.children : [];
     if (childIds.length > 0) {
@@ -302,25 +338,43 @@ export async function buildRulerSnapshot(rulerNodeId) {
           ? Object.fromEntries(k.metadata)
           : (k.metadata || {});
         if (km[ROLE_NS]?.role !== "ruler") continue;
+        let subPlanOrdinal = null;
+        let subPlanSlug = null;
+        try {
+          const subEmission = await readActivePlanEmission(k._id);
+          if (subEmission) {
+            subPlanOrdinal = subEmission.ordinal;
+            subPlanSlug = slugifyEmission(subEmission.reasoning, subEmission.ordinal);
+          }
+        } catch {}
+        let subContractsOrdinal = null;
+        let subContractsSlug = null;
+        try {
+          const subContracts = await readActiveContractsEmission(k._id);
+          if (subContracts) {
+            subContractsOrdinal = subContracts.ordinal;
+            subContractsSlug = slugifyEmission(subContracts.reasoning, subContracts.ordinal);
+          }
+        } catch {}
         let subStatus = null;
         try {
           const subRecord = await readActiveExecutionRecord(k._id);
           if (subRecord) {
+            // Run records inherit the plan emission's slug.
             subStatus = {
               executionStatus: subRecord.status,
               ordinal: subRecord.ordinal,
+              slug: subPlanSlug || `record-${subRecord.ordinal}`,
             };
           }
-        } catch {}
-        let subPlanOrdinal = null;
-        try {
-          const subEmission = await readActivePlanEmission(k._id);
-          if (subEmission) subPlanOrdinal = subEmission.ordinal;
         } catch {}
         out.subRulers.push({
           id: String(k._id),
           name: k.name || "(unnamed)",
           planOrdinal: subPlanOrdinal,
+          planSlug: subPlanSlug,
+          contractsOrdinal: subContractsOrdinal,
+          contractsSlug: subContractsSlug,
           execution: subStatus,
         });
       }
@@ -332,6 +386,23 @@ export async function buildRulerSnapshot(rulerNodeId) {
   // Lifecycle field. Computed from the snapshot's existing data so
   // there's no second round of reads — pure projection.
   out.lifecycle = deriveLifecycle(out);
+
+  // Accumulated Worker flags at this Ruler scope. Workers surfaced
+  // contract issues via governing-flag-issue during their work; the
+  // flags persist on the Ruler's queue. Pass 1 has no court to
+  // drain them, so they accumulate. The Ruler in regular mode reads
+  // breadth (counts + last-N) — enough to decide whether to convene
+  // court, how to synthesize for the user, how to route the next
+  // message. Pass 2 judge mode will read full depth (verbatim flag
+  // content, affected artifacts, etc.) via a distinct snapshot.
+  try {
+    const pending = await readPendingIssues(rulerNodeId);
+    if (pending.length > 0) {
+      out.flags = summarizeFlags(pending, { lastN: 5 });
+    }
+  } catch (err) {
+    log.debug("Governing/Snapshot", `flags summary skipped: ${err.message}`);
+  }
 
   return out;
 }
@@ -353,19 +424,27 @@ export async function buildRulerSnapshot(rulerNodeId) {
  * card flow.
  */
 function deriveLifecycle(snapshot) {
+  // Each emission/run carries its slug (computed in the assembly
+  // block above via slugifyEmission). The lifecycle prints those
+  // slugs so the Ruler's synthesis to the user references the same
+  // descriptive names the tree shows, instead of stale "emission-1"
+  // labels.
   const plan = {
     present: !!snapshot.plan,
     ordinal: snapshot.plan?.ordinal || null,
+    slug: snapshot.plan?.slug || null,
     emissionId: snapshot.plan?.emissionNodeId || null,
   };
   const contracts = {
     present: !!snapshot.contracts,
     ordinal: snapshot.contracts?.ordinal || null,
+    slug: snapshot.contracts?.slug || null,
     count: snapshot.contracts?.count || 0,
   };
   const execution = {
     status: snapshot.execution?.status || "absent",
     ordinal: snapshot.execution?.ordinal || null,
+    slug: snapshot.execution?.slug || null,
     recordNodeId: snapshot.execution?.recordNodeId || null,
   };
 
@@ -418,12 +497,25 @@ export function formatRulerSnapshot(snapshot) {
   // the per-stage flags let you reason about why.
   if (snapshot.lifecycle) {
     const lc = snapshot.lifecycle;
+    // Emission and run records are slug-named in the tree (e.g.,
+    // "single-react-component-canvas-toolbar"). The lifecycle block
+    // prints those slugs so the Ruler's synthesis to the user
+    // references the same names the user sees on the tree page,
+    // not stale "emission-1" labels.
+    const planLabel = lc.plan.present
+      ? `present (${lc.plan.slug || `emission-${lc.plan.ordinal}`})`
+      : "absent";
+    const contractsLabel = lc.contracts.present
+      ? `ratified (${lc.contracts.slug || `emission-${lc.contracts.ordinal}`}, ${lc.contracts.count} contract${lc.contracts.count === 1 ? "" : "s"})`
+      : "absent";
+    const executionLabel = lc.execution.ordinal
+      ? `${lc.execution.status} (${lc.execution.slug || `record-${lc.execution.ordinal}`})`
+      : lc.execution.status;
     lines.push("");
     lines.push("Lifecycle position:");
-    lines.push(`  plan        : ${lc.plan.present ? `present (emission-${lc.plan.ordinal})` : "absent"}`);
-    lines.push(`  contracts   : ${lc.contracts.present ? `ratified (emission-${lc.contracts.ordinal}, ${lc.contracts.count} contract${lc.contracts.count === 1 ? "" : "s"})` : "absent"}`);
-    lines.push(`  execution   : ${lc.execution.status}` +
-      (lc.execution.ordinal ? ` (record-${lc.execution.ordinal})` : ""));
+    lines.push(`  plan        : ${planLabel}`);
+    lines.push(`  contracts   : ${contractsLabel}`);
+    lines.push(`  execution   : ${executionLabel}`);
     lines.push(`  awaiting    : ${lc.awaiting || "(nothing the architecture advances next; pick by user-message intent)"}`);
   }
 
@@ -446,7 +538,7 @@ export function formatRulerSnapshot(snapshot) {
       ? snapshot.plan.reasoning.split("\n")[0].slice(0, 200) +
         (snapshot.plan.reasoning.length > 200 ? "…" : "")
       : "(no reasoning)";
-    lines.push(`Active plan: emission-${snapshot.plan.ordinal} ` +
+    lines.push(`Active plan: ${snapshot.plan.slug || `emission-${snapshot.plan.ordinal}`} ` +
       `(${snapshot.plan.leafCount} leaf, ${snapshot.plan.branchCount} branch step(s))`);
     lines.push(`  reasoning: ${reasoningHead}`);
     if (snapshot.plan.branchNames?.length) {
@@ -461,8 +553,20 @@ export function formatRulerSnapshot(snapshot) {
     lines.push("");
     const kinds = Object.entries(snapshot.contracts.byKind || {})
       .map(([k, n]) => `${n} ${k}`).join(", ");
-    lines.push(`Active contracts at this scope: emission-${snapshot.contracts.ordinal} ` +
-      `(${snapshot.contracts.count} total — ${kinds})`);
+    if (snapshot.contracts.inheritsFrom) {
+      // Inheritance declaration: this scope ratified that the parent's
+      // contracts cover its plan. Render as a signed inheritance state,
+      // not as "0 contracts" (which would imply the Contractor failed
+      // to emit).
+      const refs = snapshot.contracts.parentContractsApplied || [];
+      lines.push(`Active contracts at this scope: ${snapshot.contracts.slug || `emission-${snapshot.contracts.ordinal}`} ` +
+        `(inherits from ${String(snapshot.contracts.inheritsFrom).slice(0, 8)}` +
+        (refs.length ? `, ${refs.length} parent ref${refs.length === 1 ? "" : "s"} applied` : "") +
+        ")");
+    } else {
+      lines.push(`Active contracts at this scope: ${snapshot.contracts.slug || `emission-${snapshot.contracts.ordinal}`} ` +
+        `(${snapshot.contracts.count} total — ${kinds})`);
+    }
   } else if (snapshot.plan) {
     lines.push("");
     lines.push(`Active contracts at this scope: none yet — Contractor hasn't emitted.`);
@@ -472,7 +576,7 @@ export function formatRulerSnapshot(snapshot) {
   if (snapshot.execution) {
     lines.push("");
     const c = snapshot.execution.counts;
-    lines.push(`Active execution: record-${snapshot.execution.ordinal} ` +
+    lines.push(`Active execution: ${snapshot.execution.slug || `record-${snapshot.execution.ordinal}`} ` +
       `(status=${snapshot.execution.status})`);
     lines.push(`  steps: ${c.done}/${snapshot.execution.totalSteps} done` +
       (c.running ? `, ${c.running} running` : "") +
@@ -500,14 +604,31 @@ export function formatRulerSnapshot(snapshot) {
     }
   }
 
+  // Accumulated Worker flags. Pass 1 has no court yet, so these
+  // persist; the Ruler should be aware of them when synthesizing
+  // build summaries ("X seams were flagged for future court
+  // adjudication"). The summarizer bounds the recent section to 5
+  // so this block stays small even when the queue grows.
+  if (snapshot.flags && snapshot.flags.total > 0) {
+    lines.push("");
+    const formatted = formatFlagSummary(snapshot.flags);
+    if (formatted) lines.push(formatted);
+  }
+
   // Sub-Rulers
   if (snapshot.subRulers?.length) {
     lines.push("");
     lines.push(`Sub-Rulers under your scope:`);
     for (const sr of snapshot.subRulers) {
-      const planBit = sr.planOrdinal ? `plan emission-${sr.planOrdinal}` : "no plan yet";
+      // Sub-Rulers are full Rulers, slugs match what they'd say
+      // about themselves. Falls back to ordinal-only if a slug is
+      // somehow absent (defensive — slugifyEmission has its own
+      // fallback for empty reasoning).
+      const planBit = sr.planOrdinal
+        ? `plan ${sr.planSlug || `emission-${sr.planOrdinal}`}`
+        : "no plan yet";
       const execBit = sr.execution
-        ? `execution-${sr.execution.ordinal} ${sr.execution.executionStatus}`
+        ? `${sr.execution.slug || `record-${sr.execution.ordinal}`} ${sr.execution.executionStatus}`
         : "no execution";
       lines.push(`  - ${sr.name} (${sr.id.slice(0, 8)}): ${planBit}, ${execBit}`);
     }

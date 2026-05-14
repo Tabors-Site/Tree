@@ -18,8 +18,35 @@ import log from "../../seed/log.js";
 import plannerMode from "./modes/planner.js";
 import contractorMode from "./modes/contractor.js";
 import workerMode from "./modes/worker.js";
+import workerBuildMode from "./modes/workerBuild.js";
+import workerRefineMode from "./modes/workerRefine.js";
+import workerReviewMode from "./modes/workerReview.js";
+import workerIntegrateMode from "./modes/workerIntegrate.js";
 import foremanMode from "./modes/foreman.js";
 import rulerMode from "./modes/ruler.js";
+import {
+  WORKER_TYPES,
+  DEFAULT_WORKER_TYPE,
+  WORKER_TYPE_MODE_KEYS,
+  isValidWorkerType,
+  coerceWorkerType,
+} from "./modes/workerBase.js";
+import {
+  registerWorkspaceWorkerTypes,
+  unregisterWorkspaceWorkerTypes,
+  lookupWorkerMode,
+  listWorkerTypeRegistrations,
+  shouldGovernAtScope,
+} from "./state/workerTypeRegistry.js";
+import {
+  FLAG_KINDS,
+  isValidFlagKind,
+  appendFlag,
+  readPendingIssues,
+  markFlagResolved,
+  summarizeFlags,
+  formatFlagSummary,
+} from "./state/flagQueue.js";
 import {
   buildRulerSnapshot,
   formatRulerSnapshot,
@@ -197,9 +224,17 @@ export async function init(core) {
     core.modes.registerMode("tree:governing-ruler", rulerMode, "governing");
     core.modes.registerMode("tree:governing-planner", plannerMode, "governing");
     core.modes.registerMode("tree:governing-contractor", contractorMode, "governing");
+    // Generic Worker for legacy plans without workerType.
     core.modes.registerMode("tree:governing-worker", workerMode, "governing");
+    // Typed Workers — Build, Refine, Review, Integrate. The Planner
+    // picks the type per leaf step; dispatch routes to the matching
+    // mode key.
+    core.modes.registerMode("tree:governing-worker-build", workerBuildMode, "governing");
+    core.modes.registerMode("tree:governing-worker-refine", workerRefineMode, "governing");
+    core.modes.registerMode("tree:governing-worker-review", workerReviewMode, "governing");
+    core.modes.registerMode("tree:governing-worker-integrate", workerIntegrateMode, "governing");
     core.modes.registerMode("tree:governing-foreman", foremanMode, "governing");
-    log.verbose("Governing", "Registered modes: tree:governing-{ruler, planner, contractor, worker, foreman}");
+    log.verbose("Governing", "Registered modes: tree:governing-{ruler, planner, contractor, worker, worker-build, worker-refine, worker-review, worker-integrate, foreman}");
   } else {
     log.warn("Governing", "core.modes.registerMode not available; modes NOT registered");
   }
@@ -207,16 +242,21 @@ export async function init(core) {
   // Tools: emission tools (governing-emit-plan, governing-emit-contracts),
   // Ruler decision tools (hire-planner, route-to-foreman, respond-
   // directly, revise-plan, archive-plan, pause-execution, resume-
-  // execution, read-plan-detail, convene-court), and Foreman decision
+  // execution, read-plan-detail, convene-court), Foreman decision
   // tools (retry-branch, mark-failed, freeze-record, pause-record,
-  // resume-record, escalate-to-ruler, respond-directly, read-branch-detail).
+  // resume-record, escalate-to-ruler, respond-directly, read-branch-detail),
+  // and Worker flag tools (governing-flag-issue,
+  // governing-read-pending-issues) — Workers surface contract issues
+  // during their work; Rulers read the accumulated queue.
   const { default: getGoverningTools } = await import("./tools.js");
   const { default: getRulerTools } = await import("./rulerTools.js");
   const { default: getForemanTools } = await import("./foremanTools.js");
+  const { default: getFlagTools } = await import("./flagTools.js");
   const tools = [
     ...getGoverningTools(core),
     ...getRulerTools(core),
     ...getForemanTools(core),
+    ...getFlagTools(core),
   ];
 
   // Plan panel slot. Registers a placeholder div on plan-type nodes
@@ -329,7 +369,16 @@ export async function init(core) {
     router,
     // Mode handlers (also exposed for cross-extension reuse, e.g.
     // workspaces extending the Worker base prompt).
-    modes: [plannerMode, contractorMode, workerMode, foremanMode],
+    modes: [
+      plannerMode,
+      contractorMode,
+      workerMode,
+      workerBuildMode,
+      workerRefineMode,
+      workerReviewMode,
+      workerIntegrateMode,
+      foremanMode,
+    ],
     tools,
 
     // The .exports object is what callers see at getExtension("governing")
@@ -393,6 +442,48 @@ export async function init(core) {
       buildExecutionRef, parseExecutionRef,
       // Validator registry
       registerValidator, unregisterValidatorsForExt, runValidators, listValidators,
+      // Worker-type taxonomy. Planner validates against WORKER_TYPES;
+      // dispatch resolves leaf-step type → mode key via
+      // WORKER_TYPE_MODE_KEYS, falling back to coerceWorkerType for
+      // missing or malformed entries. Workspaces may override per
+      // type via manifest.provides.workerTypes; the dispatcher
+      // consults workspace registrations before falling back to the
+      // governing base modes here.
+      WORKER_TYPES,
+      DEFAULT_WORKER_TYPE,
+      WORKER_TYPE_MODE_KEYS,
+      isValidWorkerType,
+      coerceWorkerType,
+      // Workspace worker-type registry — workspaces call
+      // registerWorkspaceWorkerTypes() from their init() after their
+      // typed modes are registered. dispatch reads the registry via
+      // lookupWorkerMode(); the listWorkerTypeRegistrations() helper
+      // is for diagnostics and the dashboard.
+      registerWorkspaceWorkerTypes,
+      unregisterWorkspaceWorkerTypes,
+      lookupWorkerMode,
+      listWorkerTypeRegistrations,
+      // shouldGovernAtScope tells dispatch whether to route a tree-
+      // zone message through the Ruler instead of running the
+      // classifier's mode pick directly. Returns true at any scope
+      // where a workspace is ext-allow'd (workspaces bundle governing
+      // as a dep) OR when no workspaces are installed at all
+      // (governing-alone land). Replaces the legacy
+      // isWorkspacePlanMode mode-key check.
+      shouldGovernAtScope,
+      // Worker flag queue. Workers call appendFlag (via the
+      // governing-flag-issue tool) when they encounter a contract
+      // issue; the Ruler reads via readPendingIssues. The snapshot
+      // formatter uses summarizeFlags + formatFlagSummary to render
+      // a bounded section in the Ruler's prompt. Pass 2 courts will
+      // adjudicate via markFlagResolved.
+      FLAG_KINDS,
+      isValidFlagKind,
+      appendFlag,
+      readPendingIssues,
+      markFlagResolved,
+      summarizeFlags,
+      formatFlagSummary,
       // Ruler-as-being primitive. The Ruler mode runs every turn at a
       // Ruler scope and decides what to do; rulerSnapshot assembles its
       // per-turn state context; rulerDecisions is the per-visitor

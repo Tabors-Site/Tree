@@ -239,7 +239,7 @@ export async function createPlanNode({
 export async function ensurePlanAtScope({
   scopeNodeId,
   userId,
-  name = "plan",
+  name = "plans",
   systemSpec = null,
   wasAi = false,
   chatId = null,

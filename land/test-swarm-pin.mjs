@@ -50,7 +50,7 @@ const fakeRunBranch = async ({ mode, branchNodeId, message }) => {
 
 // Build a tiny plan with one branch.
 const branches = [
-  { name: "testbranch", spec: "test branch spec", path: "testbranch", files: ["foo.js"], mode: "tree:code-plan" },
+  { name: "testbranch", spec: "test branch spec", path: "testbranch", files: ["foo.js"], mode: "tree:governing-planner" },
 ];
 
 console.log("\n=== Calling runBranchSwarm ===");
@@ -70,7 +70,7 @@ const result = await swarm.runBranchSwarm({
   rt: null,
   emitStatus: () => {},
   runBranch: fakeRunBranch,
-  defaultBranchMode: "tree:code-plan",
+  defaultBranchMode: "tree:governing-planner",
 });
 
 console.log("\n=== Result ===");

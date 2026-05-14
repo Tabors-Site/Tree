@@ -101,7 +101,21 @@ export default {
       { key: "tree:book-coach", handler: "./modes/coach.js", assignmentSlot: "book-coach" },
       { key: "tree:book-review", handler: "./modes/review.js", assignmentSlot: "book-review" },
       { key: "tree:book-ask", handler: "./modes/ask.js", assignmentSlot: "book-ask" },
+      // Typed Workers. dispatch routes leaf groups here by workerType.
+      { key: "tree:book-worker-build", handler: "./modes/workerBuild.js", assignmentSlot: "book-write" },
+      { key: "tree:book-worker-refine", handler: "./modes/workerRefine.js", assignmentSlot: "book-write" },
+      { key: "tree:book-worker-review", handler: "./modes/workerReview.js", assignmentSlot: "book-review" },
+      { key: "tree:book-worker-integrate", handler: "./modes/workerIntegrate.js", assignmentSlot: "book-write" },
     ],
+
+    // Informational worker-type declaration; live wiring is the
+    // registerWorkspaceWorkerTypes() call in index.js's init().
+    workerTypes: {
+      build:     { modeKey: "tree:book-worker-build" },
+      refine:    { modeKey: "tree:book-worker-refine" },
+      review:    { modeKey: "tree:book-worker-review" },
+      integrate: { modeKey: "tree:book-worker-integrate" },
+    },
 
     hooks: {
       fires: [],

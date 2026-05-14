@@ -1,11 +1,16 @@
 /**
  * tree:code-ask
  *
- * Past/query tense. Pure read-only exploration. "What does X do?",
- * "Where is this defined?", "How is the project structured?". Never
- * writes. Used instead of -review to avoid colliding with codebase's
- * existing tree:code-review mode while still routing past-tense messages
- * here via parseTense's find("review","ask") fallback.
+ * Past/query tense direct-chat mode. Pure read-only exploration —
+ * "What does X do?", "Where is this defined?", "How is the project
+ * structured?". Never writes. Routes via the orchestrator's grammar
+ * classifier when the user's message reads as a query.
+ *
+ * Stays in code-workspace (not routed through governance) because
+ * spinning up a Ruler/Planner/Worker cycle for "what does this
+ * function do" would cost 3 LLM turns where 1 is plenty. If the
+ * query reveals a fix is needed, the user's next message routes
+ * through the Ruler which hires a Refine Worker.
  */
 
 export default {

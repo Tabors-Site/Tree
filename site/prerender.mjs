@@ -50,6 +50,13 @@ const STATIC_ROUTES = [
   "/food",
   "/recovery",
   "/kb",
+  "/governing",
+  "/governing/rulership",
+  "/governing/rulership/ruler",
+  "/governing/rulership/planner",
+  "/governing/rulership/contractor",
+  "/governing/rulership/foreman",
+  "/governing/rulership/worker",
   "/app",
   "/start",
   "/what",
@@ -89,8 +96,8 @@ const PAGE_META = {
     description: "The fourth primitive. Seven kernel additions. Two entry points. Six statuses none terminal. .flow as the water table. The nervous system of the tree.",
   },
   "/swarm": {
-    title: "Swarm . Parallel Inquiry as a Primitive",
-    description: "One compound task, many independent branches, one coherent result. The architect decomposes, branches build in isolation, contracts keep the seams aligned, validators catch drift. Code projects, research papers, books, curricula, data pipelines. The tree turns plural problems into parallel work.",
+    title: "Swarm . The Parallel Execution Engine",
+    description: "Swarm runs governing's plans in parallel. It dispatches branch steps as their own sessions, tracks status, retries failures, surfaces sibling state, and resumes interrupted work across sessions. Mechanism, not policy. Governing decides what gets done; swarm does the doing in parallel. Tree authoritative.",
   },
   "/flow": {
     title: "The Flow . How Data Moves Through the System",
@@ -151,6 +158,34 @@ const PAGE_META = {
   "/kb": {
     title: "KB . The Tree That Remembers Everything",
     description: "Tell it things. Ask it things. One person maintains, everyone benefits. Knowledge base with citations, staleness detection, and guided review. The coworker who never forgets.",
+  },
+  "/governing": {
+    title: "Governing . The Coordination Glue of TreeOS",
+    description: "Without governing, a tree is a folder structure. With it, every scope becomes an addressable domain where work coordinates across branches. Five layers (Rulership, Courts, Reputation, Structural Remedies, Economy) compose the substrate that any workspace consumes.",
+  },
+  "/governing/rulership": {
+    title: "Rulership . The Five Roles of Governing",
+    description: "Pass 1 of governing. Ruler decides. Planner advises on decomposition. Contractor commits shared vocabulary. Foreman manages execution. Worker builds. Five roles compose into a uniform pattern at every scope, root or sub.",
+  },
+  "/governing/rulership/ruler": {
+    title: "The Ruler . The Be-er of Rules",
+    description: "The addressable being at a TreeOS scope. Holds authority for the domain, hears every user message, decides what happens via tool selection. Top-level Rulers pause between user gates; sub-Rulers chain their full lifecycle in one turn.",
+  },
+  "/governing/rulership/planner": {
+    title: "The Planner . The Cartographer of Work",
+    description: "Transient role that drafts decomposition. Reads the briefing, traverses the local tree, drafts a structured plan with reasoning, presents to the Ruler, exits. Domain-neutral; workspaces don't specialize the Planner.",
+  },
+  "/governing/rulership/contractor": {
+    title: "The Contractor . The Binder of Seams",
+    description: "Transient role that ratifies shared vocabulary. Identifies what crosses branch boundaries, drafts contracts with valid scope (LCA correctness), hands them back to the Ruler. Seams between branches hold because contracts pin the names down.",
+  },
+  "/governing/rulership/foreman": {
+    title: "The Foreman . The Call-Stack Manager",
+    description: "Wakes when execution needs judgment: branch failed, swarm completed, resume requested. Reads the execution stack, decides retry vs escalate vs pause vs cancel-subtree. Trees execute like call stacks; the Foreman holds frame discipline.",
+  },
+  "/governing/rulership/worker": {
+    title: "The Worker . The Hand of the Work",
+    description: "The only role in Rulership that produces artifacts rather than coordinating. Where TreeOS's general substrate becomes domain specific. Workspace extensions specialize the Worker for code, prose, civic coordination. The substrate provides the structure; the workspace provides the substance.",
   },
   "/use": {
     title: "TreeOS . One Life, One Tree",

@@ -98,9 +98,10 @@ export { updatePronounState, getLastRouting, getLastRoutingRing, clearLastRoutin
 // affirmative's root chat. Runs sequentially; any failure or abort stops
 // the chain but leaves prior items written.
 //
-// Each item dispatches through code-plan at the current tree position.
-// The mode's own tool cap + the runSteppedMode continuation loop already
-// handle per-item work bounding.
+// Each item dispatches through the governance Ruler at the current
+// tree position. Pre-typed-worker this fired code-plan directly; that
+// mode is gone — the Ruler picks the right typed Worker (typically
+// Refine for "fix" items, Build for "add" items, etc.).
 async function runPendingPlan(pending, triggerMessage, visitorId, {
   socket, username, userId, signal, sessionId,
   rootId, rootChatId, slot, onToolLoopCheckpoint,
@@ -108,22 +109,8 @@ async function runPendingPlan(pending, triggerMessage, visitorId, {
   emitStatus(socket, "intent", `Applying ${pending.items.length} planned fixes...`);
 
   const items = pending.items;
-  // Always execute through code-plan — it's the imperative builder mode.
-  // Plans can be captured by any mode (review, coach, ask), but applying
-  // them means writing files, and code-plan is the one wired to do that.
-  // Using the capture mode would run items through an audit-only prompt
-  // that explicitly says "don't write", and the model would respect it.
-  const mode = "tree:code-plan";
   const results = [];
   const appliedLines = [];
-
-  // Ensure we're in the plan mode for the whole sequence. Cheap: switchMode
-  // short-circuits when already in the target mode.
-  await switchMode(visitorId, mode, {
-    username, userId, rootId,
-    currentNodeId: getCurrentNodeId(visitorId) || rootId,
-    clearHistory: false,
-  });
 
   for (let i = 0; i < items.length; i++) {
     if (signal?.aborted) {
@@ -140,17 +127,22 @@ async function runPendingPlan(pending, triggerMessage, visitorId, {
 
     emitStatus(socket, "intent", `Fix ${i + 1}/${items.length}: ${item.slice(0, 60)}`);
 
-    // Dispatch the item. runSteppedMode creates its own chain steps via
-    // rt.beginChainStep — including a first-call step whose input is
-    // itemMessage. Each write-nudge retry and each continuation step
-    // also gets its own chain step. No need to wrap with a parent item
-    // header — the chain records speak for themselves.
+    // Dispatch the item through the governance Ruler. The Ruler reads
+    // the item's intent and routes via hire-planner → typed Worker.
+    // Pre-typed-worker, this called runSteppedMode("tree:code-plan")
+    // directly; that mode is gone — the Ruler picks the right Worker
+    // type per item.
     let itemResult;
     try {
-      itemResult = await runSteppedMode(visitorId, mode, itemMessage, {
-        username, userId, rootId, signal, slot,
-        readOnly: false, onToolLoopCheckpoint, socket,
-        parentChatId: rootChatId || null,
+      const { runRulerTurn } = await import("./ruling.js");
+      itemResult = await runRulerTurn({
+        visitorId,
+        message: itemMessage,
+        username, userId, rootId,
+        currentNodeId: getCurrentNodeId(visitorId) || rootId,
+        signal, slot, socket,
+        sessionId, rootChatId, rt: null,
+        readOnly: false, onToolLoopCheckpoint,
         dispatchOrigin: "plan-expand",
       });
     } catch (err) {

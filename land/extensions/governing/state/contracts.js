@@ -85,7 +85,11 @@ async function nextEmissionOrdinal(contractsNodeId) {
  * member. Stamps role + the structured emission payload.
  */
 async function createContractsEmission({ contractsNodeId, ordinal, payload, userId, core }) {
-  const name = `emission-${ordinal}`;
+  // Slug derived from the Contractor's reasoning headline. Same
+  // approach as plan-emission naming: descriptive at-a-glance, with
+  // the numeric ordinal preserved in metadata for ordering.
+  const { slugifyEmission } = await import("./slugifyEmission.js");
+  const name = slugifyEmission(payload?.reasoning, ordinal);
 
   let created = null;
   try {
@@ -148,7 +152,17 @@ async function createContractsEmission({ contractsNodeId, ordinal, payload, user
  * the Ruler scope. Symmetric with planApprovals/executionApprovals:
  * one entry per emission, references the emission node id.
  */
-async function appendApproval({ rulerNodeId, contractsEmissionNodeId, supersedes }) {
+async function appendApproval({
+  rulerNodeId,
+  contractsEmissionNodeId,
+  supersedes,
+  // Inheritance ratification fields. Set when the approval is for an
+  // inheritance declaration (child scope ratified that parent contracts
+  // cover its plan). Same audit-trail shape as a full contract
+  // emission ratification; Pass 2 courts read both the same way.
+  inheritedFrom = null,
+  parentContractsApplied = [],
+}) {
   if (!rulerNodeId || !contractsEmissionNodeId) return null;
   const node = await Node.findById(rulerNodeId);
   if (!node) return null;
@@ -166,6 +180,12 @@ async function appendApproval({ rulerNodeId, contractsEmissionNodeId, supersedes
     contractsRef: String(contractsEmissionNodeId),
     status: "approved",
     supersedes: supersedes || null,
+    ...(inheritedFrom ? {
+      inheritedFrom: String(inheritedFrom),
+      parentContractsApplied: Array.isArray(parentContractsApplied)
+        ? parentContractsApplied.map((s) => String(s)).slice(0, 50)
+        : [],
+    } : {}),
   };
 
   const next = {
@@ -260,11 +280,27 @@ export async function readActiveContractsEmission(rulerNodeId) {
  * `skipped` is non-empty when the entire emission was idempotent;
  * `emissionNode` is null in that case.
  */
-export async function setContracts({ scopeNodeId, contracts, userId, systemSpec = null, core, reasoning = null }) {
+export async function setContracts({
+  scopeNodeId,
+  contracts,
+  userId,
+  systemSpec = null,
+  core,
+  reasoning = null,
+  // Inheritance declaration form. When inheritsFrom is set, the
+  // emission represents "this child scope's contracts are the parent's"
+  // rather than a list of new commitments. contracts may be empty.
+  // The emission still materializes a node + approval ledger entry so
+  // dispatch-execution sees a ratified state and Pass 2 courts have a
+  // signed record of the inheritance decision.
+  inheritsFrom = null,
+  parentContractsApplied = [],
+}) {
   if (!scopeNodeId) return null;
 
   const incoming = Array.isArray(contracts) ? contracts : [];
-  if (incoming.length === 0) {
+  const isInheritance = !!inheritsFrom;
+  if (incoming.length === 0 && !isInheritance) {
     return { contractsNode: null, emissionNode: null, accepted: [], rejected: [], skipped: [] };
   }
 
@@ -311,29 +347,34 @@ export async function setContracts({ scopeNodeId, contracts, userId, systemSpec 
     });
   }
 
-  if (accepted.length === 0) {
+  if (accepted.length === 0 && !isInheritance) {
     return { contractsNode, emissionNode: null, accepted: [], rejected, skipped: [] };
   }
 
   // Idempotency: if the active emission's contract set matches this
   // one structurally, no new emission. The Ruler's existing approval
-  // already covers this set.
-  const newFingerprint = emissionFingerprint(accepted);
+  // already covers this set. Inheritance declarations skip this check
+  // — re-declaring inheritance is always a fresh decision.
   const priorActive = await readActiveContractsEmission(scopeNodeId);
-  if (priorActive?.contracts && emissionFingerprint(priorActive.contracts) === newFingerprint) {
-    log.verbose("Governing",
-      `setContracts at ${String(scopeNodeId).slice(0, 8)}: ${accepted.length} contract(s) match active ` +
-      `emission-${priorActive.ordinal}; skipping idempotent re-emission`);
-    return {
-      contractsNode,
-      emissionNode: null,
-      accepted: [],
-      rejected,
-      skipped: accepted.map((c) => ({ ...c, _existingEmissionOrdinal: priorActive.ordinal })),
-    };
+  if (!isInheritance && accepted.length > 0) {
+    const newFingerprint = emissionFingerprint(accepted);
+    if (priorActive?.contracts && emissionFingerprint(priorActive.contracts) === newFingerprint) {
+      log.verbose("Governing",
+        `setContracts at ${String(scopeNodeId).slice(0, 8)}: ${accepted.length} contract(s) match active ` +
+        `emission-${priorActive.ordinal}; skipping idempotent re-emission`);
+      return {
+        contractsNode,
+        emissionNode: null,
+        accepted: [],
+        rejected,
+        skipped: accepted.map((c) => ({ ...c, _existingEmissionOrdinal: priorActive.ordinal })),
+      };
+    }
   }
 
-  // Materialize the new emission.
+  // Materialize the new emission. Inheritance declarations carry an
+  // empty contracts array plus inheritsFrom/parentContractsApplied
+  // metadata so the emission node is self-describing.
   const ordinal = await nextEmissionOrdinal(contractsNode._id);
   const payload = {
     ordinal,
@@ -341,6 +382,12 @@ export async function setContracts({ scopeNodeId, contracts, userId, systemSpec 
     reasoning: reasoning ? String(reasoning).slice(0, 800) : null,
     emittedBy: systemSpec ? String(systemSpec).slice(0, 200) : null,
     contracts: accepted,
+    ...(isInheritance ? {
+      inheritsFrom: String(inheritsFrom),
+      parentContractsApplied: Array.isArray(parentContractsApplied)
+        ? parentContractsApplied.map((s) => String(s)).slice(0, 50)
+        : [],
+    } : {}),
   };
   const emissionNode = await createContractsEmission({
     contractsNodeId: contractsNode._id,
@@ -351,10 +398,15 @@ export async function setContracts({ scopeNodeId, contracts, userId, systemSpec 
   });
 
   // Append the approval ledger entry. Supersedes the prior active.
+  // Inheritance declarations get the inheritedFrom/parentContractsApplied
+  // fields stamped on the approval entry too, so Pass 2 courts can read
+  // the inheritance commitment without dereferencing the emission node.
   const approvalEntry = await appendApproval({
     rulerNodeId: scopeNodeId,
     contractsEmissionNodeId: emissionNode._id,
     supersedes: priorActive?._approvalId || null,
+    inheritedFrom: isInheritance ? inheritsFrom : null,
+    parentContractsApplied: isInheritance ? parentContractsApplied : [],
   });
 
   log.info("Governing",

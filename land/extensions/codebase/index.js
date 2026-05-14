@@ -6,11 +6,14 @@ import analyzeMode from "./modes/analyze.js";
 import browseMode from "./modes/browse.js";
 import editMode from "./modes/edit.js";
 import testMode from "./modes/test.js";
-// reviewMode intentionally not imported: code-workspace owns tree:code-review
-// now. codebase still ships its reviewMode file for future reintroduction,
-// but the mode key is reserved for the authoring extension's review+refine
-// loop. Past-tense messages ("how does this look", "review this", "check
-// the project") route through the grammar pipeline to code-workspace.
+// reviewMode intentionally not imported: governance's typed Review
+// Worker (tree:code-worker-review or governing-worker-review) now
+// owns the review-and-fix loop. Past-tense direct-chat queries ("how
+// does this look", "what's wrong with X") route through code-
+// workspace's tree:code-ask. Actionable reviews ("audit and fix the
+// auth module") route through the Ruler which hires a Review Worker.
+// codebase still ships its reviewMode file for reference / future
+// reintroduction if a non-governance review mode is ever needed.
 
 export async function init(core) {
   configure({ metadata: core.metadata });

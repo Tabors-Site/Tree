@@ -119,9 +119,15 @@ function buildInitialStepStatuses(planEmission) {
   steps.forEach((step, i) => {
     const stepIndex = i + 1;
     if (step?.type === "leaf") {
+      // workerType travels with the step so the Foreman snapshot,
+      // failure wakeups, and Pass 3 reputation reads can see which
+      // cognitive shape this step had. Defaults to "build" for plans
+      // emitted before typed-worker landed.
+      const workerType = typeof step.workerType === "string" ? step.workerType : "build";
       out.push({
         stepIndex,
         type: "leaf",
+        workerType,
         spec: step.spec || "",
         status: "pending",
         startedAt: null,
@@ -206,7 +212,16 @@ export async function appendExecutionRecord({
   }
 
   const ordinal = await nextRecordOrdinal(executionNode._id);
-  const recordName = `record-${ordinal}`;
+  // Run records inherit their slug from the plan emission they're
+  // dispatching. A run named after the plan it executes makes the
+  // tree readable: "runs/single-react-component-canvas-toolbar"
+  // tells you what was attempted without expanding the node. Falls
+  // back to "record-N" when planEmission has no reasoning.
+  const { slugifyEmission } = await import("./slugifyEmission.js");
+  const planSlug = slugifyEmission(planEmission?.reasoning, ordinal);
+  const recordName = planSlug.startsWith("emission-")
+    ? `record-${ordinal}`
+    : planSlug;
   const startedAt = new Date().toISOString();
 
   // Create the execution-record node.

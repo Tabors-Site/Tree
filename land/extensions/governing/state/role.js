@@ -81,6 +81,14 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, core }) {
     await setExtMeta(node, NS, data);
   }
 
+  // Promotion is a load-bearing lifecycle event — surface it in logs
+  // so operators can see the moment a scope took authority for its
+  // domain. Fires only on actual transition; the idempotent re-call
+  // path above (already-ruler) returns early without logging.
+  log.info("Governing",
+    `🤴 Node ${String(nodeId).slice(0, 8)} ("${node.name || "?"}") promoted to Ruler ` +
+    `(from=${promotedFrom}, reason="${(data.reason || "").slice(0, 80)}")`);
+
   // Fire the lifecycle event. Subscribers (including future Pass 2
   // courts) react here.
   try {

@@ -8,6 +8,13 @@ import writeMode from "./modes/write.js";
 import coachMode from "./modes/coach.js";
 import reviewMode from "./modes/review.js";
 import askMode from "./modes/ask.js";
+// Typed Workers — see code-workspace's equivalent block for the
+// architecture. dispatch consults governing.lookupWorkerMode() which
+// reads the registry registerWorkspaceWorkerTypes() populates below.
+import bookWorkerBuild from "./modes/workerBuild.js";
+import bookWorkerRefine from "./modes/workerRefine.js";
+import bookWorkerReview from "./modes/workerReview.js";
+import bookWorkerIntegrate from "./modes/workerIntegrate.js";
 
 async function swarm() {
   const { getExtension } = await import("../loader.js");
@@ -66,12 +73,45 @@ export async function init(core) {
   core.modes.registerMode("tree:book-review", reviewMode, "book-workspace");
   core.modes.registerMode("tree:book-ask", askMode, "book-workspace");
 
+  // Typed Workers. dispatch routes leaf groups here by workerType.
+  core.modes.registerMode("tree:book-worker-build", bookWorkerBuild, "book-workspace");
+  core.modes.registerMode("tree:book-worker-refine", bookWorkerRefine, "book-workspace");
+  core.modes.registerMode("tree:book-worker-review", bookWorkerReview, "book-workspace");
+  core.modes.registerMode("tree:book-worker-integrate", bookWorkerIntegrate, "book-workspace");
+
+  // Register with governing's worker-type registry so dispatch finds
+  // these typed Workers when resolving a leaf-group's workerType.
+  try {
+    const { getExtension } = await import("../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (governing?.registerWorkspaceWorkerTypes) {
+      governing.registerWorkspaceWorkerTypes("book-workspace", {
+        build:     { modeKey: "tree:book-worker-build" },
+        refine:    { modeKey: "tree:book-worker-refine" },
+        review:    { modeKey: "tree:book-worker-review" },
+        integrate: { modeKey: "tree:book-worker-integrate" },
+      });
+      log.info("BookWorkspace",
+        "Registered typed Workers with governing: build/refine/review/integrate");
+    }
+  } catch (err) {
+    log.warn("BookWorkspace", `worker-type registration failed: ${err.message}`);
+  }
+
   try {
     core.llm?.registerModeAssignment?.("tree:book-plan", "book-plan");
     core.llm?.registerModeAssignment?.("tree:book-write", "book-write");
     core.llm?.registerModeAssignment?.("tree:book-coach", "book-coach");
     core.llm?.registerModeAssignment?.("tree:book-review", "book-review");
     core.llm?.registerModeAssignment?.("tree:book-ask", "book-ask");
+    // Typed Workers reuse existing slots: build/refine/integrate use
+    // book-write's slot (same writing-model profile); review uses
+    // book-review's slot. Operators can override per type once they
+    // care to.
+    core.llm?.registerModeAssignment?.("tree:book-worker-build", "book-write");
+    core.llm?.registerModeAssignment?.("tree:book-worker-refine", "book-write");
+    core.llm?.registerModeAssignment?.("tree:book-worker-review", "book-review");
+    core.llm?.registerModeAssignment?.("tree:book-worker-integrate", "book-write");
   } catch {}
 
   // enrichContext — inject book-workspace context at every node under

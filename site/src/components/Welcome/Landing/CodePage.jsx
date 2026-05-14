@@ -609,6 +609,7 @@ tree:code-review        past: audit + refine loop with .source references`}</pre
               <a href="/seed">The Seed</a>
               <a href="/ai">The AI</a>
               <a href="/code">Code</a>
+              <a href="/governing">Governing</a>
               <a href="/extensions">Extensions</a>
               <a href="/build">Build</a>
             </div>

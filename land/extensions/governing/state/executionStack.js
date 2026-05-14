@@ -333,6 +333,12 @@ function computeBlockedOn(frames) {
           frameDepth: frame.depth,
           rulerName: frame.rulerName,
           branchName: null,
+          // workerType travels with the failure so the Foreman can
+          // reason about whether the failure shape matches the type
+          // (a build failure is different from a refine failure
+          // different from a review's adverse finding).
+          workerType: step.workerType || "build",
+          stepIndex: step.stepIndex,
           reason: (step.error || "(no error message)").slice(0, 200),
           retriesUsed: step.retries || 0,
           requiredAction: "mark-failed-and-escalate",
@@ -522,7 +528,8 @@ function formatFrame(frame, indent) {
       const icon = statusIcon(step.status || "pending");
       if (step?.type === "leaf") {
         const spec = step.spec ? `: ${truncate(step.spec, 100)}` : "";
-        lines.push(`${stepPad}${icon} step ${step.stepIndex} [leaf]${spec}`);
+        const wt = step.workerType ? ` ${step.workerType}` : "";
+        lines.push(`${stepPad}${icon} step ${step.stepIndex} [leaf${wt}]${spec}`);
         if (step.status === "failed" && step.error) {
           lines.push(`${stepPad}    error: ${truncate(step.error, 200)}`);
         }
@@ -636,7 +643,14 @@ export function formatExecutionStack(snapshot) {
       const where = b.branchName
         ? `${b.rulerName} / ${b.branchName}`
         : b.rulerName;
-      lines.push(`  • [${b.frameDepth}] ${where}: ${b.reason}`);
+      // For leaf failures, surface the workerType so the Foreman
+      // reads "build failed" / "refine failed" / "review failed" /
+      // "integrate failed" — the cognitive shape of the failed work
+      // is part of the judgment surface.
+      const typeTag = b.workerType
+        ? ` (${b.workerType}${typeof b.stepIndex === "number" ? ` step ${b.stepIndex}` : ""})`
+        : "";
+      lines.push(`  • [${b.frameDepth}] ${where}${typeTag}: ${b.reason}`);
     }
     if (snapshot.blockedOn.length > FAILURE_RENDER_CAP) {
       lines.push(`  ... and ${snapshot.blockedOn.length - FAILURE_RENDER_CAP} more`);

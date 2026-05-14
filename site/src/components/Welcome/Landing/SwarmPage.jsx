@@ -1,77 +1,134 @@
 import "./LandingPage.css";
+import "./Governing.css";
 import Particles from "./Particles.jsx";
+
+// SwarmPage. /swarm
+//
+// Swarm is now a pure execution engine. Plan emission and contract
+// ratification moved to governing in v0.2. This page reflects that.
+// What swarm still owns: parallel branch dispatch, branch status
+// tracking, tree authoritative reconciliation, sibling visibility,
+// resume detection across sessions.
 
 const SwarmPage = () => {
   return (
-    <div className="lp">
+    <div className="lp lp-gov">
 
-      {/* ── HERO ── */}
+      {/* HERO */}
       <section className="lp-hero">
         <Particles count={25} />
         <div className="lp-hero-inner">
           <div className="lp-tree-icon">🐝</div>
           <h1 className="lp-title">Swarm</h1>
-          <p className="lp-subtitle">Parallel Inquiry as a Primitive</p>
+          <p className="lp-subtitle">The parallel execution engine</p>
           <p className="lp-tagline">
-            One compound task, many independent branches, one coherent result.
-            The architect decomposes. Branches build in isolation. Contracts
-            keep the seams aligned. Validators catch drift. The tree turns
-            plural problems into parallel work.
+            Swarm takes a plan that already carries branch steps and runs
+            those branches in parallel. It dispatches each branch into
+            its own session, tracks status, retries failures, surfaces
+            sibling state, and resumes interrupted work across sessions.
+            Mechanism, not policy. Governing decides what gets done.
+            Swarm does the doing in parallel.
           </p>
-          <div className="lp-hero-ctas">
+          <div className="lp-hero-ctas lp-hero-ctas-sub">
+            <a className="lp-btn lp-btn-secondary" href="/governing">Governing</a>
+            <a className="lp-btn lp-btn-secondary" href="/governing/rulership">Rulership</a>
             <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
-            <a className="lp-btn lp-btn-secondary" href="/ai">The AI</a>
-            <a className="lp-btn lp-btn-secondary" href="/cascade">Cascade</a>
             <a className="lp-btn lp-btn-secondary" href="/code">Code</a>
             <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
           </div>
         </div>
       </section>
 
-      {/* ── WHAT IT IS ── */}
+      {/* WHAT SWARM IS NOW */}
       <section className="lp-section">
-        <div className="lp-container">
-          <h2 className="lp-section-title">What Swarm Is</h2>
+        <div className="lp-container" style={{maxWidth: 760}}>
+          <h2 className="lp-section-title">What swarm is now</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            A compound task is one that naturally splits into independent sub-investigations
-            that need to reconverge. Build a server plus a frontend plus tests. Write a
-            research paper with a literature review, methodology, results, and discussion.
-            Draft a book, one branch per chapter. Design a data pipeline with ingestion,
+            A compound task is one that naturally splits into independent
+            sub investigations that need to reconverge. Build a server plus
+            a frontend plus tests. Write a research paper with literature
+            review, methodology, results, discussion. Draft a book, one
+            branch per chapter. Design a data pipeline with ingestion,
             transform, validate, export.
           </p>
           <p className="lp-section-sub lp-section-sub-wide">
-            Swarm is the primitive that turns these into parallel work without losing
-            coherence. The architect writes contracts that define the invariants all
-            branches must share. Each branch becomes its own tree node with its own AI
-            session, its own workspace, and its own validators. Branches never see each
-            other directly. They see the contracts.
-          </p>
-          <p className="lp-section-sub lp-section-sub-wide">
-            When all branches finish, validators cross-check the actual output against
-            the contracts. Any branch that drifted gets flipped to failed with a specific
-            violation signal, then retried. The swarm produces a coherent compound result
-            or tells you exactly why it couldn't.
+            Swarm is the engine that runs those branches in parallel
+            without losing track of them. It does not draft the
+            decomposition. It does not ratify the shared vocabulary. It
+            does not decide who gets what work. Those are{" "}
+            <a href="/governing">governing</a>'s job. Swarm reads
+            governing's emissions and runs the branches the plan named,
+            in the modes the plan declared, under the contracts in
+            force.
           </p>
         </div>
       </section>
 
-      {/* ── HOW IT WORKS ── */}
+      {/* DIVISION OF LABOR */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">How It Works</h2>
+          <h2 className="lp-section-title">Division of labor</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            Five phases. Each phase is its own AI turn or background pass.
+            In v0.2, swarm shed the work it shouldn't have been doing.
+            Plan emission, contract ratification, role coordination
+            moved to governing. What remained is the part swarm was
+            always best at. Parallel dispatch and bookkeeping.
+          </p>
+          <div className="lp-cards">
+            <div className="lp-card">
+              <h3>👑 Governing owns</h3>
+              <p>
+                Plan emission via the Planner. Contract ratification via
+                the Contractor. Role coordination via the Ruler. Call
+                stack discipline via the Foreman. Workspace specialized
+                production via the Worker. The deciding and the
+                judging.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3>🐝 Swarm owns</h3>
+              <p>
+                Parallel branch dispatch. Branch status tracking. Tree
+                authoritative reconciliation. Sibling visibility. Resume
+                detection across sessions. The mechanism that makes
+                governing's plans run in parallel without anyone losing
+                track of what's happening.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3>🔧 Workspaces own</h3>
+              <p>
+                Domain specific tools and validators that fire on
+                swarm's lifecycle hooks. code workspace runs syntax
+                checks, contract conformance, smoke tests. book
+                workspace runs voice continuity, character consistency.
+                Whatever the domain produces, the workspace validates.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* HOW IT WORKS */}
+      <section className="lp-section">
+        <div className="lp-container">
+          <h2 className="lp-section-title">How it works</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Five phases. Each is mechanical. Plan in, branches running,
+            results out.
           </p>
           <div className="lp-steps">
             <div className="lp-step">
               <div className="lp-step-num" style={{background: "#4ade80", color: "#000"}}>1</div>
               <div className="lp-step-content">
-                <h4>Decompose</h4>
+                <h4>Reconcile</h4>
                 <p>
-                  The architect reads the compound request and emits two blocks:
-                  <code>[[CONTRACTS]]</code> declares the invariants every branch must
-                  respect. <code>[[BRANCHES]]</code> names the sub-investigations with a
-                  spec, a mode, a path, and the files or sections each branch owns.
+                  Before any dispatch, swarm runs <code>reconcileProject</code>{" "}
+                  to walk the actual tree children and merge them with
+                  the cached subPlan. New children become pending
+                  entries. Deleted children drop. Renamed or rewritten
+                  specs refresh from node metadata. The tree is ground
+                  truth. The cache adopts reality.
                 </p>
               </div>
             </div>
@@ -80,45 +137,53 @@ const SwarmPage = () => {
               <div className="lp-step-content">
                 <h4>Dispatch</h4>
                 <p>
-                  Each branch becomes a child node under the project root. Swarm spawns
-                  one AI session per branch at its own tree position. Contracts get
-                  injected into every branch's system prompt. Branches start blind to
-                  each other but aligned to the same invariants.
+                  For each branch step in the plan, swarm promotes the
+                  child node to a sub Ruler (via governing's
+                  promoteToRuler) and spawns a recursive turn at that
+                  scope. Contracts in force at the parent scope are
+                  visible to the sub Ruler. The sub Ruler runs its own
+                  full lifecycle. Plan, contract, dispatch.
                 </p>
               </div>
             </div>
             <div className="lp-step">
               <div className="lp-step-num" style={{background: "#f59e0b", color: "#000"}}>3</div>
               <div className="lp-step-content">
-                <h4>Build</h4>
+                <h4>Track</h4>
                 <p>
-                  Branches write in parallel. Each emits contract signals as it produces
-                  output, which cascade to siblings. A branch that's stuck or ambiguous
-                  can read what its siblings have already claimed to hold.
+                  Swarm watches the branch step status. Pending,
+                  running, done, failed, blocked. Status writes are
+                  atomic and dual sourced (plan node and swarm
+                  metadata) so the picture stays consistent even across
+                  concurrent dispatches.
                 </p>
               </div>
             </div>
             <div className="lp-step">
-              <div className="lp-step-num" style={{background: "#ef4444", color: "#000"}}>4</div>
+              <div className="lp-step-num" style={{background: "#a855f7", color: "#000"}}>4</div>
               <div className="lp-step-content">
-                <h4>Validate</h4>
+                <h4>Reconverge</h4>
                 <p>
-                  Once all branches declare done, validators fire. Contract conformance
-                  checks the actual output against the declared contracts. Domain-specific
-                  validators (syntax, seam, smoke, fact-check, citation-check) plug in via
-                  hooks. Any violation produces a signal on the offending branch.
+                  When all branches at a step settle, swarm fires{" "}
+                  <code>swarm:afterAllBranchesComplete</code>. The
+                  Foreman wakes to judge terminal status. Workspace
+                  validators run. Failures get retried (or escalated
+                  per the Foreman's decision). Success rolls up.
                 </p>
               </div>
             </div>
             <div className="lp-step">
-              <div className="lp-step-num" style={{background: "#a855f7", color: "#000"}}>5</div>
+              <div className="lp-step-num" style={{background: "#ef4444", color: "#000"}}>5</div>
               <div className="lp-step-content">
-                <h4>Retry and Converge</h4>
+                <h4>Resume</h4>
                 <p>
-                  Failed branches get one more shot with the violation signal in their
-                  enrichContext. Most small drifts fix on retry. Unfixable ones surface
-                  as part of the final plan.md, which writes the distributed subPlan as a
-                  human-readable summary.
+                  When a session is killed mid build,{" "}
+                  <code>detectResumableSwarm</code> walks the tree to
+                  find branches still pending or running. The Foreman
+                  reads the resumable set on next user contact and
+                  decides whether to redispatch. Pause markers and
+                  frame anchors written by the Foreman survive session
+                  refresh.
                 </p>
               </div>
             </div>
@@ -126,267 +191,192 @@ const SwarmPage = () => {
         </div>
       </section>
 
-      {/* ── VS ORCHESTRATOR ── */}
+      {/* TREE AUTHORITATIVE */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 760}}>
+          <h2 className="lp-section-title">Tree authoritative</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            The most important architectural property of swarm. The
+            tree node graph is ground truth. Cached state (subPlan,
+            queues, in memory progress) is a working copy that
+            reconciles against the tree on every dispatch and resume.
+          </p>
+          <p className="lp-section-sub lp-section-sub-wide">
+            This matters because trees outlive sessions. A user can
+            navigate away, edit nodes by hand, import work from offline
+            tools, run mycelium federation that mutates a peer's tree.
+            Two weeks later, swarm picks up where it left off. Not by
+            trusting its cache. By rereading the tree.
+          </p>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Without this property, every recovery would mean rebuilding
+            state from scratch or trusting stale assumptions. With it,
+            the tree is the database, and swarm is just the runtime
+            that animates the parallel dispatch.
+          </p>
+        </div>
+      </section>
+
+      {/* SIBLING VISIBILITY */}
       <section className="lp-section">
         <div className="lp-container">
-          <h2 className="lp-section-title">Swarm vs. Orchestrator</h2>
+          <h2 className="lp-section-title">Siblings are legible</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            These are not the same thing. They work at different layers and for different
-            kinds of work.
+            Branches don't run blind. <code>readSiblingBranches</code>{" "}
+            returns a read only snapshot of every sibling branch's state
+            and descendant notes. Domain neutral. Domain extensions
+            render it however they want.
           </p>
           <div className="lp-cards">
-            <div className="lp-card">
-              <h3>Orchestrator</h3>
+            <div className="lp-card lp-card-sm">
+              <h4>code workspace</h4>
               <p>
-                <strong>One turn, one thought.</strong> The orchestrator takes a single
-                natural-language request and decides what to do with it at the current
-                position. Parse the grammar. Classify the intent. Pick the mode. Run the
-                continuation loop. Dispatch one AI conversation, possibly with many tool
-                calls, into one coherent response.
-              </p>
-              <p>
-                It handles nouns, verbs, tenses, pronouns, conjunctions, prepositions.
-                It routes between extensions. It respects per-node mode overrides. It's
-                the compiler that turns language into execution at a position.
-              </p>
-              <p style={{color: "#888", fontSize: "0.9em"}}>
-                Example: "add a vowel counter to lib.js" — one turn, one file written,
-                done.
+                Renders sibling state as a partial file tree. The
+                frontend branch can see what files the backend branch
+                has produced before writing its fetch calls.
               </p>
             </div>
-            <div className="lp-card">
-              <h3>Swarm</h3>
+            <div className="lp-card lp-card-sm">
+              <h4>book workspace</h4>
               <p>
-                <strong>One request, many parallel conversations.</strong> Swarm takes a
-                compound request, decomposes it into independent branches, runs them in
-                parallel, and reconverges with cross-branch validation. Each branch is
-                its own orchestrator invocation at its own tree position.
+                Renders sibling state as chapter summaries. Chapter
+                seven can see which characters are alive after chapter
+                six landed.
               </p>
+            </div>
+            <div className="lp-card lp-card-sm">
+              <h4>research workspace</h4>
               <p>
-                Swarm does not compile language. It coordinates. It owns the decomposition
-                turn (the architect), the parallel build phase, the contract contract
-                storage, the validator hook lifecycle, and the retry loop. The orchestrator
-                handles each individual branch.
-              </p>
-              <p style={{color: "#888", fontSize: "0.9em"}}>
-                Example: "build a polygon pong chatroom with a backend and a frontend" —
-                architect decomposes, two branches build in parallel, contract conformance
-                validates, retry fixes the seam.
+                Renders sibling state as section claims. The discussion
+                branch sees what the methodology branch committed
+                before drawing conclusions.
               </p>
             </div>
           </div>
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 24}}>
-            The orchestrator is always running. Swarm only fires when the architect's
-            turn produces a <code>[[BRANCHES]]</code> block. A simple request passes
-            through the orchestrator and never touches swarm. A compound request passes
-            through the orchestrator, hits the architect mode, and hands off to swarm for
-            the parallel build.
+            The visibility is structural, not coordinated by hand.
+            Branches that need each other's outputs read them through
+            the same primitive regardless of domain.
           </p>
         </div>
       </section>
 
-      {/* ── CONTRACTS ── */}
+      {/* HOOK LIFECYCLE */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">Contracts Are the Invariant</h2>
+          <h2 className="lp-section-title">Hook lifecycle</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            A contract is whatever invariant keeps parallel branches coherent. The shape
-            depends on the domain.
-          </p>
-          <div className="lp-cards">
-            <div className="lp-card lp-card-sm">
-              <h4>Code projects</h4>
-              <p>
-                Wire message types. Payload fields. Shared type definitions. The frontend
-                and backend of a WebSocket game agree on every message shape before either
-                writes a line.
-              </p>
-            </div>
-            <div className="lp-card lp-card-sm">
-              <h4>Research papers</h4>
-              <p>
-                Terminology definitions. Citation conventions. Variable symbols. Every
-                section uses the same term for the same concept.
-              </p>
-            </div>
-            <div className="lp-card lp-card-sm">
-              <h4>Books</h4>
-              <p>
-                Character names. Timeline events. Voice conventions. Chapter four doesn't
-                resurrect a character chapter two killed.
-              </p>
-            </div>
-            <div className="lp-card lp-card-sm">
-              <h4>Data pipelines</h4>
-              <p>
-                Schemas for each handoff. Ingestion's output equals transform's input.
-                Validate and export share the same field definitions.
-              </p>
-            </div>
-            <div className="lp-card lp-card-sm">
-              <h4>Curriculum design</h4>
-              <p>
-                Learning objectives per module. Prerequisite chains. Shared vocabulary.
-                Module three assumes module two's vocabulary is known.
-              </p>
-            </div>
-            <div className="lp-card lp-card-sm">
-              <h4>Business plans</h4>
-              <p>
-                Shared KPIs and assumptions. Market's growth rate equals financials'
-                growth rate. Product and ops speak the same customer profile.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── EXTENSIONS THAT USE IT ── */}
-      <section className="lp-section">
-        <div className="lp-container">
-          <h2 className="lp-section-title">Extensions That Use Swarm</h2>
-          <p className="lp-section-sub lp-section-sub-wide">
-            Swarm is the common bus. Domain-specific extensions subscribe to its hooks
-            and bring their own validators.
-          </p>
-          <div className="lp-cards">
-            <div className="lp-card">
-              <h3>code-workspace</h3>
-              <p>
-                The reference consumer. Compound code projects decompose into backend,
-                frontend, persistence, and shared-contracts branches. Validators include
-                syntax, smoke, integration probe, WebSocket seam analysis, and contract
-                conformance. Every file write cascades contract signals to siblings.
-              </p>
-              <p style={{color: "#888", fontSize: "0.9em"}}>
-                Live preview per project at <code>/api/v1/preview/&lt;slug&gt;/</code>.
-                Contracts keep the wire protocol aligned between the backend's sender and
-                the frontend's receiver.
-              </p>
-            </div>
-            <div className="lp-card">
-              <h3>research-workspace</h3>
-              <p>
-                Compound research projects decompose into literature review, methodology,
-                results, and discussion branches. Validators check citations, cross-reference
-                claims, enforce terminology consistency. Contracts define the vocabulary
-                and the citation graph.
-              </p>
-              <p style={{color: "#888", fontSize: "0.9em"}}>
-                Each section is a branch node. The architect produces a claim map. Validators
-                flag unsupported assertions against the citation contract.
-              </p>
-            </div>
-            <div className="lp-card">
-              <h3>book-workspace</h3>
-              <p>
-                Long-form drafts decompose into chapter branches. Validators enforce
-                character consistency, timeline sanity, voice uniformity. Contracts
-                define the cast, the world state, and the narrative voice.
-              </p>
-              <p style={{color: "#888", fontSize: "0.9em"}}>
-                Chapter seven can't reintroduce a character that died in chapter three.
-                The contract is the story bible.
-              </p>
-            </div>
-            <div className="lp-card">
-              <h3>curriculum-workspace</h3>
-              <p>
-                Courses decompose into module branches. Validators enforce prerequisite
-                ordering, objective coverage, vocabulary reuse. Contracts define learning
-                outcomes and the concept graph.
-              </p>
-              <p style={{color: "#888", fontSize: "0.9em"}}>
-                A module can't teach a concept whose prerequisite isn't covered earlier in
-                the sequence.
-              </p>
-            </div>
-          </div>
-          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 24, color: "#888"}}>
-            code-workspace ships today. The others are what the primitive enables. Install
-            just swarm plus a domain workspace and that kind of compound work becomes
-            parallel on your land.
-          </p>
-        </div>
-      </section>
-
-      {/* ── HOOK LIFECYCLE ── */}
-      <section className="lp-section lp-section-alt">
-        <div className="lp-container">
-          <h2 className="lp-section-title">The Hook Lifecycle</h2>
-          <p className="lp-section-sub lp-section-sub-wide">
-            Swarm emits hooks at every stage. Extensions subscribe without importing from
-            each other.
+            Swarm fires hooks at every stage of dispatch. Workspace
+            extensions subscribe to add domain specific behavior
+            without importing swarm directly.
           </p>
           <div className="lp-steps">
             <div className="lp-step">
               <div className="lp-step-num" style={{background: "#4ade80", color: "#000"}}>·</div>
               <div className="lp-step-content">
-                <h4>afterContractsDeclared</h4>
-                <p>Contracts parsed and stored on the project root. Consumers can index them, run schema checks, or prepare validator state.</p>
+                <h4>swarm:afterProjectInit</h4>
+                <p>The project is initialized and ready for dispatch. Workspaces can stamp project level metadata or seed structural files.</p>
               </div>
             </div>
             <div className="lp-step">
               <div className="lp-step-num" style={{background: "#60a5fa", color: "#000"}}>·</div>
               <div className="lp-step-content">
-                <h4>onBranchStart</h4>
-                <p>A branch's AI session is about to dispatch. Consumers can inject per-branch context, stamp metadata, or claim resources.</p>
+                <h4>swarm:beforeBranchRun</h4>
+                <p>A branch is about to dispatch. Workspaces can inject per branch context, claim resources, or prepare validator state.</p>
               </div>
             </div>
             <div className="lp-step">
               <div className="lp-step-num" style={{background: "#f59e0b", color: "#000"}}>·</div>
               <div className="lp-step-content">
-                <h4>afterBranchFileWrite</h4>
-                <p>A branch wrote output. Consumers extract contract signals, run per-file syntax checks, and cascade to siblings.</p>
-              </div>
-            </div>
-            <div className="lp-step">
-              <div className="lp-step-num" style={{background: "#ef4444", color: "#000"}}>·</div>
-              <div className="lp-step-content">
-                <h4>afterBranchComplete</h4>
-                <p>A branch declared done. Consumers run per-branch smoke validators and stamp status.</p>
+                <h4>swarm:afterBranchComplete</h4>
+                <p>A branch declared done. Workspaces run per branch validators (syntax, smoke, voice, citation) and stamp status.</p>
               </div>
             </div>
             <div className="lp-step">
               <div className="lp-step-num" style={{background: "#a855f7", color: "#000"}}>·</div>
               <div className="lp-step-content">
-                <h4>onSwarmComplete</h4>
-                <p>All branches finished. Consumers run cross-branch validators (conformance, seam, integration). Violations flip branches to failed, which triggers the retry loop.</p>
+                <h4>swarm:branchRetryNeeded</h4>
+                <p>A branch failed validation and the Foreman judged it recoverable. The branch will redispatch with the failure reason in context.</p>
+              </div>
+            </div>
+            <div className="lp-step">
+              <div className="lp-step-num" style={{background: "#ef4444", color: "#000"}}>·</div>
+              <div className="lp-step-content">
+                <h4>swarm:afterAllBranchesComplete</h4>
+                <p>All branches at a step settled. The Foreman wakes for terminal status judgment. Workspaces can run cross branch validators (integration, seam, contract conformance).</p>
+              </div>
+            </div>
+            <div className="lp-step">
+              <div className="lp-step-num" style={{background: "#06b6d4", color: "#000"}}>·</div>
+              <div className="lp-step-content">
+                <h4>swarm:runScouts</h4>
+                <p>The seam verification phase. Scouts run cross branch checks, route discovered issues back into branch inboxes for redispatch. Loops until clean or capped.</p>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── PHILOSOPHY ── */}
-      <section className="lp-section" style={{paddingBottom: 60}}>
-        <div className="lp-container" style={{textAlign: "center"}}>
-          <h2 className="lp-section-title">Why Parallel Inquiry Is a Primitive</h2>
+      {/* WHAT MOVED */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 760}}>
+          <h2 className="lp-section-title">What moved to governing</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            Humans already do this. Teams split a project into parts, each person works in
-            their own head, and they reconverge through shared language and specs. The
-            word "contract" isn't new. The word "branch" isn't new. What's new is making
-            it native to an AI operating system instead of a process a human ties together.
+            Earlier versions of swarm carried responsibilities that
+            didn't really fit. v0.2 moved them to governing where they
+            belong. If you remember the old shape, here's the map.
           </p>
-          <p className="lp-section-sub lp-section-sub-wide" style={{color: "#666"}}>
-            Small models don't have room to hold a backend, a frontend, a persistence
-            layer, and a test suite in the same context window. They can hold one of those
-            at a time. Swarm gives each one its own context, its own position, its own
-            conversation. Coherence is handled by the contracts, not by cramming everything
-            into one turn.
+          <ul>
+            <li>The architect (decomposition role) is now governing's <a href="/governing/rulership/planner">Planner</a>.</li>
+            <li>Contract emission is now governing's <a href="/governing/rulership/contractor">Contractor</a>, with Ruler ratification.</li>
+            <li>Plan lifecycle events (proposed, updated, archived) moved to <code>governing:plan*</code> hooks.</li>
+            <li>The judgment surface for failures and resume decisions is now governing's <a href="/governing/rulership/foreman">Foreman</a>.</li>
+            <li>Branch dispatch into a sub Ruler turn replaces the old direct mode dispatch. Each branch is a recursive Ruler scope, not a Worker pretending to coordinate.</li>
+          </ul>
+          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 24}}>
+            What stayed in swarm. Everything mechanical. Reconciliation,
+            dispatch, status tracking, sibling visibility, resume
+            detection. The plumbing that makes parallel branches run
+            without governing having to babysit them.
           </p>
-          <p className="lp-section-sub lp-section-sub-wide" style={{color: "#666"}}>
-            The result is compound work that would take a 200B model hours in one shot,
-            done by many 27B models in parallel with validators keeping them aligned.
+        </div>
+      </section>
+
+      {/* PHILOSOPHY */}
+      <section className="lp-section lp-section-alt" style={{paddingBottom: 60}}>
+        <div className="lp-container" style={{textAlign: "center", maxWidth: 720}}>
+          <h2 className="lp-section-title">Why parallel execution is a primitive</h2>
+          <p className="lp-section-sub lp-section-sub-wide">
+            Humans already do this. Teams split a project into parts,
+            each person works in their own head, and they reconverge
+            through shared language and specs. The word "branch" isn't
+            new. The word "merge" isn't new. What's new is making
+            parallel execution native to an AI operating system instead
+            of a process a human ties together.
+          </p>
+          <p className="lp-section-sub lp-section-sub-wide" style={{color: "rgba(255,255,255,0.7)"}}>
+            Small models don't have room to hold a backend, a frontend,
+            a persistence layer, and a test suite in the same context
+            window. They can hold one of those at a time. Swarm gives
+            each one its own context, its own position, its own
+            conversation. Coherence is handled by the contracts (which
+            governing ratifies), not by cramming everything into one
+            turn.
+          </p>
+          <p className="lp-section-sub lp-section-sub-wide" style={{color: "rgba(255,255,255,0.7)"}}>
+            The result is compound work that would take a 200B model
+            hours in one shot, done by many 27B models in parallel with
+            governing keeping them aligned and swarm keeping them moving.
           </p>
           <div style={{marginTop: 32}}>
-            <a className="lp-btn lp-btn-secondary" href="/code">See It In Code</a>
+            <a className="lp-btn lp-btn-secondary" href="/governing">Governing</a>
+            <a className="lp-btn lp-btn-secondary" href="/code" style={{marginLeft: 12}}>See It In Code</a>
             <a className="lp-btn lp-btn-secondary" href="/seed" style={{marginLeft: 12}}>Back to the Seed</a>
           </div>
         </div>
       </section>
 
-      {/* ── FOOTER ── */}
+      {/* FOOTER */}
       <footer className="lp-footer">
         <div className="lp-container">
           <div className="lp-footer-grid">
@@ -396,6 +386,7 @@ const SwarmPage = () => {
               <a href="/seed">The Seed</a>
               <a href="/ai">The AI</a>
               <a href="/cascade">Cascade</a>
+              <a href="/governing">Governing</a>
               <a href="/swarm">Swarm</a>
               <a href="/flow">The Flow</a>
               <a href="/extensions">Extensions</a>
@@ -404,6 +395,16 @@ const SwarmPage = () => {
               <a href="/mycelium">Mycelium</a>
               <a href="/lands">Start a Land</a>
               <a href="/cli">CLI</a>
+            </div>
+            <div className="lp-footer-col">
+              <h4>Governing</h4>
+              <a href="/governing">Overview</a>
+              <a href="/governing/rulership">Rulership (Pass 1)</a>
+              <a href="/governing/rulership/ruler">Ruler</a>
+              <a href="/governing/rulership/planner">Planner</a>
+              <a href="/governing/rulership/contractor">Contractor</a>
+              <a href="/governing/rulership/foreman">Foreman</a>
+              <a href="/governing/rulership/worker">Worker</a>
             </div>
             <div className="lp-footer-col">
               <h4>TreeOS</h4>
@@ -420,7 +421,7 @@ const SwarmPage = () => {
             <div className="lp-footer-col">
               <h4>Source</h4>
               <a href="https://github.com/taborgreat/create-treeos">GitHub</a>
-              <a href="https://github.com/taborgreat/TreeOS/blob/main/LICENSE">AGPL-3.0 License</a>
+              <a href="https://github.com/taborgreat/create-treeos/blob/main/template/seed/LICENSE">AGPL-3.0 License</a>
             </div>
           </div>
           <div className="lp-footer-bottom">

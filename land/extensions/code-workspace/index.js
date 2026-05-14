@@ -48,12 +48,23 @@ import {
   dumpContextForSession,
 } from "./sessionWatch.js";
 
-import planMode from "./modes/plan.js";
-import logMode from "./modes/log.js";
+// Direct-chat conversational modes. Coach handles future-tense
+// guidance ("how should I structure this", "walk me through it");
+// Ask handles past-tense / read-only queries ("what does X do",
+// "where is this defined"). Neither does work — work routes through
+// governance Ruler → typed Worker dispatch. These two modes stay
+// because spinning up a full governance cycle for "what does this
+// function do" would cost three LLM turns where one is plenty.
 import coachMode from "./modes/coach.js";
 import askMode from "./modes/ask.js";
-import reviewMode from "./modes/review.js";
-import summarizeMode from "./modes/summarize.js";
+// Typed Workers. Each consumes the governing typed base + adds the
+// JS-builder identity / curated facets / per-type tool list.
+// Dispatch resolves workerTypes from the governing registry; see
+// the registerWorkspaceWorkerTypes call inside init below.
+import codeWorkerBuild from "./modes/workerBuild.js";
+import codeWorkerRefine from "./modes/workerRefine.js";
+import codeWorkerReview from "./modes/workerReview.js";
+import codeWorkerIntegrate from "./modes/workerIntegrate.js";
 
 // Serve subsystem — live preview of workspace projects
 import createServeRouter from "./serve/routes.js";
@@ -583,32 +594,72 @@ async function writeSwarmPlan({ projectNode, userRequest, userId, core }) {
 }
 
 export async function init(core) {
-  // LLM slots: one per mode so operators can pin a cheap model to
-  // ask/coach and a strong model to plan/log.
+  // LLM slots. Pre-typed-worker, code-workspace registered slots per
+  // imperative-builder mode (code-plan, code-log, code-review). Those
+  // modes are gone — governance owns work dispatch via typed Workers.
+  // The remaining slots are for the conversational direct-chat modes
+  // (ask, coach) and the four typed Workers. code-plan stays as a
+  // slot name because the typed Workers share it (config compatibility:
+  // operators with code-plan llm config keep working).
   try {
     core.llm?.registerRootLlmSlot?.("code-plan");
-    core.llm?.registerRootLlmSlot?.("code-log");
     core.llm?.registerRootLlmSlot?.("code-coach");
     core.llm?.registerRootLlmSlot?.("code-ask");
     core.llm?.registerRootLlmSlot?.("code-review");
   } catch {}
 
-  core.modes.registerMode("tree:code-plan", planMode, "code-workspace");
-  core.modes.registerMode("tree:code-log", logMode, "code-workspace");
+  // Direct-chat modes — conversational, no governance overhead.
   core.modes.registerMode("tree:code-coach", coachMode, "code-workspace");
   core.modes.registerMode("tree:code-ask", askMode, "code-workspace");
-  core.modes.registerMode("tree:code-review", reviewMode, "code-workspace");
-  core.modes.registerMode("tree:code-summarize", summarizeMode, "code-workspace");
+
+  // Typed Workers — what dispatch routes to when a leaf step carries
+  // a workerType. Each gets a curated tool list (Build can only add;
+  // Refine can only edit; Review is read-only; Integrate can add
+  // top-level but not edit). Dispatch consults the governing
+  // worker-type registry (registered below) to map workerType →
+  // modeKey.
+  core.modes.registerMode("tree:code-worker-build", codeWorkerBuild, "code-workspace");
+  core.modes.registerMode("tree:code-worker-refine", codeWorkerRefine, "code-workspace");
+  core.modes.registerMode("tree:code-worker-review", codeWorkerReview, "code-workspace");
+  core.modes.registerMode("tree:code-worker-integrate", codeWorkerIntegrate, "code-workspace");
+
+  // Register typed Workers with governing so dispatch can find them
+  // by workerType. The registry is governing's lookup surface; we
+  // hit it once at init (idempotent — re-registering replaces the
+  // entry, which matters during hot reload). Failures here log but
+  // don't abort init — without registration the workers still exist,
+  // dispatch just falls back to governing's base typed modes.
+  try {
+    const { getExtension } = await import("../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (governing?.registerWorkspaceWorkerTypes) {
+      governing.registerWorkspaceWorkerTypes("code-workspace", {
+        build:     { modeKey: "tree:code-worker-build" },
+        refine:    { modeKey: "tree:code-worker-refine" },
+        review:    { modeKey: "tree:code-worker-review" },
+        integrate: { modeKey: "tree:code-worker-integrate" },
+      });
+      log.info("CodeWorkspace",
+        "Registered typed Workers with governing: build/refine/review/integrate");
+    } else {
+      log.warn("CodeWorkspace",
+        "governing.registerWorkspaceWorkerTypes unavailable; dispatch will fall back to governing base typed modes");
+    }
+  } catch (err) {
+    log.warn("CodeWorkspace", `worker-type registration failed: ${err.message}`);
+  }
 
   try {
-    core.llm?.registerModeAssignment?.("tree:code-plan", "code-plan");
-    core.llm?.registerModeAssignment?.("tree:code-log", "code-log");
     core.llm?.registerModeAssignment?.("tree:code-coach", "code-coach");
     core.llm?.registerModeAssignment?.("tree:code-ask", "code-ask");
-    core.llm?.registerModeAssignment?.("tree:code-review", "code-review");
-    // The summarizer reuses code-log's slot (same small-model profile),
-    // so it doesn't require its own slot config on every tree.
-    core.llm?.registerModeAssignment?.("tree:code-summarize", "code-log");
+    // Typed Workers share LLM slots — Build/Refine/Integrate reuse
+    // the code-plan slot (writer profile); Review uses the code-review
+    // slot (lighter, judgment-focused profile). Operators can override
+    // per-type once they care to.
+    core.llm?.registerModeAssignment?.("tree:code-worker-build", "code-plan");
+    core.llm?.registerModeAssignment?.("tree:code-worker-refine", "code-plan");
+    core.llm?.registerModeAssignment?.("tree:code-worker-review", "code-review");
+    core.llm?.registerModeAssignment?.("tree:code-worker-integrate", "code-plan");
   } catch {}
 
   // enrichContext:
@@ -2171,6 +2222,19 @@ export async function init(core) {
     // getExtension("code-workspace").exports.* rather than re-implementing
     // any tree↔note plumbing.
     exports: {
+      // Typed Worker registry. dispatch.resolveWorkerModeForType reads
+      // this map first when picking a mode for a leaf-group's
+      // workerType; only when no entry matches does it fall back to
+      // governing's base typed modes. The per-type tool subsets live
+      // on the registered modes themselves; this map only declares
+      // which mode key handles which type at code-workspace scope.
+      workerTypes: {
+        build:     { modeKey: "tree:code-worker-build" },
+        refine:    { modeKey: "tree:code-worker-refine" },
+        review:    { modeKey: "tree:code-worker-review" },
+        integrate: { modeKey: "tree:code-worker-integrate" },
+      },
+
       // Active cascade primitives — called by the orchestrator between
       // turns and by the workspace-show-context tool. See sessionWatch.js
       // for the full contract.

@@ -78,27 +78,14 @@ RULES:
 
 OUTPUT STYLE:
 - Short paragraphs or bullets. No lectures.
-- End with a concrete next step. Two shapes:
-
-  1. If you diagnosed a CONCRETE fix and the user's wording implies they
-     want it applied ("fix it", "still happens", "broken", "do it",
-     "yes apply"), emit a [[HANDOFF: <one-sentence fix description>]]
-     block on its own line as the LAST thing in your response. The
-     orchestrator will dispatch a builder (tree:code-plan) at the
-     same node with that description, and its write-tool output will
-     appear in this same chat turn — no second round-trip needed.
-
-     Example (describe the fix in terms of the actual file you just
-     read, not a template name — if the project is index.html, say
-     "index.html"; if it's Python, say "main.py"):
-         [[HANDOFF: in <the actual file>, set game.birdVelocity = JUMP_STRENGTH at the top of startGame() so the bird gets an initial lift on spawn]]
-
-  2. If you're NOT sure, or the user sounds exploratory ("why does it
-     happen", "what do you think"), end with a question like "want me
-     to apply this?" and wait for their next message. Do NOT emit
-     a HANDOFF block.
-
-Never emit both. A HANDOFF is a commitment — only use it when the fix
-is concrete, small, and the user's intent is clearly "make it work".`.trim();
+- End with a concrete next step.
+- When you've diagnosed a fix, describe it specifically (which file,
+  which function, what change) but do NOT apply it yourself. If the
+  user wants it applied, their next message ("yes do it", "apply
+  this", "fix it") routes through the Ruler at this scope and the
+  Ruler hires a Planner that emits a Refine leaf for the change.
+- When you're exploring or unsure, end with a question like "want me
+  to dig deeper into X?" or "should I apply this?" and wait for the
+  user's next message.`.trim();
   },
 };

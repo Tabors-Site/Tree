@@ -520,10 +520,39 @@ async function checkRulerScopeWriteGuard(nodeId, filePath) {
   }
 }
 
+// Pattern check for root-level files that aren't in the explicit set
+// but are obviously workspace-level by name shape. Examples that flow
+// through here: vite.config.js / .ts / .mjs, webpack.config.cjs,
+// vitest.config.ts, jest.config.js, tailwind.config.js, postcss.config.cjs,
+// tsup.config.ts, .eslintrc.json, .prettierrc.cjs, .babelrc.js, etc.
+//
+// Only consulted at the project root after the explicit set misses;
+// the gate context already restricts this to first-segment matches.
+const CONFIG_NAME_RE = /^[A-Za-z][A-Za-z0-9_-]*\.config\.(js|cjs|mjs|ts|tsx|json|yaml|yml)$/;
+const RC_DOTFILE_RE = /^\.[a-z][a-z0-9_-]*rc(\.[a-z0-9]+)?$/i;
+const COMMON_ROOT_DOCS_RE = /^(LICENSE|LICENCE|CHANGELOG|CONTRIBUTING|CODE_OF_CONDUCT|SECURITY|AUTHORS)(\.[a-z]+)?$/i;
+const COMMON_ROOT_DOTFILES = new Set([
+  ".dockerignore",
+  ".editorconfig",
+  ".prettierignore",
+  ".eslintignore",
+  ".gitattributes",
+]);
+
+function isAllowedRootFilename(name) {
+  if (!name) return false;
+  if (ROOT_ALLOWED_FILES.has(name)) return true;
+  if (CONFIG_NAME_RE.test(name)) return true;
+  if (RC_DOTFILE_RE.test(name)) return true;
+  if (COMMON_ROOT_DOCS_RE.test(name)) return true;
+  if (COMMON_ROOT_DOTFILES.has(name)) return true;
+  return false;
+}
+
 async function checkProjectRootHasBranches(nodeId, filePath) {
   if (!nodeId || !filePath) return null;
   const firstSegment = filePath.split("/").filter(Boolean)[0] || filePath;
-  if (ROOT_ALLOWED_FILES.has(firstSegment)) return null;
+  if (isAllowedRootFilename(firstSegment)) return null;
   try {
     const node = await Node.findById(nodeId).select("metadata name children").lean();
     if (!node) return null;

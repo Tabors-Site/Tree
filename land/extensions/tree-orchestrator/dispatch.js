@@ -174,14 +174,6 @@ export async function resolveLlmProvider(userId, rootId, modeKey, slot) {
 // reads the sub-Ruler's emission back via governing.readActivePlanEmission
 // to detect nested compound work.
 
-const PLAN_MODE_PATTERN = /^tree:[a-z][a-z0-9-]+-plan$/;
-
-function isWorkspacePlanMode(mode) {
-  return typeof mode === "string"
-    && PLAN_MODE_PATTERN.test(mode)
-    && mode !== "tree:governing-planner";
-}
-
 /**
  * Run the Ruler cycle at a scope. originalMode is the workspace mode the
  * caller wanted (tree:code-plan, tree:book-plan, etc.); used as the
@@ -603,16 +595,28 @@ export async function runModeAndReturn(visitorId, mode, message, {
   emitStatus(socket, "intent", "");
 
   // Detect Ruler takeover up front so the routing display shows the
-  // mode that actually runs, not the classifier's domain pick that
-  // gets shadowed. When a Ruler scope exists at or above the current
-  // position (or when the classifier picked a planning mode and we
-  // need to promote one into being), the dispatch goes through
-  // tree:governing-ruler — the classifier's `mode` is downgraded to
-  // a domain hint passed forward as domainWorkerMode. Surfacing
-  // `tree:code-log` (etc.) here would be misleading: the Ruler reads
-  // it, may or may not honor it, and decides for itself.
+  // mode that actually runs, not the classifier's domain pick.
+  //
+  // Three triggers, in order:
+  //   1. A Ruler scope already exists at or above this position →
+  //      route through it. The Ruler decides whether the message is
+  //      work (hire-planner) or conversational (respond-directly).
+  //   2. No Ruler exists yet, but governance should be in charge at
+  //      this scope (a workspace is active here, OR governing is
+  //      alone-installed in this land). First user message at the
+  //      position promotes to Ruler. shouldGovernAtScope checks the
+  //      worker-type registry against the scope's ext-allow chain.
+  //   3. Neither — the classifier's mode pick runs directly. This
+  //      covers home zone, land zone, and tree positions without an
+  //      active workspace or governing-alone.
+  //
+  // Pre-typed-Worker, trigger 2 was approximated by
+  // `isWorkspacePlanMode(mode)` — match a `tree:<workspace>-plan`
+  // mode key. That broke when workspaces stopped registering -plan
+  // modes after the typed-Worker landing. The presence-based check
+  // here is correct: governance takes over because the workspace is
+  // present, not because the classifier guessed at a mode name.
   let routeThroughRuler = false;
-  let domainWorkerMode = null;
   try {
     const { getExtension } = await import("../loader.js");
     const governing = getExtension("governing")?.exports;
@@ -621,12 +625,9 @@ export async function runModeAndReturn(visitorId, mode, message, {
       const existing = await governing.findRulerScope(scopeForRuler);
       if (existing) {
         routeThroughRuler = true;
-        domainWorkerMode = isWorkspacePlanMode(mode) ? mode : null;
-      } else if (isWorkspacePlanMode(mode)) {
-        // No Ruler upstream and the message classified as planning —
-        // entering through the Ruler also handles the promotion.
-        routeThroughRuler = true;
-        domainWorkerMode = mode;
+      } else if (governing?.shouldGovernAtScope) {
+        const shouldGovern = await governing.shouldGovernAtScope(scopeForRuler);
+        if (shouldGovern) routeThroughRuler = true;
       }
     }
   } catch (err) {
@@ -642,7 +643,6 @@ export async function runModeAndReturn(visitorId, mode, message, {
   emitModeResult(socket, dispatchMode, {
     mode: dispatchMode,
     phase: routeThroughRuler ? "ruler-takeover" : "dispatch",
-    ...(routeThroughRuler && domainWorkerMode ? { domainWorkerMode } : {}),
   });
 
   // Build conversation memory + grammar modifier injections.
@@ -754,8 +754,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
   //
   // Detection happens up front (before emitModeResult) so the routing
   // display surfaces tree:governing-ruler instead of the classifier's
-  // domain mode when a Ruler is taking over. routeThroughRuler and
-  // domainWorkerMode are computed there.
+  // domain mode when a Ruler is taking over.
   let result;
   if (routeThroughRuler) {
     const { runRulerTurn } = await import("./ruling.js");
@@ -766,7 +765,6 @@ export async function runModeAndReturn(visitorId, mode, message, {
       signal, slot, socket,
       sessionId, rootChatId, rt,
       readOnly, onToolLoopCheckpoint,
-      domainWorkerMode,
       dispatchOrigin: "ruler-turn",
     });
   } else {
@@ -812,6 +810,13 @@ export async function runModeAndReturn(visitorId, mode, message, {
     }
 
     const branchParse = { branches: structuredBranchesFromResult, cleaned: answer };
+    // architect-entry is the post-mode block that runs after either
+    // runRulerTurn or runSteppedMode returns. It checks whether the
+    // mode produced structured branches/contracts the swarm should
+    // dispatch. When 0/0, this is no-op chatter — the runRulerTurn
+    // path (Ruler + tools) handles dispatch itself. The log fires
+    // either way so the runtime is traceable; only an emit happens
+    // when there's actual structure to forward.
     log.info("Tree Orchestrator",
       `🔍 runModeAndReturn architect-entry: result has _structuredBranches=${structuredBranchesFromResult.length}, ` +
       `_structuredContracts=${structuredContractsFromResult.length}, ` +
@@ -964,12 +969,20 @@ export async function runModeAndReturn(visitorId, mode, message, {
           // runRulerCycle), read against currentNodeId — the scope
           // governing-emit-plan writes against — not projectNode._id.
           let structuredEmission = result?._structuredEmission || null;
+          // Two fallback reads when the result didn't carry it. First try
+          // currentNodeId (the scope governing-emit-plan writes against);
+          // if that misses, try projectNode._id (the resolved Ruler scope
+          // — covers the case where the user is at a structural child
+          // and the Planner wrote at the parent Ruler).
           if (!structuredEmission && currentNodeId) {
             try {
               const { getExtension } = await import("../loader.js");
               const governing = getExtension("governing")?.exports;
               if (governing?.readActivePlanEmission) {
                 structuredEmission = await governing.readActivePlanEmission(currentNodeId);
+              }
+              if (!structuredEmission && projectNode?._id) {
+                structuredEmission = await governing.readActivePlanEmission(projectNode._id);
               }
             } catch (err) {
               log.debug("Tree Orchestrator", `plan-card emission fallback read skipped: ${err.message}`);
@@ -1063,148 +1076,16 @@ export async function runModeAndReturn(visitorId, mode, message, {
     }
   }
 
-  // Flat-build scout. If the builder wrote files but dispatched no
-  // branches, swarm:afterAllBranchesComplete never fired — so the
-  // existing cross-branch validators (symbol coherence, behavioral
-  // tests, etc.) stayed silent. Ask code-workspace for a one-shot
-  // syntax scan across the workspace so obvious broken files surface
-  // before the user tries to run the app.
-  const SUMMARIZE_MODES = new Set(["tree:code-plan", "tree:code-log", "tree:code-coach"]);
-  let flatScoutReport = null;
-  if (
-    SUMMARIZE_MODES.has(mode) &&
-    (result?._writeCount || 0) > 0 &&
-    rootId
-  ) {
-    try {
-      const { getExtension } = await import("../loader.js");
-      const cw = getExtension("code-workspace")?.exports;
-      if (cw?.runFlatBuildScout) {
-        flatScoutReport = await cw.runFlatBuildScout({ rootId });
-        if (flatScoutReport?.errors?.length > 0) {
-          log.warn("Tree Orchestrator",
-            `🔍 Flat-build scout: ${flatScoutReport.errors.length} syntax issue(s) across ${flatScoutReport.filesScanned} file(s)`,
-          );
-        } else if (flatScoutReport?.filesScanned > 0) {
-          log.info("Tree Orchestrator",
-            `✅ Flat-build scout: ${flatScoutReport.filesScanned} file(s), zero syntax issues`,
-          );
-        }
-      }
-    } catch (err) {
-      log.warn("Tree Orchestrator", `flat-build scout failed: ${err.message}`);
-    }
-  }
-
-  // Summarizer rescue. When the builder ends with a bare "[[DONE]]" or
-  // empty prose but tools actually ran, the user sees nothing. Fire a
-  // one-shot summarizer so the chat doesn't close on silence. Only for
-  // modes that opt in (the tree:code-* builder family). Skipped when
-  // branches dispatched (they produce their own summary) or the builder
-  // already wrote a real reply (>= 80 chars after marker strip).
-  if (
-    SUMMARIZE_MODES.has(mode) &&
-    (result?._writeCount || 0) > 0 &&
-    Array.isArray(result?._toolTrace) && result._toolTrace.length > 0 &&
-    ((answer || "").trim().length < 80)
-  ) {
-    try {
-      const { runChat } = await import("../../seed/llm/conversation.js");
-      const traceLines = result._toolTrace
-        .map((t) => `  - ${t.tool}${t.hint ? " (" + t.hint + ")" : ""}`)
-        .join("\n");
-      const scoutNote = flatScoutReport && flatScoutReport.errors?.length > 0
-        ? `\n\nSCOUT FOUND SYNTAX ISSUES:\n${flatScoutReport.errors
-            .slice(0, 6)
-            .map((e) => `  - ${e.file}${e.line ? ":" + e.line : ""}: ${e.message}`)
-            .join("\n")}\n(Mention these to the user — they will need to be fixed before the app runs.)`
-        : "";
-      const summarizerMsg =
-        `ORIGINAL REQUEST:\n${message}\n\n` +
-        `TOOL TRACE (${result._toolTrace.length} calls, ${result._writeCount} writes, ${result._readCount || 0} reads):\n${traceLines}\n\n` +
-        `BUILDER'S FINAL REPLY: ${((answer || "").trim()) || "(empty)"}` +
-        scoutNote +
-        `\n\nWrite the user-facing recap now.`;
-      const summary = await runChat({
-        userId, username,
-        message: summarizerMsg,
-        mode: "tree:code-summarize",
-        rootId,
-        signal,
-        // Tree-scoped summarizer lane — isolated from the user's chat,
-        // chains across repeated summaries on the same tree.
-        scope: "tree",
-        purpose: "summarize",
-        llmPriority: "INTERACTIVE",
-      });
-      const recap = (summary?.answer || "").trim();
-      if (recap && recap.length > 0 && recap !== "No response.") {
-        answer = recap;
-        if (result) {
-          result.content = recap;
-          result.answer = recap;
-        }
-        log.info("Tree Orchestrator", `📝 Summarizer rescued bare [[DONE]] (${recap.length} chars)`);
-      }
-    } catch (err) {
-      log.warn("Tree Orchestrator", `summarizer failed: ${err.message}`);
-    }
-  }
-
-  // Coach → plan handoff. A diagnose-mode (tree:code-coach) that is
-  // confident about a concrete fix emits `[[HANDOFF: <task>]]` on its
-  // last line. The orchestrator strips that marker from the visible
-  // answer and dispatches a fresh tree:code-plan run at the same node
-  // with the task description as its input. Result: one chat turn
-  // delivers both the diagnosis and the applied fix, instead of making
-  // the user re-prompt.
-  if (answer) {
-    const handoffMatch = answer.match(/\[\[HANDOFF:\s*([^\]]+?)\s*\]\]/);
-    if (handoffMatch) {
-      const fixTask = handoffMatch[1].trim();
-      answer = answer.replace(/\[\[HANDOFF:[^\]]+\]\]/g, "").trim();
-      if (result) {
-        result.content = answer;
-        result.answer = answer;
-      }
-      log.info("Tree Orchestrator",
-        `🔧 Handoff: coach → plan at ${currentNodeId || rootId} — "${fixTask.slice(0, 80)}${fixTask.length > 80 ? "..." : ""}"`,
-      );
-      try {
-        const { runChat } = await import("../../seed/llm/conversation.js");
-        const planRun = await runChat({
-          userId, username,
-          message: fixTask,
-          mode: "tree:code-plan",
-          rootId,
-          nodeId: currentNodeId || targetNodeId || rootId,
-          signal,
-          // Tree-scoped handoff lane — coach→plan handoffs chain per tree.
-          scope: "tree",
-          purpose: "handoff",
-          llmPriority: "INTERACTIVE",
-        });
-        const planAnswer = (planRun?.answer || "").trim();
-        if (planAnswer) {
-          answer = answer
-            ? `${answer}\n\n---\n\n${planAnswer}`
-            : planAnswer;
-          if (result) {
-            result.content = answer;
-            result.answer = answer;
-          }
-          log.info("Tree Orchestrator", `🔧 Handoff plan completed (${planAnswer.length} chars)`);
-        }
-      } catch (err) {
-        log.warn("Tree Orchestrator", `handoff plan failed: ${err.message}`);
-        answer = `${answer}\n\n(handoff failed: ${err.message})`;
-        if (result) {
-          result.content = answer;
-          result.answer = answer;
-        }
-      }
-    }
-  }
+  // Flat-build scout + summarizer rescue + coach→plan handoff were
+  // all coupled to the legacy code-plan/code-log/code-summarize modes.
+  // Governance now owns work dispatch: the Ruler routes the user's
+  // message → typed Worker → the Ruler synthesizes its own response
+  // at the end. Worker bare-[[DONE]] silence is handled by the
+  // Ruler's natural exit synthesis, not a post-hoc summarizer mode.
+  // Coach is still a direct-chat mode but no longer hands off to a
+  // builder; if the user wants the fix applied, the Ruler at the
+  // scope picks it up from the next message and routes through
+  // hire-planner.
 
   // Plan capture: if the mode emitted a [[PLAN]]...[[/PLAN]] block, strip it
   // from the visible answer and stash it for the next turn. The next
@@ -1305,6 +1186,631 @@ export async function runChain(chain, message, visitorId, {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// STEP-ORDER EXECUTION HELPERS
+//
+// The Foreman holds call-stack discipline: step N+1 cannot start until
+// step N's entire descendant subtree settles. dispatchSwarmPlan walks
+// the Planner's emission.steps in plan order, dispatching each as a
+// leaf-batch (Worker writes files at this scope) or a branch step
+// (sub-Rulers run their own lifecycles in parallel within the step).
+//
+// Consecutive leaves are batched into one Worker turn — they all live
+// at the parent scope, so batching is purely an efficiency. A branch
+// step always runs in its plan-order position, blocking subsequent
+// steps until all of its sub-Rulers settle.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Group a Planner's emission.steps into ordered execution units.
+ * Consecutive leaves of the SAME workerType merge into one group;
+ * when the type changes between adjacent leaves, the buffer flushes
+ * and a new leaf group starts. Each branch step is always its own
+ * group. Returns Array<
+ *   { kind: "leaves", workerType: string, steps: [...] }
+ *   | { kind: "branch", step: {...} }
+ * >.
+ *
+ * Splitting by workerType means a Build batch and a Refine batch
+ * dispatch to different Worker modes — each gets the prompt body
+ * appropriate to its cognitive shape rather than a generic Worker
+ * prompt averaged across mixed types.
+ */
+function groupStepsForExecution(steps) {
+  const groups = [];
+  if (!Array.isArray(steps)) return groups;
+  let leafBuf = [];
+  let leafType = null;
+  const flushLeaves = () => {
+    if (leafBuf.length) {
+      groups.push({ kind: "leaves", workerType: leafType || "build", steps: leafBuf });
+      leafBuf = [];
+      leafType = null;
+    }
+  };
+  for (const s of steps) {
+    if (s?.type === "leaf") {
+      const t = (typeof s.workerType === "string" ? s.workerType : "build") || "build";
+      // First leaf in a new buffer: claim the type. Subsequent leaves
+      // of a different type flush the buffer and start a fresh group.
+      if (leafBuf.length === 0) {
+        leafType = t;
+        leafBuf.push(s);
+      } else if (t === leafType) {
+        leafBuf.push(s);
+      } else {
+        flushLeaves();
+        leafType = t;
+        leafBuf.push(s);
+      }
+    } else if (s?.type === "branch") {
+      flushLeaves();
+      groups.push({ kind: "branch", step: s });
+    } else {
+      // Unknown step type — flush any pending leaves so order is
+      // preserved and the unknown step doesn't silently merge into
+      // a leaf batch.
+      flushLeaves();
+    }
+  }
+  flushLeaves();
+  return groups;
+}
+
+/**
+ * Resolve the worker mode key for a given workerType. Two paths,
+ * both authoritative:
+ *
+ *   1. governing.lookupWorkerMode — workspaces register typed Workers
+ *      with governing at init time (e.g. code-workspace registers
+ *      tree:code-worker-build for the "build" type). First match wins;
+ *      registry insertion order disambiguates if multiple workspaces
+ *      claim the same type.
+ *   2. governing.WORKER_TYPE_MODE_KEYS — governing's own base typed
+ *      modes, used when no workspace specialized this type at this
+ *      land.
+ *
+ * Returns null when neither path resolves. Callers MUST handle null
+ * with a logged error; there is no legacy fallback. The pre-typed-
+ * worker substrate routed leaf batches through the workspace's plan
+ * mode (tree:code-plan etc.); that path is gone — the typed worker
+ * substrate is the only Worker dispatch path.
+ */
+async function resolveWorkerModeForType(workerType) {
+  const type = typeof workerType === "string" ? workerType : "build";
+
+  try {
+    const { getExtension } = await import("../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (governing?.lookupWorkerMode) {
+      const hit = governing.lookupWorkerMode(type);
+      if (hit?.modeKey) return hit.modeKey;
+    }
+    if (governing?.WORKER_TYPE_MODE_KEYS?.[type]) {
+      return governing.WORKER_TYPE_MODE_KEYS[type];
+    }
+  } catch {}
+
+  return null;
+}
+
+/**
+ * Run a contiguous leaf-step group at the parent Ruler scope. Marks
+ * the corresponding execution-record steps "running" up front, dispatches
+ * the workspace mode (e.g. tree:code-plan) as a Worker with the leaf
+ * specs explicitly enumerated, then marks the steps "done." The
+ * forbidden-paths block lists ALL branch sub-domain names in the plan
+ * (not just adjacent ones) so the Worker never writes into a
+ * sub-Ruler's territory regardless of when that branch runs.
+ */
+async function runLeafGroupAtScope({
+  leafSteps,
+  workerType,
+  projectNode,
+  visitorId, userId, username, rootId,
+  signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+  stashedPlanText,
+  allBranchNames,
+}) {
+  const resolvedType = typeof workerType === "string" ? workerType : "build";
+
+  // Resolve the worker mode key for this group's type. Workspace
+  // override (if registered) wins; otherwise governing's typed base
+  // mode. There is no legacy fallback — the typed-worker substrate
+  // is the only Worker dispatch path.
+  const modeKey = await resolveWorkerModeForType(resolvedType);
+
+  log.info("Tree Orchestrator",
+    `🔨 runLeafGroupAtScope entered at ${String(projectNode?._id || "?").slice(0, 8)}: ` +
+    `type=${resolvedType}, leafSteps=${leafSteps?.length || 0}, ` +
+    `modeKey=${modeKey || "(unresolved)"}`);
+  if (!leafSteps?.length) {
+    log.warn("Tree Orchestrator", `🔨 Leaf group SKIPPED: no leafSteps`);
+    return;
+  }
+  if (!modeKey) {
+    log.error("Tree Orchestrator",
+      `🔨 Leaf group SKIPPED: no typed Worker mode resolvable for workerType="${resolvedType}". ` +
+      `governing.lookupWorkerMode and WORKER_TYPE_MODE_KEYS both returned nothing. ` +
+      `This is a substrate misconfiguration — either the governing extension didn't load, ` +
+      `or its typed Worker modes weren't registered. Surface immediately.`);
+    return;
+  }
+
+  const leafSpecs = leafSteps
+    .map((s) => (typeof s.spec === "string" ? s.spec.trim() : ""))
+    .filter(Boolean);
+  if (leafSpecs.length === 0) {
+    log.warn("Tree Orchestrator",
+      `🔨 Leaf group SKIPPED at ${String(projectNode._id).slice(0, 8)}: no usable specs ` +
+      `(leafSteps had no .spec strings)`);
+    return;
+  }
+
+  // Mark this group's leaf steps "running" so the dashboard reflects
+  // live progress. Only updates steps still in "pending"; terminal
+  // statuses (done/failed/cancelled/advanced/skipped/superseded)
+  // stay where they are.
+  const targetIndices = new Set(
+    leafSteps.map((s) => s?.stepIndex).filter((i) => Number.isFinite(i)),
+  );
+  try {
+    const { getExtension } = await import("../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (governing?.readActiveExecutionRecord && governing?.updateStepStatus) {
+      const record = await governing.readActiveExecutionRecord(projectNode._id);
+      if (record?._recordNodeId) {
+        const startedAt = new Date().toISOString();
+        for (const step of (record.stepStatuses || [])) {
+          if (step?.type !== "leaf" || step.status !== "pending") continue;
+          if (targetIndices.size > 0 && !targetIndices.has(step.stepIndex)) continue;
+          await governing.updateStepStatus({
+            recordNodeId: record._recordNodeId,
+            stepIndex: step.stepIndex,
+            updates: { status: "running", startedAt },
+          });
+        }
+      }
+    }
+  } catch (err) {
+    log.debug("Tree Orchestrator", `auto-mark leaf running skipped: ${err.message}`);
+  }
+
+  // Pin position to the Ruler scope so the Worker's writes land here.
+  setCurrentNodeId(visitorId, String(projectNode._id));
+  await switchMode(visitorId, modeKey, {
+    username, userId, rootId,
+    currentNodeId: String(projectNode._id),
+    clearHistory: false,
+  });
+
+  // Type framing block: even if the resolved mode is a legacy
+  // workspace mode (no type-specific system prompt body), the
+  // dispatch-time message names the cognitive shape explicitly so
+  // the Worker reads it inline. When the resolved mode IS one of
+  // the typed governing modes, this block is redundant with the
+  // system prompt but harmless — both surfaces saying the same
+  // thing keeps the boundary obvious to readers and to the model.
+  const TYPE_FRAMING = {
+    build: "These leaf steps are BUILD work — bring new artifacts into existence at this scope. Realize the smallest correct thing the spec asks for, no more. Don't pre-build for the future, don't scaffold beyond the listed leaves.",
+    refine: "These leaf steps are REFINE work — improve existing artifacts. READ each target file FIRST before writing. Make the smallest change that satisfies the spec; preserve unrelated behavior. If the spec is ambiguous about what to refine, surface that rather than guess.",
+    review: "These leaf steps are REVIEW work — judge artifacts and produce structured findings WITHOUT modifying them. Read-only discipline: do not call write tools that modify the artifact under review. Output findings as notes attached at this scope, organized by severity, with line-level evidence.",
+    integrate: "These leaf steps are INTEGRATE work — tie sibling sub-Ruler outputs into a coherent surface at THIS scope. Read what siblings produced FIRST. Write only top-level integration files (package.json, README, top-level config); do not reach into sibling directories. Use contracted identifiers verbatim.",
+  };
+  const typeFramingLine = TYPE_FRAMING[resolvedType] || TYPE_FRAMING.build;
+
+  const leafBlock =
+    `WORKER TYPE: ${resolvedType.toUpperCase()}\n` +
+    `${typeFramingLine}\n\n` +
+    `LEAF STEPS YOU MUST REALIZE (one file per spec, no more, no less):\n` +
+    leafSpecs.map((s, i) => `  ${i + 1}. ${s}`).join("\n");
+
+  const forbiddenBlock = (allBranchNames?.length || 0) > 0
+    ? `FORBIDDEN PATHS (sub-Ruler scopes — DO NOT write inside these):\n` +
+      allBranchNames.map((n) => `  • ${n}/  (any path beginning with "${n}/")`).join("\n") +
+      `\nThe sub-Rulers below own those directories. Their own Workers ` +
+      `will populate them. Writing into ${allBranchNames.map((n) => `"${n}/"`).join(", ")} ` +
+      `from this scope is REJECTED by the workspace tool — your write ` +
+      `will fail and the user will see the rejection.`
+    : "";
+
+  // Build the approval text (prose plan) for the Worker's prompt.
+  // Falls back to a structured render of the active emission when the
+  // Planner only emitted via tool (no prose).
+  let approvalText = stashedPlanText && stashedPlanText.trim()
+    ? stashedPlanText.trim()
+    : "";
+  if (!approvalText) {
+    try {
+      const { getExtension } = await import("../loader.js");
+      const governing = getExtension("governing")?.exports;
+      if (governing?.readActivePlanEmission) {
+        const emission = await governing.readActivePlanEmission(projectNode._id);
+        if (emission) {
+          approvalText =
+            `## Reasoning\n${emission.reasoning || ""}\n\n## Plan\n` +
+            (emission.steps || []).map((s, i) => {
+              if (s.type === "leaf") return `${i + 1}. [leaf] ${s.spec || ""}`;
+              if (s.type === "branch") {
+                const subs = (s.branches || []).map((b) => `   - ${b.name}: ${b.spec || ""}`).join("\n");
+                return `${i + 1}. [branch] ${s.rationale || ""}\n${subs}`;
+              }
+              return "";
+            }).filter(Boolean).join("\n\n");
+        }
+      }
+    } catch {}
+  }
+
+  const rulerWorkerMessage =
+    `The Ruler at this scope approved the following plan:\n\n` +
+    `${approvalText}\n\n` +
+    `${leafBlock}\n\n` +
+    (forbiddenBlock ? `${forbiddenBlock}\n\n` : "") +
+    `RULES:\n` +
+    `  • Realize ONLY the leaf steps listed above. Do not improvise ` +
+    `    additional files (no extra "index.html", no extra README, ` +
+    `    no scaffolding outside the listed leaves).\n` +
+    `  • Each leaf spec → exactly one file at this scope.\n` +
+    ((allBranchNames?.length || 0) > 0
+      ? `  • Files inside ${allBranchNames.map((n) => `"${n}/"`).join(", ")} are NOT yours.\n`
+      : "") +
+    `  • Emit [[DONE]] when ALL listed leaf steps are written. Do not ` +
+    `    keep working past the leaf list.`;
+
+  log.info("Tree Orchestrator",
+    `🔨 Leaf batch at ${String(projectNode._id).slice(0, 8)}: dispatching ${modeKey} as ${resolvedType} Worker ` +
+    `(${leafSpecs.length} leaf step(s); ${(allBranchNames?.length || 0)} forbidden sub-domain(s))`);
+  await runSteppedMode(visitorId, modeKey, rulerWorkerMessage, {
+    username, userId, rootId, signal, slot,
+    readOnly: false, onToolLoopCheckpoint, socket,
+    sessionId, rootChatId, rt,
+    currentNodeId: String(projectNode._id),
+    parentChatId: rootChatId || null,
+    dispatchOrigin: `ruler-own-integration-${resolvedType}`,
+  });
+
+  // Mark this group's leaf steps "done." Foreman overrides (advanced)
+  // and bypasses (skipped) and explicit failures stay where they are.
+  try {
+    const { getExtension } = await import("../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (governing?.readActiveExecutionRecord && governing?.updateStepStatus) {
+      const record = await governing.readActiveExecutionRecord(projectNode._id);
+      if (record?._recordNodeId) {
+        const completedAt = new Date().toISOString();
+        const TERMINAL_LEAF = new Set([
+          "done", "failed", "cancelled", "advanced", "skipped", "superseded",
+        ]);
+        let marked = 0;
+        for (const step of (record.stepStatuses || [])) {
+          if (step?.type !== "leaf") continue;
+          if (TERMINAL_LEAF.has(step.status)) continue;
+          if (targetIndices.size > 0 && !targetIndices.has(step.stepIndex)) continue;
+          await governing.updateStepStatus({
+            recordNodeId: record._recordNodeId,
+            stepIndex: step.stepIndex,
+            updates: {
+              status: "done",
+              startedAt: step.startedAt || completedAt,
+              completedAt,
+            },
+          });
+          marked++;
+        }
+        if (marked > 0) {
+          log.info("Tree Orchestrator",
+            `🔧 Leaf batch: marked ${marked} leaf step(s) done at ` +
+            `${String(projectNode._id).slice(0, 8)}`);
+        }
+      }
+    }
+  } catch (err) {
+    log.debug("Tree Orchestrator", `auto-mark leaf done skipped: ${err.message}`);
+  }
+}
+
+/**
+ * Dispatch the sub-Rulers for one branch step. Calls runBranchSwarm
+ * with just this step's branches and waits for them to settle. The
+ * sub-branches run in parallel (per the Planner's design); the
+ * function returns when all have reached a terminal status.
+ *
+ * Returns the swarmResult object so the caller can include the
+ * summary in any final user-facing report.
+ */
+async function runBranchStepAtScope({
+  branchStep,
+  projectNode,
+  sw,
+  visitorId, userId, username, rootId,
+  signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+  architectChatId, userRequest,
+}) {
+  const stepBranches = (branchStep?.branches || [])
+    .filter((b) => b && typeof b.name === "string" && b.name.trim().length > 0)
+    .map((b) => ({
+      name: b.name.trim(),
+      spec: b.spec || "",
+      path: null,
+      files: [],
+      slot: null,
+      mode: null,
+      parentBranch: null,
+    }));
+
+  if (stepBranches.length === 0) {
+    return { summary: "branch step had no usable sub-domains" };
+  }
+
+  log.info("Tree Orchestrator",
+    `🌿 Branch step ${branchStep.stepIndex ?? "?"} at ${String(projectNode._id).slice(0, 8)}: ` +
+    `dispatching ${stepBranches.length} sub-Ruler${stepBranches.length === 1 ? "" : "s"} ` +
+    `(${stepBranches.map((b) => b.name).join(", ")})`);
+
+  return await sw.runBranchSwarm({
+    branches: stepBranches,
+    rootProjectNode: projectNode,
+    rootChatId,
+    architectChatId,
+    sessionId,
+    visitorId,
+    userId,
+    username,
+    rootId,
+    signal,
+    slot,
+    socket,
+    onToolLoopCheckpoint,
+    userRequest: userRequest || "",
+    rt,
+    // Sub-Ruler dispatch always routes through governing's Planner.
+    // The branch is promoted to Ruler at its child node and runs its
+    // own Planner/Contractor/Worker cycle from there; the original
+    // workspace plan mode (tree:code-plan etc.) is no longer involved
+    // in dispatch. swarm uses defaultBranchMode purely for metadata/
+    // audit labelling since runBranch (below) bypasses it and calls
+    // runRulerTurn directly.
+    defaultBranchMode: "tree:governing-planner",
+    core: { metadata: { setExtMeta: async (node, ns, data) => {
+      const NodeModel = (await import("../../seed/models/node.js")).default;
+      await NodeModel.updateOne({ _id: node._id }, { $set: { [`metadata.${ns}`]: data } });
+    } } },
+    emitStatus,
+    runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot, markerChatId }) => {
+      setActiveRequest(visitorId, {
+        socket, username, userId, signal,
+        sessionId,
+        rootId,
+        rootChatId,
+        slot, onToolLoopCheckpoint,
+        rt: (getActiveRequest(visitorId) || {}).rt,
+      });
+      const branchIdStr = await pinBranchPosition(visitorId, branchNodeId, branchMode, {
+        username, userId, rootId,
+      });
+      const { runRulerTurn } = await import("./ruling.js");
+      const cycleResult = await runRulerTurn({
+        visitorId,
+        message: branchMessage,
+        username, userId, rootId,
+        currentNodeId: branchIdStr,
+        signal, slot: branchSlot, socket,
+        sessionId, rootChatId, rt,
+        readOnly: false, onToolLoopCheckpoint,
+        dispatchOrigin: "branch-swarm",
+      });
+      return cycleResult;
+    },
+  });
+}
+
+/**
+ * Roll up a single branch step's parent status from its sub-branch
+ * statuses. Called after each branch step settles so the
+ * execution-record reflects the branch's terminal state before any
+ * subsequent step runs. Deterministic — branch parent status is a
+ * function of sub-branch statuses, not a judgment call.
+ */
+async function rollUpBranchStepStatus(governing, recordNodeId, branchStepIndex) {
+  if (!governing?.readActiveExecutionRecord || !governing?.updateStepStatus) return null;
+  if (!recordNodeId || !Number.isFinite(branchStepIndex)) return null;
+  try {
+    const record = await governing.readActiveExecutionRecord(recordNodeId);
+    if (!record?.stepStatuses) return null;
+    const step = record.stepStatuses.find((s) => s?.stepIndex === branchStepIndex);
+    if (!step || step.type !== "branch" || !Array.isArray(step.branches)) return null;
+
+    const PROGRESSED = new Set(["done", "advanced", "skipped"]);
+    const subs = step.branches;
+    const allProgressed = subs.length > 0 && subs.every((b) => PROGRESSED.has(b.status));
+    const allCancelled  = subs.length > 0 && subs.every((b) => b.status === "cancelled");
+    const anySubFailed  = subs.some((b) => b.status === "failed");
+    const anySubBlocked = subs.some((b) => b.status === "blocked");
+
+    let nextStatus = step.status;
+    if (anySubFailed)        nextStatus = "failed";
+    else if (anySubBlocked)  nextStatus = "blocked";
+    else if (allCancelled)   nextStatus = "cancelled";
+    else if (allProgressed)  nextStatus = "done";
+
+    if (nextStatus === step.status) return step.status;
+    const completedAt = new Date().toISOString();
+    const isTerminal = nextStatus === "done"
+      || nextStatus === "failed"
+      || nextStatus === "cancelled";
+    await governing.updateStepStatus({
+      recordNodeId: record._recordNodeId || recordNodeId,
+      stepIndex: branchStepIndex,
+      updates: {
+        status: nextStatus,
+        startedAt: step.startedAt || completedAt,
+        completedAt: isTerminal ? completedAt : null,
+      },
+    });
+    return nextStatus;
+  } catch (err) {
+    log.debug("Tree Orchestrator", `rollUpBranchStepStatus(${branchStepIndex}) skipped: ${err.message}`);
+    return null;
+  }
+}
+
+/**
+ * Mark every leaf step in a failed batch as "failed" with a captured
+ * error and timestamps. Steps already in a terminal status stay where
+ * they are — Foreman overrides (advanced / skipped) and explicit
+ * earlier failures are authoritative.
+ *
+ * Called from the leaf-batch failure path so the dashboard, snapshot,
+ * and Pass 2 readers see the precise leaf that broke (vs. the whole
+ * record going silently stale).
+ */
+async function markLeafBatchFailed(recordNodeId, leafSteps, error) {
+  if (!recordNodeId || !Array.isArray(leafSteps) || leafSteps.length === 0) return;
+  try {
+    const { getExtension } = await import("../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (!governing?.readActiveExecutionRecord || !governing?.updateStepStatus) return;
+    const record = await governing.readActiveExecutionRecord(recordNodeId);
+    if (!record?._recordNodeId && !recordNodeId) return;
+    const recId = record?._recordNodeId || recordNodeId;
+    const TERMINAL_LEAF = new Set([
+      "done", "failed", "cancelled", "advanced", "skipped", "superseded",
+    ]);
+    const targetIndices = new Set(
+      leafSteps.map((s) => s?.stepIndex).filter((i) => Number.isFinite(i)),
+    );
+    const errMsg = String(error?.message || error || "leaf batch failed").slice(0, 500);
+    const completedAt = new Date().toISOString();
+    for (const step of (record.stepStatuses || [])) {
+      if (step?.type !== "leaf") continue;
+      if (TERMINAL_LEAF.has(step.status)) continue;
+      if (targetIndices.size > 0 && !targetIndices.has(step.stepIndex)) continue;
+      await governing.updateStepStatus({
+        recordNodeId: recId,
+        stepIndex: step.stepIndex,
+        updates: {
+          status: "failed",
+          startedAt: step.startedAt || completedAt,
+          completedAt,
+          error: errMsg,
+        },
+      });
+    }
+    log.info("Tree Orchestrator",
+      `🚨 Marked ${targetIndices.size} leaf step(s) failed (batch error: ${errMsg.slice(0, 80)})`);
+  } catch (err) {
+    log.debug("Tree Orchestrator", `markLeafBatchFailed skipped: ${err.message}`);
+  }
+}
+
+/**
+ * Wake the Foreman when a leaf batch fails. Payload carries the
+ * workerType + step indices + error so the Foreman reads the
+ * cognitive shape of the failure alongside the snapshot, not just
+ * "something broke."
+ */
+async function wakeForemanForLeafFailure({
+  projectNode, recordNodeIdForRollup,
+  workerType, leafSteps, error,
+  visitorId, username, userId, rootId,
+  signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+}) {
+  if (!projectNode?._id) return;
+  try {
+    const { runForemanTurn } = await import("./ruling.js");
+    const stepIndices = leafSteps
+      .map((s) => s?.stepIndex)
+      .filter((i) => Number.isFinite(i));
+    const errMsg = String(error?.message || error || "(no message)").slice(0, 500);
+    const summary =
+      `Leaf batch failure. workerType=${workerType}, ` +
+      `step${stepIndices.length === 1 ? "" : "s"}=${stepIndices.join(",")}. ` +
+      `Error: ${errMsg}. ` +
+      `Decide whether to retry the leaves at this scope, mark them failed, ` +
+      `or escalate to the Ruler for re-planning. The leaf shape was ` +
+      `${workerType} — failures in this category typically mean ` +
+      (workerType === "build" ? "the spec underspecified what to create."
+        : workerType === "refine" ? "the target artifact wasn't readable or the change was rejected."
+        : workerType === "review" ? "the artifact under review couldn't be loaded or interpreted."
+        : workerType === "integrate" ? "the sibling outputs were incompatible or missing."
+        : "(unknown shape)") +
+      ` Read the snapshot's WAITING ON entries for the per-step error context.`;
+    await runForemanTurn({
+      visitorId,
+      message: summary,
+      username, userId, rootId,
+      currentNodeId: String(projectNode._id),
+      signal, slot, socket,
+      sessionId, rootChatId, rt,
+      readOnly: false, onToolLoopCheckpoint,
+      wakeup: {
+        reason: "leaf-failed",
+        workerType,
+        stepIndices,
+        recordNodeId: recordNodeIdForRollup || null,
+        payload: summary,
+      },
+    });
+  } catch (err) {
+    log.warn("Tree Orchestrator", `Foreman leaf-failed turn failed: ${err.message}`);
+  }
+}
+
+/**
+ * Wake the Foreman when a branch step settles to "failed" (every
+ * sub-branch failed, zero done) or when the branch step itself
+ * threw. Payload carries the branch step index + sub-branch names +
+ * their workerTypes (where readable) so the Foreman has the full
+ * cross-branch context, not just the rollup verdict.
+ */
+async function wakeForemanForBranchFailure({
+  projectNode, recordNodeIdForRollup,
+  branchStep, rolledUpStatus, error,
+  visitorId, username, userId, rootId,
+  signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+}) {
+  if (!projectNode?._id) return;
+  try {
+    const { runForemanTurn } = await import("./ruling.js");
+    const subNames = (branchStep?.branches || [])
+      .map((b) => b?.name)
+      .filter(Boolean);
+    const errMsg = error ? String(error.message || error).slice(0, 500) : null;
+    const verdict = rolledUpStatus || (error ? "(dispatch error)" : "(unsettled)");
+    const summary =
+      `Branch step ${branchStep?.stepIndex ?? "?"} failure. ` +
+      `Rollup verdict: ${verdict}. ` +
+      `Sub-branches dispatched: ${subNames.join(", ") || "(none readable)"}. ` +
+      (errMsg ? `Dispatch error: ${errMsg}. ` : "") +
+      `Decide whether to retry one or more sub-branches, mark them failed ` +
+      `and continue with the remaining work, cancel the subtree, or escalate ` +
+      `to the Ruler for replan. The snapshot shows each sub-Ruler's frame ` +
+      `state under "EXECUTION STACK"; failed sub-branches appear under ` +
+      `"WAITING ON" with their workerType so you can see what shape the ` +
+      `failures took.`;
+    await runForemanTurn({
+      visitorId,
+      message: summary,
+      username, userId, rootId,
+      currentNodeId: String(projectNode._id),
+      signal, slot, socket,
+      sessionId, rootChatId, rt,
+      readOnly: false, onToolLoopCheckpoint,
+      wakeup: {
+        reason: "branch-failed",
+        stepIndex: branchStep?.stepIndex ?? null,
+        subBranchNames: subNames,
+        rolledUpStatus,
+        recordNodeId: recordNodeIdForRollup || null,
+        payload: summary,
+      },
+    });
+  } catch (err) {
+    log.warn("Tree Orchestrator", `Foreman branch-failed turn failed: ${err.message}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // DISPATCH A STASHED SWARM PLAN (used by orchestrator.js on affirmative)
 //
 // `planData` is whatever setPendingSwarmPlan captured for this visitor —
@@ -1327,7 +1833,6 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
   const {
     branches, contracts, projectNodeId, userRequest, architectChatId,
     rootChatId: stashedRootChatId, rootId: stashedRootId,
-    modeKey: stashedModeKey,
     // The Planner's plan text with [[CONTRACTS]] and [[BRANCHES]] blocks
     // stripped — leaves the ## Reasoning and ## Plan sections. The
     // Ruler's Worker reads this to know which leaf integration files
@@ -1345,7 +1850,13 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
   const rootId = stashedRootId || ctxRootId;
   const rootChatId = ctxRootChatId || stashedRootChatId || null;
 
-  if (!Array.isArray(branches) || branches.length === 0) {
+  // Note: branches.length === 0 is legitimate for leaf-only plans (the
+  // Planner emitted only leaf steps at this scope, no sub-domains). We
+  // still need to create the execution record, run the Ruler-own
+  // integration phase (Worker writes the leaf-step files), and let the
+  // Foreman freeze the record at the end. Only the swarm dispatch
+  // itself is skipped when there are no branches.
+  if (!Array.isArray(branches)) {
     return "";
   }
 
@@ -1445,7 +1956,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
         if (cEm?._emissionNodeId) contractsEmissionRef = cEm._emissionNodeId;
       }
       if (planEmission?._emissionNodeId) {
-        await governing.appendExecutionRecord({
+        const recordOut = await governing.appendExecutionRecord({
           rulerNodeId: projectNode._id,
           userId,
           core: null,
@@ -1453,288 +1964,288 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
           planEmission,
           contractsEmissionRef,
         });
+        log.info("Tree Orchestrator",
+          `📒 execution-record created at ${String(projectNode._id).slice(0, 8)}: ` +
+          `${recordOut?.recordNode?._id ? `node=${String(recordOut.recordNode._id).slice(0, 8)}` : "node=?"}, ` +
+          `ordinal=${recordOut?.ordinal ?? "?"}`);
+      } else {
+        log.warn("Tree Orchestrator",
+          `📒 execution-record SKIPPED at ${String(projectNode._id).slice(0, 8)}: ` +
+          `no plan emission with _emissionNodeId (planEmission=${!!planEmission})`);
       }
+    } else {
+      log.warn("Tree Orchestrator",
+        `📒 execution-record SKIPPED at ${String(projectNode._id).slice(0, 8)}: governing.appendExecutionRecord unavailable`);
     }
   } catch (err) {
-    log.debug("Tree Orchestrator", `Post-approval execution-record creation skipped: ${err.message}`);
-  }
-
-  // Ruler-own integration phase. Before sub-Rulers dispatch via swarm,
-  // the Ruler at this scope writes its own files (the integration shell:
-  // root entry, bootstrap, wiring). The Planner's plan lists these as
-  // leaf steps separate from the sub-domain branches.
-  //
-  // Worker uses the user's original workspace mode (stashedModeKey,
-  // typically tree:code-plan or tree:book-plan). The message
-  // explicitly enumerates the leaf-step specs the Worker MUST realize
-  // and the sub-domain directories that are FORBIDDEN — without this
-  // specificity, the Worker improvises and writes "server/index.js"
-  // into what should be a sub-Ruler scope. The tool layer also
-  // enforces this server-side via workspace-add-file's path guard.
-  //
-  // Gate: the structured emission is the canonical plan. If the
-  // emission has any leaf steps at this scope, run the Worker; if it
-  // has none (branches-only plan), skip integration. stashedPlanText
-  // (the Planner's prose) is empty for tool-only emissions, so gating
-  // on it would always skip — the bug that left package.json/README
-  // pending after acceptance.
-  if (stashedModeKey) {
-    try {
-      // Read the structured emission to extract leaf-step specs and
-      // sub-domain names directly, so the Worker's instructions are
-      // grounded in the canonical plan, not parsed from prose text.
-      let leafSpecs = [];
-      let subDomainNames = (branches || []).map((b) => b.name).filter(Boolean);
-      try {
-        const { getExtension } = await import("../loader.js");
-        const governing = getExtension("governing")?.exports;
-        if (governing?.readActivePlanEmission) {
-          const emission = await governing.readActivePlanEmission(projectNode._id);
-          if (emission?.steps?.length) {
-            leafSpecs = emission.steps
-              .filter((s) => s?.type === "leaf" && typeof s.spec === "string")
-              .map((s) => s.spec.trim())
-              .filter(Boolean);
-            // Sub-domain names from emission take precedence over the
-            // legacy branches list (kept for back-compat).
-            const emissionSubDomains = emission.steps
-              .filter((s) => s?.type === "branch" && Array.isArray(s.branches))
-              .flatMap((s) => s.branches.map((b) => b.name).filter(Boolean));
-            if (emissionSubDomains.length) subDomainNames = emissionSubDomains;
-          }
-        }
-      } catch (err) {
-        log.debug("Tree Orchestrator", `Ruler-own integration: emission read skipped: ${err.message}`);
-      }
-
-      if (leafSpecs.length === 0) {
-        log.info("Tree Orchestrator",
-          `🔨 Ruler-own integration phase: skipped at ${String(projectNode._id).slice(0, 8)} ` +
-          `(no leaf steps in active emission; ${subDomainNames.length} sub-domain branches will dispatch)`);
-      } else {
-        // Mark every leaf step as "running" up front so the dashboard's
-        // execution view shows live progress while the Worker writes.
-        try {
-          const { getExtension } = await import("../loader.js");
-          const governing = getExtension("governing")?.exports;
-          if (governing?.readActiveExecutionRecord && governing?.updateStepStatus) {
-            const record = await governing.readActiveExecutionRecord(projectNode._id);
-            if (record?._recordNodeId) {
-              const startedAt = new Date().toISOString();
-              for (const step of (record.stepStatuses || [])) {
-                if (step?.type !== "leaf" || step.status !== "pending") continue;
-                await governing.updateStepStatus({
-                  recordNodeId: record._recordNodeId,
-                  stepIndex: step.stepIndex,
-                  updates: { status: "running", startedAt },
-                });
-              }
-            }
-          }
-        } catch (err) {
-          log.debug("Tree Orchestrator", `auto-mark leaf running skipped: ${err.message}`);
-        }
-
-        // Pin position to the Ruler scope so the Worker's writes land
-        // here, not at the previous active node.
-        setCurrentNodeId(visitorId, String(projectNode._id));
-        await switchMode(visitorId, stashedModeKey, {
-          username, userId, rootId,
-          currentNodeId: String(projectNode._id),
-          clearHistory: false,
-        });
-
-        const leafBlock =
-          `LEAF STEPS YOU MUST REALIZE (one file per spec, no more, no less):\n` +
-          leafSpecs.map((s, i) => `  ${i + 1}. ${s}`).join("\n");
-
-        const forbiddenBlock = subDomainNames.length > 0
-          ? `FORBIDDEN PATHS (sub-Ruler scopes — DO NOT write inside these):\n` +
-            subDomainNames.map((n) => `  • ${n}/  (any path beginning with "${n}/")`).join("\n") +
-            `\nThe sub-Rulers below own those directories. Their own Workers ` +
-            `will populate them. Writing into ${subDomainNames.map((n) => `"${n}/"`).join(", ")} ` +
-            `from this scope is REJECTED by the workspace tool — your write ` +
-            `will fail and the user will see the rejection.`
-          : "";
-
-        // Build approval text from structured emission when prose is
-        // empty (tool-only emit). Falls back to stashedPlanText for
-        // backward compatibility with text-emission Planners.
-        let approvalText = stashedPlanText && stashedPlanText.trim()
-          ? stashedPlanText.trim()
-          : "";
-        if (!approvalText) {
-          try {
-            const { getExtension } = await import("../loader.js");
-            const governing = getExtension("governing")?.exports;
-            if (governing?.readActivePlanEmission) {
-              const emission = await governing.readActivePlanEmission(projectNode._id);
-              if (emission) {
-                approvalText =
-                  `## Reasoning\n${emission.reasoning || ""}\n\n## Plan\n` +
-                  (emission.steps || []).map((s, i) => {
-                    if (s.type === "leaf") return `${i + 1}. [leaf] ${s.spec || ""}`;
-                    if (s.type === "branch") {
-                      const subs = (s.branches || []).map((b) => `   - ${b.name}: ${b.spec || ""}`).join("\n");
-                      return `${i + 1}. [branch] ${s.rationale || ""}\n${subs}`;
-                    }
-                    return "";
-                  }).filter(Boolean).join("\n\n");
-              }
-            }
-          } catch {}
-        }
-
-        const rulerWorkerMessage =
-          `The Ruler at this scope approved the following plan:\n\n` +
-          `${approvalText}\n\n` +
-          `${leafBlock}\n\n` +
-          (forbiddenBlock ? `${forbiddenBlock}\n\n` : "") +
-          `RULES:\n` +
-          `  • Realize ONLY the leaf steps listed above. Do not improvise ` +
-          `    additional files (no extra "index.html", no extra README, ` +
-          `    no scaffolding outside the listed leaves).\n` +
-          `  • Each leaf spec → exactly one file at this scope.\n` +
-          (subDomainNames.length > 0
-            ? `  • Files inside ${subDomainNames.map((n) => `"${n}/"`).join(", ")} are NOT yours.\n`
-            : "") +
-          `  • Emit [[DONE]] when ALL listed leaf steps are written. Do not ` +
-          `    keep working past the leaf list.`;
-
-        log.info("Tree Orchestrator",
-          `🔨 Ruler-own integration phase: dispatching ${stashedModeKey} as Worker at ` +
-          `${String(projectNode._id).slice(0, 8)} (${leafSpecs.length} leaf step(s); ` +
-          `${subDomainNames.length} forbidden sub-domain(s))`);
-        await runSteppedMode(visitorId, stashedModeKey, rulerWorkerMessage, {
-          username, userId, rootId, signal, slot,
-          readOnly: false, onToolLoopCheckpoint, socket,
-          sessionId, rootChatId, rt,
-          currentNodeId: String(projectNode._id),
-          parentChatId: rootChatId || null,
-          dispatchOrigin: "ruler-own-integration",
-        });
-
-        // Mark leaf-step statuses as done on the active execution-record.
-        // The Worker just finished the Ruler's own integration files;
-        // every leaf step at this scope is now realized. Branch steps
-        // stay pending — swarm flips them as it dispatches sub-Rulers.
-        try {
-          const { getExtension } = await import("../loader.js");
-          const governing = getExtension("governing")?.exports;
-          if (governing?.readActiveExecutionRecord && governing?.updateStepStatus) {
-            const record = await governing.readActiveExecutionRecord(projectNode._id);
-            if (record?._recordNodeId) {
-              const completedAt = new Date().toISOString();
-              let marked = 0;
-              // Skip any leaf already in a terminal status — Foreman
-              // overrides (advanced) and bypasses (skipped) shouldn't
-              // be silently flipped to "done", and failed/cancelled
-              // leaves stay where they are.
-              const TERMINAL_LEAF = new Set([
-                "done", "failed", "cancelled", "advanced", "skipped", "superseded",
-              ]);
-              for (const step of (record.stepStatuses || [])) {
-                if (step?.type !== "leaf") continue;
-                if (TERMINAL_LEAF.has(step.status)) continue;
-                await governing.updateStepStatus({
-                  recordNodeId: record._recordNodeId,
-                  stepIndex: step.stepIndex,
-                  updates: {
-                    status: "done",
-                    startedAt: step.startedAt || completedAt,
-                    completedAt,
-                  },
-                });
-                marked++;
-              }
-              if (marked > 0) {
-                log.info("Tree Orchestrator",
-                  `🔧 Ruler-own integration: marked ${marked} leaf step(s) done at ` +
-                  `${String(projectNode._id).slice(0, 8)}`);
-              }
-            }
-          }
-        } catch (err) {
-          log.debug("Tree Orchestrator", `auto-mark leaf done skipped: ${err.message}`);
-        }
-      }
-    } catch (err) {
-      log.warn("Tree Orchestrator", `Ruler-own integration phase failed: ${err.message}`);
-    }
+    log.warn("Tree Orchestrator", `📒 execution-record creation FAILED: ${err.message}`);
   }
 
   try {
-    const swarmResult = await sw.runBranchSwarm({
-      branches,
-      rootProjectNode: projectNode,
-      rootChatId,
-      architectChatId,
-      sessionId,
-      visitorId,
-      userId,
-      username,
-      rootId,
-      signal,
-      slot,
-      socket,
-      onToolLoopCheckpoint,
-      userRequest: userRequest || "",
-      rt,
-      // The user's original workspace mode (tree:code-plan,
-      // tree:book-plan, etc.) flows through as defaultBranchMode so
-      // each branch's runRulerCycle has a Worker fallback when its
-      // Planner finds leaf work. Stashed at architect-emit time when
-      // runModeAndReturn captured `mode` before the Ruler-cycle
-      // substitution.
-      defaultBranchMode: stashedModeKey || null,
-      core: { metadata: { setExtMeta: async (node, ns, data) => {
-        const NodeModel = (await import("../../seed/models/node.js")).default;
-        await NodeModel.updateOne({ _id: node._id }, { $set: { [`metadata.${ns}`]: data } });
-      } } },
-      emitStatus,
-      runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot, markerChatId }) => {
-        setActiveRequest(visitorId, {
-          socket, username, userId, signal,
-          sessionId,
-          rootId,
-          rootChatId,
-          slot, onToolLoopCheckpoint,
-          rt: (getActiveRequest(visitorId) || {}).rt,
-        });
-        const branchIdStr = await pinBranchPosition(visitorId, branchNodeId, branchMode, {
-          username, userId, rootId,
-        });
-        // Sub-Ruler is alive from the moment of promotion. Its first
-        // turn arrives here as a Ruler turn, with the parent's branch
-        // spec as the inherited message. The sub-Ruler reads its own
-        // domain (just-promoted, lineage-stamped, parent contracts
-        // visible via enrichContext), then decides — typically
-        // hire-planner with a briefing derived from the inherited
-        // spec, but the sub-Ruler can also respond-directly if the
-        // work is leaf-trivial, or escalate via convene-court if the
-        // assignment doesn't make sense.
-        //
-        // Same machinery as the root Ruler. Same prompt, same tools,
-        // same judgment. Only difference is what the snapshot reads.
-        const { runRulerTurn } = await import("./ruling.js");
-        const cycleResult = await runRulerTurn({
-          visitorId,
-          message: branchMessage,
-          username, userId, rootId,
-          currentNodeId: branchIdStr,
-          signal, slot: branchSlot, socket,
-          sessionId, rootChatId, rt,
-          readOnly: false, onToolLoopCheckpoint,
-          domainWorkerMode: branchMode,
-          dispatchOrigin: "branch-swarm",
-        });
-        return cycleResult;
-      },
-    });
+  // Step-order execution. Walk the Planner's emission.steps in plan
+  // order. Each iteration handles either a leaf-batch (Worker writes
+  // files at this scope) or a branch step (sub-Rulers run their own
+  // lifecycles in parallel within the step). The Foreman holds
+  // call-stack discipline: step N+1 cannot start until step N's
+  // entire descendant subtree settles.
+  let planSteps = [];
+  let allBranchNames = [];
+  try {
+    const { getExtension } = await import("../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (governing?.readActivePlanEmission) {
+      const emission = await governing.readActivePlanEmission(projectNode._id);
+      if (emission?.steps?.length) {
+        planSteps = emission.steps;
+        allBranchNames = emission.steps
+          .filter((s) => s?.type === "branch" && Array.isArray(s.branches))
+          .flatMap((s) => s.branches.map((b) => b?.name).filter(Boolean));
+      }
+    }
+  } catch (err) {
+    log.warn("Tree Orchestrator", `step-loop emission read FAILED: ${err.message}`);
+  }
 
-    // Restore position to the project root so subsequent chat turns
-    // land on the project, not the last-running branch.
-    if (projectNode?._id) setCurrentNodeId(visitorId, String(projectNode._id));
+  // The forbidden-paths block lists ALL branch sub-domains in the
+  // plan, not just adjacent ones — branches that haven't run yet
+  // still own their territories (sub-Rulers promote on first
+  // dispatch), so the Worker must never write into them regardless
+  // of execution timing.
+  const groups = groupStepsForExecution(planSteps);
+  const leafBatchCount = groups.filter((g) => g.kind === "leaves").length;
+  const branchStepCount = groups.filter((g) => g.kind === "branch").length;
+  // Surface the type breakdown per leaf batch so logs make the
+  // execution sequence legible at a glance.
+  const leafTypeBreakdown = groups
+    .filter((g) => g.kind === "leaves")
+    .map((g) => `${g.steps.length}${(g.workerType || "build")[0]}`)
+    .join("+");
+  log.info("Tree Orchestrator",
+    `🪜 Step loop at ${String(projectNode._id).slice(0, 8)}: ` +
+    `${groups.length} group(s) (${leafBatchCount} leaf batch(es)` +
+    (leafTypeBreakdown ? ` [${leafTypeBreakdown}]` : "") +
+    `, ${branchStepCount} branch step(s)), ` +
+    `planSteps.length=${planSteps.length}`);
+  if (groups.length === 0) {
+    log.warn("Tree Orchestrator",
+      `🪜 Step loop will run NOTHING — planSteps was empty. ` +
+      `No work will happen for this dispatch. Check that the plan emission ` +
+      `was readable at projectNode._id=${String(projectNode._id).slice(0, 8)}.`);
+  }
+
+  let lastSwarmResult = { summary: "leaf-only build (no sub-Ruler dispatch)" };
+  let recordNodeIdForRollup = null;
+  try {
+    const { getExtension } = await import("../loader.js");
+    const governing = getExtension("governing")?.exports;
+    if (governing?.readActiveExecutionRecord) {
+      const record = await governing.readActiveExecutionRecord(projectNode._id);
+      recordNodeIdForRollup = record?._recordNodeId || null;
+    }
+  } catch {}
+
+  // Foreman halt-marker cache for the step-loop. Mirrors the same
+  // pattern in swarm.js (per-branch queue): cache the read briefly
+  // so a tight loop doesn't hammer Mongo, but stay tight enough to
+  // pick up Foreman writes within ~500ms of when they land.
+  //
+  // The step-loop reads this BEFORE each group dispatches so a
+  // cancel-subtree or pause-frame written during one group's run
+  // halts the next group instead of continuing past it. The swarm
+  // queue's halt-check (swarm.js) handles in-branch dispatching;
+  // this check handles between-step dispatching.
+  const HALT_CACHE_TTL_MS = 500;
+  let cachedStepHaltCheck = null;
+  let cachedStepHaltCheckAt = 0;
+  async function readStepHaltMarkers() {
+    const now = Date.now();
+    if (cachedStepHaltCheck && (now - cachedStepHaltCheckAt) < HALT_CACHE_TTL_MS) {
+      return cachedStepHaltCheck;
+    }
+    try {
+      const { getExtension } = await import("../loader.js");
+      const governing = getExtension("governing")?.exports;
+      if (!governing?.readActiveExecutionRecord) {
+        cachedStepHaltCheck = { status: null, pendingCancel: null, pendingPauseAt: null };
+        cachedStepHaltCheckAt = now;
+        return cachedStepHaltCheck;
+      }
+      const record = await governing.readActiveExecutionRecord(projectNode._id);
+      cachedStepHaltCheck = {
+        status: record?.status || null,
+        pendingCancel: record?.pendingCancel || null,
+        pendingPauseAt: typeof record?.pendingPauseAt === "number" ? record.pendingPauseAt : null,
+      };
+      cachedStepHaltCheckAt = now;
+      return cachedStepHaltCheck;
+    } catch (err) {
+      log.debug("Tree Orchestrator", `step-loop halt-marker read skipped: ${err.message}`);
+      return { status: null, pendingCancel: null, pendingPauseAt: null };
+    }
+  }
+
+  // Each group has a 1-based stepIndex (leaf groups carry one for
+  // each step in the batch; branch groups carry the step's index
+  // directly). For pendingPauseAt comparison we use the EARLIEST
+  // step index in the upcoming group — the deferred-pause boundary
+  // is "stop before dispatching step N," so a leaf batch covering
+  // steps 3,4,5 with pendingPauseAt=4 must halt before that batch
+  // runs (otherwise step 4 dispatches alongside 3 and the boundary
+  // misses). For branch groups, group.step.stepIndex is the boundary.
+  function earliestStepIndex(group) {
+    if (group.kind === "leaves") {
+      return group.steps.reduce((min, s) => {
+        const i = Number.isFinite(s?.stepIndex) ? s.stepIndex : Infinity;
+        return i < min ? i : min;
+      }, Infinity);
+    }
+    if (group.kind === "branch") {
+      return Number.isFinite(group.step?.stepIndex) ? group.step.stepIndex : Infinity;
+    }
+    return Infinity;
+  }
+
+  for (const group of groups) {
+    if (signal?.aborted) break;
+
+    // Foreman halt-marker check. The Foreman's cancel-subtree /
+    // pause-frame writes markers on the active execution-record;
+    // halt the step loop when any halt-condition is set. The
+    // Foreman has already frozen descendant records and aborted
+    // in-flight controllers; the step loop's job is to stop
+    // dispatching MORE work.
+    const halt = await readStepHaltMarkers();
+    if (halt.status === "cancelled" || halt.pendingCancel) {
+      log.warn("Tree Orchestrator",
+        `🛑 Step loop cancelled by Foreman at ${String(projectNode._id).slice(0, 8)} ` +
+        `(remaining groups skipped)`);
+      break;
+    }
+    if (halt.status === "paused") {
+      log.warn("Tree Orchestrator",
+        `⏸ Step loop paused by Foreman at ${String(projectNode._id).slice(0, 8)} ` +
+        `(remaining groups will resume on foreman-resume-frame)`);
+      break;
+    }
+    // Deferred-pause: halt BEFORE dispatching a group whose earliest
+    // step index matches pendingPauseAt. The execution-record gets
+    // flipped to "paused" so the Foreman's next wakeup sees the
+    // settled state, and the snapshot's resumeAnchors point at the
+    // correct re-entry step.
+    const upcomingStepIndex = earliestStepIndex(group);
+    if (halt.pendingPauseAt && halt.pendingPauseAt === upcomingStepIndex) {
+      log.warn("Tree Orchestrator",
+        `⏸ Step loop deferred-pause boundary reached (step ${halt.pendingPauseAt}); ` +
+        `flipping execution-record to paused and halting.`);
+      try {
+        const { getExtension } = await import("../loader.js");
+        const governing = getExtension("governing")?.exports;
+        if (recordNodeIdForRollup && governing?.freezeExecutionRecord) {
+          await governing.freezeExecutionRecord({
+            recordNodeId: recordNodeIdForRollup,
+            nextStatus: "paused",
+          });
+        }
+      } catch (err) {
+        log.debug("Tree Orchestrator", `deferred-pause freeze skipped: ${err.message}`);
+      }
+      break;
+    }
+
+    if (group.kind === "leaves") {
+      let leafBatchError = null;
+      try {
+        await runLeafGroupAtScope({
+          leafSteps: group.steps,
+          workerType: group.workerType,
+          projectNode,
+          visitorId, userId, username, rootId,
+          signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+          stashedPlanText,
+          allBranchNames,
+        });
+      } catch (err) {
+        leafBatchError = err;
+        log.warn("Tree Orchestrator",
+          `Leaf batch failed (workerType=${group.workerType || "build"}): ${err.message}`);
+      }
+      // Leaf-batch failure → mark the batch's leaf steps "failed" so
+      // the dashboard, snapshot, and Pass 2 readers see the precise
+      // step that broke, then wake the Foreman with a leaf-failed
+      // wakeup carrying the workerType. The Foreman decides retry /
+      // mark-failed / escalate; without the wakeup, leaf failures
+      // sit silent and the swarm-completed wakeup at the end
+      // conflates them with the rest of the rollup.
+      if (leafBatchError) {
+        await markLeafBatchFailed(
+          recordNodeIdForRollup,
+          group.steps,
+          leafBatchError,
+        );
+        await wakeForemanForLeafFailure({
+          projectNode, recordNodeIdForRollup,
+          workerType: group.workerType || "build",
+          leafSteps: group.steps,
+          error: leafBatchError,
+          visitorId, username, userId, rootId,
+          signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+        });
+      }
+    } else if (group.kind === "branch") {
+      let branchStepError = null;
+      try {
+        lastSwarmResult = await runBranchStepAtScope({
+          branchStep: group.step,
+          projectNode,
+          sw,
+          visitorId, userId, username, rootId,
+          signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+          architectChatId, userRequest,
+        });
+      } catch (err) {
+        branchStepError = err;
+        log.warn("Tree Orchestrator", `Branch step failed: ${err.message}`);
+      }
+      // Roll up this branch step's parent status from sub-branches
+      // immediately so the next step (and the dashboard) sees it
+      // settled before proceeding.
+      let rolledUpStatus = null;
+      try {
+        const { getExtension } = await import("../loader.js");
+        const governing = getExtension("governing")?.exports;
+        if (recordNodeIdForRollup && Number.isFinite(group.step?.stepIndex)) {
+          rolledUpStatus = await rollUpBranchStepStatus(
+            governing,
+            recordNodeIdForRollup,
+            group.step.stepIndex,
+          );
+        }
+      } catch (err) {
+        log.debug("Tree Orchestrator", `branch-step rollup skipped: ${err.message}`);
+      }
+      // Branch step failure → wake the Foreman with a branch-failed
+      // wakeup. The trigger is either (a) the step itself threw, or
+      // (b) the rollup landed on "failed" (every sub-branch failed
+      // and zero done). The Foreman reads the snapshot, sees the
+      // sub-branch failures with their workerTypes, and decides
+      // retry-branch / mark-failed / cancel-subtree / escalate.
+      if (branchStepError || rolledUpStatus === "failed") {
+        await wakeForemanForBranchFailure({
+          projectNode, recordNodeIdForRollup,
+          branchStep: group.step,
+          rolledUpStatus,
+          error: branchStepError,
+          visitorId, username, userId, rootId,
+          signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+        });
+      }
+    }
+  }
+
+  const swarmResult = lastSwarmResult;
+  // Restore position to the project root so subsequent chat turns
+  // land on the project, not the last-running branch.
+  if (projectNode?._id) setCurrentNodeId(visitorId, String(projectNode._id));
 
     // Foreman judges termination. Roll up branch-step parents from
     // their sub-branches first (deterministic — the sub-branches
@@ -1954,7 +2465,6 @@ export async function dispatchResumePlan(rulerScopeNodeId, runtimeCtx) {
           signal, slot: branchSlot, socket,
           sessionId, rootChatId, rt,
           readOnly: false, onToolLoopCheckpoint,
-          domainWorkerMode: branchMode,
           dispatchOrigin: "branch-swarm",
         });
       },

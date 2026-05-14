@@ -15,8 +15,45 @@ const StartPage = () => {
             and whatever LLM provider you choose.
           </p>
           <div className="lp-hero-ctas" style={{marginTop: 24}}>
+            <a className="lp-btn lp-btn-primary" href="/treeos">TreeOS</a>
             <a className="lp-btn lp-btn-secondary" href="/use">See what it's like</a>
+            <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
           </div>
+        </div>
+      </section>
+
+      {/* ── TREEOS ── */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">TreeOS</h2>
+          <P>
+            TreeOS is the first operating system built on top of the seed.
+            It is a bundle of around 100 extensions that ship together and
+            give the seed a working personality. Apps for fitness, food,
+            recovery, study, and knowledge. Cascade signal flow. Federation
+            through Canopy and Mycelium. Governance and rulership for
+            coordinating multi-branch work. Connectors for Telegram,
+            Discord, email, SMS. The full toolset most people want from
+            their land out of the box.
+          </P>
+          <P>
+            TreeOS is what you get when you run the setup wizard with the
+            recommended profile. It is the reference implementation. It is
+            what we run on treeos.ai. It is what most people start with.
+          </P>
+          <P>
+            But TreeOS is not the seed. The seed is the kernel underneath.
+            The seed is what every land server boots from regardless of
+            what extensions are installed. You can strip TreeOS down,
+            install your own subset, fork it entirely, or build something
+            different on the same kernel. TreeOS is a choice. The seed is
+            the contract.
+          </P>
+          <P>
+            <a href="/treeos" style={{color: "#7dd385"}}>What's in TreeOS</a>
+            <span style={{color: "rgba(255,255,255,0.15)", margin: "0 12px"}}>.</span>
+            <a href="/seed" style={{color: "rgba(255,255,255,0.5)"}}>The Seed beneath it</a>
+          </P>
         </div>
       </section>
 
@@ -214,7 +251,8 @@ chat "how's my progress this week"`}</Code>
       <section className="lp-section">
         <div className="lp-container" style={{textAlign: "center", maxWidth: 600}}>
           <div style={{display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center"}}>
-            <a className="lp-btn lp-btn-primary" href="/seed">The Seed</a>
+            <a className="lp-btn lp-btn-primary" href="/treeos">TreeOS</a>
+            <a className="lp-btn lp-btn-secondary" href="/seed">The Seed</a>
             <a className="lp-btn lp-btn-secondary" href="/build">Build</a>
             <a className="lp-btn lp-btn-secondary" href="/html">HTML System</a>
             <a className="lp-btn lp-btn-secondary" href="/extensions">Extensions</a>
@@ -233,6 +271,7 @@ chat "how's my progress this week"`}</Code>
               <a href="/seed">The Seed</a>
               <a href="/ai">The AI</a>
               <a href="/cascade">Cascade</a>
+              <a href="/governing">Governing</a>
               <a href="/flow">The Flow</a>
               <a href="/extensions">Extensions</a>
               <a href="/build">Build</a>
@@ -257,7 +296,7 @@ chat "how's my progress this week"`}</Code>
             <div className="lp-footer-col">
               <h4>Source</h4>
               <a href="https://github.com/taborgreat/create-treeos">GitHub</a>
-              <a href="https://github.com/taborgreat/TreeOS/blob/main/LICENSE">AGPL-3.0 License</a>
+              <a href="https://github.com/taborgreat/create-treeos/blob/main/template/seed/LICENSE">AGPL-3.0 License</a>
             </div>
           </div>
           <div className="lp-footer-bottom">

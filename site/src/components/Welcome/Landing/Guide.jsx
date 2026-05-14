@@ -553,6 +553,77 @@ treeos ext-scope               # see what's active at this position`}</Code>
       </section>
 
       {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 11.5 GOVERNING */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Governing</h2>
+          <P>
+            Technically an extension. Architecturally a primitive. Governing is the
+            coordination substrate that any other extension can consume so it doesn't
+            have to reinvent how plans get drafted, contracts get ratified, branches
+            get dispatched, or failures get judged. Without governing, a tree is a
+            folder structure. With it, every scope becomes an addressable domain
+            where work coordinates across branches without drifting apart.
+          </P>
+          <P>
+            Governing composes in five layers. <strong>Rulership</strong> (Pass 1,
+            shipped) defines five roles. Ruler decides and ratifies. Planner advises
+            on decomposition. Contractor commits shared vocabulary. Foreman manages
+            execution as a call stack. Worker produces artifacts at leaf scopes.
+            <strong> Courts</strong> (Pass 2) will adjudicate disagreements.
+            <strong> Reputation</strong> (Pass 3) will shape future routing from
+            accumulated track record. <strong>Structural Remedies</strong> (Pass 4)
+            will let Rulership intervene through quarantines, replacements, or
+            decommissioning when something goes wrong.
+            <strong> Economy</strong> (Pass 5) will route resources through
+            coalitions and budgets.
+          </P>
+          <P>
+            The first four roles (Ruler, Planner, Contractor, Foreman) stay
+            domain-neutral. The Worker is where workspace extensions specialize the
+            substrate for their domain. <code>code-workspace</code> adds file
+            editing tools and code validators on top of Worker.{" "}
+            <code>book-workspace</code> adds chapter writing and prose validators.
+            A future <code>civilization</code> extension would add civic action
+            tools and community-norm validators. The other roles stay uniform.
+          </P>
+          <P>
+            Self-promotion at every depth. A node becomes a Ruler the moment it
+            accepts authority for its domain. Three uniform call sites. A root node
+            accepts authority when a user request arrives. A branch accepts
+            authority when dispatched as a sub Ruler. A Worker accepts authority
+            retroactively when it discovers its work is compound. Same lifecycle
+            event, same metadata write, same architectural shape, root or ten levels
+            deep. Authority distributes to where work happens rather than
+            concentrating at the top.
+          </P>
+          <P>
+            LCA correctness on contracts. Every contract carries a scope (
+            <code>global</code>, <code>shared:[X,Y]</code>, or <code>local:[X]</code>).
+            The Lowest Common Ancestor of a contract's named consumers must sit at
+            or above the Contractor's emission position. Contracts that overreach
+            are rejected at parse time. This is what keeps coordination boundaries
+            honest as trees grow deep.
+          </P>
+          <P>
+            Governing pairs with <a href="/swarm" style={{color: "#7dd385"}}>swarm</a>{" "}
+            for parallel execution. Governing decides what gets done and ratifies
+            the shared vocabulary. Swarm dispatches the branches in parallel,
+            tracks status, reconciles with the tree, and resumes interrupted work.
+            Mechanism and policy split cleanly.
+          </P>
+          <P>
+            <a href="/governing" style={{color: "#7dd385"}}>Deep dive: Governing</a>
+            <span style={{color: "rgba(255,255,255,0.15)", margin: "0 12px"}}>.</span>
+            <a href="/governing/rulership" style={{color: "rgba(255,255,255,0.5)"}}>Rulership (Pass 1)</a>
+            <span style={{color: "rgba(255,255,255,0.15)", margin: "0 12px"}}>.</span>
+            <a href="/swarm" style={{color: "rgba(255,255,255,0.5)"}}>Swarm</a>
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
       {/* 12. CLI */}
       {/* ══════════════════════════════════════════════════════════════ */}
       <section className="lp-section lp-section-alt">
@@ -660,6 +731,59 @@ treeos llm assign         # assign to a specific tree or mode`}</Code>
           <Code style={{marginTop: 16}}>{`treeos ext install treeos-cascade      # install a bundle
 treeos ext install persona              # install standalone
 treeos ext publish my-extension         # publish your own`}</Code>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 15.5 TREEOS VS SEED VS LANDS */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">TreeOS, the Seed, and Lands</h2>
+          <P>
+            Three terms that get conflated. They are not the same.
+          </P>
+          <P>
+            <strong style={{color: "#fff"}}>The seed</strong> is the kernel. Two
+            schemas, a conversation loop, hooks, registries, a cascade engine, and
+            an extension loader. It boots with zero extensions and still works.
+            Everything else builds on it. The seed never changes per install. It
+            is the contract.
+          </P>
+          <P>
+            <strong style={{color: "#fff"}}>TreeOS</strong> is the first operating
+            system built on the seed. It is a bundle of around 100 extensions that
+            ship together. Governance, mycelium, cascade, intelligence, connect,
+            maintenance, the proficiency apps. Most of what this guide describes
+            lives in TreeOS. It is the reference implementation and a good
+            starting point. Run the setup wizard with the recommended profile
+            and you are running TreeOS. You can strip it down to a minimal land,
+            install only the extensions you want, fork it entirely, or build a
+            different OS on the same kernel. TreeOS is a choice, not the
+            substrate.
+          </P>
+          <P>
+            <strong style={{color: "#fff"}}>A land</strong> is a running server. A
+            Node.js process with the seed loaded, a database connected, an LLM
+            wired in, and whatever extensions the operator chose to install.
+            Every land boots from the seed. Most lands run TreeOS by default,
+            but a land could run an entirely different extension set. A land
+            is the deployment. TreeOS is the bundle most lands deploy. The seed
+            is what every land has in common no matter what bundle they run.
+          </P>
+          <P style={{color: "rgba(255,255,255,0.4)", fontSize: "0.85rem"}}>
+            When this guide names a feature like governance or mycelium or
+            cascade, those are TreeOS extensions. When it talks about hooks,
+            schemas, the conversation loop, or registries, those are seed
+            primitives. A land is wherever both end up running together.
+          </P>
+          <P>
+            <a href="/treeos" style={{color: "#7dd385"}}>What's in TreeOS</a>
+            <span style={{color: "rgba(255,255,255,0.15)", margin: "0 12px"}}>.</span>
+            <a href="/seed" style={{color: "rgba(255,255,255,0.5)"}}>The Seed</a>
+            <span style={{color: "rgba(255,255,255,0.15)", margin: "0 12px"}}>.</span>
+            <a href="/lands" style={{color: "rgba(255,255,255,0.5)"}}>Start a Land</a>
+          </P>
         </div>
       </section>
 
@@ -971,6 +1095,7 @@ export async function init(core) {
               <a href="/seed">The Seed</a>
               <a href="/ai">The AI</a>
               <a href="/cascade">Cascade</a>
+              <a href="/governing">Governing</a>
               <a href="/flow">The Flow</a>
               <a href="/extensions">Extensions</a>
               <a href="/build">Build</a>
@@ -994,7 +1119,7 @@ export async function init(core) {
             <div className="lp-footer-col">
               <h4>Source</h4>
               <a href="https://github.com/taborgreat/create-treeos">GitHub</a>
-              <a href="https://github.com/taborgreat/TreeOS/blob/main/LICENSE">AGPL-3.0 License</a>
+              <a href="https://github.com/taborgreat/create-treeos/blob/main/template/seed/LICENSE">AGPL-3.0 License</a>
             </div>
           </div>
           <div className="lp-footer-bottom">

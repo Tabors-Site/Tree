@@ -200,10 +200,86 @@ async function ensureRulerScope({ scopeNodeId, userId, message, dispatchOrigin }
   const governing = await governingExports();
   if (!governing || !scopeNodeId) return null;
 
+  // Resolve the actual Ruler scope. The user can speak from anywhere
+  // in the tree, including from inside a Ruler's structural subtree
+  // (the plans/contracts/runs trio members, their emission children,
+  // or any free-form notes a user attached under an emission). The
+  // Ruler is the scope ABOVE the trio — never the trio member, never
+  // an emission, and never any user-attached child of an emission.
+  //
+  // Walk the full ancestor chain. If ANY ancestor is structural
+  // (plan / plan-emission / contracts / contracts-emission /
+  // execution / execution-record), the resolved scope is the first
+  // non-structural ancestor that sits ABOVE all structural ancestors
+  // in the chain. This covers:
+  //   1. user at emission-1 directly        → walk past emission, plans → Ruler
+  //   2. user at "my-note" under emission-1 → walk past note's structural
+  //      ancestors (emission, plans) → Ruler
+  //   3. user at a normal Ruler scope       → no structural in chain,
+  //      self is the Ruler (or promotion candidate)
+  //
+  // Emission readback (readActivePlanEmission etc.) is by ID, so a
+  // child on an emission does NOT break the system's ability to see
+  // the plan — it just means routing would otherwise have promoted
+  // the wrong node. This walk-up keeps routing honest.
+  let actualScopeId = String(scopeNodeId);
+  const STRUCTURAL_TYPES = new Set([
+    "plan", "plan-emission",
+    "contracts", "contracts-emission",
+    "execution", "execution-record",
+  ]);
+  try {
+    const { default: NodeModel } = await import("../../seed/models/node.js");
+    const { getAncestorChain } = await import("../../seed/tree/ancestorCache.js");
+    const self = await NodeModel.findById(actualScopeId).select("_id type").lean();
+    if (self) {
+      const ancestors = await getAncestorChain(actualScopeId) || [];
+      // Chain is [self, parent, grandparent, ..., root].
+      // Some implementations of getAncestorChain include self as
+      // index 0; defend against both shapes.
+      const chain = ancestors.length && String(ancestors[0]?._id) === String(self._id)
+        ? ancestors
+        : [self, ...ancestors];
+
+      const hasStructural = chain.some((n) => STRUCTURAL_TYPES.has(n.type));
+      if (hasStructural) {
+        // Walk past all structural ancestors. The first non-structural
+        // ancestor that sits above the structural region is the Ruler
+        // scope.
+        let resolved = null;
+        for (let i = 0; i < chain.length; i++) {
+          if (STRUCTURAL_TYPES.has(chain[i].type)) continue;
+          // Check that this candidate has no structural ancestor below
+          // it in the chain. Since the chain is self→root and we walk
+          // forward, the first non-structural we hit AFTER any
+          // structural is the boundary.
+          const lowerHasStructural = chain
+            .slice(0, i)
+            .some((n) => STRUCTURAL_TYPES.has(n.type));
+          if (lowerHasStructural) {
+            resolved = chain[i];
+            break;
+          }
+        }
+        if (resolved?._id) {
+          actualScopeId = String(resolved._id);
+        } else if (governing.findRulerScope) {
+          // No clean non-structural ancestor found (degenerate tree).
+          // Fall back to findRulerScope which uses its own resolution.
+          const ruler = await governing.findRulerScope(actualScopeId);
+          if (ruler?._id) actualScopeId = String(ruler._id);
+        }
+      }
+    }
+  } catch (err) {
+    log.debug("Ruling", `Ruler scope walk-up skipped: ${err.message}`);
+  }
+
   // Self-promotion. Idempotent — already-promoted scopes stay as-is.
+  // Only promotes the resolved scope, never a structural child.
   if (governing.promoteToRuler) {
     await governing.promoteToRuler({
-      nodeId: scopeNodeId,
+      nodeId: actualScopeId,
       reason: dispatchOrigin === "branch-swarm"
         ? `sub-Ruler dispatched by parent (origin: ${dispatchOrigin})`
         : `user request entered tree at this scope (origin: ${dispatchOrigin || "ruler-turn"})`,
@@ -213,19 +289,12 @@ async function ensureRulerScope({ scopeNodeId, userId, message, dispatchOrigin }
     });
   }
 
-  // Plan trio member.
-  if (governing.ensurePlanAtScope && userId) {
-    try {
-      await governing.ensurePlanAtScope({
-        scopeNodeId,
-        userId,
-        systemSpec: typeof message === "string" ? message.slice(0, 500) : null,
-        wasAi: false,
-      });
-    } catch (err) {
-      log.debug("Ruling", `ensurePlanAtScope skipped: ${err.message}`);
-    }
-  }
+  // Plan/contracts/runs trio members are created lazily by their
+  // respective emission tools (governing-emit-plan, governing-emit-
+  // contracts, dispatch-execution → appendExecutionRecord). The Ruler
+  // doesn't need empty trio nodes hanging around when the role hasn't
+  // been hired yet. Speaking at a Ruler scope before any emission
+  // leaves the trio absent — clean state.
 
   // Lineage stamp for sub-Rulers.
   const isBranchDispatch = typeof dispatchOrigin === "string"
@@ -286,11 +355,6 @@ export async function runRulerTurn({
   rt,
   readOnly,
   onToolLoopCheckpoint,
-  // Domain hint — the original workspace mode the user's message
-  // would have routed to (tree:code-plan, tree:book-plan, etc.). The
-  // Ruler does not consume this; it's threaded through to the Worker
-  // phase when the Ruler's decision is hire-planner.
-  domainWorkerMode,
   // Origin discriminator (see above).
   dispatchOrigin,
   // Recursion depth for latency instrumentation. Threaded explicitly

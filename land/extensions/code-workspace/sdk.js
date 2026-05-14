@@ -56,7 +56,21 @@ import { registerStrategy } from "./strategyRegistry.js";
 // defineStrategy
 // ---------------------------------------------------------------------------
 
-export function defineStrategy({ name, contextBlock, appliesWhen, tools = [], modes = ["tree:code-plan", "tree:code-log"] }) {
+export function defineStrategy({
+  name,
+  contextBlock,
+  appliesWhen,
+  tools = [],
+  // Strategies inject their tools into the typed Workers that
+  // actually do code work. Build/Refine/Integrate are the writers;
+  // Review reads. Strategies that want their tools available in
+  // Review too can extend this list when calling defineStrategy.
+  modes = [
+    "tree:code-worker-build",
+    "tree:code-worker-refine",
+    "tree:code-worker-integrate",
+  ],
+}) {
   if (!name || typeof name !== "string") {
     throw new Error("defineStrategy: name is required");
   }

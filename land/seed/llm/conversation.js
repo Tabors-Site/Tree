@@ -1739,7 +1739,16 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
   if (_chatCtx.chatId && !args.chatId) args.chatId = _chatCtx.chatId;
   if (_chatCtx.sessionId && !args.sessionId) args.sessionId = _chatCtx.sessionId;
   if (ctx.rootId && !args.rootId) args.rootId = ctx.rootId;
-  const _curNode = session.currentNodeId || ctx.rootId || null;
+  // Pinned position wins. When a turn is dispatched with an explicit
+  // ctx.currentNodeId (Worker-at-Ruler-scope, sub-Ruler turn, branch
+  // dispatch, etc.) tool calls land at THAT node — even if the user
+  // navigates somewhere else mid-turn and the visitor's session
+  // state shifts. Without this pin, a sub-Ruler's Worker writes into
+  // the project root the moment the user clicks elsewhere in the
+  // dashboard, because session.currentNodeId is per-visitor and
+  // shared between user-driven turns and dispatch-driven turns.
+  // Falls back to session state for unpinned turns (regular chat).
+  const _curNode = ctx.currentNodeId || session.currentNodeId || ctx.rootId || null;
   if (_curNode && !args.nodeId) args.nodeId = _curNode;
 
   // Tool circuit breaker: if this tool has failed too many times in this session, skip it.

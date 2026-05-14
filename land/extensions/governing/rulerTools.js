@@ -464,12 +464,29 @@ export default function getRulerTools(_core) {
         const contractorMessage =
           `The Ruler at this scope approved this plan:\n\n${planText}\n\n` +
           (briefing ? `Ruler's additional briefing:\n${briefing}\n\n` : "") +
-          `Draft contracts shaped around the approved plan. Identify shared ` +
-          `vocabulary (events, storage keys, dom ids, message types, function ` +
-          `signatures) the named sub-domains must agree on. Emit via ` +
-          `governing-emit-contracts. Validate scope authority against the LCA ` +
-          `of named consumers; the dispatcher rejects contracts whose scope ` +
-          `exceeds the LCA.`;
+          `Draft contracts and emit ONCE via governing-emit-contracts.\n\n` +
+          `ROOT scope: always emit substantive contracts. Root names are ` +
+          `project-level vocabulary every reader, sub-Ruler, future ` +
+          `revision, and Pass 2 court will reference. Even a flat plan ` +
+          `commits at root: file path, exported component or function ` +
+          `names, DOM ids the artifact creates, state-type names, ` +
+          `storage keys. Use scope: local:[<this-scope>] for these.\n\n` +
+          `CHILD scope: read parent contracts (visible above this ` +
+          `briefing) first. Three outcomes:\n` +
+          `  1. Plan introduces new vocabulary the parent didn't cover ` +
+          `→ emit substantive contracts for the new names with scope ` +
+          `local:[<this-scope>] or shared:[A,B] for cross-sub coordination.\n` +
+          `  2. Plan entirely inherits — every name is already in parent ` +
+          `contracts → emit an INHERITANCE DECLARATION with inheritsFrom: ` +
+          `<parent-ruler-id>, parentContractsApplied: [<refs>], and ` +
+          `contracts: []. This is a real ratified state, not the absence ` +
+          `of one. Pass 2 reads it as a signed inheritance commitment.\n` +
+          `  3. Mix of new + inherited → emit substantive contracts for ` +
+          `the new names; inherited names are implicit (not re-emitted).\n\n` +
+          `Validate scope authority against the LCA of named consumers; ` +
+          `contracts whose scope exceeds the LCA are rejected. There is ` +
+          `no exit path without emitting — empty contracts arrays are ` +
+          `rejected unless paired with an inheritance declaration.`;
 
         log.info("Governing",
           `📜 Ruler hiring Contractor at ${String(ruler._id).slice(0, 8)} ` +
@@ -801,8 +818,9 @@ export default function getRulerTools(_core) {
     // The plan is approved and contracts are ratified. Now run the
     // execution. This tool spawns the dispatch flow as a chainstep:
     //   - Foreman primitives create the execution-record.
-    //   - Worker (in the user's domain mode like tree:code-plan)
-    //     writes the Ruler's own leaf steps at this scope.
+    //   - Typed Workers (build/refine/review/integrate) write the
+    //     Ruler's own leaf steps at this scope. Dispatch picks the
+    //     mode per leaf via governing.lookupWorkerMode.
     //   - swarm.runBranchSwarm dispatches sub-Ruler turns recursively.
     //   - On completion, Foreman wakes for the swarm-completed
     //     judgment (freeze record terminal status).
@@ -903,22 +921,12 @@ export default function getRulerTools(_core) {
           `contracts emission-${contractsEmission.ordinal}, ` +
           `${branches.length} branches)`);
 
-        // Resolve workspace mode for Ruler-own integration phase.
-        // The user's tree may be a code-workspace, book-workspace,
-        // etc. Use the persisted workspace mode at this scope (or
-        // default to tree:code-plan).
-        let stashedModeKey = "tree:code-plan";
-        try {
-          const Node = (await import("../../seed/models/node.js")).default;
-          const scopeNode = await Node.findById(ruler._id).select("metadata").lean();
-          const meta = scopeNode?.metadata instanceof Map
-            ? Object.fromEntries(scopeNode.metadata)
-            : (scopeNode?.metadata || {});
-          // Look for a workspace mode hint in tree metadata; if any
-          // workspace extension installed at this scope, use its
-          // -plan mode.
-          if (meta?.modes?.plan) stashedModeKey = meta.modes.plan;
-        } catch {}
+        // Worker dispatch is fully owned by governance's typed Worker
+        // resolver now — dispatch.resolveWorkerModeForType picks the
+        // mode per leaf based on the leaf's workerType + governing's
+        // workspace registry. The legacy stashedModeKey (the workspace
+        // plan mode the user originally invoked) is no longer threaded
+        // through; dispatch infers the workspace from the registry.
 
         const callerSignal = await getCallerAbortSignal(visitorId);
         const callerSocket = await getCallerSocket(visitorId);
@@ -947,7 +955,6 @@ export default function getRulerTools(_core) {
             architectChatId: chatId || null,
             rootChatId: chatId || null,
             rootId: rootId || null,
-            modeKey: stashedModeKey,
             targetNodeId: String(ruler._id),
             cleanedAnswer: "",
             emission: planEmission,

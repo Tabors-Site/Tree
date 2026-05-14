@@ -33,6 +33,13 @@ import FitnessPage from "./Landing/FitnessPage.jsx";
 import FoodPage from "./Landing/FoodPage.jsx";
 import RecoveryPage from "./Landing/RecoveryPage.jsx";
 import KbPage from "./Landing/KbPage.jsx";
+import GoverningPage from "./Landing/GoverningPage.jsx";
+import RulershipPage from "./Landing/RulershipPage.jsx";
+import RulerPage from "./Landing/RulerPage.jsx";
+import PlannerPage from "./Landing/PlannerPage.jsx";
+import ContractorPage from "./Landing/ContractorPage.jsx";
+import ForemanPage from "./Landing/ForemanPage.jsx";
+import WorkerPage from "./Landing/WorkerPage.jsx";
 
 import ApiAccessSection from "./About/API.jsx";
 
@@ -83,6 +90,13 @@ const WelcomeRoutes = () => {
       <Route path="/food" element={<FoodPage />} />
       <Route path="/recovery" element={<RecoveryPage />} />
       <Route path="/kb" element={<KbPage />} />
+      <Route path="/governing" element={<GoverningPage />} />
+      <Route path="/governing/rulership" element={<RulershipPage />} />
+      <Route path="/governing/rulership/ruler" element={<RulerPage />} />
+      <Route path="/governing/rulership/planner" element={<PlannerPage />} />
+      <Route path="/governing/rulership/contractor" element={<ContractorPage />} />
+      <Route path="/governing/rulership/foreman" element={<ForemanPage />} />
+      <Route path="/governing/rulership/worker" element={<WorkerPage />} />
       <Route path="/horizon" element={<HorizonRedirect />} />
 
       {/* Original app welcome (treeos.ai example) */}

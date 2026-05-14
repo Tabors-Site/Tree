@@ -114,10 +114,19 @@ export async function runSteppedMode(visitorId, mode, message, {
   // Modes that are expected to produce file writes. A turn that ends with
   // reads only is suspicious for these — the model is probably claiming
   // completion without actually doing the work. We'll force a retry below.
+  //
+  // Typed Workers are the only modes that do writes now (governance Ruler
+  // routes work through them). Build creates, Refine edits, Integrate
+  // assembles top-level files. Review is read-only by design — it should
+  // NOT be in this set, because a read-only Review turn is correct
+  // behavior.
   const WRITE_EXPECTED_MODES = new Set([
-    "tree:code-plan",
-    "tree:code-log",
-    "tree:code-coach",
+    "tree:code-worker-build",
+    "tree:code-worker-refine",
+    "tree:code-worker-integrate",
+    "tree:book-worker-build",
+    "tree:book-worker-refine",
+    "tree:book-worker-integrate",
   ]);
   const expectsWrites = WRITE_EXPECTED_MODES.has(mode);
 

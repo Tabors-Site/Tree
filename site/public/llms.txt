@@ -108,6 +108,24 @@ Hook lifecycle: afterContractsDeclared, onBranchStart, afterBranchFileWrite, aft
 
 Contracts are whatever invariant keeps parallel branches coherent. Wire message shapes for code. Terminology and citations for research. Character names and timeline for fiction. Schemas for data pipelines. Learning objectives for curriculum.
 
+## Governing
+
+The coordination glue of TreeOS. Without it, a tree is a folder structure. With it, every scope becomes an addressable domain where work coordinates across branches without drifting apart. Governing is the substrate workspace extensions consume.
+
+Five layers compose into the full architecture. Rulership (Pass 1, shipped) defines the role taxonomy. Courts (Pass 2, designed) adjudicate disagreements. Reputation (Pass 3, designed) shapes future routing decisions from accumulated track record. Structural Remedies (Pass 4, designed) lets Rulership fix things via quarantines, replacements, and decommissioning when reputation signal or court ruling says a position is failing. The conservative corrective tool, used rarely and deliberately. Economy (Pass 5, designed) routes resources through coalitions and budgets.
+
+Rulership has five roles, each with bounded judgment that composes into a clear chain of accountability. Ruler decides and ratifies. Planner advises on decomposition (transient, exits after emission). Contractor commits shared vocabulary contracts (transient, exits after emission). Foreman manages execution as a call stack (wakes for judgment required cases, stays programmatic for routine motion). Worker produces artifacts at leaf scopes.
+
+The other four roles (Ruler, Planner, Contractor, Foreman) are domain neutral. The Worker is where workspace extensions specialize the substrate for their domain. code workspace specializes Worker for files and code validators. book workspace specializes for prose and continuity validators. civilization specializes for civic agreements and jurisdictional validators. The Ruler/Planner/Contractor/Foreman primitives stay uniform; only the Worker varies per domain.
+
+Self promotion lifecycle. A node becomes a Ruler the moment it accepts authority for its domain. Three uniform call sites: a root node accepts authority when a user request arrives, a branch accepts authority when dispatched as a sub Ruler, a Worker accepts authority retroactively when it discovers its work is compound. Authority arises through acceptance at the scope where work happens, never imposed from above.
+
+LCA correctness on contracts. Every contract carries a scope (global, shared:[X,Y], or local:[X]). The Lowest Common Ancestor of a contract's named consumers must sit at or above the Contractor's emission position. Contracts that overreach are rejected at parse time. This keeps coordination boundaries honest as trees grow deep.
+
+Frame discipline. Trees execute like call stacks. Step N+1 does not start until step N's entire descendant subtree settles. Cancel a parent and all descendants halt. Cancel a sub Ruler and only its subtree halts. Pause and resume preserve frame position via persistent markers that survive session refresh. The Foreman holds this discipline.
+
+Substrate for becoming. Approval ledgers, ratified contracts, branch outcomes, Foreman wakeups all accumulate. A Ruler that has run for months has a track record. A scope that has hosted many plans has precedent. A contract that has survived ten ratifications is a stable name. Pass 2 courts read these records. Pass 3 reputation scores from them. Pass 4 structural remedies modify them. Pass 5 economy routes resources through them. Rulership is the foundation; the rest is layered consumers.
+
 ## Extensions
 
 A folder with manifest.js and index.js. The manifest declares needs (models, services, other extensions with semver). init(core) returns routes, tools, jobs, pageRouter, exports.
@@ -219,6 +237,13 @@ A snake eating its own tail. Claude Code, but operated from inside the system it
 - Code: https://treeos.ai/code
 - Cascade: https://treeos.ai/cascade
 - The Flow: https://treeos.ai/flow
+- Governing: https://treeos.ai/governing
+- Rulership (Pass 1): https://treeos.ai/governing/rulership
+- The Ruler: https://treeos.ai/governing/rulership/ruler
+- The Planner: https://treeos.ai/governing/rulership/planner
+- The Contractor: https://treeos.ai/governing/rulership/contractor
+- The Foreman: https://treeos.ai/governing/rulership/foreman
+- The Worker: https://treeos.ai/governing/rulership/worker
 - Extensions: https://treeos.ai/extensions
 - The Network: https://treeos.ai/network
 - Use TreeOS: https://treeos.ai/use

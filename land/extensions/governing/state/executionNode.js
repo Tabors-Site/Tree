@@ -42,12 +42,20 @@ export async function ensureExecutionNode({ scopeNodeId, userId, core }) {
 
   // Create lazily. core.tree.createNode fires kernel hooks; fall back
   // to direct insert when the scoped core is absent.
+  //
+  // Visible name is "runs" (parallel collection holding execution
+  // records). The structural type stays "execution" because every
+  // query in the codebase filters on type, not name. Renaming type
+  // would be a destructive migration; renaming name is cosmetic and
+  // reads more naturally to anyone walking the tree. Sam's framing
+  // (avoid "execution" overloading with phase-4 structural remedies)
+  // is satisfied by the visible label change.
   let created = null;
   try {
     if (core?.tree?.createNode) {
       created = await core.tree.createNode({
         parentId: String(scopeNodeId),
-        name: "execution",
+        name: "runs",
         type: "execution",
         userId,
         wasAi: true,
@@ -62,7 +70,7 @@ export async function ensureExecutionNode({ scopeNodeId, userId, core }) {
     const { v4: uuid } = await import("uuid");
     created = await NodeModel.create({
       _id: uuid(),
-      name: "execution",
+      name: "runs",
       type: "execution",
       parent: scopeNodeId,
       children: [],

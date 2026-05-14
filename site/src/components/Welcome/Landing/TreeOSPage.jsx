@@ -18,6 +18,7 @@ const TreeOSPage = () => {
           </p>
           <div className="lp-hero-ctas">
             <a className="lp-btn lp-btn-primary" href="/seed">The Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="/governing">Governing</a>
             <a className="lp-btn lp-btn-secondary" href="/what">What?</a>
             <a className="lp-btn lp-btn-secondary" href="/guide">Guide</a>
             <a className="lp-btn lp-btn-secondary" href="https://horizon.treeos.ai">Horizon</a>
@@ -460,6 +461,7 @@ const TreeOSPage = () => {
               <a href="/seed">The Seed</a>
               <a href="/ai">The AI</a>
               <a href="/cascade">Cascade</a>
+              <a href="/governing">Governing</a>
               <a href="/swarm">Swarm</a>
               <a href="/flow">The Flow</a>
               <a href="/extensions">Extensions</a>
@@ -485,7 +487,7 @@ const TreeOSPage = () => {
             <div className="lp-footer-col">
               <h4>Source</h4>
               <a href="https://github.com/taborgreat/create-treeos">GitHub</a>
-              <a href="https://github.com/taborgreat/TreeOS/blob/main/LICENSE">AGPL-3.0 License</a>
+              <a href="https://github.com/taborgreat/create-treeos/blob/main/template/seed/LICENSE">AGPL-3.0 License</a>
             </div>
           </div>
           <div className="lp-footer-bottom">

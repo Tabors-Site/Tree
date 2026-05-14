@@ -113,10 +113,40 @@ export default {
         handler: "./modes/contractor.js",
         assignmentSlot: "governing-contractor",
       },
+      // Generic Worker stays registered for backward compatibility:
+      // older plans without a workerType field resolve here. The
+      // mode delegates to Build (the default cognitive shape).
       {
         key: "tree:governing-worker",
         handler: "./modes/worker.js",
         assignmentSlot: "governing-worker",
+      },
+      // The four typed Workers. Workers are typed by the cognitive
+      // shape of the work, not by domain — Build creates new
+      // artifacts, Refine improves existing ones, Review judges
+      // without modifying, Integrate ties sibling outputs together.
+      // Workspaces may register per-type specializations via
+      // provides.workerTypes; absent that, dispatch routes to these
+      // governing base modes directly.
+      {
+        key: "tree:governing-worker-build",
+        handler: "./modes/workerBuild.js",
+        assignmentSlot: "governing-worker-build",
+      },
+      {
+        key: "tree:governing-worker-refine",
+        handler: "./modes/workerRefine.js",
+        assignmentSlot: "governing-worker-refine",
+      },
+      {
+        key: "tree:governing-worker-review",
+        handler: "./modes/workerReview.js",
+        assignmentSlot: "governing-worker-review",
+      },
+      {
+        key: "tree:governing-worker-integrate",
+        handler: "./modes/workerIntegrate.js",
+        assignmentSlot: "governing-worker-integrate",
       },
       {
         key: "tree:governing-foreman",

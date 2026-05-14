@@ -378,9 +378,25 @@ router.get("/chat", authenticateLite, async (req, res) => {
       font-style: italic;
     }
 
-    /* Tree picker */
+    /* Tree picker. Owns its own scroll so the list of roots can be
+       browsed without dragging the whole page. Capped height keeps it
+       above the fold even with dozens of trees. */
     .tree-picker {
-      padding: 12px 16px 4px;
+      padding: 12px 14px 14px;
+      max-height: 52vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.18) transparent;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+    .tree-picker::-webkit-scrollbar { width: 6px; }
+    .tree-picker::-webkit-scrollbar-track { background: transparent; margin: 6px 0; }
+    .tree-picker::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 3px; }
+    .tree-picker::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.32); }
+    @media (min-width: 900px) {
+      .tree-picker { max-height: 460px; }
     }
     /* Responsive tree-list grid. Cards self-size; on narrow screens
        they collapse to one column, on wider screens fill with as many
@@ -397,23 +413,41 @@ router.get("/chat", authenticateLite, async (req, res) => {
       border-radius: 12px;
       padding: 14px 16px;
       cursor: pointer;
-      transition: background var(--transition-fast), transform var(--transition-fast), border-color var(--transition-fast);
+      transition: background var(--transition-fast), transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
       display: flex; align-items: center; gap: 12px;
-      min-height: 56px;
+      min-height: 60px;
       animation: fadeInUp 0.3s ease-out backwards;
     }
     .tree-item:hover {
       background: var(--bg-hover);
       border-color: var(--border-strong);
       transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.18);
     }
     .tree-item:active { transform: translateY(0) scale(0.98); }
     .tree-item-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
-    .tree-item-icon { font-size: 20px; flex-shrink: 0; }
+    .tree-item-icon { font-size: 22px; flex-shrink: 0; }
     .tree-item-name { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tree-item-meta { font-size: 12px; color: var(--text-muted); }
+    .tree-count { font-size: 0.7rem; color: var(--text-muted); font-weight: 500; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; }
+    .tree-filter-row { padding: 8px 14px 0; }
+    .tree-filter-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color var(--transition-fast);
+    }
+    .tree-filter-input:focus { border-color: var(--border-strong); }
+    .tree-filter-input::placeholder { color: var(--text-muted); }
+    .tree-empty-filter { padding: 16px; color: var(--text-muted); font-size: 0.85rem; text-align: center; }
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(16px); } }
-    ${trees.map((_, i) => `.tree-item:nth-child(${i + 1}) { animation-delay: ${i * 0.06}s; }`).join("\n    ")}
+    ${trees.map((_, i) => `.tree-item:nth-child(${i + 1}) { animation-delay: ${Math.min(i * 0.05, 0.5)}s; }`).join("\n    ")}
 
     .empty-state {
       background: rgba(var(--glass-rgb), var(--glass-alpha));
@@ -1058,13 +1092,23 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
     <!-- Trees Zone -->
     <div class="zone-section" id="zoneTrees">
-      <div class="zone-label" style="display:flex;justify-content:space-between;align-items:center;">
-        <span>Trees</span>
+      <div class="zone-label" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="display:flex;align-items:center;gap:8px;">
+          <span>Trees</span>
+          ${trees.length > 0 ? `<span class="tree-count" id="treeCount">${trees.length}</span>` : ""}
+        </span>
         <form style="display:flex;gap:6px;" onsubmit="createTree(event)">
           <input type="text" id="newTreeName" placeholder="New tree..." autocomplete="off" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text-secondary);font-size:0.8rem;width:120px;outline:none;" />
           <button type="submit" style="background:var(--border-strong);border:none;color:var(--text-muted);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.8rem;">+</button>
         </form>
       </div>
+      ${
+        trees.length >= 6
+          ? `<div class="tree-filter-row">
+              <input type="text" id="treeFilter" class="tree-filter-input" placeholder="Filter trees..." autocomplete="off" oninput="filterTrees(this.value)" />
+            </div>`
+          : ""
+      }
       <div class="tree-picker" id="treePicker">
         ${
           trees.length > 0
@@ -1072,13 +1116,14 @@ router.get("/chat", authenticateLite, async (req, res) => {
                 ${trees
                   .map(
                     (t) => `
-                  <div class="tree-item" onclick="selectTree('${t._id}', '${escapeHtml(t.name)}')">
+                  <div class="tree-item" data-name="${escapeHtml(t.name).toLowerCase()}" onclick="selectTree('${t._id}', '${escapeHtml(t.name)}')">
                     <span class="tree-item-icon">🌳</span>
                     <span class="tree-item-name">${escapeHtml(t.name)}</span>
                   </div>`,
                   )
                   .join("")}
-              </div>`
+              </div>
+              <div class="tree-empty-filter" id="treeEmptyFilter" style="display:none;">No trees match.</div>`
             : `<div style="padding:16px;color:var(--text-muted);font-size:0.85rem;text-align:center;">No trees yet. Just start talking at home and the tree grows.</div>`
         }
       </div>
@@ -1505,6 +1550,22 @@ router.get("/chat", authenticateLite, async (req, res) => {
       // every step (leaves + branches), and branch rationales. Falls
       // back to legacy branches-only view when emission is absent.
       var emission = ev && ev.emission && Array.isArray(ev.emission.steps) ? ev.emission : null;
+      // Diagnostic. When the rich card silently degrades to the legacy
+      // branches-only view, we want to know which field on the
+      // payload disqualified it. Surfaces the shape in the browser
+      // console so a missing reasoning paragraph stops being a mystery.
+      try {
+        if (typeof console !== "undefined" && console.log) {
+          console.log("[plan-card] payload", {
+            hasEmission: !!(ev && ev.emission),
+            stepsIsArray: !!(ev && ev.emission && Array.isArray(ev.emission.steps)),
+            stepsLen: ev && ev.emission && Array.isArray(ev.emission.steps) ? ev.emission.steps.length : null,
+            reasoningLen: ev && ev.emission && typeof ev.emission.reasoning === "string" ? ev.emission.reasoning.length : null,
+            branchesLen: ev && Array.isArray(ev.branches) ? ev.branches.length : null,
+            ev: ev,
+          });
+        }
+      } catch (_) { /* never block render on logging */ }
       var bodyHtml = "";
       var totalSteps = 0;
       var branchStepCount = 0;
@@ -2009,6 +2070,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
         const item = document.createElement("div");
         item.className = "tree-item";
+        item.setAttribute("data-name", name.toLowerCase());
         const rootId = data.data?.rootId || data.rootId;
         item.onclick = () => selectTree(rootId, name);
         item.innerHTML = \`
@@ -2017,6 +2079,11 @@ router.get("/chat", authenticateLite, async (req, res) => {
         item.style.animation = "fadeInUp 0.3s ease-out";
         treeList.appendChild(item);
 
+        const countBadge = document.getElementById("treeCount");
+        if (countBadge) {
+          countBadge.textContent = treeList.children.length;
+        }
+
         input.value = "";
       } catch (err) {
         console.error("Create tree error:", err);
@@ -2024,6 +2091,23 @@ router.get("/chat", authenticateLite, async (req, res) => {
       } finally {
         btn.disabled = false;
       }
+    }
+
+    // ── Tree filter (visible only with 6+ trees) ───────────────────────
+    function filterTrees(query) {
+      const q = (query || "").trim().toLowerCase();
+      const list = document.getElementById("treeList");
+      if (!list) return;
+      const items = list.querySelectorAll(".tree-item");
+      let visible = 0;
+      items.forEach(function (item) {
+        const name = item.getAttribute("data-name") || "";
+        const match = !q || name.indexOf(q) !== -1;
+        item.style.display = match ? "" : "none";
+        if (match) visible++;
+      });
+      const empty = document.getElementById("treeEmptyFilter");
+      if (empty) empty.style.display = visible === 0 && q ? "block" : "none";
     }
 
     // ── Tree selection ────────────────────────────────────────────────

@@ -18,6 +18,12 @@
 import { z } from "zod";
 import Node from "../../seed/models/node.js";
 import log from "../../seed/log.js";
+import {
+  WORKER_TYPES,
+  DEFAULT_WORKER_TYPE,
+  isValidWorkerType,
+  coerceWorkerType,
+} from "./modes/workerBase.js";
 
 // Caps are sanity bounds, not formatting rules. The prompt asks the
 // model to be concise; these only catch runaway emissions (a 50KB
@@ -76,6 +82,19 @@ function validatePlanArgs(args) {
           const r = String(step.rationale).trim();
           if (r.length > RATIONALE_CAP) errors.push(`${where} (leaf) \`rationale\` exceeds ${RATIONALE_CAP} chars; trim to 1-2 sentences`);
         }
+        // workerType is optional; default is "build". Anything else
+        // must match the canonical list (build/refine/review/integrate).
+        // The Planner's prompt explains when to pick each type; an
+        // unknown type is a hint the model is hallucinating a category.
+        if (step.workerType != null) {
+          const wt = String(step.workerType).trim().toLowerCase();
+          if (!isValidWorkerType(wt)) {
+            errors.push(
+              `${where} (leaf) \`workerType\`=${JSON.stringify(step.workerType)} is not a valid type. ` +
+              `Use one of: ${WORKER_TYPES.join(", ")}. Omit the field for the default ("${DEFAULT_WORKER_TYPE}").`,
+            );
+          }
+        }
       }
 
       if (type === "branch") {
@@ -106,7 +125,21 @@ function validatePlanArgs(args) {
   }
 
   if (errors.length) return { ok: false, errors };
-  return { ok: true, value: { reasoning, steps } };
+
+  // Normalize: stamp every leaf step with an explicit workerType so
+  // downstream readers (dispatch, executionStack snapshot, Foreman
+  // wakeups) never have to coerce a missing field. Branch steps don't
+  // carry workerType — the sub-Ruler's own Planner picks types for
+  // its child plan.
+  const normalizedSteps = steps.map((step) => {
+    if (step.type !== "leaf") return step;
+    const wt = coerceWorkerType(
+      typeof step.workerType === "string" ? step.workerType.trim().toLowerCase() : null,
+    );
+    return { ...step, workerType: wt };
+  });
+
+  return { ok: true, value: { reasoning, steps: normalizedSteps } };
 }
 
 /**
@@ -167,7 +200,12 @@ async function nextEmissionOrdinal(planNodeId) {
  * Returns the created node.
  */
 async function createPlanEmission({ planNodeId, ordinal, payload, userId, core }) {
-  const name = `emission-${ordinal}`;
+  // Slug derived from the Planner's reasoning headline. Walking the
+  // tree page tells you what each emission is about without
+  // expanding it. Falls back to "emission-N" when reasoning is empty
+  // or produces no usable words.
+  const { slugifyEmission } = await import("./state/slugifyEmission.js");
+  const name = slugifyEmission(payload?.reasoning, ordinal);
 
   let created = null;
   try {
@@ -275,15 +313,35 @@ const VALID_SCOPE_TYPES = new Set(["global"]);
 function validateContractsArgs(args) {
   const errors = [];
   if (!args || typeof args !== "object") {
-    return { ok: false, errors: ["args must be an object with `reasoning` and `contracts`"] };
+    return { ok: false, errors: ["args must be an object with `reasoning` and `contracts` (or `inheritsFrom` for inheritance declarations)"] };
   }
 
   const reasoning = typeof args.reasoning === "string" ? args.reasoning.trim() : "";
-  if (!reasoning) errors.push("`reasoning` is required (explain why this contract set takes this shape)");
+  if (!reasoning) errors.push("`reasoning` is required (explain why this contract set takes this shape, or why parent contracts cover this scope)");
   else if (reasoning.length > REASONING_CAP) errors.push(`\`reasoning\` exceeds ${REASONING_CAP} chars (got ${reasoning.length}); this looks like a generation loop — emit only the architectural explanation`);
 
+  // Inheritance declaration form: child scope inherits parent contracts
+  // and introduces no new vocabulary. Valid emission shape parallel to
+  // a substantive contract set. Pass 2 courts read it the same way as
+  // a full emission — ratified state with signer + timestamp + rationale.
+  const inheritsFrom = typeof args.inheritsFrom === "string" && args.inheritsFrom.trim()
+    ? args.inheritsFrom.trim()
+    : null;
+  const parentContractsApplied = Array.isArray(args.parentContractsApplied)
+    ? args.parentContractsApplied.filter((s) => typeof s === "string" && s.trim()).map((s) => s.trim())
+    : [];
+  const isInheritance = !!inheritsFrom;
+
   const contracts = Array.isArray(args.contracts) ? args.contracts : null;
-  if (!contracts || contracts.length === 0) errors.push("`contracts` must be a non-empty array. If no contracts are needed, do not call this tool — exit instead.");
+  if (isInheritance) {
+    // Inheritance declarations carry an empty contracts array. The
+    // commitment is "parent's contracts apply, no new vocabulary."
+    if (contracts && contracts.length > 0) {
+      errors.push("inheritance declaration (`inheritsFrom` set) must have empty `contracts: []`. If you have new vocabulary to commit, drop `inheritsFrom` and emit a substantive contract set.");
+    }
+  } else if (!contracts || contracts.length === 0) {
+    errors.push("`contracts` must be a non-empty array. For child scopes that fully inherit from parent contracts, set `inheritsFrom` to the parent ruler's id and `parentContractsApplied: [refs]` to emit an inheritance declaration.");
+  }
 
   const seenNames = new Set();
   if (contracts) {
@@ -340,7 +398,14 @@ function validateContractsArgs(args) {
   }
 
   if (errors.length) return { ok: false, errors };
-  return { ok: true, value: { reasoning, contracts } };
+  return {
+    ok: true,
+    value: {
+      reasoning,
+      contracts: contracts || [],
+      ...(isInheritance ? { inheritsFrom, parentContractsApplied } : {}),
+    },
+  };
 }
 
 /**
@@ -383,6 +448,15 @@ export default function getGoverningTools(core) {
           rationale: z.string().optional().describe(
             "Optional for leaf (1-2 sentences for non-obvious leaves). REQUIRED for branch (why these sub-domains, not one).",
           ),
+          workerType: z.enum(["build", "refine", "review", "integrate"]).optional().describe(
+            "LEAF STEPS ONLY. The cognitive shape of the work, picked from four base types: " +
+            "'build' (default) creates something new at this scope; 'refine' improves an existing " +
+            "artifact (read first, write second, minimum surface area); 'review' judges an artifact " +
+            "and produces findings without modifying it (read-only); 'integrate' ties sibling " +
+            "branch outputs into a coherent surface at this scope (typically after a branch step " +
+            "returns). Omit for the default 'build'. Branch steps do not carry workerType — the " +
+            "sub-Ruler's own Planner picks types for its child plan.",
+          ),
           branches: z.array(z.object({
             name: z.string().describe("Sub-domain name. Becomes the directory/node name. Lowercase-kebab preferred."),
             spec: z.string().describe("Concrete description of what this sub-domain owns end-to-end."),
@@ -421,13 +495,32 @@ export default function getGoverningTools(core) {
           );
         }
 
-        // Locate the plan trio member.
-        const planNode = await findPlanTrioMember(ruler._id);
+        // Locate the plan trio member, creating it lazily if absent.
+        // Trio creation is lazy by design: a Ruler scope without any
+        // emissions has no trio nodes hanging around. The first
+        // governing-emit-plan call materializes the "plans" node, the
+        // first governing-emit-contracts call materializes "contracts",
+        // and the first dispatch-execution materializes "runs".
+        let planNode = await findPlanTrioMember(ruler._id);
+        if (!planNode) {
+          try {
+            const { getExtension } = await import("../loader.js");
+            const governing = getExtension("governing")?.exports;
+            if (governing?.ensurePlanAtScope) {
+              planNode = await governing.ensurePlanAtScope({
+                scopeNodeId: String(ruler._id),
+                userId,
+                wasAi: true,
+              });
+            }
+          } catch (err) {
+            log.warn("Governing", `governing-emit-plan: lazy plan-node creation failed: ${err.message}`);
+          }
+        }
         if (!planNode) {
           return text(
-            `governing-emit-plan: Ruler ${String(ruler._id).slice(0, 8)} ("${ruler.name}") has no plan trio member. ` +
-            `Phase 1's runRulerCycle should ensure the plan node before the Planner runs; if missing, ` +
-            `surface as substrate bug.`,
+            `governing-emit-plan: Ruler ${String(ruler._id).slice(0, 8)} ("${ruler.name}") has no plan trio member ` +
+            `and lazy creation failed. Surface as substrate bug.`,
           );
         }
 
@@ -451,9 +544,24 @@ export default function getGoverningTools(core) {
           .filter((s) => s.type === "branch")
           .flatMap((s) => (s.branches || []).map((b) => b.name))
           .join(", ");
+        // Worker-type mix across the leaf steps — surfacing this in the
+        // log is how Reputation (Pass 3) and future analytics will
+        // backfill which scopes did how much of each kind of work.
+        const typeCounts = payload.steps
+          .filter((s) => s.type === "leaf")
+          .reduce((acc, s) => {
+            const t = s.workerType || "build";
+            acc[t] = (acc[t] || 0) + 1;
+            return acc;
+          }, {});
+        const typeMix = Object.entries(typeCounts)
+          .map(([t, n]) => `${n} ${t}`)
+          .join(", ");
         log.info("Governing",
           `🧭 governing-emit-plan validated: ` +
-          `ordinal=${ordinal}, leaves=${leafStepCount}, branches=${branchStepCount}` +
+          `ordinal=${ordinal}, leaves=${leafStepCount}` +
+          (typeMix ? ` [${typeMix}]` : "") +
+          `, branches=${branchStepCount}` +
           (branchNames ? ` (${branchNames})` : "") +
           `, reasoning=${payload.reasoning.length}c`);
 
@@ -557,22 +665,37 @@ export default function getGoverningTools(core) {
       name: "governing-emit-contracts",
       description:
         "Emit the contract set for this Ruler scope. Use ONCE per Contractor invocation. " +
-        "Args carry the full set: a top-level `reasoning` field (2-6 sentences explaining " +
-        "the contract set as a whole), then a `contracts[]` array where each entry has " +
-        "`kind` (e.g. 'event-name', 'storage-key', 'method-signature', 'dom-id', " +
-        "'message-type', 'module-export'), `name` (the canonical identifier consumers use " +
-        "verbatim), `scope` ('global' OR { shared: ['A', 'B', ...] } OR { local: '<name>' }), " +
-        "`details` (the contract content — schema, signatures, payload shapes; cap 800 chars), " +
-        "and `rationale` (1-3 sentences on why THIS contract specifically exists; cap 400). " +
+        "Two valid shapes:\n\n" +
+        "SUBSTANTIVE: `reasoning` plus `contracts[]` array (>= 1 entry) where each entry has " +
+        "kind/name/scope/details/rationale. Used at root and any child scope that introduces " +
+        "new vocabulary the parent didn't commit.\n\n" +
+        "INHERITANCE DECLARATION (child scopes only): `reasoning` plus `inheritsFrom` (the " +
+        "parent ruler scope id) and optional `parentContractsApplied: [refs]` listing which " +
+        "parent contracts apply at this scope. `contracts: []` (empty array). Used when a " +
+        "child scope's plan introduces no new vocabulary beyond what the parent already " +
+        "committed. Pass 2 courts read inheritance declarations the same way they read full " +
+        "emissions — ratified state with signer, timestamp, rationale.\n\n" +
         "scope.shared requires 2+ named consumers; if only one scope cares, use scope.local. " +
         "LCA validation runs server-side: a contract whose scope reaches outside this Ruler's " +
         "domain is rejected. Server persists to the Ruler's contracts trio member and appends " +
         "approval entries to contractApprovals. Returns {ok, accepted, rejected, skipped, " +
-        "contractsNodeId, rulerNodeId}. After this tool succeeds, you are done — exit.",
+        "contractsNodeId, rulerNodeId, inheritsFrom?}. After this tool succeeds, you are done — exit.",
       schema: {
         reasoning: z.string().describe(
-          "2-6 sentences. Why this contract set takes this shape. What shared vocabulary the " +
-          "approved plan implies, what coordination concerns drove which contracts. Cap 800.",
+          "2-6 sentences. Why this contract set takes this shape, or for an inheritance " +
+          "declaration, why parent contracts cover this scope's plan with no new vocabulary " +
+          "needed. Cap 800.",
+        ),
+        inheritsFrom: z.string().optional().describe(
+          "Inheritance declaration only. The parent Ruler scope id (or name). When set, " +
+          "`contracts` must be empty — this scope's commitment IS the inheritance from the " +
+          "parent. Omit at root scope (root never inherits) and at child scopes that " +
+          "introduce new vocabulary.",
+        ),
+        parentContractsApplied: z.array(z.string()).optional().describe(
+          "Inheritance declaration only. List of parent contract refs that apply at this " +
+          "scope (e.g. ['event:tick', 'dom-id:gameCanvas']). Optional but recommended for " +
+          "Pass 2 traceability.",
         ),
         contracts: z.array(z.object({
           kind: z.string().describe(
@@ -601,8 +724,8 @@ export default function getGoverningTools(core) {
           ),
         })).describe(
           "Array of contracts the Ruler ratifies. Each is one piece of shared vocabulary " +
-          "scopes must agree on. If no contracts are needed for this plan, do not call the " +
-          "tool — exit instead.",
+          "scopes must agree on. Empty array is valid ONLY when `inheritsFrom` is set " +
+          "(inheritance declaration). At root scope, this array must always have entries.",
         ),
       },
       annotations: { readOnlyHint: false },
@@ -655,10 +778,13 @@ export default function getGoverningTools(core) {
         const sharedCount = incoming.filter((c) => c.scope && typeof c.scope === "object" && Array.isArray(c.scope.shared)).length;
         const globalCount = incoming.filter((c) => c.scope === "global").length;
         const localCount = incoming.length - sharedCount - globalCount;
+        const inheritsFromTag = validation.value.inheritsFrom
+          ? ` [inheritance from ${String(validation.value.inheritsFrom).slice(0, 8)}, ${validation.value.parentContractsApplied?.length || 0} parent ref${validation.value.parentContractsApplied?.length === 1 ? "" : "s"}]`
+          : "";
         log.info("Governing",
           `📜 governing-emit-contracts validated: ` +
           `${incoming.length} contract${incoming.length === 1 ? "" : "s"} ` +
-          `(${globalCount} global, ${sharedCount} shared, ${localCount} local), ` +
+          `(${globalCount} global, ${sharedCount} shared, ${localCount} local)${inheritsFromTag}, ` +
           `reasoning=${validation.value.reasoning.length}c`);
 
         let result = null;
@@ -674,6 +800,15 @@ export default function getGoverningTools(core) {
             userId,
             reasoning: validation.value.reasoning,
             core,
+            // Inheritance declaration form: child scope inherits parent
+            // contracts. The emission still materializes a ratified
+            // node + approval entry so dispatch-execution sees the
+            // gated state as satisfied and Pass 2 courts have a signed
+            // record of the inheritance decision.
+            inheritsFrom: validation.value.inheritsFrom || null,
+            parentContractsApplied: Array.isArray(validation.value.parentContractsApplied)
+              ? validation.value.parentContractsApplied
+              : [],
           });
         } catch (err) {
           log.warn("Governing", `governing-emit-contracts persistence failed: ${err.message}`);
@@ -701,6 +836,10 @@ export default function getGoverningTools(core) {
           rulerNodeId: String(ruler._id),
           contractsNodeId: result?.contractsNode?._id ? String(result.contractsNode._id) : null,
           emissionId: result?.emissionNode?._id ? String(result.emissionNode._id) : null,
+          ...(validation.value.inheritsFrom ? {
+            inheritsFrom: validation.value.inheritsFrom,
+            parentContractsApplied: validation.value.parentContractsApplied || [],
+          } : {}),
           accepted: accepted.map((c) => ({ id: c.id, kind: c.kind, name: c.name, scope: c.scope })),
           rejected: rejected.map((r) => ({
             kind: r.kind || r.namespace,

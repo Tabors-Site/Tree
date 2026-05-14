@@ -1,0 +1,296 @@
+/* Governing pages: readability + visual interest overrides.
+   Scoped under .lp-gov so other landing pages stay unaffected. */
+
+/* Tighter section padding so the page reads denser and you don't feel
+   like you're scrolling through huge empty bands. */
+.lp-gov .lp-section {
+  padding: 80px 0;
+}
+
+/* Section titles a touch warmer with a subtle underline accent. */
+.lp-gov .lp-section-title {
+  font-size: 36px;
+  margin-bottom: 20px;
+}
+
+.lp-gov .lp-section-title::after {
+  content: "";
+  display: block;
+  width: 56px;
+  height: 3px;
+  margin: 18px auto 0;
+  background: linear-gradient(90deg, #4ade80 0%, #60a5fa 100%);
+  border-radius: 2px;
+  opacity: 0.7;
+}
+
+/* Lead paragraphs: more contrast so they actually read. */
+.lp-gov .lp-section-sub,
+.lp-gov .lp-section-sub-wide {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 18px;
+  line-height: 1.75;
+  margin-bottom: 24px;
+}
+
+.lp-gov .lp-section-sub-wide {
+  font-size: 19px;
+}
+
+.lp-gov .lp-section-sub:last-child,
+.lp-gov .lp-section-sub-wide:last-child {
+  margin-bottom: 0;
+}
+
+/* Larger, more readable cards with a soft accent strip on top. */
+.lp-gov .lp-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 16px;
+  padding: 28px 30px;
+  position: relative;
+  transition: transform 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.lp-gov .lp-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(74, 222, 128, 0.5), rgba(96, 165, 250, 0.5), rgba(192, 132, 252, 0.5));
+  border-radius: 0 0 4px 4px;
+  opacity: 0.55;
+}
+
+.lp-gov .lp-card:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.03) 100%);
+  transform: translateY(-2px);
+}
+
+.lp-gov a.lp-card:hover {
+  border-color: rgba(74, 222, 128, 0.32);
+}
+
+.lp-gov .lp-card h3 {
+  font-size: 22px;
+  margin-bottom: 14px;
+  letter-spacing: -0.2px;
+}
+
+.lp-gov .lp-card p {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.75;
+  margin: 0 0 12px;
+}
+
+.lp-gov .lp-card p:last-child {
+  margin-bottom: 0;
+}
+
+/* Small cards: bigger text. The 12px before was too small. */
+.lp-gov .lp-card-sm {
+  padding: 22px 24px;
+}
+
+.lp-gov .lp-card-sm h4 {
+  font-size: 16px;
+  margin-bottom: 10px;
+  letter-spacing: -0.1px;
+}
+
+.lp-gov .lp-card-sm p {
+  font-size: 14.5px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.7;
+  margin: 0 0 10px;
+}
+
+.lp-gov .lp-card-sm p:last-child {
+  margin-bottom: 0;
+}
+
+/* Card grids: small gap so cards feel related, not adrift. */
+.lp-gov .lp-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.lp-gov .lp-cards-4 {
+  gap: 18px;
+}
+
+@media (max-width: 900px) {
+  .lp-gov .lp-cards,
+  .lp-gov .lp-cards-4,
+  .lp-gov .lp-cards-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .lp-gov .lp-cards,
+  .lp-gov .lp-cards-4,
+  .lp-gov .lp-cards-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Steps: tighter spacing, accent border on the active content,
+   numbered badges that feel like they belong on a tree. */
+.lp-gov .lp-steps {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.lp-gov .lp-step {
+  gap: 20px;
+  margin-bottom: 22px;
+  padding: 20px 22px;
+  background: rgba(255, 255, 255, 0.025);
+  border-left: 3px solid rgba(255, 255, 255, 0.10);
+  border-radius: 4px 12px 12px 4px;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.lp-gov .lp-step:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-left-color: rgba(74, 222, 128, 0.5);
+}
+
+.lp-gov .lp-step-num {
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.lp-gov .lp-step-content h4 {
+  font-size: 17px;
+  margin-bottom: 6px;
+  letter-spacing: -0.1px;
+}
+
+.lp-gov .lp-step-content p {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.7;
+  margin: 0 0 8px;
+}
+
+.lp-gov .lp-step-content p:last-child {
+  margin-bottom: 0;
+}
+
+.lp-gov .lp-step-content code {
+  font-size: 13.5px;
+  padding: 2px 8px;
+}
+
+/* Inline code: more legible. */
+.lp-gov code {
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-size: 14px;
+  color: rgba(160, 200, 255, 0.92);
+  background: rgba(96, 165, 250, 0.10);
+  padding: 2px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+}
+
+/* Lists: actually styled. The default <ul> was flat and hard to scan. */
+.lp-gov ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.lp-gov ul li {
+  position: relative;
+  padding: 10px 0 10px 28px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.lp-gov ul li:last-child {
+  border-bottom: none;
+}
+
+.lp-gov ul li::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 18px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(74, 222, 128, 0.6);
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.35);
+}
+
+/* Status pill on cards (Pass 1. Shipped. style). Targets the small
+   bold paragraph at the bottom of layer/role cards. */
+.lp-gov .lp-card p[style*="fontWeight: 600"],
+.lp-gov .lp-card-sm p[style*="fontWeight: 600"] {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  font-size: 13px !important;
+  margin-top: 14px !important;
+  letter-spacing: 0.3px;
+}
+
+/* Container variants used inside governing for callout boxes
+   (LCA valid/rejected, decision matrix, etc) get more breathing room. */
+.lp-gov .lp-container {
+  padding: 0 32px;
+}
+
+/* The monospace decision-matrix block on RulerPage and the contract
+   listings on ContractorPage: improve line height and add subtle
+   row separation. */
+.lp-gov [style*="ui-monospace"] > div {
+  padding: 4px 0;
+}
+
+/* Closing callback sections: pull-quote feel without being heavy. */
+.lp-gov .lp-section-alt:has(.lp-section-sub-wide[style*="textAlign"]) .lp-section-sub-wide,
+.lp-gov .lp-section:has(.lp-section-sub-wide[style*="textAlign"]) .lp-section-sub-wide {
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.85);
+  border-left: 3px solid rgba(74, 222, 128, 0.4);
+  padding-left: 24px;
+  text-align: left !important;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+/* Hero refinements: keep the hero compact without making the rest of the
+   page feel like an afterthought. */
+.lp-gov .lp-hero {
+  padding-top: 80px;
+  padding-bottom: 60px;
+}
+
+.lp-gov .lp-tagline {
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.75;
+  font-size: 17px;
+}
+
+/* Footer: keep its existing density but bump the Governing column so
+   the role list doesn't look cramped. */
+.lp-gov .lp-footer-col a {
+  padding: 4px 0;
+  font-size: 14px;
+}

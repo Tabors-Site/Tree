@@ -391,7 +391,11 @@ export async function triggerPlanPivot({
       architectChatId: null,
       rootChatId: null,
       rootId,
-      modeKey: "tree:code-plan",
+      // Pivot stash dispatches through governance Ruler → typed
+      // Workers; the modeKey field is informational only now (audit
+      // trail / dashboard hint), so we use the Ruler key directly
+      // rather than the legacy code-plan that no longer exists.
+      modeKey: "tree:governing-ruler",
       targetNodeId: active.projectNodeId,
       version: stashVersion,
       cleanedAnswer: "",

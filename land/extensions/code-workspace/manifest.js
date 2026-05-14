@@ -116,11 +116,36 @@ export default {
     },
 
     modes: [
-      { key: "tree:code-plan", handler: "./modes/plan.js", assignmentSlot: "code-plan" },
-      { key: "tree:code-log", handler: "./modes/log.js", assignmentSlot: "code-log" },
+      // Direct-chat conversational modes. coach handles future-tense
+      // guidance, ask handles past-tense read-only queries. These do
+      // NOT do work — work routes through governance Ruler → typed
+      // Workers. They stay because spinning up the full governance
+      // cycle for "what does this function do" is overkill.
       { key: "tree:code-coach", handler: "./modes/coach.js", assignmentSlot: "code-coach" },
       { key: "tree:code-ask", handler: "./modes/ask.js", assignmentSlot: "code-ask" },
-      { key: "tree:code-review", handler: "./modes/review.js", assignmentSlot: "code-review" },
+      // Typed Workers. dispatch routes leaf groups here by workerType.
+      // Each has its own tool subset (Build adds; Refine edits; Review
+      // is read-only; Integrate adds top-level + reads siblings).
+      // Live wiring is the registerWorkspaceWorkerTypes() call in
+      // index.js's init().
+      { key: "tree:code-worker-build", handler: "./modes/workerBuild.js", assignmentSlot: "code-plan" },
+      { key: "tree:code-worker-refine", handler: "./modes/workerRefine.js", assignmentSlot: "code-plan" },
+      { key: "tree:code-worker-review", handler: "./modes/workerReview.js", assignmentSlot: "code-review" },
+      { key: "tree:code-worker-integrate", handler: "./modes/workerIntegrate.js", assignmentSlot: "code-plan" },
     ],
+
+    // workerTypes — informational declaration of which Worker
+    // cognitive shapes this workspace specializes. The loader doesn't
+    // consume this field today (the live wiring is in index.js's
+    // exports.workerTypes), but declaring it in the manifest makes
+    // the workspace's capabilities discoverable to future tooling
+    // (Horizon directory, ext-info, dashboards) without having to
+    // load the extension first.
+    workerTypes: {
+      build:     { modeKey: "tree:code-worker-build" },
+      refine:    { modeKey: "tree:code-worker-refine" },
+      review:    { modeKey: "tree:code-worker-review" },
+      integrate: { modeKey: "tree:code-worker-integrate" },
+    },
   },
 };

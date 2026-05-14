@@ -53,7 +53,9 @@ router.post("/root/:rootId/swarm-plans/branches/:branchName/generate", authentic
       userId,
       username,
       message: architectMsg,
-      mode: "tree:code-plan",
+      // Sub-plan generation runs through governance's Planner. The
+      // Ruler at this scope (promoted if absent) hires it.
+      mode: "tree:governing-planner",
       rootId,
       nodeId: branchNodeId,
       // Sub-plan generation is one-shot — default ephemeral session.
