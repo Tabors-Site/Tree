@@ -1,6 +1,6 @@
 # Position Descriptor — the JSON shape lands return
 
-When the browser requests a Perspective Address from a land, the land returns a **Position Descriptor**: structured JSON describing what's at that position. The browser renders the descriptor according to TreeOS conventions — no HTML, no land-supplied layout. The land owns the data; the browser owns the rendering.
+When the portal requests a Portal Address from a land, the land returns a **Position Descriptor**: structured JSON describing what's at that position. The portal renders the descriptor according to TreeOS conventions — no HTML, no land-supplied layout. The land owns the data; the portal owns the rendering.
 
 This document defines the contract.
 
@@ -10,8 +10,8 @@ This document defines the contract.
 {
   // Identifies the position this descriptor describes.
   // The address carries the path in BOTH forms (names and ids) at full
-  // chain depth. The browser renders whichever form the user prefers
-  // and can switch freely (the four forms in perspective-address.md).
+  // chain depth. The portal renders whichever form the user prefers
+  // and can switch freely (the four forms in portal-address.md).
   "address": {
     "land": "treeos.ai",
     "path": "/flappybird/chapter-1",        // the form the request used (verbatim)
@@ -20,13 +20,13 @@ This document defines the contract.
     "userId": "<uuid|null>",                // user-owner of this scope, when applicable
 
     // Full chain — BOTH representations, top-down (land root → leaf).
-    // The browser uses these to render the four switchable path forms.
+    // The portal uses these to render the four switchable path forms.
     "chain": [
       { "name": "flappybird", "id": "<uuid-a>" },
       { "name": "chapter-1",  "id": "<uuid-b>" }
     ],
 
-    // Convenience derivations (the browser COULD compute these from
+    // Convenience derivations (the portal COULD compute these from
     // chain, but the server provides them so all clients agree on the
     // canonical strings).
     "pathByNames": "/flappybird/chapter-1",
@@ -35,11 +35,11 @@ This document defines the contract.
     "leafId":      "<uuid-b>"
   },
 
-  // Zone type — controls which top-level chrome the browser draws.
-  "zone": "land" | "home" | "node",
+  // Zone type — controls which top-level chrome the portal draws.
+  "zone": "land" | "home" | "tree",
 
   // Embodiments invocable AT this position by the addressing identity.
-  // The browser uses this list to populate the address-bar autocomplete
+  // The portal uses this list to populate the address-bar autocomplete
   // and the chat-panel invoke dropdown.
   "beings": [
     {
@@ -79,14 +79,14 @@ This document defines the contract.
       "totalBytes": 12894,
       "createdAt": "2026-05-15T10:38:00Z",
       "byBeing": "<embodiment that produced it>",
-      "fullContentRef": "/api/v1/node/<nodeId>/notes/<noteId>"  // browser fetches on demand
+      "fullContentRef": "/api/v1/node/<nodeId>/notes/<noteId>"  // portal fetches on demand
     },
     // ...
   ],
 
   // Governance state at this scope (if this is a Ruler scope).
   // Mirrors what the existing governance dashboard shows but in
-  // structured JSON the browser draws natively.
+  // structured JSON the portal draws natively.
   "governance": {
     "ruler": {
       "promoted": "2026-05-15T08:00:00Z",
@@ -144,11 +144,11 @@ This document defines the contract.
   ],
 
   // Live chat threads ongoing at or addressing this position.
-  // Each thread carries its own Perspective Address.
+  // Each thread carries its own Portal Address.
   "chatThreads": [
     {
       "threadId": "<uuid>",
-      "address": "tabor -> treeos.ai/flappybird@ruler",
+      "address": "tabor :: treeos.ai/flappybird@ruler",
       "openedAt": "2026-05-15T09:00:00Z",
       "lastMessageAt": "2026-05-15T10:42:00Z",
       "messageCount": 12,
@@ -170,7 +170,7 @@ This document defines the contract.
     { "name": "chapter-3-impact", "path": "...", "lifecycle": "idle" }
   ],
 
-  // Live WS subscription hint. Once the browser has the descriptor,
+  // Live WS subscription hint. Once the portal has the descriptor,
   // it subscribes to events scoped to this position for live updates.
   "live": {
     "wsUrl": "wss://treeos.ai/ws",
@@ -182,7 +182,7 @@ This document defines the contract.
   },
 
   // Identity context — who the server thinks is making this request.
-  // Helps the browser confirm the identity panel matches reality.
+  // Helps the portal confirm the identity panel matches reality.
   "identity": {
     "userId": "<uuid>",
     "username": "tabor",
@@ -191,7 +191,7 @@ This document defines the contract.
     "writeAllowed": true
   },
 
-  // Diagnostics + version. Browser surfaces these on error.
+  // Diagnostics + version. Portal surfaces these on error.
   "_meta": {
     "descriptorVersion": "1.0",
     "serverVersion": "treeos-land 1.0.0",
@@ -258,15 +258,15 @@ User's tree root. Personal space.
 }
 ```
 
-### Node zone (`zone: "node"`)
+### Tree zone (`zone: "tree"`)
 
 A position inside a tree. The richest shape — governance + artifacts + children + everything.
 
-The full union above is the example. Most node positions will have governance + children + maybe artifacts; Worker leaves have artifacts + maybe blocked-status; intermediate Ruler scopes have governance + children.
+The full union above is the example. Most tree positions will have governance + children + maybe artifacts; Worker leaves have artifacts + maybe blocked-status; intermediate Ruler scopes have governance + children.
 
-## How the browser uses each field
+## How the portal uses each field
 
-| Field | Browser surface |
+| Field | Portal surface |
 |---|---|
 | `address` | Address bar shows it. Tab title uses path + embodiment. |
 | `zone` | Determines top-level chrome (land discovery / home dashboard / node renderer). |
@@ -278,32 +278,32 @@ The full union above is the example. Most node positions will have governance + 
 | `chatThreads` | Chat panel — restored threads on page load. Click to focus a thread. |
 | `lineage` | Breadcrumbs at the top of the main view. |
 | `siblings` | Sideways arrows. Quick-switch buttons in the tree navigator. |
-| `live` | Browser opens WS connection and subscribes to events scoped here. |
-| `identity` | Identity panel sanity-checks (if mismatch with browser's signed-in being, prompt to re-auth). |
+| `live` | Portal opens WS connection and subscribes to events scoped here. |
+| `identity` | Identity panel sanity-checks (if mismatch with portal's signed-in being, prompt to re-auth). |
 | `_meta` | Error overlays, diagnostic toggles. |
 
 ## Why JSON, not HTML
 
-- **Consistent rendering.** Every land's positions look like TreeOS positions because the browser draws them the same way. Visitors don't learn each land's UI; they learn TreeOS once.
+- **Consistent rendering.** Every land's positions look like TreeOS positions because the portal draws them the same way. Visitors don't learn each land's UI; they learn TreeOS once.
 - **Live updates.** WebSocket events update fields without re-fetching. New plan emission? Patch `governance.plan.active`. New worker started? Patch `governance.workers.running`.
-- **Embodiment-aware rendering.** The same position fetched as `@ruler` vs `@archivist` returns different subsets of the same shape. The browser strips chat-write surfaces in archivist mode. The land doesn't have to render two HTML variants — it returns the same descriptor with different `beings` / `identity.writeAllowed`.
-- **Federation.** A browser session can navigate across lands; each land returns the same descriptor shape; no per-land rendering quirks.
-- **Extensibility.** Adding a new artifact `kind` or extension `surface` doesn't require an HTML rewrite — it adds a field the browser recognizes.
+- **Embodiment-aware rendering.** The same position fetched as `@ruler` vs `@archivist` returns different subsets of the same shape. The portal strips chat-write surfaces in archivist mode. The land doesn't have to render two HTML variants — it returns the same descriptor with different `beings` / `identity.writeAllowed`.
+- **Federation.** A portal session can navigate across lands; each land returns the same descriptor shape; no per-land rendering quirks.
+- **Extensibility.** Adding a new artifact `kind` or extension `surface` doesn't require an HTML rewrite — it adds a field the portal recognizes.
 
 ## What the server returns when it doesn't know the position
 
 `{ status: "error", error: { code: "POSITION_NOT_FOUND", message: "...", address: {...} } }`
 
-The browser shows a TreeOS-flavored 404 with the breadcrumb back to a known position.
+The portal shows a TreeOS-flavored 404 with the breadcrumb back to a known position.
 
 ## What the server returns when the identity isn't authorized
 
 `{ status: "error", error: { code: "FORBIDDEN", message: "Sign in as a being authorized at this scope.", address, suggestedIdentitiesToSwitch: [...] } }`
 
-The browser shows a sign-in prompt with the suggestions.
+The portal shows a sign-in prompt with the suggestions.
 
 ## Versioning
 
-`_meta.descriptorVersion` is a SemVer the browser checks against its supported range. Backwards-incompatible changes bump the major. The browser falls back to legacy HTML mode when descriptor version is unsupported.
+`_meta.descriptorVersion` is a SemVer the portal checks against its supported range. Backwards-incompatible changes bump the major. The portal falls back to legacy HTML mode when descriptor version is unsupported.
 
-The Position Descriptor format is the CONTRACT between browser and land server. It needs to stay stable through Pass 1 and Pass 2. Pass 3+ may add fields, never remove.
+The Position Descriptor format is the CONTRACT between portal and land server. It needs to stay stable through Pass 1 and Pass 2. Pass 3+ may add fields, never remove.

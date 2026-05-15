@@ -1,6 +1,6 @@
 # Zones — land, home, node
 
-Every position in the TreeOS Browser belongs to one of three zone types. The zone determines the top-level chrome the browser renders. The position within the zone determines what the body shows.
+Every position in the TreeOS Portal belongs to one of three zone types. The zone determines the top-level chrome the portal renders. The position within the zone determines what the body shows.
 
 ## Land zone
 
@@ -44,11 +44,11 @@ Every position in the TreeOS Browser belongs to one of three zone types. The zon
 
 ### Privacy boundary
 
-Home zone is PRIVATE by default. Only the owner (and identities they've explicitly authorized) sees the full content. The browser refuses to render someone else's home zone unless the requesting identity has been granted access.
+Home zone is PRIVATE by default. Only the owner (and identities they've explicitly authorized) sees the full content. The portal refuses to render someone else's home zone unless the requesting identity has been granted access.
 
 ### Where personal work happens
 
-The home zone is the most-visited part of the browser for any given user. Building things. Coordinating personal beings. Running projects. Notes. Reading.
+The home zone is the most-visited part of the portal for any given user. Building things. Coordinating personal beings. Running projects. Notes. Reading.
 
 ### Chrome
 
@@ -61,13 +61,13 @@ The home zone is the most-visited part of the browser for any given user. Buildi
 
 `@dreamer` for creative-leaning users (poetic / generative interactions feel right). `@builder` for engineering-leaning users (focused on construction). User picks via setting; can be overridden per-tab via the address bar.
 
-## Node zone
+## Tree zone
 
 `land/<path>` — a specific position inside a tree.
 
 ### What it surfaces
 
-Depends heavily on what's at the position. The Position Descriptor describes it; the browser renders accordingly. Possible surfaces:
+Depends heavily on what's at the position. The Position Descriptor describes it; the portal renders accordingly. Possible surfaces:
 
 - **Governance state** if the node is a Ruler scope: plan / contracts / runs / workers / flags / lifecycle pill.
 - **Artifact content** if the node has notes or files: rendered as markdown / images / code per the artifact `kind`.
@@ -106,7 +106,7 @@ Special case. Most-used surface in the system once people are coordinating. Layo
 │ The story of Tagay and Egay opens with...                       │
 │ ...                                                             │
 ├──────────────────────────────────────────────────────────────────┤
-│ chat: tabor -> treeos.ai/tagay-book@ruler           [send]     │
+│ chat: tabor :: treeos.ai/tagay-book@ruler           [send]     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -133,7 +133,7 @@ Every zone has:
 
 - **Address bar** at the top (left = identity, right = position+embodiment)
 - **Identity panel** always visible
-- **Tabs** for multiple Perspective Addresses open at once
+- **Tabs** for multiple Portal Addresses open at once
 - **Back / forward / home buttons** (home = home zone of current land; tree button to go to tree root when inside a tree)
 - **No refresh button** — everything is live via WS. State invalidation is event-driven.
 
@@ -151,12 +151,12 @@ These three carve at real architectural joints:
 
 - **Land zone**: the server's public-facing surface. Discovery + economy. Anyone may visit.
 - **Home zone**: a user's private root. Personal authority + accumulated artifacts.
-- **Node zone**: everywhere else — every position inside any tree, any user's home, any land-public tree. The recursive workspace.
+- **Tree zone**: everywhere else — every position inside any tree, any user's home, any land-public tree. The recursive workspace.
 
-Four would over-specify (node zone covers a lot of different node types but the BROWSER chrome stays the same; the Position Descriptor varies the BODY). Two would conflate land and home (both are "roots" but their privacy + content differ enough).
+Four would over-specify (tree zone covers a lot of different node types but the BROWSER chrome stays the same; the Position Descriptor varies the BODY). Two would conflate land and home (both are "roots" but their privacy + content differ enough).
 
-The three-zone split makes the address bar predictable: type `/` you're in land, `~` you're in home, a path you're in node. The browser knows which chrome to draw before the Position Descriptor arrives.
+The three-zone split makes the address bar predictable: type `/` you're in land, `~` you're in home, a path you're in node. The portal knows which chrome to draw before the Position Descriptor arrives.
 
 ## Open question: ZONE for cross-land federation
 
-A "federated zone" for visiting another land while signed in to your home land might warrant its own chrome (subtly different border / "federated" indicator). For Pass 1 this is over-design; cross-land visits use the node-zone chrome with a small "federated" pill. Revisit if Pass 5's federation work makes the visit pattern common.
+A "federated zone" for visiting another land while signed in to your home land might warrant its own chrome (subtly different border / "federated" indicator). For Pass 1 this is over-design; cross-land visits use the tree-zone chrome with a small "federated" pill. Revisit if Pass 5's federation work makes the visit pattern common.

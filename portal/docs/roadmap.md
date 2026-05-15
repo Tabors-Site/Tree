@@ -1,19 +1,19 @@
 # Build roadmap
 
-The TreeOS Browser is a multi-pass build. This document sequences the work.
+The TreeOS Portal is a multi-pass build. This document sequences the work.
 
 ## Phase 0 — Foundations (this folder)
 
 What's done in this pass:
 
 - Conceptual model written (README + docs/).
-- Perspective Address grammar defined ([perspective-address.md](perspective-address.md)).
+- Portal Address grammar defined ([portal-address.md](portal-address.md)).
 - Position Descriptor JSON contract defined ([position-descriptor.md](position-descriptor.md)).
 - Identity-first session model ([identity.md](identity.md)).
 - Zone types specified ([zones.md](zones.md)).
-- Browser surface inventory ([surfaces.md](surfaces.md)).
+- Portal surface inventory ([surfaces.md](surfaces.md)).
 - Server protocol locked ([server-protocol.md](server-protocol.md)).
-- PA parser scaffolded ([../lib/perspective-address.js](../lib/perspective-address.js)).
+- PA parser scaffolded ([../lib/portal-address.js](../lib/portal-address.js)).
 
 Done = the documents that anyone joining can read before writing the first line of UI code. The format contracts (PA + Position Descriptor) are the load-bearing pieces; the rest is implementation-shaped guidance.
 
@@ -27,7 +27,7 @@ Smallest end-to-end slice. Goal: a land server returns valid Position Descriptor
    - `GET /api/v1/.treeos-discovery` (capabilities)
    - `GET /api/v1/position/land/` (land zone)
    - `GET /api/v1/position/home/:user` (home zone)
-   - `GET /api/v1/position/node/*` (node zone, deep paths)
+   - `GET /api/v1/position/node/*` (tree zone, deep paths)
 2. Position-resolver helpers in `land/seed/tree/` that map a PA to a node + governance state and shape it into the descriptor JSON.
 3. Reuse existing extensions:
    - `governing.buildDashboardData` → governance block
@@ -43,13 +43,13 @@ Smallest end-to-end slice. Goal: a land server returns valid Position Descriptor
 - `curl /api/v1/position/home/tabor` → returns home zone JSON with tabor's trees
 - `curl /api/v1/position/node/tagay-book?embodiment=ruler` → returns full node descriptor
 
-No browser needed yet — Phase 1 stands alone. Existing CLI / HTML browser keep working in parallel.
+No portal needed yet — Phase 1 stands alone. Existing CLI / HTML browser keep working in parallel.
 
 **Estimate:** 1-2 days of focused work. Most logic exists; this is shaping + new routes.
 
-## Phase 2 — Browser shell (minimal)
+## Phase 2 — Portal shell (minimal)
 
-Goal: an Electron (or Tauri) app that signs in, navigates by PA, renders home + node zones.
+Goal: an Electron (or Tauri) app that signs in, navigates by PA, renders home + tree zones.
 
 **Choice point:** Electron vs Tauri.
 
@@ -60,7 +60,7 @@ Recommend **Electron** for Phase 2. Bundle size doesn't matter for the dev-test 
 
 **Work:**
 
-1. Scaffold `browser/app/` with Electron + Vite + React (or similar minimal stack).
+1. Scaffold `portal/app/` with Electron + Vite + React (or similar minimal stack).
 2. Sign-in screen:
    - Land URL input.
    - Existing-being picker (from local roster).
@@ -68,18 +68,18 @@ Recommend **Electron** for Phase 2. Bundle size doesn't matter for the dev-test 
 3. Address bar (left chip + right text, parser-backed).
 4. Main view:
    - Home zone renderer — tree grid.
-   - Node zone renderer — governance panel + artifact body + sidebar.
+   - Tree zone renderer — governance panel + artifact body + sidebar.
 5. Identity panel (always visible, switch roster, sign-in elsewhere).
 6. Tree navigator (sidebar).
 7. WS subscription wiring — descriptor patches apply live.
 
 **Verification:**
 
-- Launch browser → sign-in screen.
+- Launch portal → sign-in screen.
 - Sign in as `tabor @ localhost:3000` → home zone renders showing tabor's trees.
-- Click `tagay-book` → node zone renders with current state from descriptor.
+- Click `tagay-book` → tree zone renders with current state from descriptor.
 - Open another tab, navigate to `tagay-book/chapter-1` → renders chapter scope.
-- Live update: another client modifies the tree → first browser tab updates without refresh.
+- Live update: another client modifies the tree → first portal tab updates without refresh.
 
 **Estimate:** 1-2 weeks. UI is the heavy lift.
 
@@ -121,7 +121,7 @@ Goal: discovery works. The TreeOS land becomes inhabitable.
 **Verification:**
 
 - Land zone shows trees, extensions, beings.
-- Click into a public tree → node zone.
+- Click into a public tree → tree zone.
 - Open three tabs simultaneously: home / project root / chapter inside project.
 - Drag a node from tree navigator → drops as a position-link in active chat.
 
@@ -129,7 +129,7 @@ Goal: discovery works. The TreeOS land becomes inhabitable.
 
 ## Phase 5 — Legacy HTML mode + transition
 
-Goal: existing HTML pages still work inside the new browser. Migration path for old surfaces.
+Goal: existing HTML pages still work inside the new portal. Migration path for old surfaces.
 
 **Work:**
 
@@ -149,18 +149,18 @@ Goal: cross-land navigation works. Federated identities propagate.
 2. Federated identity headers.
 3. Visited-land authorization rules via Canopy.
 
-This sits under the broader Pass 5 federation push and may not be Phase 6 of the browser specifically. Depends on Canopy's status at the time.
+This sits under the broader Pass 5 federation push and may not be Phase 6 of the portal specifically. Depends on Canopy's status at the time.
 
 ## Phase 7 — Polish
 
-Theming, keyboard shortcuts, accessibility, mobile-shaped layout (browser as a tablet-aware app), Tauri port if bundle size becomes painful, sync of identity roster across devices (via federated home land).
+Theming, keyboard shortcuts, accessibility, mobile-shaped layout (portal as a tablet-aware app), Tauri port if bundle size becomes painful, sync of identity roster across devices (via federated home land).
 
 ## Sequencing summary
 
 ```
 Phase 0  [DONE — this folder]   foundations: format contracts + docs
 Phase 1  [2 days]               server-side: Position Descriptor routes
-Phase 2  [1-2 weeks]            browser shell: sign-in + home/node rendering
+Phase 2  [1-2 weeks]            portal shell: sign-in + home/node rendering
 Phase 3  [1 week]               chat panel + live events
 Phase 4  [1-2 weeks]            land zone + extensions + tabs
 Phase 5  [1 week]               legacy HTML fallback
@@ -168,17 +168,17 @@ Phase 6  [depends on Pass 5]    federation
 Phase 7  [open-ended]           polish
 ```
 
-Total to "TreeOS browser is the daily-driver for using the system": ~5-6 weeks of focused work, distributed however contributors are available.
+Total to "TreeOS portal is the daily-driver for using the system": ~5-6 weeks of focused work, distributed however contributors are available.
 
 ## What NOT to build
 
 Resist these temptations:
 
-- **Generic web browsing.** The TreeOS Browser doesn't render arbitrary websites. It renders Position Descriptors. Legacy HTML fallback is for TreeOS pages that haven't migrated yet, not for the open web.
+- **Generic web browsing.** The TreeOS Portal doesn't render arbitrary websites. It renders Position Descriptors. Legacy HTML fallback is for TreeOS pages that haven't migrated yet, not for the open web.
 - **Heavy UI framework reach.** Stick with the lightest stack that works. React + Vite. No Material-UI / heavy component libraries. Visual style is TreeOS-shaped (sage / dark / monospace accents), not platform-native.
-- **Re-implementation of TreeOS features.** All governance / planning / contracting logic stays on the land server. The browser renders state and emits user messages.
+- **Re-implementation of TreeOS features.** All governance / planning / contracting logic stays on the land server. The portal renders state and emits user messages.
 - **Mobile-first.** Desktop first. Mobile shape is a Phase 7 concern.
-- **Cross-browser compatibility.** This IS the browser. There's no "render in Chrome too" requirement.
+- **Cross-browser compatibility.** This IS the portal. There's no "render in Chrome too" requirement.
 
 ## When to write the first line of UI code
 
@@ -187,4 +187,4 @@ When at least these are true:
 - Land server returns valid descriptors for the three zone types (Phase 1 done).
 - The shape of `beings:` and `extensions:` is validated against real data from the existing TreeOS server.
 
-Then the browser shell can be built confidently against a stable backend.
+Then the portal shell can be built confidently against a stable backend.

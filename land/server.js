@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 
 import registerURLRoutes from "./routes/handler.js";
 import { initWebSocketServer } from "./seed/ws/websocket.js";
+import { initPortalHttp, initPortalWs } from "./portal/index.js";
 import { sendOk, sendError, ERR } from "./seed/protocol.js";
 import { getExtension } from "./extensions/loader.js";
 import securityHeaders from "./seed/middleware/securityHeaders.js";
@@ -76,10 +77,22 @@ app.get("/health", (_req, res) => {
 });
 
 await registerURLRoutes(app, { registerRawWebhook });
+
+// Portal Protocol — core peer to the legacy URL-based API. Registers the
+// single HTTP bootstrap route (/.well-known/treeos-portal) BEFORE the
+// catch-all so it isn't shadowed. Everything else in the Portal Protocol
+// travels over WebSocket; see land/portal/.
+initPortalHttp(app);
+
 app.use((req, res) => notFoundPage(req, res));
 
 const server = http.createServer(app);
 export const wsServer = initWebSocketServer(server, corsOrigins);
+
+// Attach Portal Protocol WS handlers to the same Socket.IO instance the
+// legacy chat WS uses. Zero shared event names with the legacy `op:"chat"`
+// protocol — both coexist on the same socket.
+initPortalWs(wsServer);
 
 const PORT = process.env.PORT || 80;
 server.listen(PORT, "0.0.0.0", () => onListen());

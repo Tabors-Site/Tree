@@ -1,6 +1,6 @@
-# Browser surfaces
+# Portal surfaces
 
-The TreeOS Browser has six core surfaces. This document defines each — what it does, what it surfaces, how it behaves.
+The TreeOS Portal has six core surfaces. This document defines each — what it does, what it surfaces, how it behaves.
 
 ## 1. Address bar
 
@@ -10,13 +10,13 @@ The primary navigation surface. Always at the top.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│ [ tabor ▾ ]  ->  treeos.ai/flappybird/chapter-1@ruler  [Enter]  │
+│ [ tabor ▾ ]  ::  treeos.ai/flappybird/chapter-1@ruler  [Enter]  │
 └──────────────────────────────────────────────────────────────────┘
    left-chip          right-text (editable)
 ```
 
 - **Left chip**: identity (signed-in being). Not editable. Click → roster dropdown to switch.
-- **Right text**: the destination stance (`land/path@embodiment`). Editable. The `->` bridge is rendered between them but not editable as a character.
+- **Right text**: the destination stance (`land/path@embodiment`). Editable. The `::` bridge is rendered between them but not editable as a character.
 
 ### Behaviors
 
@@ -26,8 +26,8 @@ The primary navigation surface. Always at the top.
   - `/` → child paths from current position, then siblings, then known trees
   - `@` → embodiments invocable at the current right-side path (from the Position Descriptor's `beings:`)
   - bare typing → fuzzy match against navigation history + favorites
-- **Paste a full PA** (`tabor->treeos.ai/foo@ruler`) → browser parses it; if the left side matches the current identity it just navigates; if it doesn't, prompt to switch.
-- **Bridge mode** — typing `->` in the right-side field signals the user wants to address ANOTHER stance from theirs. Used for AI-to-AI bridges later. Pass 1: surface as advanced; the simple case is "I (left stance) address X (right stance)."
+- **Paste a full PA** (`tabor::treeos.ai/foo@ruler`) → portal parses it; if the left side matches the current identity it just navigates; if it doesn't, prompt to switch.
+- **Bridge mode** — typing `::` in the right-side field signals the user wants to address ANOTHER stance from theirs. Used for AI-to-AI bridges later. Pass 1: surface as advanced; the simple case is "I (left stance) address X (right stance)."
 
 ### Visual states
 
@@ -38,7 +38,7 @@ The primary navigation surface. Always at the top.
 
 ## 2. Identity panel
 
-Always visible. Top-left or top-right of the browser chrome.
+Always visible. Top-left or top-right of the portal chrome.
 
 ### Layout
 
@@ -74,7 +74,7 @@ The body of the current tab. Renders the right-side position's Position Descript
 
 - **Land zone**: discovery grid (trees + extensions + beings + land metadata).
 - **Home zone**: tree grid (the user's projects + notes + active extensions).
-- **Node zone**: tree-shaped layout with governance panel, artifact body, sibling navigator, lineage breadcrumb.
+- **Tree zone**: tree-shaped layout with governance panel, artifact body, sibling navigator, lineage breadcrumb.
 
 See [zones.md](zones.md) for per-zone detail.
 
@@ -102,17 +102,17 @@ Sidebar or floating dock. Where the user talks to beings.
 ┌─────────────────────────────────┐
 │ Chats (3)                 [+]   │
 ├─────────────────────────────────┤
-│ ▼ tabor -> tagay-book@ruler     │
+│ ▼ tabor :: tagay-book@ruler     │
 │   (active, lifecycle: running)  │
 │   ⋮ messages...                 │
 ├─────────────────────────────────┤
-│ ▶ tabor -> chapter-1@archivist  │
+│ ▶ tabor :: chapter-1@archivist  │
 │   (read-only, 4 messages)       │
 ├─────────────────────────────────┤
-│ ▶ tabor -> ~tabor@dreamer       │
+│ ▶ tabor :: ~tabor@dreamer       │
 │   (idle)                        │
 ├─────────────────────────────────┤
-│ [Message tabor -> tagay-book@.. │
+│ [Message tabor :: tagay-book@.. │
 │  ____________________________ ] │
 │                          [send] │
 └─────────────────────────────────┘
@@ -134,7 +134,7 @@ Chat messages can carry:
 
 ### Persistence
 
-Threads persist in the browser's local store + on the land server. Closing the panel and reopening shows them again. Threads cross sessions (signing out and back in restores them).
+Threads persist in the portal's local store + on the land server. Closing the panel and reopening shows them again. Threads cross sessions (signing out and back in restores them).
 
 ### "Always-on surface" model
 
@@ -183,9 +183,9 @@ Extensions installed at the current position contribute their own panels. Render
 
 Each extension surface gets a collapsible panel slot. Surfaces declare their render kind:
 
-- `json-tree` — extension provides hierarchical data; browser renders as a tree
-- `json-list` — extension provides flat list; browser renders as a table
-- `html-fragment` — extension returns sandboxed HTML the browser embeds
+- `json-tree` — extension provides hierarchical data; portal renders as a tree
+- `json-list` — extension provides flat list; portal renders as a table
+- `html-fragment` — extension returns sandboxed HTML the portal embeds
 - `custom` — extension provides a registered React/component contract (Pass 4)
 
 For book-workspace: an outline panel + a chapter-status panel. For code-workspace: a file-tree panel + a build-output panel. For values: a domain-list panel. For schedule: a calendar.
@@ -194,7 +194,7 @@ Multiple extensions can be active; the user controls which panels are expanded.
 
 ## Tabs
 
-Multiple PAs open at once. Each tab is one Perspective Address.
+Multiple PAs open at once. Each tab is one Portal Address.
 
 ### Tab title
 
@@ -202,7 +202,7 @@ Shows `<embodiment-emoji> <path-tail>@<embodiment>`. E.g., `👑 tagay-book@rule
 
 ### Tab pinning
 
-Pinned tabs stay across browser restarts. Useful for home zone + current project.
+Pinned tabs stay across portal restarts. Useful for home zone + current project.
 
 ### Cross-tab linking
 
@@ -210,10 +210,10 @@ Drag a position-link from one tab's content to another tab's chat → references
 
 ## What's NOT a surface
 
-These are intentionally absent (web-browser holdovers that don't fit):
+These are intentionally absent (web-portal holdovers that don't fit):
 
 - **Refresh button**. Everything is live. State is event-driven.
 - **Bookmarks bar**. Replaced by favorites in the identity panel and tree-navigator pinning.
 - **Search bar separate from address bar**. The address bar is the only entry point.
-- **Plugin/extension UI as overlays**. Extensions live as panels in the position descriptor, not as browser-chrome popups.
-- **DOM inspector / dev tools**. Replaced by a "Position Descriptor inspector" that shows the raw JSON the browser is rendering.
+- **Plugin/extension UI as overlays**. Extensions live as panels in the position descriptor, not as portal-chrome popups.
+- **DOM inspector / dev tools**. Replaced by a "Position Descriptor inspector" that shows the raw JSON the portal is rendering.

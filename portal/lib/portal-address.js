@@ -1,19 +1,19 @@
-// Perspective Address parser + formatter.
+// Portal Address parser + formatter.
 //
 // TreeOS replaces URLs with a three-tier addressing hierarchy:
 //
 //   Position           = land/path           (where)
 //   Stance             = land/path@embodiment (where + as what being) — one side of a bridge
-//   Perspective Address = stance -> stance   (full bridged form — one being addressing another)
+//   Portal Address = stance :: stance   (full bridged form — one being addressing another)
 //
 // Each level answers a different question. "What's the position?" → just
 // the land/path. "What's the stance?" → land/path/embodiment (one side).
-// "What's the perspective address?" → the full bridged form.
+// "What's the portal address?" → the full bridged form.
 //
-// Full grammar (see ../docs/perspective-address.md):
+// Full grammar (see ../docs/portal-address.md):
 //
-//   PerspectiveAddress := Bridge | Stance
-//   Bridge             := Stance "->" Stance
+//   PortalAddress := Bridge | Stance
+//   Bridge             := Stance "::" Stance
 //   Stance             := Position "@" Embodiment | Position | Embodiment
 //   Position           := Land? Path?
 //   Land               := Domain (":" Port)?
@@ -24,7 +24,7 @@
 //   Segment            := node-name | node-id (uuid)
 //   Embodiment         := "@" Identifier
 //
-// Path representations (browser switches between freely):
+// Path representations (portal switches between freely):
 //   Each node has a stable id (uuid) AND a display name. A path can be
 //   written as either form, and at either depth:
 //     /tagay-book/chapter-1        full chain, names
@@ -34,7 +34,7 @@
 //   All four resolve to the same node. The parser accepts any form; the
 //   server resolves to a canonical nodeId and returns BOTH forms (the
 //   id chain and the name chain) in the Position Descriptor so the
-//   browser can render either.
+//   portal can render either.
 //
 // Both sides of a bridge are stances. They use the SAME grammar. A
 // human user is represented as `<land>/@<username>` — i.e. an
@@ -57,7 +57,7 @@
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Parse a Perspective Address string into a normalized object.
+ * Parse a Portal Address string into a normalized object.
  *
  * @param {string} input
  * @param {object} [ctx]
@@ -72,15 +72,15 @@ export function parse(input, ctx = {}) {
     throw paError(
       "input-not-string",
       input,
-      "Perspective address must be a string",
+      "Portal address must be a string",
     );
   }
   const trimmed = input.trim();
   if (!trimmed) {
-    throw paError("empty-input", input, "Perspective address cannot be empty");
+    throw paError("empty-input", input, "Portal address cannot be empty");
   }
   // Bridge?
-  const bridgeIdx = trimmed.indexOf("->");
+  const bridgeIdx = trimmed.indexOf("::");
   let leftStr = null;
   let rightStr = trimmed;
   if (bridgeIdx >= 0) {
@@ -96,11 +96,11 @@ export function parse(input, ctx = {}) {
         offset: bridgeIdx + 2,
       });
     }
-    if (rightStr.includes("->")) {
+    if (rightStr.includes("::")) {
       throw paError(
         "multiple-bridges",
         input,
-        "Only one '->' separator allowed",
+        "Only one '::' separator allowed",
       );
     }
   }
@@ -127,7 +127,7 @@ export function format(pa, opts = {}) {
   }
   const rightStr = formatStance(pa.right, opts);
   if (pa.left) {
-    return `${formatStance(pa.left, opts)} -> ${rightStr}`;
+    return `${formatStance(pa.left, opts)} :: ${rightStr}`;
   }
   return rightStr;
 }
@@ -254,7 +254,7 @@ function parseStance(input, ctx, opts = {}) {
   // Determine if `rest` includes a land identifier or is just a zone marker.
   // The three zone markers are:
   //   "/"            → land zone (literal slash IS the land)
-  //   "/<id>..."     → node zone (slash followed by node id or full path)
+  //   "/<id>..."     → tree zone (slash followed by node id or full path)
   //   "~" / "~user"  → home zone (shorthand; expands to "/~<user>")
   // A land identifier (e.g. "treeos.ai") never starts with "/" or "~", so a
   // leading slash or tilde means we're already inside the current land.
@@ -461,7 +461,7 @@ export function isValidEmbodiment(embodiment) {
 // ─────────────────────────────────────────────────────────────────────
 
 function paError(code, input, message, extra = {}) {
-  const err = new Error(`PerspectiveAddress: ${message}`);
+  const err = new Error(`PortalAddress: ${message}`);
   err.code = code;
   err.paInput = input;
   Object.assign(err, extra);
@@ -499,7 +499,7 @@ export function toHttpRoute(stance) {
     const segs = rest.split("/").filter(Boolean);
     encodedTail = segs.map(encodeURIComponent).join("/");
   } else {
-    zone = "node";
+    zone = "tree";
     const segs = path.slice(1).split("/").filter(Boolean);
     encodedTail = segs.map(encodeURIComponent).join("/");
   }
