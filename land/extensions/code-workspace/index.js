@@ -638,6 +638,29 @@ export async function init(core) {
         refine:    { modeKey: "tree:code-worker-refine" },
         review:    { modeKey: "tree:code-worker-review" },
         integrate: { modeKey: "tree:code-worker-integrate" },
+        // Decomposition hints. Code projects naturally branch by
+        // directory because directories ARE encapsulation boundaries
+        // and downstream consumers (build tools, package managers,
+        // human readers) expect this structure. Parallel sub-Ruler
+        // work pays off — separate directories truly are separate
+        // sub-domains, the engineering cost of branching is matched
+        // by the parallelism benefit.
+        _decompositionHints: {
+          defaultShape: "branch-per-major-sub-domain",
+          branchWhen:
+            "Each top-level directory or independent module — server/, client/, shared/, and so on — becomes a branch sub-Ruler. Multi-module projects fan out naturally; sub-Rulers handle their own internal decomposition.",
+          leafWhen:
+            "Top-level integration files (package.json, README, top-level config, top-level index.html when there's no client/ directory). Files at THIS scope only; the directory branches own their own contents.",
+          integrateWhen:
+            "Tie sibling sub-Ruler outputs into a coherent surface at the current scope: the project-level package.json that references each module, the README that names the project, top-level index.html that loads the client bundle. Reach into sibling directories is forbidden — integrate works at this scope only, reading sibling outputs read-only.",
+          antiPatterns: [
+            "single leaf 'write the whole project' — code projects need directory structure for tooling/IDE/readability",
+            "branch entries that name files instead of sub-domains — branches are sub-domains, files are leaves",
+            "leaves at parent scope that write inside a child branch's directory — that's the child sub-Ruler's territory",
+          ],
+          example:
+            "A web app project: ROOT plan has 3 branch entries (server, client, shared, each a directory sub-Ruler), 2 leaves (package.json, README), 1 integrate leaf (top-level index.html that loads the client bundle once it's built). Each branch sub-Ruler plans its own internals.",
+        },
       });
       log.info("CodeWorkspace",
         "Registered typed Workers with governing: build/refine/review/integrate");

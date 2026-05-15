@@ -11,6 +11,22 @@ export async function init(core) {
   // Wire orchestrator memory cleanup into the WebSocket disconnect/clear path
   setClearMemoryFn(clearMemory);
 
+  // Cancel-button → drain per-user spawn-abort registry. Fire-and-forget
+  // governance spawns (planner / contractor / dispatch / etc.) keep
+  // running AFTER the user's original request has returned; without
+  // this hook, the stop button has no way to halt them. The kernel
+  // fires `request:cancelled` on cancelRequest WS events; tree-
+  // orchestrator owns the registry so it does the actual aborting.
+  core.hooks.register("request:cancelled", async ({ userId }) => {
+    if (!userId) return;
+    try {
+      const { abortAllForUser } = await import("./spawnAborts.js");
+      abortAllForUser(userId);
+    } catch (err) {
+      log.debug("TreeOrchestrator", `request:cancelled abort drain skipped: ${err.message}`);
+    }
+  });
+
   // ── Routing index: rebuild on boot ──
   core.hooks.register("afterBoot", async () => {
     try {

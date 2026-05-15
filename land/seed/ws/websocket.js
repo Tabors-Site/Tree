@@ -1240,6 +1240,23 @@ export function initWebSocketServer(httpServer, allowedOrigins) {
         socket._chatAbort.abort();
         socket._chatAbort = null;
       }
+      // Fire `request:cancelled` so extensions that own background
+      // spawn-and-await chains (governing's planner/contractor/
+      // dispatch, etc.) can drain their per-user abort registries.
+      // The kernel can't import extension state directly (seed never
+      // reaches into extensions); the hook is the contracted surface.
+      const userIdForCancel = socket.visitorId || socket.userId;
+      if (userIdForCancel) {
+        try {
+          hooks.run("request:cancelled", {
+            userId: String(userIdForCancel),
+            visitorId: socket.visitorId || null,
+            socketId: socket.id || null,
+          }).catch(() => {});
+        } catch (err) {
+          log.debug("WS", `request:cancelled hook fire skipped: ${err.message}`);
+        }
+      }
       // Active chat finalization is handled by the abort path in the chat handler
     });
 

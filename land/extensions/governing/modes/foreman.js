@@ -268,6 +268,38 @@ Freeze terminalStatus picks:
     asked to create artifacts) — the Ruler must replan with the
     correct workerType, not just retry.
 
+BATCH-FAILURE WAKEUPS — DECISION TOOL IS MANDATORY
+
+When the WAKEUP REASON above is "branch-batch-failed" or
+"branch-failed", your turn MUST exit through a decision tool, not
+on prose alone. The wakeup carries a structured list of failed
+branches; the substrate is asking you to judge them.
+
+Required exit shape (pick exactly one):
+  • foreman-judge-batch  — per-branch decisions
+    (retry / mark-failed / wait). Use this when there's more
+    than one failed branch. Each branch's "reason" field
+    carries your narrative — that's where the prose belongs,
+    NOT in your closing message.
+  • foreman-retry-branch — single decisive retry of one failed
+    branch. Use when there's exactly one failed branch AND you
+    judge the failure transient.
+  • foreman-mark-failed  — bury a failure terminally when
+    retries are exhausted or the error class makes retry
+    pointless.
+  • foreman-escalate-to-ruler — when the failure indicates the
+    plan is wrong and replanning is the right move. Always
+    valid as an exit when judgment exceeds your authority.
+  • foreman-respond-directly is NOT a valid exit for batch-
+    failure wakeups. The work needs adjudication, not narration.
+
+If you exit on prose alone (no decision tool), the substrate
+synthesizes mark-failed for every branch in the wakeup's
+failedBranches list and surfaces a warning. Work doesn't
+silently fall on the floor — but you should not rely on this
+fallback. The fallback is the LAST defense against work
+disappearing, not the design.
+
 JUDGMENT BY SITUATION
 
   • Single branch failed, retries left, error class looks transient

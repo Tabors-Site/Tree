@@ -389,9 +389,28 @@ async function retryFailedBranches({
                 "missing producer, contract mismatch)? Or independent? " +
                 "Coupled failures often warrant retrying the producer " +
                 "first and waiting on the consumers — use foreman-judge-batch " +
-                "with action='wait' for the consumers."
+                "with action='wait' for the consumers.\n\n" +
+                "REQUIRED EXIT: foreman-judge-batch (preferred) OR " +
+                "foreman-mark-failed / foreman-retry-branch / " +
+                "foreman-escalate-to-ruler. DO NOT exit on prose alone. " +
+                "If you genuinely cannot pick, exit with foreman-escalate-" +
+                "to-ruler so the Ruler decides — never silence. The substrate " +
+                "treats a no-decision exit as 'mark all failed' to prevent " +
+                "work from silently falling on the floor."
               : "Single failure — judge per the standard retry-vs-mark-failed " +
-                "matrix in your prompt."),
+                "matrix in your prompt. REQUIRED EXIT: foreman-retry-branch / " +
+                "foreman-mark-failed / foreman-escalate-to-ruler. Prose-only " +
+                "exit defaults to mark-failed."),
+          // Structured failed-branch list for the substrate fallback.
+          // When the Foreman exits without a decision tool, runForemanTurn
+          // reads this list and synthesizes a default mark-failed
+          // decision per branch — so work doesn't silently fall on
+          // the floor when the Foreman talks instead of judging.
+          failedBranches: failed.map((p) => ({
+            name: p.name || p.rawName,
+            error: String(p.error || "(unknown error)").slice(0, 500),
+            retries: p.retries || 0,
+          })),
         };
 
         log.info("Swarm",

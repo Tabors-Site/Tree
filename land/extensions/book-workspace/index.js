@@ -90,6 +90,29 @@ export async function init(core) {
         refine:    { modeKey: "tree:book-worker-refine" },
         review:    { modeKey: "tree:book-worker-review" },
         integrate: { modeKey: "tree:book-worker-integrate" },
+        // Decomposition hints. The Planner reads these when planning
+        // at any scope where book-workspace is active. Prose is
+        // production work, not parallel engineering — defaulting to
+        // branch-per-section mistakes the shape and stacks sub-Ruler
+        // overhead onto atomic prose. The shape book Planners should
+        // gravitate to:
+        _decompositionHints: {
+          defaultShape: "single-leaf-with-internal-structure",
+          branchWhen:
+            "Only when sections are genuinely independent surveys / anthologies / multi-author pieces. NOT for ordered chapters where one prose flow could carry the work.",
+          leafWhen:
+            "Default. A chapter, an essay, a section — emit one build leaf with a substantive spec describing the structure. The Worker writes the full prose as ONE note. Internal headings live inside the prose, not as branch decompositions.",
+          integrateWhen:
+            "Only when multiple sibling sub-Rulers produced separately-authored prose that genuinely needs unifying (e.g., an anthology with chapter prose by different sub-Rulers, where references must be coalesced). Skip integrate when the parent's research-notes already aggregated sources OR there are no sibling outputs to unify.",
+          antiPatterns: [
+            "branch-per-section for a single-authored chapter — sub-Ruler tax with no parallelism benefit",
+            "integrate step at the end of every chapter — research-notes already aggregates citations; the Worker's prose carries inline citations",
+            "splitting research → outline → prose into three leaves when one build leaf can produce well-structured prose directly",
+            "creating a 'chapter-outline' leaf as scaffolding — the outline is in the spec, not a separate artifact",
+          ],
+          example:
+            "A 4-chapter book: ROOT plan has 4 branch entries (one per chapter, each with a ONE-paragraph spec describing what the chapter covers, target word count, voice). Each chapter Ruler then emits a SINGLE build leaf whose spec describes the chapter's internal structure (intro, sections, conclusion as bullets within the spec). The book Worker writes the entire chapter as one prose note. References emerge inline; if a coalesced references node is needed, that's a root-level integrate leaf, not a per-chapter one.",
+        },
       });
       log.info("BookWorkspace",
         "Registered typed Workers with governing: build/refine/review/integrate");

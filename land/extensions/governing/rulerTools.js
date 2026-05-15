@@ -1114,12 +1114,15 @@ export default function getRulerTools(_core) {
 
         // LIFECYCLE_ACTIVE start. dispatch-execution is the longest
         // phase in any lifecycle and the most important one for the
-        // user to see "still active" through. Fire it before kicking
-        // off the background dispatch.
-        if (activeRequest.socket?.emit) {
+        // user to see "still active" through. Fire via emitToUser so
+        // the chip reaches every socket the user has open right now
+        // (not just the one captured at request time — that one goes
+        // stale during long dispatches and across page reloads).
+        if (userId) {
           try {
+            const { emitToUser } = await import("../../seed/ws/websocket.js");
             const { WS } = await import("../../seed/protocol.js");
-            activeRequest.socket.emit(WS.LIFECYCLE_ACTIVE, {
+            emitToUser(String(userId), WS.LIFECYCLE_ACTIVE, {
               active: true,
               rulerNodeId: String(ruler._id),
               rootId: rootId || null,
@@ -1132,6 +1135,23 @@ export default function getRulerTools(_core) {
             log.debug("Governing", `LIFECYCLE_ACTIVE emit (dispatch start) skipped: ${err.message}`);
           }
         }
+
+        // Register a spawn-local AbortController so the stop button
+        // can cancel the entire dispatch chain (sub-Rulers, Worker
+        // batches, recursive sub-spawns). Without this, the stop
+        // button can't halt fire-and-forget dispatches — the user's
+        // only escape is killing the server.
+        const dispatchAbort = new AbortController();
+        if (callerSignal) {
+          if (callerSignal.aborted) dispatchAbort.abort();
+          else callerSignal.addEventListener("abort", () => dispatchAbort.abort(), { once: true });
+        }
+        let unregisterDispatchAbort = () => {};
+        try {
+          const { registerSpawnAbort } = await import("../tree-orchestrator/spawnAborts.js");
+          unregisterDispatchAbort = registerSpawnAbort(String(userId), dispatchAbort, `dispatch:${spawnId.slice(0, 8)}`);
+        } catch {}
+        runtimeCtx.signal = dispatchAbort.signal;
 
         // Kick off the dispatch WITHOUT awaiting. On settle (success
         // or failure), release the claim + fire governing:swarmDispatched.
@@ -1146,12 +1166,15 @@ export default function getRulerTools(_core) {
               `dispatch-execution: dispatchSwarmPlan failed: ${dispatchError}`);
           }
           releaseSpawn(claim.key);
+          try { unregisterDispatchAbort(); } catch {}
 
-          // LIFECYCLE_ACTIVE clear for dispatch.
-          if (activeRequest.socket?.emit) {
+          // LIFECYCLE_ACTIVE clear for dispatch via emitToUser so
+          // it survives the user's request socket closing.
+          if (userId) {
             try {
+              const { emitToUser } = await import("../../seed/ws/websocket.js");
               const { WS } = await import("../../seed/protocol.js");
-              activeRequest.socket.emit(WS.LIFECYCLE_ACTIVE, {
+              emitToUser(String(userId), WS.LIFECYCLE_ACTIVE, {
                 active: false,
                 rulerNodeId: String(ruler._id),
                 rootId: rootId || null,

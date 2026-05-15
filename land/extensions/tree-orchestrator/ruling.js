@@ -171,7 +171,7 @@ export async function spawnRoleAsChainstep({
   if (socket?.emit) {
     try {
       const { buildSocketBridge } = await import("./dispatch.js");
-      bridgeCallbacks = buildSocketBridge(socket, signal);
+      bridgeCallbacks = buildSocketBridge(socket, signal, userId);
     } catch (err) {
       log.debug("Ruling", `socket bridge build skipped: ${err.message}`);
     }
@@ -229,17 +229,19 @@ export async function spawnRoleAsChainstep({
     // chainstep's outcome — the answer is what flows back regardless.
     const exitText = result?.answer || result?.content || result?._allContent || null;
     if (
-      socket?.emit &&
+      userId &&
       exitText &&
       isGovernanceSubRole(modeKey) &&
       hasSubstantiveProse(exitText)
     ) {
       try {
         const { WS } = await import("../../seed/protocol.js");
-        socket.emit(WS.CHAINSTEP_COMPLETED, {
+        const { emitToUser } = await import("../../seed/ws/websocket.js");
+        emitToUser(String(userId), WS.CHAINSTEP_COMPLETED, {
           role: roleLabelFromModeKey(modeKey),
           modeKey,
           exitText: stripMarkerTokens(String(exitText)).slice(0, 4000),
+          rulerNodeId: nodeId ? String(nodeId) : null,
           parentChatId: parentChatId || null,
           source: source || null,
           durationMs: ms,
@@ -323,17 +325,53 @@ export function spawnRoleAsChainstepAsync({
     `↪️  spawnAsync ${spawnId.slice(0, 16)}: ${modeKey} ` +
     `(kind=${kind || "(unset)"}, completionHook=${completionHookName}, source=${source || "(unset)"})`);
 
+  // Register this spawn's AbortController with the per-user registry
+  // so the stop button (kernel's cancelRequest) can actually halt it.
+  // Without registration, fire-and-forget spawns become uncancellable
+  // — the user's only escape is killing the server. Forwards aborts
+  // from any parent signal too.
+  let spawnAbortController = null;
+  let unregisterAbort = null;
+  if (userId) {
+    spawnAbortController = new AbortController();
+    if (signal) {
+      // If the caller's signal aborts later, propagate to our spawn.
+      if (signal.aborted) spawnAbortController.abort();
+      else signal.addEventListener("abort", () => spawnAbortController.abort(), { once: true });
+    }
+    import("./spawnAborts.js").then((m) => {
+      unregisterAbort = m.registerSpawnAbort(String(userId), spawnAbortController, `${kind || modeKey}:${spawnId.slice(0, 8)}`);
+    }).catch(() => {});
+  }
+  const effectiveSignal = spawnAbortController ? spawnAbortController.signal : signal;
+
   // LIFECYCLE_ACTIVE — emit "active=true" so the chat panel renders
   // a persistent "Ruler active" chip. Cleared in the settle block
   // below once this spawn finishes AND the in-flight registry shows
   // no other spawns running at this scope. The chip is the user-
   // facing complement to fire-and-forget: with no synchronous wait,
   // the chat panel has no other signal that work is in progress.
-  if (socket?.emit && nodeId) {
-    try {
-      // Lazy-import to avoid a circular dep — protocol is in seed.
-      import("../../seed/protocol.js").then(({ WS }) => {
-        socket.emit(WS.LIFECYCLE_ACTIVE, {
+  //
+  // Emit via emitToUser (fans out to ALL of the user's connected
+  // sockets) rather than the captured `socket` reference. The
+  // captured socket gets stale across page reloads + during long
+  // recursive dispatches (sub-Ruler chains keep firing events long
+  // after the user's original request socket may have been
+  // replaced). emitToUser uses the kernel's authSessions registry
+  // so events reach whichever socket(s) the user has open RIGHT
+  // NOW — including the dashboard chat panel viewing the rulership
+  // scope, the CLI, multiple browser tabs, etc.
+  if (userId && nodeId) {
+    // spawnRoleAsChainstepAsync is sync (returns spawnId immediately),
+    // so the start-side emit can't await imports. Use the dynamic
+    // import's then() chain to fire-and-forget the LIFECYCLE_ACTIVE
+    // event; the captured params close over the spawnId.
+    Promise.all([
+      import("../../seed/ws/websocket.js"),
+      import("../../seed/protocol.js"),
+    ]).then(([wsMod, protoMod]) => {
+      try {
+        wsMod.emitToUser(String(userId), protoMod.WS.LIFECYCLE_ACTIVE, {
           active: true,
           rulerNodeId: String(nodeId),
           rootId: rootId ? String(rootId) : null,
@@ -342,21 +380,23 @@ export function spawnRoleAsChainstepAsync({
           modeKey,
           at: new Date().toISOString(),
         });
-      }).catch(() => {});
-    } catch (err) {
-      log.debug("Ruling", `LIFECYCLE_ACTIVE emit (start) skipped: ${err.message}`);
-    }
+      } catch (err) {
+        log.debug("Ruling", `LIFECYCLE_ACTIVE emit (start) skipped: ${err.message}`);
+      }
+    }).catch(() => {});
   }
 
   // Build socket bridge so the spawned role's events flow to the
-  // parent's socket — same shape as spawnRoleAsChainstep. The bridge
-  // emits to the user's WebSocket, which outlives the calling Ruler
-  // turn, so events continue streaming after the tool handler returns.
+  // user — same shape as spawnRoleAsChainstep. Pass userId so the
+  // bridge can use emitToUser fan-out (reaches every live socket
+  // the user has, including ones connected after the spawn started).
+  // Without userId the bridge falls back to direct socket emit
+  // (legacy single-socket behavior).
   const bridgeReady = (async () => {
-    if (!socket?.emit) return {};
+    if (!userId && !socket?.emit) return {};
     try {
       const { buildSocketBridge } = await import("./dispatch.js");
-      return buildSocketBridge(socket, signal) || {};
+      return buildSocketBridge(socket, effectiveSignal, userId) || {};
     } catch (err) {
       log.debug("Ruling", `socket bridge build skipped: ${err.message}`);
       return {};
@@ -380,7 +420,9 @@ export function spawnRoleAsChainstepAsync({
         mode: modeKey,
         rootId: rootId || null,
         nodeId: nodeId || null,
-        signal: signal || null,
+        // Use the spawn-local signal so the kernel's stop button can
+        // actually halt this background work via abortAllForUser.
+        signal: effectiveSignal,
         parentChatId: parentChatId || null,
         parentSessionId: parentSessionId || null,
         source: source || `spawn:${modeKey}`,
@@ -413,9 +455,10 @@ export function spawnRoleAsChainstepAsync({
     //       "10 contracts ratified — 1 global, 5 shared, 4 local").
     //       Without (b), the user only sees a tool-call line and
     //       no readable account of what was produced.
-    if (socket?.emit && isGovernanceSubRole(modeKey) && !error) {
+    if (userId && isGovernanceSubRole(modeKey) && !error) {
       try {
         const { WS } = await import("../../seed/protocol.js");
+        const { emitToUser } = await import("../../seed/ws/websocket.js");
         const role = roleLabelFromModeKey(modeKey);
         let bubbleText = null;
         if (exitText && hasSubstantiveProse(exitText)) {
@@ -478,10 +521,11 @@ export function spawnRoleAsChainstepAsync({
           }
         }
         if (bubbleText) {
-          socket.emit(WS.CHAINSTEP_COMPLETED, {
+          emitToUser(String(userId), WS.CHAINSTEP_COMPLETED, {
             role,
             modeKey,
             exitText: bubbleText,
+            rulerNodeId: nodeId ? String(nodeId) : null,
             parentChatId: parentChatId || null,
             source: source || null,
             durationMs: ms,
@@ -505,17 +549,25 @@ export function spawnRoleAsChainstepAsync({
       }
     }
 
+    // Unregister this spawn's AbortController so the per-user
+    // registry stays accurate. After settle, the controller is
+    // useless; keeping it would mean the next stop press iterates
+    // over dead controllers.
+    if (unregisterAbort) {
+      try { unregisterAbort(); } catch {}
+    }
+
     // LIFECYCLE_ACTIVE clear — emit "active=false" so the chat panel
     // can take down its "Ruler active" chip if no other spawns are
-    // still in flight at this scope. The chat panel does its own
-    // book-keeping (spawnId set + count), so we just emit the per-
-    // spawn settle event; the panel removes the chip when the set
-    // empties. Without this paired emit, the chip would stay
-    // forever after the lifecycle completes.
-    if (socket?.emit && nodeId) {
+    // still in flight at this scope. Use emitToUser (matches the
+    // start-side emit above) so the clear reaches whatever sockets
+    // the user has open right now — not just the one captured at
+    // spawn time.
+    if (userId && nodeId) {
       try {
+        const { emitToUser } = await import("../../seed/ws/websocket.js");
         const { WS } = await import("../../seed/protocol.js");
-        socket.emit(WS.LIFECYCLE_ACTIVE, {
+        emitToUser(String(userId), WS.LIFECYCLE_ACTIVE, {
           active: false,
           rulerNodeId: String(nodeId),
           rootId: rootId ? String(rootId) : null,
@@ -1006,6 +1058,72 @@ export async function runForemanTurn({
 
   if (!decision) {
     const fallback = foremanResult?._allContent || foremanResult?.answer || foremanResult?.content || "";
+
+    // Batch-failure fallback. When the wakeup carried a structured
+    // failed-branch list and the Foreman exited on prose without
+    // calling a decision tool, the kernel synthesizes a mark-failed
+    // decision per branch. This is substrate-honesty: a no-decision
+    // exit in failure context must NOT mean "work falls on the
+    // floor." Either the Foreman judges or the substrate marks
+    // failed — never silence. The Foreman's prose still surfaces as
+    // the answer so the user / Ruler can read what it thought.
+    if (
+      (wakeup?.reason === "branch-batch-failed" || wakeup?.reason === "branch-failed")
+      && Array.isArray(wakeup?.failedBranches)
+      && wakeup.failedBranches.length > 0
+    ) {
+      log.warn("Ruling",
+        `Foreman exited without a decision tool on ${wakeup.reason} wakeup. ` +
+        `Substrate synthesizing judge-batch → mark-failed for ${wakeup.failedBranches.length} ` +
+        `branch${wakeup.failedBranches.length === 1 ? "" : "es"} so work doesn't fall on the floor.`);
+      const synthDecision = {
+        kind: "judge-batch",
+        decisions: wakeup.failedBranches.map((b) => ({
+          branchName: b.name,
+          action: "mark-failed",
+          reason: "Foreman exited on prose without judging; substrate default to mark-failed (prefer foreman-judge-batch / retry-branch / escalate-to-ruler to override).",
+        })),
+        synthetic: true,
+      };
+      // Persist the mark-failed writes immediately. The swarm's
+      // approvedForRetry gate will see zero retries (which is
+      // correct — Foreman didn't approve any), and the branch
+      // statuses will reflect honest "failed" instead of stale
+      // "failed-pending-retry."
+      try {
+        const governing = await governingExports();
+        if (governing?.updateStepStatusByBranchName) {
+          for (const d of synthDecision.decisions) {
+            try {
+              await governing.updateStepStatusByBranchName({
+                rulerNodeId: scopeNodeId,
+                branchName: d.branchName,
+                updates: {
+                  status: "failed",
+                  error: "Foreman declined to judge; auto-marked failed by substrate.",
+                  completedAt: new Date().toISOString(),
+                },
+              });
+            } catch (perBranchErr) {
+              log.debug("Ruling",
+                `synth mark-failed for "${d.branchName}" skipped: ${perBranchErr.message}`);
+            }
+          }
+        }
+      } catch (err) {
+        log.debug("Ruling", `synth mark-failed write failed: ${err.message}`);
+      }
+      return {
+        success: true,
+        answer: fallback || "(no response)",
+        modeKey: "tree:governing-foreman",
+        modesUsed: ["tree:governing-foreman"],
+        rootId,
+        targetNodeId: scopeNodeId,
+        _foremanDecision: synthDecision,
+      };
+    }
+
     log.warn("Ruling", `Foreman exited without a decision tool. Treating prose as respond-directly.`);
     return {
       success: true,

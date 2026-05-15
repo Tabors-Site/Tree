@@ -44,7 +44,43 @@ export function registerWorkspaceWorkerTypes(workspaceName, types) {
       sanitized[t] = { modeKey: types[t].modeKey };
     }
   }
+  // Pass-through for workspace-declared decomposition hints. The
+  // Planner reads these via getWorkspaceDecompositionHints when
+  // building its prompt so it can pick branch-vs-leaf shapes that
+  // suit the workspace's typical work pattern. Free-text — the
+  // workspace owns the semantics.
+  if (types._decompositionHints && typeof types._decompositionHints === "object") {
+    sanitized._decompositionHints = types._decompositionHints;
+  }
   REGISTRY.set(workspaceName, sanitized);
+}
+
+/**
+ * Read a workspace's decomposition hints (free-text guidance the
+ * Planner injects into its prompt). Returns null when the workspace
+ * registered no hints OR the workspace isn't in the registry.
+ *
+ * Shape (workspace-declared):
+ *   {
+ *     defaultShape: "single-leaf-with-internal-structure"
+ *                 | "branch-per-major-sub-domain"
+ *                 | "mixed-leaf-and-branch"
+ *                 | <custom string>,
+ *     branchWhen: "<one sentence: when to use branches>",
+ *     leafWhen:   "<one sentence: when to use leaves>",
+ *     integrateWhen: "<one sentence: when integrate is meaningful>",
+ *     antiPatterns: ["<phrase>", ...],  // shapes the Planner should NOT emit
+ *     example: "<concrete example plan shape for this workspace>",
+ *   }
+ *
+ * The hints are SUGGESTIONS, not validators — the Planner reads
+ * them as architectural guidance during decomposition.
+ */
+export function getWorkspaceDecompositionHints(workspaceName) {
+  if (!workspaceName) return null;
+  const entry = REGISTRY.get(workspaceName);
+  if (!entry?._decompositionHints) return null;
+  return entry._decompositionHints;
 }
 
 /**

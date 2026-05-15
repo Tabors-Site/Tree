@@ -38,6 +38,7 @@ import {
   listWorkerTypeRegistrations,
   shouldGovernAtScope,
   findActiveWorkspaceAtScope,
+  getWorkspaceDecompositionHints,
 } from "./state/workerTypeRegistry.js";
 import {
   FLAG_KINDS,
@@ -396,10 +397,13 @@ export async function init(core) {
         // notes on tree nodes) vs other workspaces. Without this
         // surface the Planner has no signal which workspace is
         // active and tends to default to whichever shape its training
-        // saw most (usually code). Surfacing the workspace identity
-        // + its node-types + its typed Workers' tool sets lets the
-        // Planner choose artifact shapes the active workspace's
-        // Workers can actually produce.
+        // saw most (usually code).
+        //
+        // Workspace-declared decomposition hints (defaultShape,
+        // branchWhen, leafWhen, integrateWhen, antiPatterns, example)
+        // come from the workspace's own registration — that's where
+        // the workspace owner names the shape of its production
+        // work. The Planner reads these and adapts.
         try {
           const ws = await findActiveWorkspaceAtScope(nodeId);
           if (ws) {
@@ -410,31 +414,61 @@ export async function init(core) {
               .filter((r) => r.workspace === ws)
               .map((r) => `${r.workerType} → ${r.modeKey}`)
               .join(", ");
-            // Workspace-specific hints. These name the SHAPE the
-            // workspace produces so the Planner doesn't generalize
-            // wrong. Adding a new workspace adds an entry here.
-            const WORKSPACE_HINTS = {
+
+            // Static fallback (in case a workspace hasn't declared
+            // its hints yet). Workspace-declared hints below override.
+            const FALLBACK_HINTS = {
               "book-workspace":
-                "Prose artifacts. Workers write text as NOTES on tree nodes (create-node-note), " +
-                "not as files. The 'book' compiler walks the tree and assembles the final document. " +
-                "Plan leaves should produce prose at scopes: chapters as branch steps (sub-Rulers), " +
-                "sections as either branch sub-Rulers (if substantial) or leaf prose. NO 'package.json,' " +
-                "NO 'index.html,' NO source files. Artifacts are NODES with NOTES (research-notes, " +
-                "chapter-outline, final-prose, references). Branch names are chapter/section identifiers " +
-                "(chapter-01-origins, section-introduction), NOT directory names. Use the contracted " +
-                "vocabulary from parent contracts verbatim.",
+                "Prose artifacts. Workers write text as NOTES on tree nodes (create-node-note), not as files.",
               "code-workspace":
-                "Code artifacts. Workers create + edit FILES via workspace-add-file / workspace-edit-file. " +
-                "Plan leaves should name concrete file paths (package.json, server/index.js, etc.). " +
-                "Branch steps are directories (each becomes a sub-Ruler with its own scope). " +
-                "DO NOT plan prose notes here — code-workspace's Workers don't write notes.",
+                "Code artifacts. Workers create + edit FILES via workspace-add-file / workspace-edit-file.",
             };
-            const hint = WORKSPACE_HINTS[ws] || `Workspace "${ws}" is active.`;
+            const fallback = FALLBACK_HINTS[ws] || `Workspace "${ws}" is active.`;
+
+            // Read workspace-declared decomposition hints. The
+            // workspace owner names defaultShape, when-to-branch,
+            // when-to-integrate, anti-patterns, and an example plan.
+            // Renders to a multi-section block the Planner reads
+            // directly. Without these, the Planner has no
+            // workspace-specific guidance beyond the static fallback.
+            let hintsBlock = "";
+            try {
+              const hints = getWorkspaceDecompositionHints(ws);
+              if (hints) {
+                const lines = [];
+                if (hints.defaultShape) {
+                  lines.push(`### Default decomposition shape\n${hints.defaultShape}`);
+                }
+                if (hints.branchWhen) {
+                  lines.push(`### When to use BRANCH steps\n${hints.branchWhen}`);
+                }
+                if (hints.leafWhen) {
+                  lines.push(`### When to use LEAF steps\n${hints.leafWhen}`);
+                }
+                if (hints.integrateWhen) {
+                  lines.push(`### When to use INTEGRATE workerType\n${hints.integrateWhen}`);
+                }
+                if (Array.isArray(hints.antiPatterns) && hints.antiPatterns.length) {
+                  lines.push("### Anti-patterns (do NOT emit plans shaped like these)");
+                  for (const a of hints.antiPatterns) lines.push(`  • ${a}`);
+                }
+                if (hints.example) {
+                  lines.push(`### Example plan shape\n${hints.example}`);
+                }
+                if (lines.length) {
+                  hintsBlock = "\n\n" + lines.join("\n\n");
+                }
+              }
+            } catch (err) {
+              log.debug("Governing", `enrichContext decomp-hints read skipped: ${err.message}`);
+            }
+
             context.governingActiveWorkspace =
               "## ACTIVE WORKSPACE AT THIS SCOPE\n\n" +
               `Workspace: **${ws}**\n` +
               (typedWorkers ? `Typed Workers available: ${typedWorkers}\n\n` : "\n") +
-              hint;
+              fallback +
+              hintsBlock;
           }
         } catch (err) {
           log.debug("Governing", `enrichContext active-workspace skipped: ${err.message}`);
@@ -790,6 +824,7 @@ export async function init(core) {
       unregisterWorkspaceWorkerTypes,
       lookupWorkerMode,
       listWorkerTypeRegistrations,
+      getWorkspaceDecompositionHints,
       // shouldGovernAtScope tells dispatch whether to route a tree-
       // zone message through the Ruler instead of running the
       // classifier's mode pick directly. Returns true at any scope

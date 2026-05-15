@@ -61,20 +61,60 @@ export function emitStatus(socket, phase, text) {
  * Safe when socket is null — each callback becomes a no-op. Signal check
  * mirrors the old onToolResults guard so an aborted run stops emitting.
  */
-export function buildSocketBridge(socket, signal = null) {
-  const isLive = () => socket?.emit && !signal?.aborted;
+export function buildSocketBridge(socket, signal = null, userId = null) {
+  // Two emit paths in priority:
+  //   1. userId → emitToUser fan-out. Reaches every socket the user
+  //      has open right now (browser tabs, CLI, mobile sheet), and
+  //      survives the original request's socket closing. This is
+  //      what makes the chat panel a live dashboard for the
+  //      rulership tree — sub-Ruler events from any depth flow back.
+  //   2. socket → direct emit. Fallback when userId is unknown
+  //      (older call sites that didn't thread userId). Same shape
+  //      as before; events go only to the captured socket.
+  //
+  // Both paths gated on signal.aborted so a cancelled run stops
+  // emitting cleanly.
+  let liveEmit = null;
+  if (userId) {
+    // Lazy-import to avoid bringing seed-ws into module-init order
+    // — buildSocketBridge is called per-spawn, the import resolves
+    // once and cached.
+    let cachedFn = null;
+    liveEmit = (event, payload) => {
+      if (signal?.aborted) return;
+      if (cachedFn) { try { cachedFn(String(userId), event, payload); } catch {} return; }
+      import("../../seed/ws/websocket.js").then((m) => {
+        cachedFn = m.emitToUser;
+        try { cachedFn(String(userId), event, payload); } catch {}
+      }).catch(() => {
+        // Fall back to direct socket emit if the user-room import
+        // fails — preserve the old single-socket behavior rather
+        // than dropping the event entirely.
+        if (socket?.emit) socket.emit(event, payload);
+      });
+    };
+  } else if (socket?.emit) {
+    liveEmit = (event, payload) => {
+      if (signal?.aborted) return;
+      socket.emit(event, payload);
+    };
+  }
+  if (!liveEmit) {
+    return {
+      onToolResults: () => {},
+      onToolCalled: () => {},
+      onThinking: () => {},
+    };
+  }
   return {
     onToolResults: (results) => {
-      if (!isLive()) return;
-      for (const r of results) socket.emit(WS.TOOL_RESULT, r);
+      for (const r of results) liveEmit(WS.TOOL_RESULT, r);
     },
     onToolCalled: (call) => {
-      if (!isLive()) return;
-      socket.emit(WS.TOOL_CALLED, call);
+      liveEmit(WS.TOOL_CALLED, call);
     },
     onThinking: (thought) => {
-      if (!isLive()) return;
-      socket.emit(WS.THINKING, thought);
+      liveEmit(WS.THINKING, thought);
     },
   };
 }
