@@ -52,13 +52,16 @@ export default function App() {
     (async () => {
       try {
         setConnectionStatus("loading");
-        const disc = await PortalClient.bootstrap(session.landUrl);
+        const disc = await PortalClient.bootstrap(session.landUrl, {
+          useProxy: session.landIsProxied,
+        });
         if (cancelled) return;
         setDiscovery(disc);
 
         const client = new PortalClient({
           landUrl: session.landUrl,
           token: session.token,
+          useProxy: session.landIsProxied,
           onConnectionChange: (status, detail) => {
             setConnectionStatus(status);
             if (status === "error") setFetchError(`Connection: ${detail || "unknown"}`);

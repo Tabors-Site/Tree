@@ -10,9 +10,10 @@
 import { io } from "socket.io-client";
 
 export class PortalClient {
-  constructor({ landUrl, token, onConnectionChange }) {
+  constructor({ landUrl, token, useProxy, onConnectionChange }) {
     this.landUrl = landUrl;
     this.token = token;
+    this.useProxy = !!useProxy; // dev: use Vite proxy (relative URLs, same-origin)
     this.socket = null;
     this.connected = false;
     this._reqCounter = 0;
@@ -24,13 +25,26 @@ export class PortalClient {
   // GET /.well-known/treeos-portal → discovery info.
   // ────────────────────────────────────────────────────────────────
 
-  static async bootstrap(landUrl) {
-    const base = landUrl.replace(/\/+$/, "");
-    const res = await fetch(`${base}/.well-known/treeos-portal`);
-    if (!res.ok) {
-      throw new Error(`Portal bootstrap failed: HTTP ${res.status}`);
+  static async bootstrap(landUrl, { useProxy } = {}) {
+    const url = useProxy
+      ? "/.well-known/treeos-portal"
+      : `${landUrl.replace(/\/+$/, "")}/.well-known/treeos-portal`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    try {
+      const res = await fetch(url, { signal: controller.signal });
+      if (!res.ok) {
+        throw new Error(`Portal bootstrap failed: HTTP ${res.status}`);
+      }
+      return await res.json();
+    } catch (err) {
+      if (err.name === "AbortError") {
+        throw new Error("Portal bootstrap timed out (10s). Is the Land server reachable?");
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
     }
-    return await res.json();
   }
 
   // ────────────────────────────────────────────────────────────────
@@ -40,7 +54,10 @@ export class PortalClient {
   connect() {
     if (this.socket) return;
     // Socket.IO understands the http(s):// URL; it upgrades to websocket.
-    this.socket = io(this.landUrl, {
+    // In dev (proxy mode), pass undefined to use the current origin so
+    // Vite's /socket.io proxy forwards the connection.
+    const target = this.useProxy ? undefined : this.landUrl;
+    this.socket = io(target, {
       auth: { token: this.token, client: "portal", instance: "main" },
       transports: ["websocket"],
       withCredentials: false,

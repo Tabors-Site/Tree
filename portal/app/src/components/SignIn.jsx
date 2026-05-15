@@ -8,6 +8,11 @@ import React, { useState } from "react";
  *   2. POST {landUrl}/api/v1/login → returns { token, userId, username }.
  *   3. Caller (App) stores the token + opens a Portal socket.
  *
+ * Dev mode (Vite): if the land URL points at localhost (default), we issue
+ * the login as a relative URL ("/api/v1/login") so Vite's proxy handles it.
+ * That avoids CORS preflight issues during dev. In a built bundle, the
+ * URL stays absolute.
+ *
  * Pass 5 (federation) will add: pick from roster, federated sign-in,
  * cross-land bridge.
  */
@@ -24,23 +29,50 @@ export default function SignIn({ onSignedIn }) {
     setLoading(true);
     try {
       const cleaned = landUrl.replace(/\/+$/, "");
-      const res = await fetch(`${cleaned}/api/v1/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
-      const body = await res.json();
+
+      // Dev: if we're inside a Vite dev server, use a relative URL so the
+      // proxy handles it (no CORS). The proxy target is set in
+      // vite.config.js via PORTAL_LAND_TARGET (default localhost:3000).
+      const useProxy =
+        import.meta.env?.DEV &&
+        (cleaned.startsWith("http://localhost") ||
+          cleaned === "" ||
+          cleaned === "/" ||
+          (import.meta.env?.VITE_PORTAL_USE_PROXY === "true"));
+      const loginUrl = useProxy ? "/api/v1/login" : `${cleaned}/api/v1/login`;
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+
+      let res;
+      try {
+        res = await fetch(loginUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      const body = await res.json().catch(() => ({}));
       if (!res.ok || body.status !== "ok") {
         throw new Error(body?.error?.message || `Sign-in failed (HTTP ${res.status})`);
       }
       onSignedIn({
         landUrl: cleaned,
+        landIsProxied: useProxy,
         token: body.data.token,
         userId: body.data.userId,
         username: body.data.username,
       });
     } catch (err) {
-      setError(err.message);
+      const msg =
+        err.name === "AbortError"
+          ? "Request timed out after 10s. Is the Land server reachable?"
+          : err.message;
+      setError(msg);
     } finally {
       setLoading(false);
     }
