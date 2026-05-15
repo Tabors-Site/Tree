@@ -32,9 +32,22 @@ export function registerRawWebhook(handler) {
 
 const app = express();
 
-// CORS: landUrl + any configured allowed domains
+// CORS: landUrl + configured allowed domains. The Land is a first-class
+// server that accepts traffic from multiple kinds of clients:
+//   - Its own UI (landUrl)
+//   - Chrome extensions (origin "chrome-extension://...")
+//   - The Portal (a separate dev/native app on its own origin)
+//   - Anything explicitly added to `allowedFrameDomains` config
+//
+// In dev mode (LAND_DOMAIN=localhost or similar), we also allow ANY
+// localhost origin — that's how multiple dev tools naturally coexist on
+// one machine. In production this loosening doesn't apply.
 const landUrl = getLandUrl();
 const corsOrigins = [landUrl];
+const isDevMode = (() => {
+  const d = (process.env.LAND_DOMAIN || "localhost").toLowerCase();
+  return d === "localhost" || d.startsWith("localhost") || d.startsWith("127.") || d.startsWith("192.168.") || d.startsWith("10.") || d.endsWith(".lan") || d.endsWith(".local") || !d.includes(".");
+})();
 try {
   const { getLandConfigValue } = await import("./seed/landConfig.js");
   const extra = getLandConfigValue("allowedFrameDomains");
@@ -45,9 +58,24 @@ try {
   }
 } catch {}
 
+const LOCALHOST_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d{1,5})?$/i;
+
+function corsOriginCheck(origin, cb) {
+  // No origin = same-origin or non-browser client (CLI, curl, etc.). Allow.
+  if (!origin) return cb(null, true);
+  // Configured allow-list.
+  if (corsOrigins.includes(origin)) return cb(null, true);
+  // Chrome extensions (parity with the WS CORS in seed/ws/websocket.js).
+  if (origin.startsWith("chrome-extension://")) return cb(null, true);
+  // Dev mode: any localhost origin (so the Portal at localhost:5175,
+  // a separate dev tool, etc. can all talk to a local Land at 3000).
+  if (isDevMode && LOCALHOST_ORIGIN_RE.test(origin)) return cb(null, true);
+  cb(null, false);
+}
+
 app.use(
   cors({
-    origin: corsOrigins,
+    origin: corsOriginCheck,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "x-api-key", "x-internal-token"],
     credentials: true,
@@ -87,7 +115,10 @@ initPortalHttp(app);
 app.use((req, res) => notFoundPage(req, res));
 
 const server = http.createServer(app);
-export const wsServer = initWebSocketServer(server, corsOrigins);
+// Pass the same origin-check function the HTTP CORS uses, so WS and HTTP
+// stay aligned. The WS server still also allows chrome-extension:// via
+// the function (delegates back to corsOriginCheck).
+export const wsServer = initWebSocketServer(server, corsOriginCheck);
 
 // Attach Portal Protocol WS handlers to the same Socket.IO instance the
 // legacy chat WS uses. Zero shared event names with the legacy `op:"chat"`

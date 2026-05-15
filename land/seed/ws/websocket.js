@@ -434,22 +434,32 @@ function chatSourceTypeFor(safeChatMode) {
 // WEBSOCKET SERVER
 // ============================================================================
 
-export function initWebSocketServer(httpServer, allowedOrigins) {
+export function initWebSocketServer(httpServer, originPolicy) {
   // Register transport-layer session types before any connections arrive
   registerSessionType("WEBSOCKET_CHAT", "websocket-chat");
 
   _httpServerRef = httpServer;
 
+  // originPolicy can be either:
+  //   - a function (origin, cb) => cb(null, ok)  — caller controls the check
+  //   - an array of allowed origin strings       — legacy callers
+  // Both are normalized here. Chrome extensions and no-origin (CLI / same-
+  // origin) are always allowed for parity with the rest of the system.
+  const originCheck = (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (origin.startsWith("chrome-extension://")) return cb(null, true);
+    if (typeof originPolicy === "function") {
+      return originPolicy(origin, cb);
+    }
+    if (Array.isArray(originPolicy) && originPolicy.includes(origin)) {
+      return cb(null, true);
+    }
+    cb(null, false);
+  };
+
   io = new Server(httpServer, {
     cors: {
-      origin: (origin, cb) => {
-        // Allow configured origins, Chrome extensions, and null origin (same-origin)
-        if (!origin || (allowedOrigins && allowedOrigins.includes(origin)) || origin?.startsWith("chrome-extension://")) {
-          cb(null, true);
-        } else {
-          cb(null, false);
-        }
-      },
+      origin: originCheck,
       methods: ["GET", "POST"],
       credentials: true,
     },
