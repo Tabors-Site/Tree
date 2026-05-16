@@ -101,12 +101,10 @@ export default function App() {
     if (!clientRef.current) return;
     setFetchError(null);
     try {
-      // The right-side address may include the land or not. We pass it as
-      // typed — the server parser fills in current-land context.
-      const desc = await clientRef.current.fetch(rawAddress);
+      // The address may include the land or not. We pass it as typed; the
+      // server parser fills in current-land context.
+      const desc = await clientRef.current.see(rawAddress);
       setDescriptor(desc);
-      // Update the address bar to the canonical path-by-names (just the
-      // right side, no `from-stance ::` prefix for now).
       setCurrentAddress(desc.address.pathByNames || rawAddress);
     } catch (err) {
       setFetchError(`${err.code || "ERROR"}: ${err.message}`);
@@ -160,7 +158,7 @@ export default function App() {
         {discovery && (
           <>
             <span style={{ color: "var(--fg-faint)" }}>·</span>
-            <span>portal v{discovery.portalProtocolVersion}</span>
+            <span>portal v{discovery.protocolVersion}</span>
           </>
         )}
       </div>

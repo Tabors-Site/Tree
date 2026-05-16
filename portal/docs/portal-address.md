@@ -1,19 +1,21 @@
-# Portal Address — grammar and semantics
+# Portal Address: grammar and semantics
 
 A Portal Address (PA) names **a being addressing another being**. PAs replace URLs in the TreeOS Portal.
 
-## The four-tier hierarchy
+## The vocabulary
 
-TreeOS replaces the single notion of "URL" with four addressing tiers, each adding one piece of detail:
+There are two places you can address in the world: a **position** (a place) and a **stance** (a being at that place). A Portal Address is the bridge form that names a relationship between two stances. A **land** is the domain name; it is used by the BE verb to identify where identity is established.
 
-| Tier | What it carries | Example | Answer to |
+| Concept | Form | Example | Answer to |
 |---|---|---|---|
-| **Land** | just the domain | `treeos.ai` | "What land?" |
-| **Position** | land + path (where, no being) | `treeos.ai/flappybird` | "What's the position?" |
-| **Stance** | position + embodiment (where + as what being) | `treeos.ai/flappybird@ruler` | "What's the stance?" |
-| **Portal Address (PA)** | stance :: stance (full bridged form) | `tabor :: treeos.ai/flappybird@ruler` | "What's the portal address?" |
+| **Land** | bare domain | `treeos.ai` | "Which land?" (used by BE) |
+| **Position** | `<land>/<path>` | `treeos.ai/` (land root), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (tree node) | "Where in the world?" |
+| **Stance** | `<position>@<embodiment>` | `treeos.ai/flappybird@ruler` | "Which being at the place?" |
+| **Portal Address** | `<stance> :: <stance>` | `tabor :: treeos.ai/flappybird@ruler` | "Which two beings are relating?" |
 
-A **Stance** is one side of a bridge — a being at a position. A **Portal Address** joins two stances through a **bridge** (`::`), naming who's addressing whom.
+The slash is always part of a position. `treeos.ai` (no slash) is the land identifier; `treeos.ai/` is the land's root position. The path may be empty (just `/`, the land root), a home (`/~user...`), or any tree node.
+
+A **Stance** is one side of a bridge: a being at a position. A **Portal Address** joins two stances through a **bridge** (`::`), naming who's addressing whom.
 
 The conceptual shift from the web: a URL says *"this resource, fetched."* A PA says *"this being addressing that being, both with full position and embodiment."*
 
@@ -23,15 +25,17 @@ The conceptual shift from the web: a URL says *"this resource, fetched."* A PA s
 PortalAddress         := Bridge | Stance
 Bridge                := Stance "::" Stance
 Stance                := Position "@" Embodiment | Position | Embodiment
-Position              := Land? Path?
+Position              := Land "/" Path?
 Land                  := Domain | Domain ":" Port
-Path                  := "/" Segment ("/" Segment)*  | "/~" UserSlug ("/" Segment)*  | "/"
+Path                  := Segment ("/" Segment)*  | "~" UserSlug ("/" Segment)*  | ""
 Embodiment            := "@" Identifier
 Domain                := Host (DNS-style; tld optional for local lands)
 Segment               := url-safe identifier (node-name OR node-id uuid)
 UserSlug              := url-safe identifier (the user's home identity)
 Identifier            := [a-z][a-z0-9-]*
 ```
+
+A Position requires the Land followed by `/`. The Path after the slash may be empty (the land's root position), start with `~` (a home), or be one or more segments (a tree node).
 
 ## The bridge form (two-sided, symmetric)
 
@@ -103,16 +107,16 @@ The user toggles single-stance mode explicitly (a "viewer" pill in the address b
 
 ## Stance breakdown
 
-A Stance has three parts that combine the four tiers:
+A Stance is a Position with an Embodiment qualifier:
 
 ```
 treeos.ai          /flappybird/chapter-1    @ruler
-└── land           └── path                 └── embodiment
+land             + path                   + embodiment
 └──────── position ────────┘
 └──────────────────── stance ────────────────────┘
 ```
 
-The `@` is the load-bearing piece — it names the **being** at the position. Everything left of `@` is just *where* the being is; the `@<label>` is *who* is there. When we say "stance" we mean the whole chain (land + path + being), but the working focus is usually the being at the end.
+The `@` is the load-bearing piece. It names the **being** at the position. Everything to the left of `@` is the position (where); the `@<label>` is the being (who) at that place. When we say "stance" we mean the whole chain (land + path + embodiment), but the working focus is usually the being at the end.
 
 ### What each kind of being brings to a Stance
 
@@ -149,7 +153,7 @@ A node's path can be written in any of FOUR forms, all resolving to the same pos
 | Full chain, ids | `/<uuid-a>/<uuid-b>` | stable across renames; canonical for links pasted between sessions |
 | Leaf only, id | `/<uuid-b>` | shortest stable form; deep links |
 
-Both representations (names and ids) and both depths (full chain and leaf only) are first-class — the user switches between them in the address bar. Names are friendlier; ids survive renames. The portal can render either at any moment because the Position Descriptor returns the full chain in BOTH forms.
+Both representations (names and ids) and both depths (full chain and leaf only) are first-class — the user switches between them in the address bar. Names are friendlier; ids survive renames. The portal can render either at any moment because the Stance Descriptor returns the full chain in BOTH forms.
 
 Each segment is either:
 - a node-name (kebab-case identifier, e.g. `chapter-1`)
@@ -191,7 +195,7 @@ Canonical embodiments (initial set; extensible):
 - `@archivist` — read-only browsing of artifacts and trace history
 - `@swarm` — collective/group-agent cognition
 
-Lands can extend with custom embodiments. The portal doesn't need to know all embodiments in advance — it asks the land what's invocable at this position (in the Position Descriptor) and renders the chat-invoke surface accordingly.
+Lands can extend with custom embodiments. The portal doesn't need to know all embodiments in advance — it asks the land what's invocable at this position (in the Stance Descriptor) and renders the chat-invoke surface accordingly.
 
 ## Shorthands
 
@@ -228,7 +232,7 @@ When the right side omits `@embodiment`, the default is the embodiment most natu
 - Home zone (`server/~user`) — `@dreamer` or `@builder` (personal creative space; user picks via setting)
 - Tree zone (`server/<path>`) — depends on the node's role. Ruler scopes default to `@ruler`. Worker leaves default to `@worker`. Read-only artifact nodes default to `@archivist`.
 
-The Position Descriptor surfaces which embodiments are invocable at the position (in the `beings:` field); the portal uses that list to populate the address-bar autocomplete.
+The Stance Descriptor surfaces which embodiments are invocable at the position (in the `beings:` field); the portal uses that list to populate the address-bar autocomplete.
 
 ## Address-bar UX
 

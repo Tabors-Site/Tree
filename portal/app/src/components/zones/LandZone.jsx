@@ -3,8 +3,8 @@ import React from "react";
 /**
  * Land zone renderer.
  *
- * Renders zone === "land" Position Descriptors. The land root is the
- * discovery surface — shows the operator, available beings, and any
+ * Renders zone === "land" Stance Descriptors. The land root is the
+ * discovery surface. Shows the operator, available beings, and any
  * public trees ext-allow'd at land scope.
  */
 export default function LandZone({ descriptor, onNavigate }) {

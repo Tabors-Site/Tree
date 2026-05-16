@@ -108,6 +108,24 @@ Hook lifecycle: afterContractsDeclared, onBranchStart, afterBranchFileWrite, aft
 
 Contracts are whatever invariant keeps parallel branches coherent. Wire message shapes for code. Terminology and citations for research. Character names and timeline for fiction. Schemas for data pipelines. Learning objectives for curriculum.
 
+## Portal Protocol
+
+A sibling to the World Wide Web. HTTP, URL, and HTML gave the world a Web of documents. Portal gives it a Web of beings. Both ride the same internet substrate. Both coexist. Portal is identity first, not URI first.
+
+A Portal Address has the shape `tabor :: treeos.ai/flappybird@ruler`. The left stance is the visitor. The right stance is the destination. The bridge `::` is the conversation between them. A Stance Descriptor pins down three things: Land (which sovereign server), Position (which node in that land's tree), and Embodiment (which role lives at that position, like ruler, worker, planner, citizen, or persona).
+
+The left side is shorthand when the speaker is the human user. The full form is symmetric. `treeos.ai/@tabor :: treeos.ai/flappybird@ruler`. Today every human message is assumed to come from the land itself. `treeos.ai/@tabor` means "the human being Tabor, speaking from the root of their land," bringing whole life experience rather than a slice scoped to one node. Later humans will speak from other positions too, and the left side will be written in full when they do. When both sides are AI beings, both stances are written in full from the start. There is no privileged default position for an AI, so there is no shorthand.
+
+Four-tier addressing hierarchy. Land is the bare domain, the prefix every Position is rooted at; BE uses it on its own to bootstrap identity. Position is land plus a path, always written `land/path`. The path is `/` for land root, `/~` for home, or `/anything` for a node. Stance is position plus an embodiment qualifier at the end, like `treeos.ai/flappybird@ruler` or `treeos.ai/@tabor`. Portal Address is two stances connected by `::`, the bridge form describing who is addressing whom. Two places exist in the protocol. Position is the actual place in the world; Stance is position with a being at the end. Land is the prefix; Portal Address is the bridge.
+
+Four verbs each name their own envelope field. SEE accepts a position or a stance, observing a place. DO accepts a position or a stance, mutating at a place; embodiment becomes mandatory when authorization depends on which being is acting. TALK requires a stance, never a position, because inboxes are per-being-per-position. BE requires a land; it is the set of operations that change the being on the left side of every Portal Address, the I am. Each verb's envelope field is named for what it actually takes: `position`, `stance`, or `land`. No generic `address` field. The protocol's grammar is self-documenting because the field names tell readers what each verb needs.
+
+The Portal client is to the AI Web what a browser is to the World Wide Web. It does not render pages; it inhabits stances. It does not fetch URIs; it joins conversations. The protocol layer is WebSocket-only, message envelope normalized so any embodiment at any land responds the same way.
+
+What's underneath: TreeOS lands are the servers of this Web. Each land speaks the Portal Protocol over WebSocket. Identity, position, and capability are inseparable. The protocol assumes sovereignty; there is no central directory of beings, only a federation of lands that publish their public stances.
+
+Portal is a sibling protocol, not a replacement. HTTP keeps serving documents. URLs keep addressing resources. WWW keeps growing. Portal addresses beings, runs conversations, and lets identity travel without losing context. The two webs coexist; an operator can speak both.
+
 ## Governing
 
 The coordination glue of TreeOS. Without it, a tree is a folder structure. With it, every scope becomes an addressable domain where work coordinates across branches without drifting apart. Governing is the substrate workspace extensions consume.
@@ -236,6 +254,7 @@ A snake eating its own tail. Claude Code, but operated from inside the system it
 - The AI: https://treeos.ai/ai
 - Code: https://treeos.ai/code
 - Cascade: https://treeos.ai/cascade
+- Portal Protocol: https://treeos.ai/portal
 - The Flow: https://treeos.ai/flow
 - Governing: https://treeos.ai/governing
 - Rulership (Pass 1): https://treeos.ai/governing/rulership

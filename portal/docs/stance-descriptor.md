@@ -1,14 +1,31 @@
-# Position Descriptor — the JSON shape lands return
+# Stance Descriptor: the JSON shape SEE returns
 
-When the portal requests a Portal Address from a land, the land returns a **Position Descriptor**: structured JSON describing what's at that position. The portal renders the descriptor according to TreeOS conventions — no HTML, no land-supplied layout. The land owns the data; the portal owns the rendering.
+When SEE addresses a position (with or without an embodiment qualifier), the land returns a **Stance Descriptor**: structured JSON describing what is at that address. The portal renders the descriptor according to TreeOS conventions. No HTML, no land-supplied layout. The land owns the data; the portal owns the rendering.
 
-This document defines the contract.
+## What the descriptor describes
+
+The descriptor describes **what is at the addressed position**, with embodiment-specific augmentation when the address has a qualifier. Recall the terminology:
+
+- **Position**: `<land>/<path>`. The slash is always present. The path may be empty (`treeos.ai/`, the land root), `~user...` (a home), or any tree node (`treeos.ai/flappybird/chapter-1`). A position is the actual place in the world.
+- **Stance**: `<position>@<embodiment>`. A being at a position. `treeos.ai/flappybird@ruler`.
+- **Portal Address**: `<stance> :: <stance>`. `tabor :: treeos.ai/flappybird@ruler`. Names the relationship between two stances. Used in UI and being-to-being framing; the verb envelope carries only the "to" side.
+
+There are two things addressable in the world: a position (a place) and a stance (a being at a place). The SEE verb accepts either; the descriptor returned reflects which was asked for.
+
+SEE accepts either an unqualified position or a qualified one:
+
+- **Unqualified** (`see treeos.ai/flappybird`): the descriptor describes the position. Children, artifacts, lineage, governance, the list of beings invocable here. Embodiment-specific fields reflect the union of all invocable embodiments so the user can pick.
+- **Qualified** (`see treeos.ai/flappybird@ruler`): the descriptor is augmented with the named embodiment's specific data. That embodiment's inbox, its honored intents, its response mode, its open conversations. The base position fields remain the same.
+
+Same position with different embodiment qualifiers returns different augmented descriptors. The Ruler-augmented descriptor at /flappybird emphasizes governance state. The Historian-augmented descriptor emphasizes accumulated history. The Oracle-augmented descriptor emphasizes synthesis. Same position, same base shape, different augmentation.
+
+The descriptor is **filtered by the requesting identity**. Which beings appear in the `beings` list, what data is visible in `governance` or `artifacts`, what panels are populated, all depend on what the requesting identity is permitted to see at this position. The descriptor is named "Stance Descriptor" because the requester-plus-addressed-position together form an implicit stance relationship even when the address itself is unqualified.
 
 ## Top-level shape
 
 ```jsonc
 {
-  // Identifies the position this descriptor describes.
+  // Identifies the stance this descriptor describes.
   // The address carries the path in BOTH forms (names and ids) at full
   // chain depth. The portal renders whichever form the user prefers
   // and can switch freely (the four forms in portal-address.md).
@@ -48,8 +65,26 @@ This document defines the contract.
       "description": "Coordinates work at this scope. Hires Planner/Contractor/Foreman, dispatches workers.",
       "invocableBy": "owner" | "anyone" | "members" | "custom-rule-name",
       "available": true,                    // whether the current identity is authorized to invoke this
-      "modeKey": "tree:governing-ruler",    // server-side mode key (for chat panel routing)
-      "icon": "👑"
+      "honoredIntents": ["chat", "place", "query", "be"],  // which TALK intents this embodiment accepts
+      "respondMode": "sync" | "async" | "none",            // how this embodiment delivers responses
+      "triggerOn": ["message", "hook", "schedule"],        // when summoning fires for this embodiment
+      "icon": "👑",
+      // Per-embodiment inbox preview at this position
+      "inbox": {
+        "total":      47,
+        "unconsumed": 3,
+        "recent": [
+          {
+            "correlation": "msg-12",
+            "from":        "tabor@treeos.ai",
+            "intent":      "chat",
+            "preview":     "begin",
+            "sentAt":      "2026-05-15T20:30:00Z",
+            "consumed":    true,
+            "responseId":  "msg-13"
+          }
+        ]
+      }
     },
     // ...
   ],
@@ -143,17 +178,21 @@ This document defines the contract.
     }
   ],
 
-  // Live chat threads ongoing at or addressing this position.
-  // Each thread carries its own Portal Address.
-  "chatThreads": [
+  // Conversation threads at this position. A thread is a chain of TALK
+  // messages walking inReplyTo back to an original message. The portal
+  // renders one chat panel per active thread keyed by the originating
+  // correlation id. This field replaces the older chatThreads/sessionId
+  // model.
+  "conversations": [
     {
-      "threadId": "<uuid>",
-      "address": "tabor :: treeos.ai/flappybird@ruler",
-      "openedAt": "2026-05-15T09:00:00Z",
-      "lastMessageAt": "2026-05-15T10:42:00Z",
-      "messageCount": 12,
+      "rootCorrelation": "msg-12",         // correlation id of the message that started this thread
+      "withStance":      "tabor@treeos.ai", // the other end of the conversation
+      "embodiment":      "ruler",           // which being at this position is in the thread
+      "openedAt":        "2026-05-15T09:00:00Z",
+      "lastMessageAt":   "2026-05-15T10:42:00Z",
+      "messageCount":    12,
       "lifecycleActive": true,             // is a spawn / Worker / dispatch running for this thread?
-      "lifecyclePhase": "dispatch-execution" | "hire-planner" | null
+      "lifecyclePhase":  "dispatch-execution" | "hire-planner" | null
     }
   ],
 
@@ -170,15 +209,14 @@ This document defines the contract.
     { "name": "chapter-3-impact", "path": "...", "lifecycle": "idle" }
   ],
 
-  // Live WS subscription hint. Once the portal has the descriptor,
-  // it subscribes to events scoped to this position for live updates.
+  // Live SEE subscription is requested via the live: true flag on the
+  // original SEE call. Closing the WS connection ends all live SEEs.
+  // The portal does not need a separate subscribe step; the field below
+  // declares the patch granularity the land will emit if live SEE is
+  // active on this address.
   "live": {
-    "wsUrl": "wss://treeos.ai/ws",
-    "subscribe": {
-      "scope": "node" | "subtree" | "user-rooms",
-      "rulerNodeId": "<uuid>",
-      "rootId": "<uuid>"
-    }
+    "supportedScopes": ["position", "subtree"],
+    "patchGranularity": "field"            // field-level RFC 6902 patches
   },
 
   // Identity context — who the server thinks is making this request.
@@ -260,9 +298,9 @@ User's tree root. Personal space.
 
 ### Tree zone (`zone: "tree"`)
 
-A position inside a tree. The richest shape — governance + artifacts + children + everything.
+A stance inside a tree. The richest shape: governance + artifacts + children + everything.
 
-The full union above is the example. Most tree positions will have governance + children + maybe artifacts; Worker leaves have artifacts + maybe blocked-status; intermediate Ruler scopes have governance + children.
+The full union above is the example. Most tree-zone stances will have governance + children + maybe artifacts. Worker leaves have artifacts + maybe blocked-status. Intermediate Ruler stances have governance + children.
 
 ## How the portal uses each field
 
@@ -270,40 +308,56 @@ The full union above is the example. Most tree positions will have governance + 
 |---|---|
 | `address` | Address bar shows it. Tab title uses path + embodiment. |
 | `zone` | Determines top-level chrome (land discovery / home dashboard / node renderer). |
-| `beings` | Address-bar autocomplete on `@`. Chat-panel "new chat" dropdown. |
+| `beings` | Address-bar autocomplete on `@`. Chat-panel invoke dropdown. Each being's inbox drives a chat-panel preview. |
+| `beings[].honoredIntents` | Portal-side intent picker for TALK. Disables intents the embodiment refuses. |
+| `beings[].respondMode` | Portal-side rendering choice: sync (block UI for response) vs async (background panel + notification on response). |
+| `beings[].inbox` | Preview of recent messages. Click expands to full conversation view. |
 | `children` | Tree navigator. Click-to-navigate. |
-| `artifacts` | Main view body — renders each by `kind`. Notes as markdown, files as appropriate, images as images. |
-| `governance` | Governance panel — plans / contracts / runs / workers / flags. Lifecycle pill in header. |
-| `extensions` | Extension panels — each surface renders its panel alongside main view. |
-| `chatThreads` | Chat panel — restored threads on page load. Click to focus a thread. |
+| `artifacts` | Main view body. Renders each by `kind`. Notes as markdown, files as appropriate, images as images. |
+| `governance` | Governance panel: plans, contracts, runs, workers, flags. Lifecycle pill in header. |
+| `extensions` | Extension panels. Each surface renders its panel alongside main view. |
+| `conversations` | Chat panel. Restored threads on page load. Click to focus a thread keyed by rootCorrelation. |
 | `lineage` | Breadcrumbs at the top of the main view. |
 | `siblings` | Sideways arrows. Quick-switch buttons in the tree navigator. |
-| `live` | Portal opens WS connection and subscribes to events scoped here. |
-| `identity` | Identity panel sanity-checks (if mismatch with portal's signed-in being, prompt to re-auth). |
+| `live` | Declares what the land will emit for live SEE on this address. |
+| `identity` | Identity panel sanity-check (if mismatch with portal's signed-in being, prompt to re-auth). |
 | `_meta` | Error overlays, diagnostic toggles. |
 
 ## Why JSON, not HTML
 
-- **Consistent rendering.** Every land's positions look like TreeOS positions because the portal draws them the same way. Visitors don't learn each land's UI; they learn TreeOS once.
-- **Live updates.** WebSocket events update fields without re-fetching. New plan emission? Patch `governance.plan.active`. New worker started? Patch `governance.workers.running`.
-- **Embodiment-aware rendering.** The same position fetched as `@ruler` vs `@archivist` returns different subsets of the same shape. The portal strips chat-write surfaces in archivist mode. The land doesn't have to render two HTML variants — it returns the same descriptor with different `beings` / `identity.writeAllowed`.
+- **Consistent rendering.** Every land's positions look like TreeOS positions because the portal draws them the same way. Visitors do not learn each land's UI; they learn TreeOS once.
+- **Live updates.** Live SEE streams RFC 6902 patches. New plan emission patches `governance.plan.active`. New inbox message patches `beings[].inbox`. No re-fetching.
+- **Embodiment-aware rendering.** The same position fetched as `@ruler` vs `@archivist` returns different subsets of the same shape. The portal strips DO/TALK write surfaces in archivist mode. The land does not render two variants; it returns the same descriptor with different `beings[].available` and `identity.writeAllowed`.
 - **Federation.** A portal session can navigate across lands; each land returns the same descriptor shape; no per-land rendering quirks.
-- **Extensibility.** Adding a new artifact `kind` or extension `surface` doesn't require an HTML rewrite — it adds a field the portal recognizes.
+- **Extensibility.** Adding a new artifact `kind` or extension `surface` does not require a rewrite. It adds a field the portal recognizes.
 
-## What the server returns when it doesn't know the position
+## What the server returns when the stance does not resolve
 
-`{ status: "error", error: { code: "POSITION_NOT_FOUND", message: "...", address: {...} } }`
+The standard error envelope from [protocol.md](protocol.md):
 
-The portal shows a TreeOS-flavored 404 with the breadcrumb back to a known position.
+```
+{ status: "error", error: { code: "NODE_NOT_FOUND", message: "...", detail: { position: {...} } } }
+```
 
-## What the server returns when the identity isn't authorized
+The portal shows a TreeOS-flavored 404 with the breadcrumb back to a known stance.
 
-`{ status: "error", error: { code: "FORBIDDEN", message: "Sign in as a being authorized at this scope.", address, suggestedIdentitiesToSwitch: [...] } }`
+## What the server returns when the requesting stance is not authorized
+
+```
+{ status: "error", error: { code: "FORBIDDEN", message: "Sign in as a being authorized at this stance.", detail: { stance, suggestedIdentitiesToSwitch: [...] } } }
+```
 
 The portal shows a sign-in prompt with the suggestions.
 
 ## Versioning
 
-`_meta.descriptorVersion` is a SemVer the portal checks against its supported range. Backwards-incompatible changes bump the major. The portal falls back to legacy HTML mode when descriptor version is unsupported.
+`_meta.descriptorVersion` is a SemVer the portal checks against its supported range. Backwards-incompatible changes bump the major. The portal falls back to a degraded mode when descriptor version is unsupported.
 
-The Position Descriptor format is the CONTRACT between portal and land server. It needs to stay stable through Pass 1 and Pass 2. Pass 3+ may add fields, never remove.
+The Stance Descriptor format is the CONTRACT between portal and land server. It stays stable through Pass 1 and Pass 2. Pass 3+ may add fields, never remove.
+
+## See also
+
+- [protocol.md](protocol.md) the four-verb spec
+- [server-protocol.md](server-protocol.md) wire-level rules for SEE
+- [inbox.md](inbox.md) how inbox fields are populated
+- [being-summoned.md](being-summoned.md) why beings have inboxes

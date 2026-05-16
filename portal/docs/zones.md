@@ -67,7 +67,7 @@ The home zone is the most-visited part of the portal for any given user. Buildin
 
 ### What it surfaces
 
-Depends heavily on what's at the position. The Position Descriptor describes it; the portal renders accordingly. Possible surfaces:
+Depends heavily on what's at the position. The Stance Descriptor describes it; the portal renders accordingly. Possible surfaces:
 
 - **Governance state** if the node is a Ruler scope: plan / contracts / runs / workers / flags / lifecycle pill.
 - **Artifact content** if the node has notes or files: rendered as markdown / images / code per the artifact `kind`.
@@ -125,7 +125,7 @@ A Ruler with sub-Ruler children. Governance panel collapsed (smaller); child tre
 - Ruler scopes: `@ruler` (the user can coordinate the scope)
 - Worker leaves: `@worker` (rare — usually the user observes via `@archivist`)
 - Plan / contracts / runs trio-children: `@archivist` (read-only inspection)
-- Custom node types: per the Position Descriptor's `beings:` field
+- Custom node types: per the Stance Descriptor's `beings:` field
 
 ## Cross-zone shared chrome
 
@@ -153,9 +153,9 @@ These three carve at real architectural joints:
 - **Home zone**: a user's private root. Personal authority + accumulated artifacts.
 - **Tree zone**: everywhere else — every position inside any tree, any user's home, any land-public tree. The recursive workspace.
 
-Four would over-specify (tree zone covers a lot of different node types but the BROWSER chrome stays the same; the Position Descriptor varies the BODY). Two would conflate land and home (both are "roots" but their privacy + content differ enough).
+Four would over-specify (tree zone covers a lot of different node types but the BROWSER chrome stays the same; the Stance Descriptor varies the BODY). Two would conflate land and home (both are "roots" but their privacy + content differ enough).
 
-The three-zone split makes the address bar predictable: type `/` you're in land, `~` you're in home, a path you're in node. The portal knows which chrome to draw before the Position Descriptor arrives.
+The three-zone split makes the address bar predictable: type `/` you're in land, `~` you're in home, a path you're in node. The portal knows which chrome to draw before the Stance Descriptor arrives.
 
 ## Open question: ZONE for cross-land federation
 

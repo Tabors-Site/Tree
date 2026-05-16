@@ -1,11 +1,17 @@
-// Portal Protocol client.
+// TreeOS Portal client.
 //
-// Wraps a Socket.IO connection and exposes typed methods for the portal:*
-// ops the Land server speaks. The Portal client speaks ONLY this protocol
-// — never raw HTTP routes (except the single /.well-known/treeos-portal
-// bootstrap before a socket is open).
+// Wraps a Socket.IO connection and exposes typed methods for the four
+// Portal Protocol verbs (see / do / talk / be). The client speaks only
+// this protocol, never raw HTTP routes (except the single
+// /.well-known/treeos-portal bootstrap before a socket is open).
 //
-// See ../../docs/server-protocol.md for the wire contract.
+// See ../../docs/protocol.md for the conceptual model and
+// ../../docs/server-protocol.md for the wire contract.
+//
+// Phase 1 scaffolding (fetch / resolve / discover methods, portal:fetch /
+// portal:resolve / portal:discover ops) has been removed. The four verb
+// methods below are stubbed: they throw VERB_NOT_WIRED until the
+// corresponding server-side handler lands in subsequent phases.
 
 import { io } from "socket.io-client";
 
@@ -21,8 +27,8 @@ export class PortalClient {
   }
 
   // ────────────────────────────────────────────────────────────────
-  // Bootstrap — the ONE HTTP call before WS opens.
-  // GET /.well-known/treeos-portal → discovery info.
+  // Bootstrap: the one HTTP call before WS opens.
+  // GET /.well-known/treeos-portal returns { ws, protocolVersion, land }.
   // ────────────────────────────────────────────────────────────────
 
   static async bootstrap(landUrl, { useProxy } = {}) {
@@ -53,9 +59,6 @@ export class PortalClient {
 
   connect() {
     if (this.socket) return;
-    // Socket.IO understands the http(s):// URL; it upgrades to websocket.
-    // In dev (proxy mode), pass undefined to use the current origin so
-    // Vite's /socket.io proxy forwards the connection.
     const target = this.useProxy ? undefined : this.landUrl;
     this.socket = io(target, {
       auth: { token: this.token, client: "portal", instance: "main" },
@@ -88,7 +91,68 @@ export class PortalClient {
   }
 
   // ────────────────────────────────────────────────────────────────
-  // portal:* ops
+  // Verb methods (stubbed; wired in subsequent phases)
+  //
+  // Each verb's address field is named explicitly. See ../../docs/protocol.md.
+  // ────────────────────────────────────────────────────────────────
+
+  /**
+   * SEE: observe a place. Returns a Stance Descriptor.
+   *
+   * Pass `address` as a string and the client decides whether to send it as
+   * `position` or `stance` based on whether it contains an embodiment
+   * qualifier (`@<name>`). Use the explicit form to force one or the other.
+   *
+   * @param {string|object} address  position string, stance string, or { position }/{ stance }
+   * @param {object} [options]  { live: boolean }
+   * @returns {Promise<object>} Stance Descriptor (one-shot) or initial descriptor (live)
+   */
+  async see(address, options = {}) {
+    const field = _toAddressField(address);
+    return this._emitWithAck("portal:see", { ...field, ...options });
+  }
+
+  /**
+   * DO: mutate the world at a place.
+   *
+   * Pass `address` as a string (auto-routed to position or stance) or an
+   * explicit { position } / { stance } object. Use stance when the
+   * requester's embodiment matters for authorization; position otherwise.
+   *
+   * @param {string|object} address  position or stance
+   * @param {string} action          named action (create-child, rename, ...) or set-meta
+   * @param {object} payload         action-specific
+   */
+  async do(address, action, payload = {}) {
+    const field = _toAddressField(address);
+    return this._emitWithAck("portal:do", { ...field, action, payload });
+  }
+
+  /**
+   * TALK: deliver a message to a being's inbox.
+   *
+   * Requires a stance (embodiment qualifier mandatory).
+   *
+   * @param {string} stance   position@embodiment
+   * @param {object} message  { from, content, intent, correlation, inReplyTo?, attachments? }
+   */
+  async talk(stance, message) {
+    return this._emitWithAck("portal:talk", { stance, message });
+  }
+
+  /**
+   * BE: manage be-er identity.
+   *
+   * @param {string} operation  register | claim | release | switch
+   * @param {string} land       the land hostname (no @embodiment)
+   * @param {object} [extra]    operation-specific fields (payload, from, to, ...)
+   */
+  async be(operation, land, extra = {}) {
+    return this._emitWithAck("portal:be", { operation, land, ...extra });
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // Internals
   // ────────────────────────────────────────────────────────────────
 
   _nextId() {
@@ -101,50 +165,50 @@ export class PortalClient {
         reject(new Error("Portal socket not connected"));
         return;
       }
+      const id = this._nextId();
       const timeout = setTimeout(() => {
-        reject(new Error(`${op} timed out`));
+        const err = new Error(`${op} timed out (or not wired on this land)`);
+        err.code = "VERB_NOT_WIRED";
+        reject(err);
       }, 15000);
-      this.socket.emit(op, payload, (response) => {
+      this.socket.emit(op, { id, ...payload }, (response) => {
         clearTimeout(timeout);
         if (!response) {
-          reject(new Error(`${op} returned no response`));
+          const err = new Error(`${op} returned no response`);
+          err.code = "VERB_NOT_WIRED";
+          reject(err);
           return;
         }
-        if (response.ok === false) {
+        if (response.status === "error") {
           const err = new Error(response.error?.message || `${op} failed`);
           err.code = response.error?.code;
           err.detail = response.error?.detail;
           reject(err);
           return;
         }
-        resolve(response);
+        resolve(response.data);
       });
     });
   }
+}
 
-  // Fetch a Position Descriptor for a Portal Address.
-  // Resolves to the parsed { descriptor } object.
-  async fetch(address, ctx) {
-    const id = this._nextId();
-    const resp = await this._emitWithAck("portal:fetch", { id, address, ctx });
-    return resp.descriptor;
-  }
+// ────────────────────────────────────────────────────────────────
+// Helpers
+// ────────────────────────────────────────────────────────────────
 
-  // Light resolution — canonical PA + chain, no full descriptor.
-  async resolve(address, ctx) {
-    const id = this._nextId();
-    const resp = await this._emitWithAck("portal:resolve", { id, address, ctx });
-    return {
-      canonical: resp.canonical,
-      left: resp.left,
-      right: resp.right,
-      rightResolved: resp.rightResolved,
-    };
+/**
+ * Route a string address to its protocol field name. A string ending in
+ * `@<embodiment>` becomes `{ stance }`; without it becomes `{ position }`.
+ * Callers may pass an explicit object to force one or the other.
+ */
+function _toAddressField(address) {
+  if (typeof address === "string") {
+    const hasEmbodiment = /@[a-z][a-z0-9-]*$/i.test(address);
+    return hasEmbodiment ? { stance: address } : { position: address };
   }
-
-  // Discovery — what the land supports.
-  async discover() {
-    const resp = await this._emitWithAck("portal:discover", {});
-    return resp.discovery;
+  if (address && typeof address === "object") {
+    if ("position" in address) return { position: address.position };
+    if ("stance" in address) return { stance: address.stance };
   }
+  throw new Error("Portal verb requires a position or stance address");
 }

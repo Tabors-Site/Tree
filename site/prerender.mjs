@@ -34,6 +34,7 @@ const STATIC_ROUTES = [
   "/kernel",
   "/cascade",
   "/swarm",
+  "/portal",
   "/extensions",
   "/flow",
   "/network",
@@ -98,6 +99,10 @@ const PAGE_META = {
   "/swarm": {
     title: "Swarm . The Parallel Execution Engine",
     description: "Swarm runs governing's plans in parallel. It dispatches branch steps as their own sessions, tracks status, retries failures, surfaces sibling state, and resumes interrupted work across sessions. Mechanism, not policy. Governing decides what gets done; swarm does the doing in parallel. Tree authoritative.",
+  },
+  "/portal": {
+    title: "Portal Protocol . A Sibling to the World Wide Web",
+    description: "HTTP/URL/WWW gave the world the Web of documents. Portal gives it the Web of beings. Portal Addresses, four verbs (SEE/DO/TALK/BE), Stance Descriptors. The protocol layer for identity-first interaction with sovereign AI on TreeOS lands.",
   },
   "/flow": {
     title: "The Flow . How Data Moves Through the System",

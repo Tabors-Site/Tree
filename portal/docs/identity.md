@@ -51,7 +51,7 @@ The land looks at the `@<label>` and the position:
 - Label matches a known embodiment kind invocable at this position → AI being.
 - Both could in principle match — the label-namespace is shared — but in practice usernames and embodiment kinds occupy disjoint namespaces (usernames are user-picked; embodiment kinds come from the extension manifest).
 
-The Position Descriptor's `beings[]` field tells the portal which kind each invocable label resolves to.
+The Stance Descriptor's `beings[]` field tells the portal which kind each invocable label resolves to.
 
 ### A bridge connects two beings
 

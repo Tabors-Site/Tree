@@ -14,16 +14,18 @@ Two architectural commitments make this different from the web:
 
 2. **Stance-aware addressing.** Web URLs locate resources. Portal Addresses (PAs) locate STANCES (positions interpreted through embodiments). The same node viewed @ruler vs @historian renders differently — same data, different lens, different tools.
 
-## The four-tier address hierarchy
+## Addressing in TreeOS
 
-TreeOS replaces "URL" with four addressing tiers, each adding one piece of detail:
+There are two places to address in the world: a **position** (a place) and a **stance** (a being at that place). A **Portal Address** is the bridge form linking two stances. A **land** is the domain name; it appears at the start of every position and is used by the BE verb to name where identity is established.
 
-| Tier | What it carries | Example |
+| Concept | Form | Example |
 |---|---|---|
-| **Land** | just the domain | `treeos.ai` |
-| **Position** | land + path (where) | `treeos.ai/flappybird` |
-| **Stance** | position + embodiment (where + as what being) | `treeos.ai/flappybird@ruler` |
-| **Portal Address (PA)** | stance :: stance (full bridge) | `tabor :: treeos.ai/flappybird@ruler` |
+| **Land** | bare domain | `treeos.ai` (used by BE to identify the land) |
+| **Position** | `<land>/<path>` | `treeos.ai/` (land root), `treeos.ai/~tabor` (home), `treeos.ai/flappybird/chapter-1` (tree node) |
+| **Stance** | `<position>@<embodiment>` | `treeos.ai/flappybird@ruler` |
+| **Portal Address** | `<stance> :: <stance>` | `tabor :: treeos.ai/flappybird@ruler` |
+
+The slash is always present in a position. `treeos.ai` (no slash) is the land identifier; `treeos.ai/` is the land's root position. The path may be empty (just `/`), a home (`/~user...`), or any tree node.
 
 A **Stance** is one side of a bridge: a being at a position. A **Portal Address** joins two stances through a **bridge** (`::`), naming who's addressing whom.
 
@@ -38,13 +40,13 @@ Shorthands when context allows:
 - Implicit self on the left: `treeos.ai/flappybird@ruler`
 - Home position: `treeos.ai/~@dreamer`
 
-Single-stance viewing (no `::`) is allowed only for read-only inspection. Anything interactive requires a full PA.
+Single-stance addressing (no `::`) is the normal mode for the four protocol verbs. SEE / DO / TALK / BE name the addressed stance; the requesting stance is implicit, established by BE. A full Portal Address (`stance :: stance`) is the relationship between two stances, used in UI surfaces (tab titles, history) and in advanced flows like being-to-being addressing.
 
 See [docs/portal-address.md](docs/portal-address.md) for the full grammar.
 
 ## What the portal renders
 
-Lands no longer return HTML pages for each URL. They return **Position Descriptors** — structured JSON describing what's at a position. The portal knows how to render TreeOS-shaped data:
+Lands no longer return HTML pages for each URL. They return **Stance Descriptors** — structured JSON describing what's at a position. The portal knows how to render TreeOS-shaped data:
 
 - governance state (plans, contracts, runs, workers, flags) at Ruler scopes
 - artifact content at Worker leaves
@@ -55,7 +57,7 @@ Lands no longer return HTML pages for each URL. They return **Position Descripto
 
 Rendering is consistent across lands because the portal owns the visual language — every land's positions look like TreeOS positions because the portal draws them that way.
 
-See [docs/position-descriptor.md](docs/position-descriptor.md) for the JSON shape and [docs/zones.md](docs/zones.md) for how each zone type renders.
+See [docs/stance-descriptor.md](docs/stance-descriptor.md) for the JSON shape and [docs/zones.md](docs/zones.md) for how each zone type renders.
 
 ## The three zone types
 
@@ -81,39 +83,47 @@ See [docs/surfaces.md](docs/surfaces.md).
 
 ## Coexistence with the existing web
 
-The TreeOS Portal doesn't replace the web. It wraps it.
+The TreeOS Portal does not wrap the web. It is its own surface, speaking a different protocol than HTTP/HTML.
 
-- **Legacy HTML mode**: positions that return HTML get rendered in a frame with TreeOS chrome around it. Existing dashboard pages keep working.
-- **Native TreeOS mode**: positions returning Position Descriptors render natively in TreeOS conventions.
+For TreeOS lands, the portal speaks four WebSocket verbs (SEE, DO, TALK, BE) and renders Stance Descriptors. The legacy `land/routes/api/*` HTTP routes keep running during per-extension migration but are not part of the new protocol; nothing new wires through them.
 
-Lands migrate surfaces from HTML to JSON over time. Portal supports both during transition.
-
-For domains outside TreeOS (regular HTTP sites), the portal can act as a wrapper that presents the domain's *being-side* — every domain can publish an AI-being layer the TreeOS Portal knows how to invoke. Instead of MCP servers stitched onto a website, a full being can know and act on the platform. The legacy HTML is still reachable; the new being-layer is the preferred surface.
+For domains outside TreeOS (regular HTTP sites), the portal can present the domain's *being-side*. Every domain can publish an AI-being layer that the TreeOS Portal knows how to invoke (TALK with the appropriate intent). Instead of MCP servers stitched onto a website, a full being can know and act on the platform. The site's HTML stays reachable in any normal browser; the new being-layer is the preferred surface for portal users.
 
 ## How this relates to TreeOS itself
 
 The Land server (existing TreeOS server in `../land/`) is the backend. It already has:
 - the node tree
-- the governing extension (Ruler/Planner/Contractor/Foreman/Worker)
+- the governing extension (Ruler / Planner / Contractor / Foreman / Worker)
 - workspaces (book-workspace, code-workspace) that produce artifacts
 - a WebSocket layer for live events
-- HTML rendering for dashboards (the legacy surface)
+- legacy HTTP routes and an HTML dashboard surface
 
-This portal sits opposite the Land server. It speaks a new protocol — the Position Descriptor format — and renders accordingly. The Land server gets new route handlers that recognize PA-shaped requests and return Position Descriptors instead of HTML. Old routes keep working; new routes coexist.
+This portal sits opposite the Land server. It speaks a new protocol: four WS verbs (SEE / DO / TALK / BE) carrying Portal Addresses, plus a single HTTP bootstrap endpoint. The Land server gains a portal layer in `land/portal/` that exposes these verbs. The legacy HTTP routes keep working during migration; each extension's routes retire as it migrates to `do set-meta` plus TALK.
 
-Future: the same portal opens any TreeOS-speaking land. Federation (Canopy) means a portal session can navigate across lands. A bridge can connect a stance on one land to a stance on another.
+Future: the same portal opens any TreeOS-speaking land. Federation (Canopy) means a portal session can navigate across lands. A bridge connects a stance on one land to a stance on another.
 
 ## What gets built first
 
-Three pieces, in order:
+The protocol surface is four WebSocket verbs:
 
-1. **Position Descriptor format** — locked-in JSON contract between server and portal. The shape land servers return per zone type.
-2. **Server-side handlers** — Land server recognizes PA-shaped routes and returns Position Descriptors.
-3. **The portal app itself** — Electron or Tauri shell. Address bar, identity panel, JSON-position rendering, basic chat panel. Start with home-zone rendering since that's where most user time lives.
+- **SEE** observe a position (one-shot or live)
+- **DO** mutate the world (named structural actions plus generic `set-meta` for extensions)
+- **TALK** deliver a message to a being's inbox (chat / place / query / be carried as intent classifier)
+- **BE** identity lifecycle (register / claim / release / switch via a per-land auth-being)
 
-The first version doesn't need to be polished. It needs to prove the concept: sign in as a being at a land, navigate to your home, see your tree, talk to beings at scopes.
+The build sequence:
 
-See [docs/roadmap.md](docs/roadmap.md) for sequencing detail.
+1. Demolish the earlier portal scaffolding (`portal:fetch`, `portal:resolve`, `portal:discover`) in one commit. No aliases.
+2. Build SEE fresh. Full Stance Descriptor for all three zones; live SEE streams RFC 6902 patches.
+3. Build DO with four named actions plus `set-meta` to prove the dispatch pattern.
+4. Build TALK and the inbox. Sync respond-mode first, with one demonstration embodiment.
+5. Build BE. Auth-being handles register/claim/release/switch.
+6. Add async respond-mode. Response routing back to the originator's inbox.
+7. Finish the portal shell. Land/Home/Tree zone renderers, tabs, navigator, identity panel.
+
+The first version proves the concept: sign in as a being at a land, navigate to your home, see your tree, talk to beings at scopes.
+
+See [docs/roadmap.md](docs/roadmap.md) for detailed phase sequencing.
 
 ## Directory layout
 
@@ -121,13 +131,19 @@ See [docs/roadmap.md](docs/roadmap.md) for sequencing detail.
 portal/
 ├── README.md                  this file
 ├── docs/
-│   ├── portal-address.md PA grammar + parser semantics
-│   ├── position-descriptor.md JSON shape lands return per zone
+│   ├── protocol.md            the four-verb spec, top-level
+│   ├── being-summoned.md      architectural framing: beings are summoned, not running
+│   ├── message-envelope.md    TALK envelope and intent semantics
+│   ├── inbox.md               inbox model, summoning triggers, response delivery
+│   ├── do-actions.md          catalog of named DO actions plus set-meta
+│   ├── be-operations.md       identity bootstrap and auth-being
+│   ├── server-protocol.md     wire-level rules for the four ops
+│   ├── portal-address.md      PA grammar + parser semantics
+│   ├── stance-descriptor.md JSON shape lands return per zone
 │   ├── zones.md               land / home / tree zone rendering rules
 │   ├── identity.md            identity-first session model
 │   ├── surfaces.md            address bar / identity / chat / navigator / tabs
-│   ├── server-protocol.md     how lands respond to PA-shaped requests
-│   └── roadmap.md             build phases + first-three sequencing
+│   └── roadmap.md             build phases under the four-verb model
 └── lib/
     └── portal-address.js parser + formatter for the PA grammar
 ```

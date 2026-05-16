@@ -337,7 +337,7 @@ async function listArtifacts(nodeId) {
       totalBytes: typeof n.content === "string" ? Buffer.byteLength(n.content, "utf8") : 0,
       createdAt: n.createdAt,
       byUsername: n.username || null,
-      fullContentRef: `/api/v1/node/${nodeId}/notes/${n._id}`, // legacy URL — Pass 2 will move to portal:fetch as well
+      fullContentRef: `/api/v1/node/${nodeId}/notes/${n._id}`, // legacy URL; will move to a portal:see artifact path
     }));
   } catch {
     return [];

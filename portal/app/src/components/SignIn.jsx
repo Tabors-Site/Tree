@@ -30,15 +30,12 @@ export default function SignIn({ onSignedIn }) {
     try {
       const cleaned = landUrl.replace(/\/+$/, "");
 
-      // Dev: if we're inside a Vite dev server, use a relative URL so the
-      // proxy handles it (no CORS). The proxy target is set in
-      // vite.config.js via PORTAL_LAND_TARGET (default localhost:3000).
-      const useProxy =
-        import.meta.env?.DEV &&
-        (cleaned.startsWith("http://localhost") ||
-          cleaned === "" ||
-          cleaned === "/" ||
-          (import.meta.env?.VITE_PORTAL_USE_PROXY === "true"));
+      // The Land server's CORS now allows any localhost origin in dev mode,
+      // so we hit the typed URL directly. The Vite proxy stays available
+      // as an opt-in (set VITE_PORTAL_USE_PROXY=true in .env to force
+      // routing through Vite, useful for testing against a non-CORS-
+      // configured land like production treeos.ai).
+      const useProxy = import.meta.env?.VITE_PORTAL_USE_PROXY === "true";
       const loginUrl = useProxy ? "/api/v1/login" : `${cleaned}/api/v1/login`;
 
       const controller = new AbortController();

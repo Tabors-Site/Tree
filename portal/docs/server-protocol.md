@@ -1,248 +1,402 @@
-# Server protocol — how lands respond to Portal Addresses
+# Server Protocol: Wire-Level Rules
 
-The TreeOS Portal talks to lands through a small protocol layered over HTTP + WebSocket. Lands serve **Position Descriptors** at PA-shaped routes; live events flow over WS subscriptions scoped to positions.
+This document specifies how lands respond to the four portal verbs at the wire level. It is the bridge between the conceptual protocol ([protocol.md](protocol.md)) and the implementation in `land/portal/`.
 
-This document defines the wire contract.
+Read [protocol.md](protocol.md), [being-summoned.md](being-summoned.md), and [message-envelope.md](message-envelope.md) first.
 
-## HTTP — Position resolution
+## Transport
 
-### Request
+WebSocket only. The Socket.IO implementation runs on the land's existing `/ws` namespace. The portal client opens a single socket per land it engages with and reuses it for all verb traffic.
 
-```
-GET /api/v1/position/<zone>/<encoded-path>?embodiment=<id>
-Headers:
-  X-TreeOS-Being:    <beingId>
-  X-TreeOS-Auth:     Bearer <token>
-  X-TreeOS-Land:     <land identifying the being>
-  Accept:            application/vnd.treeos.position+json; version=1
-```
+There are no HTTP endpoints for the four verbs. The single HTTP endpoint that exists is the bootstrap.
 
-`<encoded-path>` URL-encodes the path segments after the zone identifier. Examples:
-
-| PA right-side | HTTP route |
-|---|---|
-| `treeos.ai/` | `GET /api/v1/position/land/` |
-| `treeos.ai/~tabor` | `GET /api/v1/position/home/tabor` |
-| `treeos.ai/~tabor/flappybird` | `GET /api/v1/position/home/tabor/flappybird` |
-| `treeos.ai/flappybird/chapter-1@ruler` | `GET /api/v1/position/node/flappybird/chapter-1?embodiment=ruler` |
-| `treeos.ai/flappybird@ruler` | `GET /api/v1/position/node/flappybird?embodiment=ruler` |
-
-Embodiment goes in the query string; land maps to the request host; path is URL-path.
-
-### Response
+## Bootstrap
 
 ```
-HTTP/1.1 200 OK
-Content-Type: application/vnd.treeos.position+json; version=1
-X-TreeOS-Descriptor-Version: 1.0
-
-<Position Descriptor JSON — see position-descriptor.md>
+GET /.well-known/treeos-portal
 ```
 
-The portal caches the descriptor briefly (~30 sec ETag) and then opens a WS subscription to keep it live.
+Returns:
 
-### Errors
+```json
+{
+  "ws": "wss://treeos.ai/ws",
+  "protocolVersion": "1.0",
+  "land": "treeos.ai"
+}
+```
 
-| Code | HTTP status | Meaning |
+The client uses this only to learn the WS URL. Capability discovery (zones, embodiments, version negotiation) flows through `see <land>/.discovery` over the socket once connected.
+
+Authentication: none required for bootstrap. Anyone can learn how to connect.
+
+## Socket.IO ops
+
+Four ops, one per verb.
+
+```
+portal:see   (verb: SEE)
+portal:do    (verb: DO)
+portal:talk  (verb: TALK)
+portal:be    (verb: BE)
+```
+
+Each is a Socket.IO event taking a request payload and returning an ack (or, for live SEE, a stream of emitted frames in addition to the ack).
+
+The client emits with a request id; the land returns the ack carrying the same id. Streamed frames also carry the request id so the client can route them.
+
+## Request shape
+
+Common envelope:
+
+```json
+{
+  "id":       "<request id, client-generated>",
+  "verb":     "see" | "do" | "talk" | "be",
+  "identity": "<token, optional for some SEE and BE>",
+  "...":      "address field (named per verb) plus verb-specific fields"
+}
+```
+
+Each verb names its address field explicitly:
+
+| Verb | Field | Required form |
 |---|---|---|
-| `POSITION_NOT_FOUND` | 404 | The path doesn't exist on this land |
-| `FORBIDDEN` | 403 | Identity isn't authorized to view this position (with `suggestedIdentitiesToSwitch`) |
-| `UNAUTHORIZED` | 401 | Missing or invalid auth headers |
-| `EMBODIMENT_UNAVAILABLE` | 422 | The requested embodiment isn't invocable at this position by this identity |
-| `WORLD_MIGRATED` | 301 | Land has moved (federation redirect); follow `Location` |
-| `RATE_LIMITED` | 429 | Slow down |
-| `INTERNAL` | 500 | Server error |
+| SEE | `position` OR `stance` | exactly one; position when no embodiment qualifier needed, stance when descriptor augmentation by embodiment matters |
+| DO | `position` OR `stance` | exactly one; same rule as SEE, stance carries requester's role for authorization |
+| TALK | `stance` | required, embodiment qualifier mandatory |
+| BE | `land` | required, just the land hostname |
 
-All errors follow the existing TreeOS protocol envelope: `{ status: "error", error: { code, message, detail? } }`.
+No generic `address` field. The field name tells the reader what the verb requires. None of these are Portal Addresses (the bridged `stance :: stance` form); they are the target side of an implicit relationship. The requester side is established by the identity token.
 
-### Discovery
+Verb-specific fields:
 
-The portal hits `GET /api/v1/.treeos-discovery` on any new land to learn:
+**SEE**: `live?: boolean`
 
-```json
-{
-  "name": "TreeOS Public Land",
-  "operator": "...",
-  "descriptorVersionSupported": ["1.0"],
-  "wsUrl": "wss://treeos.ai/ws",
-  "auth": { "method": "bearer", "registration": "open" },
-  "zones": ["land", "home", "node"],
-  "embodiments": [ "citizen", "ruler", "oracle", "dreamer", "..." ],
-  "capabilities": [ "live-events", "federation", "bring-your-own-llm" ]
-}
-```
+**DO**: `action: string, payload: object`
 
-The portal uses this to decide which features to enable and which embodiments to autocomplete.
+**TALK**: `message: { from, content, intent, correlation, inReplyTo?, attachments?, sentAt? }` (server sets sentAt if missing)
 
-## WebSocket — live subscription
+**BE**: `operation: "register" | "claim" | "release" | "switch", target, payload?, from?, to?`
 
-Once the descriptor lands, the portal opens a WS connection (re-using the existing TreeOS `/ws` socket if already connected for this identity) and subscribes.
+## Response shape
 
-### Subscribe
+Successful ack:
 
 ```json
 {
-  "op": "subscribe",
-  "topic": "position",
-  "scope": "node" | "subtree" | "user-rooms",
-  "rulerNodeId": "<uuid>",
-  "rootId": "<uuid>",
-  "embodiment": "ruler"
+  "id":     "<request id>",
+  "status": "ok",
+  "data":   <verb-specific>
 }
 ```
 
-The land registers the socket for events that affect this scope. The portal receives:
+For SEE one-shot: `data` is the Stance Descriptor.
+For SEE live: the initial `data` is the descriptor; subsequent frames arrive as separate emits.
+For DO: `data` is action-specific (often `{ written: true }` or `{ nodeId, address }`).
+For TALK sync: `data` is the response message envelope.
+For TALK async or none: `data` is `{ status: "accepted" }`.
+For BE: `data` is `{ identityToken, beingAddress }` for register/claim, `{ released: true }` for release, `{ active }` for switch.
 
-- `descriptor:patch` — small JSON patches to apply to the in-memory descriptor (most common path; live updates).
-- `descriptor:replace` — when state changed enough that a full re-fetch is cheaper.
-- `descriptor:invalidate` — server suggests the portal drop and re-fetch.
-- All the existing TreeOS WS events: `chatResponse`, `toolCalled`, `toolResult`, `thinking`, `chainstepCompleted`, `lifecycleActive`, `planProposed`, `governingExecutionCompleted`, etc.
-
-### Patch shape
+Error ack:
 
 ```json
 {
-  "op": "descriptor:patch",
-  "topic": "position",
-  "scope": { "rulerNodeId": "..." },
-  "patch": [
-    { "op": "replace", "path": "/governance/plan/active", "value": { /* new plan */ } },
-    { "op": "add", "path": "/governance/workers/running/-", "value": { /* new worker */ } }
-  ]
+  "id":     "<request id>",
+  "status": "error",
+  "error":  {
+    "code":    "<error code>",
+    "message": "<human-readable>",
+    "detail":  <structured detail, optional>
+  }
 }
 ```
 
-JSON-Patch shape (RFC 6902). Portal applies in place; renders the diff.
+Error codes are listed in [protocol.md](protocol.md).
 
-### Unsubscribe
+## SEE wire rules
 
-When a tab closes or the user navigates away:
+### One-shot
 
-```json
-{ "op": "unsubscribe", "topic": "position", "scope": { "rulerNodeId": "..." } }
+```
+client emits portal:see { id, position: "<position>", identity?, live: false (or omitted) }
+       OR  portal:see { id, stance:   "<stance>",   identity?, live: false (or omitted) }
+land responds with ack { id, status: "ok", data: <Stance Descriptor> }
 ```
 
-## Chat — bidirectional
+Exactly one of `position` or `stance` must be present. `identity` is required except for explicitly anonymous-accessible places (the `.discovery` position at a land, public-visibility land zones).
 
-Chat threads are addressed by Portal Addresses and have their own WS topic.
+### Live
 
-### Open thread
+```
+client emits portal:see { id, position OR stance, identity, live: true }
+land responds with ack { id, status: "ok", data: <initial Stance Descriptor> }
+land emits portal:patch frames (any number, any time):
+  { id, op: "patch", patch: [<RFC 6902 patches>] }
+  { id, op: "replace", descriptor: <full descriptor> }
+  { id, op: "invalidate" }
+client closes socket -> live SEE ends, no UNSUBSCRIBE needed
+client emits a new portal:see with same field -> new subscription, new id
+```
+
+The land may emit `patch`, `replace`, or `invalidate` frames at its discretion. The client applies patches in order. If patches drift (the client missed a frame), the land emits `replace` or `invalidate` to recover.
+
+Multiple live SEEs from the same client are allowed (different request ids, different addresses). Each is independent.
+
+When the socket closes (intentionally or via network), all live SEEs for that socket end. On reconnect, the client re-emits the SEEs it wants to keep alive.
+
+### Authorization
+
+The land checks for each SEE:
+
+1. Is exactly one of `position` or `stance` present and parseable? `INVALID_INPUT` or `ADDRESS_PARSE_ERROR` if not.
+2. Does it resolve to a known place? `NODE_NOT_FOUND` if not.
+3. If `stance`: is the embodiment qualifier invocable here for this identity? `EMBODIMENT_UNAVAILABLE` if not.
+4. Does the identity have read access here? `FORBIDDEN` if not.
+5. For anonymous SEE: is this place public? `UNAUTHORIZED` if not.
+
+## DO wire rules
+
+```
+client emits portal:do { id, action, position OR stance, identity, payload }
+land responds with ack { id, status: "ok", data: <action-specific> }
+```
+
+Exactly one of `position` or `stance` must be present. Sequential per identity: the land may serialize DOs from the same identity to avoid races on the same node. The protocol does not require strict ordering across identities.
+
+### Validation chain
+
+1. Address field parse + resolve (`ADDRESS_PARSE_ERROR` or `NODE_NOT_FOUND`).
+2. Identity check (`UNAUTHORIZED` if missing or invalid).
+3. Address-level authorization (`FORBIDDEN` if not authorized at this position).
+4. Action-level authorization (some actions need `isAdmin`; if `stance` field is present, the embodiment is checked against the action).
+5. Payload schema validation per action (`INVALID_INPUT` if mismatch).
+6. Pre-hooks (`beforeNodeCreate`, etc.) fire and may cancel.
+7. The mutation executes.
+8. Post-hooks fire.
+9. Live SEE subscribers receive descriptor patches for the affected place(s).
+
+### Multi-step payloads
+
+For large uploads (`upload-artifact` with megabyte-scale bytes), the action supports chunking:
+
+```
+client emits portal:do { id, action: "upload-artifact", position, identity, payload: { kind, name, contentType, chunk: 0, totalChunks: 5, bytes: <chunk 0> } }
+land responds with ack { id, status: "ok", data: { chunkAccepted: 0 } }
+client emits portal:do { id, action: "upload-artifact", payload: { chunk: 1, totalChunks: 5, bytes: <chunk 1>, uploadId: <returned in first ack> } }
+... and so on
+final chunk: land responds with ack { id, status: "ok", data: { artifactId, position: "<position>/artifacts/<artifactId>" } }
+```
+
+Chunked uploads use a per-upload `uploadId` returned in the first ack and threaded through subsequent chunks.
+
+## TALK wire rules
+
+```
+client emits portal:talk { id, stance: "<stance>", identity, message }
+```
+
+The land's TALK handler:
+
+1. Validates envelope shape. `INVALID_INPUT` if malformed or `stance` field missing/unqualified.
+2. Resolves stance. `NODE_NOT_FOUND` or `EMBODIMENT_UNAVAILABLE` if fails.
+3. Authorizes TALK at the stance. `FORBIDDEN` if not.
+4. Validates intent against embodiment's permission list. `INVALID_INTENT` if not honored.
+5. Atomically: appends `message` to inbox + fires summoning per `triggerOn`.
+6. Per `respondMode`:
+   - `sync`: holds ack open; when summoning completes, returns the response message inline as `data: <response envelope>`
+   - `async`: returns ack immediately with `data: { status: "accepted" }`; the response (if any) arrives later as a new portal:talk delivered to the sender's inbox
+   - `none`: returns ack immediately with `data: { status: "accepted" }`
+
+### Sync response delivery
+
+For sync, the ack data is the full response message envelope:
 
 ```json
 {
-  "op": "chat:open",
-  "address": "tabor :: treeos.ai/flappybird@ruler",
-  "threadId": "<uuid generated by portal>"
+  "id": "<id>",
+  "status": "ok",
+  "data": {
+    "from": "<being's stance>",
+    "content": "<response>",
+    "intent": "chat",
+    "correlation": "<new id>",
+    "inReplyTo": "<originating correlation>",
+    "sentAt": "<server timestamp>"
+  }
 }
 ```
 
-Land confirms with `chat:opened` carrying any restored history.
+Sync may stream chunks. The land emits intermediate frames before the final ack:
 
-### Send message
+```
+land emits portal:talk-delta { id, delta: "<partial content>" }
+land emits portal:talk-delta { id, delta: "<more content>" }
+land responds with final ack { id, status: "ok", data: <complete response envelope> }
+```
+
+Embodiments declare `streaming: true` to opt into delta frames. Without that, the response arrives only in the final ack.
+
+### Async response delivery
+
+The originating client receives async responses through a live SEE on the sender's home position. When the response TALK is appended to the sender's inbox, the live SEE emits a patch frame that adds the new inbox entry.
+
+```
+client A -> portal:talk { id: "talk-1", stance: "<ruler stance>", message: { from: "tabor@treeos.ai", ... } }
+client A <- ack { id: "talk-1", status: "ok", data: { status: "accepted" } }
+
+(time passes)
+
+ruler's async summoning produces a response.
+land writes response as TALK to tabor@treeos.ai's inbox.
+client A is running live SEE on stance "tabor@treeos.ai".
+client A receives portal:patch with the new inbox entry.
+client A renders the response in the chat thread keyed by inReplyTo.
+```
+
+This is why a portal client should always have a live SEE on the user's home stance open: it is how async responses arrive.
+
+### Cascade and system-generated TALKs
+
+When the land's internal code (cascade-deliver, completion hooks, scheduler) needs to deliver a message to a being, it constructs a TALK request internally and goes through the same TALK handler. The `from` field names the system origin (e.g., the cascade source stance, the completing job's stance). The `identity` is a system identity issued by the land for internal traffic.
+
+This means cascade arrivals are indistinguishable from user TALKs at the protocol layer. The being's embodiment may inspect `from` to know the origin, but the protocol does not separate them.
+
+## BE wire rules
+
+```
+client emits portal:be { id, operation, land, payload?, identity?, from?, to? }
+```
+
+The land's BE handler dispatches to the auth-being at the named land. The auth-being is implicit; the verb knows where to dispatch.
+
+### Validation chain
+
+1. `operation` is one of the four. `INVALID_INPUT` if not.
+2. `land` is present and resolves to a known land (the running server's own land in Pass 1). `INVALID_INPUT` if not.
+3. For register/claim: identity is optional/absent.
+4. For release/switch: identity is required.
+5. Auth-being processes the operation per its embodiment's policy.
+6. Land returns the operation-specific response.
+
+### Atomicity
+
+`register` is atomic: either the be-er is created and the token issued, or nothing is created and an error is returned. No partial registration.
+
+`switch` is purely client-coordination on the land side; the land may verify the token but does not mutate state.
+
+### Token issuance
+
+Tokens are issued by the auth-being. The format is land-specific (today TreeOS uses JWT). The token is returned in the ack data:
 
 ```json
 {
-  "op": "chat:send",
-  "threadId": "<uuid>",
-  "content": "begin",
-  "addressOverride": null,             // null = use the thread's address
-  "interruptCurrentSpawn": false       // user can interrupt mid-lifecycle work
+  "id": "<id>",
+  "status": "ok",
+  "data": {
+    "identityToken": "<token>",
+    "beingAddress": "tabor@treeos.ai",
+    "expiresAt": "<ISO8601, optional>"
+  }
 }
 ```
 
-### Receive events for that thread
+Clients should store tokens securely and present them on subsequent SEE/DO/TALK.
 
-The chat panel listens for events whose `threadId` matches an open thread:
+## Discovery
 
-- `chat:userMessage` — echo of the user's send (for confirmation)
-- `chat:assistantMessage` — the being's response (may stream)
-- `chat:toolCalled` — being called a tool
-- `chat:toolResult` — tool returned
-- `chat:thinking` — being's internal reasoning event
-- `chat:chainstepCompleted` — sub-role exit text (Planner / Contractor / Foreman)
-- `chat:lifecycleActive` — spawn started / settled
-- `chat:planProposed` — plan card for ratification
-- `chat:done` — being's turn ended
-
-All events carry `threadId` so the chat panel can route them to the right thread.
-
-### Close thread
+A SEE with `position: "<land>/.discovery"` returns the land's capabilities:
 
 ```json
-{ "op": "chat:close", "threadId": "<uuid>" }
+{
+  "land": "treeos.ai",
+  "protocolVersion": "1.0",
+  "supportedVerbs": ["see", "do", "talk", "be"],
+  "supportedZones": ["land", "home", "tree"],
+  "embodiments": [
+    { "name": "ruler", "description": "Coordinates work at this scope" },
+    { "name": "worker", "description": "Executes leaf-level work" },
+    "..."
+  ],
+  "extensionsInstalled": [
+    { "name": "governing", "version": "1.0.0" },
+    "..."
+  ],
+  "authBeing": { "stance": "treeos.ai/@auth", "registrationOpen": true, "credentialTypes": ["password"] },
+  "capabilities": ["live-see", "streaming-talk", "federation"]
+}
 ```
 
-Optionally `discardHistory: true` to fully delete. Default: preserves so re-opening restores.
+The client uses this to:
+- Confirm protocol version compatibility
+- Populate address-bar autocomplete with embodiments
+- Render the sign-in surface based on auth-being policy
+- Decide which features to enable
 
-## Artifacts — bytes-on-demand
-
-Position Descriptors include artifact metadata and a `fullContentRef`. The portal fetches actual bytes via:
-
-```
-GET /api/v1/node/<nodeId>/notes/<noteId>
-GET /api/v1/node/<nodeId>/artifact/<artifactName>
-```
-
-Standard auth headers. Returns the raw content (markdown / image bytes / file).
-
-For real-time artifact updates (Worker writing prose as it streams), the descriptor's `live.subscribe.scope: "node"` includes `noteUpdated` events that carry partial-content patches.
-
-## Extension surfaces
-
-Extensions render their own panels. The Position Descriptor's `extensions[].surfaces[]` declares each. The portal fetches the surface content via:
-
-```
-GET /api/v1/ext/<extName>/panel/<surfaceKey>?nodeId=<id>
-```
-
-The response is the surface's render-kind specific content (json-tree / json-list / html-fragment / custom contract).
-
-Extension surfaces can also receive their own WS events scoped to the extension. The extension declares its WS topic in the descriptor; the portal subscribes when the panel is expanded.
-
-## Authorization model
-
-Every request the portal makes carries identity headers. The land's existing auth middleware (JWT + Canopy token check for federated identities) applies as-is. The portal doesn't bypass any existing security; it just makes the identity layer explicit.
-
-For PA-shaped requests, the land additionally checks:
-
-1. **Does this identity exist?** (auth check)
-2. **Is the requested path real?** (404 if not)
-3. **Is this identity authorized to view this path?** (403 if not, suggest other identities)
-4. **Is the requested embodiment invocable here by this identity?** (422 if not, suggest other embodiments)
-
-These are layered: an unauthorized identity gets 403 with no information about the path's existence (no info leak). An authorized identity attempting an inappropriate embodiment gets 422 with embodiment alternatives.
+Discovery is anonymous-accessible by default. Lands may restrict discovery if they choose.
 
 ## Backwards compatibility
 
-The land server keeps its existing HTML routes (`/api/v1/root/:rootId/governance`, dashboard pages, etc.) for the legacy portal experience. The Position Descriptor routes are NEW (added at `/api/v1/position/...`). Coexistence is the explicit design — Pass 1 lands serve both; new portal uses descriptors; old portal uses HTML.
+The legacy `land/routes/api/*` HTTP routes continue serving traffic during migration. They are not part of the four-verb protocol; nothing new is built against them.
 
-Over time, lands can mark HTML routes deprecated and migrate them to descriptor-rendered surfaces.
+Each extension migrates its routes in its own pass. When an extension is migrated:
+- Its existing HTTP routes are retired.
+- Its mutations move to `do set-meta` against its namespace.
+- Its reads move into the Stance Descriptor or are SEE-fetchable as artifacts.
+- Its tools (for AI use) keep using the existing tool registry; tools are not protocol verbs.
 
-## Federation hint
+The legacy WS chat handler (`land/seed/ws/websocket.js`) keeps running until TALK is proven and the migration completes. There may be a transition window where both chat handlers run; clients use the new one.
 
-For Pass 5 cross-land, the position request can include:
+## Phase 1 ops, discarded
+
+The earlier `portal:fetch`, `portal:resolve`, `portal:discover`, and stubbed `portal:speak`/`portal:subscribe`/`portal:unsubscribe` ops are removed. They were scaffolding for an earlier shape; the four new ops replace them entirely. No aliases.
+
+Anything still calling the old ops is updated in the same pass that wires the new ops.
+
+## Implementation layout
+
+The new protocol lives in `land/portal/`. Verb handlers are in `land/portal/verbs/`:
+
+- `land/portal/verbs/see.js` SEE handler (one-shot and live)
+- `land/portal/verbs/do.js` DO action dispatcher
+- `land/portal/verbs/talk.js` TALK with inbox append and summoning trigger
+- `land/portal/verbs/be.js` BE operations via auth-being
+
+Shared utilities:
+
+- `land/portal/address.js` PA parser + server-context injection (existing)
+- `land/portal/resolver.js` PA to position resolution (existing, internal only)
+- `land/portal/descriptor.js` Stance Descriptor builder (existing, extended)
+- `land/portal/inbox.js` inbox kernel helpers (new)
+- `land/portal/errors.js` PortalError + error codes (existing, extended)
+- `land/portal/actions/` one file per kernel-named DO action (new)
+
+Wiring:
+
+- `land/portal/protocol.js` registers the four ops on the Socket.IO instance
+- `land/portal/bootstrap-route.js` the single HTTP bootstrap endpoint
+- `land/portal/index.js` boot hook from `startup.js`
+
+## Versioning
+
+The protocol carries a version in the bootstrap response. Major versions are breaking; minor versions add fields. The client's first SEE after connect should check the version against its supported range:
 
 ```
-X-TreeOS-Federated-Origin: <home-land>
-X-TreeOS-Federated-Signature: <signed token from home land>
+client connects
+client -> portal:see { position: "<land>/.discovery" }
+client checks protocolVersion against its supported list
+client proceeds or shows a version-mismatch error
 ```
 
-The visited land verifies the signature with the home land (via Canopy) and treats the identity as federated. Authorization decisions can then use the federated scope.
+This pass is `1.0`. Federation extends to `1.1` when Canopy details land.
 
-For Pass 1: out of scope; identities are land-local.
+## See also
 
-## What gets built first on the land side
-
-Three minimum routes:
-
-1. `GET /api/v1/.treeos-discovery` — land's capability declaration.
-2. `GET /api/v1/position/land/` — land zone descriptor.
-3. `GET /api/v1/position/home/:user` — home zone descriptor.
-
-With these, the portal can sign in, see the land, navigate to home, and start. Node-zone routes follow (one route per zone type but the renderers are existing tree code).
-
-WS subscription endpoints come next:
-- the existing TreeOS `/ws` extends with the `position` topic.
-- the existing chat events get a `threadId` field if they don't carry one yet.
-
-Then the portal-readable HTML fragments (legacy mode) just keep working as a fallback.
+- [protocol.md](protocol.md) the conceptual four-verb spec
+- [being-summoned.md](being-summoned.md) the architectural framing
+- [message-envelope.md](message-envelope.md) TALK details
+- [inbox.md](inbox.md) inbox model
+- [do-actions.md](do-actions.md) DO action catalog
+- [be-operations.md](be-operations.md) identity bootstrap
+- [stance-descriptor.md](stance-descriptor.md) SEE response shape
+- [portal-address.md](portal-address.md) PA grammar

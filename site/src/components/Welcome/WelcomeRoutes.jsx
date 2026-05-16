@@ -40,6 +40,7 @@ import PlannerPage from "./Landing/PlannerPage.jsx";
 import ContractorPage from "./Landing/ContractorPage.jsx";
 import ForemanPage from "./Landing/ForemanPage.jsx";
 import WorkerPage from "./Landing/WorkerPage.jsx";
+import ProtocolPage from "./Landing/ProtocolPage.jsx";
 
 import ApiAccessSection from "./About/API.jsx";
 
@@ -97,6 +98,7 @@ const WelcomeRoutes = () => {
       <Route path="/governing/rulership/contractor" element={<ContractorPage />} />
       <Route path="/governing/rulership/foreman" element={<ForemanPage />} />
       <Route path="/governing/rulership/worker" element={<WorkerPage />} />
+      <Route path="/portal" element={<ProtocolPage />} />
       <Route path="/horizon" element={<HorizonRedirect />} />
 
       {/* Original app welcome (treeos.ai example) */}

@@ -545,3 +545,88 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Envelope cards per verb (Portal Protocol page) ─────────────── */
+
+.lp-gov .lp-envelopes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.lp-gov .lp-envelope {
+  background: rgba(74, 222, 128, 0.04);
+  border: 1px solid rgba(74, 222, 128, 0.22);
+  border-radius: 14px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lp-gov .lp-envelope-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lp-gov .lp-envelope-verb {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.lp-gov .lp-envelope-fields {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.lp-gov .lp-envelope-fields code {
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  color: #bfdbfe;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 12.5px;
+}
+
+.lp-gov .lp-envelope-desc {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.lp-gov .lp-envelope-desc code {
+  background: rgba(255, 255, 255, 0.07);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.lp-gov .lp-envelope-code {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #d1d5db;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+@media (max-width: 880px) {
+  .lp-gov .lp-envelopes {
+    grid-template-columns: 1fr;
+  }
+}

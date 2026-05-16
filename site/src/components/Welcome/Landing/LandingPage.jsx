@@ -108,6 +108,7 @@ const LandingPage = () => {
             <a className="lp-btn lp-btn-primary" href="/start">Start</a>
             <a className="lp-btn lp-btn-secondary" href="/use">See what it's like</a>
             <a className="lp-btn lp-btn-secondary" href="/kernel">Inside the Seed</a>
+            <a className="lp-btn lp-btn-secondary" href="/portal">Portal Protocol</a>
             <a className="lp-btn lp-btn-secondary" href="/treeos">TreeOS</a>
           </div>
         </div>

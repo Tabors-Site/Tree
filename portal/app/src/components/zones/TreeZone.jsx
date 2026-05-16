@@ -3,10 +3,10 @@ import React from "react";
 /**
  * Tree zone renderer.
  *
- * Renders zone === "tree" Position Descriptors — a position inside a tree.
- * This is the richest zone: lineage breadcrumb, children, artifacts, beings
+ * Renders zone === "tree" Stance Descriptors. A position inside a tree.
+ * The richest zone: lineage breadcrumb, children, artifacts, beings
  * invocable at this node. Governance state (plans/contracts/workers/flags)
- * will land in Slice 4b; for now governance is `null` and we just show
+ * lands in a later phase; for now governance is null and we just show
  * the surrounding tree shape.
  */
 export default function TreeZone({ descriptor, onNavigate }) {

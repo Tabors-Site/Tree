@@ -56,7 +56,7 @@ export function parseFromSocket(socket, input, extraCtx = {}) {
     return parseRaw(input, ctx);
   } catch (e) {
     throw new PortalError(
-      PORTAL_ERR.PA_PARSE,
+      PORTAL_ERR.ADDRESS_PARSE_ERROR,
       e.message || "Invalid Portal Address",
       { code: e.code, paInput: e.paInput },
     );
@@ -70,7 +70,7 @@ export function parseWithContext(input, ctx = {}) {
     return parseRaw(input, fullCtx);
   } catch (e) {
     throw new PortalError(
-      PORTAL_ERR.PA_PARSE,
+      PORTAL_ERR.ADDRESS_PARSE_ERROR,
       e.message || "Invalid Portal Address",
       { code: e.code, paInput: e.paInput },
     );

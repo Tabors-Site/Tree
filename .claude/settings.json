@@ -951,7 +951,8 @@
       "Bash(grep -n \"username\\\\|\\\\\\\\\\\\${username}\\\\|operator\\\\b\" land/extensions/governing/modes/ruler.js land/extensions/governing/modes/planner.js land/extensions/governing/modes/contractor.js land/extensions/governing/modes/foreman.js land/extensions/governing/rulerTools.js)",
       "Bash(grep -nE '\"[^\"]*\\\\\\\\b\\(user|operator\\)\\\\\\\\b[^\"]*\"|`[^`]*\\\\\\\\b\\(user|operator\\)\\\\\\\\b[^`]*`' land/extensions/governing/modes/ruler.js land/extensions/governing/modes/planner.js land/extensions/governing/modes/contractor.js land/extensions/governing/modes/foreman.js land/extensions/governing/rulerTools.js)",
       "Bash(grep -nE '\"[^\"]*\\\\b\\(the user|operator\\)\\\\b[^\"]*\"|`[^`]*\\\\b\\(the user|operator\\)\\\\b[^`]*`' land/extensions/governing/modes/ruler.js land/extensions/governing/modes/planner.js land/extensions/governing/modes/contractor.js land/extensions/governing/modes/foreman.js land/extensions/governing/rulerTools.js)",
-      "Bash(grep -nE '\"[^\"]*\\\\b\\(the user|to the user|operator\\)\\\\b[^\"]*\"|`[^`]*\\\\b\\(the user|to the user|operator\\)\\\\b[^`]*`' land/extensions/governing/modes/ruler.js land/extensions/governing/modes/planner.js land/extensions/governing/modes/contractor.js land/extensions/governing/modes/foreman.js land/extensions/governing/rulerTools.js)"
+      "Bash(grep -nE '\"[^\"]*\\\\b\\(the user|to the user|operator\\)\\\\b[^\"]*\"|`[^`]*\\\\b\\(the user|to the user|operator\\)\\\\b[^`]*`' land/extensions/governing/modes/ruler.js land/extensions/governing/modes/planner.js land/extensions/governing/modes/contractor.js land/extensions/governing/modes/foreman.js land/extensions/governing/rulerTools.js)",
+      "Bash(grep -v \":#\\\\|^[^:]*$\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

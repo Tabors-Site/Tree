@@ -1,21 +1,34 @@
-// Portal Protocol errors.
+// TreeOS Portal Protocol errors.
 //
-// Native error codes for Portal Address operations. These are returned in
-// `{ ok: false, error: { code, message } }` ack responses to portal:* WS ops
-// AND from the bootstrap HTTP route on failures.
+// The portal protocol reuses seed's ERR vocabulary wherever the meaning
+// matches and adds five portal-specific codes for protocol-layer concerns
+// seed does not cover. PORTAL_ERR is the composition of both, so portal
+// callers have one import for every error code they may throw.
 //
-// Codes are namespaced PA_* so they don't collide with the legacy `ERR.*`
-// codes in seed/protocol.js. The Portal Protocol does NOT reuse legacy HTTP
-// error shapes — it has its own.
+// Reuse rule: a portal handler should reach for seed's existing codes
+// (UNAUTHORIZED, FORBIDDEN, NODE_NOT_FOUND, INVALID_INPUT, RESOURCE_CONFLICT,
+// etc.) before considering a portal-specific code. The five additions exist
+// only for things seed cannot express:
+//
+//   ADDRESS_PARSE_ERROR     address string failed to parse
+//   EMBODIMENT_UNAVAILABLE  @embodiment qualifier not invocable here
+//   VERB_NOT_SUPPORTED      address does not support the requested verb
+//   ACTION_NOT_SUPPORTED    DO action unknown or not permitted here
+//   INVALID_INTENT          TALK intent not in embodiment's honoredIntents
+
+import { ERR } from "../seed/protocol.js";
+
+const PORTAL_SPECIFIC = Object.freeze({
+  ADDRESS_PARSE_ERROR:    "ADDRESS_PARSE_ERROR",
+  EMBODIMENT_UNAVAILABLE: "EMBODIMENT_UNAVAILABLE",
+  VERB_NOT_SUPPORTED:     "VERB_NOT_SUPPORTED",
+  ACTION_NOT_SUPPORTED:   "ACTION_NOT_SUPPORTED",
+  INVALID_INTENT:         "INVALID_INTENT",
+});
 
 export const PORTAL_ERR = Object.freeze({
-  PA_PARSE: "PA_PARSE",                    // address string failed to parse
-  PA_UNAUTHORIZED: "PA_UNAUTHORIZED",      // socket has no userId
-  PA_FORBIDDEN: "PA_FORBIDDEN",            // identity not allowed at this stance
-  PA_NOT_FOUND: "PA_NOT_FOUND",            // land/path doesn't exist
-  PA_EMBODIMENT_UNAVAILABLE: "PA_EMBODIMENT_UNAVAILABLE", // embodiment not invocable
-  PA_INTERNAL: "PA_INTERNAL",              // unexpected server error
-  PA_UNSUPPORTED: "PA_UNSUPPORTED",        // op recognized but not implemented yet
+  ...ERR,
+  ...PORTAL_SPECIFIC,
 });
 
 export class PortalError extends Error {

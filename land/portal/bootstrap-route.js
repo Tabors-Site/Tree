@@ -1,15 +1,19 @@
 // Portal Protocol HTTP bootstrap.
 //
-// One — and only one — HTTP route. The Portal client uses this to discover
-// where to open its WebSocket connection before it has one. Everything else
-// in the Portal Protocol travels over WS.
+// One HTTP route. The Portal client uses this to discover where to open
+// its WebSocket connection before it has one. Everything else in the
+// Portal Protocol travels over WebSocket.
 //
-// GET /.well-known/treeos-portal → { ws, version, capabilities, ... }
+// GET /.well-known/treeos-portal → { ws, protocolVersion, land }
 //
-// The same shape is also reachable via `portal:discover` on the WS connection.
-// After the client connects, this HTTP route is never needed again.
+// The response is intentionally minimal: just enough information for the
+// client to open a socket. Full capability discovery (zones, embodiments,
+// supported actions, version negotiation) moves to `see <land>/.discovery`
+// once the socket is open.
 
-import { buildDiscovery } from "./discovery.js";
+import { getLandDomain } from "./address.js";
+import { PORTAL_PROTOCOL_VERSION } from "./discovery.js";
+import { getLandUrl } from "../canopy/identity.js";
 
 /**
  * Register the bootstrap HTTP route on the Express app.
@@ -17,6 +21,12 @@ import { buildDiscovery } from "./discovery.js";
  */
 export function registerPortalBootstrap(app) {
   app.get("/.well-known/treeos-portal", (_req, res) => {
-    res.json(buildDiscovery());
+    const landUrl = getLandUrl();
+    const wsUrl = landUrl.replace(/^http/, "ws");
+    res.json({
+      ws: wsUrl,
+      protocolVersion: PORTAL_PROTOCOL_VERSION,
+      land: getLandDomain(),
+    });
   });
 }

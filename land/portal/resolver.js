@@ -10,8 +10,9 @@
 //   - leafId:      convenience: chain[last].id
 //   - embodiment:  the @label from the stance (unchanged)
 //
-// Pass 1 Slice 1 implements ONLY the land-zone case (path === "/").
-// Home and tree zones throw PA_UNSUPPORTED until subsequent slices land.
+// Pass 1 Slice 1 implemented ONLY the land-zone case (path === "/").
+// Home and tree zones are now wired through; the rest of the verbs
+// (DO/TALK/BE) will consume this resolver next.
 
 import { PortalError, PORTAL_ERR } from "./errors.js";
 import { getLandDomain } from "./address.js";
@@ -38,14 +39,14 @@ import { resolveRootNode } from "../seed/tree/treeFetch.js";
 export async function resolveStance(stance, opts = {}) {
   const { requireLandMatch = true } = opts;
   if (!stance) {
-    throw new PortalError(PORTAL_ERR.PA_PARSE, "Stance is required");
+    throw new PortalError(PORTAL_ERR.ADDRESS_PARSE_ERROR, "Stance is required");
   }
 
-  // Land must match this server (Pass 1 — no federated lookup yet).
+  // Land must match this server (Pass 1: no federated lookup yet).
   const stanceLand = stance.land || getLandDomain();
   if (requireLandMatch && stanceLand !== getLandDomain()) {
     throw new PortalError(
-      PORTAL_ERR.PA_NOT_FOUND,
+      PORTAL_ERR.NODE_NOT_FOUND,
       `Land "${stanceLand}" is not served by this server`,
       { stanceLand, serverLand: getLandDomain() },
     );
@@ -80,7 +81,7 @@ export async function resolveStance(stance, opts = {}) {
 
     if (!username) {
       throw new PortalError(
-        PORTAL_ERR.PA_PARSE,
+        PORTAL_ERR.ADDRESS_PARSE_ERROR,
         `Invalid home path: "${path}" (missing username after ~)`,
       );
     }
@@ -88,7 +89,7 @@ export async function resolveStance(stance, opts = {}) {
     const user = await User.findOne({ username }).select("_id username").lean();
     if (!user) {
       throw new PortalError(
-        PORTAL_ERR.PA_NOT_FOUND,
+        PORTAL_ERR.USER_NOT_FOUND,
         `No user "${username}" on this land`,
         { username },
       );
@@ -126,7 +127,7 @@ export async function resolveStance(stance, opts = {}) {
   const segments = path.slice(1).split("/").filter(Boolean);
   if (segments.length === 0) {
     // Shouldn't happen: "/" is handled above. Defensive return.
-    throw new PortalError(PORTAL_ERR.PA_PARSE, `Invalid path "${path}"`);
+    throw new PortalError(PORTAL_ERR.ADDRESS_PARSE_ERROR, `Invalid path "${path}"`);
   }
   const landRootId = getLandRootId();
   return resolveNodePath({
@@ -157,7 +158,7 @@ export async function resolveStance(stance, opts = {}) {
 async function resolveNodePath({ startUnderParent, segments, ownerFilter, stance, contextUser }) {
   if (!startUnderParent) {
     throw new PortalError(
-      PORTAL_ERR.PA_INTERNAL,
+      PORTAL_ERR.INTERNAL,
       "Land root not initialized yet",
     );
   }
@@ -195,7 +196,7 @@ async function resolveNodePath({ startUnderParent, segments, ownerFilter, stance
     }
     if (!node) {
       throw new PortalError(
-        PORTAL_ERR.PA_NOT_FOUND,
+        PORTAL_ERR.NODE_NOT_FOUND,
         `Segment "${seg}" not found at depth ${i} of path`,
         { segment: seg, depth: i, parent: currentParent },
       );
