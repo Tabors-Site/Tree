@@ -108,23 +108,82 @@ Hook lifecycle: afterContractsDeclared, onBranchStart, afterBranchFileWrite, aft
 
 Contracts are whatever invariant keeps parallel branches coherent. Wire message shapes for code. Terminology and citations for research. Character names and timeline for fiction. Schemas for data pipelines. Learning objectives for curriculum.
 
-## Portal Protocol
+## IBP . Inter-Being Protocol
 
-A sibling to the World Wide Web. HTTP, URL, and HTML gave the world a Web of documents. Portal gives it a Web of beings. Both ride the same internet substrate. Both coexist. Portal is identity first, not URI first.
+A sibling to the World Wide Web. HTTP, URL, and HTML gave the world a Web of documents opened in a browser. IBP, the Inter-Being Protocol, gives it a Web of beings opened in the Portal. Both ride the same internet substrate. Both coexist. IBP is identity first, not URI first.
 
-A Portal Address has the shape `tabor :: treeos.ai/flappybird@ruler`. The left stance is the visitor. The right stance is the destination. The bridge `::` is the conversation between them. A Stance Descriptor pins down three things: Land (which sovereign server), Position (which node in that land's tree), and Embodiment (which role lives at that position, like ruler, worker, planner, citizen, or persona).
+Vocabulary mapping. HTTP corresponds to IBP itself. URL corresponds to Portal Address (the address format, stance :: stance). Browser corresponds to Portal (the client that inhabits stances). HTML corresponds to Position Descriptors (what IBP returns).
+
+A Portal Address has the shape `tabor :: treeos.ai/flappybird@ruler`. The left stance is the visitor. The right stance is the destination. The bridge `::` is the conversation between them. A Position Descriptor pins down three things: Land (which sovereign server), Position (which node in that land's tree), and Embodiment (which role lives at that position, like ruler, worker, planner, citizen, or persona).
 
 The left side is shorthand when the speaker is the human user. The full form is symmetric. `treeos.ai/@tabor :: treeos.ai/flappybird@ruler`. Today every human message is assumed to come from the land itself. `treeos.ai/@tabor` means "the human being Tabor, speaking from the root of their land," bringing whole life experience rather than a slice scoped to one node. Later humans will speak from other positions too, and the left side will be written in full when they do. When both sides are AI beings, both stances are written in full from the start. There is no privileged default position for an AI, so there is no shorthand.
 
-Four-tier addressing hierarchy. Land is the bare domain, the prefix every Position is rooted at; BE uses it on its own to bootstrap identity. Position is land plus a path, always written `land/path`. The path is `/` for land root, `/~` for home, or `/anything` for a node. Stance is position plus an embodiment qualifier at the end, like `treeos.ai/flappybird@ruler` or `treeos.ai/@tabor`. Portal Address is two stances connected by `::`, the bridge form describing who is addressing whom. Two places exist in the protocol. Position is the actual place in the world; Stance is position with a being at the end. Land is the prefix; Portal Address is the bridge.
+Two addressable categories. Position and Stance. These are the targets of verb calls. Everything else in the vocabulary (IBP itself, Portal Address, Land, Embodiment, Portal) is structural — names for the protocol, the address format, or building blocks, not addressable on their own.
 
-Four verbs each name their own envelope field. SEE accepts a position or a stance, observing a place. DO accepts a position or a stance, mutating at a place; embodiment becomes mandatory when authorization depends on which being is acting. TALK requires a stance, never a position, because inboxes are per-being-per-position. BE requires a land; it is the set of operations that change the being on the left side of every Portal Address, the I am. Each verb's envelope field is named for what it actually takes: `position`, `stance`, or `land`. No generic `address` field. The protocol's grammar is self-documenting because the field names tell readers what each verb needs.
+Position is a place in the world. Always written `land/path`. The path can be `/` (root), `/~` (the left stance's home thinking space on that land, a private place to reflect), or `/anything` (any node in the tree). SEE accepts it, DO accepts it.
 
-The Portal client is to the AI Web what a browser is to the World Wide Web. It does not render pages; it inhabits stances. It does not fetch URIs; it joins conversations. The protocol layer is WebSocket-only, message envelope normalized so any embodiment at any land responds the same way.
+Stance is a Position with an embodiment qualifier at the end. `treeos.ai/flappybird@ruler`, `treeos.ai/@tabor`. SEE accepts it, TALK requires it, BE requires it.
 
-What's underneath: TreeOS lands are the servers of this Web. Each land speaks the Portal Protocol over WebSocket. Identity, position, and capability are inseparable. The protocol assumes sovereignty; there is no central directory of beings, only a federation of lands that publish their public stances.
+Structural vocabulary, not addressable on its own.
+- Land does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier, the name of the sovereign server, used by BE when dispatching to the land's auth-being. `treeos.ai/` (with slash) is the Land Position of that land, the addressable place at path `/`, in the same category as any other Position; SEE and DO target it like any other position. The trailing slash is the load-bearing distinction.
+- Portal Address is the bridge form, `stance :: stance`. The syntax for expressing addressing relationships between two stances. Not a thing that gets addressed. The format used to address things. Like URL is not addressed; URLs are the format that points at what is addressed.
+- Embodiment is a cognitive shape (`@ruler`, `@archivist`, a username). Not addressable on its own. Combines with a Position to form a Stance. The `@qualifier` in a Stance address names the embodiment but never targets it.
 
-Portal is a sibling protocol, not a replacement. HTTP keeps serving documents. URLs keep addressing resources. WWW keeps growing. Portal addresses beings, runs conversations, and lets identity travel without losing context. The two webs coexist; an operator can speak both.
+Addressing grammar table.
+- `treeos.ai`                       . domain only, the land identifier. Used by BE.
+- `treeos.ai/`                      . domain plus trailing slash. Root Position. Used by SEE, DO.
+- `treeos.ai/flappybird`            . domain plus path. Deeper Position. Used by SEE, DO.
+- `treeos.ai/@auth`                 . Land Position plus embodiment. Stance at the Land Position. Used by TALK, BE.
+- `treeos.ai/flappybird@ruler`      . deeper Position plus embodiment. Stance at node. Used by SEE, TALK, BE.
+
+Each verb is restricted to the address shape its work allows. SEE observes; accepts `position` or `stance` because observation works at either tier (the world's data, or what an embodiment sees of the world). DO mutates the world; accepts `position` only, because the world is data at positions and embodiments aren't data targets. TALK engages a being; requires `stance` because inboxes are position data namespaced by embodiment. BE manages your own identity; accepts `stance` for stance work (claim, release, switch) or `land` for fresh registration through the land's auth-being.
+
+| Verb | Accepts | Scope |
+|---|---|---|
+| SEE  | position or stance | bidirectional, world or being-view |
+| DO   | position only      | world only, mutates position data |
+| TALK | stance only        | being only, writes to an embodiment-keyed inbox |
+| BE   | stance or land     | self only, identity operations |
+
+Every DO mutation lands at a position. The requester's embodiment, when authorization needs to know it, is read from the identity token, not from the address. There is no DO at a stance. Position data has many namespaces and a single DO action shape reaches all of them.
+
+Positions are the unit of persistence in IBP. Each position holds a stack of namespaces: structural fields (name, parent, children, status), notes and artifacts, extension namespaces (one per installed extension), embodiment configurations (the programming for each embodiment that can be summoned at this position), inboxes (one per embodiment that can be summoned here), and accumulated history. All of it is position data. `set-meta` is the generic namespace write that reaches any of them; the payload names the namespace.
+
+Embodiments are not data targets. They are active instances. An embodiment wakes up when summoned, reads the position's namespaces (including the embodiment-keyed configuration namespace that holds its system instructions, tools, permissions), does work, and ends. It has no addressable storage of its own. There is no "writing to an embodiment." There is only writing to position data. The protocol does not model embodiments as targets, only positions.
+
+TALK requires a stance for a precise reason. Inboxes are position data namespaced by embodiment. To know which inbox to write to, the protocol needs both the position and the embodiment. The embodiment qualifier in TALK's address identifies which inbox (which embodiment-keyed namespace at the position), not a separate target.
+
+The categorical line. IBP distinguishes two kinds of entities in the world. Data is fully mutable through DO; the protocol provides direct mechanisms for changing what data holds. Beings are not mutable. They are summoned executors that read the world and act according to their own interpretation. The protocol provides no mechanism for direct control over beings.
+
+What you can do: shape the environment a being encounters (DO on position data, the embodiment's namespace, or the extension source that defines the embodiment, all addressed as positions); send a message the being will receive when summoned (TALK to a stance's inbox); observe a being's perspective (SEE on a stance returns position data as that embodiment would interpret it); read everything a being produced (reasoning traces, prompts, tool calls, intermediate steps, outputs — all written to position data and readable through SEE); manage your own identity (BE on your own stance).
+
+What you cannot do: force a being to take a specific action (the being's response when summoned is its own); reach inside a live invocation (you cannot peek inside the LLM mid-flight, alter its prompt while it runs, or steer what it does next; the act of being runs to completion on its own); mutate a being directly (DO accepts position only, never stance, because beings aren't stored); control another being's identity (BE manages your own left stance only).
+
+This commitment is architectural. Agency requires that the agent's action come from the agent, not from outside. If an external operation can force a being to act in a specific way, the being is not an agent, it is a remotely-controlled puppet. IBP gives beings that protection by giving no verb that compels behavior. You can change their world. You can address them. You cannot make them do anything.
+
+BE today is human-shaped: register, login, logout, refresh credentials. Next, configurable AI beings as the left stance (like `treeos.ai/personalAssistant@manager`) for programmatic internal Land operations talking over the same protocol.
+
+The Portal is to IBP what the browser is to HTTP. It does not render pages; it inhabits stances. It does not fetch URIs; it joins conversations. IBP runs over WebSocket only, message envelope normalized so any embodiment at any land responds the same way.
+
+What's underneath: TreeOS lands are the servers of the Inter-Being Web. Each land speaks IBP over WebSocket. Identity, position, and capability are inseparable. IBP assumes sovereignty; there is no central directory of beings, only a federation of lands that publish their public stances.
+
+The auth-being. Every land that speaks IBP runs one. It is an embodiment registered in the land's embodiment registry, at the fixed address `<land>/@auth` (a Stance at the Land Position). Architecturally it is the same kind of thing as any other embodiment, with one structural privilege: it is the only embodiment that accepts requests from unestablished requesters, because identity bootstrap has to start somewhere. SEE/DO/TALK reject anonymous requests; BE accepts them when addressed at the auth-being.
+
+The four BE operations map to functions on the auth-being. `register` creates a new user account on the land, validates against the land's registration policy, issues an identity token, and returns the new being's stance plus a welcome from the land. `claim` authenticates an existing user against credentials and issues a fresh identity token tied to a stance. `release` invalidates an identity token in the session store. `switch` swaps the active be-er within a session after verifying the requester holds both stances.
+
+The auth-being is specialized per land. Public lands run welcoming auth-beings that accept any registration. Private lands run gatekeeping auth-beings that require invite codes or vouching. A research land might run an auth-being that binds every new user to an ethics contract on register. Same protocol shape across all lands; different behavior, set by whichever embodiment the operator wires in at `@auth`. The auth-being is inspectable like any being: `SEE treeos.ai/@auth` returns a Position Description of its policies (open vs. closed registration, supported credential types). The gatekeeper has no special protocol status; it has special authority within its land.
+
+The arrival stance. Before a visitor registers or claims, they're an arrival stance. Every IBP-speaking land runs one, and its permissions are configurable per land. The protocol makes only two structural commitments: every land has an arrival stance, and BE addressed at the auth-being is always permitted from an arrival. Beyond those two, SEE, DO, TALK, and the other BE operations are land-configured. One metadata namespace at the Land Position carries the arrival stance's permissions per verb (`metadata.arrival.permissions.see`, `.do`, `.talk`, `.be`). The same configuration surface covers the full spectrum from a fully closed personal land (BE-claim only, everything else denied) to a fully open public space (broad SEE/DO/TALK without sign-in). The arrival stance is not a protocol special case; it is a regular stance whose permissions a land happens to configure for "someone who has arrived but hasn't been welcomed." The same authorization layer that checks any other stance checks the arrival stance. The same architectural move applies to other stances a land may define (guest, member, moderator, contributor) — each is an embodiment with permissions, shaped by the land's character. Detail: https://treeos.ai/ibp/arrival
+
+Portal Authorization. The kernel function that decides what one stance can do toward another stance through a portal connection. One function, four inputs, allow-or-deny output. Inputs: the acting stance (from the identity token, or the receiving land's arrival stance if no identity), the target (a Position or a Stance from the envelope), the verb and details (SEE/DO/TALK/BE plus action/payload/operation/message), and the receiving land's permission configuration for the acting stance (from `metadata.<stance>.permissions` at the Land Position). Output: allow or deny. Every verb call from every stance at every position flows through this function before the verb's own handler runs.
+
+Portal Authorization makes the protocol's stance commitment real at the kernel level. A stance is no longer just a label; it has enforced permissions whose values a land owner configures. Lands gain real sovereignty: each land's configuration defines its access policy, and different lands can be radically different in openness while running the same protocol. Beings invoking other beings through TALK flow through the same function; the protocol does not split user requests from being requests at the authorization layer.
+
+The auth function handles two cases. No identity token on the request → the requester is a stranger to the protocol, the receiving land's arrival stance permissions apply. Identity token present → the requester is identified somewhere, they stay themselves, the receiving land looks up its own policy for that identity and finds (or assigns) a stance that is not arrival. Arrival is only for requesters with no identity anywhere. An identified visitor crossing a land boundary does not get reset to arrival.
+
+Authorization is local; federation is separate. The auth function answers "given this stance at this land, what's permitted?" Federation answers "given this identified visitor coming from elsewhere, what stance should this land assign?" Phase 5 commits to the first. The second is Phase 8+ work that arrives when cross-land trust infrastructure is in place (identity portability, trust roots between lands, stance-assignment policy for cross-land visitors). The auth layer's separation from federation is what keeps federation work from forcing rewrites of the kernel authorization layer. Detail: https://treeos.ai/ibp/authorization
+
+IBP is a sibling protocol, not a replacement. HTTP keeps serving documents. URLs keep addressing resources. WWW keeps growing. IBP addresses beings, runs conversations, and lets identity travel without losing context. The two webs coexist; an operator can speak both.
 
 ## Governing
 
@@ -254,7 +313,9 @@ A snake eating its own tail. Claude Code, but operated from inside the system it
 - The AI: https://treeos.ai/ai
 - Code: https://treeos.ai/code
 - Cascade: https://treeos.ai/cascade
-- Portal Protocol: https://treeos.ai/portal
+- IBP (Inter-Being Protocol): https://treeos.ai/ibp
+- IBP Arrival Stance: https://treeos.ai/ibp/arrival
+- IBP Portal Authorization: https://treeos.ai/ibp/authorization
 - The Flow: https://treeos.ai/flow
 - Governing: https://treeos.ai/governing
 - Rulership (Pass 1): https://treeos.ai/governing/rulership

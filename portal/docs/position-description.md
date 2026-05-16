@@ -1,12 +1,14 @@
-# Stance Descriptor: the JSON shape SEE returns
+# Position Description: the JSON shape SEE returns
 
-When SEE addresses a position (with or without an embodiment qualifier), the land returns a **Stance Descriptor**: structured JSON describing what is at that address. The portal renders the descriptor according to TreeOS conventions. No HTML, no land-supplied layout. The land owns the data; the portal owns the rendering.
+When the SEE verb of IBP (the Inter-Being Protocol) addresses a position (with or without an embodiment qualifier), the land returns a **Position Description**: structured JSON describing what is at that address. The Portal renders the descriptor according to TreeOS conventions. No HTML, no land-supplied layout. The land owns the data; the Portal owns the rendering.
+
+Position Description is to IBP what HTML is to HTTP: the response shape the client knows how to render.
 
 ## What the descriptor describes
 
 The descriptor describes **what is at the addressed position**, with embodiment-specific augmentation when the address has a qualifier. Recall the terminology:
 
-- **Position**: `<land>/<path>`. The slash is always present. The path may be empty (`treeos.ai/`, the land root), `~user...` (a home), or any tree node (`treeos.ai/flappybird/chapter-1`). A position is the actual place in the world.
+- **Position**: `<land>/<path>`. The slash is always present. The path may be empty (`treeos.ai/`, the Land Position), `~user...` (a home), or any tree node (`treeos.ai/flappybird/chapter-1`). A position is the actual place in the world.
 - **Stance**: `<position>@<embodiment>`. A being at a position. `treeos.ai/flappybird@ruler`.
 - **Portal Address**: `<stance> :: <stance>`. `tabor :: treeos.ai/flappybird@ruler`. Names the relationship between two stances. Used in UI and being-to-being framing; the verb envelope carries only the "to" side.
 
@@ -19,7 +21,7 @@ SEE accepts either an unqualified position or a qualified one:
 
 Same position with different embodiment qualifiers returns different augmented descriptors. The Ruler-augmented descriptor at /flappybird emphasizes governance state. The Historian-augmented descriptor emphasizes accumulated history. The Oracle-augmented descriptor emphasizes synthesis. Same position, same base shape, different augmentation.
 
-The descriptor is **filtered by the requesting identity**. Which beings appear in the `beings` list, what data is visible in `governance` or `artifacts`, what panels are populated, all depend on what the requesting identity is permitted to see at this position. The descriptor is named "Stance Descriptor" because the requester-plus-addressed-position together form an implicit stance relationship even when the address itself is unqualified.
+The descriptor is **filtered by the requesting identity**. Which beings appear in the `beings` list, what data is visible in `governance` or `artifacts`, what panels are populated, all depend on what the requesting identity is permitted to see at this position. The descriptor is named "Position Description" because the requester-plus-addressed-position together form an implicit stance relationship even when the address itself is unqualified.
 
 ## Top-level shape
 
@@ -353,7 +355,7 @@ The portal shows a sign-in prompt with the suggestions.
 
 `_meta.descriptorVersion` is a SemVer the portal checks against its supported range. Backwards-incompatible changes bump the major. The portal falls back to a degraded mode when descriptor version is unsupported.
 
-The Stance Descriptor format is the CONTRACT between portal and land server. It stays stable through Pass 1 and Pass 2. Pass 3+ may add fields, never remove.
+The Position Description format is the CONTRACT between portal and land server. It stays stable through Pass 1 and Pass 2. Pass 3+ may add fields, never remove.
 
 ## See also
 

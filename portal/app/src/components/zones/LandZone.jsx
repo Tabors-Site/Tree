@@ -3,7 +3,7 @@ import React from "react";
 /**
  * Land zone renderer.
  *
- * Renders zone === "land" Stance Descriptors. The land root is the
+ * Renders zone === "land" Position Descriptions. The land root is the
  * discovery surface. Shows the operator, available beings, and any
  * public trees ext-allow'd at land scope.
  */

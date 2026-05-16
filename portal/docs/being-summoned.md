@@ -1,8 +1,8 @@
 # Beings are summoned, not running
 
-Read this before reading any other portal protocol doc.
+Read this before reading any other IBP (Inter-Being Protocol) doc.
 
-The TreeOS protocol is shaped around a specific commitment about what a being is. Build against the wrong model and the architecture will not make sense.
+IBP is shaped around a specific commitment about what a being is. Build against the wrong model and the architecture will not make sense.
 
 ## The two wrong mental models
 

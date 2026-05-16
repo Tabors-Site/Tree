@@ -1,9 +1,9 @@
-// TreeOS Portal client.
+// TreeOS Portal client. Speaks IBP (Inter-Being Protocol).
 //
-// Wraps a Socket.IO connection and exposes typed methods for the four
-// Portal Protocol verbs (see / do / talk / be). The client speaks only
-// this protocol, never raw HTTP routes (except the single
-// /.well-known/treeos-portal bootstrap before a socket is open).
+// Wraps a Socket.IO connection and exposes typed methods for IBP's four
+// verbs (see / do / talk / be). The client speaks only IBP, never raw HTTP
+// routes (except the single /.well-known/treeos-portal bootstrap before
+// a socket is open).
 //
 // See ../../docs/protocol.md for the conceptual model and
 // ../../docs/server-protocol.md for the wire contract.
@@ -97,7 +97,7 @@ export class PortalClient {
   // ────────────────────────────────────────────────────────────────
 
   /**
-   * SEE: observe a place. Returns a Stance Descriptor.
+   * SEE: observe a place. Returns a Position Description.
    *
    * Pass `address` as a string and the client decides whether to send it as
    * `position` or `stance` based on whether it contains an embodiment
@@ -105,7 +105,7 @@ export class PortalClient {
    *
    * @param {string|object} address  position string, stance string, or { position }/{ stance }
    * @param {object} [options]  { live: boolean }
-   * @returns {Promise<object>} Stance Descriptor (one-shot) or initial descriptor (live)
+   * @returns {Promise<object>} Position Description (one-shot) or initial descriptor (live)
    */
   async see(address, options = {}) {
     const field = _toAddressField(address);
@@ -113,19 +113,22 @@ export class PortalClient {
   }
 
   /**
-   * DO: mutate the world at a place.
+   * DO: mutate the world at a position.
    *
-   * Pass `address` as a string (auto-routed to position or stance) or an
-   * explicit { position } / { stance } object. Use stance when the
-   * requester's embodiment matters for authorization; position otherwise.
+   * Accepts a position string. If a string with a trailing @embodiment
+   * qualifier is passed, the qualifier is stripped before sending; DO
+   * always targets a position.
    *
-   * @param {string|object} address  position or stance
-   * @param {string} action          named action (create-child, rename, ...) or set-meta
-   * @param {object} payload         action-specific
+   * @param {string} position  the position address (qualifier stripped if present)
+   * @param {string} action    named action (create-child, rename, ...) or set-meta
+   * @param {object} payload   action-specific
    */
-  async do(address, action, payload = {}) {
-    const field = _toAddressField(address);
-    return this._emitWithAck("portal:do", { ...field, action, payload });
+  async do(position, action, payload = {}) {
+    if (typeof position !== "string" || position.length === 0) {
+      throw new Error("DO requires a position address (string)");
+    }
+    const stripped = position.replace(/@[a-z][a-z0-9-]*$/i, "");
+    return this._emitWithAck("portal:do", { position: stripped, action, payload });
   }
 
   /**
@@ -143,12 +146,20 @@ export class PortalClient {
   /**
    * BE: manage be-er identity.
    *
-   * @param {string} operation  register | claim | release | switch
-   * @param {string} land       the land hostname (no @embodiment)
-   * @param {object} [extra]    operation-specific fields (payload, from, to, ...)
+   * Accepts either a stance (full form, e.g. `<land>/@auth` or a held
+   * stance like `<land>/@<username>`) or a bare land domain (shorthand
+   * for register and credential-based claim). For release and switch,
+   * use the held stance.
+   *
+   * @param {string} operation              register | claim | release | switch
+   * @param {string|object} addressOrField  bare land like "treeos.ai",
+   *                                        a stance like "treeos.ai/@auth",
+   *                                        or { stance } / { land }
+   * @param {object} [extra]                operation-specific fields (payload, from, ...)
    */
-  async be(operation, land, extra = {}) {
-    return this._emitWithAck("portal:be", { operation, land, ...extra });
+  async be(operation, addressOrField, extra = {}) {
+    const addressField = _toBeAddressField(addressOrField);
+    return this._emitWithAck("portal:be", { operation, ...addressField, ...extra });
   }
 
   // ────────────────────────────────────────────────────────────────
@@ -211,4 +222,26 @@ function _toAddressField(address) {
     if ("stance" in address) return { stance: address.stance };
   }
   throw new Error("Portal verb requires a position or stance address");
+}
+
+/**
+ * Route a BE address to its protocol field name. A bare domain (no
+ * slash, no @) becomes `{ land }`; anything with `@` becomes `{ stance }`.
+ * Callers may pass an explicit object to force one or the other.
+ */
+function _toBeAddressField(address) {
+  if (typeof address === "string") {
+    const hasEmbodiment = /@[a-z][a-z0-9-]*$/i.test(address);
+    const looksLikeBareDomain = !address.includes("/") && !address.includes("@");
+    if (hasEmbodiment) return { stance: address };
+    if (looksLikeBareDomain) return { land: address };
+    throw new Error(
+      `BE requires either a bare land domain ("treeos.ai") or a stance with @embodiment ("treeos.ai/@auth"). Got: ${address}`,
+    );
+  }
+  if (address && typeof address === "object") {
+    if ("stance" in address) return { stance: address.stance };
+    if ("land" in address) return { land: address.land };
+  }
+  throw new Error("BE requires a stance or land address");
 }

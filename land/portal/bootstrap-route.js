@@ -1,8 +1,8 @@
-// Portal Protocol HTTP bootstrap.
+// IBP (Inter-Being Protocol) HTTP bootstrap.
 //
 // One HTTP route. The Portal client uses this to discover where to open
-// its WebSocket connection before it has one. Everything else in the
-// Portal Protocol travels over WebSocket.
+// its WebSocket connection before it has one. Everything else in IBP
+// travels over WebSocket.
 //
 // GET /.well-known/treeos-portal → { ws, protocolVersion, land }
 //

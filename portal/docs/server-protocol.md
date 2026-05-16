@@ -1,6 +1,6 @@
-# Server Protocol: Wire-Level Rules
+# Server Protocol: IBP Wire-Level Rules
 
-This document specifies how lands respond to the four portal verbs at the wire level. It is the bridge between the conceptual protocol ([protocol.md](protocol.md)) and the implementation in `land/portal/`.
+This document specifies how lands respond to IBP's four verbs at the wire level. It is the bridge between the conceptual protocol spec ([protocol.md](protocol.md), which defines IBP) and the implementation in `land/portal/`.
 
 Read [protocol.md](protocol.md), [being-summoned.md](being-summoned.md), and [message-envelope.md](message-envelope.md) first.
 
@@ -58,14 +58,14 @@ Common envelope:
 }
 ```
 
-Each verb names its address field explicitly:
+Each verb names its address field explicitly. The four verbs partition cleanly: SEE observes, DO mutates, TALK engages a being, BE acts on the requester's own identity.
 
-| Verb | Field | Required form |
+| Verb | Field | Why |
 |---|---|---|
-| SEE | `position` OR `stance` | exactly one; position when no embodiment qualifier needed, stance when descriptor augmentation by embodiment matters |
-| DO | `position` OR `stance` | exactly one; same rule as SEE, stance carries requester's role for authorization |
-| TALK | `stance` | required, embodiment qualifier mandatory |
-| BE | `land` | required, just the land hostname |
+| SEE | `position` OR `stance` | Observation works at either tier: position-level (what's here?) or embodiment-specific view (what does this being see here?). |
+| DO | `position` only | The world is data at positions; embodiments are not data targets. Mutations always land at a position. |
+| TALK | `stance` only | Beings live as stances (embodiment-at-position). Engagement requires both. Inboxes are per-being-per-position. |
+| BE | `stance` only | Self-identity operations target stances. For fresh registration, the stance is the land's auth-being. |
 
 No generic `address` field. The field name tells the reader what the verb requires. None of these are Portal Addresses (the bridged `stance :: stance` form); they are the target side of an implicit relationship. The requester side is established by the identity token.
 
@@ -77,7 +77,7 @@ Verb-specific fields:
 
 **TALK**: `message: { from, content, intent, correlation, inReplyTo?, attachments?, sentAt? }` (server sets sentAt if missing)
 
-**BE**: `operation: "register" | "claim" | "release" | "switch", target, payload?, from?, to?`
+**BE**: `operation: "register" | "claim" | "release" | "switch", payload?, from?, to?`
 
 ## Response shape
 
@@ -91,7 +91,7 @@ Successful ack:
 }
 ```
 
-For SEE one-shot: `data` is the Stance Descriptor.
+For SEE one-shot: `data` is the Position Description.
 For SEE live: the initial `data` is the descriptor; subsequent frames arrive as separate emits.
 For DO: `data` is action-specific (often `{ written: true }` or `{ nodeId, address }`).
 For TALK sync: `data` is the response message envelope.
@@ -121,7 +121,7 @@ Error codes are listed in [protocol.md](protocol.md).
 ```
 client emits portal:see { id, position: "<position>", identity?, live: false (or omitted) }
        OR  portal:see { id, stance:   "<stance>",   identity?, live: false (or omitted) }
-land responds with ack { id, status: "ok", data: <Stance Descriptor> }
+land responds with ack { id, status: "ok", data: <Position Description> }
 ```
 
 Exactly one of `position` or `stance` must be present. `identity` is required except for explicitly anonymous-accessible places (the `.discovery` position at a land, public-visibility land zones).
@@ -130,7 +130,7 @@ Exactly one of `position` or `stance` must be present. `identity` is required ex
 
 ```
 client emits portal:see { id, position OR stance, identity, live: true }
-land responds with ack { id, status: "ok", data: <initial Stance Descriptor> }
+land responds with ack { id, status: "ok", data: <initial Position Description> }
 land emits portal:patch frames (any number, any time):
   { id, op: "patch", patch: [<RFC 6902 patches>] }
   { id, op: "replace", descriptor: <full descriptor> }
@@ -158,23 +158,24 @@ The land checks for each SEE:
 ## DO wire rules
 
 ```
-client emits portal:do { id, action, position OR stance, identity, payload }
+client emits portal:do { id, action, position: "<position>", identity, payload }
 land responds with ack { id, status: "ok", data: <action-specific> }
 ```
 
-Exactly one of `position` or `stance` must be present. Sequential per identity: the land may serialize DOs from the same identity to avoid races on the same node. The protocol does not require strict ordering across identities.
+`position` is the only address field. There is no `stance` form. Sequential per identity: the land may serialize DOs from the same identity to avoid races on the same node. The protocol does not require strict ordering across identities.
 
 ### Validation chain
 
-1. Address field parse + resolve (`ADDRESS_PARSE_ERROR` or `NODE_NOT_FOUND`).
-2. Identity check (`UNAUTHORIZED` if missing or invalid).
-3. Address-level authorization (`FORBIDDEN` if not authorized at this position).
-4. Action-level authorization (some actions need `isAdmin`; if `stance` field is present, the embodiment is checked against the action).
-5. Payload schema validation per action (`INVALID_INPUT` if mismatch).
-6. Pre-hooks (`beforeNodeCreate`, etc.) fire and may cancel.
-7. The mutation executes.
-8. Post-hooks fire.
-9. Live SEE subscribers receive descriptor patches for the affected place(s).
+1. `position` present and parseable (`INVALID_INPUT` or `ADDRESS_PARSE_ERROR`).
+2. `position` resolves to a known place (`NODE_NOT_FOUND` if not).
+3. Identity check (`UNAUTHORIZED` if missing or invalid).
+4. Address-level authorization (`FORBIDDEN` if not authorized at this position). The kernel reads the requester's role from the identity token (not from the address).
+5. Action-level authorization (some actions need `isAdmin`).
+6. Payload schema validation per action (`INVALID_INPUT` if mismatch).
+7. Pre-hooks (`beforeNodeCreate`, etc.) fire and may cancel.
+8. The mutation executes.
+9. Post-hooks fire.
+10. Live SEE subscribers receive descriptor patches for the affected place(s).
 
 ### Multi-step payloads
 
@@ -265,18 +266,21 @@ This means cascade arrivals are indistinguishable from user TALKs at the protoco
 ## BE wire rules
 
 ```
-client emits portal:be { id, operation, land, payload?, identity?, from?, to? }
+client emits portal:be { id, operation, stance: "<stance>", payload?, identity?, from? }
 ```
 
-The land's BE handler dispatches to the auth-being at the named land. The auth-being is implicit; the verb knows where to dispatch.
+`stance` is the only address field. For fresh registration, the stance is the land's auth-being (typically `<land>/@auth`). The land's BE handler dispatches to the auth-being at the named stance's land.
 
 ### Validation chain
 
 1. `operation` is one of the four. `INVALID_INPUT` if not.
-2. `land` is present and resolves to a known land (the running server's own land in Pass 1). `INVALID_INPUT` if not.
-3. For register/claim: identity is optional/absent.
-4. For release/switch: identity is required.
-5. Auth-being processes the operation per its embodiment's policy.
+2. `stance` is present and qualified. `INVALID_INPUT` if missing or unqualified.
+3. The stance's land is this server (Pass 1: no federated BE yet).
+4. Identity requirement varies:
+   - `register` or credential-based `claim` (stance is auth-being, payload has credentials): identity may be absent.
+   - Token-based `claim` (stance is a held being, identity carries the still-valid token): identity required.
+   - `release` and `switch`: identity required.
+5. The auth-being at the stance's land processes the operation per its embodiment's policy.
 6. Land returns the operation-specific response.
 
 ### Atomicity
@@ -342,7 +346,7 @@ The legacy `land/routes/api/*` HTTP routes continue serving traffic during migra
 Each extension migrates its routes in its own pass. When an extension is migrated:
 - Its existing HTTP routes are retired.
 - Its mutations move to `do set-meta` against its namespace.
-- Its reads move into the Stance Descriptor or are SEE-fetchable as artifacts.
+- Its reads move into the Position Description or are SEE-fetchable as artifacts.
 - Its tools (for AI use) keep using the existing tool registry; tools are not protocol verbs.
 
 The legacy WS chat handler (`land/seed/ws/websocket.js`) keeps running until TALK is proven and the migration completes. There may be a transition window where both chat handlers run; clients use the new one.
@@ -366,7 +370,7 @@ Shared utilities:
 
 - `land/portal/address.js` PA parser + server-context injection (existing)
 - `land/portal/resolver.js` PA to position resolution (existing, internal only)
-- `land/portal/descriptor.js` Stance Descriptor builder (existing, extended)
+- `land/portal/descriptor.js` Position Description builder (existing, extended)
 - `land/portal/inbox.js` inbox kernel helpers (new)
 - `land/portal/errors.js` PortalError + error codes (existing, extended)
 - `land/portal/actions/` one file per kernel-named DO action (new)
@@ -398,5 +402,5 @@ This pass is `1.0`. Federation extends to `1.1` when Canopy details land.
 - [inbox.md](inbox.md) inbox model
 - [do-actions.md](do-actions.md) DO action catalog
 - [be-operations.md](be-operations.md) identity bootstrap
-- [stance-descriptor.md](stance-descriptor.md) SEE response shape
+- [position-description.md](position-description.md) SEE response shape
 - [portal-address.md](portal-address.md) PA grammar

@@ -34,7 +34,9 @@ const STATIC_ROUTES = [
   "/kernel",
   "/cascade",
   "/swarm",
-  "/portal",
+  "/ibp",
+  "/ibp/arrival",
+  "/ibp/authorization",
   "/extensions",
   "/flow",
   "/network",
@@ -100,9 +102,17 @@ const PAGE_META = {
     title: "Swarm . The Parallel Execution Engine",
     description: "Swarm runs governing's plans in parallel. It dispatches branch steps as their own sessions, tracks status, retries failures, surfaces sibling state, and resumes interrupted work across sessions. Mechanism, not policy. Governing decides what gets done; swarm does the doing in parallel. Tree authoritative.",
   },
-  "/portal": {
-    title: "Portal Protocol . A Sibling to the World Wide Web",
-    description: "HTTP/URL/WWW gave the world the Web of documents. Portal gives it the Web of beings. Portal Addresses, four verbs (SEE/DO/TALK/BE), Stance Descriptors. The protocol layer for identity-first interaction with sovereign AI on TreeOS lands.",
+  "/ibp": {
+    title: "IBP . Inter-Being Protocol . Sibling to the World Wide Web",
+    description: "HTTP/URL/WWW gave the world the Web of documents. IBP, the Inter-Being Protocol, gives it the Web of beings. Portal Addresses, four verbs (SEE/DO/TALK/BE), Position Descriptors. The protocol layer for identity-first interaction with sovereign AI on TreeOS lands. The Portal is its browser.",
+  },
+  "/ibp/arrival": {
+    title: "The arrival stance . IBP",
+    description: "Every IBP-speaking land runs an arrival stance for visitors who haven't yet registered or claimed. Its permissions are configurable per land. One configuration surface covers the full spectrum from a fully closed personal land to a fully open public space. A regular stance, not a protocol special case.",
+  },
+  "/ibp/authorization": {
+    title: "Portal Authorization . IBP",
+    description: "The kernel function that decides what one stance can do toward another stance through a portal connection. One function, four inputs, allow-or-deny output. Every verb call from every stance at every position flows through it. The layer that makes the protocol's stance commitment real at the kernel level.",
   },
   "/flow": {
     title: "The Flow . How Data Moves Through the System",

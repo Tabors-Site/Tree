@@ -630,3 +630,1434 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── IBP stacks (WWW vs IBP) ─────────────────────────────────── */
+
+.lp-gov .ibp-stacks {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 24px;
+  align-items: stretch;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.lp-gov .ibp-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 22px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.lp-gov .ibp-stack-www {
+  border-color: rgba(96, 165, 250, 0.25);
+  background: rgba(96, 165, 250, 0.04);
+}
+
+.lp-gov .ibp-stack-ibp {
+  border-color: rgba(74, 222, 128, 0.3);
+  background: rgba(74, 222, 128, 0.04);
+}
+
+.lp-gov .ibp-stack-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  letter-spacing: 0.2px;
+}
+
+.lp-gov .ibp-stack-www .ibp-stack-title { color: #60a5fa; }
+.lp-gov .ibp-stack-ibp .ibp-stack-title { color: #4ade80; }
+
+.lp-gov .ibp-stack-layer {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  padding: 11px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lp-gov .ibp-stack-www .ibp-stack-layer {
+  border-color: rgba(96, 165, 250, 0.22);
+  background: rgba(96, 165, 250, 0.06);
+}
+
+.lp-gov .ibp-stack-ibp .ibp-stack-layer {
+  border-color: rgba(74, 222, 128, 0.22);
+  background: rgba(74, 222, 128, 0.06);
+}
+
+.lp-gov .ibp-stack-layer strong {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.lp-gov .ibp-stack-www .ibp-stack-layer strong { color: #bfdbfe; }
+.lp-gov .ibp-stack-ibp .ibp-stack-layer strong { color: #bbf7d0; }
+
+.lp-gov .ibp-stack-layer span {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.lp-gov .ibp-stacks-bridge {
+  align-self: center;
+  font-size: 13px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 0 8px;
+}
+
+.lp-gov .ibp-stacks-base {
+  max-width: 920px;
+  margin: 24px auto 0;
+  padding: 14px 22px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.4px;
+}
+
+@media (max-width: 760px) {
+  .lp-gov .ibp-stacks {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .lp-gov .ibp-stacks-bridge {
+    text-align: center;
+    padding: 4px 0;
+  }
+}
+
+/* ── Portal Address anatomy ──────────────────────────────────── */
+
+.lp-gov .ibp-addr {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.lp-gov .ibp-addr-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 22px 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.3);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  margin-bottom: 16px;
+}
+
+.lp-gov .ibp-addr-left   { color: #fde68a; }
+.lp-gov .ibp-addr-bridge { color: rgba(255, 255, 255, 0.4); padding: 0 8px; }
+.lp-gov .ibp-addr-land   { color: #4ade80; }
+.lp-gov .ibp-addr-path   { color: #60a5fa; }
+.lp-gov .ibp-addr-emb    { color: #c084fc; }
+
+.lp-gov .ibp-addr-stance-labels {
+  display: grid;
+  grid-template-columns: 1fr auto 2fr;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.lp-gov .ibp-addr-stance-label {
+  padding: 14px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+  text-align: center;
+}
+
+.lp-gov .ibp-addr-stance-left   { border-color: rgba(253, 230, 138, 0.3); background: rgba(253, 230, 138, 0.04); }
+.lp-gov .ibp-addr-stance-bridge { border-color: rgba(255, 255, 255, 0.12); }
+.lp-gov .ibp-addr-stance-right  { border-color: rgba(96, 165, 250, 0.3); background: rgba(96, 165, 250, 0.04); }
+
+.lp-gov .ibp-addr-stance-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.lp-gov .ibp-addr-stance-left .ibp-addr-stance-name  { color: #fde68a; }
+.lp-gov .ibp-addr-stance-right .ibp-addr-stance-name { color: #93c5fd; }
+.lp-gov .ibp-addr-stance-bridge .ibp-addr-stance-name { color: rgba(255, 255, 255, 0.7); }
+
+.lp-gov .ibp-addr-stance-desc {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 2px;
+}
+
+.lp-gov .ibp-addr-stance-desc code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.lp-gov .ibp-addr-stance-note {
+  font-size: 11.5px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.lp-gov .ibp-addr-parts {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
+
+.lp-gov .ibp-addr-part {
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.025);
+  text-align: center;
+}
+
+.lp-gov .ibp-addr-part-land { border-color: rgba(74, 222, 128, 0.3); background: rgba(74, 222, 128, 0.04); }
+.lp-gov .ibp-addr-part-path { border-color: rgba(96, 165, 250, 0.3); background: rgba(96, 165, 250, 0.04); }
+.lp-gov .ibp-addr-part-emb  { border-color: rgba(192, 132, 252, 0.3); background: rgba(192, 132, 252, 0.04); }
+
+.lp-gov .ibp-addr-part-head {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.lp-gov .ibp-addr-part-land .ibp-addr-part-head { color: #bbf7d0; }
+.lp-gov .ibp-addr-part-path .ibp-addr-part-head { color: #bfdbfe; }
+.lp-gov .ibp-addr-part-emb .ibp-addr-part-head  { color: #e9d5ff; }
+
+.lp-gov .ibp-addr-part-code {
+  display: inline-block;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  margin-bottom: 6px;
+}
+
+.lp-gov .ibp-addr-part-land .ibp-addr-part-code { color: #4ade80; }
+.lp-gov .ibp-addr-part-path .ibp-addr-part-code { color: #60a5fa; }
+.lp-gov .ibp-addr-part-emb .ibp-addr-part-code  { color: #c084fc; }
+
+.lp-gov .ibp-addr-part-note {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+@media (max-width: 780px) {
+  .lp-gov .ibp-addr-bar {
+    font-size: 16px;
+    padding: 18px 16px;
+  }
+  .lp-gov .ibp-addr-stance-labels,
+  .lp-gov .ibp-addr-parts {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Verb comparison (HTTP → IBP) ─────────────────────────────── */
+
+.lp-gov .ibp-verbs {
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lp-gov .ibp-verbs-head {
+  display: grid;
+  grid-template-columns: 1fr 60px 1fr;
+  gap: 14px;
+  padding: 0 4px 6px;
+}
+
+.lp-gov .ibp-verbs-head-http {
+  font-size: 14px;
+  font-weight: 700;
+  color: #60a5fa;
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+.lp-gov .ibp-verbs-head-ibp {
+  font-size: 14px;
+  font-weight: 700;
+  color: #4ade80;
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+.lp-gov .ibp-verb-row {
+  display: grid;
+  grid-template-columns: 1fr 60px 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.lp-gov .ibp-verb-http,
+.lp-gov .ibp-verb-ibp {
+  padding: 14px 18px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lp-gov .ibp-verb-http {
+  background: rgba(96, 165, 250, 0.05);
+  border-color: rgba(96, 165, 250, 0.25);
+}
+
+.lp-gov .ibp-verb-ibp {
+  background: rgba(74, 222, 128, 0.06);
+  border-color: rgba(74, 222, 128, 0.32);
+}
+
+.lp-gov .ibp-verb-http strong {
+  color: #bfdbfe;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.lp-gov .ibp-verb-ibp strong {
+  color: #bbf7d0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.lp-gov .ibp-verb-http span,
+.lp-gov .ibp-verb-ibp span {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.lp-gov .ibp-verb-arrow {
+  align-self: center;
+  text-align: center;
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 300;
+}
+
+@media (max-width: 720px) {
+  .lp-gov .ibp-verbs-head,
+  .lp-gov .ibp-verb-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .lp-gov .ibp-verb-arrow {
+    transform: rotate(90deg);
+    font-size: 18px;
+    padding: 2px 0;
+  }
+  .lp-gov .ibp-verbs-head-http,
+  .lp-gov .ibp-verbs-head-ibp {
+    text-align: left;
+    padding: 0 4px;
+  }
+}
+
+/* ── Positions are the unit of persistence ──────────────────── */
+
+.lp-gov .ibp-persist {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 18px;
+}
+
+.lp-gov .ibp-persist-card {
+  padding: 22px 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.lp-gov .ibp-persist-position {
+  border-color: rgba(96, 165, 250, 0.3);
+  background: rgba(96, 165, 250, 0.04);
+}
+
+.lp-gov .ibp-persist-embodiment {
+  border-color: rgba(192, 132, 252, 0.3);
+  background: rgba(192, 132, 252, 0.04);
+}
+
+.lp-gov .ibp-persist-head {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  margin-bottom: 12px;
+}
+
+.lp-gov .ibp-persist-position .ibp-persist-head { color: #bfdbfe; }
+.lp-gov .ibp-persist-embodiment .ibp-persist-head { color: #e9d5ff; }
+
+.lp-gov .ibp-persist-desc {
+  margin: 0 0 12px 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.lp-gov .ibp-persist-desc code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.lp-gov .ibp-persist-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lp-gov .ibp-persist-list li {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.75);
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.lp-gov .ibp-persist-list li strong {
+  color: #bfdbfe;
+  font-weight: 600;
+}
+
+.lp-gov .ibp-persist-list li code {
+  background: rgba(255, 255, 255, 0.07);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12.5px;
+}
+
+@media (max-width: 800px) {
+  .lp-gov .ibp-persist {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Verb scope table (Accepts / Scope) ──────────────────────── */
+
+.lp-gov .ibp-shape {
+  max-width: 880px;
+  margin: 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.lp-gov .ibp-shape-row {
+  display: grid;
+  grid-template-columns: 120px 200px 1fr;
+  gap: 14px;
+  padding: 14px 18px;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.lp-gov .ibp-shape-row:last-child {
+  border-bottom: none;
+}
+
+.lp-gov .ibp-shape-head {
+  background: rgba(74, 222, 128, 0.05);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.lp-gov .ibp-shape-verb {
+  font-size: 15px;
+  font-weight: 700;
+  color: #bbf7d0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.lp-gov .ibp-shape-accepts {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.lp-gov .ibp-shape-accepts code {
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  color: #bfdbfe;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lp-gov .ibp-shape-scope {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .lp-gov .ibp-shape-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 14px 16px;
+  }
+  .lp-gov .ibp-shape-head {
+    display: none;
+  }
+  .lp-gov .ibp-shape-accepts::before {
+    content: "Accepts: ";
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 12px;
+  }
+  .lp-gov .ibp-shape-scope::before {
+    content: "Scope: ";
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 12px;
+  }
+}
+
+/* ── Data and Beings: the categorical line ──────────────────── */
+
+.lp-gov .ibp-categorical {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 8px;
+}
+
+.lp-gov .ibp-categorical-col {
+  padding: 22px 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.lp-gov .ibp-categorical-can {
+  border-color: rgba(74, 222, 128, 0.3);
+  background: rgba(74, 222, 128, 0.04);
+}
+
+.lp-gov .ibp-categorical-cannot {
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.04);
+}
+
+.lp-gov .ibp-categorical-head {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lp-gov .ibp-categorical-can .ibp-categorical-head { color: #bbf7d0; }
+.lp-gov .ibp-categorical-cannot .ibp-categorical-head { color: #fecaca; }
+
+.lp-gov .ibp-categorical-col ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lp-gov .ibp-categorical-col li {
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.78);
+  padding-left: 22px;
+  position: relative;
+}
+
+.lp-gov .ibp-categorical-can li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #4ade80;
+  font-weight: 700;
+}
+
+.lp-gov .ibp-categorical-cannot li::before {
+  content: "✕";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #f87171;
+  font-weight: 700;
+}
+
+.lp-gov .ibp-categorical-col li strong {
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .lp-gov .ibp-categorical {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Addressable vs structural category labels ──────────────── */
+
+.lp-gov .ibp-cat-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.lp-gov .ibp-cat-label-target {
+  background: rgba(74, 222, 128, 0.1);
+  color: #bbf7d0;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.lp-gov .ibp-cat-label-struct {
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.lp-gov .ibp-step-struct {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  font-size: 20px !important;
+  line-height: 1 !important;
+}
+
+/* ── Land's dual nature (domain vs root position) ─────────── */
+
+.lp-gov .ibp-land-dual {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.lp-gov .ibp-land-form {
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lp-gov .ibp-land-syntax {
+  display: inline-block;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  color: #bfdbfe;
+  margin-bottom: 8px;
+}
+
+.lp-gov .ibp-land-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 4px;
+  letter-spacing: 0.2px;
+}
+
+.lp-gov .ibp-land-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.lp-gov .ibp-land-body code {
+  background: rgba(255, 255, 255, 0.07);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .lp-gov .ibp-land-dual {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Address grammar table ────────────────────────────────── */
+
+.lp-gov .ibp-grammar {
+  max-width: 800px;
+  margin: 36px auto 0;
+  padding: 22px 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(74, 222, 128, 0.22);
+  background: rgba(74, 222, 128, 0.03);
+}
+
+.lp-gov .ibp-grammar-head {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #bbf7d0;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(74, 222, 128, 0.18);
+}
+
+.lp-gov .ibp-grammar-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lp-gov .ibp-grammar-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 2fr;
+  gap: 16px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.lp-gov .ibp-grammar-row:last-child {
+  border-bottom: none;
+}
+
+.lp-gov .ibp-grammar-form {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: #bfdbfe;
+  padding: 4px 10px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  display: inline-block;
+  width: fit-content;
+}
+
+.lp-gov .ibp-grammar-meaning {
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+}
+
+@media (max-width: 700px) {
+  .lp-gov .ibp-grammar-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+
+/* ── Auth-being section ──────────────────────────────────── */
+
+.lp-gov .ibp-auth-addr {
+  text-align: center;
+  margin: 0 auto 28px;
+  padding: 18px 22px;
+  max-width: 600px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(192, 132, 252, 0.25);
+}
+
+.lp-gov .ibp-auth-addr-code {
+  display: inline-block;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  margin-bottom: 8px;
+}
+
+.lp-gov .ibp-auth-addr-note {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.lp-gov .ibp-auth-addr-note code {
+  background: rgba(255, 255, 255, 0.07);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.lp-gov .ibp-auth-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 18px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.lp-gov .ibp-auth-card {
+  padding: 22px 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(192, 132, 252, 0.22);
+  background: rgba(192, 132, 252, 0.04);
+}
+
+.lp-gov .ibp-auth-head {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #e9d5ff;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(192, 132, 252, 0.18);
+}
+
+.lp-gov .ibp-auth-card p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0;
+}
+
+.lp-gov .ibp-auth-card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lp-gov .ibp-auth-card ul li {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.78);
+  padding-left: 16px;
+  position: relative;
+}
+
+.lp-gov .ibp-auth-card ul li::before {
+  content: "·";
+  position: absolute;
+  left: 0;
+  top: -2px;
+  color: #c084fc;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.lp-gov .ibp-auth-card ul li strong {
+  color: #e9d5ff;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (max-width: 800px) {
+  .lp-gov .ibp-auth-grid {
+    grid-template-columns: 1fr;
+  }
+  .lp-gov .ibp-auth-addr-code {
+    font-size: 18px;
+  }
+}
+
+/* ── Arrival page: bootstrap rules ────────────────────────── */
+
+.lp-gov .ibp-arrival-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.lp-gov .ibp-arrival-rule {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 18px;
+  align-items: start;
+  padding: 18px 22px;
+  border-radius: 12px;
+  background: rgba(74, 222, 128, 0.04);
+  border: 1px solid rgba(74, 222, 128, 0.22);
+}
+
+.lp-gov .ibp-arrival-rule-num {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #4ade80;
+  color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.lp-gov .ibp-arrival-rule-body {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.lp-gov .ibp-arrival-rule-body strong {
+  color: #bbf7d0;
+  font-weight: 700;
+}
+
+/* ── Arrival page: configuration spectrum ─────────────────── */
+
+.lp-gov .ibp-spectrum {
+  max-width: 1000px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lp-gov .ibp-spectrum-row {
+  display: grid;
+  grid-template-columns: 100px 240px 1fr;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  align-items: start;
+}
+
+.lp-gov .ibp-spectrum-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 5px;
+  text-align: center;
+  align-self: start;
+}
+
+.lp-gov .ibp-spectrum-label-closed {
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.lp-gov .ibp-spectrum-label-mid {
+  background: rgba(253, 230, 138, 0.12);
+  color: #fde68a;
+  border: 1px solid rgba(253, 230, 138, 0.3);
+}
+
+.lp-gov .ibp-spectrum-label-open {
+  background: rgba(74, 222, 128, 0.12);
+  color: #bbf7d0;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.lp-gov .ibp-spectrum-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: 0.2px;
+}
+
+.lp-gov .ibp-spectrum-desc {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+@media (max-width: 800px) {
+  .lp-gov .ibp-spectrum-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .lp-gov .ibp-spectrum-label {
+    justify-self: start;
+  }
+}
+
+/* ── Arrival page: deployment templates ──────────────────── */
+
+.lp-gov .ibp-templates {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.lp-gov .ibp-template {
+  padding: 22px 22px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lp-gov .ibp-template-closed { border-color: rgba(248, 113, 113, 0.28); background: rgba(248, 113, 113, 0.04); }
+.lp-gov .ibp-template-mid    { border-color: rgba(253, 230, 138, 0.3); background: rgba(253, 230, 138, 0.04); }
+.lp-gov .ibp-template-open   { border-color: rgba(74, 222, 128, 0.3); background: rgba(74, 222, 128, 0.04); }
+
+.lp-gov .ibp-template-head {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lp-gov .ibp-template-closed .ibp-template-head { color: #fecaca; }
+.lp-gov .ibp-template-mid .ibp-template-head    { color: #fde68a; }
+.lp-gov .ibp-template-open .ibp-template-head   { color: #bbf7d0; }
+
+.lp-gov .ibp-template-line {
+  font-size: 13px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  color: rgba(255, 255, 255, 0.72);
+  padding: 3px 0;
+}
+
+.lp-gov .ibp-template-desc {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+@media (max-width: 800px) {
+  .lp-gov .ibp-templates {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Link from /ibp auth-being section into /ibp/arrival ──── */
+
+.lp-gov .ibp-auth-link {
+  margin: 28px auto 0;
+  max-width: 800px;
+  padding: 16px 22px;
+  border-radius: 12px;
+  background: rgba(74, 222, 128, 0.05);
+  border: 1px solid rgba(74, 222, 128, 0.22);
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.lp-gov .ibp-auth-link strong {
+  color: #bbf7d0;
+  font-weight: 700;
+}
+
+.lp-gov .ibp-auth-link a {
+  color: #4ade80;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(74, 222, 128, 0.35);
+  white-space: nowrap;
+}
+
+.lp-gov .ibp-auth-link a:hover {
+  border-bottom-color: #4ade80;
+}
+
+/* ── Authorization page: four inputs ─────────────────────── */
+
+.lp-gov .ibp-auth-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.lp-gov .ibp-auth-input {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 14px;
+  padding: 20px 22px;
+  border-radius: 12px;
+  background: rgba(96, 165, 250, 0.04);
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  align-items: start;
+}
+
+.lp-gov .ibp-auth-input-num {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #60a5fa;
+  color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.lp-gov .ibp-auth-input-head {
+  font-size: 15px;
+  font-weight: 700;
+  color: #bfdbfe;
+  margin-bottom: 4px;
+}
+
+.lp-gov .ibp-auth-input-source {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 8px;
+  font-style: italic;
+}
+
+.lp-gov .ibp-auth-input-body p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.lp-gov .ibp-auth-input-body p code {
+  background: rgba(255, 255, 255, 0.07);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12.5px;
+}
+
+@media (max-width: 800px) {
+  .lp-gov .ibp-auth-inputs {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Authorization page: what it makes real ──────────────── */
+
+.lp-gov .ibp-real-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.lp-gov .ibp-real-card {
+  padding: 22px 24px;
+  border-radius: 14px;
+  background: rgba(74, 222, 128, 0.04);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+}
+
+.lp-gov .ibp-real-head {
+  font-size: 16px;
+  font-weight: 700;
+  color: #bbf7d0;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(74, 222, 128, 0.18);
+}
+
+.lp-gov .ibp-real-card p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+@media (max-width: 800px) {
+  .lp-gov .ibp-real-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Authorization page: federation pattern cards ────────── */
+
+.lp-gov .ibp-fed-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.lp-gov .ibp-fed-card {
+  padding: 22px 22px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lp-gov .ibp-fed-head {
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lp-gov .ibp-fed-card p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.7);
+  flex-grow: 1;
+}
+
+.lp-gov .ibp-fed-status {
+  margin-top: 8px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  background: rgba(96, 165, 250, 0.1);
+  color: #bfdbfe;
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  display: inline-block;
+  align-self: flex-start;
+}
+
+@media (max-width: 880px) {
+  .lp-gov .ibp-fed-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Phase badges (Phase 5 / Phase 7) ────────────────────── */
+
+.lp-gov .ibp-phase-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 5px 11px;
+  border-radius: 5px;
+  margin-bottom: 14px;
+}
+
+.lp-gov .ibp-phase-badge-now {
+  background: rgba(74, 222, 128, 0.12);
+  color: #bbf7d0;
+  border: 1px solid rgba(74, 222, 128, 0.32);
+}
+
+.lp-gov .ibp-spectrum-phase {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.lp-gov .ibp-spectrum-phase-now {
+  background: rgba(74, 222, 128, 0.1);
+  color: #bbf7d0;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.lp-gov .ibp-spectrum-phase-soon {
+  background: rgba(253, 230, 138, 0.1);
+  color: #fde68a;
+  border: 1px solid rgba(253, 230, 138, 0.3);
+}
+
+.lp-gov .ibp-spectrum-phase-later {
+  background: rgba(96, 165, 250, 0.1);
+  color: #bfdbfe;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+}
+
+/* ── Roadmap columns ─────────────────────────────────────── */
+
+.lp-gov .ibp-roadmap {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.lp-gov .ibp-roadmap-col {
+  padding: 22px 22px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lp-gov .ibp-roadmap-now   { border-color: rgba(74, 222, 128, 0.3); background: rgba(74, 222, 128, 0.04); }
+.lp-gov .ibp-roadmap-soon  { border-color: rgba(253, 230, 138, 0.3); background: rgba(253, 230, 138, 0.04); }
+.lp-gov .ibp-roadmap-later { border-color: rgba(96, 165, 250, 0.3); background: rgba(96, 165, 250, 0.04); }
+
+.lp-gov .ibp-roadmap-head {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lp-gov .ibp-roadmap-now .ibp-roadmap-head   { color: #bbf7d0; }
+.lp-gov .ibp-roadmap-soon .ibp-roadmap-head  { color: #fde68a; }
+.lp-gov .ibp-roadmap-later .ibp-roadmap-head { color: #bfdbfe; }
+
+.lp-gov .ibp-roadmap-col ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lp-gov .ibp-roadmap-col li {
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.75);
+  padding-left: 16px;
+  position: relative;
+}
+
+.lp-gov .ibp-roadmap-col li::before {
+  content: "·";
+  position: absolute;
+  left: 0;
+  top: -2px;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.lp-gov .ibp-roadmap-now li::before   { color: #4ade80; }
+.lp-gov .ibp-roadmap-soon li::before  { color: #fde68a; }
+.lp-gov .ibp-roadmap-later li::before { color: #60a5fa; }
+
+.lp-gov .ibp-roadmap-col li strong {
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 700;
+}
+
+.lp-gov .ibp-roadmap-col li code {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .lp-gov .ibp-roadmap {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Two-case cards (no token / token present) ────────────── */
+
+.lp-gov .ibp-cases {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.lp-gov .ibp-case {
+  padding: 22px 24px;
+  border-radius: 14px;
+}
+
+.lp-gov .ibp-case-arrival {
+  background: rgba(253, 230, 138, 0.04);
+  border: 1px solid rgba(253, 230, 138, 0.28);
+}
+
+.lp-gov .ibp-case-identified {
+  background: rgba(96, 165, 250, 0.04);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+}
+
+.lp-gov .ibp-case-head {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lp-gov .ibp-case-arrival .ibp-case-head    { color: #fde68a; }
+.lp-gov .ibp-case-identified .ibp-case-head { color: #bfdbfe; }
+
+.lp-gov .ibp-case p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.lp-gov .ibp-case p code {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12.5px;
+}
+
+.lp-gov .ibp-case p strong {
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 700;
+}
+
+@media (max-width: 800px) {
+  .lp-gov .ibp-cases {
+    grid-template-columns: 1fr;
+  }
+}

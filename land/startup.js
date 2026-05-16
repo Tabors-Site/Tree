@@ -39,6 +39,12 @@ export function onListen() {
     await ensureLandRoot();
     await initLandConfig();
 
+    // Seed default stance permissions (arrival, owner) and BE config flags
+    // on the land root if not already present. Idempotent; does not
+    // overwrite operator configuration.
+    const { seedDefaultStancePermissions } = await import("./portal/authorize.js");
+    await seedDefaultStancePermissions();
+
     // Run seed migrations (after config is loaded, before extensions)
     const { runSeedMigrations } = await import("./seed/migrations/runner.js");
     await runSeedMigrations();

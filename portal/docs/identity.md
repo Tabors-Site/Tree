@@ -1,6 +1,6 @@
 # Identity-first session model
 
-The TreeOS Portal cannot be opened anonymously. Every session begins **signed in as a being at a land**. Identity is the root of every action; without it, no Portal Address can form.
+IBP (the Inter-Being Protocol) cannot be opened anonymously. Every Portal session begins **signed in as a being at a land**. Identity is the root of every action; without it, no Portal Address can form, no IBP verb (SEE/DO/TALK) can fire.
 
 This document defines what a being is, how identity flows, and what's deferred to future passes.
 
@@ -51,7 +51,7 @@ The land looks at the `@<label>` and the position:
 - Label matches a known embodiment kind invocable at this position → AI being.
 - Both could in principle match — the label-namespace is shared — but in practice usernames and embodiment kinds occupy disjoint namespaces (usernames are user-picked; embodiment kinds come from the extension manifest).
 
-The Stance Descriptor's `beings[]` field tells the portal which kind each invocable label resolves to.
+The Position Description's `beings[]` field tells the portal which kind each invocable label resolves to.
 
 ### A bridge connects two beings
 

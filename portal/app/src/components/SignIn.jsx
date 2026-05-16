@@ -1,25 +1,23 @@
 import React, { useState } from "react";
+import { PortalClient } from "../portal-client.js";
 
 /**
  * Sign-in screen.
  *
- * Pass 1 flow:
- *   1. User enters land URL + username + password.
- *   2. POST {landUrl}/api/v1/login → returns { token, userId, username }.
- *   3. Caller (App) stores the token + opens a Portal socket.
- *
- * Dev mode (Vite): if the land URL points at localhost (default), we issue
- * the login as a relative URL ("/api/v1/login") so Vite's proxy handles it.
- * That avoids CORS preflight issues during dev. In a built bundle, the
- * URL stays absolute.
- *
- * Pass 5 (federation) will add: pick from roster, federated sign-in,
- * cross-land bridge.
+ * Phase 5 flow (BE):
+ *   1. User enters land URL + username + password (and chooses register or claim).
+ *   2. PortalClient.bootstrap(landUrl) → { ws, protocolVersion, land }.
+ *   3. Open a temporary, unauthenticated PortalClient socket.
+ *   4. portal:be { operation: "claim" | "register", land: "<land>", payload }
+ *      → { identityToken, beingAddress }.
+ *   5. Disconnect the temporary socket; hand the token up to App, which
+ *      opens a real authenticated PortalClient.
  */
 export default function SignIn({ onSignedIn }) {
   const [landUrl, setLandUrl] = useState("http://localhost:3000");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [mode, setMode] = useState("claim"); // "claim" or "register"
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -27,50 +25,52 @@ export default function SignIn({ onSignedIn }) {
     e.preventDefault();
     setError(null);
     setLoading(true);
+
+    let bootstrapClient = null;
     try {
       const cleaned = landUrl.replace(/\/+$/, "");
-
-      // The Land server's CORS now allows any localhost origin in dev mode,
-      // so we hit the typed URL directly. The Vite proxy stays available
-      // as an opt-in (set VITE_PORTAL_USE_PROXY=true in .env to force
-      // routing through Vite, useful for testing against a non-CORS-
-      // configured land like production treeos.ai).
       const useProxy = import.meta.env?.VITE_PORTAL_USE_PROXY === "true";
-      const loginUrl = useProxy ? "/api/v1/login" : `${cleaned}/api/v1/login`;
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
+      // Step 1: bootstrap to learn the WS URL + land identity.
+      const disc = await PortalClient.bootstrap(cleaned, { useProxy });
+      const landDomain = disc.land;
 
-      let res;
-      try {
-        res = await fetch(loginUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password }),
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeout);
+      // Step 2: open an unauthenticated socket for the BE call.
+      bootstrapClient = new PortalClient({
+        landUrl: cleaned,
+        token: null,
+        useProxy,
+      });
+      bootstrapClient.connect();
+      await waitForConnect(bootstrapClient);
+
+      // Step 3: BE claim or register against the auth-being.
+      const result = await bootstrapClient.be(mode, landDomain, {
+        payload: { username, password },
+      });
+
+      if (!result?.identityToken) {
+        throw new Error("Auth-being did not return an identity token");
       }
 
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok || body.status !== "ok") {
-        throw new Error(body?.error?.message || `Sign-in failed (HTTP ${res.status})`);
-      }
+      // Extract userId from the beingAddress (the JWT has it but the
+      // client-side stash uses what the auth-being returned).
       onSignedIn({
         landUrl: cleaned,
         landIsProxied: useProxy,
-        token: body.data.token,
-        userId: body.data.userId,
-        username: body.data.username,
+        token: result.identityToken,
+        username,
+        beingAddress: result.beingAddress,
+        userId: null, // App will fetch from a SEE on the home position
       });
     } catch (err) {
-      const msg =
-        err.name === "AbortError"
-          ? "Request timed out after 10s. Is the Land server reachable?"
-          : err.message;
-      setError(msg);
+      const msg = err?.message || "Sign-in failed";
+      const code = err?.code ? `${err.code}: ` : "";
+      setError(`${code}${msg}`);
     } finally {
+      if (bootstrapClient) {
+        try { bootstrapClient.disconnect(); } catch {}
+      }
       setLoading(false);
     }
   }
@@ -79,7 +79,7 @@ export default function SignIn({ onSignedIn }) {
     <div className="signin">
       <form className="signin-card" onSubmit={handleSubmit}>
         <h1>TreeOS Portal</h1>
-        <div className="subtitle">Sign in to a land to begin.</div>
+        <div className="subtitle">{mode === "claim" ? "Claim a being at a land." : "Register a new being at a land."}</div>
 
         <div className="field">
           <label>Land</label>
@@ -109,16 +109,41 @@ export default function SignIn({ onSignedIn }) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
+            autoComplete={mode === "register" ? "new-password" : "current-password"}
           />
         </div>
 
         <button className="btn" type="submit" disabled={loading || !username || !password}>
-          {loading ? "Signing in…" : "Sign in"}
+          {loading
+            ? (mode === "register" ? "Registering…" : "Claiming…")
+            : (mode === "register" ? "Register" : "Claim")}
+        </button>
+
+        <button
+          type="button"
+          className="btn-link"
+          onClick={() => setMode(mode === "claim" ? "register" : "claim")}
+        >
+          {mode === "claim" ? "or register a new being" : "or claim an existing being"}
         </button>
 
         {error && <div className="error">{error}</div>}
       </form>
     </div>
   );
+}
+
+function waitForConnect(client, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    if (client.connected) return resolve();
+    const t = setTimeout(() => reject(new Error("Connect timed out")), timeoutMs);
+    client.socket.once("connect", () => {
+      clearTimeout(t);
+      resolve();
+    });
+    client.socket.once("connect_error", (err) => {
+      clearTimeout(t);
+      reject(new Error(err?.message || "Connect error"));
+    });
+  });
 }

@@ -24,7 +24,7 @@ The primary navigation surface. Always at the top.
 - **Auto-complete** triggers on:
   - `~` → user homes in the current land
   - `/` → child paths from current position, then siblings, then known trees
-  - `@` → embodiments invocable at the current right-side path (from the Stance Descriptor's `beings:`)
+  - `@` → embodiments invocable at the current right-side path (from the Position Description's `beings:`)
   - bare typing → fuzzy match against navigation history + favorites
 - **Paste a full PA** (`tabor::treeos.ai/foo@ruler`) → portal parses it; if the left side matches the current identity it just navigates; if it doesn't, prompt to switch.
 - **Bridge mode** — typing `::` in the right-side field signals the user wants to address ANOTHER stance from theirs. Used for AI-to-AI bridges later. Pass 1: surface as advanced; the simple case is "I (left stance) address X (right stance)."
@@ -32,7 +32,7 @@ The primary navigation surface. Always at the top.
 ### Visual states
 
 - Normal: monospace text, subtle highlight on focused field
-- Loading: indicator next to the address while the Stance Descriptor is being fetched
+- Loading: indicator next to the address while the Position Description is being fetched
 - Error: red highlight on the bad segment of the address with the parser's error message in a tooltip
 - Authorized-but-degraded: yellow pill ("guest"/"read-only") next to the embodiment when the identity can browse but not invoke
 
@@ -68,7 +68,7 @@ Always visible. Top-left or top-right of the portal chrome.
 
 ## 3. Main view
 
-The body of the current tab. Renders the right-side position's Stance Descriptor.
+The body of the current tab. Renders the right-side position's Position Description.
 
 ### Layout per zone
 
@@ -80,7 +80,7 @@ See [zones.md](zones.md) for per-zone detail.
 
 ### Live updates
 
-The main view subscribes to a position-scoped event stream via the WebSocket. Stance Descriptor fields update in place as events arrive:
+The main view subscribes to a position-scoped event stream via the WebSocket. Position Description fields update in place as events arrive:
 - new plan emission → governance.plan.active replaced; visual highlight on the change
 - worker started → governance.workers.running gets a new entry; pulse animation
 - worker finished → moves from running to completed; status pill updates
@@ -177,7 +177,7 @@ Renders ~2 levels deep by default to stay readable. Expandable on demand. For de
 
 ## 6. Extension surfaces
 
-Extensions installed at the current position contribute their own panels. Rendered alongside the main view per the Stance Descriptor's `extensions[].surfaces` field.
+Extensions installed at the current position contribute their own panels. Rendered alongside the main view per the Position Description's `extensions[].surfaces` field.
 
 ### Layout
 
@@ -206,7 +206,7 @@ Pinned tabs stay across portal restarts. Useful for home zone + current project.
 
 ### Cross-tab linking
 
-Drag a position-link from one tab's content to another tab's chat → references it in chat. Hover a position-link → tooltip shows the Stance Descriptor summary without navigating.
+Drag a position-link from one tab's content to another tab's chat → references it in chat. Hover a position-link → tooltip shows the Position Description summary without navigating.
 
 ## What's NOT a surface
 
@@ -216,4 +216,4 @@ These are intentionally absent (web-portal holdovers that don't fit):
 - **Bookmarks bar**. Replaced by favorites in the identity panel and tree-navigator pinning.
 - **Search bar separate from address bar**. The address bar is the only entry point.
 - **Plugin/extension UI as overlays**. Extensions live as panels in the position descriptor, not as portal-chrome popups.
-- **DOM inspector / dev tools**. Replaced by a "Stance Descriptor inspector" that shows the raw JSON the portal is rendering.
+- **DOM inspector / dev tools**. Replaced by a "Position Description inspector" that shows the raw JSON the portal is rendering.

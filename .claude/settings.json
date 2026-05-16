@@ -952,7 +952,14 @@
       "Bash(grep -nE '\"[^\"]*\\\\\\\\b\\(user|operator\\)\\\\\\\\b[^\"]*\"|`[^`]*\\\\\\\\b\\(user|operator\\)\\\\\\\\b[^`]*`' land/extensions/governing/modes/ruler.js land/extensions/governing/modes/planner.js land/extensions/governing/modes/contractor.js land/extensions/governing/modes/foreman.js land/extensions/governing/rulerTools.js)",
       "Bash(grep -nE '\"[^\"]*\\\\b\\(the user|operator\\)\\\\b[^\"]*\"|`[^`]*\\\\b\\(the user|operator\\)\\\\b[^`]*`' land/extensions/governing/modes/ruler.js land/extensions/governing/modes/planner.js land/extensions/governing/modes/contractor.js land/extensions/governing/modes/foreman.js land/extensions/governing/rulerTools.js)",
       "Bash(grep -nE '\"[^\"]*\\\\b\\(the user|to the user|operator\\)\\\\b[^\"]*\"|`[^`]*\\\\b\\(the user|to the user|operator\\)\\\\b[^`]*`' land/extensions/governing/modes/ruler.js land/extensions/governing/modes/planner.js land/extensions/governing/modes/contractor.js land/extensions/governing/modes/foreman.js land/extensions/governing/rulerTools.js)",
-      "Bash(grep -v \":#\\\\|^[^:]*$\")"
+      "Bash(grep -v \":#\\\\|^[^:]*$\")",
+      "Bash(sed -i -e 's|at `treeos.ai` land root|at the Land Position `treeos.ai/`|g' -e 's|path = `/` \\(land root|path = `/` \\(Land Position|g' -e 's|live at the land root \\(`/`\\)|live at the Land Position \\(`/`\\)|g' -e 's|usually at land root `/`|usually at the Land Position `/`|g' -e 's|bare username at land root|bare username at the Land Position|g' -e 's|embodiment label at their land root|embodiment label at their Land Position|g' -e 's|always `/` for a human at their land root|always `/` for a human at their Land Position|g' /home/tabor/github/Tree/portal/docs/portal-address.md)",
+      "Bash(sed -i -e 's|`treeos.ai/`, the land root|`treeos.ai/`, the Land Position|g' /home/tabor/github/Tree/portal/docs/position-descriptor.md)",
+      "Bash(treeos.ai/)",
+      "Bash(grep -n \"land root\\\\|`treeos.ai/`, the land root\" /home/tabor/github/Tree/portal/docs/position-description.md)",
+      "Bash(grep -n \"## Three address concepts\\\\|land$\\\\|treeos.ai$\\\\|land identifier\" /home/tabor/github/Tree/portal/docs/protocol.md)",
+      "Bash(JWT_SECRET=smoketest-only-not-real node -e ' *)",
+      "Bash(JWT_SECRET=smoketest node -e ' *)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

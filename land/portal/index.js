@@ -1,16 +1,16 @@
-// Portal Protocol — boot entry point.
+// IBP (Inter-Being Protocol) — boot entry point.
 //
-// Portal is core, peer to seed/, routes/, extensions/. It speaks Portal
-// Addresses as a native protocol primitive — the Land's second protocol
-// surface alongside the legacy HTTP API.
+// IBP is core, peer to seed/, routes/, extensions/. It carries Portal
+// Addresses as its native address primitive. IBP is the Land's second
+// protocol surface alongside the legacy HTTP API.
 //
 // Boot ordering (called from server.js):
-//   1. initPortalHttp(app) — BEFORE the catch-all 404 handler. Registers the
+//   1. initPortalHttp(app) . BEFORE the catch-all 404 handler. Registers the
 //      single bootstrap route GET /.well-known/treeos-portal.
-//   2. initPortalWs(io)   — AFTER initWebSocketServer() returns the io.
+//   2. initPortalWs(io)   . AFTER initWebSocketServer() returns the io.
 //      Attaches portal:* event handlers onto every authenticated socket.
 //
-// Both must be called for the Portal Protocol to be fully alive on a Land.
+// Both must be called for IBP to be fully alive on a Land.
 
 import log from "../seed/log.js";
 import { registerPortalBootstrap } from "./bootstrap-route.js";
@@ -22,11 +22,11 @@ import { attachPortalHandlers } from "./protocol.js";
  */
 export function initPortalHttp(app) {
   registerPortalBootstrap(app);
-  log.info("Portal", "Portal Protocol HTTP bootstrap registered at /.well-known/treeos-portal");
+  log.info("Portal", "IBP HTTP bootstrap registered at /.well-known/treeos-portal");
 }
 
 /**
- * Attach Portal Protocol WS handlers to the Socket.IO server.
+ * Attach IBP WS handlers to the Socket.IO server.
  * Call from server.js after initWebSocketServer() returns the io.
  */
 export function initPortalWs(io) {

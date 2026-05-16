@@ -1,8 +1,8 @@
-// Position Descriptor builder.
+// Position Description builder.
 //
-// Given a resolved stance (from resolver.js), produce the Position Descriptor
+// Given a resolved stance (from resolver.js), produce the Position Description
 // JSON the Portal client will render. The descriptor shape is specified in
-// /portal/docs/position-descriptor.md.
+// /portal/docs/position-description.md.
 //
 // Pass 1 Slice 1 implements ONLY the land-zone descriptor with empty children
 // and artifacts. Subsequent slices populate children (public trees) and add
@@ -16,14 +16,16 @@ import { getLandRootId } from "../seed/landRoot.js";
 import { NODE_STATUS } from "../seed/protocol.js";
 import { getNotes } from "../seed/tree/notes.js";
 import { resolveTreeAccess } from "../seed/tree/treeAccess.js";
+import { getInboxSummary } from "./inbox.js";
+import { getEmbodiment, listEmbodiments } from "./embodiments/registry.js";
 
 /**
- * Build a Position Descriptor for a resolved stance.
+ * Build a Position Description for a resolved stance.
  *
  * @param {object} resolved — output of resolver.resolveStance()
  * @param {object} [opts]
  * @param {object} [opts.identity] — { userId, username } for the requesting being
- * @returns {object} Position Descriptor
+ * @returns {object} Position Description
  */
 export async function buildDescriptor(resolved, opts = {}) {
   if (resolved.zone === "land") {
@@ -238,38 +240,12 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
     // Beings invocable at this node. Pass 1 Slice 4 returns a small
     // default set; Slice 4b will pull from the mode registry filtered
     // by the node's actual scope + governance state.
-    beings: [
-      {
-        embodiment: "ruler",
-        label: "Ruler",
-        description: "Coordinates work at this scope.",
-        invocableBy: "owner",
-        available: writeAllowed,
-        modeKey: "tree:governing-ruler",
-        kind: "ai",
-        icon: "👑",
-      },
-      {
-        embodiment: "worker",
-        label: "Worker",
-        description: "Produces artifacts.",
-        invocableBy: "owner",
-        available: writeAllowed,
-        modeKey: "tree:governing-worker",
-        kind: "ai",
-        icon: "🔨",
-      },
-      {
-        embodiment: "archivist",
-        label: "Archivist",
-        description: "Read-only inspection of artifacts and history.",
-        invocableBy: "anyone",
-        available: authorizedHere,
-        modeKey: "tree:archivist",
-        kind: "ai",
-        icon: "📚",
-      },
-    ],
+    beings: await buildBeings(node._id, [
+      { embodiment: "ruler",     label: "Ruler",     description: "Coordinates work at this scope.",                    invocableBy: "owner",  available: writeAllowed,  modeKey: "tree:governing-ruler",  kind: "ai", icon: "\u{1F451}" },
+      { embodiment: "worker",    label: "Worker",    description: "Produces artifacts.",                                 invocableBy: "owner",  available: writeAllowed,  modeKey: "tree:governing-worker", kind: "ai", icon: "\u{1F528}" },
+      { embodiment: "archivist", label: "Archivist", description: "Read-only inspection of artifacts and history.",       invocableBy: "anyone", available: authorizedHere, modeKey: "tree:archivist",        kind: "ai", icon: "\u{1F4DA}" },
+      { embodiment: "echo",      label: "Echo",      description: "Demo: returns whatever you send. Phase 4 round-trip.", invocableBy: "anyone", available: true,           modeKey: "tree:echo",             kind: "ai", icon: "\u{1F501}" },
+    ]),
     children,
     artifacts,
     lineage,
@@ -381,7 +357,7 @@ function buildLineage(resolved) {
  *   - visibility === "public"
  *   - status !== DELETED
  *
- * Returned in the Position Descriptor `children` shape.
+ * Returned in the Position Description `children` shape.
  */
 async function listPublicTrees() {
   const landRootId = getLandRootId();
@@ -448,7 +424,7 @@ async function listUserTrees(userId, username) {
 }
 
 function deriveLifecycle(status) {
-  // Map the existing NODE_STATUS values onto Position Descriptor lifecycle.
+  // Map the existing NODE_STATUS values onto Position Description lifecycle.
   // Conservative mapping; can be refined as governing-extension status
   // becomes the source of truth in later slices.
   if (!status) return "idle";
@@ -456,4 +432,33 @@ function deriveLifecycle(status) {
   if (status === "completed" || status === "done") return "completed";
   if (status === "blocked" || status === "stalled") return "stalled";
   return "idle";
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Beings + inbox preview
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Enrich a beings list with registered embodiment metadata
+ * (honoredIntents, respondMode, triggerOn) and the per-embodiment inbox
+ * summary at this node.
+ *
+ * `entries` is the static portion (embodiment, label, description, kind,
+ * icon, invocableBy, available, modeKey). The function attaches:
+ *   - honoredIntents, respondMode, triggerOn from the embodiment registry
+ *     (or null if the embodiment is not registered yet)
+ *   - inbox: { total, unconsumed, recent } from getInboxSummary
+ */
+async function buildBeings(nodeId, entries) {
+  const inboxByEmbodiment = await getInboxSummary(nodeId);
+  return entries.map((entry) => {
+    const def = getEmbodiment(entry.embodiment);
+    return {
+      ...entry,
+      honoredIntents: def ? def.honoredIntents : null,
+      respondMode:    def ? def.respondMode : null,
+      triggerOn:      def ? def.triggerOn : null,
+      inbox:          inboxByEmbodiment[entry.embodiment] || { total: 0, unconsumed: 0, recent: [] },
+    };
+  });
 }

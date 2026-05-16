@@ -222,7 +222,7 @@ When retention triggers, the oldest consumed entries are archived (moved to a se
 
 ## Inbox is observable via SEE
 
-A Stance Descriptor for a being's position includes an inbox preview:
+A Position Description for a being's position includes an inbox preview:
 
 ```
 descriptor.inbox = {
@@ -250,4 +250,4 @@ This makes the inbox visible in the portal UI. A chat thread is just a rendered 
 - [message-envelope.md](message-envelope.md) the TALK envelope
 - [being-summoned.md](being-summoned.md) the architectural framing
 - [protocol.md](protocol.md) the four-verb spec
-- [stance-descriptor.md](stance-descriptor.md) how the inbox surfaces in SEE responses
+- [position-description.md](position-description.md) how the inbox surfaces in SEE responses

@@ -3,7 +3,7 @@ import React from "react";
 /**
  * Tree zone renderer.
  *
- * Renders zone === "tree" Stance Descriptors. A position inside a tree.
+ * Renders zone === "tree" Position Descriptions. A position inside a tree.
  * The richest zone: lineage breadcrumb, children, artifacts, beings
  * invocable at this node. Governance state (plans/contracts/workers/flags)
  * lands in a later phase; for now governance is null and we just show

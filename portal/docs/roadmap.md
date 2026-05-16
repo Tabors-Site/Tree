@@ -1,6 +1,6 @@
 # Build roadmap
 
-The TreeOS Portal is a multi-pass build. This document sequences the work under the four-verb protocol model (SEE / DO / TALK / BE).
+The TreeOS Portal is a multi-pass build. This document sequences the work under IBP, the Inter-Being Protocol, and its four verbs (SEE / DO / TALK / BE).
 
 ## Phase 0: Foundations (this folder, done)
 
@@ -14,13 +14,13 @@ What's locked:
 - Inbox model and summoning triggers ([inbox.md](inbox.md)).
 - DO action catalog and `set-meta` semantics ([do-actions.md](do-actions.md)).
 - BE operations and auth-being model ([be-operations.md](be-operations.md)).
-- Stance Descriptor JSON contract ([stance-descriptor.md](stance-descriptor.md)).
+- Position Description JSON contract ([position-description.md](position-description.md)).
 - Server protocol wire-level rules ([server-protocol.md](server-protocol.md)).
 - Identity-first session model ([identity.md](identity.md)).
 - Zone types and surfaces ([zones.md](zones.md), [surfaces.md](surfaces.md)).
 - PA parser ([../lib/portal-address.js](../lib/portal-address.js)).
 
-Done means anyone joining can read these docs before writing the first new line of code. The format contracts (PA + Stance Descriptor + four-verb envelope + TALK message + inbox shape) are the load-bearing pieces.
+Done means anyone joining can read these docs before writing the first new line of code. The format contracts (PA + Position Description + four-verb envelope + TALK message + inbox shape) are the load-bearing pieces.
 
 ## Phase 1: Demolish Phase 1 scaffolding
 
@@ -45,7 +45,7 @@ The first verb. Read-only path. Smallest risk.
 **Work:**
 
 1. Build [land/portal/verbs/see.js](land/portal/verbs/see.js):
-   - One-shot SEE returns a Stance Descriptor for the address.
+   - One-shot SEE returns a Position Description for the address.
    - Live SEE returns initial descriptor plus an open patch stream.
 2. Extend [land/portal/descriptor.js](land/portal/descriptor.js):
    - Home zone descriptor (was scaffolded empty).
@@ -86,7 +86,7 @@ Mutation path. Three or four named actions prove the dispatcher pattern; `set-me
 - `do create-child position: "<home>/test-tree" { name: "test-tree" }` creates a child node.
 - `do rename position: "<position>" { name: "renamed-tree" }` renames it.
 - `do change-status position: "<position>" { status: "completed" }` flips status.
-- `do set-meta position: "<position>" { extension: "values", data: { compassion: 7 } }` writes to extension metadata.
+- `do set-meta position: "<position>" { namespace: "values", data: { compassion: 7 } }` writes namespaced metadata.
 - Live SEE on the position emits a patch frame for each mutation.
 
 **Estimate:** 3 to 4 days.
@@ -138,12 +138,55 @@ Identity bootstrap. Establishes the protocol's full surface.
 
 **Verification:**
 
-- `be register land: "treeos.ai" { username, password }` creates a new user and returns a token.
-- `be claim land: "treeos.ai" { username, password }` returns a token.
-- `be release land: "treeos.ai"` invalidates the token.
+- `be register stance: "treeos.ai/@auth" { username, password }` creates a new user and returns a token.
+- `be claim stance: "treeos.ai/@auth" { username, password }` returns a token (credential-based).
+- `be claim stance: "tabor@treeos.ai" identity: <token>` re-claims a held stance.
+- `be release stance: "tabor@treeos.ai"` invalidates the identity token.
+- `be switch stance: "<target stance>" from: "<from stance>" identity: <token>` swaps the active be-er.
 - Subsequent SEE/DO/TALK with the released token fail with `UNAUTHORIZED`.
 
 **Estimate:** 3 to 4 days.
+
+## Phase 5.5: Stance Authorization
+
+The kernel system that determines what one stance can do toward another stance or position through a portal connection. Every IBP verb call routes through one authorize call.
+
+Phase 5 wired BE but left per-verb auth checks ad-hoc. Phase 5.5 builds the infrastructure with a deliberately simple permission shape — expressive enough for the patterns lands want today, with room to extend when real lands surface real needs.
+
+**Work:**
+
+1. Build `land/portal/authorize.js`:
+   - `authorize({ identity, verb, target, action?, namespace? })` → `{ ok, stance, reason? }`.
+   - Resolves the requester's stance: `arrival` if no identity; `owner` if identity has write access at the scope (via existing `resolveTreeAccess.write`); falls through to existing access logic otherwise.
+   - Reads `metadata.embodiments.<stance>.permissions` at the land root.
+   - Returns allow or deny with the stance that was checked.
+2. Apply the simple permission shape (NOT a glob/prefix DSL):
+   - `see: { allowed_visibility: [...] }` — list of Node `visibility` values arrivals may SEE.
+   - `do: { allowed_actions: [...] | "*" }` — list of action names or wildcard.
+   - `talk: { allowed_targets: ["@embodiment", ...] | "*" }` — list of embodiment names or wildcard.
+   - `be: { allowed_operations: [...] }` — which BE ops the stance can call.
+3. Apply land-level BE flags: `metadata.auth.register_enabled` and `metadata.auth.claim_enabled` (both default `true`). Auth-being rejects with `FORBIDDEN` when the requested operation is disabled.
+4. Replace per-verb ad-hoc auth checks in [land/portal/verbs/*.js](land/portal/verbs/) with calls to `authorize()`. SEE, DO, TALK route through it. BE bootstrap stays (the auth-being is the only escape hatch for unestablished requesters), but consults the land-level BE flags.
+5. Seed default `arrival` and `owner` stance permissions on land boot, so a freshly installed land has the conservative defaults set explicitly in metadata.
+
+**Deferred (Phase 7+):**
+
+- Glob/prefix path matching and conflict-resolution semantics in the permission DSL.
+- Additional stance vocabularies (`member`, `guest`, `contributor`, `moderator`, custom).
+- Land-installer presets (personal / community / service) as convenience configurations.
+- Cross-land stance assignment beyond arrival-by-default (federation, Phase 10+).
+- Introspection queries for "what can stance X do at this land."
+
+**Verification:**
+
+- A freshly installed land has explicit defaults: arrival allows BE register + claim + SEE public; owner allows everything.
+- Editing `metadata.embodiments.arrival.permissions` on a test land changes what an arrival can do (verify with SEE/TALK from an unauthenticated socket).
+- Setting `metadata.auth.register_enabled = false` causes `be register` to return `FORBIDDEN`.
+- Authenticated user at their own tree still passes the existing write-access checks.
+- The introspection query returns the configured permissions for a named stance.
+- Performance: the authorize function is called on every verb request; measure overhead and keep it under a small budget.
+
+**Estimate:** 1 to 2 weeks. The work is small in lines of code but the design choices (DSL semantics, conflict resolution, inheritance) deserve care. Bugs in this function have system-wide blast radius.
 
 ## Phase 6: Async respond-mode
 
@@ -246,7 +289,7 @@ Total to "TreeOS Portal is the daily driver for the system": about 6 to 8 weeks 
 
 Resist these temptations:
 
-- **Generic web browsing.** The TreeOS Portal does not render arbitrary websites. It renders Stance Descriptors. The legacy HTML fallback was a Phase 1 idea that has been dropped under the four-verb model.
+- **Generic web browsing.** The TreeOS Portal does not render arbitrary websites. It renders Position Descriptions. The legacy HTML fallback was a Phase 1 idea that has been dropped under the four-verb model.
 - **HTTP versions of the four verbs.** No `/api/v1/see/...` or `/api/v1/do/...` routes. The protocol is WS-only.
 - **Bridge HTTP routes for backwards compatibility.** The legacy `land/routes/api/*` routes stay live during migration but are not extended; they retire per extension.
 - **Heavy UI frameworks.** Stick with React + Vite. No Material-UI / heavy component libraries. Visual style is TreeOS-shaped.
@@ -258,7 +301,7 @@ Resist these temptations:
 ## When to write the first line of UI code
 
 When at least these are true:
-- Stance Descriptor contract reviewed and stable (done).
+- Position Description contract reviewed and stable (done).
 - Four-verb protocol docs reviewed and stable (done in this pass).
 - SEE returns valid descriptors for all three zones (Phase 2 done).
 - Then the portal shell can be built confidently against a stable backend.

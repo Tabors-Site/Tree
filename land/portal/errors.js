@@ -1,9 +1,9 @@
-// TreeOS Portal Protocol errors.
+// IBP (Inter-Being Protocol) errors.
 //
-// The portal protocol reuses seed's ERR vocabulary wherever the meaning
-// matches and adds five portal-specific codes for protocol-layer concerns
-// seed does not cover. PORTAL_ERR is the composition of both, so portal
-// callers have one import for every error code they may throw.
+// IBP reuses seed's ERR vocabulary wherever the meaning matches and adds
+// five portal-specific codes for IBP-layer concerns seed does not cover.
+// PORTAL_ERR is the composition of both, so IBP callers have one import
+// for every error code they may throw.
 //
 // Reuse rule: a portal handler should reach for seed's existing codes
 // (UNAUTHORIZED, FORBIDDEN, NODE_NOT_FOUND, INVALID_INPUT, RESOURCE_CONFLICT,

@@ -3,7 +3,7 @@ import React from "react";
 /**
  * Home zone renderer.
  *
- * Renders zone === "home" Stance Descriptors. A user's personal space.
+ * Renders zone === "home" Position Descriptions. A user's personal space.
  * Shows their tree-roots as a grid plus the beings invocable at home scope.
  */
 export default function HomeZone({ descriptor, onNavigate }) {

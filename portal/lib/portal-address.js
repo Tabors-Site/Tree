@@ -33,7 +33,7 @@
 //     /<uuid-b>                    leaf only, id
 //   All four resolve to the same node. The parser accepts any form; the
 //   server resolves to a canonical nodeId and returns BOTH forms (the
-//   id chain and the name chain) in the Stance Descriptor so the
+//   id chain and the name chain) in the Position Description so the
 //   portal can render either.
 //
 // Both sides of a bridge are stances. They use the SAME grammar. A

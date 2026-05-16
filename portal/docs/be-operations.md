@@ -14,26 +14,28 @@ Folding BE into DO would require an `anonymous-from` exception to the protocol's
 
 ## The four operations
 
+The BE envelope always carries a `stance`. Self-identity operations target stances. For fresh registration, the stance is the land's auth-being (typically `<land>/@auth`); the auth-being processes the credential creation.
+
 ```
-{ verb: "be", operation: "register" | "claim" | "release" | "switch", land: "<land>", identity?, payload? }
+{ verb: "be", operation: "register" | "claim" | "release" | "switch", stance: "<stance>", identity?, payload? }
 ```
 
-The `land` field names where identity is being established or changed. Identity bootstrap happens at land level; the auth-being at that land processes the operation, but the verb knows where to dispatch (the auth-being is implicit). The auth-being is still a real being inspectable via SEE on its stance (typically `<land>/@auth`); lands choose the qualifier name and may install custom auth-being embodiments per land.
+The auth-being at the stance's land processes the operation. It is a real being inspectable via SEE on its stance; lands choose the qualifier name (`@auth`, `@identity`) and may install custom auth-being embodiments per land.
 
 ### register
 
-Creates a new be-er at a land.
+Creates a new be-er at a land. There is no prior stance, so the address is the land's auth-being.
 
 ```
 {
   verb:      "be",
   operation: "register",
-  land:      "<land>",
+  stance:    "<land>/@auth",
   payload:   { username, password, ...land-specific fields }
 }
 ```
 
-Addressed at the land's auth-being. The payload carries credentials and any registration data the land's auth-being requires (e.g., invite code, real name, contract acceptance).
+The payload carries credentials and any registration data the land's auth-being requires (e.g., invite code, real name, contract acceptance).
 
 Returns: `{ identityToken, beingAddress }`. The new be-er is established for this session; subsequent SEE/DO/TALK use the returned token.
 
@@ -41,66 +43,68 @@ Errors: `FORBIDDEN` (registration not open on this land), `RESOURCE_CONFLICT` (u
 
 ### claim
 
-Logs in as an existing be-er.
+Logs in. Two entry forms:
+
+**Credential-based** (no prior stance; address is the auth-being):
 
 ```
 {
   verb:      "be",
   operation: "claim",
-  land:      "<land>",
+  stance:    "<land>/@auth",
   payload:   { username, password }
 }
 ```
 
-Or with alternative credentials (depends on land's auth-being):
+**Token re-claim** (you have a previously-held stance and a still-valid token; re-establishes the active claim):
+
 ```
 {
   verb:      "be",
   operation: "claim",
-  land:      "<land>",
-  payload:   { username, token: <federated identity proof> }
+  stance:    "<held stance>",
+  identity:  <token>
 }
 ```
 
 Returns: `{ identityToken, beingAddress }`. The session now holds this be-er.
 
-Errors: `UNAUTHORIZED` (credentials invalid), `USER_NOT_FOUND` (username does not exist).
+Errors: `UNAUTHORIZED` (credentials invalid or token expired), `USER_NOT_FOUND` (username does not exist).
 
 ### release
 
-Logs out. Invalidates the identity token.
+Releases a held stance.
 
 ```
 {
   verb:      "be",
   operation: "release",
-  land:      "<land>",
+  stance:    "<held stance>",
   identity:  <token>
 }
 ```
 
 Returns: `{ released: true }`. The token is no longer valid for subsequent operations.
 
-If the session holds multiple be-ers (multi-identity portal sessions), `release` affects only the be-er bound to the land in the address. Use `switch` to change active be-er without releasing.
+If the session holds multiple stances, `release` affects only the named stance. Use `switch` to change the active stance without releasing any.
 
 ### switch
 
-Swaps the active be-er within a session that holds multiple.
+Swaps the active be-er within a session that holds multiple. The address is the target stance.
 
 ```
 {
   verb:      "be",
   operation: "switch",
-  land:      "<land>",
-  from:      "<stance>",
-  to:        "<stance>",
-  identity:  <token-for-to>
+  stance:    "<target stance>",
+  from:      "<currently-active stance>",
+  identity:  <token-for-target>
 }
 ```
 
-`from` is the currently-active stance. `to` is the new active stance. Both must be be-ers the session already holds (claimed in this or a prior session and still valid). The identity token for the `to` stance is provided to confirm the session has it.
+Both stances must already be held by the session (claimed in this or a prior session and still valid). The identity token for the target stance confirms the session has it.
 
-Returns: `{ active: <to> }`.
+Returns: `{ active: "<target stance>" }`.
 
 This is the operation behind "switch identity" in the portal's identity panel. It does not re-authenticate; it just selects which held be-er is the active one for new requests.
 
@@ -184,18 +188,31 @@ Federation details belong to the Canopy spec and are out of scope here. The prot
 
 The auth-being can respond with a challenge, await an answer, and complete the switch through a final BE operation. The protocol supports both: `BE switch` for simple held-be-er selection, TALK + final BE for complex flows.
 
-## Anonymous SEE
+## The arrival stance
 
-The protocol allows SEE without identity for explicitly anonymous-accessible addresses:
+An unestablished requester is in the **arrival stance** at the land. Arrival is not a protocol special case; it is a regular stance whose permissions the land defines. See [protocol.md](protocol.md#the-arrival-stance) for the full framing.
+
+The protocol commits to:
+
+1. Every land has an arrival stance.
+2. BE addressed at the auth-being is always permitted from the arrival stance.
+
+Beyond those two, lands configure what an arrival can do. Some lands are open: arrivals SEE public scopes, TALK to a public host being, even DO bounded things like leave a guestbook entry. Some lands are closed: arrivals can only BE.
+
+Configuration lives at `<land>/` under `metadata.embodiments.arrival.permissions`:
 
 ```
-{ verb: "see", position: "<land>/.discovery" }
-{ verb: "see", position: "<land>/" }  // land zone, public visibility
+{
+  see:  { allowed: [...], denied: [...] },
+  do:   { allowed: [{ action, scope, ... }] },
+  talk: { allowed: ["@auth", "@host", ...] },
+  be:   { allowed: ["register", "claim"] }
+}
 ```
 
-The land's auth-being declares which addresses permit anonymous SEE. The protocol does not require an `anonymous` be-er; it simply allows the `identity` field to be omitted for these specific addresses.
+Authorization checks arrival permissions on every request from an unestablished requester. No special-case logic.
 
-DO and TALK never accept anonymous requests. BE register/claim are how anonymous becomes established.
+The discovery position (`<land>/.discovery`) is implicitly readable by arrivals on every land regardless of configuration, because clients need to learn the land's capabilities before they can engage in any other way.
 
 ## Errors
 
@@ -259,7 +276,7 @@ client decides which is active via switch
 ### Logout
 
 ```
-client -> { verb: "be", operation: "release", land: "treeos.ai", identity: <token> }
+client -> { verb: "be", operation: "release", stance: "tabor@treeos.ai", identity: <token> }
 client receives { released: true }
 ```
 
