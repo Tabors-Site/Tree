@@ -31,7 +31,7 @@ const ArrivalPage = () => {
             Note. Arrival is <em>not</em> what happens when an identified
             visitor reaches a different land. Identities carry across lands;
             the receiving land's policy assigns the visitor a stance other
-            than arrival. Cross-land identity portability is <a href="/ibp/authorization" style={{color: "#4ade80", textDecoration: "none", borderBottom: "1px solid rgba(74, 222, 128, 0.35)"}}>Phase 8+ work</a>.
+            than arrival. <a href="/ibp/authorization" style={{color: "#4ade80", textDecoration: "none", borderBottom: "1px solid rgba(74, 222, 128, 0.35)"}}>How the layer handles that →</a>
           </p>
           <div className="lp-hero-ctas lp-hero-ctas-sub">
             <a className="lp-btn lp-btn-secondary" href="/ibp">Back to IBP</a>
@@ -75,43 +75,43 @@ const ArrivalPage = () => {
         <div className="lp-container">
           <h2 className="lp-section-title">The configuration spectrum</h2>
           <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center", maxWidth: 800, margin: "0 auto 28px"}}>
-            One configuration surface (the arrival stance's permissions per verb) covers the full range from "completely closed" to "fully open." Land owners pick where on the spectrum their land sits. The rows below show what Phase 5 supports today against what the design horizon includes.
+            One configuration surface (the arrival stance's permissions per verb) covers the full range from "completely closed" to "fully open." Land owners pick where on the spectrum their land sits.
           </p>
 
           <div className="ibp-spectrum">
             <div className="ibp-spectrum-row">
               <div className="ibp-spectrum-label ibp-spectrum-label-closed">Closed</div>
-              <div className="ibp-spectrum-name">Private personal land <span className="ibp-spectrum-phase ibp-spectrum-phase-now">Phase 5</span></div>
+              <div className="ibp-spectrum-name">Private personal land</div>
               <div className="ibp-spectrum-desc">BE-claim only (login by the owner). BE-register disabled. SEE, DO, TALK all denied. Nothing is visible to arrivals. Useful for personal installations or private workspaces.</div>
             </div>
             <div className="ibp-spectrum-row">
               <div className="ibp-spectrum-label ibp-spectrum-label-closed">Closed</div>
-              <div className="ibp-spectrum-name">Invite-only community <span className="ibp-spectrum-phase ibp-spectrum-phase-soon">Phase 7</span></div>
-              <div className="ibp-spectrum-desc">BE-register requires an invite code (or is disabled). BE-claim available for existing members. SEE limited to a public "about" surface, or nothing. Private communities, research environments, internal lands. Invite-code flow needs richer BE policy than Phase 5 ships.</div>
+              <div className="ibp-spectrum-name">Invite-only community</div>
+              <div className="ibp-spectrum-desc">BE-register requires an invite code (or is disabled). BE-claim available for existing members. SEE limited to a public "about" surface, or nothing. Private communities, research environments, internal lands.</div>
             </div>
             <div className="ibp-spectrum-row">
               <div className="ibp-spectrum-label ibp-spectrum-label-mid">Middle</div>
-              <div className="ibp-spectrum-name">Public profiles, sign-in for participation <span className="ibp-spectrum-phase ibp-spectrum-phase-now">Phase 5</span></div>
+              <div className="ibp-spectrum-name">Public profiles, sign-in for participation</div>
               <div className="ibp-spectrum-desc">Arrival can SEE positions with <code>visibility: public</code> (introduction, what kind of place it is, what beings live here, public artifacts). To do anything beyond viewing requires BE-register or BE-claim. Common pattern for community sites that want discoverability without anonymous interaction.</div>
             </div>
             <div className="ibp-spectrum-row">
               <div className="ibp-spectrum-label ibp-spectrum-label-mid">Middle</div>
-              <div className="ibp-spectrum-name">Open browsing, sign-in for engagement <span className="ibp-spectrum-phase ibp-spectrum-phase-now">Phase 5</span></div>
+              <div className="ibp-spectrum-name">Open browsing, sign-in for engagement</div>
               <div className="ibp-spectrum-desc">Broader SEE: arrivals can browse everything marked public. Still can't TALK or DO until they sign in. Useful for content-oriented lands like a publication, a research archive, a public garden.</div>
             </div>
             <div className="ibp-spectrum-row">
               <div className="ibp-spectrum-label ibp-spectrum-label-mid">Middle</div>
-              <div className="ibp-spectrum-name">Limited interaction without sign-in <span className="ibp-spectrum-phase ibp-spectrum-phase-soon">Phase 7</span></div>
-              <div className="ibp-spectrum-desc">Arrival gets specific DO permissions at specific scopes. Leave a guestbook entry, submit an inquiry, fill out a contact form. The land lets visitors interact in bounded ways without requiring registration. Needs per-action scope-and-namespace constraints, gated to Phase 7.</div>
+              <div className="ibp-spectrum-name">Limited interaction without sign-in</div>
+              <div className="ibp-spectrum-desc">Arrival gets specific DO permissions at specific scopes. Leave a guestbook entry, submit an inquiry, fill out a contact form. The land lets visitors interact in bounded ways without requiring registration.</div>
             </div>
             <div className="ibp-spectrum-row">
               <div className="ibp-spectrum-label ibp-spectrum-label-open">Open</div>
-              <div className="ibp-spectrum-name">Public-facing beings reachable <span className="ibp-spectrum-phase ibp-spectrum-phase-now">Phase 5</span></div>
+              <div className="ibp-spectrum-name">Public-facing beings reachable</div>
               <div className="ibp-spectrum-desc">Arrival can TALK to specific public-facing beings named in <code>allowed_targets</code> (a greeter, help desk, guide). Still can't reach private beings. The land has public beings as part of its surface for unauthenticated visitors.</div>
             </div>
             <div className="ibp-spectrum-row">
               <div className="ibp-spectrum-label ibp-spectrum-label-open">Open</div>
-              <div className="ibp-spectrum-name">Fully open community <span className="ibp-spectrum-phase ibp-spectrum-phase-now">Phase 5</span></div>
+              <div className="ibp-spectrum-name">Fully open community</div>
               <div className="ibp-spectrum-desc">Arrival has near-full permissions: SEE public, DO with <code>allowed_actions: "*"</code>, TALK with <code>allowed_targets: "*"</code>. Sign-in is optional and just for persistence and identity. Useful for very open community spaces.</div>
             </div>
           </div>
@@ -126,8 +126,6 @@ const ArrivalPage = () => {
             The arrival stance's permissions live in the land's metadata under the embodiment namespace. Each verb gets its own simple allow rule. The kernel checks them on every request from an arrival.
           </p>
 
-          <div className="ibp-phase-badge ibp-phase-badge-now">Phase 5 . ships now</div>
-
           <pre className="lp-envelope-code" style={{maxWidth: 760, margin: "0 auto"}}>{`// at the Land Position
 metadata.embodiments.arrival.permissions = {
   see:  { allowed_visibility: ["public"] },
@@ -141,11 +139,11 @@ metadata.auth.register_enabled = true
 metadata.auth.claim_enabled    = true`}</pre>
 
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 20, maxWidth: 760, margin: "20px auto 0", fontSize: 14.5, color: "rgba(255,255,255,0.7)"}}>
-            <strong>What this Phase 5 shape supports.</strong> SEE on positions whose <code>visibility</code> field is in the allow list (the Node schema already carries <code>visibility</code>). DO actions restricted to a named list, or <code>"*"</code> for all, or <code>[]</code> for none. TALK targeted at a named embodiment list (<code>"@auth"</code>, <code>"@guide"</code>), or <code>"*"</code>, or <code>[]</code>. BE operations restricted to a subset of <code>register / claim / release / switch</code>.
+            <strong>What this shape supports.</strong> SEE on positions whose <code>visibility</code> field is in the allow list (the Node schema already carries <code>visibility</code>). DO actions restricted to a named list, or <code>"*"</code> for all, or <code>[]</code> for none. TALK targeted at a named embodiment list (<code>"@auth"</code>, <code>"@guide"</code>), or <code>"*"</code>, or <code>[]</code>. BE operations restricted to a subset of <code>register / claim / release / switch</code>.
           </p>
 
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 12, maxWidth: 760, margin: "12px auto 0", fontSize: 14, color: "rgba(255,255,255,0.55)"}}>
-            Glob path matching, conflict resolution between overlapping rules, and per-action scope-and-namespace constraints are <a href="#roadmap" style={{color: "#fde68a", borderBottom: "1px solid rgba(253, 230, 138, 0.35)", textDecoration: "none"}}>Phase 7 work</a>, gated on real lands needing them.
+            The shape extends in place as lands surface needs for richer rule semantics: glob path matching, conflict resolution between overlapping rules, per-action scope-and-namespace constraints. Same metadata namespace, richer rule shape.
           </p>
 
           <div className="ibp-auth-link" style={{maxWidth: 760, margin: "20px auto 0"}}>
@@ -180,66 +178,14 @@ metadata.auth.claim_enabled    = true`}</pre>
               <div className="ibp-template-desc">Multi-user land. Public profile content visible. Anyone can register or claim. Participation requires sign-in.</div>
             </div>
             <div className="ibp-template ibp-template-open">
-              <div className="ibp-template-head">Public service <span className="ibp-spectrum-phase ibp-spectrum-phase-soon" style={{marginLeft: 8}}>Phase 7</span></div>
+              <div className="ibp-template-head">Public service</div>
               <div className="ibp-template-line">SEE: public surfaces</div>
               <div className="ibp-template-line">DO: bounded (forms, guestbook)</div>
               <div className="ibp-template-line">TALK: public beings (greeter, support)</div>
               <div className="ibp-template-line">BE: register, claim</div>
-              <div className="ibp-template-desc">Service-oriented land. Visitors can interact in bounded ways without signing in. Needs per-action scope-and-namespace constraints — gated to Phase 7.</div>
+              <div className="ibp-template-desc">Service-oriented land. Visitors can interact in bounded ways without signing in. Sign-in optional for richer access.</div>
             </div>
           </div>
-
-          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 20, textAlign: "center", maxWidth: 760, margin: "20px auto 0", fontSize: 14, color: "rgba(255,255,255,0.55)"}}>
-            Personal home and Community templates ship out of the box in Phase 5. Public service is the design target for Phase 7 once the configuration language extends.
-          </p>
-        </div>
-      </section>
-
-      {/* ROADMAP */}
-      <section className="lp-section" id="roadmap">
-        <div className="lp-container" style={{maxWidth: 880}}>
-          <h2 className="lp-section-title">Phase 5 ships . what comes later</h2>
-          <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center", maxWidth: 760, margin: "0 auto 28px"}}>
-            Phase 5 lands the kernel infrastructure and the simplest expressive surface that has actual users. The expressive surface extends in later phases when real lands surface real configuration needs.
-          </p>
-
-          <div className="ibp-roadmap">
-            <div className="ibp-roadmap-col ibp-roadmap-now">
-              <div className="ibp-roadmap-head">Phase 5 . ships now</div>
-              <ul>
-                <li>Kernel <strong>authorize</strong> function on every verb call (the Portal Authorization layer).</li>
-                <li>Arrival stance as a real protocol category. Default: SEE positions with <code>visibility: public</code>, BE register and claim only.</li>
-                <li>Owner stance with full default permissions at the land owner's own land.</li>
-                <li>Auth-being wrapping the existing user / JWT infrastructure. Handles register, claim, release, switch.</li>
-                <li>Two land-level BE flags: <code>register_enabled</code> and <code>claim_enabled</code>.</li>
-                <li>Simple permission shape per verb (<code>allowed_visibility</code>, <code>allowed_actions</code>, <code>allowed_targets</code>, <code>allowed_operations</code>) with <code>"*"</code> and <code>[]</code> for all-or-none.</li>
-              </ul>
-            </div>
-            <div className="ibp-roadmap-col ibp-roadmap-soon">
-              <div className="ibp-roadmap-head">Phase 7 . future work</div>
-              <ul>
-                <li>Glob path matching in permissions for SEE and DO.</li>
-                <li>Conflict resolution semantics for overlapping rules (deny-wins, most-specific-wins).</li>
-                <li>Per-action scope-and-namespace constraints in DO permissions.</li>
-                <li>Additional stance vocabularies beyond arrival and owner (guest, member, moderator, contributor).</li>
-                <li>Auth-being customization beyond the shipped default (per-land character).</li>
-                <li>Invite-code BE flow for closed communities.</li>
-              </ul>
-            </div>
-            <div className="ibp-roadmap-col ibp-roadmap-later">
-              <div className="ibp-roadmap-head">Phase 8+ . open design</div>
-              <ul>
-                <li>Identity portability across lands. How an identified visitor keeps their identity when reaching a different land.</li>
-                <li>Cross-land trust roots. How a receiving land verifies an identity it didn't issue.</li>
-                <li>Stance-assignment policy for identified cross-land visitors. <em>Once identity is portable</em>, how the receiving land's policy maps a visitor to a stance.</li>
-                <li>Federation-wide reputation that informs stance assignment.</li>
-              </ul>
-            </div>
-          </div>
-
-          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 24, textAlign: "center", maxWidth: 760, margin: "24px auto 0", fontSize: 14, color: "rgba(255,255,255,0.55)", fontStyle: "italic"}}>
-            The Phase 5 permission shape can extend in place. When real lands need globs, the same metadata namespace accepts a richer rule shape. Work compounds rather than gets replaced.
-          </p>
         </div>
       </section>
 

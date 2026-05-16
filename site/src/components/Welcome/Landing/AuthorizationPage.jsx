@@ -135,20 +135,18 @@ const AuthorizationPage = () => {
         <div className="lp-container" style={{maxWidth: 900}}>
           <h2 className="lp-section-title">One shape for every stance</h2>
           <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center", maxWidth: 760, margin: "0 auto 28px"}}>
-            Arrival is the first stance every land has. It is not a special case. The same permission configuration shape works for any stance a land defines. Phase 5 ships arrival and owner as concrete protocol categories; additional vocabularies (guest, member, moderator, contributor) extend in Phase 7 against the same shape.
+            Arrival is the first stance every land has. It is not a special case. The same permission configuration shape works for any stance a land defines.
           </p>
 
           <pre className="lp-envelope-code" style={{maxWidth: 760, margin: "0 auto"}}>{`// at the Land Position
-metadata.embodiments.arrival.permissions = { see, do, talk, be }
-metadata.embodiments.owner.permissions   = { see, do, talk, be }
+metadata.embodiments.arrival.permissions   = { see, do, talk, be }
+metadata.embodiments.owner.permissions     = { see, do, talk, be }
+metadata.embodiments.guest.permissions     = { see, do, talk, be }
+metadata.embodiments.member.permissions    = { see, do, talk, be }
+metadata.embodiments.moderator.permissions = { see, do, talk, be }
+// ...whatever stance vocabulary the land defines
 
-// Phase 7 extends with whatever the land defines:
-//   metadata.embodiments.guest.permissions
-//   metadata.embodiments.member.permissions
-//   metadata.embodiments.moderator.permissions
-//   ...
-
-// Phase 5 verb shape (simple allow-lists per verb):
+// verb shape (simple allow-lists per verb):
 metadata.embodiments.<stance>.permissions = {
   see:  { allowed_visibility: ["public"] | [] },
   do:   { allowed_actions:    [] | ["action", ...] | "*" },
@@ -161,7 +159,7 @@ metadata.embodiments.<stance>.permissions = {
           </p>
 
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 12, maxWidth: 760, margin: "12px auto 0", fontSize: 14, color: "rgba(255,255,255,0.55)"}}>
-            For the arrival stance's permissions in concrete detail with phase markers and roadmap: see <a href="/ibp/arrival" style={{color: "#4ade80", borderBottom: "1px solid rgba(74, 222, 128, 0.35)", textDecoration: "none"}}>the arrival stance page</a>.
+            For the arrival stance's permissions in concrete detail: see <a href="/ibp/arrival" style={{color: "#4ade80", borderBottom: "1px solid rgba(74, 222, 128, 0.35)", textDecoration: "none"}}>the arrival stance page</a>.
           </p>
         </div>
       </section>
@@ -196,13 +194,13 @@ metadata.embodiments.<stance>.permissions = {
         <div className="lp-container" style={{maxWidth: 880}}>
           <h2 className="lp-section-title">Authorization is local. Federation is separate.</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            Two distinct design problems. The auth function answers "given this stance at this land, what's permitted?" Federation answers "given this identified visitor coming from elsewhere, what stance should this land assign?" Phase 5 commits to the first one. The second is Phase 8+ work that arrives when cross-land trust infrastructure is in place.
+            Two distinct design problems. The auth function answers "given this stance at this land, what's permitted?" Federation answers "given this identified visitor coming from elsewhere, what stance should this land assign?" These are different layers, and the protocol keeps them separate so each can evolve on its own terms.
           </p>
           <p className="lp-section-sub lp-section-sub-wide">
-            Phase 5 within-land. Each land authorizes its own people fully. Owner has full permissions at their land. Arrivals have whatever the arrival stance is configured for. Identified members of a land have the stance that land granted them. The kernel function works end-to-end for any request that arrives carrying an identity the land recognizes (or no identity, which routes to arrival).
+            Within-land authorization. Each land authorizes its own people fully. Owner has full permissions at their land. Arrivals have whatever the arrival stance is configured for. Identified members of a land have the stance that land granted them. The kernel function works end-to-end for any request that arrives carrying an identity the land recognizes, or no identity at all (which routes to arrival).
           </p>
           <p className="lp-section-sub lp-section-sub-wide">
-            Phase 8+ cross-land. When an identity carrying provenance from another land reaches this one, the receiving land needs a policy for how to recognize that identity and what stance to assign. This is identity portability, trust roots between lands, and stance-assignment policy. Those are real design problems and they don't change the auth function. They feed it.
+            Cross-land authorization. When an identity carrying provenance from another land reaches this one, the receiving land needs a policy for how to recognize that identity and what stance to assign. This is identity portability, trust roots between lands, and stance-assignment policy. Those are real design problems and they don't change the auth function. They feed it.
           </p>
           <p className="lp-section-sub lp-section-sub-wide" style={{fontStyle: "italic", borderLeft: "3px solid rgba(74, 222, 128, 0.4)", paddingLeft: 24, color: "rgba(255,255,255,0.7)"}}>
             The auth layer asks: given this stance, what's permitted? It does not ask how the stance was assigned. That separation is what keeps federation work from forcing rewrites of the kernel authorization layer.
