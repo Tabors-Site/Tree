@@ -384,3 +384,33 @@ body {
 .status-dot.connected { background: var(--accent); }
 .status-dot.error     { background: var(--error); }
 .status-dot.loading   { background: var(--warn); }
+
+.nav-buttons {
+  display: flex;
+  gap: 4px;
+  margin-right: 4px;
+}
+
+.nav-btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 2px 10px;
+  background: var(--bg-default, #1a1f1c);
+  color: var(--fg-default, #c8d3cb);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: var(--bg-elevated-strong, #232a26);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TreeOS Portal 3D</title>
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0a0d0c; color: #c8d3cb; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono", monospace; }
+      #scene { position: fixed; inset: 0; }
+      #hud {
+        position: fixed; inset: 0; pointer-events: none; z-index: 10;
+        display: flex; flex-direction: column; justify-content: space-between;
+      }
+      #hud-top, #hud-bottom {
+        padding: 8px 14px; font-size: 12px; color: #9ab0a3;
+        background: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0));
+      }
+      #hud-bottom {
+        background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.4));
+        text-align: center;
+      }
+      #address-bar {
+        pointer-events: auto;
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 14px; font-size: 12px;
+        background: rgba(10, 13, 12, 0.78);
+        backdrop-filter: blur(2px);
+        border-bottom: 1px solid #1f2a23;
+      }
+      #address-bar .identity-chip {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        padding: 4px 10px; border: 1px solid #2c3a32; border-radius: 4px;
+        background: #131a17; color: #c8d3cb; white-space: nowrap;
+        cursor: pointer; user-select: none;
+      }
+      #address-bar .identity-chip:hover { border-color: #8fbf9f; }
+      #address-bar .identity-chip .dim { color: #6b7d72; }
+      #address-bar .bridge-arrow { color: #6b7d72; font-family: ui-monospace, monospace; }
+      #address-bar input {
+        flex: 1; min-width: 0;
+        padding: 5px 10px;
+        background: #0a0d0c; color: #c8d3cb;
+        border: 1px solid #2c3a32; border-radius: 4px;
+        font-family: ui-monospace, monospace; font-size: 12px;
+      }
+      #address-bar input:focus { outline: none; border-color: #8fbf9f; }
+      #address-bar .nav-btn {
+        background: #131a17; color: #c8d3cb;
+        border: 1px solid #2c3a32; border-radius: 3px;
+        font-family: ui-monospace, monospace; font-size: 11px;
+        padding: 4px 10px; cursor: pointer; text-transform: lowercase;
+      }
+      #address-bar .nav-btn:hover { border-color: #8fbf9f; color: #8fbf9f; }
+      #address-bar .nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+      #reticle {
+        position: fixed; left: 50%; top: 50%; width: 6px; height: 6px;
+        margin: -3px 0 0 -3px; border-radius: 50%;
+        background: rgba(200, 211, 203, 0.6);
+        pointer-events: none; z-index: 9;
+      }
+      .label {
+        position: fixed; pointer-events: none; z-index: 8;
+        background: rgba(10, 13, 12, 0.8); color: #c8d3cb;
+        padding: 4px 10px; border: 1px solid #2c3a32; border-radius: 4px;
+        font-size: 11px; white-space: nowrap;
+        transform: translate(-50%, -130%);
+      }
+      .overlay {
+        position: fixed; inset: 0; z-index: 20; pointer-events: auto;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(10, 13, 12, 0.55);
+        backdrop-filter: blur(2px);
+      }
+      .overlay-card {
+        background: #131a17; border: 1px solid #2c3a32;
+        border-radius: 6px; padding: 22px 26px; min-width: 320px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      }
+      .overlay-card h2 {
+        margin: 0 0 4px 0; font-size: 14px; color: #c8d3cb; font-weight: 500;
+      }
+      .overlay-card .sub {
+        font-size: 11px; color: #6b7d72; margin-bottom: 18px;
+      }
+      .overlay-card .field {
+        margin-bottom: 10px;
+      }
+      .overlay-card label {
+        display: block; font-size: 10px; color: #6b7d72;
+        margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;
+      }
+      .overlay-card input {
+        width: 100%; box-sizing: border-box; padding: 6px 8px;
+        background: #0a0d0c; color: #c8d3cb;
+        border: 1px solid #2c3a32; border-radius: 3px;
+        font-family: inherit; font-size: 12px;
+      }
+      .overlay-card input:focus { outline: none; border-color: #8fbf9f; }
+      .overlay-card .btn {
+        width: 100%; padding: 8px 12px; margin-top: 8px;
+        background: #1a3424; color: #c8d3cb;
+        border: 1px solid #2f6b48; border-radius: 3px;
+        font-family: inherit; font-size: 12px; cursor: pointer;
+      }
+      .overlay-card .btn:hover { background: #234a32; }
+      .overlay-card .btn-link {
+        background: none; border: none; color: #6b7d72;
+        padding: 6px 0; margin-top: 4px; width: 100%;
+        cursor: pointer; font-family: inherit; font-size: 11px;
+      }
+      .overlay-card .btn-link:hover { color: #c8d3cb; }
+      .overlay-card .error {
+        color: #d97a7a; font-size: 11px; margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="reticle"></div>
+    <div id="hud">
+      <div id="address-bar">
+        <div class="identity-chip" id="identity-chip" title="Signed-in being. Click to toggle full form.">
+          <span id="chip-name">arrival</span>
+          <span class="dim" id="chip-land">@&lt;land&gt;</span>
+        </div>
+        <button class="nav-btn" id="nav-back"    title="Back"    disabled>&lsaquo;</button>
+        <button class="nav-btn" id="nav-forward" title="Forward" disabled>&rsaquo;</button>
+        <span class="bridge-arrow">::</span>
+        <input id="address-input" type="text" placeholder="land/path" autocomplete="off" spellcheck="false" />
+        <button class="nav-btn" id="nav-land"  title="Land root">land</button>
+        <button class="nav-btn" id="nav-home"  title="Your home" disabled>home</button>
+        <button class="nav-btn" id="nav-root"  title="Tree root" disabled>root</button>
+      </div>
+      <div id="hud-top" style="display:none"></div>
+      <div id="hud-bottom"></div>
+    </div>
+    <div id="overlays"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -111,6 +111,20 @@ export default function App() {
     }
   }
 
+  // Tree-root resolution: walk the chain back to the first segment
+  // after the optional ~user, or null if we're not in a tree.
+  function getTreeRootPath() {
+    const chain = descriptor?.address?.chain;
+    if (!Array.isArray(chain) || chain.length === 0) return null;
+    const first = chain[0]?.name || "";
+    const tildeRoot = first.startsWith("~");
+    const idx = tildeRoot ? 1 : 0;
+    if (chain.length <= idx) return null;
+    const segs = chain.slice(0, idx + 1).map((c) => c.name);
+    return "/" + segs.join("/");
+  }
+  const treeRootPath = getTreeRootPath();
+
   // ── Render ────────────────────────────────────────────────────
   if (!session) {
     return <SignIn onSignedIn={handleSignedIn} />;
@@ -121,6 +135,7 @@ export default function App() {
       <div className="shell-header">
         <AddressBar
           username={session.username}
+          landDomain={discovery?.land}
           currentAddress={currentAddress}
           onNavigate={navigate}
           invalid={!!fetchError}
@@ -151,6 +166,31 @@ export default function App() {
       </div>
 
       <div className="status-bar">
+        <div className="nav-buttons">
+          <button
+            className="nav-btn"
+            onClick={() => navigate("/")}
+            title="Land root"
+          >
+            land
+          </button>
+          <button
+            className="nav-btn"
+            onClick={() => navigate("/~")}
+            title="Your home"
+          >
+            home
+          </button>
+          <button
+            className="nav-btn"
+            onClick={() => treeRootPath && navigate(treeRootPath)}
+            disabled={!treeRootPath}
+            title={treeRootPath ? `Tree root: ${treeRootPath}` : "Not inside a tree"}
+          >
+            root
+          </button>
+        </div>
+        <span style={{ color: "var(--fg-faint)" }}>·</span>
         <span className={`status-dot ${connectionStatus === "connected" ? "connected" : connectionStatus === "error" ? "error" : "loading"}`} />
         <span>{session.username} @ {session.landUrl}</span>
         <span style={{ color: "var(--fg-faint)" }}>·</span>

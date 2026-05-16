@@ -342,8 +342,8 @@ function parseLand(s) {
 function parsePath(s, ctx) {
   const trimmed = s.trim();
   if (!trimmed) return null;
-  // Home shorthand: "~" alone → current user's home.
-  if (trimmed === "~") {
+  // Home shorthand: "~" or "/~" alone → current user's home.
+  if (trimmed === "~" || trimmed === "/~") {
     if (!ctx.currentUser) {
       throw paError(
         "missing-user-context",

@@ -22,6 +22,7 @@ import cors from "cors";
 import { getLandDomain } from "./address.js";
 import { PORTAL_PROTOCOL_VERSION } from "./discovery.js";
 import { getLandUrl } from "../canopy/identity.js";
+import { getLandConfigValue } from "../seed/landConfig.js";
 
 // Permissive route-level CORS just for the bootstrap. Wins over the
 // global cors() middleware on this specific route.
@@ -45,6 +46,7 @@ export function registerPortalBootstrap(app) {
       ws: wsUrl,
       protocolVersion: PORTAL_PROTOCOL_VERSION,
       land: getLandDomain(),
+      timezone: getLandConfigValue("timezone") || null,
     });
   });
 }

@@ -57,10 +57,20 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
       leafId: null,
     },
     zone: "land",
-    // Beings invocable at the land root. Pass 1 Slice 1 lists just the
-    // default land-manager being. Future slices will read this from the
-    // mode registry filtered by land-zone scope.
+    // Beings invocable at the land root. The auth-being is always present
+    // and is the entry point for unestablished requesters; the others are
+    // contextually invocable per the land's permissions.
     beings: [
+      {
+        embodiment: "auth",
+        label: "Auth",
+        description: "The land's welcome character. Processes register, claim, release, switch.",
+        invocableBy: "anyone",
+        available: true,
+        modeKey: "land:auth",
+        kind: "ai",
+        icon: "\u{1F511}",
+      },
       {
         embodiment: "land-manager",
         label: "Land Manager",
@@ -68,7 +78,8 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
         invocableBy: "owner",
         available: true,
         modeKey: "land:manager",
-        icon: "🏛️",
+        kind: "ai",
+        icon: "\u{1F3DB}\u{FE0F}",
       },
       {
         embodiment: "citizen",
@@ -77,7 +88,8 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
         invocableBy: "anyone",
         available: true,
         modeKey: "land:citizen",
-        icon: "👤",
+        kind: "ai",
+        icon: "\u{1F464}",
       },
     ],
     // Public trees at land scope. Populated from the user-root nodes
@@ -194,8 +206,12 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
   const pathByNames = "/" + resolved.chain.map((c) => c.name).join("/");
   const pathByIds = "/" + resolved.chain.map((c) => c.id).join("/");
 
-  // Children of this node (immediate descendants).
+  // Children of this node (immediate descendants). Backfill `path` from
+  // this node's pathByNames so clients can navigate deeper.
   const children = await listChildren(node._id);
+  for (const c of children) {
+    c.path = `${pathByNames}/${c.name}`;
+  }
 
   // Notes attached to this node, as artifact previews.
   const artifacts = await listArtifacts(node._id);
@@ -207,8 +223,13 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
   // synthetic "land root" entry at index 0.
   const lineage = buildLineage(resolved);
 
-  // Siblings: other children of the parent.
+  // Siblings: other children of the parent. Backfill paths from the
+  // parent's path (this node's path minus the leaf segment).
   const siblings = node.parent ? await listChildren(node.parent, { exclude: node._id }) : [];
+  const parentPath = pathByNames.replace(/\/[^/]+$/, "") || "/";
+  for (const s of siblings) {
+    s.path = parentPath === "/" ? `/${s.name}` : `${parentPath}/${s.name}`;
+  }
 
   // Authorization check.
   let writeAllowed = false;
@@ -413,7 +434,11 @@ async function listUserTrees(userId, username) {
 
   return trees.map((t) => ({
     name: t.name,
-    path: `/~${username}/${t.name}`,
+    // Canonical land-level path. A user-owned root tree lives at the
+    // land root (parent === landRootId), so its address is /<name>.
+    // The home zone is a listing surface; entering a tree takes you
+    // to the tree's own address, not to a home-prefixed sub-path.
+    path: `/${t.name}`,
     nodeId: t._id,
     type: t.type || null,
     visibility: t.visibility || "private",
