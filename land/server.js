@@ -73,6 +73,17 @@ function corsOriginCheck(origin, cb) {
   cb(null, false);
 }
 
+// IBP is **structurally cross-origin**. Any Portal client from any origin
+// must be able to open a WS connection. Authentication is bearer-token
+// (auth.token in the Socket.IO handshake), not cookies; browsers do not
+// auto-send cookies cross-origin, so legacy cookie-authed handlers
+// already fail closed for unauthenticated cross-origin sockets. The WS
+// origin gate is therefore not load-bearing for security; it would only
+// prevent legitimate Portal clients from connecting.
+function wsOriginCheck(_origin, cb) {
+  return cb(null, true);
+}
+
 app.use(
   cors({
     origin: corsOriginCheck,
@@ -115,10 +126,11 @@ initPortalHttp(app);
 app.use((req, res) => notFoundPage(req, res));
 
 const server = http.createServer(app);
-// Pass the same origin-check function the HTTP CORS uses, so WS and HTTP
-// stay aligned. The WS server still also allows chrome-extension:// via
-// the function (delegates back to corsOriginCheck).
-export const wsServer = initWebSocketServer(server, corsOriginCheck);
+// IBP is cross-origin by design. The WS gate accepts any origin; per-handler
+// auth (JWT in the Socket.IO handshake) is what enforces access. Legacy
+// cookie-authed chat handlers stay safe because browsers don't auto-send
+// cookies cross-origin — those handlers see no userId and reject.
+export const wsServer = initWebSocketServer(server, wsOriginCheck);
 
 // Attach Portal Protocol WS handlers to the same Socket.IO instance the
 // legacy chat WS uses. Zero shared event names with the legacy `op:"chat"`
