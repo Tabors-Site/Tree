@@ -169,7 +169,7 @@ function buildInitialStepStatuses(planEmission) {
  * already exists, returns it without creating a duplicate (race-safe
  * via the type+parent filter).
  *
- * Required: rulerNodeId, userId, planEmissionRef, planEmission (the
+ * Required: rulerNodeId, beingId, planEmissionRef, planEmission (the
  * payload, used to seed stepStatuses). Optional:
  * contractsEmissionRef.
  *
@@ -177,7 +177,7 @@ function buildInitialStepStatuses(planEmission) {
  */
 export async function appendExecutionRecord({
   rulerNodeId,
-  userId,
+  beingId,
   core,
   planEmissionRef,
   planEmission,
@@ -188,7 +188,7 @@ export async function appendExecutionRecord({
   // Ensure the execution-node parent exists.
   let executionNode = await findExecutionNode(rulerNodeId);
   if (!executionNode) {
-    executionNode = await ensureExecutionNode({ scopeNodeId: rulerNodeId, userId, core });
+    executionNode = await ensureExecutionNode({ scopeNodeId: rulerNodeId, beingId, core });
   }
   if (!executionNode) {
     log.warn("Governing", `appendExecutionRecord: no execution-node resolvable at ${String(rulerNodeId).slice(0, 8)}`);
@@ -232,7 +232,7 @@ export async function appendExecutionRecord({
         parentId: String(executionNode._id),
         name: recordName,
         type: "execution-record",
-        userId,
+        beingId,
         wasAi: true,
       });
     }

@@ -36,7 +36,7 @@ router.post("/root/:rootId/boundary/analyze", authenticate, async (req, res) => 
   try {
     const rootId = validateRootId(req, res);
     if (!rootId) return;
-    const result = await analyze(rootId, req.userId, req.username);
+    const result = await analyze(rootId, req.beingId, req.username);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -50,7 +50,7 @@ router.post("/node/:nodeId/boundary/analyze", authenticate, async (req, res) => 
     if (!nodeId || nodeId === "undefined" || nodeId === "null") {
       return sendError(res, 400, ERR.INVALID_INPUT, "nodeId is required");
     }
-    const result = await analyzeBranch(nodeId, req.userId, req.username);
+    const result = await analyzeBranch(nodeId, req.beingId, req.username);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);

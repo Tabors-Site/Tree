@@ -12,7 +12,7 @@ let _mergeExtMeta = null;
 let _emitToUser = null;
 let _hooks = null;
 let _Node = null;
-let _Note = null;
+let _Artifact = null;
 
 export function setServices(s) {
   _runChat = s.runChat;
@@ -23,7 +23,7 @@ export function setServices(s) {
   _emitToUser = s.emitToUser;
   _hooks = s.hooks;
   _Node = s.Node;
-  _Note = s.Note;
+  _Artifact = s.Artifact;
 }
 
 // ── Defaults ──
@@ -34,7 +34,7 @@ const MAX_HISTORY_ENTRIES = 20;
 function defaultConfig() {
   return {
     partner: null,
-    trigger: "afterNote",
+    trigger: "afterArtifact",
     maxRounds: 5,
     autoApply: false,
     reviewPrompt: null,
@@ -104,14 +104,14 @@ async function resolveRoot(nodeId) {
 // ── 1. TRIGGER REVIEW ──
 // Called by afterNote hook. Sends review request to partner.
 
-export async function triggerReview(nodeId, note, userId) {
+export async function triggerReview(nodeId, note, beingId) {
   const node = await _Node.findById(nodeId);
   if (!node) return;
 
   const config = getReviewConfig(node);
   if (!config.partner) return;
   if (config.status !== "idle") return;
-  if (config.trigger !== "afterNote") return;
+  if (config.trigger !== "afterArtifact") return;
 
   // Validate partner exists
   const partner = await _Node.findById(config.partner).select("systemRole").lean();
@@ -212,7 +212,7 @@ export async function handleReviewRequest(hookData) {
   let answer;
   try {
     const result = await _runChat({
-      userId: "SYSTEM",
+      beingId: "SYSTEM",
       username: "peer-review",
       message,
       mode: "tree:review",
@@ -414,7 +414,7 @@ async function reviseContent(nodeId, config, suggestions, round) {
   let originalContent = sess?.notePreview || "";
   if (sess?.noteId) {
     try {
-      const note = await _Note.findById(sess.noteId).select("content").lean();
+      const note = await _Artifact.findById(sess.noteId).select("content").lean();
       if (note?.content) originalContent = truncate(note.content, MAX_CONTENT_CHARS);
     } catch {}
   }
@@ -432,7 +432,7 @@ async function reviseContent(nodeId, config, suggestions, round) {
   ].join("\n");
 
   const result = await _runChat({
-    userId: "SYSTEM",
+    beingId: "SYSTEM",
     username: "peer-review",
     message,
     mode: "tree:respond",

@@ -35,7 +35,7 @@ const formatToolArgHint = (args) => {
     }
   }
   const keys = Object.keys(args).filter(
-    (k) => !["userId", "rootId", "nodeId", "chatId", "sessionId"].includes(k),
+    (k) => !["beingId", "rootId", "nodeId", "chatId", "sessionId"].includes(k),
   );
   if (!keys.length) return "";
   return "(" + keys.slice(0, 3).join(",") + ")";
@@ -805,7 +805,7 @@ const renderChain = (chain, tokenQS, token, capturesByChatId, childrenByParent, 
 
         <div class="note-content">
           <div class="chat-message chat-user">
-            <span class="msg-label">${chat.userId?._id ? `<a href="/api/v1/user/${chat.userId._id}${tokenQS}" class="msg-user-link">${esc(chat.userId.username || "User")}</a>` : esc("User")}</span>
+            <span class="msg-label">${chat.beingId?._id ? `<a href="/api/v1/user/${chat.beingId._id}${tokenQS}" class="msg-user-link">${esc(chat.beingId.username || "User")}</a>` : esc("User")}</span>
             <div class="msg-text msg-clamp">${esc(chat.startMessage?.content || "")}</div>
             ${(chat.startMessage?.content || "").length > 300 ? `<button class="expand-btn" onclick="toggleExpand(this)">Show more</button>` : ""}
           </div>

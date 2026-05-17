@@ -7,16 +7,16 @@ export async function init(core) {
   core.llm.registerRootLlmSlot("evolution");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setRunChat(async (opts) => {
-    if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+    if (opts.beingId && opts.beingId !== "SYSTEM" && !await core.llm.userHasLlm(opts.beingId)) return { answer: null };
     return core.llm.runChat({ ...opts, llmPriority: BG });
   });
   setMetadata(core.metadata);
 
-  // ── afterNote: track activity ──────────────────────────────────────
-  core.hooks.register("afterNote", async ({ nodeId, userId, contentType, action }) => {
-    if (contentType !== "text") return;
+  // ── afterArtifact: track activity ─────────────────────────────────
+  core.hooks.register("afterArtifact", async ({ nodeId, beingId, origin, action }) => {
+    if (origin !== "ibp") return;
     if (action !== "create") return;
-    if (!userId || userId === "SYSTEM") return;
+    if (!beingId || beingId === "SYSTEM") return;
 
     try {
       await bumpMetric(nodeId, "notesWritten");
@@ -26,8 +26,8 @@ export async function init(core) {
   }, "evolution");
 
   // ── afterNodeCreate: track growth ──────────────────────────────────
-  core.hooks.register("afterNodeCreate", async ({ node, userId }) => {
-    if (!node?.parent || !userId) return;
+  core.hooks.register("afterNodeCreate", async ({ node, beingId }) => {
+    if (!node?.parent || !beingId) return;
 
     try {
       // Bump growth score on the parent (a child was added)
@@ -38,7 +38,7 @@ export async function init(core) {
   }, "evolution");
 
   // ── afterNavigate: track revisits ──────────────────────────────────
-  core.hooks.register("afterNavigate", async ({ userId, rootId, nodeId }) => {
+  core.hooks.register("afterNavigate", async ({ beingId, rootId, nodeId }) => {
     if (!rootId) return;
 
     try {

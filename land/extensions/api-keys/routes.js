@@ -1,6 +1,6 @@
 import log from "../../seed/log.js";
 import express from "express";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
@@ -8,10 +8,10 @@ import {
   generateApiKey,
   deleteApiKey,
 } from "./core.js";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
 
 function getKeys(user) {
-  const raw = getUserMeta(user, "apiKeys");
+  const raw = getBeingMeta(user, "apiKeys");
   return Array.isArray(raw) ? raw : [];
 }
 import { getExtension } from "../loader.js";
@@ -20,8 +20,8 @@ import { renderApiKeyCreated, renderApiKeysList } from "./pages/apiKeys.js";
 
 const router = express.Router();
 
-router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
-  if (req.userId.toString() !== req.params.userId.toString()) {
+router.post("/user/:beingId/api-keys", authenticate, async (req, res) => {
+  if (req.beingId.toString() !== req.params.beingId.toString()) {
     return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
   }
 
@@ -31,14 +31,14 @@ router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
   }
 
   try {
-    const userId = req.userId;
+    const beingId = req.beingId;
     const { name, revokeOld = false } = req.body;
     const safeName = (name?.trim().slice(0, 64) || "API Key").replace(
       /<[^>]*>/g,
       "",
     );
 
-    const user = await User.findById(userId);
+    const user = await Being.findById(beingId);
     if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
     let keys = getKeys(user);
@@ -46,7 +46,7 @@ router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
     if (keys.filter((k) => !k.revoked).length >= 10) {
       const token = req.query.token ?? "";
       const qs = token ? `?token=${token}&html` : `?html`;
-      return res.redirect(`/api/v1/user/${userId}/api-keys${qs}&error=limit`);
+      return res.redirect(`/api/v1/user/${beingId}/api-keys${qs}&error=limit`);
     }
 
     if (revokeOld) {
@@ -56,30 +56,30 @@ router.post("/user/:userId/api-keys", authenticate, async (req, res) => {
     const { rawKey, keyHash, keyPrefix } = await generateApiKey();
     const crypto = await import("crypto");
     keys = [...keys, { _id: crypto.randomUUID(), keyHash, keyPrefix, name: safeName, createdAt: new Date() }];
-    setUserMeta(user, "apiKeys", keys);
+    setBeingMeta(user, "apiKeys", keys);
     await user.save();
 
     const token = req.query.token ?? "";
 
     return res
       .status(201)
-      .send(renderApiKeyCreated({ userId, safeName, rawKey, token }));
+      .send(renderApiKeyCreated({ beingId, safeName, rawKey, token }));
   } catch (err) {
  log.error("Api Keys", "API key create (html) error:", err);
     return res.status(500).send("Failed to create API key");
   }
 });
 
-router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
+router.get("/user/:beingId/api-keys", authenticate, async (req, res) => {
   try {
-    if (req.userId.toString() !== req.params.userId.toString()) {
+    if (req.beingId.toString() !== req.params.beingId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
 
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-    const userId = req.params.userId;
+    const beingId = req.params.beingId;
 
-    const user = await User.findById(req.userId)
+    const user = await Being.findById(req.beingId)
       .select("username metadata");
     if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     const apiKeys = getKeys(user);
@@ -101,7 +101,7 @@ router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
     const errorParam = req.query.error || null;
 
     return res.send(
-      renderApiKeysList({ userId, user, apiKeys, token, errorParam }),
+      renderApiKeysList({ beingId, user, apiKeys, token, errorParam }),
     );
   } catch (err) {
  log.error("Api Keys", "api keys page error:", err);
@@ -110,10 +110,10 @@ router.get("/user/:userId/api-keys", authenticate, async (req, res) => {
 });
 
 router.delete(
-  "/user/:userId/api-keys/:keyId",
+  "/user/:beingId/api-keys/:keyId",
   authenticate,
   async (req, res) => {
-    if (req.userId.toString() !== req.params.userId.toString()) {
+    if (req.beingId.toString() !== req.params.beingId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
     return deleteApiKey(req, res);

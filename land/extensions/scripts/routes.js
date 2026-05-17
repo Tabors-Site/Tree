@@ -75,14 +75,14 @@ router.post(
     try {
       const { nodeId, scriptId } = req.params;
       const { name, script } = req.body;
-      const userId = req.userId;
+      const beingId = req.beingId;
 
       await updateScript({
         nodeId,
         scriptId,
         name,
         script,
-        userId,
+        beingId,
       });
       const qs = filterQuery(req);
 
@@ -101,9 +101,9 @@ router.post(
   async (req, res) => {
     try {
       const { nodeId, scriptId } = req.params;
-      const userId = req.userId;
+      const beingId = req.beingId;
 
-      await executeScript({ nodeId, scriptId, userId });
+      await executeScript({ nodeId, scriptId, beingId });
 
       const qs = filterQuery(req);
       return res.redirect(`/api/v1/node/${nodeId}/script/${scriptId}?${qs}`);
@@ -253,7 +253,7 @@ router.post("/node/:nodeId/script/create", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const { name } = req.body;
-    const userId = req.userId;
+    const beingId = req.beingId;
 
     if (!name) {
       return res.status(400).send("Script name is required");
@@ -262,7 +262,7 @@ router.post("/node/:nodeId/script/create", authenticate, async (req, res) => {
     const result = await updateScript({
       nodeId,
       name,
-      userId,
+      beingId,
     });
 
     const qs = filterQuery(req);

@@ -13,7 +13,7 @@ import { getExtension } from "../loader.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import authenticate from "../../seed/middleware/authenticate.js";
 import rateLimit from "express-rate-limit";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -43,17 +43,17 @@ router.post("/forgot-password", emailLimiter, async (req, res) => {
     return sendOk(res, { message: "Reset link sent if email exists" });
   }
 
-  const user = await User.findOne({ "metadata.email.address": email.trim().toLowerCase() });
+  const user = await Being.findOne({ "metadata.email.address": email.trim().toLowerCase() });
   if (!user) {
     return sendOk(res, { message: "Reset link sent if email exists" });
   }
 
   const token = crypto.randomBytes(32).toString("hex");
 
-  const emailMeta = getUserMeta(user, "email");
+  const emailMeta = getBeingMeta(user, "email");
   emailMeta.resetToken = token;
   emailMeta.resetExpiry = Date.now() + 1000 * 60 * 15;
-  setUserMeta(user, "email", emailMeta);
+  setBeingMeta(user, "email", emailMeta);
   await user.save();
 
   const resetURL = `${getLandUrl()}/api/v1/user/reset-password/${token}`;
@@ -68,7 +68,7 @@ router.post("/user/reset-password", async (req, res) => {
     return sendError(res, 400, ERR.INVALID_INPUT, "Password must be at least 8 characters long");
   }
 
-  const user = await User.findOne({
+  const user = await Being.findOne({
     "metadata.email.resetToken": token,
     "metadata.email.resetExpiry": { $gt: Date.now() },
   });
@@ -80,15 +80,15 @@ router.post("/user/reset-password", async (req, res) => {
   user.password = password;
 
   // Clear reset token
-  const emailMeta = getUserMeta(user, "email");
+  const emailMeta = getBeingMeta(user, "email");
   delete emailMeta.resetToken;
   delete emailMeta.resetExpiry;
-  setUserMeta(user, "email", emailMeta);
+  setBeingMeta(user, "email", emailMeta);
 
   // Invalidate all existing JWT tokens
-  const authMeta = getUserMeta(user, "auth");
+  const authMeta = getBeingMeta(user, "auth");
   authMeta.tokensInvalidBefore = new Date().toISOString();
-  setUserMeta(user, "auth", authMeta);
+  setBeingMeta(user, "auth", authMeta);
 
   await user.save();
 
@@ -108,7 +108,7 @@ router.get("/user/verify/:token", async (req, res) => {
       return sendError(res, 403, ERR.SESSION_EXPIRED, "Invalid or expired verification link");
     }
 
-    const existingUser = await User.findOne({
+    const existingUser = await Being.findOne({
       username: { $regex: `^${escapeRegex(tempUser.username)}$`, $options: "i" },
     });
     if (existingUser) {
@@ -116,26 +116,26 @@ router.get("/user/verify/:token", async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "Username already taken");
     }
 
-    const existingEmail = await User.findOne({ "metadata.email.address": tempUser.email });
+    const existingEmail = await Being.findOne({ "metadata.email.address": tempUser.email });
     if (existingEmail) {
       await tempUser.deleteOne();
       return sendError(res, 400, ERR.INVALID_INPUT, "Email already registered");
     }
 
-    const user = await User.create({
+    const user = await Being.create({
       username: tempUser.username,
       password: tempUser.password,
       // Tier set via user-tiers extension if installed
     });
 
-    setUserMeta(user, "email", { address: tempUser.email, verified: true });
+    setBeingMeta(user, "email", { address: tempUser.email, verified: true });
     await user.save();
 
     const { hooks } = await import("../../seed/hooks.js");
     hooks.run("afterRegister", { user, email: tempUser.email }).catch(() => {});
 
     const authToken = jwt.sign(
-      { userId: user._id, username: user.username },
+      { beingId: user._id, username: user.username },
       JWT_SECRET,
       { expiresIn: "365d" },
     );
@@ -167,7 +167,7 @@ router.post("/user/change-password", authenticate, async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "New password must be at least 8 characters");
     }
 
-    const user = await User.findById(req.userId).select("+password metadata");
+    const user = await Being.findById(req.beingId).select("+password metadata");
     if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
     const bcrypt = (await import("bcrypt")).default;
@@ -180,15 +180,15 @@ router.post("/user/change-password", authenticate, async (req, res) => {
     user.password = newPassword;
 
     // Invalidate all existing tokens
-    const authMeta = getUserMeta(user, "auth");
+    const authMeta = getBeingMeta(user, "auth");
     authMeta.tokensInvalidBefore = new Date().toISOString();
-    setUserMeta(user, "auth", authMeta);
+    setBeingMeta(user, "auth", authMeta);
 
     await user.save();
 
     // Issue new token so user stays logged in
     const newToken = jwt.sign(
-      { userId: user._id, username: user.username },
+      { beingId: user._id, username: user.username },
       JWT_SECRET,
       { expiresIn: "365d" },
     );

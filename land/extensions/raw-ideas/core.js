@@ -2,20 +2,20 @@ import path from "path";
 import fs from "fs";
 import RawIdea from "./model.js";
 import { DELETED } from "../../seed/protocol.js";
-import { createNote } from "../../seed/tree/notes.js";
-import { getUserMeta, setUserMeta, incUserMeta } from "../../seed/tree/userMetadata.js";
+import { createArtifact } from "../../seed/tree/artifacts.js";
+import { getBeingMeta, setBeingMeta, incBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { getExtension } from "../loader.js";
 
 // Services wired from init() via setServices()
 let Node = null;
-let Note = null;
+let _Artifact = null;
 let User = null;
 let logContribution = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
 
 export function setServices({ models, contributions }) {
   Node = models.Node;
-  Note = models.Note;
+  _Artifact = models.Artifact;
   User = models.User;
   if (contributions?.logContribution) logContribution = contributions.logContribution;
 }
@@ -41,7 +41,7 @@ async function extractTaggedUsersAndRewrite(content) {
 
   const identifiers = matches.map((m) => m[1]);
 
-  const users = await User.find({
+  const users = await Being.find({
     $or: [{ username: { $in: identifiers } }, { _id: { $in: identifiers } }],
   });
 
@@ -64,11 +64,11 @@ async function extractTaggedUsersAndRewrite(content) {
 
 const NOTE_TEXT_MAX_CHARS = 5000;
 
-export async function assertNoteTextWithinLimit(content, userId) {
+export async function assertArtifactTextWithinLimit(content, beingId) {
   if (!content) return;
 
-  if (userId) {
-    const user = await User.findById(userId).select("isAdmin").lean();
+  if (beingId) {
+    const user = await Being.findById(beingId).select("isAdmin").lean();
     if (user?.isAdmin) return;
   }
 
@@ -82,7 +82,7 @@ export async function assertNoteTextWithinLimit(content, userId) {
 async function createRawIdea({
   contentType,
   content,
-  userId,
+  beingId,
   file,
   wasAi = false,
 }) {
@@ -90,8 +90,8 @@ async function createRawIdea({
     throw new Error("Invalid content type");
   }
 
-  if (!userId) {
-    throw new Error("Missing required field: userId");
+  if (!beingId) {
+    throw new Error("Missing required field: beingId");
   }
 
   let finalContent = content;
@@ -114,7 +114,7 @@ async function createRawIdea({
 
     taggedUserIds = tagged;
     finalContent = rewrittenContent;
-    await assertNoteTextWithinLimit(rewrittenContent, userId);
+    await assertArtifactTextWithinLimit(rewrittenContent, beingId);
   }
 
   // ── ENERGY ─────────────────────────────────────
@@ -126,7 +126,7 @@ async function createRawIdea({
   }
 
   const { energyUsed } = await useEnergy({
-    userId,
+    beingId,
     action: "rawIdea",
     payload,
     file,
@@ -136,7 +136,7 @@ async function createRawIdea({
   const rawIdea = new RawIdea({
     contentType,
     content: finalContent,
-    userId,
+    beingId,
     tagged: taggedUserIds,
   });
 
@@ -147,12 +147,12 @@ async function createRawIdea({
     ? Math.ceil(file.size / 1024)
     : Math.ceil(Buffer.byteLength(finalContent || "", "utf8") / 1024);
   if (sizeKB > 0) {
-    await incUserMeta(userId, "storage", "usageKB", sizeKB);
+    await incBeingMeta(beingId, "storage", "usageKB", sizeKB);
   }
 
   // ── LOG ────────────────────────────────────────
   await logContribution({
-    userId,
+    beingId,
     nodeId: DELETED,
     wasAi,
     action: "rawIdea",
@@ -173,13 +173,13 @@ async function createRawIdea({
 
 async function convertRawIdeaToNote({
   rawIdeaId,
-  userId,
+  beingId,
   nodeId,
   wasAi = false,
   chatId = null,
   sessionId = null,
 }) {
-  if (!rawIdeaId || !userId || !nodeId) {
+  if (!rawIdeaId || !beingId || !nodeId) {
     throw new Error("Missing or invalid required fields");
   }
 
@@ -192,15 +192,15 @@ async function convertRawIdeaToNote({
     throw new Error("Raw idea already placed or deleted");
   }
 
-  if (rawIdea.userId.toString() !== userId) {
+  if (rawIdea.beingId.toString() !== beingId) {
     throw new Error("You do not own this raw idea");
   }
 
   // 2️⃣ Create note via core (handles hooks, energy, tags, storage, contribution)
-  const result = await createNote({
+  const result = await createArtifact({
     contentType: rawIdea.contentType,
     content: rawIdea.content,
-    userId,
+    beingId,
     nodeId,
     file: rawIdea.contentType === "file" ? { filename: rawIdea.content, size: 0 } : null,
     wasAi,
@@ -212,7 +212,7 @@ async function convertRawIdeaToNote({
 
   // 3️⃣ Log raw idea placement contribution
   await logContribution({
-    userId,
+    beingId,
     nodeId,
     wasAi,
     chatId,
@@ -223,7 +223,7 @@ async function convertRawIdeaToNote({
       action: "placed",
       rawIdeaId: rawIdeaId.toString(),
       targetNodeId: nodeId,
-      noteId: result.Note._id.toString(),
+      noteId: result.artifact._id.toString(),
     },
   });
 
@@ -233,25 +233,25 @@ async function convertRawIdeaToNote({
 
   return {
     message: "Raw idea converted to note",
-    note: result.Note,
+    note: result.artifact,
   };
 }
 
-async function deleteRawIdeaAndFile({ rawIdeaId, userId, wasAi = false }) {
+async function deleteRawIdeaAndFile({ rawIdeaId, beingId, wasAi = false }) {
   const rawIdea = await RawIdea.findById(rawIdeaId);
   if (!rawIdea) {
     throw new Error("Raw idea not found");
   }
 
   // ownership check
-  if (rawIdea.userId.toString() !== userId) {
+  if (rawIdea.beingId.toString() !== beingId) {
     throw new Error("You do not own this raw idea");
   }
   let energyUsed = null;
 
   if (rawIdea.contentType === "text") {
     const energyResult = await useEnergy({
-      userId,
+      beingId,
       action: "removeNote",
     });
     energyUsed = energyResult.energyUsed;
@@ -285,7 +285,7 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId, wasAi = false }) {
   await rawIdea.save();
 
   if (fileSizeKB > 0) {
-    await User.findByIdAndUpdate(userId, [
+    await Being.findByIdAndUpdate(beingId, [
       {
         $set: {
           "metadata.storage.usageKB": {
@@ -298,7 +298,7 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId, wasAi = false }) {
 
   // --- LOG CONTRIBUTION ---
   await logContribution({
-    userId,
+    beingId,
     nodeId: DELETED,
     wasAi,
     action: "rawIdea",
@@ -322,21 +322,21 @@ async function deleteRawIdeaAndFile({ rawIdeaId, userId, wasAi = false }) {
  *   "pending" also includes legacy docs with no status field.
  */
 async function getRawIdeas({
-  userId,
+  beingId,
   limit,
   startDate,
   endDate,
   status = "pending",
 }) {
-  if (!userId) {
-    throw new Error("Missing required parameter: userId");
+  if (!beingId) {
+    throw new Error("Missing required parameter: beingId");
   }
 
   if (limit !== undefined && (typeof limit !== "number" || limit <= 0)) {
     throw new Error("Invalid limit: must be a positive number");
   }
 
-  const queryObj = { userId };
+  const queryObj = { beingId };
 
   if (!status || status === "all") {
     // no status filter — return everything for this user
@@ -388,14 +388,14 @@ function wordify(str) {
     .trim();
 }
 async function searchRawIdeasByUser({
-  userId,
+  beingId,
   query,
   limit,
   startDate,
   endDate,
   status = "pending",
 }) {
-  if (!userId) throw new Error("Missing required parameter: userId");
+  if (!beingId) throw new Error("Missing required parameter: beingId");
   if (!query || typeof query !== "string") {
     throw new Error("Query must be a non-empty string");
   }
@@ -433,7 +433,7 @@ async function searchRawIdeasByUser({
   }
 
   const mongoQueryObj = {
-    userId, // inbox only
+    beingId, // inbox only
     contentType: "text", // files have no searchable text
     $and: conditions,
   };
@@ -475,12 +475,12 @@ async function searchRawIdeasByUser({
 
 const AUTO_PLACE_ELIGIBLE = ["standard", "premium"];
 
-async function toggleAutoPlace({ userId, enabled }) {
-  if (!userId) throw new Error("Missing required parameter: userId");
+async function toggleAutoPlace({ beingId, enabled }) {
+  if (!beingId) throw new Error("Missing required parameter: beingId");
   if (typeof enabled !== "boolean")
     throw new Error("enabled must be a boolean");
 
-  const user = await User.findById(userId).select(
+  const user = await Being.findById(beingId).select(
     "isAdmin metadata",
   );
   if (!user) throw new Error("User not found");
@@ -489,7 +489,7 @@ async function toggleAutoPlace({ userId, enabled }) {
   if (!user.isAdmin) {
     try {
       const tiers = getExtension("user-tiers");
-      const allowed = tiers?.exports ? await tiers.exports.hasAccess(userId, "auto-place") : true;
+      const allowed = tiers?.exports ? await tiers.exports.hasAccess(beingId, "auto-place") : true;
       if (!allowed) {
         throw new Error("Auto-place requires a Standard or Premium plan.");
       }
@@ -498,10 +498,10 @@ async function toggleAutoPlace({ userId, enabled }) {
     }
   }
 
-  const { batchSetUserMeta } = await import("../../seed/tree/userMetadata.js");
-  const rawIdeas = getUserMeta(user, "rawIdeas");
+  const { batchSetBeingMeta } = await import("../../seed/tree/beingMetadata.js");
+  const rawIdeas = getBeingMeta(user, "rawIdeas");
   rawIdeas.autoPlace = enabled;
-  await batchSetUserMeta(String(user._id), "rawIdeas", rawIdeas);
+  await batchSetBeingMeta(String(user._id), "rawIdeas", rawIdeas);
 
   return { message: `Auto-place ${enabled ? "enabled" : "disabled"}`, enabled };
 }

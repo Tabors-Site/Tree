@@ -27,7 +27,7 @@ export async function init(core) {
 
   configure({
     Node: core.models.Node,
-    Note: core.models.Note,
+    Artifact: core.models.Artifact,
     runChat,
     metadata: core.metadata,
     getExtension,
@@ -55,7 +55,7 @@ export async function init(core) {
 
   // ── Accumulate activity via hooks ──
 
-  core.hooks.register("afterNote", async ({ nodeId }) => {
+  core.hooks.register("afterArtifact", async ({ nodeId }) => {
     if (!nodeId) return;
     // Walk to root
     let cursor = await core.models.Node.findById(nodeId).select("_id rootOwner parent").lean();
@@ -115,7 +115,7 @@ export async function init(core) {
         const ringState = core.metadata.getExtMeta(root, "rings");
         if (!ringState?.started) continue;
 
-        const owner = await core.models.User.findById(root.rootOwner).select("username").lean();
+        const owner = await core.models.Being.findById(root.rootOwner).select("username").lean();
         if (!owner) continue;
 
         await onExhale(root._id, root.rootOwner, owner.username);
@@ -156,7 +156,7 @@ export async function init(core) {
         rootId = String(node._id);
         rootNode = node;
       } else {
-        // rootOwner is a userId, not the root node. Walk up.
+        // rootOwner is a beingId, not the root node. Walk up.
         let cursor = node;
         while (cursor) {
           if (cursor.rootOwner && String(cursor._id) !== String(cursor.parent)) {

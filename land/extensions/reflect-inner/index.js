@@ -8,9 +8,9 @@
 import { v4 as uuidv4 } from "uuid";
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { getNotes } from "../../seed/tree/notes.js";
-import { createNote } from "../../seed/tree/notes.js";
+import Artifact from "../../seed/models/artifact.js";
+import { getArtifacts } from "../../seed/tree/artifacts.js";
+import { createArtifact } from "../../seed/tree/artifacts.js";
 import { getExtMeta, mergeExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 const DAILY_MS = 24 * 60 * 60 * 1000;
@@ -59,8 +59,8 @@ async function _reflect(rootId, runChat) {
   const ownerId = String(rootNode.rootOwner);
 
   // Read thoughts
-  const result = await getNotes({ nodeId: String(innerNode._id), limit: 200 });
-  const thoughts = result?.notes || [];
+  const result = await getArtifacts({ nodeId: String(innerNode._id), limit: 200 });
+  const thoughts = result?.artifacts || [];
   if (thoughts.length < MIN_THOUGHTS) return;
 
   // Build prompt
@@ -70,7 +70,7 @@ async function _reflect(rootId, runChat) {
     .join("\n");
 
   const { answer } = await runChat({
-    userId: ownerId,
+    beingId: ownerId,
     username: "reflect-inner",
     message:
       `You are summarizing a tree's internal observations from the past 24 hours.\n\n` +
@@ -96,10 +96,10 @@ async function _reflect(rootId, runChat) {
   if (!reflectNode) return;
 
   // Write themes as a note
-  await createNote({
-    contentType: "text",
+  await createArtifact({
+    origin: "ibp",
     content: answer.trim(),
-    userId: ownerId,
+    beingId: ownerId,
     nodeId: String(reflectNode._id),
     wasAi: true,
   });
@@ -109,15 +109,15 @@ async function _reflect(rootId, runChat) {
   if (innerNodeFull) await mergeExtMeta(innerNodeFull, "reflect-inner", { lastReflection: Date.now() });
 
   // Cap reflections
-  const noteCount = await Note.countDocuments({ nodeId: String(reflectNode._id) });
+  const noteCount = await Artifact.countDocuments({ nodeId: String(reflectNode._id) });
   if (noteCount > MAX_REFLECTIONS) {
-    const oldest = await Note.find({ nodeId: String(reflectNode._id) })
+    const oldest = await Artifact.find({ nodeId: String(reflectNode._id) })
       .sort({ createdAt: 1 })
       .limit(noteCount - MAX_REFLECTIONS)
       .select("_id")
       .lean();
     if (oldest.length > 0) {
-      await Note.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
+      await Artifact.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
     }
   }
 

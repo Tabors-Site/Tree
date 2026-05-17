@@ -18,7 +18,7 @@ export async function init(core) {
     models: core.models,
     contributions: core.contributions,
     llm: { ...core.llm, runChat: async (opts) => {
-      if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+      if (opts.beingId && opts.beingId !== "SYSTEM" && !await core.llm.userHasLlm(opts.beingId)) return { answer: null };
       return core.llm.runChat({ ...opts, llmPriority: BG });
     } },
     energy: core.energy || null,

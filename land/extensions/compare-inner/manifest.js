@@ -17,7 +17,7 @@ export default {
     "with each weekly cycle.",
 
   needs: {
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
     services: ["hooks", "llm"],
   },
 

@@ -271,7 +271,7 @@ export async function routeBatch(signals, config) {
  * AI routing for ambiguous signals (selective mode).
  * Sends the batch to the AI for scoring.
  */
-export async function aiRoute(signals, profiles, userId) {
+export async function aiRoute(signals, profiles, beingId) {
   if (!_runChat || signals.length === 0 || profiles.length === 0) return [];
 
   const signalSummary = signals.map(s => ({
@@ -296,7 +296,7 @@ export async function aiRoute(signals, profiles, userId) {
 
   try {
     const { answer } = await _runChat({
-      userId: userId || "system",
+      beingId: beingId || "system",
       username: "mycelium",
       message: prompt,
       mode: "home:default",

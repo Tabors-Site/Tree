@@ -11,18 +11,18 @@
 
 import log from "../log.js";
 import Node from "../models/node.js";
-import Note from "../models/note.js";
+import Artifact from "../models/artifact.js";
 import Contribution from "../models/contribution.js";
-import { NODE_STATUS, CONTENT_TYPE } from "../protocol.js";
+import { NODE_STATUS, ARTIFACT_ORIGIN } from "../protocol.js";
 import { getLandConfigValue } from "../landConfig.js";
 
 // Configurable caps. Read at call time so config changes take effect.
 function maxTreeDepth() { return Number(getLandConfigValue("treeSummaryMaxDepth")) || 4; }
 function maxTreeNodes() { return Number(getLandConfigValue("treeSummaryMaxNodes")) || 60; }
-function maxNotesPerQuery() { return Math.min(Number(getLandConfigValue("noteQueryLimit")) || 5000, 50000); }
+function maxArtifactsPerQuery() { return Math.min(Number(getLandConfigValue("artifactQueryLimit")) || Number(getLandConfigValue("noteQueryLimit")) || 5000, 50000); }
 function maxAncestorDepth() { return Math.max(5, Math.min(Number(getLandConfigValue("treeAncestorDepth")) || 50, 200)); }
 function maxContributionsPerNode() { return Math.max(10, Math.min(Number(getLandConfigValue("treeContributionsPerNode")) || 500, 10000)); }
-function maxNotesPerNodeQuery() { return Math.max(10, Math.min(Number(getLandConfigValue("treeNotesPerNode")) || 100, 1000)); }
+function maxArtifactsPerNodeQuery() { return Math.max(10, Math.min(Number(getLandConfigValue("treeArtifactsPerNode")) || Number(getLandConfigValue("treeNotesPerNode")) || 100, 1000)); }
 function maxChildrenResolve() { return Math.max(10, Math.min(Number(getLandConfigValue("treeMaxChildrenResolve")) || 200, 1000)); }
 function maxAllDataDepth() { return Math.max(5, Math.min(Number(getLandConfigValue("treeAllDataDepth")) || 20, 50)); }
 const MAX_STRIP_DEPTH = 10; // not configurable, internal safety
@@ -38,7 +38,7 @@ export async function getNodeName(nodeId) {
 
 /**
  * Get a node formatted for AI consumption.
- * Notes capped. Children resolved by name only (no recursive load).
+ * Artifacts capped. Children resolved by name only (no recursive load).
  */
 export async function getNodeForAi(nodeId) {
   if (!nodeId) throw new Error("Node ID is required");
@@ -46,10 +46,10 @@ export async function getNodeForAi(nodeId) {
   const node = await Node.findById(nodeId).lean();
   if (!node) throw new Error(`Node ${nodeId} not found`);
 
-  const notes = await Note.find({ nodeId: node._id, contentType: CONTENT_TYPE.TEXT })
-    .populate("userId", "username -_id")
+  const artifacts = await Artifact.find({ nodeId: node._id, origin: ARTIFACT_ORIGIN.IBP })
+    .populate("beingId", "username -_id")
     .sort({ createdAt: -1 })
-    .limit(maxNotesPerNodeQuery())
+    .limit(maxArtifactsPerNodeQuery())
     .lean();
 
   const parentNodeId = node.parent ? node.parent.toString() : null;
@@ -71,9 +71,9 @@ export async function getNodeForAi(nodeId) {
     parentNodeId,
     parentName,
     children,
-    notes: notes.map(n => ({
-      username: n.userId?.username || "Unknown",
-      content: n.content,
+    artifacts: artifacts.map(a => ({
+      username: a.beingId?.username || "Unknown",
+      content: a.content,
     })),
   };
 
@@ -207,8 +207,8 @@ export async function getTreeStructure(rootId, filters = {}) {
 }
 
 /**
- * Get full node data with contributions, notes, ancestors, and status filtering.
- * Contributions and notes capped per node. Total nodes capped.
+ * Get full node data with contributions, artifacts, ancestors, and status filtering.
+ * Contributions and artifacts capped per node. Total nodes capped.
  */
 export async function getAllNodeData(rootId, filters = {}) {
   if (!rootId) throw new Error("Root node ID is required");
@@ -230,12 +230,12 @@ export async function getAllNodeData(rootId, filters = {}) {
       .limit(maxContributionsPerNode())
       .lean();
 
-    const notes = await Note.find({ nodeId: node._id, contentType: CONTENT_TYPE.TEXT })
-      .populate("userId", "username -_id")
+    const artifacts = await Artifact.find({ nodeId: node._id, origin: ARTIFACT_ORIGIN.IBP })
+      .populate("beingId", "username -_id")
       .sort({ createdAt: -1 })
-      .limit(maxNotesPerNodeQuery())
+      .limit(maxArtifactsPerNodeQuery())
       .lean();
-    node.notes = notes.map(n => ({ username: n.userId?.username || "Unknown", content: n.content }));
+    node.artifacts = artifacts.map(a => ({ username: a.beingId?.username || "Unknown", content: a.content }));
 
     if (node.children?.length > 0) {
       const kids = [];

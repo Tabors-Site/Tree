@@ -53,27 +53,27 @@ function enqueue(nodeId, fn) {
 //add note to node
 
 //bound to user id
-function makeSafeFunctions(userId) {
+function makeSafeFunctions(beingId) {
   return {
     getApi,
 
     setValueForNode: (nodeId, key, value, version) =>
       enqueue(nodeId, () =>
-        setValueForNode({ nodeId, key, value, version, userId }),
+        setValueForNode({ nodeId, key, value, version, beingId }),
       ),
 
     setGoalForNode: (nodeId, key, goal, version) =>
       enqueue(nodeId, () =>
-        setGoalForNode({ nodeId, key, goal, version, userId }),
+        setGoalForNode({ nodeId, key, goal, version, beingId }),
       ),
 
     editStatusForNode: (nodeId, status, version, isInherited) =>
       enqueue(nodeId, () =>
-        editStatus({ nodeId, status, version, isInherited, userId }),
+        editStatus({ nodeId, status, version, isInherited, beingId }),
       ),
 
     addPrestigeForNode: (nodeId) =>
-      enqueue(nodeId, () => addPrestige({ nodeId, userId })),
+      enqueue(nodeId, () => addPrestige({ nodeId, beingId })),
 
     updateScheduleForNode: (nodeId, versionIndex, newSchedule, reeffectTime) =>
       enqueue(nodeId, () =>
@@ -82,7 +82,7 @@ function makeSafeFunctions(userId) {
           versionIndex,
           newSchedule,
           reeffectTime,
-          userId,
+          beingId,
         }),
       ),
   };

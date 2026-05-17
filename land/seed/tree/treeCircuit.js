@@ -23,7 +23,7 @@
 
 import log from "../log.js";
 import Node from "../models/node.js";
-import User from "../models/user.js";
+import Being from "../models/being.js";
 import Contribution from "../models/contribution.js";
 import { hooks } from "../hooks.js";
 import { getLandConfigValue } from "../landConfig.js";
@@ -230,7 +230,7 @@ export async function tripTree(rootId, reason, scores = {}) {
  * Revive a tripped tree. Only the tree owner or an admin can revive.
  *
  * @param {string} rootId
- * @param {string} actorId - userId of the caller (required for authorization)
+ * @param {string} actorId - beingId of the caller (required for authorization)
  */
 export async function reviveTree(rootId, actorId) {
   if (!rootId) throw new Error("rootId is required");
@@ -239,7 +239,7 @@ export async function reviveTree(rootId, actorId) {
   // Authorization: only tree owner or admin can revive
   const access = await resolveTreeAccess(rootId, actorId);
   if (!access.ok || !access.isOwner) {
-    const actor = await User.findById(actorId).select("isAdmin").lean();
+    const actor = await Being.findById(actorId).select("isAdmin").lean();
     if (!actor?.isAdmin) {
       throw new Error("Only the tree owner or admin can revive a tripped tree");
     }

@@ -37,7 +37,7 @@ export default {
           includeChildren: true,
           includeSiblings: false,
           includeParentChain: !isRoot,
-          userId: null,
+          beingId: null,
         });
       } catch {}
     }

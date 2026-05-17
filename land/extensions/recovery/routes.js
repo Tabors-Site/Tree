@@ -3,7 +3,7 @@ import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import log from "../../seed/log.js";
 import NodeModel from "../../seed/models/node.js";
-import UserModel from "../../seed/models/user.js";
+import UserModel from "../../seed/models/being.js";
 import {
   isInitialized,
   findRecoveryNodes,
@@ -35,7 +35,7 @@ router.get("/root/:rootId/recovery", async (req, res, next) => {
         ]);
       }
       const { renderRecoveryDashboard } = await import("./pages/dashboard.js");
-      res.send(renderRecoveryDashboard({ rootId, rootName: root.name, status, milestones, patterns, history, token: req.query.token || null, userId: req.userId, inApp: !!req.query.inApp }));
+      res.send(renderRecoveryDashboard({ rootId, rootName: root.name, status, milestones, patterns, history, token: req.query.token || null, beingId: req.beingId, inApp: !!req.query.inApp }));
     });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, "Dashboard failed");
@@ -56,9 +56,9 @@ router.post("/root/:rootId/recovery", authenticate, async (req, res) => {
     const root = await NodeModel.findById(rootId).select("rootOwner contributors").lean();
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
 
-    const userId = req.userId;
-    const isOwner = root.rootOwner?.toString() === userId;
-    const isContributor = root.contributors?.some(c => c.toString() === userId);
+    const beingId = req.beingId;
+    const isOwner = root.rootOwner?.toString() === beingId;
+    const isContributor = root.contributors?.some(c => c.toString() === beingId);
     if (!isOwner && !isContributor) return sendError(res, 403, ERR.FORBIDDEN, "No access");
 
     const { isExtensionBlockedAtNode } = await import("../../seed/tree/extensionScope.js");
@@ -66,10 +66,10 @@ router.post("/root/:rootId/recovery", authenticate, async (req, res) => {
       return sendError(res, 403, ERR.EXTENSION_BLOCKED, "Recovery is blocked on this branch.");
     }
 
-    const user = await UserModel.findById(userId).select("username").lean();
+    const user = await UserModel.findById(beingId).select("username").lean();
     const username = user?.username || "user";
 
-    const result = await handleMessage(message, { userId, username, rootId, res });
+    const result = await handleMessage(message, { beingId, username, rootId, res });
 
     if (result.error) {
       if (!res.headersSent) sendError(res, result.status || 500, result.code || ERR.INTERNAL, result.message);
@@ -128,12 +128,12 @@ router.get("/root/:rootId/recovery/taper", authenticate, async (req, res) => {
     const nodes = await findRecoveryNodes(req.params.rootId);
     if (!nodes) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Recovery tree not found");
 
-    const Note = (await import("../../seed/models/note.js")).default;
+    const Artifact = (await import("../../seed/models/artifact.js")).default;
     const taperData = {};
 
     for (const [name, sub] of Object.entries(nodes.substances || {})) {
       if (!sub.schedule) continue;
-      const notes = await Note.find({ nodeId: sub.schedule })
+      const notes = await Artifact.find({ nodeId: sub.schedule })
         .sort({ createdAt: 1 })
         .select("content createdAt")
         .lean();
@@ -169,7 +169,7 @@ router.post("/root/:rootId/recovery/substance", authenticate, async (req, res) =
     const { name, startingTarget, finalTarget } = req.body;
     if (!name) return sendError(res, 400, ERR.INVALID_INPUT, "Substance name required");
 
-    const result = await addSubstance(req.params.rootId, name, req.userId, { startingTarget, finalTarget });
+    const result = await addSubstance(req.params.rootId, name, req.beingId, { startingTarget, finalTarget });
     sendOk(res, result);
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);

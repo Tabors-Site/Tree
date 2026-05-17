@@ -45,13 +45,13 @@ export function registerSessionType(key, value) {
 // DATA STRUCTURES
 // ─────────────────────────────────────────────────────────────────────────
 
-// sessionId -> { sessionId, userId, type, createdAt, lastActivity, status, description, meta }
+// sessionId -> { sessionId, beingId, type, createdAt, lastActivity, status, description, meta }
 const sessions = new Map();
 
-// userId -> Set<sessionId>
+// beingId -> Set<sessionId>
 const userSessionIndex = new Map();
 
-// userId -> sessionId  (which session controls the iframe)
+// beingId -> sessionId  (which session controls the iframe)
 const activeNavigator = new Map();
 
 // sessionId -> AbortController  (allows killing in-flight work)
@@ -77,8 +77,8 @@ export function setMaxSessions(n) {
 /**
  * Create or retrieve a session. Single entry point for all session creation.
  */
-export function createSession({ userId, type, scopeKey, description = "", meta = {}, idleTTL = DEFAULT_SCOPE_TTL }) {
-  if (!userId) throw new Error("createSession requires userId");
+export function createSession({ beingId, type, scopeKey, description = "", meta = {}, idleTTL = DEFAULT_SCOPE_TTL }) {
+  if (!beingId) throw new Error("createSession requires beingId");
   if (!type || typeof type !== "string") throw new Error("createSession requires a valid type string");
 
   const now = Date.now();
@@ -97,14 +97,14 @@ export function createSession({ userId, type, scopeKey, description = "", meta =
     const existing = scopedSessions.get(scopeKey);
     if (existing && now - existing.lastActivity < idleTTL) {
       existing.lastActivity = now;
-      const { isActiveNavigator } = registerSession({ sessionId: existing.sessionId, userId, type, description, meta });
+      const { isActiveNavigator } = registerSession({ sessionId: existing.sessionId, beingId, type, description, meta });
       return { sessionId: existing.sessionId, reused: true, isActiveNavigator };
     }
   }
 
   // Create a new session
   const sessionId = uuidv4();
-  const { isActiveNavigator } = registerSession({ sessionId, userId, type, description, meta });
+  const { isActiveNavigator } = registerSession({ sessionId, beingId, type, description, meta });
 
   // Store in scoped map if scopeKey provided (with cap)
   if (scopeKey) {
@@ -132,9 +132,9 @@ export function createSession({ userId, type, scopeKey, description = "", meta =
  */
 const MAX_DESCRIPTION_LENGTH = 500;
 
-export function registerSession({ sessionId, userId, type, description = "", meta = {} }) {
+export function registerSession({ sessionId, beingId, type, description = "", meta = {} }) {
   const now = Date.now();
-  const uid = String(userId);
+  const uid = String(beingId);
   // Cap description to prevent oversized session objects
   const safeDesc = typeof description === "string" ? description.slice(0, MAX_DESCRIPTION_LENGTH) : "";
 
@@ -149,7 +149,7 @@ export function registerSession({ sessionId, userId, type, description = "", met
 
   sessions.set(sessionId, {
     sessionId,
-    userId: uid,
+    beingId: uid,
     type,
     createdAt: now,
     lastActivity: now,
@@ -179,7 +179,7 @@ export function registerSession({ sessionId, userId, type, description = "", met
   const isNav = activeNavigator.get(uid) === sessionId;
   log.debug("Session", `Session registered: ${type} [${sessionId.slice(0, 8)}] for user ${uid} (navigator: ${isNav})`);
 
-  hooks.run("afterSessionCreate", { sessionId, userId: uid, type, description, meta, isActiveNavigator: isNav }).catch(() => {});
+  hooks.run("afterSessionCreate", { sessionId, beingId: uid, type, description, meta, isActiveNavigator: isNav }).catch(() => {});
   return { sessionId, isActiveNavigator: isNav };
 }
 
@@ -202,7 +202,7 @@ export function endSession(sessionId) {
   }
 
   // Capture session data before deletion so the hook gets full context
-  const uid = session.userId;
+  const uid = session.beingId;
   const { type, meta, description } = session;
 
   sessions.delete(sessionId);
@@ -217,15 +217,15 @@ export function endSession(sessionId) {
     promoteNavigator(uid);
   }
 
-  hooks.run("afterSessionEnd", { sessionId, userId: uid, type, meta, description }).catch(() => {});
+  hooks.run("afterSessionEnd", { sessionId, beingId: uid, type, meta, description }).catch(() => {});
 }
 
 /**
  * Remove all sessions for a user (e.g. on disconnect).
  * Fires afterSessionEnd for each session so extensions can clean up.
  */
-export function clearUserSessions(userId) {
-  const uid = String(userId);
+export function clearUserSessions(beingId) {
+  const uid = String(beingId);
   const userSet = userSessionIndex.get(uid);
   if (!userSet) return;
 
@@ -240,7 +240,7 @@ export function clearUserSessions(userId) {
     sessions.delete(sid);
     // Fire hook so extensions know the session ended
     if (session) {
-      hooks.run("afterSessionEnd", { sessionId: sid, userId: uid, type: session.type, meta: session.meta, description: session.description }).catch(() => {});
+      hooks.run("afterSessionEnd", { sessionId: sid, beingId: uid, type: session.type, meta: session.meta, description: session.description }).catch(() => {});
     }
   }
   userSessionIndex.delete(uid);
@@ -288,40 +288,40 @@ export function updateSessionMeta(sessionId, metaUpdates) {
 export function canNavigate(sessionId) {
   const session = sessions.get(sessionId);
   if (!session || session.status !== "active") return false;
-  const isNav = activeNavigator.get(session.userId) === sessionId;
+  const isNav = activeNavigator.get(session.beingId) === sessionId;
   if (isNav) session.lastActivity = Date.now();
   return isNav;
 }
 
-export function isActiveNavigator(userId, sessionId) {
-  return activeNavigator.get(String(userId)) === sessionId;
+export function isActiveNavigator(beingId, sessionId) {
+  return activeNavigator.get(String(beingId)) === sessionId;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // NAVIGATOR CONTROL
 // ─────────────────────────────────────────────────────────────────────────
 
-export function setActiveNavigator(userId, sessionId) {
+export function setActiveNavigator(beingId, sessionId) {
   const session = sessions.get(sessionId);
-  if (!session || session.userId !== String(userId)) return false;
-  activeNavigator.set(String(userId), sessionId);
+  if (!session || session.beingId !== String(beingId)) return false;
+  activeNavigator.set(String(beingId), sessionId);
   return true;
 }
 
-export function getActiveNavigator(userId) {
-  return activeNavigator.get(String(userId)) || null;
+export function getActiveNavigator(beingId) {
+  return activeNavigator.get(String(beingId)) || null;
 }
 
-export function clearActiveNavigator(userId) {
-  activeNavigator.delete(String(userId));
+export function clearActiveNavigator(beingId) {
+  activeNavigator.delete(String(beingId));
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // QUERY
 // ─────────────────────────────────────────────────────────────────────────
 
-export function getSessionsForUser(userId) {
-  const uid = String(userId);
+export function getSessionsForUser(beingId) {
+  const uid = String(beingId);
   const userSet = userSessionIndex.get(uid);
   if (!userSet) return [];
   const result = [];
@@ -399,10 +399,10 @@ export function registerPromotionPriority(key) {
   }
 }
 
-function promoteNavigator(userId) {
-  const userSet = userSessionIndex.get(userId);
+function promoteNavigator(beingId) {
+  const userSet = userSessionIndex.get(beingId);
   if (!userSet || userSet.size === 0) {
-    activeNavigator.delete(userId);
+    activeNavigator.delete(beingId);
     return;
   }
 
@@ -411,14 +411,14 @@ function promoteNavigator(userId) {
     for (const sid of userSet) {
       const s = sessions.get(sid);
       if (s && s.type === type && s.status === "active") {
-        activeNavigator.set(userId, sid);
-        log.debug("Session", `Navigator promoted: ${type} [${sid.slice(0, 8)}] for user ${userId}`);
+        activeNavigator.set(beingId, sid);
+        log.debug("Session", `Navigator promoted: ${type} [${sid.slice(0, 8)}] for user ${beingId}`);
         return;
       }
     }
   }
 
-  activeNavigator.delete(userId);
+  activeNavigator.delete(beingId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────

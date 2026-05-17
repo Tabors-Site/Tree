@@ -19,9 +19,9 @@ function MAX_INHERITED_NODES() { return Math.max(100, Math.min(Number(getLandCon
 
 async function editStatus({
   nodeId, status, isInherited,
-  userId, wasAi = false, chatId = null, sessionId = null,
+  beingId, wasAi = false, chatId = null, sessionId = null,
 }) {
-  if (!nodeId || !userId) throw new Error("nodeId and userId are required");
+  if (!nodeId || !beingId) throw new Error("nodeId and beingId are required");
   if (!status || !VALID_STATUSES.has(status)) {
     throw new Error(`Invalid status "${status}". Valid: ${[...VALID_STATUSES].join(", ")}`);
   }
@@ -34,7 +34,7 @@ async function editStatus({
   if (status === NODE_STATUS.COMPLETED) isInherited = true;
 
   // beforeStatusChange hook: extensions can validate or cancel
-  const beforeData = { node, status, userId };
+  const beforeData = { node, status, beingId };
   const hookResult = await hooks.run("beforeStatusChange", beforeData);
   if (hookResult.cancelled) {
     const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
@@ -44,13 +44,13 @@ async function editStatus({
   node.status = status;
   await node.save();
 
-  hooks.run("afterStatusChange", { node, status, userId })
+  hooks.run("afterStatusChange", { node, status, beingId })
     .catch(err => log.debug("Status", `afterStatusChange hook error: ${err.message}`));
 
-  checkCascade(nodeId, { action: "status:change", status, userId }).catch(() => {});
+  checkCascade(nodeId, { action: "status:change", status, beingId }).catch(() => {});
 
   await logContribution({
-    userId, nodeId, wasAi, chatId, sessionId,
+    beingId, nodeId, wasAi, chatId, sessionId,
     action: "editStatus",
     statusEdited: status,
   });
@@ -59,7 +59,7 @@ async function editStatus({
   if (isInherited && node.children?.length > 0) {
     const maxDepth = Number(getLandConfigValue("cascadeMaxDepth")) || 50;
     let totalAffected = 0;
-    await inheritStatus(node.children, status, userId, wasAi, chatId, sessionId, 0, maxDepth, { count: totalAffected, max: MAX_INHERITED_NODES() });
+    await inheritStatus(node.children, status, beingId, wasAi, chatId, sessionId, 0, maxDepth, { count: totalAffected, max: MAX_INHERITED_NODES() });
   }
 
   return {
@@ -72,7 +72,7 @@ async function editStatus({
  * Explicit depth parameter (no arguments[] hack).
  * Capped by both depth and total node count.
  */
-async function inheritStatus(childIds, status, userId, wasAi, chatId, sessionId, depth, maxDepth, counter) {
+async function inheritStatus(childIds, status, beingId, wasAi, chatId, sessionId, depth, maxDepth, counter) {
   if (depth >= maxDepth) return;
 
   for (const childId of childIds) {
@@ -85,14 +85,14 @@ async function inheritStatus(childIds, status, userId, wasAi, chatId, sessionId,
     counter.count++;
 
     await logContribution({
-      userId, nodeId: childId, wasAi, chatId, sessionId,
+      beingId, nodeId: childId, wasAi, chatId, sessionId,
       action: "editStatus",
       statusEdited: status,
     });
 
     const child = await Node.findById(childId).select("children").lean();
     if (child?.children?.length > 0) {
-      await inheritStatus(child.children, status, userId, wasAi, chatId, sessionId, depth + 1, maxDepth, counter);
+      await inheritStatus(child.children, status, beingId, wasAi, chatId, sessionId, depth + 1, maxDepth, counter);
     }
   }
 }

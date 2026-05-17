@@ -114,7 +114,7 @@ function validateValue(key, value, label) {
 
 const ALLOWED_POLICIES = ["OWNER_ONLY", "ANYONE", "MAJORITY", "ALL"];
 
-export async function setTransactionPolicy({ rootNodeId, policy, userId }) {
+export async function setTransactionPolicy({ rootNodeId, policy, beingId }) {
   if (!ALLOWED_POLICIES.includes(policy)) {
     throw new Error("Invalid transaction policy");
   }
@@ -130,7 +130,7 @@ export async function setTransactionPolicy({ rootNodeId, policy, userId }) {
     throw new Error("Not a root node");
   }
 
-  if (root.rootOwner.toString() !== userId.toString()) {
+  if (root.rootOwner.toString() !== beingId.toString()) {
     throw new Error("Only root owner can change transaction policy");
   }
   if (getPolicy(root) === policy) {
@@ -159,7 +159,7 @@ export const createTransaction = async ({
   sideB,
   valuesA,
   valuesB,
-  userId,
+  beingId,
 }) => {
   validateTransactionSides({ sideA, sideB });
   assertNonNegativeTradeMap(valuesA, "sideA");
@@ -194,19 +194,19 @@ export const createTransaction = async ({
   }
 
   if (sideA.kind === "NODE") {
-    await resolveTreeAccess(sideA.nodeId, userId);
+    await resolveTreeAccess(sideA.nodeId, beingId);
   }
 
   if (sideB.kind === "NODE") {
-    await resolveTreeAccess(sideB.nodeId, userId);
+    await resolveTreeAccess(sideB.nodeId, beingId);
   }
 
-  const approvalGroups = await buildApprovalGroups({ sideA, sideB }, userId);
+  const approvalGroups = await buildApprovalGroups({ sideA, sideB }, beingId);
 
   const allResolved = approvalGroups.every((g) => g.resolved);
 
   const { energyUsed } = await useEnergy({
-    userId,
+    beingId,
     action: "transaction",
   });
 
@@ -224,7 +224,7 @@ export const createTransaction = async ({
   });
   if (nodeA) {
     await logContribution({
-      userId,
+      beingId,
       nodeId: nodeA._id,
       action: "transaction",
       tradeId: transaction._id,
@@ -236,7 +236,7 @@ export const createTransaction = async ({
         counterpartyNodeId: nodeB?._id ?? null,
         versionSelf: "0",
         versionCounterparty: "0",
-        actorUserId: userId,
+        actorUserId: beingId,
       },
       energyUsed,
     });
@@ -244,7 +244,7 @@ export const createTransaction = async ({
 
   if (nodeB) {
     await logContribution({
-      userId,
+      beingId,
       nodeId: nodeB._id,
       action: "transaction",
       tradeId: transaction._id,
@@ -256,14 +256,14 @@ export const createTransaction = async ({
         counterpartyNodeId: nodeA?._id ?? null,
         versionSelf: "0",
         versionCounterparty: "0",
-        actorUserId: userId,
+        actorUserId: beingId,
       },
       energyUsed,
     });
   }
 
   if (transaction.status === "accepted") {
-    await executeTransaction(transaction, userId);
+    await executeTransaction(transaction, beingId);
   }
 
   return transaction;
@@ -273,7 +273,7 @@ export async function getTransactions({
   nodeId,
   version,
   includePending = false,
-  userId,
+  beingId,
 }) {
   if (!nodeId) throw new Error("nodeId is required");
 
@@ -293,11 +293,11 @@ export async function getTransactions({
 
   for (const tx of txs) {
     const viewerApprovals = tx.approvalGroups.filter((g) =>
-      g.eligibleApprovers.includes(String(userId)),
+      g.eligibleApprovers.includes(String(beingId)),
     );
 
     const viewerAlreadyApproved = viewerApprovals.some((g) =>
-      g.approvals.some((a) => a.userId === String(userId)),
+      g.approvals.some((a) => a.beingId === String(beingId)),
     );
 
     const canApprove =
@@ -327,7 +327,7 @@ export async function getTransactions({
         required: g.requiredApprovals,
         approved: g.approvals.length,
         resolved: g.resolved,
-        isViewerGroup: g.eligibleApprovers.includes(String(userId)),
+        isViewerGroup: g.eligibleApprovers.includes(String(beingId)),
       }))
       .sort((a, b) => (b.isViewerGroup ? 1 : 0) - (a.isViewerGroup ? 1 : 0));
     formatted.push({
@@ -351,7 +351,7 @@ export async function getTransactions({
   };
 }
 
-export async function executeTransaction(transaction, userId) {
+export async function executeTransaction(transaction, beingId) {
   // 0) Basic guards
   if (!transaction) throw new Error("Transaction is required");
 
@@ -416,7 +416,7 @@ export async function executeTransaction(transaction, userId) {
   // 5) execution_started contributions
   if (nodeA) {
     await logContribution({
-      userId,
+      beingId,
       nodeId: nodeA._id,
       action: "transaction",
       tradeId: transaction._id,
@@ -428,14 +428,14 @@ export async function executeTransaction(transaction, userId) {
         counterpartyNodeId: nodeB?._id ?? null,
         versionSelf: "0",
         versionCounterparty: "0",
-        actorUserId: userId,
+        actorUserId: beingId,
       },
     });
   }
 
   if (nodeB) {
     await logContribution({
-      userId,
+      beingId,
       nodeId: nodeB._id,
       action: "transaction",
       tradeId: transaction._id,
@@ -447,7 +447,7 @@ export async function executeTransaction(transaction, userId) {
         counterpartyNodeId: nodeA?._id ?? null,
         versionSelf: "0",
         versionCounterparty: "0",
-        actorUserId: userId,
+        actorUserId: beingId,
       },
     });
   }
@@ -499,7 +499,7 @@ export async function executeTransaction(transaction, userId) {
 
     if (nodeA) {
       await logContribution({
-        userId,
+        beingId,
         nodeId: nodeA._id,
         action: "transaction",
         tradeId: transaction._id,
@@ -514,14 +514,14 @@ export async function executeTransaction(transaction, userId) {
           valuesSent: sideAObj,
           valuesReceived: sideBObj ?? {},
           failureReason: err.message,
-          actorUserId: userId,
+          actorUserId: beingId,
         },
       });
     }
 
     if (nodeB) {
       await logContribution({
-        userId,
+        beingId,
         nodeId: nodeB._id,
         action: "transaction",
         tradeId: transaction._id,
@@ -536,7 +536,7 @@ export async function executeTransaction(transaction, userId) {
           valuesSent: sideBObj ?? {},
           valuesReceived: sideAObj ?? {},
           failureReason: err.message,
-          actorUserId: userId,
+          actorUserId: beingId,
         },
       });
     }
@@ -547,7 +547,7 @@ export async function executeTransaction(transaction, userId) {
   // 7) SUCCESS contributions
   if (nodeA) {
     await logContribution({
-      userId,
+      beingId,
       nodeId: nodeA._id,
       action: "transaction",
       tradeId: transaction._id,
@@ -561,14 +561,14 @@ export async function executeTransaction(transaction, userId) {
         versionCounterparty: "0",
         valuesSent: sideAObj,
         valuesReceived: sideBObj ?? {},
-        actorUserId: userId,
+        actorUserId: beingId,
       },
     });
   }
 
   if (nodeB) {
     await logContribution({
-      userId,
+      beingId,
       nodeId: nodeB._id,
       action: "transaction",
       tradeId: transaction._id,
@@ -582,7 +582,7 @@ export async function executeTransaction(transaction, userId) {
         versionCounterparty: "0",
         valuesSent: sideBObj ?? {},
         valuesReceived: sideAObj ?? {},
-        actorUserId: userId,
+        actorUserId: beingId,
       },
     });
   }
@@ -593,13 +593,13 @@ export async function executeTransaction(transaction, userId) {
 /**
  * Build approval groups for each NODE side
  */
-export async function buildApprovalGroups({ sideA, sideB }, userId) {
+export async function buildApprovalGroups({ sideA, sideB }, beingId) {
   const approvalGroups = [];
 
   for (const side of [sideA, sideB]) {
     if (side.kind !== "NODE") continue;
 
-    const access = await resolveTreeAccess(side.nodeId, userId);
+    const access = await resolveTreeAccess(side.nodeId, beingId);
 
     const rootNode = await Node.findById(access.rootId)
       .select("rootOwner contributors metadata")
@@ -647,8 +647,8 @@ export async function buildApprovalGroups({ sideA, sideB }, userId) {
     const approvals = [];
 
     // Proposer auto-approves if eligible
-    if (eligibleApprovers.includes(String(userId))) {
-      approvals.push({ userId: String(userId), approvedAt: new Date() });
+    if (eligibleApprovers.includes(String(beingId))) {
+      approvals.push({ beingId: String(beingId), approvedAt: new Date() });
     }
 
     approvalGroups.push({
@@ -665,7 +665,7 @@ export async function buildApprovalGroups({ sideA, sideB }, userId) {
   return approvalGroups;
 }
 
-export async function applyApproval(transactionId, userId) {
+export async function applyApproval(transactionId, beingId) {
   const transaction = await Transaction.findById(transactionId);
   const { sideA, sideB, valuesTraded } =
     transaction;
@@ -683,23 +683,23 @@ export async function applyApproval(transactionId, userId) {
   for (const group of transaction.approvalGroups) {
     if (group.resolved) continue;
 
-    if (!group.eligibleApprovers.includes(String(userId))) {
+    if (!group.eligibleApprovers.includes(String(beingId))) {
       continue;
     }
 
     const alreadyApproved = group.approvals.some(
-      (a) => a.userId === String(userId),
+      (a) => a.beingId === String(beingId),
     );
 
     if (alreadyApproved) continue;
 
     group.approvals.push({
-      userId: String(userId),
+      beingId: String(beingId),
       approvedAt: new Date(),
     });
 
     await logContribution({
-      userId,
+      beingId,
       nodeId: group.side === "A" ? sideA.nodeId : sideB.nodeId,
       action: "transaction",
       tradeId: transaction._id,
@@ -714,7 +714,7 @@ export async function applyApproval(transactionId, userId) {
             : (sideA?.nodeId ?? null),
         versionSelf: "0",
         versionCounterparty: "0",
-        actorUserId: userId,
+        actorUserId: beingId,
       },
     });
 
@@ -735,10 +735,10 @@ export async function applyApproval(transactionId, userId) {
     transaction.status = "accepted";
     await transaction.save();
 
-    await logResolution(transaction, "accepted", userId);
+    await logResolution(transaction, "accepted", beingId);
 
     try {
-      await executeTransaction(transaction, userId);
+      await executeTransaction(transaction, beingId);
     } catch (err) {
       throw err;
     }
@@ -747,7 +747,7 @@ export async function applyApproval(transactionId, userId) {
   return transaction;
 }
 
-export async function denyTransaction(transactionId, userId) {
+export async function denyTransaction(transactionId, beingId) {
   const tx = await Transaction.findById(transactionId);
   if (!tx) throw new Error("Transaction not found");
   if (tx.status !== "pending") {
@@ -758,24 +758,24 @@ export async function denyTransaction(transactionId, userId) {
 
   for (const group of tx.approvalGroups) {
     if (group.resolved) continue;
-    if (!group.eligibleApprovers.includes(String(userId))) continue;
+    if (!group.eligibleApprovers.includes(String(beingId))) continue;
 
     const alreadyApproved = group.approvals.some(
-      (a) => a.userId === String(userId),
+      (a) => a.beingId === String(beingId),
     );
     if (alreadyApproved) {
       throw new Error("User has already approved and cannot deny");
     }
 
     const alreadyDenied = group.denials?.some(
-      (d) => d.userId === String(userId),
+      (d) => d.beingId === String(beingId),
     );
     if (alreadyDenied) continue;
 
     // ✅ Store denial
     group.denials = group.denials || [];
     group.denials.push({
-      userId: String(userId),
+      beingId: String(beingId),
       deniedAt: new Date(),
     });
 
@@ -789,7 +789,7 @@ export async function denyTransaction(transactionId, userId) {
     // ✅ Log denial for BOTH sides (if NODE)
     if (tx.sideA.kind === "NODE") {
       await logContribution({
-        userId,
+        beingId,
         nodeId: tx.sideA.nodeId,
         action: "transaction",
         tradeId: tx._id,
@@ -801,14 +801,14 @@ export async function denyTransaction(transactionId, userId) {
           counterpartyNodeId: tx.sideB?.nodeId ?? null,
           versionSelf: "0",
           versionCounterparty: "0",
-          actorUserId: userId,
+          actorUserId: beingId,
         },
       });
     }
 
     if (tx.sideB.kind === "NODE") {
       await logContribution({
-        userId,
+        beingId,
         nodeId: tx.sideB.nodeId,
         action: "transaction",
         tradeId: tx._id,
@@ -820,7 +820,7 @@ export async function denyTransaction(transactionId, userId) {
           counterpartyNodeId: tx.sideA?.nodeId ?? null,
           versionSelf: "0",
           versionCounterparty: "0",
-          actorUserId: userId,
+          actorUserId: beingId,
         },
       });
     }
@@ -835,7 +835,7 @@ export async function denyTransaction(transactionId, userId) {
 
   if (anyGroupFailed) {
     tx.status = "rejected";
-    await logResolution(tx, "rejected", userId);
+    await logResolution(tx, "rejected", beingId);
   }
 
   await tx.save();
@@ -851,7 +851,7 @@ async function logResolution(transaction, outcome, actorUserId) {
 
   if (sideA.kind === "NODE") {
     await logContribution({
-      userId: actorUserId,
+      beingId: actorUserId,
       nodeId: sideA.nodeId,
       action: "transaction",
       tradeId: transaction._id,
@@ -870,7 +870,7 @@ async function logResolution(transaction, outcome, actorUserId) {
 
   if (sideB.kind === "NODE") {
     await logContribution({
-      userId: actorUserId,
+      beingId: actorUserId,
       nodeId: sideB.nodeId,
       action: "transaction",
       tradeId: transaction._id,
@@ -927,7 +927,7 @@ export async function getTransactionWithContributions(transactionId) {
   })
     .sort({ date: 1 })
     .populate({
-      path: "userId",
+      path: "beingId",
       select: "_id username", // adjust fields as needed
     })
     .lean();

@@ -8,7 +8,7 @@ const router = express.Router();
 // POST /root/:rootId/split/analyze - Analyze all branches for split candidates
 router.post("/root/:rootId/split/analyze", authenticate, async (req, res) => {
   try {
-    const result = await analyze(req.params.rootId, req.userId);
+    const result = await analyze(req.params.rootId, req.beingId);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -18,7 +18,7 @@ router.post("/root/:rootId/split/analyze", authenticate, async (req, res) => {
 // POST /node/:nodeId/split/preview - Preview what a split would do
 router.post("/node/:nodeId/split/preview", authenticate, async (req, res) => {
   try {
-    const result = await preview(req.params.nodeId, req.userId);
+    const result = await preview(req.params.nodeId, req.beingId);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -28,7 +28,7 @@ router.post("/node/:nodeId/split/preview", authenticate, async (req, res) => {
 // POST /node/:nodeId/split/execute - Execute the split
 router.post("/node/:nodeId/split/execute", authenticate, async (req, res) => {
   try {
-    const result = await execute(req.params.nodeId, req.userId, req.username);
+    const result = await execute(req.params.nodeId, req.beingId, req.username);
     sendOk(res, result, 201);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);

@@ -25,7 +25,7 @@ router.post("/node/:nodeId/value", authenticate, async (req, res) => {
     const { nodeId } = req.params;
     const { key, value } = req.body;
 
-    await setValueForNode({ nodeId, key, value, userId: req.userId });
+    await setValueForNode({ nodeId, key, value, beingId: req.beingId });
 
     if ("html" in req.query) {
       return res.redirect(`/api/v1/node/${nodeId}/values?token=${req.query.token ?? ""}&html`);
@@ -41,7 +41,7 @@ router.post("/node/:nodeId/goal", authenticate, async (req, res) => {
     const { nodeId } = req.params;
     const { key, goal } = req.body;
 
-    await setGoalForNode({ nodeId, key, goal, userId: req.userId });
+    await setGoalForNode({ nodeId, key, goal, beingId: req.beingId });
 
     if ("html" in req.query) {
       return res.redirect(`/api/v1/node/${nodeId}/values?token=${req.query.token ?? ""}&html`);

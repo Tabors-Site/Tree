@@ -2,7 +2,7 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { getThesis, deriveThesis } from "./core.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 
 const router = express.Router();
 
@@ -20,7 +20,7 @@ router.get("/root/:rootId/thesis", authenticate, async (req, res) => {
 // POST /root/:rootId/thesis/rederive
 router.post("/root/:rootId/thesis/rederive", authenticate, async (req, res) => {
   try {
-    const thesis = await deriveThesis(req.params.rootId, req.userId);
+    const thesis = await deriveThesis(req.params.rootId, req.beingId);
     if (!thesis) return sendOk(res, { message: "Could not derive thesis" });
     sendOk(res, { thesis });
   } catch (err) {

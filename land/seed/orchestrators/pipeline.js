@@ -5,7 +5,7 @@
  *
  * Usage:
  *   const result = await runPipeline({
- *     userId, username, rootId,
+ *     beingId, username, rootId,
  *     description: "Dream cycle for MyTree",
  *     sessionType: "dream-orchestrate",
  *     modeKeyForLlm: "tree:respond",
@@ -23,7 +23,7 @@
 import { OrchestratorRuntime } from "./runtime.js";
 
 export async function runPipeline({
-  userId, username, rootId, description,
+  beingId, username, rootId, description,
   sessionType = "orchestration",
   modeKeyForLlm = "tree:respond",
   source = "orchestrator",
@@ -39,11 +39,11 @@ export async function runPipeline({
   purpose = null,
   extra = null,
 }) {
-  if (!userId || !steps) throw new Error("runPipeline requires userId and steps function");
+  if (!beingId || !steps) throw new Error("runPipeline requires beingId and steps function");
 
   const rt = new OrchestratorRuntime({
     rootId,
-    userId,
+    beingId,
     username: username || "system",
     scope,
     purpose,

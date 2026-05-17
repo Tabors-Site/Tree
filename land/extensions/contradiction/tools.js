@@ -8,7 +8,7 @@ export default [
     description: "Show active contradictions at a node. Surfaces conflicts between this node's content and the broader tree.",
     schema: {
       nodeId: z.string().describe("The node to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -32,7 +32,7 @@ export default [
     schema: {
       nodeId: z.string().describe("The node with the contradiction."),
       contradictionId: z.string().describe("The contradiction ID to resolve."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -52,12 +52,12 @@ export default [
     schema: {
       rootId: z.string().describe("The tree root to scan."),
       confirm: z.boolean().optional().default(false).describe("Set to true to actually run the scan. Without it, returns only the cost estimate."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    handler: async ({ rootId, confirm, userId }) => {
+    handler: async ({ rootId, confirm, beingId }) => {
       try {
         // Estimate cost before scanning
         const { getDescendantIds } = await import("../../seed/tree/treeFetch.js");
@@ -84,14 +84,14 @@ export default [
 
         let username = null;
         try {
-          const User = (await import("../../seed/models/user.js")).default;
-          const user = await User.findById(userId).select("username").lean();
+          const User = (await import("../../seed/models/being.js")).default;
+          const user = await Being.findById(beingId).select("username").lean();
           username = user?.username;
         } catch (err) {
           // Non-critical: scan proceeds without username
           log.debug("Contradiction", "username lookup failed:", err.message);
         }
-        const result = await scanTree(rootId, userId, username);
+        const result = await scanTree(rootId, beingId, username);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Scan failed: ${err.message}` }] };

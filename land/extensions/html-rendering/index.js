@@ -57,11 +57,11 @@ export async function init(core) {
 
   // Generate share token for new users
   core.hooks.register("afterRegister", async ({ user }) => {
-    const freshUser = await User.findById(user._id).select("metadata").lean();
+    const freshUser = await Being.findById(user._id).select("metadata").lean();
     if (!freshUser) return;
-    const existing = core.userMetadata.getUserMeta(freshUser, "html");
+    const existing = core.userMetadata.getBeingMeta(freshUser, "html");
     if (existing?.shareToken) return;
-    await core.userMetadata.batchSetUserMeta(String(user._id), "html", { ...existing, shareToken: generateShareToken() });
+    await core.userMetadata.batchSetBeingMeta(String(user._id), "html", { ...existing, shareToken: generateShareToken() });
   }, "html-rendering");
 
   // Detect optional extensions after boot

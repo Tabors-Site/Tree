@@ -66,8 +66,8 @@ export default {
         { name: "my-ext:afterProcess", data: "{ result, userId }", description: "Fired after processing completes" },
       ],
       listens: [                        // Hooks this extension handles
-        "afterNote", "enrichContext",    // Core hooks
-        "gateway:beforeDispatch",       // Another extension's hook
+        "afterArtifact", "enrichContext", // Core hooks
+        "gateway:beforeDispatch",        // Another extension's hook
       ],
     },
   },
@@ -517,8 +517,8 @@ export async function init(core) {
 
 | Hook | Data shape | Type | Purpose |
 |------|-----------|------|---------|
-| `beforeNote` | `{ nodeId, version, content, userId, contentType }` | before | Modify note data before save. Prestige uses this to tag version. |
-| `afterNote` | `{ note, nodeId, userId, sizeKB, deltaKB, action }` | after | React after note create/edit/delete. Understanding flags dirty nodes. Energy meters storage. |
+| `beforeArtifact` | `{ nodeId, content, beingId, origin, metadata }` | before | Modify artifact data before save. Origin is one of "ibp", "filesystem", "web", "cross-land". |
+| `afterArtifact` | `{ artifact, nodeId, beingId, origin, sizeKB, deltaKB, action, chatId, sessionId }` | after | React after artifact create/edit/delete. |
 | `beforeContribution` | `{ nodeId, nodeVersion, action, userId }` | before | Modify contribution metadata. Prestige uses this to tag nodeVersion. |
 | `afterNodeCreate` | `{ node, userId }` | after | Initialize extension data on new nodes. |
 | `beforeStatusChange` | `{ node, status, userId }` | before | Validate or intercept status changes. |
@@ -574,10 +574,10 @@ Extensions define their own hooks using the `extName:hookName` naming convention
 If your hook handler creates, moves, or deletes nodes, acquire a node lock via `core.nodeLocks.acquireNodeLock`. Release in a `finally` block. The kernel does not know which hooks do structural work. Extensions that do take responsibility.
 
 ```js
-core.hooks.register("afterNote", async ({ nodeId }) => {
+core.hooks.register("afterArtifact", async ({ nodeId }) => {
   const lock = await core.nodeLocks.acquireNodeLock(parentId, sessionId);
   try {
-    await createNode({ name: "Child", parentId, userId });
+    await createNode({ name: "Child", parentId, beingId });
   } finally {
     core.nodeLocks.releaseNodeLock(parentId, sessionId);
   }

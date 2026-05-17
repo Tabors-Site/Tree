@@ -11,7 +11,7 @@
  *
  *     [[PLAN]]
  *     high:1: Remove unused express dependency from package.json
- *     high:2: Add userId query parameter to the 6 API endpoints in server.js
+ *     high:2: Add beingId query parameter to the 6 API endpoints in server.js
  *     high:3: Change fs.writeFileSync to async fs.writeFile in saveData
  *     [[/PLAN]]
  *

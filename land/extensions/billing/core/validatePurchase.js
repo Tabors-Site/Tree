@@ -1,4 +1,4 @@
-import { getUserMeta } from "../../../seed/tree/userMetadata.js";
+import { getBeingMeta } from "../../../seed/tree/beingMetadata.js";
 
 const PLAN_DAILY_VALUE = {
   basic: 0,
@@ -13,7 +13,7 @@ export function validatePurchase(user, { plan, energyAmount }) {
       throw new Error("Invalid plan");
     }
 
-    const currentPlan = getUserMeta(user, "tiers").plan || "basic";
+    const currentPlan = getBeingMeta(user, "tiers").plan || "basic";
     const oldVal = PLAN_DAILY_VALUE[currentPlan] ?? 0;
     const newVal = PLAN_DAILY_VALUE[plan] ?? 0;
 

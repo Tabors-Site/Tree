@@ -10,16 +10,16 @@ export default [
       "installed intelligence data, then distills actionable insights.",
     schema: {
       rootId: z.string().describe("Tree root to extract lessons from."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    handler: async ({ rootId, userId }) => {
+    handler: async ({ rootId, beingId }) => {
       try {
-        const User = (await import("../../seed/models/user.js")).default;
-        const user = await User.findById(userId).select("username").lean();
-        const lessonSet = await extractLessons(rootId, userId, user?.username || "system");
+        const User = (await import("../../seed/models/being.js")).default;
+        const user = await Being.findById(beingId).select("username").lean();
+        const lessonSet = await extractLessons(rootId, beingId, user?.username || "system");
         return {
           content: [{
             type: "text",
@@ -45,7 +45,7 @@ export default [
     description: "Show active lessons at this tree. Read-only, no LLM calls.",
     schema: {
       rootId: z.string().describe("Tree root to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -68,14 +68,14 @@ export default [
     schema: {
       rootId: z.string().describe("Tree root."),
       lessonId: z.string().describe("ID of the lesson to dismiss."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    handler: async ({ rootId, lessonId, userId }) => {
+    handler: async ({ rootId, lessonId, beingId }) => {
       try {
-        const result = await dismissLesson(rootId, lessonId, userId);
+        const result = await dismissLesson(rootId, lessonId, beingId);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Failed: ${err.message}` }] };

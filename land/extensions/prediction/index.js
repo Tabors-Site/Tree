@@ -28,8 +28,8 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { getNotes } from "../../seed/tree/notes.js";
+import Artifact from "../../seed/models/artifact.js";
+import { getArtifacts } from "../../seed/tree/artifacts.js";
 import { getExtMeta, mergeExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
@@ -98,8 +98,8 @@ async function predict(rootId, runChat) {
   const ringsNode = await Node.findOne({ parent: rootId, name: ".rings" }).select("_id").lean();
   let ringsData = [];
   if (ringsNode) {
-    const ringsResult = await getNotes({ nodeId: String(ringsNode._id), limit: 10 });
-    ringsData = (ringsResult?.notes || []).map(n => {
+    const ringsResult = await getArtifacts({ nodeId: String(ringsNode._id), limit: 10 });
+    ringsData = (ringsResult?.artifacts || []).map(n => {
       try { return JSON.parse(n.content); } catch { return null; }
     }).filter(Boolean);
   }
@@ -112,8 +112,8 @@ async function predict(rootId, runChat) {
     if (reflectNode) {
       const compareNode = await Node.findOne({ parent: String(reflectNode._id), name: ".compare" }).select("_id").lean();
       if (compareNode) {
-        const compResult = await getNotes({ nodeId: String(compareNode._id), limit: 4 });
-        recentComparisons = (compResult?.notes || []).map(n => n.content).join("\n---\n");
+        const compResult = await getArtifacts({ nodeId: String(compareNode._id), limit: 4 });
+        recentComparisons = (compResult?.artifacts || []).map(n => n.content).join("\n---\n");
       }
     }
   }
@@ -140,7 +140,7 @@ async function predict(rootId, runChat) {
   const treeName = rootNode.name || "this tree";
 
   const { answer } = await runChat({
-    userId: ownerId,
+    beingId: ownerId,
     username: "prediction",
     message:
       `You are generating predictions for a tree called "${treeName}" based on its history.\n\n` +

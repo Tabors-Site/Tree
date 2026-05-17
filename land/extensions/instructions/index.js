@@ -32,18 +32,18 @@ import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import authenticate from "../../seed/middleware/authenticate.js";
-import User from "../../seed/models/user.js";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import Being from "../../seed/models/being.js";
+import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { getModeOwner } from "../../seed/tree/extensionScope.js";
 import log from "../../seed/log.js";
 
 // ─────────────────────────────────────────────────────────────────────────
-// READ helper: load both layers for a given userId + nodeId + mode
+// READ helper: load both layers for a given beingId + nodeId + mode
 // ─────────────────────────────────────────────────────────────────────────
 
-async function loadUserInstructions(userId) {
-  if (!userId) return { global: [], byExtension: {} };
-  const user = await User.findById(userId).select("metadata").lean();
+async function loadUserInstructions(beingId) {
+  if (!beingId) return { global: [], byExtension: {} };
+  const user = await Being.findById(beingId).select("metadata").lean();
   if (!user) return { global: [], byExtension: {} };
   const inst = user.metadata instanceof Map
     ? user.metadata.get("instructions")
@@ -82,14 +82,14 @@ export async function init(core) {
   // ${hookName}:${extName}, so re-registering would replace this.
   // ─────────────────────────────────────────────────────────────────────
   core.hooks.register("beforeLLMCall", async (hookData) => {
-    const { messages, mode, userId, nodeId } = hookData;
+    const { messages, mode, beingId, nodeId } = hookData;
     if (!messages?.[0] || messages[0].role !== "system") return;
 
     // ── User-level layer (broadest) ──
     let userBlock = "";
-    if (userId) {
+    if (beingId) {
       try {
-        const userInst = await loadUserInstructions(userId);
+        const userInst = await loadUserInstructions(beingId);
         userBlock = buildUserInstructionsBlock(userInst, mode);
       } catch (err) {
         log.debug("Instructions", `Failed to load user instructions: ${err.message}`);
@@ -150,13 +150,13 @@ export async function init(core) {
       schema: {
         text: z.string().describe("The instruction in second person, e.g. 'use kg for weights' or 'never suggest meat'. Be brief and direct."),
         scope: z.string().describe("'global' for everywhere, or an extension name like 'food', 'fitness', 'study'."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      handler: async ({ text, scope, userId }) => {
-        if (!userId) return { content: [{ type: "text", text: "No user context." }] };
+      handler: async ({ text, scope, beingId }) => {
+        if (!beingId) return { content: [{ type: "text", text: "No user context." }] };
         if (!text || typeof text !== "string" || !text.trim()) {
           return { content: [{ type: "text", text: "text is required." }] };
         }
@@ -164,10 +164,10 @@ export async function init(core) {
         const cleanScope = (scope || "global").trim().toLowerCase();
 
         try {
-          const user = await User.findById(userId);
+          const user = await Being.findById(beingId);
           if (!user) return { content: [{ type: "text", text: "User not found." }] };
 
-          const current = getUserMeta(user, "instructions") || {};
+          const current = getBeingMeta(user, "instructions") || {};
           if (!Array.isArray(current.global)) current.global = [];
           if (!current.byExtension || typeof current.byExtension !== "object") current.byExtension = {};
 
@@ -180,10 +180,10 @@ export async function init(core) {
             current.byExtension[cleanScope].push(entry);
           }
 
-          setUserMeta(user, "instructions", current);
+          setBeingMeta(user, "instructions", current);
           await user.save();
 
-          log.info("Instructions", `Added [${cleanScope}] for user ${String(userId).slice(0, 8)}: "${cleanText.slice(0, 60)}"`);
+          log.info("Instructions", `Added [${cleanScope}] for user ${String(beingId).slice(0, 8)}: "${cleanText.slice(0, 60)}"`);
           return {
             content: [{
               type: "text",
@@ -204,15 +204,15 @@ export async function init(core) {
         "asks 'what do you remember about me' or 'what are my instructions' or wants " +
         "to review what's been saved.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
-      handler: async ({ userId }) => {
-        if (!userId) return { content: [{ type: "text", text: "No user context." }] };
+      handler: async ({ beingId }) => {
+        if (!beingId) return { content: [{ type: "text", text: "No user context." }] };
         try {
-          const userInst = await loadUserInstructions(userId);
+          const userInst = await loadUserInstructions(beingId);
           const lines = [];
           if (userInst.global.length > 0) {
             lines.push("Global:");
@@ -242,19 +242,19 @@ export async function init(core) {
         "to it by the short prefix (first 8 chars).",
       schema: {
         id: z.string().describe("The instruction id (or its first 8 chars) to remove."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-      handler: async ({ id, userId }) => {
-        if (!userId) return { content: [{ type: "text", text: "No user context." }] };
+      handler: async ({ id, beingId }) => {
+        if (!beingId) return { content: [{ type: "text", text: "No user context." }] };
         if (!id) return { content: [{ type: "text", text: "id is required." }] };
         try {
-          const user = await User.findById(userId);
+          const user = await Being.findById(beingId);
           if (!user) return { content: [{ type: "text", text: "User not found." }] };
 
-          const current = getUserMeta(user, "instructions") || {};
+          const current = getBeingMeta(user, "instructions") || {};
           let removed = null;
           const matches = (entryId) => entryId === id || entryId?.startsWith(id);
 
@@ -282,10 +282,10 @@ export async function init(core) {
             return { content: [{ type: "text", text: `No instruction found matching "${id}".` }] };
           }
 
-          setUserMeta(user, "instructions", current);
+          setBeingMeta(user, "instructions", current);
           await user.save();
 
-          log.info("Instructions", `Removed for user ${String(userId).slice(0, 8)}: "${removed.text?.slice(0, 60)}"`);
+          log.info("Instructions", `Removed for user ${String(beingId).slice(0, 8)}: "${removed.text?.slice(0, 60)}"`);
           return { content: [{ type: "text", text: `Removed: "${removed.text}"` }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Failed to remove: ${err.message}` }] };
@@ -387,12 +387,12 @@ export async function init(core) {
 
   // HTML page (must be registered BEFORE the JSON handler on the same path
   // so ?html requests get the rendered page instead of raw JSON).
-  router.get("/user/:userId/instructions", authenticate, async (req, res, next) => {
+  router.get("/user/:beingId/instructions", authenticate, async (req, res, next) => {
     if (!("html" in req.query)) return next();
     try {
       const { renderInstructionsPage } = await import("./pages/instructionsPage.js");
-      const { userId } = req.params;
-      const user = await User.findById(userId).select("username metadata").lean();
+      const { beingId } = req.params;
+      const user = await Being.findById(beingId).select("username metadata").lean();
       if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
       const inst = user.metadata instanceof Map
@@ -400,7 +400,7 @@ export async function init(core) {
         : user.metadata?.instructions;
 
       res.send(renderInstructionsPage({
-        userId,
+        beingId,
         username: user.username,
         instructions: inst || { global: [], byExtension: {} },
         token: req.query.token || null,
@@ -413,21 +413,21 @@ export async function init(core) {
   });
 
   // JSON API
-  router.get("/user/:userId/instructions", authenticate, async (req, res) => {
+  router.get("/user/:beingId/instructions", authenticate, async (req, res) => {
     try {
-      if (req.userId !== req.params.userId) {
+      if (req.beingId !== req.params.beingId) {
         return sendError(res, 403, ERR.FORBIDDEN, "Not your account");
       }
-      const userInst = await loadUserInstructions(req.params.userId);
+      const userInst = await loadUserInstructions(req.params.beingId);
       sendOk(res, userInst);
     } catch (err) {
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
 
-  router.post("/user/:userId/instructions", authenticate, async (req, res) => {
+  router.post("/user/:beingId/instructions", authenticate, async (req, res) => {
     try {
-      if (req.userId !== req.params.userId) {
+      if (req.beingId !== req.params.beingId) {
         return sendError(res, 403, ERR.FORBIDDEN, "Not your account");
       }
       const { text, scope } = req.body;
@@ -437,10 +437,10 @@ export async function init(core) {
       const cleanText = text.trim().slice(0, 500);
       const cleanScope = ((scope || "global") + "").trim().toLowerCase();
 
-      const user = await User.findById(req.params.userId);
+      const user = await Being.findById(req.params.beingId);
       if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
-      const current = getUserMeta(user, "instructions") || {};
+      const current = getBeingMeta(user, "instructions") || {};
       if (!Array.isArray(current.global)) current.global = [];
       if (!current.byExtension || typeof current.byExtension !== "object") current.byExtension = {};
 
@@ -452,7 +452,7 @@ export async function init(core) {
         current.byExtension[cleanScope].push(entry);
       }
 
-      setUserMeta(user, "instructions", current);
+      setBeingMeta(user, "instructions", current);
       await user.save();
 
       sendOk(res, { added: entry, scope: cleanScope });
@@ -461,16 +461,16 @@ export async function init(core) {
     }
   });
 
-  router.delete("/user/:userId/instructions/:id", authenticate, async (req, res) => {
+  router.delete("/user/:beingId/instructions/:id", authenticate, async (req, res) => {
     try {
-      if (req.userId !== req.params.userId) {
+      if (req.beingId !== req.params.beingId) {
         return sendError(res, 403, ERR.FORBIDDEN, "Not your account");
       }
       const { id } = req.params;
-      const user = await User.findById(req.params.userId);
+      const user = await Being.findById(req.params.beingId);
       if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
-      const current = getUserMeta(user, "instructions") || {};
+      const current = getBeingMeta(user, "instructions") || {};
       let removed = null;
       const matches = (entryId) => entryId === id || entryId?.startsWith(id);
 
@@ -498,7 +498,7 @@ export async function init(core) {
         return sendError(res, 404, ERR.INVALID_INPUT, `No instruction found matching "${id}"`);
       }
 
-      setUserMeta(user, "instructions", current);
+      setBeingMeta(user, "instructions", current);
       await user.save();
 
       sendOk(res, { removed });
@@ -513,8 +513,8 @@ export async function init(core) {
   try {
     const { getExtension } = await import("../loader.js");
     const base = getExtension("treeos-base");
-    base?.exports?.registerSlot?.("user-quick-links", "instructions", ({ userId, queryString }) =>
-      `<li><a href="/api/v1/user/${userId}/instructions${queryString}">Instructions</a></li>`,
+    base?.exports?.registerSlot?.("user-quick-links", "instructions", ({ beingId, queryString }) =>
+      `<li><a href="/api/v1/user/${beingId}/instructions${queryString}">Instructions</a></li>`,
       { priority: 55 }
     );
   } catch {}

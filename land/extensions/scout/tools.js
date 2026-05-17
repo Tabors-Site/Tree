@@ -12,19 +12,19 @@ export default [
     schema: {
       nodeId: z.string().describe("The node to scout from."),
       query: z.string().describe("What to find. Natural language."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       username: z.string().optional().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    handler: async ({ nodeId, query, userId, username }) => {
+    handler: async ({ nodeId, query, beingId, username }) => {
       try {
         // Walk up to tree root so strategies search the whole tree
         const rootNode = await resolveRootNode(nodeId);
         const rootId = String(rootNode._id);
 
-        const result = await runScout(nodeId, query, userId, username || "system", { rootId });
+        const result = await runScout(nodeId, query, beingId, username || "system", { rootId });
         if (result.error) {
           return { content: [{ type: "text", text: result.error }] };
         }
@@ -52,7 +52,7 @@ export default [
     description: "Previous scout runs at this position. Shows what was searched and what was found.",
     schema: {
       nodeId: z.string().describe("The node to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -74,7 +74,7 @@ export default [
     description: "Accumulated knowledge gaps from all scout runs at this position. What the tree doesn't know.",
     schema: {
       nodeId: z.string().describe("The node to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

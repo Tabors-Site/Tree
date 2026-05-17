@@ -10,13 +10,13 @@ export default function getTools() {
         nodeId: z.string().describe("The unique ID of the node to edit."),
         key: z.string().describe("The key of the value to modify."),
         value: z.number().describe("The numeric value to assign."),
-        userId: z.string().describe("The ID of the user performing the edit."),
+        beingId: z.string().describe("The ID of the user performing the edit."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-      handler: async ({ nodeId, key, value, userId, chatId, sessionId }) => {
-        const result = await setValueForNode({ nodeId, key, value, userId, wasAi: true, chatId, sessionId });
+      handler: async ({ nodeId, key, value, beingId, chatId, sessionId }) => {
+        const result = await setValueForNode({ nodeId, key, value, beingId, wasAi: true, chatId, sessionId });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       },
     },
@@ -27,14 +27,14 @@ export default function getTools() {
         nodeId: z.string().describe("The unique ID of the node to edit."),
         key: z.string().describe("The key of the goal (must match an existing value key)."),
         goal: z.number().describe("The numeric goal value."),
-        userId: z.string().describe("The ID of the user performing the edit."),
+        beingId: z.string().describe("The ID of the user performing the edit."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-      handler: async ({ nodeId, key, goal, userId, chatId, sessionId }) => {
+      handler: async ({ nodeId, key, goal, beingId, chatId, sessionId }) => {
         try {
-          const result = await setGoalForNode({ nodeId, key, goal, userId, wasAi: true, chatId, sessionId });
+          const result = await setGoalForNode({ nodeId, key, goal, beingId, wasAi: true, chatId, sessionId });
           return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Failed to update goal: ${err.message}` }] };

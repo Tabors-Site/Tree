@@ -8,20 +8,20 @@ export async function init(core) {
   setModels(core.models);
   resolveHtmlAuth();
   // Register lifecycle hooks for energy metering
-  core.hooks.register("beforeNote", async (data) => {
-    try { await useEnergy({ userId: data.userId, action: "note" }); } catch (err) { log.debug("Energy", "note metering failed:", err.message); }
+  core.hooks.register("beforeArtifact", async (data) => {
+    try { await useEnergy({ beingId: data.beingId, action: "note" }); } catch (err) { log.debug("Energy", "note metering failed:", err.message); }
   }, "energy");
 
   core.hooks.register("beforeStatusChange", async (data) => {
-    try { await useEnergy({ userId: data.userId, action: "editStatus" }); } catch (err) { log.debug("Energy", "editStatus metering failed:", err.message); }
+    try { await useEnergy({ beingId: data.beingId, action: "editStatus" }); } catch (err) { log.debug("Energy", "editStatus metering failed:", err.message); }
   }, "energy");
 
   core.hooks.register("afterNodeCreate", async (data) => {
-    try { await useEnergy({ userId: data.userId, action: "create" }); } catch (err) { log.debug("Energy", "create metering failed:", err.message); }
+    try { await useEnergy({ beingId: data.beingId, action: "create" }); } catch (err) { log.debug("Energy", "create metering failed:", err.message); }
   }, "energy");
 
   core.hooks.register("beforeNodeDelete", async (data) => {
-    try { await useEnergy({ userId: data.userId, action: "branchLifecycle" }); } catch (err) { log.debug("Energy", "branchLifecycle metering failed:", err.message); }
+    try { await useEnergy({ beingId: data.beingId, action: "branchLifecycle" }); } catch (err) { log.debug("Energy", "branchLifecycle metering failed:", err.message); }
   }, "energy");
 
 
@@ -31,11 +31,11 @@ export async function init(core) {
   // Register energy display on user profile
   try {
     const { getExtension } = await import("../loader.js");
-    const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
+    const { getBeingMeta } = await import("../../seed/tree/beingMetadata.js");
     const treeos = getExtension("treeos-base");
-    treeos?.exports?.registerSlot?.("user-profile-energy", "energy", ({ userId, queryString, user }) => {
+    treeos?.exports?.registerSlot?.("user-profile-energy", "energy", ({ beingId, queryString, user }) => {
       maybeResetEnergy(user);
-      const energyData = getUserMeta(user, "energy");
+      const energyData = getBeingMeta(user, "energy");
       const amount = (energyData.available?.amount ?? 0) + (energyData.additional?.amount ?? 0);
       const lastReset = energyData.available?.lastResetAt;
       const nextReset = lastReset ? new Date(new Date(lastReset).getTime() + 86400000) : null;
@@ -43,7 +43,7 @@ export async function init(core) {
         ? nextReset.toLocaleString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short" })
         : "...";
       return `<span class="meta-item">
-        <a href="/api/v1/user/${userId}/energy${queryString}">\u26A1 ${amount} \u00B7 resets ${resetLabel}</a>
+        <a href="/api/v1/user/${beingId}/energy${queryString}">\u26A1 ${amount} \u00B7 resets ${resetLabel}</a>
       </span>`;
     }, { priority: 10 });
   } catch {}

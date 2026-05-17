@@ -38,7 +38,7 @@ export async function updateScript({
   scriptId,
   name,
   script,
-  userId,
+  beingId,
   wasAi = false,
   chatId = null,
   sessionId = null,
@@ -92,7 +92,7 @@ export async function updateScript({
 
   const payload = script !== undefined ? finalScript.length : 0;
   const { energyUsed } = await useEnergy({
-    userId,
+    beingId,
     action: "editScript",
     payload,
   });
@@ -149,7 +149,7 @@ export async function updateScript({
   // Log contribution
   // ---------------------------------------------------------
   await logContribution({
-    userId,
+    beingId,
     nodeId,
     wasAi,
     chatId,
@@ -176,13 +176,13 @@ export async function updateScript({
 export async function executeScript({
   nodeId,
   scriptId,
-  userId,
+  beingId,
   wasAi = false,
   chatId = null,
   sessionId = null,
 }) {
-  if (!nodeId || !scriptId || !userId) {
-    throw new Error("Missing required fields: nodeId, scriptId, or userId");
+  if (!nodeId || !scriptId || !beingId) {
+    throw new Error("Missing required fields: nodeId, scriptId, or beingId");
   }
 
   const node = await Node.findById(nodeId);
@@ -197,14 +197,14 @@ export async function executeScript({
     throw new Error("Script not found");
   }
   const { energyUsed } = await useEnergy({
-    userId,
+    beingId,
     action: "executeScript",
   });
 
   const scriptName = scriptObj.name;
 
   const sandboxNode = JSON.parse(JSON.stringify(node));
-  const safeFns = makeSafeFunctions(userId);
+  const safeFns = makeSafeFunctions(beingId);
   const logs = [];
 
   const sandbox = {
@@ -250,7 +250,7 @@ export async function executeScript({
     ]);
 
     await logContribution({
-      userId,
+      beingId,
       nodeId,
       wasAi,
       chatId,
@@ -267,7 +267,7 @@ export async function executeScript({
     });
   } catch (err) {
     await logContribution({
-      userId,
+      beingId,
       nodeId,
       wasAi,
       chatId,
@@ -324,7 +324,7 @@ export async function getScript({ nodeId, scriptId }) {
         if (c.action === "editScript") {
           return {
             type: "edit",
-            userId: c.userId,
+            beingId: c.beingId,
             nodeVersion: c.nodeVersion,
             scriptName: c.editScript?.scriptName,
             contents: c.editScript?.contents,
@@ -335,7 +335,7 @@ export async function getScript({ nodeId, scriptId }) {
         if (c.action === "executeScript") {
           return {
             type: "execute",
-            userId: c.userId,
+            beingId: c.beingId,
             nodeVersion: c.nodeVersion,
             scriptName: c.executeScript?.scriptName,
             logs: c.executeScript?.logs || [],

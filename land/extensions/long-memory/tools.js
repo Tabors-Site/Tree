@@ -8,7 +8,7 @@ export default [
       "Get the long-term memory trace for a node. Shows when it last heard from another node, how many interactions total, and the rolling connection history.",
     schema: {
       nodeId: z.string().describe("The node to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -47,7 +47,7 @@ export default [
     description: "Clear the long-term memory trace for a node. The node forgets all cascade history.",
     schema: {
       nodeId: z.string().describe("The node to clear."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

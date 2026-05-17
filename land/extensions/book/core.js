@@ -1,11 +1,11 @@
 import crypto from "crypto";
 import Book from "./model.js";
-import { collectSubtreeNodeIds, nodeMatchesStatus } from "../../seed/tree/notes.js";
+import { collectSubtreeNodeIds, nodeMatchesStatus } from "../../seed/tree/artifacts.js";
 
 // Models wired from init() via setModels()
 let Node = null;
-let Note = null;
-export function setModels(models) { Node = models.Node; Note = models.Note; }
+let _Artifact = null;
+export function setModels(models) { Node = models.Node; _Artifact = models.Artifact; }
 
 function hashBookSettings(settings) {
   return crypto
@@ -44,8 +44,8 @@ function applyNoteFilters(notes, node, flags) {
     );
     result = result.filter((n) => getNoteVersion(n) === maxVersion);
   }
-  if (flags.filesOnly) result = result.filter((n) => n.contentType === "file");
-  if (flags.textOnly) result = result.filter((n) => n.contentType === "text");
+  if (flags.filesOnly) result = result.filter((n) => n.origin === "filesystem");
+  if (flags.textOnly) result = result.filter((n) => n.origin === "ibp");
   if (flags.lastNoteOnly) result = result.length ? [result[result.length - 1]] : [];
   return result;
 }
@@ -68,9 +68,9 @@ function buildBookTree(node, nodeMap, notesByNode, flags = {}) {
   const filteredNotes = applyNoteFilters(rawNotes, node, flags).map((n) => ({
     noteId: n._id.toString(),
     version: getNoteVersion(n),
-    userId: n.userId?.toString(),
+    beingId: n.beingId?.toString(),
     content: n.content,
-    type: n.contentType,
+    type: n.origin,
   }));
 
   const isLeaf = filteredChildren.length === 0;
@@ -100,7 +100,7 @@ export async function getBook({ nodeId, options = {} }) {
   const subtreeIds = await collectSubtreeNodeIds(nodeId);
   const [nodes, notes] = await Promise.all([
     Node.find({ _id: { $in: subtreeIds } }).lean(),
-    Note.find({ nodeId: { $in: subtreeIds } }).lean(),
+    _Artifact.find({ nodeId: { $in: subtreeIds } }).lean(),
   ]);
 
   const nodeMap = new Map(nodes.map((n) => [n._id.toString(), n]));
@@ -115,7 +115,7 @@ export async function getBook({ nodeId, options = {} }) {
   return { message: "Book generated successfully", book };
 }
 
-export async function generateBook({ nodeId, settings, userId }) {
+export async function generateBook({ nodeId, settings, beingId }) {
   if (!nodeId) throw new Error("Missing nodeId");
 
   const normalizedSettings = normalizeBookSettings(settings);
@@ -130,7 +130,7 @@ export async function generateBook({ nodeId, settings, userId }) {
     settings: normalizedSettings,
     settingsHash,
     shareId,
-    createdBy: userId,
+    createdBy: beingId,
   });
 
   return { reused: false, shareId };

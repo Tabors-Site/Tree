@@ -24,9 +24,9 @@
 import { v4 as uuidv4 } from "uuid";
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { getNotes } from "../../seed/tree/notes.js";
-import { createNote } from "../../seed/tree/notes.js";
+import Artifact from "../../seed/models/artifact.js";
+import { getArtifacts } from "../../seed/tree/artifacts.js";
+import { createArtifact } from "../../seed/tree/artifacts.js";
 import { getExtMeta, mergeExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 const MONTHLY_MS = 30 * 24 * 60 * 60 * 1000;
@@ -108,7 +108,7 @@ async function _synthesizeNarrative(rootId, runChat) {
   const ownerId = String(rootNode.rootOwner);
 
   // Read recent comparisons (Layer 3 output)
-  const comparisonsResult = await getNotes({ nodeId: String(compareNode._id), limit: 8 });
+  const comparisonsResult = await getArtifacts({ nodeId: String(compareNode._id), limit: 8 });
   const comparisons = comparisonsResult?.notes || [];
   if (comparisons.length < MIN_COMPARISONS) return;
 
@@ -117,13 +117,13 @@ async function _synthesizeNarrative(rootId, runChat) {
   if (!narrativeNode) return;
 
   let previousNarrative = "";
-  const prevResult = await getNotes({ nodeId: String(narrativeNode._id), limit: 1 });
+  const prevResult = await getArtifacts({ nodeId: String(narrativeNode._id), limit: 1 });
   if (prevResult?.notes?.length > 0) {
     previousNarrative = prevResult.notes[0].content;
   }
 
   // Read latest reflections (Layer 2) for additional context
-  const reflectionsResult = await getNotes({ nodeId: String(reflectNode._id), limit: 5 });
+  const reflectionsResult = await getArtifacts({ nodeId: String(reflectNode._id), limit: 5 });
   const recentThemes = (reflectionsResult?.notes || []).map(n => n.content).join("\n\n");
 
   // Build the comparisons text
@@ -134,7 +134,7 @@ async function _synthesizeNarrative(rootId, runChat) {
   const treeName = rootNode.name || "this tree";
 
   const { answer } = await runChat({
-    userId: ownerId,
+    beingId: ownerId,
     username: "narrative",
     message:
       `You are writing the identity narrative for a tree called "${treeName}". ` +
@@ -170,10 +170,10 @@ async function _synthesizeNarrative(rootId, runChat) {
   if (!answer || answer.length < 30) return;
 
   // Write the narrative as a note
-  await createNote({
-    contentType: "text",
+  await createArtifact({
+    origin: "ibp",
     content: answer.trim(),
-    userId: ownerId,
+    beingId: ownerId,
     nodeId: String(narrativeNode._id),
     wasAi: true,
   });
@@ -198,7 +198,7 @@ async function _synthesizeNarrative(rootId, runChat) {
   // not WHAT tools it calls.
   try {
     const { answer: initiativeAnswer } = await runChat({
-      userId: ownerId,
+      beingId: ownerId,
       username: "narrative",
       message:
         `You are generating behavioral directives for an AI that lives in a tree.\n\n` +
@@ -239,15 +239,15 @@ async function _synthesizeNarrative(rootId, runChat) {
   if (compareNodeFull) await mergeExtMeta(compareNodeFull, "narrative", { lastNarrative: Date.now() });
 
   // Cap narratives
-  const noteCount = await Note.countDocuments({ nodeId: String(narrativeNode._id) });
+  const noteCount = await Artifact.countDocuments({ nodeId: String(narrativeNode._id) });
   if (noteCount > MAX_NARRATIVES) {
-    const oldest = await Note.find({ nodeId: String(narrativeNode._id) })
+    const oldest = await Artifact.find({ nodeId: String(narrativeNode._id) })
       .sort({ createdAt: 1 })
       .limit(noteCount - MAX_NARRATIVES)
       .select("_id")
       .lean();
     if (oldest.length > 0) {
-      await Note.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
+      await Artifact.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
     }
   }
 

@@ -28,8 +28,8 @@ function truncate(str) {
   return str;
 }
 
-function requireBrowser(userId) {
-  if (!isConnected(userId)) {
+function requireBrowser(beingId) {
+  if (!isConnected(beingId)) {
     throw new Error("No browser connected. The user needs to install the TreeOS Chrome extension and connect it.");
   }
 }
@@ -46,19 +46,19 @@ export default function getTools() {
         "Call this first to understand what's on the page before taking any action.",
       annotations: { readOnlyHint: true },
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
-      handler: async ({ userId }) => {
-        requireBrowser(userId);
+      handler: async ({ beingId }) => {
+        requireBrowser(beingId);
 
         // Get page state (accessibility tree + metadata)
-        const stateResult = await sendRequest(userId, "getPageState", {});
+        const stateResult = await sendRequest(beingId, "getPageState", {});
         const state = stateResult?.data || stateResult;
 
         // Get text content
         let pageText = "";
         try {
-          const extractResult = await sendRequest(userId, "executeAction", { action: { type: "extract" } });
+          const extractResult = await sendRequest(beingId, "executeAction", { action: { type: "extract" } });
           const content = extractResult?.data?.text || extractResult?.text || extractResult?.data || extractResult;
           pageText = typeof content === "string" ? content : JSON.stringify(content);
         } catch {}
@@ -114,14 +114,14 @@ export default function getTools() {
       annotations: { readOnlyHint: false, destructiveHint: true },
       schema: {
         elementId: z.string().describe("Element ID from the accessibility tree (e.g. 'e5')"),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
-      handler: async ({ elementId, nodeId, userId }) => {
-        requireBrowser(userId);
-        const result = await sendRequest(userId, "executeAction", {
+      handler: async ({ elementId, nodeId, beingId }) => {
+        requireBrowser(beingId);
+        const result = await sendRequest(beingId, "executeAction", {
           action: { type: "click", elementId },
         });
-        logAction(nodeId, userId, { type: "click", elementId }, getCurrentUrl(userId), result).catch(() => {});
+        logAction(nodeId, beingId, { type: "click", elementId }, getCurrentUrl(beingId), result).catch(() => {});
         return json(result);
       },
     },
@@ -135,14 +135,14 @@ export default function getTools() {
       schema: {
         elementId: z.string().describe("Element ID of the input field (e.g. 'e12')"),
         text: z.string().describe("Text to type into the field"),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
-      handler: async ({ elementId, text, nodeId, userId }) => {
-        requireBrowser(userId);
-        const result = await sendRequest(userId, "executeAction", {
+      handler: async ({ elementId, text, nodeId, beingId }) => {
+        requireBrowser(beingId);
+        const result = await sendRequest(beingId, "executeAction", {
           action: { type: "type", elementId, text },
         });
-        logAction(nodeId, userId, { type: "type", elementId }, getCurrentUrl(userId), result).catch(() => {});
+        logAction(nodeId, beingId, { type: "type", elementId }, getCurrentUrl(beingId), result).catch(() => {});
         return json(result);
       },
     },
@@ -155,19 +155,19 @@ export default function getTools() {
       annotations: { readOnlyHint: false, destructiveHint: true },
       schema: {
         url: z.string().describe("The URL to navigate to"),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
-      handler: async ({ url, nodeId, userId }) => {
-        requireBrowser(userId);
+      handler: async ({ url, nodeId, beingId }) => {
+        requireBrowser(beingId);
         // Check site access against the TARGET url specifically
         const access = await checkSiteAccess(nodeId, url);
         if (access.blocked) {
           return text(`Blocked: ${access.reason}. This site is not allowed at this tree position.`);
         }
-        const result = await sendRequest(userId, "executeAction", {
+        const result = await sendRequest(beingId, "executeAction", {
           action: { type: "navigate", url },
         });
-        logAction(nodeId, userId, { type: "navigate", url }, url, result).catch(() => {});
+        logAction(nodeId, beingId, { type: "navigate", url }, url, result).catch(() => {});
         return json(result);
       },
     },
@@ -182,11 +182,11 @@ export default function getTools() {
       schema: {
         commentText: z.string().describe("The text to post as a comment or reply"),
         replyTo: z.string().optional().describe("Username to reply to (e.g. 'u/someone'). If omitted, posts to the main post."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
-      handler: async ({ commentText, replyTo, userId }) => {
-        requireBrowser(userId);
-        const result = await sendRequest(userId, "executeAction", {
+      handler: async ({ commentText, replyTo, beingId }) => {
+        requireBrowser(beingId);
+        const result = await sendRequest(beingId, "executeAction", {
           action: { type: "comment", text: commentText, replyTo: replyTo || null },
         });
         const res = result?.data || result;
@@ -207,9 +207,9 @@ export default function getTools() {
       annotations: { readOnlyHint: true },
       schema: {
         url: z.string().describe("URL to fetch"),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
-      handler: async ({ url, userId }) => {
+      handler: async ({ url, beingId }) => {
         if (!url) return text("URL required.");
 
         try {

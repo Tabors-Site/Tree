@@ -10,7 +10,7 @@ function esc(s) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-export function renderNodeLlmPage({ nodeId, nodeName, connections, defaultLlm, slots, allSlots = [], qs, userId }) {
+export function renderNodeLlmPage({ nodeId, nodeName, connections, defaultLlm, slots, allSlots = [], qs, beingId }) {
   const activeConn = defaultLlm ? connections.find(c => c._id === defaultLlm) : null;
 
   // Slot assignment rows
@@ -37,7 +37,7 @@ export function renderNodeLlmPage({ nodeId, nodeName, connections, defaultLlm, s
       <div class="back-nav">
         <a href="/api/v1/root/${esc(nodeId)}${qs}" class="back-link">\u2190 Back to ${esc(nodeName || "Tree")}</a>
         <a href="/api/v1/node/${esc(nodeId)}/command-center${qs}" class="back-link">Command Center</a>
-        <a href="/api/v1/user/${esc(userId)}/llm${qs}" class="back-link">User LLM</a>
+        <a href="/api/v1/user/${esc(beingId)}/llm${qs}" class="back-link">User LLM</a>
       </div>
 
       <div class="header">
@@ -49,7 +49,7 @@ export function renderNodeLlmPage({ nodeId, nodeName, connections, defaultLlm, s
         ? `<div class="header" style="margin-top:16px;text-align:center;">
             <div style="color:rgba(255,255,255,0.5);font-size:14px;line-height:1.8;">
               No LLM connections configured.<br/>
-              <a href="/api/v1/user/${esc(userId)}/llm${qs}" style="color:#4ade80;">Add one on your profile</a>
+              <a href="/api/v1/user/${esc(beingId)}/llm${qs}" style="color:#4ade80;">Add one on your profile</a>
             </div>
           </div>`
         : `

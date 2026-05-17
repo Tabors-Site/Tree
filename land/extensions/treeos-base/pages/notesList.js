@@ -740,8 +740,8 @@ input[type="file"].hidden-input {
       <ul class="notes-list">
       ${notes
         .map((n) => {
-          const noteUserId = typeof n.userId === "object" ? n.userId?._id?.toString() : n.userId?.toString();
-          const noteUsername = (typeof n.userId === "object" ? n.userId?.username : null) || n.username;
+          const noteUserId = typeof n.beingId === "object" ? n.beingId?._id?.toString() : n.beingId?.toString();
+          const noteUsername = (typeof n.beingId === "object" ? n.beingId?.username : null) || n.username;
           const isSelf =
             currentUserId && noteUserId && noteUserId === currentUserId;
           const rawPreview =

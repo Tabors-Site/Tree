@@ -1,7 +1,7 @@
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import { getContradictions, resolveContradiction, scanTree } from "./core.js";
 
 const router = express.Router();
@@ -33,8 +33,8 @@ router.post("/node/:nodeId/contradictions/resolve", authenticate, async (req, re
 // POST /root/:rootId/contradictions/scan
 router.post("/root/:rootId/contradictions/scan", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("username").lean();
-    const result = await scanTree(req.params.rootId, req.userId, user?.username);
+    const user = await Being.findById(req.beingId).select("username").lean();
+    const result = await scanTree(req.params.rootId, req.beingId, user?.username);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);

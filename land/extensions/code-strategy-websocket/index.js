@@ -82,7 +82,7 @@ const strategy = defineStrategy({
       schema: {
         messageTypes: z.array(z.string()).describe("Identifier-shaped message type names. Use the same list in ws-create-client."),
         filePath: z.string().optional().describe("Target filename. Defaults to 'server.js'."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
@@ -113,7 +113,7 @@ const strategy = defineStrategy({
       schema: {
         messageTypes: z.array(z.string()).describe("Same list you passed to ws-create-server."),
         filePath: z.string().optional().describe("Target filename. Defaults to 'client.js'."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
@@ -139,7 +139,7 @@ const strategy = defineStrategy({
         "handler, and vice versa. PASS if the seam is coherent; FAIL lists the " +
         "missing pairs.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },

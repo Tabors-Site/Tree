@@ -11,7 +11,7 @@ export function resolveHtmlAuth() {
 
 import { renderEnergy } from "./pages/energy.js";
 
-import { getUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { getConnectionsForUser } from "../../seed/llm/connections.js";
 
 // Models wired from init via setModels
@@ -31,25 +31,25 @@ function buildQueryString(req) {
   return filtered ? `?${filtered}` : "";
 }
 
-router.get("/user/:userId/energy", htmlAuth, async (req, res) => {
+router.get("/user/:beingId/energy", htmlAuth, async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { beingId } = req.params;
     const qs = buildQueryString(req);
-    let user = await _User.findById(userId).exec();
+    let user = await _User.findById(beingId).exec();
     if (!user) {
       return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     }
 
-    const energy = getUserMeta(user, "energy");
+    const energy = getBeingMeta(user, "energy");
     const energyAmount = energy.available?.amount ?? 0;
     const additionalEnergy = energy.additional?.amount ?? 0;
-    const plan = (getUserMeta(user, "tiers").plan || "basic").toLowerCase();
-    const billing = getUserMeta(user, "billing");
+    const plan = (getBeingMeta(user, "tiers").plan || "basic").toLowerCase();
+    const billing = getBeingMeta(user, "billing");
     const planExpiresAt = billing.planExpiresAt || null;
 
-    const llmConnections = await getConnectionsForUser(userId);
+    const llmConnections = await getConnectionsForUser(beingId);
     const mainAssignment = user.llmDefault || null;
-    const userLlmSlots = getUserMeta(user, "userLlm")?.slots || {};
+    const userLlmSlots = getBeingMeta(user, "userLlm")?.slots || {};
     const rawIdeaAssignment = userLlmSlots.rawIdea || null;
     const activeConn = mainAssignment
       ? llmConnections.find((c) => c._id === mainAssignment)
@@ -63,7 +63,7 @@ router.get("/user/:userId/energy", htmlAuth, async (req, res) => {
     const htmlExt = getExtension("html-rendering");
     if (!wantHtml || !htmlExt) {
       return sendOk(res, {
-        userId: user._id,
+        beingId: user._id,
         plan,
         energy: energy.available,
         additionalEnergy: energy.additional,
@@ -73,7 +73,7 @@ router.get("/user/:userId/energy", htmlAuth, async (req, res) => {
 
     return res.send(
       renderEnergy({
-        userId,
+        beingId,
         user,
         energyAmount,
         additionalEnergy,

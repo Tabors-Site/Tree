@@ -29,11 +29,11 @@ export async function handleBe(socket, msg, ack) {
     if (!operation || !VALID_OPERATIONS.has(operation)) {
       throw new PortalError(
         PORTAL_ERR.INVALID_INPUT,
-        `portal:be requires \`operation\` to be one of: ${Array.from(VALID_OPERATIONS).join(", ")}`,
+        `ibp:be requires \`operation\` to be one of: ${Array.from(VALID_OPERATIONS).join(", ")}`,
       );
     }
 
-    const address = extractStanceOrLand(msg, "portal:be");
+    const address = extractStanceOrLand(msg, "ibp:be");
 
     // Verify the address points at THIS land. Pass 1 only.
     const targetLand = extractLandFromAddress(address);
@@ -66,7 +66,7 @@ export async function handleBe(socket, msg, ack) {
 
     // Identity requirements per operation.
     if (operation === "release" || operation === "switch") {
-      if (!socket.userId) {
+      if (!socket.beingId) {
         throw new PortalError(
           PORTAL_ERR.UNAUTHORIZED,
           `BE ${operation} requires an authenticated identity`,
@@ -77,8 +77,8 @@ export async function handleBe(socket, msg, ack) {
     // Stance Authorization gate. BE register/claim from arrival is the
     // bootstrap exception; the authorize function permits it inherently.
     // For release/switch from an established identity, authorize confirms.
-    const identityForAuth = socket.userId
-      ? { userId: socket.userId, username: socket.username }
+    const identityForAuth = socket.beingId
+      ? { beingId: socket.beingId, username: socket.username }
       : null;
     const decision = await authorize({
       identity: identityForAuth,
@@ -100,8 +100,8 @@ export async function handleBe(socket, msg, ack) {
     const ctx = {
       socket,
       address,
-      identity: socket.userId
-        ? { userId: socket.userId, username: socket.username }
+      identity: socket.beingId
+        ? { beingId: socket.beingId, username: socket.username }
         : null,
     };
 
@@ -129,7 +129,7 @@ export async function handleBe(socket, msg, ack) {
     if (isPortalError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("Portal", `portal:be failed: ${err.message}`);
+    log.error("Portal", `ibp:be failed: ${err.message}`);
     return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }

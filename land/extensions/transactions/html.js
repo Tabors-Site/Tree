@@ -826,9 +826,9 @@ export function renderTransactionDetail({
 }) {
   // Render approval groups
   const renderApprovalGroup = (group) => {
-    const approvedUserIds = new Set(group.approvals.map((a) => a.userId));
+    const approvedUserIds = new Set(group.approvals.map((a) => a.beingId));
     const deniedUserIds = new Set(
-      (group.denials || []).map((d) => d.userId)
+      (group.denials || []).map((d) => d.beingId)
     );
 
     return `
@@ -852,16 +852,16 @@ export function renderTransactionDetail({
 
             <div class="approvers-list">
               ${group.eligibleApprovers
-                .map((userId) => {
-                  const hasApproved = approvedUserIds.has(userId);
-                  const hasDenied = deniedUserIds.has(userId);
+                .map((beingId) => {
+                  const hasApproved = approvedUserIds.has(beingId);
+                  const hasDenied = deniedUserIds.has(beingId);
                   const approval = group.approvals.find(
-                    (a) => a.userId === userId
+                    (a) => a.beingId === beingId
                   );
                   const user = contributions.find(
-                    (c) => c.userId._id === userId
-                  )?.userId;
-                  const username = user?.username || userId.substring(0, 8);
+                    (c) => c.beingId._id === beingId
+                  )?.beingId;
+                  const username = user?.username || beingId.substring(0, 8);
 
                   return `
   <div class="approver-item ${
@@ -871,7 +871,7 @@ export function renderTransactionDetail({
       <span class="approver-icon">
         ${hasApproved ? "✓" : hasDenied ? "✗" : "○"}
       </span>
-      <a href="/api/v1/user/${userId}${queryString}" class="approver-name">
+      <a href="/api/v1/user/${beingId}${queryString}" class="approver-name">
         @${username}
       </a>
     </div>
@@ -883,7 +883,7 @@ export function renderTransactionDetail({
           ).toLocaleString()}</span>`
         : hasDenied
         ? `<span class="approval-time denied">${new Date(
-            group.denials.find((d) => d.userId === userId).deniedAt
+            group.denials.find((d) => d.beingId === beingId).deniedAt
           ).toLocaleString()}</span>`
         : `<span class="approval-time pending">Not voted</span>`
     }
@@ -902,7 +902,7 @@ export function renderTransactionDetail({
       .filter((c) => c.nodeId?.toString() === nodeId)
       .sort((a, b) => new Date(a.date) - new Date(b.date))
       .map((contrib) => {
-        const username = contrib.userId?.username || "Unknown";
+        const username = contrib.beingId?.username || "Unknown";
         const event = contrib.transactionMeta?.event;
 
         let icon = "📝";
@@ -948,7 +948,7 @@ export function renderTransactionDetail({
           <div class="timeline-content">
             <div class="timeline-header">
               <a href="/api/v1/user/${
-                contrib.userId._id
+                contrib.beingId._id
               }${queryString}" class="timeline-user">
                 @${username}
               </a>

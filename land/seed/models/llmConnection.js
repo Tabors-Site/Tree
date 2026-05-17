@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 const LlmConnectionSchema = new mongoose.Schema(
   {
     _id: { type: String, default: uuidv4 },
-    userId: { type: String, ref: "User", required: true, index: true },
+    beingId: { type: String, ref: "Being", required: true, index: true },
     name: { type: String, required: true, trim: true, maxlength: 100 },
     baseUrl: { type: String, required: true, trim: true },
     encryptedApiKey: { type: String, required: true },

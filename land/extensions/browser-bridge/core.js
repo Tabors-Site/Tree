@@ -7,7 +7,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 import log from "../../seed/log.js";
-import { createNote } from "../../seed/tree/notes.js";
+import { createArtifact } from "../../seed/tree/artifacts.js";
 
 let _metadata = null;
 let _Node = null;
@@ -17,7 +17,7 @@ export function configure({ metadata, Node }) {
   _Node = Node;
 }
 
-// Active browser connections: userId -> socket
+// Active browser connections: beingId -> socket
 const _connections = new Map();
 
 // Pending requests: requestId -> { resolve, reject, timer }
@@ -32,42 +32,42 @@ const REQUEST_TIMEOUT_MS = 15000;
 // CONNECTION MANAGEMENT
 // ─────────────────────────────────────────────────────────────────────────
 
-export function registerConnection(userId, socket) {
+export function registerConnection(beingId, socket) {
   // Disconnect previous browser connection for this user (if any)
-  const existing = _connections.get(userId);
+  const existing = _connections.get(beingId);
   if (existing && existing.id !== socket.id) {
     existing.emit("browserDisconnected", { reason: "new connection" });
   }
-  _connections.set(userId, socket);
-  log.info("BrowserBridge", `Browser connected for user ${userId}`);
+  _connections.set(beingId, socket);
+  log.info("BrowserBridge", `Browser connected for user ${beingId}`);
 
   socket.on("disconnect", () => {
-    if (_connections.get(userId)?.id === socket.id) {
-      _connections.delete(userId);
-      _currentUrls.delete(userId);
+    if (_connections.get(beingId)?.id === socket.id) {
+      _connections.delete(beingId);
+      _currentUrls.delete(beingId);
       // Reject all pending requests for this user
       for (const [id, pending] of _pending) {
-        if (pending.userId === userId) {
+        if (pending.beingId === beingId) {
           clearTimeout(pending.timer);
           pending.reject(new Error("Browser disconnected"));
           _pending.delete(id);
         }
       }
-      log.info("BrowserBridge", `Browser disconnected for user ${userId}`);
+      log.info("BrowserBridge", `Browser disconnected for user ${beingId}`);
     }
   });
 }
 
-export function isConnected(userId) {
-  return _connections.has(userId);
+export function isConnected(beingId) {
+  return _connections.has(beingId);
 }
 
-export function getCurrentUrl(userId) {
-  return _currentUrls.get(userId) || null;
+export function getCurrentUrl(beingId) {
+  return _currentUrls.get(beingId) || null;
 }
 
-export function setCurrentUrl(userId, url) {
-  _currentUrls.set(userId, url);
+export function setCurrentUrl(beingId, url) {
+  _currentUrls.set(beingId, url);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -78,8 +78,8 @@ export function setCurrentUrl(userId, url) {
  * Send a request to the Chrome extension and wait for a response.
  * Returns a Promise that resolves with the response data.
  */
-export function sendRequest(userId, event, data = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
-  const socket = _connections.get(userId);
+export function sendRequest(beingId, event, data = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const socket = _connections.get(beingId);
   if (!socket) {
     return Promise.reject(new Error("No browser connected. Install the TreeOS Chrome extension and connect it."));
   }
@@ -91,7 +91,7 @@ export function sendRequest(userId, event, data = {}, timeoutMs = REQUEST_TIMEOU
       reject(new Error("Browser request timed out (15s). The page may be unresponsive."));
     }, timeoutMs);
 
-    _pending.set(requestId, { resolve, reject, timer, userId });
+    _pending.set(requestId, { resolve, reject, timer, beingId });
     socket.emit(event, { ...data, requestId });
   });
 }
@@ -194,14 +194,14 @@ function matchesDomain(domain, patterns) {
 /**
  * Log a browser action as a note on the node.
  */
-export async function logAction(nodeId, userId, action, url, result) {
+export async function logAction(nodeId, beingId, action, url, result) {
   try {
     const summary = `[browser] ${action.type || action}${url ? " on " + url : ""}`;
     const detail = typeof result === "string" ? result : (result?.success ? "succeeded" : "failed");
-    await createNote({
-      contentType: "text",
+    await createArtifact({
+      origin: "ibp",
       content: `${summary}: ${detail}`,
-      userId: userId || "SYSTEM",
+      beingId: beingId || "SYSTEM",
       nodeId,
       wasAi: true,
     });

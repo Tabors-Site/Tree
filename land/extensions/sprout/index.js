@@ -83,22 +83,22 @@ export async function init(core) {
   // tool result the AI sees (hookResult.reason = err.message).
   // We throw with a success message so the AI knows sprout handled it.
   core.hooks.register("beforeToolCall", async (hookData) => {
-    const { toolName, args, userId } = hookData;
+    const { toolName, args, beingId } = hookData;
     if (toolName !== "create-tree") return;
-    if (!userId) return;
+    if (!beingId) return;
 
     const domain = matchDomainName(args?.name);
     if (!domain) return;
 
     // Check if this domain is available but not scaffolded
-    const unscaffolded = await getUnscaffoldedDomains(userId);
+    const unscaffolded = await getUnscaffoldedDomains(beingId);
     if (!unscaffolded.includes(domain)) return;
 
     // Intercept: run sprout, then cancel create-tree.
     // We throw so the message reaches the AI as the tool result.
     log.info("Sprout", `Intercepted create-tree "${args.name}" -> sprouting ${domain} instead`);
 
-    const result = await sproutDomain({ domain, userId });
+    const result = await sproutDomain({ domain, beingId });
     if (result.success) {
       throw new Error(
         `Sprout handled this. ${result.message} ` +
@@ -111,14 +111,14 @@ export async function init(core) {
 
   // ── enrichContext: inject sprout awareness in tree zone ──────────────
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
-    const userId = context._userId;
-    if (!userId) return;
+    const beingId = context._userId;
+    if (!beingId) return;
 
     try {
-      const unscaffolded = await getUnscaffoldedDomains(userId);
+      const unscaffolded = await getUnscaffoldedDomains(beingId);
       if (unscaffolded.length === 0) return;
 
-      const pending = getPending(userId);
+      const pending = getPending(beingId);
       context.sprout = {
         availableDomains: unscaffolded,
         pendingOffer: pending ? { domain: pending.domain } : null,
@@ -130,9 +130,9 @@ export async function init(core) {
 
   // ── beforeLLMCall: home zone awareness + pending state injection ────
   core.hooks.register("beforeLLMCall", async (hookData) => {
-    const { messages, mode, userId } = hookData;
+    const { messages, mode, beingId } = hookData;
     if (!messages || !messages[0] || messages[0].role !== "system") return;
-    if (!userId) return;
+    if (!beingId) return;
 
     const isHome = mode?.startsWith("home:");
     const isConverse = mode === "tree:converse";
@@ -144,17 +144,17 @@ export async function init(core) {
       const { getExtension } = await import("../loader.js");
       const lifeExt = getExtension("life");
       if (lifeExt?.exports?.findLifeRoot) {
-        const lifeRootId = await lifeExt.exports.findLifeRoot(userId);
+        const lifeRootId = await lifeExt.exports.findLifeRoot(beingId);
         if (!lifeRootId || String(hookData.rootId) !== String(lifeRootId)) return;
       }
     }
 
     try {
       const [unscaffolded, scaffolded] = await Promise.all([
-        getUnscaffoldedDomains(userId),
-        getScaffoldedDomains(userId),
+        getUnscaffoldedDomains(beingId),
+        getScaffoldedDomains(beingId),
       ]);
-      const pending = getPending(userId);
+      const pending = getPending(beingId);
 
       const sections = [];
 
@@ -216,23 +216,23 @@ export async function init(core) {
           "The domain to offer. One of: food, fitness, study, recovery, kb, relationships, finance, investor, market-researcher"
         ),
         rootId: z.string().nullable().optional().describe("Injected by server. Ignore."),
-        userId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        beingId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
-      handler: async ({ domain, userId }) => {
-        if (!userId) {
+      handler: async ({ domain, beingId }) => {
+        if (!beingId) {
           return { content: [{ type: "text", text: "No user context." }] };
         }
 
-        const unscaffolded = await getUnscaffoldedDomains(userId);
+        const unscaffolded = await getUnscaffoldedDomains(beingId);
         if (!unscaffolded.includes(domain)) {
           return {
             content: [{ type: "text", text: `"${domain}" is already set up or not available.` }],
           };
         }
 
-        setPending(userId, { domain, rootId: null });
-        log.verbose("Sprout", `Offered ${domain} to user ${userId}`);
+        setPending(beingId, { domain, rootId: null });
+        log.verbose("Sprout", `Offered ${domain} to user ${beingId}`);
 
         const desc = DOMAIN_DESCRIPTIONS[domain] || domain;
         return {
@@ -258,22 +258,22 @@ export async function init(core) {
           "The domain to scaffold. One of: food, fitness, study, recovery, kb, relationships, finance, investor, market-researcher"
         ),
         rootId: z.string().nullable().optional().describe("Injected by server. Ignore."),
-        userId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        beingId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      handler: async ({ domain, userId }) => {
-        if (!userId) {
+      handler: async ({ domain, beingId }) => {
+        if (!beingId) {
           return { content: [{ type: "text", text: "No user context." }] };
         }
 
         try {
-          const result = await sproutDomain({ domain, userId });
+          const result = await sproutDomain({ domain, beingId });
 
           if (!result.success) {
             return { content: [{ type: "text", text: result.error }] };
           }
 
-          log.info("Sprout", `Sprouted ${domain} for user ${userId} -> node ${result.nodeId}`);
+          log.info("Sprout", `Sprouted ${domain} for user ${beingId} -> node ${result.nodeId}`);
 
           return {
             content: [{

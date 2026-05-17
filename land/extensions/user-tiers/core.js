@@ -1,4 +1,4 @@
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
 
 let User;
 
@@ -23,10 +23,10 @@ export function registerFeature(feature, tiers) {
 /**
  * Get a user's current tier. Returns "basic" if not set.
  */
-export async function getUserTier(userId) {
-  const user = await User.findById(userId).select("metadata").lean();
+export async function getUserTier(beingId) {
+  const user = await Being.findById(beingId).select("metadata").lean();
   if (!user) return "basic";
-  const tiers = getUserMeta(user, "tiers");
+  const tiers = getBeingMeta(user, "tiers");
   return tiers.plan || "basic";
 }
 
@@ -34,19 +34,19 @@ export async function getUserTier(userId) {
  * Check if a user's tier grants access to a feature.
  * Returns true if the feature isn't registered (permissive default).
  */
-export async function hasAccess(userId, feature) {
+export async function hasAccess(beingId, feature) {
   const allowedTiers = FEATURE_ACCESS[feature];
   if (!allowedTiers) return true; // unknown feature = no restriction
 
-  const tier = await getUserTier(userId);
+  const tier = await getUserTier(beingId);
   return allowedTiers.includes(tier);
 }
 
 /**
  * Set a user's tier. Called by billing or admin.
  */
-export async function setUserTier(userId, tier) {
-  const { batchSetUserMeta } = await import("../../seed/tree/userMetadata.js");
-  await batchSetUserMeta(userId, "tiers", { plan: tier });
+export async function setUserTier(beingId, tier) {
+  const { batchSetBeingMeta } = await import("../../seed/tree/beingMetadata.js");
+  await batchSetBeingMeta(beingId, "tiers", { plan: tier });
   return tier;
 }

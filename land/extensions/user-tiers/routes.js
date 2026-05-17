@@ -7,20 +7,20 @@ export default function (core) {
   const { sendOk, sendError, ERR } = core.protocol;
   const User = core.models.User;
 
-  // GET /user/:userId/tier
-  router.get("/user/:userId/tier", authenticate, async (req, res) => {
+  // GET /user/:beingId/tier
+  router.get("/user/:beingId/tier", authenticate, async (req, res) => {
     try {
-      const tier = await getUserTier(req.params.userId);
-      sendOk(res, { userId: req.params.userId, tier });
+      const tier = await getUserTier(req.params.beingId);
+      sendOk(res, { beingId: req.params.beingId, tier });
     } catch (err) {
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
 
-  // PUT /user/:userId/tier - admin only
-  router.put("/user/:userId/tier", authenticate, async (req, res) => {
+  // PUT /user/:beingId/tier - admin only
+  router.put("/user/:beingId/tier", authenticate, async (req, res) => {
     try {
-      const admin = await User.findById(req.userId).select("isAdmin").lean();
+      const admin = await Being.findById(req.beingId).select("isAdmin").lean();
       if (!admin?.isAdmin) {
         return sendError(res, 403, ERR.FORBIDDEN, "Admin access required");
       }
@@ -30,8 +30,8 @@ export default function (core) {
         return sendError(res, 400, ERR.INVALID_INPUT, "Tier is required");
       }
 
-      const result = await setUserTier(req.params.userId, tier);
-      sendOk(res, { userId: req.params.userId, tier: result });
+      const result = await setUserTier(req.params.beingId, tier);
+      sendOk(res, { beingId: req.params.beingId, tier: result });
     } catch (err) {
       sendError(res, 500, ERR.INTERNAL, err.message);
     }

@@ -19,7 +19,7 @@ router.post("/root/:rootId/reroot/analyze", authenticate, async (req, res) => {
   try {
     const rootId = validateRootId(req, res);
     if (!rootId) return;
-    const result = await analyze(rootId, req.userId, req.username);
+    const result = await analyze(rootId, req.beingId, req.username);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -46,7 +46,7 @@ router.post("/root/:rootId/reroot/apply", authenticate, async (req, res) => {
   try {
     const rootId = validateRootId(req, res);
     if (!rootId) return;
-    const result = await applyProposal(rootId, req.userId);
+    const result = await applyProposal(rootId, req.beingId);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -58,7 +58,7 @@ router.post("/root/:rootId/reroot/reject", authenticate, async (req, res) => {
   try {
     const rootId = validateRootId(req, res);
     if (!rootId) return;
-    const result = await rejectProposal(rootId, req.userId);
+    const result = await rejectProposal(rootId, req.beingId);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);

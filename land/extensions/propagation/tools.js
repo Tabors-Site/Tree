@@ -12,7 +12,7 @@ export default [
         .record(z.any())
         .optional()
         .describe("Optional payload data to include in the signal."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -22,11 +22,11 @@ export default [
       idempotentHint: false,
       openWorldHint: false,
     },
-    handler: async ({ nodeId, payload, userId }) => {
+    handler: async ({ nodeId, payload, beingId }) => {
       try {
         const writeContext = {
           action: "manual-cascade",
-          triggeredBy: userId,
+          triggeredBy: beingId,
           ...(payload || {}),
         };
 
@@ -80,7 +80,7 @@ export default [
         .optional()
         .default(20)
         .describe("Max number of recent signals to return (default 20)."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

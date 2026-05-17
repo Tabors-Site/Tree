@@ -24,8 +24,8 @@ export async function init(core) {
   // await core.metadata.unsetExtMeta(nodeId, "my-extension");
   //
   // User metadata (same pattern):
-  // const prefs = core.userMetadata.getUserMeta(user, "my-extension");
-  // await core.userMetadata.incUserMeta(userId, "my-extension", "visits", 1);
+  // const prefs = core.userMetadata.getBeingMeta(user, "my-extension");
+  // await core.userMetadata.incBeingMeta(beingId, "my-extension", "visits", 1);
 
   // Register custom AI modes (see manifest.js for declaration)
   // core.modes.registerMode("tree:my-mode", {
@@ -47,7 +47,7 @@ export async function init(core) {
     // orchestrator, // Replace the conversation orchestrator for a bigMode:
     // orchestrator: {
     //   bigMode: "tree",  // which bigMode to intercept
-    //   async handle({ visitorId, message, socket, userId, sessionId, ...ctx }) {
+    //   async handle({ visitorId, message, socket, beingId, sessionId, ...ctx }) {
     //     // Full control over chat/place/query flow
     //     // Use core.conversation.processMessage() for LLM calls
     //   },

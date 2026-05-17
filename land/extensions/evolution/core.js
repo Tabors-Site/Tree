@@ -7,8 +7,8 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { SYSTEM_ROLE, NODE_STATUS, CONTENT_TYPE } from "../../seed/protocol.js";
+import Artifact from "../../seed/models/artifact.js";
+import { SYSTEM_ROLE, NODE_STATUS, ARTIFACT_ORIGIN } from "../../seed/protocol.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
@@ -81,7 +81,7 @@ export async function calculateFitness(nodeId) {
   const ageDays = Math.max(1, ageMs / (24 * 60 * 60 * 1000));
 
   // Note count
-  const noteCount = await Note.countDocuments({ nodeId, contentType: CONTENT_TYPE.TEXT });
+  const noteCount = await Artifact.countDocuments({ nodeId, origin: ARTIFACT_ORIGIN.IBP });
 
   // Dormancy
   const lastActivity = evo.lastActivity ? new Date(evo.lastActivity).getTime() : new Date(node.dateCreated).getTime();
@@ -121,7 +121,7 @@ export async function calculateFitness(nodeId) {
  * Run a full analysis pass on a tree. Calculates fitness for every node,
  * identifies dormant branches, and asks the AI to discover structural patterns.
  */
-export async function analyzeTree(rootId, userId, username) {
+export async function analyzeTree(rootId, beingId, username) {
   const nodeIds = await getDescendantIds(rootId);
   const config = await getEvolutionConfig();
 
@@ -193,7 +193,7 @@ export async function analyzeTree(rootId, userId, username) {
         `Maximum ${config.maxPatternsPerTree} patterns. Be specific. Use numbers.`;
 
       const { answer } = await _runChat({
-        userId,
+        beingId,
         username: username || "system",
         message: prompt,
         mode: "tree:respond",

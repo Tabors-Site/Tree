@@ -1,7 +1,7 @@
 import log from "../../seed/log.js";
 import { setModels, getUserTier, hasAccess, setUserTier, registerFeature } from "./core.js";
 import { getExtension } from "../loader.js";
-import { getUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 
 export async function init(core) {
   setModels(core.models);
@@ -13,10 +13,10 @@ export async function init(core) {
   // Register plan badge on user profile (replaces the default "User/Admin" badge)
   try {
     const treeos = getExtension("treeos-base");
-    treeos?.exports?.registerSlot?.("user-profile-badge", "user-tiers", ({ userId, queryString, user }) => {
-      const plan = (getUserMeta(user, "tiers").plan || "basic").toLowerCase();
+    treeos?.exports?.registerSlot?.("user-profile-badge", "user-tiers", ({ beingId, queryString, user }) => {
+      const plan = (getBeingMeta(user, "tiers").plan || "basic").toLowerCase();
       const label = plan.charAt(0).toUpperCase() + plan.slice(1);
-      return `<a href="/api/v1/user/${userId}/energy${queryString}">
+      return `<a href="/api/v1/user/${beingId}/energy${queryString}">
         <span class="plan-badge plan-${plan}">${label} Plan</span>
       </a>`;
     }, { priority: 10 });

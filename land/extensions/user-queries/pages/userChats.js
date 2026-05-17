@@ -11,7 +11,7 @@ import {
   sourceLabel,
 } from "../../html-rendering/html/utils.js";
 
-export function renderChats({ userId, chats, sessions, username, token, sessionId }) {
+export function renderChats({ beingId, chats, sessions, username, token, sessionId }) {
   const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
   const linkifyNodeIds = (html) =>
@@ -772,13 +772,13 @@ details[open] .contrib-summary::before { transform: rotate(90deg); }
   const body = `
   <div class="container">
     <div class="back-nav">
-      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">\u2190 Back to Profile</a>
+      <a href="/api/v1/user/${beingId}${tokenQS}" class="back-link">\u2190 Back to Profile</a>
     </div>
 
     <div class="header">
       <h1>
         AI Chats for
-        <a href="/api/v1/user/${userId}${tokenQS}">@${esc(username)}</a>
+        <a href="/api/v1/user/${beingId}${tokenQS}">@${esc(username)}</a>
         ${chats.length > 0 ? `<span class="message-count">${chats.length}</span>` : ""}
       </h1>
       <div class="header-subtitle">Last 10 AI conversation sessions. Phases = thought process. Contributions = actions made on tree during conversation.</div>

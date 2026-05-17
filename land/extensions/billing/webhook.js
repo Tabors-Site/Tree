@@ -26,13 +26,13 @@ export async function stripeWebhook(req, res) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
 
-    const userId = session.metadata.userId;
+    const beingId = session.metadata.beingId;
     const plan = session.metadata.plan || null;
     const energyAmount = Number(session.metadata.energyAmount || 0);
 
     try {
       await logContribution({
-        userId,
+        beingId,
         nodeId: "SYSTEM",
         nodeVersion: "0",
         action: "purchase",
@@ -61,7 +61,7 @@ export async function stripeWebhook(req, res) {
     }
 
     await processPurchase({
-      userId,
+      beingId,
       plan,
       energyAmount,
     });

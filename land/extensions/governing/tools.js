@@ -199,7 +199,7 @@ async function nextEmissionOrdinal(planNodeId) {
  * Carries the structured emission in metadata.governing.emission.
  * Returns the created node.
  */
-async function createPlanEmission({ planNodeId, ordinal, payload, userId, core }) {
+async function createPlanEmission({ planNodeId, ordinal, payload, beingId, core }) {
   // Slug derived from the Planner's reasoning headline. Walking the
   // tree page tells you what each emission is about without
   // expanding it. Falls back to "emission-N" when reasoning is empty
@@ -214,7 +214,7 @@ async function createPlanEmission({ planNodeId, ordinal, payload, userId, core }
         parentId: String(planNodeId),
         name,
         type: "plan-emission",
-        userId,
+        beingId,
         wasAi: true,
       });
     }
@@ -469,11 +469,11 @@ export default function getGoverningTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        // The MCP HTTP layer injects userId, rootId, nodeId, chatId,
+        // The MCP HTTP layer injects beingId, rootId, nodeId, chatId,
         // sessionId into `args` on every call (loader's passthrough
         // schema wrapping preserves them). `core` comes from this
         // closure, not from args. Match code-workspace tools.js.
-        const { userId, nodeId } = args;
+        const { beingId, nodeId } = args;
 
         // Validate the structured shape strictly.
         const validation = validatePlanArgs(args);
@@ -509,7 +509,7 @@ export default function getGoverningTools(core) {
             if (governing?.ensurePlanAtScope) {
               planNode = await governing.ensurePlanAtScope({
                 scopeNodeId: String(ruler._id),
-                userId,
+                beingId,
                 wasAi: true,
               });
             }
@@ -569,7 +569,7 @@ export default function getGoverningTools(core) {
           planNodeId: planNode._id,
           ordinal,
           payload,
-          userId,
+          beingId,
           core,
         });
 
@@ -730,7 +730,7 @@ export default function getGoverningTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { userId, nodeId } = args;
+        const { beingId, nodeId } = args;
 
         const validation = validateContractsArgs(args);
         if (!validation.ok) {
@@ -797,7 +797,7 @@ export default function getGoverningTools(core) {
           result = await governing.setContracts({
             scopeNodeId: ruler._id,
             contracts: incoming,
-            userId,
+            beingId,
             reasoning: validation.value.reasoning,
             core,
             // Inheritance declaration form: child scope inherits parent

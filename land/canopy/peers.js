@@ -125,10 +125,10 @@ export async function blockPeer(domain) {
 
   if (peer) {
     // Remove all ghost users from this land from all tree contributor arrays
-    const { default: User } = await import("../seed/models/user.js");
+    const { default: User } = await import("../seed/models/being.js");
     const { default: Node } = await import("../seed/models/node.js");
 
-    const ghostUsers = await User.find({ isRemote: true, homeLand: domain }).select("_id").lean();
+    const ghostUsers = await Being.find({ isRemote: true, homeLand: domain }).select("_id").lean();
     const ghostIds = ghostUsers.map((g) => g._id);
 
     if (ghostIds.length > 0) {

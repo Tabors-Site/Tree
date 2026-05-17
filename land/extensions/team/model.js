@@ -28,15 +28,15 @@ export const Invite = mongoose.model("Invite", InviteSchema);
 // Tracks @username mentions in notes. Replaces the old Note.tagged array.
 const NoteTagSchema = new mongoose.Schema({
   _id: { type: String, required: true, default: uuidv4 },
-  noteId: { type: String, ref: "Note", required: true, index: true },
-  userId: { type: String, ref: "User", required: true, index: true },
+  noteId: { type: String, ref: "Artifact", required: true, index: true },
+  beingId: { type: String, ref: "User", required: true, index: true },
   nodeId: { type: String, ref: "Node", required: true },
   taggedBy: { type: String, ref: "User", required: true },
   createdAt: { type: Date, default: Date.now },
 });
 
 // Compound index for efficient queries
-NoteTagSchema.index({ userId: 1, createdAt: -1 });
+NoteTagSchema.index({ beingId: 1, createdAt: -1 });
 NoteTagSchema.index({ noteId: 1 });
 
 export const NoteTag = mongoose.model("NoteTag", NoteTagSchema);

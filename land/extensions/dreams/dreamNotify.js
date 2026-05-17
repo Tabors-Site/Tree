@@ -53,7 +53,7 @@ function buildDreamLog(chats) {
 
 export async function orchestrateDreamNotify({
   rootId,
-  userId,
+  beingId,
   username,
   treeName,
   dreamSessionIds,
@@ -61,7 +61,7 @@ export async function orchestrateDreamNotify({
 }) {
   const rt = new OrchestratorRuntime({
     rootId,
-    userId,
+    beingId,
     username,
     // Tree-scoped dream-notify lane — chains nightly so the AI can compare
     // today's dream to prior dreams on the same tree.
@@ -131,7 +131,7 @@ export async function orchestrateDreamNotify({
     for (const recipientId of recipients) {
       if (summary?.title && summary?.content) {
         notifications.push({
-          userId: recipientId,
+          beingId: recipientId,
           rootId,
           type: "dream-summary",
           title: stripTags(summary.title),
@@ -142,7 +142,7 @@ export async function orchestrateDreamNotify({
 
       if (thought?.title && thought?.content) {
         notifications.push({
-          userId: recipientId,
+          beingId: recipientId,
           rootId,
           type: "dream-thought",
           title: stripTags(thought.title),

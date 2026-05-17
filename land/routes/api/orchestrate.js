@@ -9,7 +9,7 @@ import authenticate, { authenticateOptional } from "../../seed/middleware/authen
 import { createCanopyLlmProxyClient } from "../../canopy/llmProxy.js";
 import { userHasLlm } from "../../seed/llm/conversation.js";
 import { registerSessionType } from "../../seed/ws/sessionRegistry.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import Node from "../../seed/models/node.js";
 import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
 
@@ -37,8 +37,8 @@ function validateMessage(message, res) {
   return true;
 }
 
-async function checkTreeAccess(rootId, userId, res) {
-  const access = await resolveTreeAccess(rootId, userId);
+async function checkTreeAccess(rootId, beingId, res) {
+  const access = await resolveTreeAccess(rootId, beingId);
   if (!access.isOwner && !access.isContributor) {
     sendError(res, 403, ERR.FORBIDDEN, "Not authorized to access this tree.");
     return null;
@@ -46,11 +46,11 @@ async function checkTreeAccess(rootId, userId, res) {
   return access;
 }
 
-async function checkLlmAccess(rootId, userId, res) {
+async function checkLlmAccess(rootId, beingId, res) {
   const rootCheck = await Node.findById(rootId)
     .select("rootOwner visibility llmDefault metadata")
     .lean();
-  const hasUserLlm = await userHasLlm(userId);
+  const hasUserLlm = await userHasLlm(beingId);
   const hasRootLlm = !!(rootCheck?.llmDefault && rootCheck.llmDefault !== "none");
   if (!hasUserLlm && !hasRootLlm) {
     sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
@@ -72,7 +72,7 @@ router.post("/home/chat", authenticate, async (req, res) => {
     const { runOrchestration } = await import("../../seed/llm/conversation.js");
     const result = await runOrchestration({
       zone: "home",
-      userId: req.userId,
+      beingId: req.beingId,
       username: req.username,
       message: message.trim(),
       device: req.body.device || "http",
@@ -98,14 +98,14 @@ router.post("/root/:rootId/chat", authenticate, async (req, res) => {
   const { message, sessionHandle, currentNodeId } = req.body;
 
   if (!validateMessage(message, res)) return;
-  if (!(await checkTreeAccess(rootId, req.userId, res))) return;
-  if (!(await checkLlmAccess(rootId, req.userId, res))) return;
+  if (!(await checkTreeAccess(rootId, req.beingId, res))) return;
+  if (!(await checkLlmAccess(rootId, req.beingId, res))) return;
 
   try {
     const { runOrchestration } = await import("../../seed/llm/conversation.js");
     const result = await runOrchestration({
       zone: "tree",
-      userId: req.userId,
+      beingId: req.beingId,
       username: req.username,
       message: message.trim(),
       rootId,
@@ -142,14 +142,14 @@ router.post("/root/:rootId/place", authenticate, async (req, res) => {
   const { message, currentNodeId } = req.body;
 
   if (!validateMessage(message, res)) return;
-  if (!(await checkTreeAccess(rootId, req.userId, res))) return;
-  if (!(await checkLlmAccess(rootId, req.userId, res))) return;
+  if (!(await checkTreeAccess(rootId, req.beingId, res))) return;
+  if (!(await checkLlmAccess(rootId, req.beingId, res))) return;
 
   try {
     const { runOrchestration } = await import("../../seed/llm/conversation.js");
     const result = await runOrchestration({
       zone: "tree",
-      userId: req.userId,
+      beingId: req.beingId,
       username: req.username,
       message: message.trim(),
       rootId,
@@ -198,7 +198,7 @@ async function handleQuery(req, res) {
   }
 
   // Resolve who pays for LLM and access
-  let effectiveUserId = req.userId;
+  let effectiveUserId = req.beingId;
   let effectiveUsername = req.username;
   let isPublicQuery = false;
   let clientOverride = null;
@@ -213,21 +213,21 @@ async function handleQuery(req, res) {
       return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "This tree has no AI configured for public queries.");
     }
     effectiveUserId = rootCheck.rootOwner;
-    const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
+    const owner = await Being.findById(rootCheck.rootOwner).select("username").lean();
     effectiveUsername = owner?.username || "system";
     isPublicQuery = true;
   } else {
-    const queryAccess = await resolveTreeAccess(rootId, req.userId);
+    const queryAccess = await resolveTreeAccess(rootId, req.beingId);
     if (!queryAccess.isOwner && !queryAccess.isContributor) {
       if (rootCheck.visibility === "public") {
         if (treeHasLlm) {
           effectiveUserId = rootCheck.rootOwner;
-          const owner = await User.findById(rootCheck.rootOwner).select("username").lean();
+          const owner = await Being.findById(rootCheck.rootOwner).select("username").lean();
           effectiveUsername = owner?.username || "system";
         } else if (req.canopy?.sourceLandDomain) {
           clientOverride = {
             client: createCanopyLlmProxyClient({
-              userId: req.userId,
+              beingId: req.beingId,
               homeLand: req.canopy.sourceLandDomain,
               slot: "main",
             }),
@@ -247,7 +247,7 @@ async function handleQuery(req, res) {
 
   // Rate limit public queries
   if (isPublicQuery) {
-    const rateLimitKey = req.userId ? `user:${req.userId}` : (req.ip || "unknown");
+    const rateLimitKey = req.beingId ? `user:${req.beingId}` : (req.ip || "unknown");
     if (!checkPublicQueryLimit(rateLimitKey)) {
       return sendError(res, 429, ERR.RATE_LIMITED, "Too many queries. Please try again later.");
     }
@@ -272,11 +272,11 @@ async function handleQuery(req, res) {
   let deviceForQuery;
   if (isPublicQuery) {
     if (req.canopy?.sourceLandDomain) {
-      const remoteUserTag = req.userId || req.canopy.remoteUserId || "anon";
+      const remoteUserTag = req.beingId || req.canopy.remoteUserId || "anon";
       deviceForQuery = `canopy:${req.canopy.sourceLandDomain}:${remoteUserTag}`;
-    } else if (req.userId) {
+    } else if (req.beingId) {
       // Authenticated local visitor on a public tree they don't own.
-      deviceForQuery = `public:${req.userId}`;
+      deviceForQuery = `public:${req.beingId}`;
     } else {
       // Anonymous public visitor.
       deviceForQuery = `public:anon:${req.ip || "unknown"}`;
@@ -289,7 +289,7 @@ async function handleQuery(req, res) {
     const { runOrchestration } = await import("../../seed/llm/conversation.js");
     const result = await runOrchestration({
       zone: "tree",
-      userId: effectiveUserId,
+      beingId: effectiveUserId,
       username: effectiveUsername,
       message: (message || "").trim(),
       rootId,
@@ -359,14 +359,14 @@ router.post("/root/:rootId/be", authenticate, async (req, res) => {
   const { message, currentNodeId } = req.body;
 
   if (!validateMessage(message, res)) return;
-  if (!(await checkTreeAccess(rootId, req.userId, res))) return;
-  if (!(await checkLlmAccess(rootId, req.userId, res))) return;
+  if (!(await checkTreeAccess(rootId, req.beingId, res))) return;
+  if (!(await checkLlmAccess(rootId, req.beingId, res))) return;
 
   try {
     const { runOrchestration } = await import("../../seed/llm/conversation.js");
     const result = await runOrchestration({
       zone: "tree",
-      userId: req.userId,
+      beingId: req.beingId,
       username: req.username,
       message: message.trim(),
       rootId,

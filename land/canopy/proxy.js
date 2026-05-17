@@ -9,7 +9,7 @@ import { getPeerByDomain, getPeerBaseUrl } from "./peers.js";
  * the user's identity without having them in its local database.
  */
 export async function proxyToRemoteLand({
-  userId,
+  beingId,
   targetLandDomain,
   method,
   path,
@@ -30,7 +30,7 @@ export async function proxyToRemoteLand({
     throw new Error(`Land ${targetLandDomain} is currently ${peer.status}`);
   }
 
-  const token = await signCanopyToken(userId, targetLandDomain);
+  const token = await signCanopyToken(beingId, targetLandDomain);
 
   // Build the URL
   let url = `${getPeerBaseUrl(peer)}${path}`;

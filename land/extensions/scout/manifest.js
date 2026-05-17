@@ -12,7 +12,7 @@ export default {
 
   needs: {
     services: ["hooks", "llm", "metadata", "session"],
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
   },
 
   optional: {

@@ -15,7 +15,7 @@ const TempUserSchema = new mongoose.Schema({
   },
 
   // Stored in plaintext. Protected by verification token + 12 hour TTL + MongoDB TTL auto-delete.
-  // The real bcrypt hash happens when User.create() runs the User model's pre-save hook.
+  // The real bcrypt hash happens when Being.create() runs the User model's pre-save hook.
   // Do NOT hash here. TempUser hashing + User hashing = double-hash = user can never log in.
   password: {
     type: String,

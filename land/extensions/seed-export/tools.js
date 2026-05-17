@@ -11,14 +11,14 @@ export default [
     schema: {
       rootId: z.string().describe("Tree root to export."),
       cascade: z.boolean().optional().default(false).describe("Include cascade topology summary."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    handler: async ({ rootId, cascade, userId }) => {
+    handler: async ({ rootId, cascade, beingId }) => {
       try {
-        const seed = await exportTreeSeed(rootId, userId, { cascade });
+        const seed = await exportTreeSeed(rootId, beingId, { cascade });
         return {
           content: [{
             type: "text",
@@ -44,7 +44,7 @@ export default [
       "and which are missing on this land.",
     schema: {
       seedJson: z.string().describe("The seed file JSON as a string."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -71,17 +71,17 @@ export default [
       "Creates the full node hierarchy with structural metadata applied.",
     schema: {
       seedJson: z.string().describe("The seed file JSON as a string."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-    handler: async ({ seedJson, userId }) => {
+    handler: async ({ seedJson, beingId }) => {
       try {
-        const User = (await import("../../seed/models/user.js")).default;
-        const user = await User.findById(userId).select("username").lean();
+        const User = (await import("../../seed/models/being.js")).default;
+        const user = await Being.findById(beingId).select("username").lean();
         const seedData = JSON.parse(seedJson);
-        const result = await plantTreeSeed(seedData, userId, user?.username || "system");
+        const result = await plantTreeSeed(seedData, beingId, user?.username || "system");
         return {
           content: [{
             type: "text",

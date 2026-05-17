@@ -1,7 +1,7 @@
-import User from "../../../seed/models/user.js";
+import Being from "../../../seed/models/being.js";
 import { upgradeUserPlan } from "./upgradePlan.js";
 import { clearUserClientCache } from "../../../seed/llm/conversation.js";
-import { getUserMeta, setUserMeta } from "../../../seed/tree/userMetadata.js";
+import { getBeingMeta, setBeingMeta } from "../../../seed/tree/beingMetadata.js";
 
 /**
  * Read the user's energy metadata, ensuring the expected shape exists.
@@ -9,7 +9,7 @@ import { getUserMeta, setUserMeta } from "../../../seed/tree/userMetadata.js";
  *   { available: { amount, lastResetAt }, additional: { amount } }
  */
 function getEnergy(user) {
-  const energy = getUserMeta(user, "energy");
+  const energy = getBeingMeta(user, "energy");
   if (!energy.available) energy.available = { amount: 0, lastResetAt: null };
   if (!energy.additional) energy.additional = { amount: 0 };
   if (typeof energy.available.amount !== "number") energy.available.amount = 0;
@@ -22,11 +22,11 @@ const PLAN_DURATION_DAYS = 30;
 const MAX_ENERGY_PURCHASE = 1_000_000; // safety cap
 
 export async function processPurchase({
-  userId,
+  beingId,
   plan,
   energyAmount,
 }) {
-  const user = await User.findById(userId);
+  const user = await Being.findById(beingId);
 
   if (!user) {
     throw new Error("User not found");
@@ -47,18 +47,18 @@ export async function processPurchase({
   }
 
   if (plan && plan !== "basic") {
-    const currentPlan = getUserMeta(user, "tiers").plan || "basic";
+    const currentPlan = getBeingMeta(user, "tiers").plan || "basic";
     if (plan !== currentPlan) {
       upgradeUserPlan(user, plan);
     }
 
-    const billing = getUserMeta(user, "billing");
+    const billing = getBeingMeta(user, "billing");
     const baseTime = Math.max(
       Date.now(),
       billing.planExpiresAt?.getTime?.() || (typeof billing.planExpiresAt === "number" ? billing.planExpiresAt : 0)
     );
 
-    setUserMeta(user, "billing", {
+    setBeingMeta(user, "billing", {
       ...billing,
       planExpiresAt: new Date(baseTime + PLAN_DURATION_DAYS * 24 * 60 * 60 * 1000),
     });
@@ -67,12 +67,12 @@ export async function processPurchase({
   if (energyAmount > 0) {
     const energy = getEnergy(user);
     energy.additional.amount += energyAmount;
-    setUserMeta(user, "energy", energy);
+    setBeingMeta(user, "energy", energy);
   }
 
   await user.save();
 
-  clearUserClientCache(userId);
+  clearUserClientCache(beingId);
 
   return user;
 }

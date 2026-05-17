@@ -48,7 +48,7 @@ const REQUIRED_INDEXES = [
 
   // Contribution queries (audit trail by node and by user)
   { collection: "contributions", fields: { nodeId: 1, date: -1 }, options: {} },
-  { collection: "contributions", fields: { userId: 1, date: -1 }, options: {} },
+  { collection: "contributions", fields: { beingId: 1, date: -1 }, options: {} },
   { collection: "contributions", fields: { sessionId: 1 }, options: { sparse: true } },
   // Contribution lookup by chatId (finalizeChat collects contributions per chat)
   { collection: "contributions", fields: { chatId: 1 }, options: { sparse: true } },
@@ -57,7 +57,7 @@ const REQUIRED_INDEXES = [
   { collection: "users", fields: { username: 1 }, options: { unique: true } },
 
   // AIChat queries (chat history by user, by session, by node)
-  { collection: "aichats", fields: { userId: 1, "startMessage.time": -1 }, options: {} },
+  { collection: "aichats", fields: { beingId: 1, "startMessage.time": -1 }, options: {} },
   { collection: "aichats", fields: { sessionId: 1, chainIndex: 1 }, options: {} },
   { collection: "aichats", fields: { "treeContext.targetNodeId": 1 }, options: { sparse: true } },
   // Chat retention cleanup: deleteMany by startMessage.time
@@ -66,7 +66,7 @@ const REQUIRED_INDEXES = [
   { collection: "aichats", fields: { "aiContext.zone": 1 }, options: {} },
 
   // LLM connection queries (connections by user)
-  { collection: "llmconnections", fields: { userId: 1 }, options: {} },
+  { collection: "llmconnections", fields: { beingId: 1 }, options: {} },
 ];
 
 // Kernel collection names. Extension indexes cannot target these.

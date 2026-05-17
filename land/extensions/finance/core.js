@@ -9,12 +9,12 @@ import log from "../../seed/log.js";
 import { setNodeMode } from "../../seed/modes/registry.js";
 
 let _Node = null;
-let _Note = null;
+let _Artifact = null;
 let _metadata = null;
 
-export function configure({ Node, Note, metadata }) {
+export function configure({ Node, Artifact, metadata }) {
   _Node = Node;
-  _Note = Note;
+  _Artifact = Note;
   _metadata = metadata;
 }
 
@@ -31,26 +31,26 @@ export { ROLES };
 
 // ── Scaffold ──
 
-export async function scaffold(rootId, userId) {
+export async function scaffold(rootId, beingId) {
   if (!_Node) throw new Error("Finance core not configured");
   const { createNode } = await import("../../seed/tree/treeManagement.js");
 
-  const logNode = await createNode({ name: "Log", parentId: rootId, userId });
-  const accountsNode = await createNode({ name: "Accounts", parentId: rootId, userId });
-  const categoriesNode = await createNode({ name: "Categories", parentId: rootId, userId });
-  const budgetNode = await createNode({ name: "Budget", parentId: rootId, userId });
-  const profileNode = await createNode({ name: "Profile", parentId: rootId, userId });
-  const historyNode = await createNode({ name: "History", parentId: rootId, userId });
+  const logNode = await createNode({ name: "Log", parentId: rootId, beingId });
+  const accountsNode = await createNode({ name: "Accounts", parentId: rootId, beingId });
+  const categoriesNode = await createNode({ name: "Categories", parentId: rootId, beingId });
+  const budgetNode = await createNode({ name: "Budget", parentId: rootId, beingId });
+  const profileNode = await createNode({ name: "Profile", parentId: rootId, beingId });
+  const historyNode = await createNode({ name: "History", parentId: rootId, beingId });
 
   // Default accounts
-  const checking = await createNode({ name: "Checking", parentId: String(accountsNode._id), userId });
-  const savings = await createNode({ name: "Savings", parentId: String(accountsNode._id), userId });
-  const cash = await createNode({ name: "Cash", parentId: String(accountsNode._id), userId });
-  const creditCard = await createNode({ name: "Credit Card", parentId: String(accountsNode._id), userId });
+  const checking = await createNode({ name: "Checking", parentId: String(accountsNode._id), beingId });
+  const savings = await createNode({ name: "Savings", parentId: String(accountsNode._id), beingId });
+  const cash = await createNode({ name: "Cash", parentId: String(accountsNode._id), beingId });
+  const creditCard = await createNode({ name: "Credit Card", parentId: String(accountsNode._id), beingId });
 
   // Default spending categories
   for (const cat of ["Food", "Housing", "Transport", "Health", "Entertainment", "Shopping", "Bills", "Other"]) {
-    const catNode = await createNode({ name: cat, parentId: String(categoriesNode._id), userId });
+    const catNode = await createNode({ name: cat, parentId: String(categoriesNode._id), beingId });
     await _metadata.setExtMeta(catNode, "finance", { role: "category" });
   }
 
@@ -209,7 +209,7 @@ export async function getRecentTransactions(rootId, limit = 15) {
   const nodes = await findFinanceNodes(rootId);
   if (!nodes?.log) return [];
 
-  const { getNotes } = await import("../../seed/tree/notes.js");
-  const result = await getNotes({ nodeId: nodes.log.id, limit });
-  return result?.notes || [];
+  const { getArtifacts } = await import("../../seed/tree/artifacts.js");
+  const result = await getArtifacts({ nodeId: nodes.log.id, limit });
+  return result?.artifacts || [];
 }

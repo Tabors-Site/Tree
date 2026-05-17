@@ -58,7 +58,7 @@ async function setValueForNode({
   nodeId,
   key,
   value,
-  userId,
+  beingId,
   wasAi = false,
   chatId = null,
   sessionId = null,
@@ -81,13 +81,13 @@ async function setValueForNode({
   const existingKey = findExistingKey(values, key);
   const finalKey = existingKey ?? key;
 
-  const { energyUsed } = await useEnergy({ userId, action: "editValue" });
+  const { energyUsed } = await useEnergy({ beingId, action: "editValue" });
 
   values[finalKey] = numericValue;
   await _metadata.setExtMeta(node, "values", values);
 
   await logContribution({
-    userId, nodeId, wasAi, chatId, sessionId,
+    beingId, nodeId, wasAi, chatId, sessionId,
     action: "editValue",
     valueEdited: { [finalKey]: numericValue },
     nodeVersion: "0",
@@ -101,7 +101,7 @@ async function setGoalForNode({
   nodeId,
   key,
   goal,
-  userId,
+  beingId,
   wasAi = false,
   chatId = null,
   sessionId = null,
@@ -128,13 +128,13 @@ async function setGoalForNode({
   const existingKey = findExistingKey(goals, key);
   const finalKey = existingKey ?? key;
 
-  const { energyUsed } = await useEnergy({ userId, action: "editGoal" });
+  const { energyUsed } = await useEnergy({ beingId, action: "editGoal" });
 
   goals[finalKey] = numericGoal;
   await _metadata.setExtMeta(node, "goals", goals);
 
   await logContribution({
-    userId, nodeId, wasAi, chatId, sessionId,
+    beingId, nodeId, wasAi, chatId, sessionId,
     action: "editGoal",
     goalEdited: { [finalKey]: numericGoal },
     nodeVersion: "0",

@@ -10,7 +10,7 @@ router.get("/node/:nodeId/seed-export", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
     const cascade = req.query.cascade === "true";
-    const seed = await exportTreeSeed(nodeId, req.userId, { cascade });
+    const seed = await exportTreeSeed(nodeId, req.beingId, { cascade });
     sendOk(res, seed);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -24,7 +24,7 @@ router.post("/seed/plant", authenticate, async (req, res) => {
     if (!seedData?.tree) {
       return sendError(res, 400, ERR.INVALID_INPUT, "Request body must contain a seed file with a tree field");
     }
-    const result = await plantTreeSeed(seedData, req.userId, req.username);
+    const result = await plantTreeSeed(seedData, req.beingId, req.username);
     sendOk(res, result, 201);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);

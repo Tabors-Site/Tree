@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import log from "../../seed/log.js";
 
 const execFileAsync = promisify(execFile);
@@ -21,7 +21,7 @@ export default function getTools() {
       description: "Execute a shell command on the land server. Returns stdout and stderr. God-tier users only. 30 second timeout.",
       schema: {
         command: z.string().describe("The shell command to execute."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: {
         readOnlyHint: false,
@@ -29,8 +29,8 @@ export default function getTools() {
         idempotentHint: false,
         openWorldHint: true,
       },
-      async handler({ command, userId }) {
-        const user = await User.findById(userId).select("isAdmin").lean();
+      async handler({ command, beingId }) {
+        const user = await Being.findById(beingId).select("isAdmin").lean();
         if (!user || !user.isAdmin) {
           return { content: [{ type: "text", text: "Permission denied. Shell access requires admin." }] };
         }
@@ -68,18 +68,18 @@ export default function getTools() {
 
         const blocked = BLOCKED.find(re => re.test(command));
         if (blocked) {
-          log.warn("Shell", `BLOCKED dangerous command from ${userId}: ${command.slice(0, 200)}`);
+          log.warn("Shell", `BLOCKED dangerous command from ${beingId}: ${command.slice(0, 200)}`);
           return { content: [{ type: "text", text: "Blocked: this command pattern is not allowed for safety. Use the server directly for destructive operations." }] };
         }
 
         // Energy metering
         try {
-          await _useEnergy({ userId, action: "shellExecute" });
+          await _useEnergy({ beingId, action: "shellExecute" });
         } catch {
           return { content: [{ type: "text", text: "Insufficient energy for shell execution." }] };
         }
 
-        log.warn("Shell", `${userId} executing: ${command.slice(0, 200)}`);
+        log.warn("Shell", `${beingId} executing: ${command.slice(0, 200)}`);
 
         // Execute via /bin/sh -c but with execFile (no double shell interpretation).
         // execFile with explicit shell path avoids the implicit shell spawning of exec().

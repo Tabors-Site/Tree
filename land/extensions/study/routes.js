@@ -3,7 +3,7 @@ import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import log from "../../seed/log.js";
 import NodeModel from "../../seed/models/node.js";
-import UserModel from "../../seed/models/user.js";
+import UserModel from "../../seed/models/being.js";
 import {
   isInitialized,
   getStudyProgress,
@@ -33,9 +33,9 @@ router.post("/root/:rootId/study", authenticate, async (req, res) => {
     const root = await Node.findById(rootId).select("rootOwner contributors").lean();
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
 
-    const userId = req.userId;
-    const isOwner = root.rootOwner?.toString() === userId;
-    const isContributor = root.contributors?.some(c => c.toString() === userId);
+    const beingId = req.beingId;
+    const isOwner = root.rootOwner?.toString() === beingId;
+    const isContributor = root.contributors?.some(c => c.toString() === beingId);
     if (!isOwner && !isContributor) return sendError(res, 403, ERR.FORBIDDEN, "No access");
 
     const { isExtensionBlockedAtNode } = await import("../../seed/tree/extensionScope.js");
@@ -43,10 +43,10 @@ router.post("/root/:rootId/study", authenticate, async (req, res) => {
       return sendError(res, 403, ERR.EXTENSION_BLOCKED, "Study is blocked on this branch.");
     }
 
-    const user = await UserModel.findById(userId).select("username").lean();
+    const user = await UserModel.findById(beingId).select("username").lean();
     const username = user?.username || "user";
 
-    const result = await handleMessage(message, { userId, username, rootId, res });
+    const result = await handleMessage(message, { beingId, username, rootId, res });
 
     if (result.error) {
       if (!res.headersSent) sendError(res, result.status || 500, result.code || ERR.INTERNAL, result.message);
@@ -75,7 +75,7 @@ router.post("/root/:rootId/study/queue", authenticate, async (req, res) => {
     }
 
     const isUrl = /^https?:\/\//.test(topic);
-    const result = await addToQueue(rootId, topic, req.userId, { url: isUrl ? topic : null });
+    const result = await addToQueue(rootId, topic, req.beingId, { url: isUrl ? topic : null });
     sendOk(res, { queued: result.name, url: isUrl || undefined });
   } catch (err) {
     log.error("Study", "Queue error:", err.message);
@@ -122,7 +122,7 @@ router.post("/root/:rootId/study/switch", authenticate, async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "Study tree not initialized.");
     }
 
-    const result = await switchToTopic(rootId, topic, req.userId);
+    const result = await switchToTopic(rootId, topic, req.beingId);
     if (result.alreadyActive) {
       sendOk(res, { answer: `"${result.name}" is already active.`, name: result.name });
     } else {
@@ -147,7 +147,7 @@ router.post("/root/:rootId/study/deactivate", authenticate, async (req, res) => 
       return sendError(res, 400, ERR.INVALID_INPUT, "Study tree not initialized.");
     }
 
-    const result = await deactivateTopic(rootId, topic, req.userId);
+    const result = await deactivateTopic(rootId, topic, req.beingId);
     sendOk(res, { answer: `Deactivated "${result.name}". Moved back to queue.`, name: result.name });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
@@ -168,7 +168,7 @@ router.post("/root/:rootId/study/remove", authenticate, async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "Study tree not initialized.");
     }
 
-    const result = await removeFromQueue(rootId, topic, req.userId);
+    const result = await removeFromQueue(rootId, topic, req.beingId);
     sendOk(res, { answer: `Removed "${result.name}".`, name: result.name });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
@@ -202,7 +202,7 @@ router.post("/root/:rootId/study/activate/:nodeId", authenticate, async (req, re
   try {
     const node = await Node.findById(req.params.nodeId).select("name").lean();
     if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Not found");
-    const result = await switchToTopic(req.params.rootId, node.name, req.userId);
+    const result = await switchToTopic(req.params.rootId, node.name, req.beingId);
     sendOk(res, { activated: true, name: result.name });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
@@ -216,10 +216,10 @@ router.post("/root/:rootId/study/dequeue/:nodeId", authenticate, async (req, res
   try {
     const node = await Node.findById(req.params.nodeId).select("name").lean();
     if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Not found");
-    const result = await deactivateTopic(req.params.rootId, node.name, req.userId);
+    const result = await deactivateTopic(req.params.rootId, node.name, req.beingId);
     sendOk(res, { dequeued: true, name: result.name });
   } catch (err) {
-    log.error("Study", `Dequeue failed: ${err.message} (userId: ${req.userId}, nodeId: ${req.params.nodeId})`);
+    log.error("Study", `Dequeue failed: ${err.message} (beingId: ${req.beingId}, nodeId: ${req.params.nodeId})`);
     sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
@@ -231,7 +231,7 @@ router.delete("/root/:rootId/study/item/:nodeId", authenticate, async (req, res)
   try {
     const node = await Node.findById(req.params.nodeId).select("name").lean();
     if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Not found");
-    await removeFromQueue(req.params.rootId, node.name, req.userId);
+    await removeFromQueue(req.params.rootId, node.name, req.beingId);
     sendOk(res, { deleted: true, name: node.name });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);

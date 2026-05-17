@@ -6,7 +6,7 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import ShortMemory from "./model.js";
 import { orchestrateReorganize } from "./cleanupReorganize.js";
 import { orchestrateExpand } from "./cleanupExpand.js";
@@ -40,7 +40,7 @@ let jobTimer = null;
 
 async function runTreeDream(rootNode) {
   const rootId = rootNode._id.toString();
-  const userId = rootNode.rootOwner.toString();
+  const beingId = rootNode.rootOwner.toString();
 
   if (!acquireLock("dream", rootId)) {
     log.verbose("Dreams", ` Dream already running for "${rootNode.name}", skipping`);
@@ -55,7 +55,7 @@ async function runTreeDream(rootNode) {
   }
 
   // Resolve username
-  const user = await User.findById(userId).select("username").lean();
+  const user = await Being.findById(beingId).select("username").lean();
   if (!user) {
     log.warn("Dreams", ` Dream: no user for tree ${rootId}`);
     releaseLock("dream", rootId);
@@ -66,7 +66,7 @@ async function runTreeDream(rootNode) {
   // Skip if no LLM available (root assignment or user connection)
   const rootFull = await Node.findById(rootId).select("llmDefault metadata").lean();
   const treeLlmOff = !rootFull?.llmDefault || rootFull.llmDefault === "none";
-  if (treeLlmOff && !(await userHasLlm(userId))) {
+  if (treeLlmOff && !(await userHasLlm(beingId))) {
     log.verbose("Dreams", ` Skipping "${rootNode.name}" — owner has no LLM connection`);
     releaseLock("dream", rootId);
     return;
@@ -93,7 +93,7 @@ async function runTreeDream(rootNode) {
       try {
         const reorgResult = await orchestrateReorganize({
           rootId,
-          userId,
+          beingId,
           username,
           source: "background",
         });
@@ -109,7 +109,7 @@ async function runTreeDream(rootNode) {
       try {
         const expandResult = await orchestrateExpand({
           rootId,
-          userId,
+          beingId,
           username,
           source: "background",
         });
@@ -176,14 +176,14 @@ async function runTreeDream(rootNode) {
 
         const run = await understandingExt.exports.findOrCreateUnderstandingRun(
           rootId,
-          userId,
+          beingId,
           NAV_PERSPECTIVE,
           true,
         );
 
         await understandingExt.exports.orchestrateUnderstanding({
           rootId,
-          userId,
+          beingId,
           username,
           runId: run.understandingRunId,
           source: "background",
@@ -204,7 +204,7 @@ async function runTreeDream(rootNode) {
     log.verbose("Dreams", ` Generating dream notifications for "${rootNode.name}"`);
         await orchestrateDreamNotify({
           rootId,
-          userId,
+          beingId,
           username,
           treeName: rootNode.name,
           dreamSessionIds,

@@ -55,7 +55,7 @@ export default {
 
     hooks: {
       fires: [],
-      listens: ["onTreeTripped", "onDocumentPressure", "enrichContext", "beforeNote"],
+      listens: ["onTreeTripped", "onDocumentPressure", "enrichContext", "beforeArtifact"],
     },
   },
 };

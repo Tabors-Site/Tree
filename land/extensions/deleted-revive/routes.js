@@ -11,7 +11,7 @@ import {
   reviveNodeBranch,
   reviveNodeBranchAsRoot,
 } from "../../seed/tree/treeManagement.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 
 export default function createRouter(core) {
   const htmlExt = getExtension("html-rendering");
@@ -19,37 +19,37 @@ export default function createRouter(core) {
 
   const router = express.Router();
 
-  router.get("/user/:userId/deleted", htmlAuth, async (req, res) => {
+  router.get("/user/:beingId/deleted", htmlAuth, async (req, res) => {
     try {
-      const { userId } = req.params;
+      const { beingId } = req.params;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-      const deleted = await getDeletedBranchesForUser(userId);
+      const deleted = await getDeletedBranchesForUser(beingId);
 
       if (!wantHtml || !getExtension("html-rendering")) {
-        return sendOk(res, { userId, deleted });
+        return sendOk(res, { beingId, deleted });
       }
 
-      const user = await User.findById(userId).lean();
+      const user = await Being.findById(beingId).lean();
       const token = req.query.token ?? "";
 
       // renderDeletedBranches imported directly from pages/deleted.js
       if (!renderDeletedBranches) {
-        return sendOk(res, { userId, deleted });
+        return sendOk(res, { beingId, deleted });
       }
 
-      return res.send(renderDeletedBranches({ userId, user, deleted, token }));
+      return res.send(renderDeletedBranches({ beingId, user, deleted, token }));
     } catch (err) {
-      log.error("Deleted Revive", "Error in /user/:userId/deleted:", err);
+      log.error("Deleted Revive", "Error in /user/:beingId/deleted:", err);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
 
-  router.post("/user/:userId/deleted/:nodeId/revive", authenticate, async (req, res) => {
+  router.post("/user/:beingId/deleted/:nodeId/revive", authenticate, async (req, res) => {
     try {
-      const { userId, nodeId } = req.params;
+      const { beingId, nodeId } = req.params;
       const { targetParentId } = req.body;
 
-      if (!req.userId || req.userId.toString() !== userId.toString()) {
+      if (!req.beingId || req.beingId.toString() !== beingId.toString()) {
         return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
 
@@ -60,7 +60,7 @@ export default function createRouter(core) {
       const result = await reviveNodeBranch({
         deletedNodeId: nodeId,
         targetParentId,
-        userId: req.userId,
+        beingId: req.beingId,
       });
 
       if ("html" in req.query) {
@@ -76,17 +76,17 @@ export default function createRouter(core) {
     }
   });
 
-  router.post("/user/:userId/deleted/:nodeId/reviveAsRoot", authenticate, async (req, res) => {
+  router.post("/user/:beingId/deleted/:nodeId/reviveAsRoot", authenticate, async (req, res) => {
     try {
-      const { userId, nodeId } = req.params;
+      const { beingId, nodeId } = req.params;
 
-      if (!req.userId || req.userId.toString() !== userId.toString()) {
+      if (!req.beingId || req.beingId.toString() !== beingId.toString()) {
         return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
 
       const result = await reviveNodeBranchAsRoot({
         deletedNodeId: nodeId,
-        userId: req.userId,
+        beingId: req.beingId,
       });
 
       if ("html" in req.query) {

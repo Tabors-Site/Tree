@@ -6,8 +6,8 @@ import log from "../../seed/log.js";
 import { OrchestratorRuntime, LLM_PRIORITY } from "../../seed/orchestrators/runtime.js";
 import { SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import User from "../../seed/models/user.js";
+import Artifact from "../../seed/models/artifact.js";
+import Being from "../../seed/models/being.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -39,11 +39,11 @@ async function findExpansionCandidates(rootId) {
     const pMeta = node.metadata instanceof Map ? node.metadata.get("prestige") : node.metadata?.prestige;
     const currentPrestige = pMeta?.current || 0;
 
-    const notes = await Note.find({
+    const notes = await Artifact.find({
       nodeId: node._id,
-      contentType: "text",
+      origin: "ibp",
     })
-      .select("_id content userId")
+      .select("_id content beingId")
       .lean();
 
     if (notes.length > 0) {
@@ -81,13 +81,13 @@ async function findExpansionCandidates(rootId) {
 
 export async function orchestrateExpand({
   rootId,
-  userId,
+  beingId,
   username,
   source = "orchestrator",
 }) {
   const rt = new OrchestratorRuntime({
     rootId,
-    userId,
+    beingId,
     username,
     // Tree-scoped cleanup lane — successive cleanup-expand runs on the
     // same tree chain so the AI remembers what it already expanded.
@@ -140,8 +140,8 @@ export async function orchestrateExpand({
       const notesWithUsernames = [];
       for (const note of candidate.notes) {
         let noteUsername = "system";
-        if (note.userId) {
-          const noteUser = await User.findById(note.userId).select("username").lean();
+        if (note.beingId) {
+          const noteUser = await Being.findById(note.beingId).select("username").lean();
           if (noteUser) noteUsername = noteUser.username;
         }
         notesWithUsernames.push({ ...note, username: noteUsername });

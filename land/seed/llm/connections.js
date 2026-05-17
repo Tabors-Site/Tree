@@ -15,7 +15,7 @@
  */
 
 import log from "../log.js";
-import User from "../models/user.js";
+import Being from "../models/being.js";
 import LlmConnection from "../models/llmConnection.js";
 import Node from "../models/node.js";
 import { clearUserClientCache } from "./conversation.js";
@@ -259,13 +259,13 @@ export function getAllRootLlmSlots() { return [...CORE_ROOT_SLOTS, ..._extRootSl
 // PUBLIC API
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function addLlmConnection(userId, { name, baseUrl, apiKey, model }) {
-  const user = await User.findById(userId).select("_id isAdmin").lean();
+export async function addLlmConnection(beingId, { name, baseUrl, apiKey, model }) {
+  const user = await Being.findById(beingId).select("_id isAdmin").lean();
   if (!user) throw new Error("User not found");
 
   const isAdmin = user.isAdmin === true;
 
-  const count = await LlmConnection.countDocuments({ userId });
+  const count = await LlmConnection.countDocuments({ beingId });
   if (count >= MAX_CONNECTIONS_PER_USER) {
     throw new Error(`Maximum of ${MAX_CONNECTIONS_PER_USER} connections reached`);
   }
@@ -282,7 +282,7 @@ export async function addLlmConnection(userId, { name, baseUrl, apiKey, model })
   }
 
   const conn = await LlmConnection.create({
-    userId,
+    beingId,
     name: safeName,
     baseUrl: safeBaseUrl,
     encryptedApiKey: encrypt(apiKey),
@@ -297,12 +297,12 @@ export async function addLlmConnection(userId, { name, baseUrl, apiKey, model })
   };
 }
 
-export async function updateLlmConnection(userId, connectionId, { name, baseUrl, apiKey, model }) {
-  const user = await User.findById(userId).select("llmDefault metadata isAdmin").lean();
+export async function updateLlmConnection(beingId, connectionId, { name, baseUrl, apiKey, model }) {
+  const user = await Being.findById(beingId).select("llmDefault metadata isAdmin").lean();
   if (!user) throw new Error("User not found");
 
   const safeConnId = validateConnectionId(connectionId);
-  const existing = await LlmConnection.findOne({ _id: safeConnId, userId });
+  const existing = await LlmConnection.findOne({ _id: safeConnId, beingId });
   if (!existing) throw new Error("Connection not found");
 
   const isAdmin = user.isAdmin === true;
@@ -345,7 +345,7 @@ export async function updateLlmConnection(userId, connectionId, { name, baseUrl,
   const userLlmMeta = user.metadata instanceof Map ? user.metadata.get("userLlm") : user.metadata?.userLlm;
   const userSlots = userLlmMeta?.slots || {};
   if (user.llmDefault === connectionId || Object.values(userSlots).includes(connectionId)) {
-    clearUserClientCache(userId);
+    clearUserClientCache(beingId);
   }
 
   return {
@@ -356,13 +356,13 @@ export async function updateLlmConnection(userId, connectionId, { name, baseUrl,
   };
 }
 
-export async function deleteLlmConnection(userId, connectionId) {
+export async function deleteLlmConnection(beingId, connectionId) {
   const safeConnId = validateConnectionId(connectionId);
-  const conn = await LlmConnection.findOneAndDelete({ _id: safeConnId, userId });
+  const conn = await LlmConnection.findOneAndDelete({ _id: safeConnId, beingId });
   if (!conn) throw new Error("Connection not found");
 
   // Clear user assignments pointing to deleted connection
-  const user = await User.findById(userId).select("llmDefault metadata").lean();
+  const user = await Being.findById(beingId).select("llmDefault metadata").lean();
   if (user) {
     const updates = {};
     if (user.llmDefault === connectionId) {
@@ -376,8 +376,8 @@ export async function deleteLlmConnection(userId, connectionId) {
       }
     }
     if (Object.keys(updates).length > 0) {
-      await User.findByIdAndUpdate(userId, { $set: updates });
-      clearUserClientCache(userId);
+      await Being.findByIdAndUpdate(beingId, { $set: updates });
+      clearUserClientCache(beingId);
     }
   }
 
@@ -399,14 +399,14 @@ export async function deleteLlmConnection(userId, connectionId) {
   return { removed: true };
 }
 
-export async function getConnectionsForUser(userId) {
-  return LlmConnection.find({ userId })
+export async function getConnectionsForUser(beingId) {
+  return LlmConnection.find({ beingId })
     .select("_id name baseUrl model lastUsedAt createdAt")
     .sort({ createdAt: -1 })
     .lean();
 }
 
-export async function assignConnection(userId, slot, connectionId) {
+export async function assignConnection(beingId, slot, connectionId) {
   if (!isValidUserSlot(slot)) {
     throw new Error("Invalid assignment slot: " + slot);
   }
@@ -415,23 +415,23 @@ export async function assignConnection(userId, slot, connectionId) {
 
   // If assigning (not clearing), verify the connection exists and belongs to this user
   if (safeConnId) {
-    const conn = await LlmConnection.findOne({ _id: safeConnId, userId }).lean();
+    const conn = await LlmConnection.findOne({ _id: safeConnId, beingId }).lean();
     if (!conn) throw new Error("Connection not found");
   }
 
   // "main" slot goes to llmDefault, other slots go to metadata.userLlm.slots
   if (slot === "main") {
-    await User.findByIdAndUpdate(userId, {
+    await Being.findByIdAndUpdate(beingId, {
       $set: { llmDefault: safeConnId },
     });
   } else {
-    await User.findByIdAndUpdate(userId, {
+    await Being.findByIdAndUpdate(beingId, {
       $set: { [`metadata.userLlm.slots.${slot}`]: safeConnId },
     });
   }
 
   // Bust cache so the new assignment takes effect
-  clearUserClientCache(userId);
+  clearUserClientCache(beingId);
 
   return { slot, connectionId: safeConnId };
 }

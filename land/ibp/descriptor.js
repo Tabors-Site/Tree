@@ -14,12 +14,12 @@ import { getLandConfigValue } from "../seed/landConfig.js";
 import Node from "../seed/models/node.js";
 import { getLandRootId } from "../seed/landRoot.js";
 import { NODE_STATUS } from "../seed/protocol.js";
-import { getNotes } from "../seed/tree/notes.js";
+import { getArtifacts } from "../seed/tree/artifacts.js";
 import { resolveTreeAccess } from "../seed/tree/treeAccess.js";
 import { getInboxSummary } from "./inbox.js";
 import { getEmbodiment, listEmbodiments } from "./embodiments/registry.js";
 import { getExtension } from "../extensions/loader.js";
-import { getLatestActiveChainstep } from "../seed/llm/chatTracker.js";
+import { getLatestActiveChainstep, getLatestActiveChainstepForBeing } from "../seed/llm/chatTracker.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Place-bundle readers
@@ -127,13 +127,13 @@ async function resolveSceneBlock(nodeId) {
 // stays focused on its own residents.
 //
 // Two paths surface beings here:
-//   1. metadata.embodiments.<name> on this node — the canonical home
+//   1. metadata.beings.<name> on this node — the canonical home
 //      record. When an extension's lifecycle places a being at a
 //      position (Planner at a plan node, Foreman at a foreman node,
 //      etc.), it writes the namespace and the descriptor surfaces it.
 //   2. Derived signals for legacy / shorthand cases. Today only one:
 //      metadata.governing.role === "ruler" implies the Ruler is at
-//      home, even if metadata.embodiments.ruler hasn't been written
+//      home, even if metadata.beings.ruler hasn't been written
 //      explicitly. As governing's lifecycle migrates to creating real
 //      sub-positions (plan/contract/foreman child nodes with their own
 //      beings), it can drop the derived signal in favor of explicit
@@ -156,7 +156,7 @@ function readNsFrom(metadata, name) {
 // (embodiments/registry.js) tracks behavior (honoredIntents, respondMode,
 // summon). This map carries label/description/icon/modeKey for known
 // names so the descriptor can render whatever is found in
-// metadata.embodiments without each writer having to ship them.
+// metadata.beings without each writer having to ship them.
 const EMBODIMENT_PRESENTATION = {
   ruler:      { label: "Ruler",      description: "Coordinates work at this scope.",            modeKey: "tree:governing-ruler",  icon: "\u{1F451}", invocableBy: "owner"  },
   planner:    { label: "Planner",    description: "Drafts plans for this scope.",                modeKey: "tree:governing-planner", icon: "\u{1F4DD}", invocableBy: "owner"  },
@@ -170,7 +170,7 @@ function beingsForTreeNode(node, { writeAllowed, authorizedHere }) {
   const beings = [];
 
   // Read explicit being-home registrations on this node. Each entry
-  // under metadata.embodiments is either a being-home (Ruler/Planner/
+  // under metadata.beings is either a being-home (Ruler/Planner/
   // Contractor/etc.) or a stance-permission profile (arrival/owner/
   // member). We treat any entry NOT in the well-known stance set as a
   // being-home — letting future extensions register their own beings
@@ -202,7 +202,12 @@ function beingsForTreeNode(node, { writeAllowed, authorizedHere }) {
       modeKey:     pres.modeKey,
       kind:        "ai",
       icon:        pres.icon,
-      _chainstepLookupNodeId: home?.scopeRulerId || null,
+      // _chainstepLookupBeingId is the canonical activity-lookup key:
+      // when set, deriveActivity queries Chat by beingOut directly.
+      // _chainstepLookupNodeId is the legacy fallback (governing's
+      // sub-Rulers had chainsteps bound to the parent Ruler's nodeId).
+      _chainstepLookupBeingId: home?.beingId || null,
+      _chainstepLookupNodeId:  home?.scopeRulerId || null,
     });
   }
 
@@ -242,8 +247,13 @@ async function deriveActivity(nodeId, modeKey) {
   } catch {
     return null;
   }
-  if (!chat) return null;
+  return chatToActivity(chat);
+}
 
+// Convert a Chat document into an activity object the descriptor surfaces
+// for the being whose chainstep it is. Returns null when no chat is given.
+async function chatToActivity(chat) {
+  if (!chat) return null;
   const toolCalls = Array.isArray(chat.toolCalls) ? chat.toolCalls : [];
   const lastCall = toolCalls.length ? toolCalls[toolCalls.length - 1] : null;
   const target = await inferActivityTarget(chat);
@@ -308,7 +318,7 @@ async function inferActivityTarget(chat) {
  *
  * @param {object} resolved — output of resolver.resolveStance()
  * @param {object} [opts]
- * @param {object} [opts.identity] — { userId, username } for the requesting being
+ * @param {object} [opts.identity] — { beingId, username } for the requesting being
  * @returns {object} Position Description
  */
 export async function buildDescriptor(resolved, opts = {}) {
@@ -333,7 +343,7 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
       path: "/",
       embodiment: resolved.embodiment || null,
       nodeId: null,
-      userId: null,
+      beingId: null,
       chain: [],
       pathByNames: "/",
       pathByIds: "/",
@@ -388,7 +398,7 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
     },
     identity: identity
       ? {
-          userId: identity.userId,
+          beingId: identity.beingId,
           username: identity.username,
           authorizedHere: true,
           writeAllowed: false,
@@ -410,19 +420,19 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
 async function buildHomeDescriptor(resolved, { identity } = {}) {
   const landDomain = getLandDomain();
   const homePath = `/~${resolved.username}`;
-  const children = await listUserTrees(resolved.userId, resolved.username);
+  const children = await listUserTrees(resolved.beingId, resolved.username);
   const isOwner =
-    identity && String(identity.userId) === String(resolved.userId);
+    identity && String(identity.beingId) === String(resolved.beingId);
   return {
     address: {
       land: landDomain,
       path: homePath,
       embodiment: resolved.embodiment || null,
       nodeId: null,
-      userId: resolved.userId,
+      beingId: resolved.beingId,
       chain: resolved.chain,
       pathByNames: homePath,
-      pathByIds: `/~${resolved.userId}`,
+      pathByIds: `/~${resolved.beingId}`,
       leafName: resolved.leafName,
       leafId: resolved.leafId,
     },
@@ -460,7 +470,7 @@ async function buildHomeDescriptor(resolved, { identity } = {}) {
     artifacts: [],
     identity: identity
       ? {
-          userId: identity.userId,
+          beingId: identity.beingId,
           username: identity.username,
           authorizedHere: isOwner === true,
           writeAllowed: isOwner === true,
@@ -518,9 +528,9 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
   // Authorization check.
   let writeAllowed = false;
   let authorizedHere = false;
-  if (identity?.userId) {
+  if (identity?.beingId) {
     try {
-      const access = await resolveTreeAccess(node._id, identity.userId);
+      const access = await resolveTreeAccess(node._id, identity.beingId);
       writeAllowed = access?.ok && access?.write === true;
       authorizedHere = access?.ok === true;
     } catch {
@@ -538,7 +548,7 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
       path: pathByNames,
       embodiment: resolved.embodiment || null,
       nodeId: node._id,
-      userId: resolved.userId || null,
+      beingId: resolved.beingId || null,
       chain: resolved.chain,
       pathByNames,
       pathByIds,
@@ -567,7 +577,7 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
     governance: null,
     identity: identity
       ? {
-          userId: identity.userId,
+          beingId: identity.beingId,
           username: identity.username,
           authorizedHere,
           writeAllowed,
@@ -613,24 +623,27 @@ async function listChildren(parentId, { exclude } = {}) {
 async function listArtifacts(nodeId) {
   if (!nodeId) return [];
   try {
-    const result = await getNotes({ nodeId, limit: 50 });
-    const notes = Array.isArray(result?.notes) ? result.notes : [];
+    const result = await getArtifacts({ nodeId, limit: 50 });
+    const artifacts = Array.isArray(result?.artifacts) ? result.artifacts : [];
     // Artifact placement lives on the parent node's position/models
-    // namespaces, keyed by note id.
+    // namespaces, keyed by artifact id.
     const parent = await Node.findById(nodeId).select("metadata").lean();
     const parentMetadata = parent?.metadata || null;
-    return notes.map((n) => ({
-      kind: "note",
-      noteId: n._id,
-      contentType: n.contentType || "text/markdown",
-      preview: typeof n.content === "string" ? n.content.slice(0, 400) : null,
-      previewBytes: typeof n.content === "string" ? Buffer.byteLength(n.content, "utf8") : 0,
-      totalBytes: typeof n.content === "string" ? Buffer.byteLength(n.content, "utf8") : 0,
-      createdAt: n.createdAt,
-      byUsername: n.username || null,
-      fullContentRef: `/api/v1/node/${nodeId}/notes/${n._id}`, // legacy URL; will move to a portal:see artifact path
-      ...artifactPlacement(parentMetadata, String(n._id)),
-    }));
+    return artifacts.map((a) => {
+      const isText = typeof a.content === "string";
+      return {
+        kind: "artifact",
+        artifactId: a._id,
+        origin: a.origin || "ibp",
+        preview: isText ? a.content.slice(0, 400) : null,
+        previewBytes: isText ? Buffer.byteLength(a.content, "utf8") : 0,
+        totalBytes: isText ? Buffer.byteLength(a.content, "utf8") : 0,
+        createdAt: a.createdAt,
+        byUsername: a.username || null,
+        fullContentRef: `/api/v1/node/${nodeId}/artifacts/${a._id}`,
+        ...artifactPlacement(parentMetadata, String(a._id)),
+      };
+    });
   } catch {
     return [];
   }
@@ -705,7 +718,7 @@ async function listPublicTrees() {
 /**
  * List the user's tree-root nodes. A user-tree-root is a node where:
  *   - parent === landRootId
- *   - rootOwner === userId
+ *   - rootOwner === beingId
  *   - systemRole is null
  *   - status !== DELETED
  *
@@ -714,12 +727,12 @@ async function listPublicTrees() {
  * home, the resolver/authorization step would gate access (Slice 3 doesn't
  * gate yet; that's a future-pass authorization concern).
  */
-async function listUserTrees(userId, username) {
+async function listUserTrees(beingId, username) {
   const landRootId = getLandRootId();
-  if (!landRootId || !userId || !username) return [];
+  if (!landRootId || !beingId || !username) return [];
   const trees = await Node.find({
     parent: landRootId,
-    rootOwner: userId,
+    rootOwner: beingId,
     systemRole: null,
     status: { $ne: NODE_STATUS.DELETED || "deleted" },
   })
@@ -780,13 +793,21 @@ async function buildBeings(nodeId, entries) {
     const parent = await Node.findById(nodeId).select("metadata").lean();
     parentMetadata = parent?.metadata || null;
   }
-  // Look up the live chainstep for each being in parallel. Some homes
-  // carry a `_chainstepLookupNodeId` (e.g. governing's planner lives at
-  // the plan trio but its chainstep is bound to the parent Ruler's
-  // node) — try the home's own nodeId first, then fall back to the
-  // lookup override. Missing chainsteps return null.
+  // Look up the live chainstep for each being in parallel. Three paths
+  // in priority order:
+  //   1. _chainstepLookupBeingId — the canonical home-record beingId.
+  //      When governing/etc. write embodiments.<role>.beingId, this is
+  //      a direct lookup by beingOut on the Chat collection.
+  //   2. Activity bound directly to (this nodeId, modeKey).
+  //   3. Activity bound to the home's scopeRulerId (legacy: governing's
+  //      sub-Rulers had chainsteps bound to the parent Ruler's nodeId).
   const activities = await Promise.all(
     entries.map(async (e) => {
+      if (e._chainstepLookupBeingId) {
+        const chat = await getLatestActiveChainstepForBeing(e._chainstepLookupBeingId);
+        const fromChat = await chatToActivity(chat);
+        if (fromChat) return fromChat;
+      }
       const direct = await deriveActivity(nodeId, e.modeKey);
       if (direct) return direct;
       if (e._chainstepLookupNodeId) {
@@ -800,9 +821,9 @@ async function buildBeings(nodeId, entries) {
     const inb = inboxByEmbodiment[entry.embodiment] || {
       total: 0, unconsumed: 0, recent: [], activeFrom: null, pendingFrom: [], queueDepth: 0,
     };
-    // Strip internal _chainstepLookupNodeId from the wire entry — it's
-    // only used inside this builder.
-    const { _chainstepLookupNodeId, ...wireEntry } = entry;
+    // Strip internal lookup hints from the wire entry — they're only
+    // used inside this builder.
+    const { _chainstepLookupNodeId, _chainstepLookupBeingId, ...wireEntry } = entry;
     return {
       ...wireEntry,
       honoredIntents: def ? def.honoredIntents : null,

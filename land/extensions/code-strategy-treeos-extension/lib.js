@@ -86,12 +86,12 @@ export default [
     name: ${JSON.stringify(name)},
     description: "TODO: describe what this tool does.",
     schema: {
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false },
-    async handler({ userId }) {
+    async handler({ beingId }) {
       return { content: [{ type: "text", text: ${JSON.stringify(name)} + " ran (no implementation yet)." }] };
     },
   },

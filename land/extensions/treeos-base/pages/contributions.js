@@ -166,7 +166,7 @@ function renderAction(rawC, { nodeId, parsedVersion, nextVersion, queryString })
 
     case "rawIdea": {
       const ri = c.rawIdeaAction || {};
-      const uId = c.userId?._id || c.userId;
+      const uId = c.beingId?._id || c.beingId;
       const ideaRef = ri.rawIdeaId && uId
         ? `<a href="/api/v1/user/${uId}/raw-ideas/${ri.rawIdeaId}${queryString}"><code>${esc(ri.rawIdeaId)}</code></a>`
         : ri.rawIdeaId
@@ -269,7 +269,7 @@ export function renderContributions({ nodeId, version, nodeName, contributions, 
         ? `<span class="badge badge-energy">\u26A1 ${c.energyUsed}</span>`
         : "";
 
-    const user = userTag(c.userId, queryString);
+    const user = userTag(c.beingId, queryString);
 
     return `
       <li class="note-card ${colorClass}">

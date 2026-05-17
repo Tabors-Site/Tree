@@ -87,8 +87,8 @@ function getReferencedExtensions(structural) {
 
 const SEED_EXPORT_VERSION = "1.0.0";
 
-export async function exportTreeSeed(rootId, userId, opts = {}) {
-  await useEnergy({ userId, action: "seedExport" });
+export async function exportTreeSeed(rootId, beingId, opts = {}) {
+  await useEnergy({ beingId, action: "seedExport" });
 
   const maxNodes = opts.maxExportNodes || 5000;
   const maxDepth = opts.maxExportDepth || 20;
@@ -194,8 +194,8 @@ export async function exportTreeSeed(rootId, userId, opts = {}) {
   let exportedBy = "unknown";
   let sourceLand = "unknown";
   try {
-    const user = await (await import("../../seed/models/user.js")).default
-      .findById(userId).select("username").lean();
+    const user = await (await import("../../seed/models/being.js")).default
+      .findById(beingId).select("username").lean();
     if (user) exportedBy = user.username;
   } catch {}
   try {
@@ -229,7 +229,7 @@ export async function exportTreeSeed(rootId, userId, opts = {}) {
 
   // Log contribution
   await logContribution({
-    userId,
+    beingId,
     nodeId: rootId.toString(),
     wasAi: false,
     action: "seed-export:exported",
@@ -281,7 +281,7 @@ function buildCascadeTopology(nodes, nodeMap) {
 // PLANT
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function plantTreeSeed(seedData, userId, username) {
+export async function plantTreeSeed(seedData, beingId, username) {
   if (!seedData?.seedExportVersion) {
     throw new Error("Invalid seed file: missing seedExportVersion");
   }
@@ -289,7 +289,7 @@ export async function plantTreeSeed(seedData, userId, username) {
     throw new Error("Invalid seed file: missing tree data");
   }
 
-  await useEnergy({ userId, action: "seedPlant" });
+  await useEnergy({ beingId, action: "seedPlant" });
 
   const warnings = [];
 
@@ -320,7 +320,7 @@ export async function plantTreeSeed(seedData, userId, username) {
       name: nodeData.name,
       parentId,
       isRoot,
-      userId,
+      beingId,
       type: nodeData.type || null,
     });
 
@@ -358,7 +358,7 @@ export async function plantTreeSeed(seedData, userId, username) {
 
   // Log contribution
   await logContribution({
-    userId,
+    beingId,
     nodeId: rootNode._id.toString(),
     wasAi: false,
     action: "seed-export:planted",

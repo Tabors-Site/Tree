@@ -6,14 +6,14 @@ import { getNotifications } from "./core.js";
 
 const router = express.Router();
 
-router.get("/user/:userId/notifications", authenticate, async (req, res) => {
+router.get("/user/:beingId/notifications", authenticate, async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { beingId } = req.params;
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
     const offset = parseInt(req.query.offset, 10) || 0;
 
     const { notifications, total } = await getNotifications({
-      userId,
+      beingId,
       rootId: req.query.rootId,
       limit,
       offset,

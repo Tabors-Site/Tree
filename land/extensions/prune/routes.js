@@ -47,7 +47,7 @@ router.post("/root/:rootId/prune/scan", authenticate, async (req, res) => {
   try {
     const rootId = validateRootId(req, res);
     if (!rootId) return;
-    const candidates = await scanForCandidates(rootId, req.userId);
+    const candidates = await scanForCandidates(rootId, req.beingId);
     sendOk(res, { candidates, count: candidates.length });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
@@ -59,7 +59,7 @@ router.post("/root/:rootId/prune/confirm", authenticate, async (req, res) => {
   try {
     const rootId = validateRootId(req, res);
     if (!rootId) return;
-    const result = await confirmPrune(rootId, req.userId, req.username);
+    const result = await confirmPrune(rootId, req.beingId, req.username);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
@@ -71,7 +71,7 @@ router.post("/root/:rootId/prune/undo", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.body;
     if (!nodeId) return sendError(res, 400, ERR.INVALID_INPUT, "nodeId is required");
-    const result = await undoPrune(nodeId, req.userId);
+    const result = await undoPrune(nodeId, req.beingId);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
@@ -103,7 +103,7 @@ router.post("/root/:rootId/prune/purge", authenticate, async (req, res) => {
   try {
     const rootId = validateRootId(req, res);
     if (!rootId) return;
-    const result = await purge(rootId, req.userId);
+    const result = await purge(rootId, req.beingId);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);

@@ -8,7 +8,7 @@ import {
 } from "./core.js";
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
-import { getNotes } from "../../seed/tree/notes.js";
+import { getArtifacts } from "../../seed/tree/artifacts.js";
 import { userHasLlm } from "../../seed/llm/conversation.js";
 import { orchestrateUnderstanding } from "./pipeline.js";
 import { getSessionsForUser, endSession, SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
@@ -51,7 +51,7 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
     }
     const { nodeId } = req.params;
     const { perspective = "general", incremental = false } = req.body;
-    const userId = req.userId;
+    const beingId = req.beingId;
 
     const rootNode = await Node.findById(nodeId).lean();
     if (!rootNode) {
@@ -59,22 +59,22 @@ router.post("/root/:nodeId/understandings", authenticate, async (req, res) => {
     }
 
     // Only tree owner or contributors can create understanding runs
-    const isOwner = rootNode.rootOwner?.toString() === userId;
-    const isContributor = (rootNode.contributors || []).some(c => c.toString() === userId);
+    const isOwner = rootNode.rootOwner?.toString() === beingId;
+    const isContributor = (rootNode.contributors || []).some(c => c.toString() === beingId);
     if (!isOwner && !isContributor) {
       return sendError(res, 403, ERR.FORBIDDEN, "Only tree owner or contributors can create understanding runs");
     }
 
     // Check LLM access — tree owner needs an LLM or root must have one assigned
-    const hasUserLlm = await userHasLlm(userId);
+    const hasUserLlm = await userHasLlm(beingId);
     const hasRootLlm = !!(rootNode.llmDefault && rootNode.llmDefault !== "none");
     if (!hasUserLlm && !hasRootLlm) {
       return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
     }
 
     const result = incremental
-      ? await findOrCreateUnderstandingRun(nodeId, userId, perspective)
-      : await createUnderstandingRun(nodeId, userId, perspective);
+      ? await findOrCreateUnderstandingRun(nodeId, beingId, perspective)
+      : await createUnderstandingRun(nodeId, beingId, perspective);
     if ("html" in req.query) {
       return res.redirect(
         `/api/v1/root/${nodeId}/understandings/run/${
@@ -323,7 +323,7 @@ router.get(
         }
       }
 
-      const notesResult = await getNotes({
+      const notesResult = await getArtifacts({
         nodeId: realNode._id,
       });
 
@@ -404,7 +404,7 @@ router.get("/root/:nodeId/understandings", htmlAuth, async (req, res) => {
     const { nodeId } = req.params;
     const queryString = buildQueryString(req);
 
-    const root = await Node.findById(nodeId).select("_id name userId").lean();
+    const root = await Node.findById(nodeId).select("_id name beingId").lean();
     if (!root) {
       return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
     }
@@ -457,7 +457,7 @@ router.get(
       const { runId, understandingNodeId, nodeId } = req.params;
       const qs = buildQueryString(req);
 
-      const root = await Node.findById(nodeId).select("_id name userId").lean();
+      const root = await Node.findById(nodeId).select("_id name beingId").lean();
       if (!root) {
         return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
       }
@@ -511,7 +511,7 @@ router.get(
       let childEncodings = [];
 
       if (isLeaf) {
-        const notesResult = await getNotes({
+        const notesResult = await getArtifacts({
           nodeId: realNode._id,
         });
 
@@ -627,23 +627,23 @@ router.post("/root/:nodeId/understandings/run/:runId/orchestrate", authenticate,
     return sendError(res, 403, ERR.FORBIDDEN, "Share tokens cannot trigger understanding runs");
   }
   const { nodeId, runId } = req.params;
-  const userId = req.userId;
+  const beingId = req.beingId;
   const username = req.username;
   const fromSite = req.body?.source === "user";
 
   const rootNode = await Node.findById(nodeId).select("rootOwner contributors llmDefault metadata").lean();
-  const isOwner = rootNode?.rootOwner?.toString() === userId;
-  const isContributor = (rootNode?.contributors || []).some(c => c.toString() === userId);
+  const isOwner = rootNode?.rootOwner?.toString() === beingId;
+  const isContributor = (rootNode?.contributors || []).some(c => c.toString() === beingId);
   if (!isOwner && !isContributor) {
     return sendError(res, 403, ERR.FORBIDDEN, "Only tree owner or contributors can run understandings");
   }
   const hasRootLlm = !!(rootNode?.llmDefault && rootNode.llmDefault !== "none");
-  if (!hasRootLlm && !(await userHasLlm(userId))) {
+  if (!hasRootLlm && !(await userHasLlm(beingId))) {
     return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
   }
 
   try {
-    const result = await orchestrateUnderstanding({ rootId: nodeId, userId, username, runId, fromSite });
+    const result = await orchestrateUnderstanding({ rootId: nodeId, beingId, username, runId, fromSite });
     if ("html" in req.query && result.success) {
       return res.redirect(`/api/v1/root/${nodeId}/understandings/run/${runId}?token=${req.query.token ?? ""}&html`);
     }
@@ -659,8 +659,8 @@ router.post("/root/:nodeId/understandings/run/:runId/stop", authenticate, async 
     return sendError(res, 403, ERR.FORBIDDEN, "Share tokens cannot stop understanding runs");
   }
   const { runId } = req.params;
-  const userId = req.userId;
-  const sessions = getSessionsForUser(userId);
+  const beingId = req.beingId;
+  const sessions = getSessionsForUser(beingId);
   const match = sessions.find((s) => s.type === SESSION_TYPES.UNDERSTANDING_ORCHESTRATE && s.meta?.runId === runId);
   if (!match) return sendError(res, 404, ERR.NODE_NOT_FOUND, "No active session found for this run");
   endSession(match.sessionId);

@@ -77,7 +77,7 @@ async function fetchChatsForSessions(sessionIds, extraMatch = {}, populateUser =
   const q = Chat.find(query);
 
   if (populateUser) {
-    q.populate({ path: "userId", select: "username", model: "User" });
+    q.populate({ path: "beingId", select: "username", model: "User" });
   }
 
   // Lean populates: only fetch the fields we need from references.
@@ -164,15 +164,15 @@ function groupIntoSessions(sessionIds, chats) {
  * Get chat history for a user, grouped by session.
  * Returns the N most recent sessions with their chain steps.
  */
-async function getChats({ userId, sessionLimit = 10, sessionId, startDate, endDate }) {
-  if (!userId) throw new Error("Missing required parameter: userId");
+async function getChats({ beingId, sessionLimit = 10, sessionId, startDate, endDate }) {
+  if (!beingId) throw new Error("Missing required parameter: beingId");
 
   const limit = clampSessionLimit(sessionLimit);
   const timeFilter = buildTimeFilter(startDate, endDate);
 
   try {
     // Find recent session IDs
-    const matchQuery = { userId };
+    const matchQuery = { beingId };
     if (timeFilter) matchQuery["startMessage.time"] = timeFilter;
 
     const sessionIds = sessionId
@@ -180,11 +180,11 @@ async function getChats({ userId, sessionLimit = 10, sessionId, startDate, endDa
       : await findRecentSessionIds(matchQuery, limit);
 
     if (!sessionIds.length) {
-      return { message: `No AI chats found for user ${userId}`, sessions: [] };
+      return { message: `No AI chats found for user ${beingId}`, sessions: [] };
     }
 
     // Fetch chats + contributions
-    const extraMatch = { userId };
+    const extraMatch = { beingId };
     if (timeFilter) extraMatch["startMessage.time"] = timeFilter;
 
     const chats = await fetchChatsForSessions(sessionIds, extraMatch);

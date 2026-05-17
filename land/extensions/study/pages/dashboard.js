@@ -24,7 +24,7 @@ function masteryLabel(pct) {
   return "not started";
 }
 
-export function renderStudyDashboard({ rootId, rootName, queue, activeTopics, gaps, progress, profile, completed, history, token, userId, inApp }) {
+export function renderStudyDashboard({ rootId, rootName, queue, activeTopics, gaps, progress, profile, completed, history, token, beingId, inApp }) {
   const completedCount = completed?.length || progress?.completed?.allTime || 0;
   const queueCount = queue?.length || 0;
   const dailyGoal = profile?.dailyStudyMinutes || 0;
@@ -208,7 +208,7 @@ export function renderStudyDashboard({ rootId, rootName, queue, activeTopics, ga
 
   const body = `
     <div class="study-container">
-      ${userId ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><a href="/api/v1/user/${userId}/apps?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">\u2190 Apps</a><div style="display:flex;gap:16px;"><a href="/api/v1/root/${rootId}?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">Tree</a><a href="/api/v1/node/${rootId}/metadata?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">Metadata</a><a href="/api/v1/user/${userId}/llm?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM</a></div></div>` : ""}
+      ${beingId ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><a href="/api/v1/user/${beingId}/apps?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">\u2190 Apps</a><div style="display:flex;gap:16px;"><a href="/api/v1/root/${rootId}?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">Tree</a><a href="/api/v1/node/${rootId}/metadata?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">Metadata</a><a href="/api/v1/user/${beingId}/llm?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM</a></div></div>` : ""}
       <h1 style="font-size:1.5rem;color:#fff;margin-bottom:0.2rem">${esc(rootName || "Study")}</h1>
       <div style="color:rgba(255,255,255,0.35);font-size:0.85rem;margin-top:4px">${dateStr}${profileParts.length > 0 ? " . " + esc(profileParts.join(" . ")) : ""}</div>
 

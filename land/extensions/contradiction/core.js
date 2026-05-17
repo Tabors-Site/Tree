@@ -8,8 +8,8 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { SYSTEM_ROLE, CONTENT_TYPE } from "../../seed/protocol.js";
+import Artifact from "../../seed/models/artifact.js";
+import { SYSTEM_ROLE, ARTIFACT_ORIGIN } from "../../seed/protocol.js";
 import { getContextForAi } from "../../seed/tree/treeFetch.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 import { v4 as uuidv4 } from "uuid";
@@ -76,7 +76,7 @@ export async function resetNoteCount(nodeId) {
  * Check a new note against its node's context for contradictions.
  * Returns array of contradiction objects or empty array.
  */
-export async function detectContradictions(nodeId, noteContent, userId, username) {
+export async function detectContradictions(nodeId, noteContent, beingId, username) {
   if (!_runChat || !noteContent || noteContent.trim().length === 0) return [];
 
   const config = await getContradictionConfig();
@@ -88,7 +88,7 @@ export async function detectContradictions(nodeId, noteContent, userId, username
       includeNotes: true,
       includeChildren: true,
       includeParentChain: true,
-      userId,
+      beingId,
     });
     contextSummary = JSON.stringify(ctx, null, 0);
     if (contextSummary.length > config.maxContextChars) {
@@ -133,7 +133,7 @@ export async function detectContradictions(nodeId, noteContent, userId, username
 
   try {
     const { answer } = await _runChat({
-      userId,
+      beingId,
       username: username || "system",
       message: prompt,
       mode: "tree:respond",
@@ -284,7 +284,7 @@ export async function getContradictions(nodeId) {
  * Processes each node with notes, checking each note against context.
  * Returns total contradictions found.
  */
-export async function scanTree(rootId, userId, username) {
+export async function scanTree(rootId, beingId, username) {
   const { getDescendantIds } = await import("../../seed/tree/treeFetch.js");
   const nodeIds = await getDescendantIds(rootId);
   let totalFound = 0;
@@ -294,7 +294,7 @@ export async function scanTree(rootId, userId, username) {
     if (!node || node.systemRole) continue;
     if (node.status === "trimmed") continue;
 
-    const notes = await Note.find({ nodeId, contentType: CONTENT_TYPE.TEXT })
+    const notes = await Artifact.find({ nodeId, origin: ARTIFACT_ORIGIN.IBP })
       .sort({ createdAt: -1 })
       .limit(5)
       .select("content")
@@ -303,7 +303,7 @@ export async function scanTree(rootId, userId, username) {
     if (notes.length === 0) continue;
 
     // Check the most recent note against context
-    const contradictions = await detectContradictions(nodeId, notes[0].content, userId, username);
+    const contradictions = await detectContradictions(nodeId, notes[0].content, beingId, username);
     if (contradictions.length > 0) {
       await writeContradictions(nodeId, contradictions);
       await cascadeContradictions(nodeId, contradictions);

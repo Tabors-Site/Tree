@@ -30,7 +30,7 @@ const NS = "governing";
  * tree:governing-foreman as the per-node plan-intent mode so visits
  * route to the Foreman mode once its reasoning surface lands.
  */
-export async function ensureExecutionNode({ scopeNodeId, userId, core }) {
+export async function ensureExecutionNode({ scopeNodeId, beingId, core }) {
   if (!scopeNodeId) return null;
 
   // Idempotent probe.
@@ -57,7 +57,7 @@ export async function ensureExecutionNode({ scopeNodeId, userId, core }) {
         parentId: String(scopeNodeId),
         name: "runs",
         type: "execution",
-        userId,
+        beingId,
         wasAi: true,
       });
     }
@@ -106,19 +106,39 @@ export async function ensureExecutionNode({ scopeNodeId, userId, core }) {
         });
       }
 
-      // Declare the Foreman's home at this position so the descriptor
-      // surfaces the Foreman being inside the execution node with live
-      // chainstep activity.
+      // Declare the Foreman's home via the unified primitive. The
+      // execution Node was just created; createBeingWithHome places the
+      // Foreman being at it, generates a unique username + random
+      // password, and writes metadata.beings.foreman.beingId. After
+      // creation, merge governing's scopeRulerId alongside.
       const existingEmbodiments = node.metadata instanceof Map
-        ? node.metadata.get("embodiments")
+        ? node.metadata.get("beings")
         : node.metadata?.embodiments;
-      if (!existingEmbodiments?.foreman) {
+      if (!existingEmbodiments?.foreman?.beingId) {
+        const { createBeingWithHome } = await import("../../../seed/auth.js");
+        await createBeingWithHome({
+          operatingMode: "ai",
+          role:          "foreman",
+          homeNodeId:    String(created._id),
+        });
         const { mergeExtMeta: kernelMergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-        await kernelMergeExtMeta(node, "embodiments", {
+        await kernelMergeExtMeta(node, "beings", {
           foreman: {
-            installedAt: new Date().toISOString(),
-            installedBy: "governing",
+            installedBy:  "governing",
             scopeRulerId: String(scopeNodeId),
+          },
+        });
+        // Inner-being protection: only governing-role beings of THIS
+        // rulership can TALK to the Foreman. Scoped home check filters
+        // other rulerships; role check filters humans / citizens.
+        await kernelMergeExtMeta(node, "permissions", {
+          talk: {
+            "@foreman*": {
+              requires: {
+                role:         ["ruler", "planner", "contractor", "foreman"],
+                homeInDomain: String(scopeNodeId),
+              },
+            },
           },
         });
       }

@@ -9,7 +9,7 @@
 
 The kernel is called the seed. You plant it on a land. It grows trees.
 
-Six models (Node, User, Note, Contribution, Chat, LlmConnection), a conversation loop, a hook system, a cascade engine, an extension loader, and a response protocol. Remove every extension and the seed still boots. It defines the data contract that extensions build on, the resolution chains that determine what happens at every position, and the communication primitive that makes signals visible. Two models carry extensible metadata Maps (Node and User). The other four have fixed schemas.
+Six models (Node, Being, Artifact, Contribution, Chat, LlmConnection), a conversation loop, a hook system, a cascade engine, an extension loader, and a response protocol. Remove every extension and the seed still boots. It defines the data contract that extensions build on, the resolution chains that determine what happens at every position, and the communication primitive that makes signals visible. Three models carry extensible metadata Maps (Node, Being, Artifact). The others have fixed schemas.
 
 
 ## Four Primitives
@@ -18,7 +18,7 @@ Everything in the seed serves one of four primitives. Everything else is emergen
 
 | Primitive | What it is | Key files |
 |-----------|-----------|-----------|
-| **Structure** | Six models. Node and User carry extensible metadata Maps. Note, Contribution, Chat, LlmConnection are fixed. | models/*.js |
+| **Structure** | Six models. Node, Being, and Artifact carry extensible metadata Maps. Contribution, Chat, LlmConnection are fixed. | models/*.js |
 | **Intelligence** | Conversation loop, two entry points (`runChat`, `runOrchestration`), LLM/tool/mode/position resolution, time and position injection | llm/conversation.js, modes/registry.js, ws/mcp.js |
 | **Extensibility** | Extension loader, open hook system, pub/sub, spatial scoping, five registries | hooks.js, extensions/loader.js, tree/extensionScope.js |
 | **Communication** | Cascade signals, .flow system node, visible results, response protocol | tree/cascade.js, protocol.js |
@@ -45,7 +45,7 @@ Node and User are the data contract. The seed also owns models for kernel operat
 
 | Model | Purpose |
 |-------|---------|
-| Note | Content attached to nodes. Six fields: contentType, content, userId, nodeId, metadata (Map), createdAt. Extensions tag notes via metadata. Each extension uses its own namespace. beforeNote/afterNote hooks fire. |
+| Artifact | A thing that lives inside a node. Replaces the older Note model. Seven fields: origin (ibp/filesystem/web/cross-land), content (shape varies by origin), beingId, nodeId, metadata (Map), createdAt, updatedAt. Subsumes what were previously notes, files, and metadata-only objects. beforeArtifact/afterArtifact hooks fire on every write. |
 | Contribution | Audit trail. Core action shapes + extensionData for everything else. |
 | AIChat | Conversation sessions. The conversation loop is kernel. |
 | LLMConnection | LLM endpoint storage. The resolution chain is kernel. |
@@ -146,7 +146,7 @@ Three orthogonal axes, each evolves independently: **WHERE** (noun + preposition
 
 ## Extension APIs (core services bundle)
 
-Extensions receive `core` in `init(core)`. The full metadata toolkit, tree/note CRUD, scope checking, and mode management are all available through the services bundle. Extensions should never call MongoDB directly for metadata operations.
+Extensions receive `core` in `init(core)`. The full metadata toolkit, tree/artifact CRUD, scope checking, and mode management are all available through the services bundle. Extensions should never call MongoDB directly for metadata operations.
 
 ### Metadata (core.metadata)
 
@@ -184,9 +184,9 @@ await core.metadata.unsetExtMeta(nodeId, "old-extension");
 
 `core.tree.createNode`, `core.tree.createNodeBranch`, `core.tree.deleteNodeBranch`, `core.tree.updateParentRelationship`, `core.tree.editNodeName`, `core.tree.editNodeType`. Stable API through the services bundle. Path changes don't break extensions.
 
-### Notes CRUD (core.notes)
+### Artifacts CRUD (core.artifacts)
 
-`core.notes.createNote`, `core.notes.editNote`, `core.notes.deleteNoteAndFile`, `core.notes.transferNote`, `core.notes.getNotes`. Programmatic note creation without direct seed imports.
+`core.artifacts.createArtifact`, `core.artifacts.editArtifact`, `core.artifacts.deleteArtifactAndFile`, `core.artifacts.transferArtifact`, `core.artifacts.getArtifacts`. Programmatic artifact creation without direct seed imports. createArtifact takes `{ origin, content, beingId, nodeId, file?, metadata? }`. Origin defaults to `"ibp"` (TreeOS-native text or metadata-only object); pass a multer file plus `origin: "filesystem"` for uploads.
 
 ### User Metadata (core.userMetadata)
 
@@ -257,8 +257,8 @@ Two rules, no exceptions. Before hooks run sequential because they can cancel. A
 | Hook | Type | Purpose |
 |------|------|---------|
 | beforeNodeCreate | before | Gate node creation. Enforce naming, child limits, compliance. |
-| beforeNote | before | Modify note data. Extensions write to hookData.metadata. |
-| afterNote | after | React to note create/edit/delete |
+| beforeArtifact | before | Modify artifact data before save. Payload: `{ nodeId, content, beingId, origin, metadata }`. Extensions write to hookData.metadata. |
+| afterArtifact | after | React to artifact create/edit/delete. Payload: `{ artifact, nodeId, beingId, origin, sizeKB, action, chatId, sessionId }`. |
 | beforeContribution | before | Modify contribution data. Extensions add to extensionData via hook. |
 | afterNodeCreate | after | Initialize extension data |
 | beforeStatusChange | before | Validate, intercept |
@@ -333,7 +333,7 @@ WebSocket: Named constants in `WS` object. Kernel events only. Extension events 
 
 Cascade: Named constants in `CASCADE` object. Six statuses.
 
-Shared vocabulary: `NODE_STATUS` (active, completed, trimmed), `SYSTEM_ROLE` (land-root, identity, config, peers, extensions, flow), `CONTENT_TYPE` (text, file), `DELETED` sentinel. Every file that references these values imports from protocol.js. Typo in a constant fails at import. Typo in a string fails silently.
+Shared vocabulary: `NODE_STATUS` (active, completed, trimmed), `SYSTEM_ROLE` (land-root, identity, config, peers, extensions, flow), `ARTIFACT_ORIGIN` (ibp, filesystem, web, cross-land), `DELETED` sentinel. Every file that references these values imports from protocol.js. Typo in a constant fails at import. Typo in a string fails silently.
 
 ## Config
 
@@ -348,7 +348,7 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | maxToolIterations | 15 | Tool calls per message |
 | maxConversationMessages | 30 | Context window size |
 | landLlmConnection | null | LLM connection ID. Fallback for users without their own. Admin creates a connection, sets this to its ID. All users get AI. Override by setting your own. |
-| noteMaxChars | 5000 | Max characters per note |
+| artifactMaxChars | 5000 | Max characters per ibp-origin artifact (falls back to noteMaxChars for compat) |
 | treeSummaryMaxDepth | 4 | How deep AI sees the tree |
 | treeSummaryMaxNodes | 60 | How many nodes AI sees |
 | carryMessages | 4 | Messages carried across mode switch |
@@ -437,11 +437,11 @@ These keys are configurable via `treeos config set` but most lands never need to
 |-----|---------|---------------|
 | metadataNamespaceMaxBytes | 524288 | Max bytes per metadata namespace (512KB) |
 | metadataMaxNestingDepth | 5 | Max nesting depth for extension metadata values |
-| maxNotesPerNode | 1000 | Max notes per node |
+| maxArtifactsPerNode | 1000 | Max artifacts per node (falls back to maxNotesPerNode for compat) |
 | maxContributorsPerNode | 500 | Max contributors[] entries per node |
 | maxConnectionsPerUser | 15 | Max custom LLM connections per user |
-| noteQueryLimit | 5000 | Max notes returned per query |
-| noteSearchLimit | 500 | Max notes returned per search query |
+| artifactQueryLimit | 5000 | Max artifacts returned per query (falls back to noteQueryLimit) |
+| artifactSearchLimit | 500 | Max artifacts returned per search query (falls back to noteSearchLimit) |
 | contributionQueryLimit | 5000 | Max contribution documents returned per query |
 | subtreeNodeCap | 10000 | Max node IDs collected in subtree traversal |
 
@@ -451,12 +451,12 @@ These keys are configurable via `treeos config set` but most lands never need to
 |-----|---------|---------------|
 | treeAncestorDepth | 50 | Max ancestor chain depth |
 | treeContributionsPerNode | 500 | Max contributions loaded per node |
-| treeNotesPerNode | 100 | Max notes loaded per node |
+| treeArtifactsPerNode | 100 | Max artifacts loaded per node (falls back to treeNotesPerNode) |
 | treeMaxChildrenResolve | 200 | Max children name-resolved per node |
 | treeAllDataDepth | 20 | Max recursion depth in full tree export |
 | treeSearchResultLimit | 10 | Max search results returned in tree context |
-| treeSummaryRecentNotes | 3 | Recent notes shown per node in tree summary |
-| treeSummaryPreviewChars | 200 | Characters of note content shown in preview |
+| treeSummaryRecentArtifacts | 3 | Recent artifacts shown per node in tree summary (falls back to treeSummaryRecentNotes) |
+| treeSummaryPreviewChars | 200 | Characters of artifact content shown in preview |
 | chatContributionQueryLimit | 2000 | Max contributions linked per chat finalization |
 | chatHistoryMaxSessions | 50 | Max sessions returned per chat history query |
 | chatHistoryMaxChatsPerSession | 200 | Max chain steps loaded per session |
@@ -580,7 +580,7 @@ Defaults to OFF (`treeCircuitEnabled: false`).
 | Per-namespace cap | metadataNamespaceMaxBytes (default 512KB) per extension namespace on nodes, users, and contribution extensionData. Configurable. 20 extensions at 512KB = 10MB, under the 14MB ceiling. |
 | Namespace key length | Max 50 chars for metadata namespace keys in setExtMeta. Same cap as node type. |
 | Metadata nesting depth | Max 5 levels deep in setExtMeta. Deeper structures must be flattened by the extension. Prevents expensive deep queries. |
-| Note count per node | maxNotesPerNode (default 1000) checked in createNote before write. Prevents runaway loops from flooding a node. Configurable. |
+| Artifact count per node | maxArtifactsPerNode (default 1000) checked in createArtifact before write. Prevents runaway loops from flooding a node. Configurable. |
 | Contribution extensionData cap | 512KB per contribution extensionData field. Same cap as setExtMeta. Prevents buggy extensions from writing 5MB per contribution. |
 | .flow partitioning | Daily partition nodes prevent unbounded growth. flowMaxResultsPerDay cap with circular overwrite. Retention deletes entire partitions by date. |
 | Ownership chain | rootOwner/contributor mutations validate the parent chain. Only resolved owner or admin can modify. System nodes always rejected. transferOwnership uses bulkWrite for atomic two-op transfer. |

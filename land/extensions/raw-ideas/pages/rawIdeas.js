@@ -3,16 +3,16 @@ import mime from "mime-types";
 import { page } from "../../html-rendering/html/layout.js";
 import { esc, escapeHtml, truncate } from "../../html-rendering/html/utils.js";
 import { getLandUrl } from "../../../canopy/identity.js";
-import { getUserMeta } from "../../../seed/tree/userMetadata.js";
+import { getBeingMeta } from "../../../seed/tree/beingMetadata.js";
 import { renderMedia as _renderMedia } from "../../html-rendering/html/utils.js";
 
 // user.js always renders immediately (no lazy loading)
 const renderMedia = (fileUrl, mimeType) => _renderMedia(fileUrl, mimeType, { lazy: false });
 
 // ═══════════════════════════════════════════════════════════════════
-// Raw Ideas List - GET /user/:userId/raw-ideas
+// Raw Ideas List - GET /user/:beingId/raw-ideas
 // ═══════════════════════════════════════════════════════════════════
-export function renderRawIdeasList({ userId, user, rawIdeas, query, statusFilter, tabs, tabUrl, token, AUTO_PLACE_ELIGIBLE }) {
+export function renderRawIdeasList({ beingId, user, rawIdeas, query, statusFilter, tabs, tabUrl, token, AUTO_PLACE_ELIGIBLE }) {
   const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
   const css = `
@@ -443,7 +443,7 @@ export function renderRawIdeasList({ userId, user, rawIdeas, query, statusFilter
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
+      <a href="/api/v1/user/${beingId}${tokenQS}" class="back-link">
         \u2190 Back to Profile
       </a>
     </div>
@@ -452,7 +452,7 @@ export function renderRawIdeasList({ userId, user, rawIdeas, query, statusFilter
     <div class="header">
       <h1>
         Raw Ideas for
-<a href="/api/v1/user/${userId}${tokenQS}">${escapeHtml(user.username)}</a>
+<a href="/api/v1/user/${beingId}${tokenQS}">${escapeHtml(user.username)}</a>
       </h1>
       <div class="header-subtitle">
 These will be placed onto your trees automatically while you dream (Standard+ plans)</div>
@@ -461,22 +461,22 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
         <div>
           <div class="auto-place-label">Auto-place ideas</div>
           <div class="auto-place-hint">${
-            AUTO_PLACE_ELIGIBLE.includes((getUserMeta(user, "tiers").plan || "basic"))
+            AUTO_PLACE_ELIGIBLE.includes((getBeingMeta(user, "tiers").plan || "basic"))
               ? "Pending ideas are placed automatically every 15 minutes while you're offline."
               : "Available on Standard, Premium, and God plans."
           }</div>
         </div>
         <div
           id="autoPlaceToggle"
-          class="auto-place-toggle${getUserMeta(user, "rawIdeas")?.autoPlace !== false ? " active" : ""}${!AUTO_PLACE_ELIGIBLE.includes((getUserMeta(user, "tiers").plan || "basic")) ? " muted" : ""}"
-          onclick="${AUTO_PLACE_ELIGIBLE.includes((getUserMeta(user, "tiers").plan || "basic")) ? "toggleAutoPlace()" : ""}"
+          class="auto-place-toggle${getBeingMeta(user, "rawIdeas")?.autoPlace !== false ? " active" : ""}${!AUTO_PLACE_ELIGIBLE.includes((getBeingMeta(user, "tiers").plan || "basic")) ? " muted" : ""}"
+          onclick="${AUTO_PLACE_ELIGIBLE.includes((getBeingMeta(user, "tiers").plan || "basic")) ? "toggleAutoPlace()" : ""}"
         >
           <div class="auto-place-toggle-knob"></div>
         </div>
       </div>
 
       <!-- Search Form -->
-      <form method="GET" action="/api/v1/user/${userId}/raw-ideas" class="search-form">
+      <form method="GET" action="/api/v1/user/${beingId}/raw-ideas" class="search-form">
         <input type="hidden" name="token" value="${esc(token)}">
         <input type="hidden" name="html" value="">
         ${statusFilter !== "pending" ? `<input type="hidden" name="status" value="${statusFilter}">` : ""}
@@ -508,7 +508,7 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
 
           <div class="idea-content">
             <a
-              href="/api/v1/user/${userId}/raw-ideas/${r._id}${tokenQS}"
+              href="/api/v1/user/${beingId}/raw-ideas/${r._id}${tokenQS}"
               class="idea-link"
             >
              ${
@@ -525,16 +525,16 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
           ${
             r.status === "succeeded"
               ? `
-          <div class="placed-notice">Placed automatically by AI${r.placedAt ? ` on ${new Date(r.placedAt).toLocaleString()}` : ""}.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${encodeURIComponent(token)}` : ""}&html">View AI chat \u2192</a>` : ""}</div>
+          <div class="placed-notice">Placed automatically by AI${r.placedAt ? ` on ${new Date(r.placedAt).toLocaleString()}` : ""}.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${beingId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${encodeURIComponent(token)}` : ""}&html">View AI chat \u2192</a>` : ""}</div>
           `
               : r.status === "processing"
                 ? `
-          <div class="processing-notice">Being processed by AI \u2014 please wait.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${encodeURIComponent(token)}` : ""}&html">View AI chat \u2192</a>` : ""}</div>
+          <div class="processing-notice">Being processed by AI \u2014 please wait.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${beingId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${encodeURIComponent(token)}` : ""}&html">View AI chat \u2192</a>` : ""}</div>
           `
                 : r.status === "deleted"
                   ? ``
                   : `
-          ${r.status === "stuck" ? `<div class="stuck-notice">Auto-placement failed \u2014 place manually below.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${userId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${encodeURIComponent(token)}` : ""}&html">View AI chat \u2192</a>` : ""}</div>` : ""}
+          ${r.status === "stuck" ? `<div class="stuck-notice">Auto-placement failed \u2014 place manually below.${r.aiSessionId ? ` <a class="chat-link" href="/api/v1/user/${beingId}/chats?sessionId=${r.aiSessionId}${token ? `&token=${encodeURIComponent(token)}` : ""}&html">View AI chat \u2192</a>` : ""}</div>` : ""}
 
           ${
             (!r.status || r.status === "pending") && r.contentType !== "file"
@@ -543,7 +543,7 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
             class="auto-place-btn"
             data-raw-idea-id="${r._id}"
             data-token="${esc(token)}"
-            data-user-id="${userId}"
+            data-user-id="${beingId}"
           >\u2728 Auto-place</button>
           `
               : ""
@@ -551,7 +551,7 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
 
           <form
             method="POST"
-            action="/api/v1/user/${userId}/raw-ideas/${
+            action="/api/v1/user/${beingId}/raw-ideas/${
               r._id
             }/transfer?token=${encodeURIComponent(token)}&html"
             class="transfer-form"
@@ -618,7 +618,7 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
 
         try {
           const res = await fetch(
-            "/api/v1/user/${userId}/raw-ideas/" + rawIdeaId + tokenQs,
+            "/api/v1/user/${beingId}/raw-ideas/" + rawIdeaId + tokenQs,
             { method: "DELETE" }
           );
           const data = await res.json();
@@ -646,7 +646,7 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
 
         try {
           const res = await fetch(
-            "/api/v1/user/${userId}/raw-ideas/" + rawIdeaId + "/place" + tokenQs,
+            "/api/v1/user/${beingId}/raw-ideas/" + rawIdeaId + "/place" + tokenQs,
             { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: "user" }) }
           );
           if (res.status === 202) {
@@ -680,7 +680,7 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
       toggle.classList.toggle("active");
       try {
         var res = await fetch(
-          "/api/v1/user/${userId}/raw-ideas/auto-place" + tokenQs,
+          "/api/v1/user/${beingId}/raw-ideas/auto-place" + tokenQs,
           { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: newEnabled }) }
         );
         var data = await res.json();
@@ -703,9 +703,9 @@ These will be placed onto your trees automatically while you dream (Standard+ pl
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Single Raw Idea (text) - GET /user/:userId/raw-ideas/:rawIdeaId
+// Single Raw Idea (text) - GET /user/:beingId/raw-ideas/:rawIdeaId
 // ═══════════════════════════════════════════════════════════════════
-export function renderRawIdeaText({ userId, rawIdea, back, backText, userLink, hasToken, token }) {
+export function renderRawIdeaText({ beingId, rawIdea, back, backText, userLink, hasToken, token }) {
   const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
   const css = `
@@ -972,7 +972,7 @@ export function renderRawIdeaText({ userId, rawIdea, back, backText, userLink, h
         <span class="status-badge status-badge--${rawIdea.status || "pending"}">
           ${rawIdea.status === "processing" ? "\u23F3 processing" : rawIdea.status === "succeeded" ? "\u2713 placed by AI" : rawIdea.status === "stuck" ? "\u26A0 stuck" : rawIdea.status === "deleted" ? "deleted" : "pending"}
         </span>
-        ${rawIdea.aiSessionId && (rawIdea.status === "succeeded" || rawIdea.status === "stuck" || rawIdea.status === "processing") ? `<a class="ai-chat-link" href="/api/v1/user/${userId}/chats?sessionId=${rawIdea.aiSessionId}&token=${encodeURIComponent(token)}&html">View AI chat \u2192</a>` : ""}
+        ${rawIdea.aiSessionId && (rawIdea.status === "succeeded" || rawIdea.status === "stuck" || rawIdea.status === "processing") ? `<a class="ai-chat-link" href="/api/v1/user/${beingId}/chats?sessionId=${rawIdea.aiSessionId}&token=${encodeURIComponent(token)}&html">View AI chat \u2192</a>` : ""}
       </div>`
           : ""
       }
@@ -1020,11 +1020,11 @@ export function renderRawIdeaText({ userId, rawIdea, back, backText, userLink, h
     });`;
 
   return page({
-    title: `Raw Idea by ${escapeHtml(rawIdea.userId?.username || "User")} - TreeOS`,
+    title: `Raw Idea by ${escapeHtml(rawIdea.beingId?.username || "User")} - TreeOS`,
     css,
     body: `
   <meta name="description" content="${escapeHtml((rawIdea.content || "").slice(0, 160))}" />
-  <meta property="og:title" content="Raw Idea by ${escapeHtml(rawIdea.userId?.username || "User")} - TreeOS" />
+  <meta property="og:title" content="Raw Idea by ${escapeHtml(rawIdea.beingId?.username || "User")} - TreeOS" />
   <meta property="og:description" content="${escapeHtml((rawIdea.content || "").slice(0, 160))}" />
   <meta property="og:type" content="article" />
   <meta property="og:site_name" content="TreeOS" />
@@ -1035,9 +1035,9 @@ export function renderRawIdeaText({ userId, rawIdea, back, backText, userLink, h
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Single Raw Idea (file) - GET /user/:userId/raw-ideas/:rawIdeaId
+// Single Raw Idea (file) - GET /user/:beingId/raw-ideas/:rawIdeaId
 // ═══════════════════════════════════════════════════════════════════
-export function renderRawIdeaFile({ userId, rawIdea, back, backText, userLink, hasToken, token }) {
+export function renderRawIdeaFile({ beingId, rawIdea, back, backText, userLink, hasToken, token }) {
   const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
   const fileDeleted = rawIdea.content === "File was deleted";
   const fileUrl = fileDeleted ? "" : `/api/v1/uploads/${rawIdea.content}`;

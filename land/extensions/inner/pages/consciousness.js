@@ -2,7 +2,7 @@ import { page } from "../../html-rendering/html/layout.js";
 import { baseStyles, glassHeaderStyles, responsiveBase } from "../../html-rendering/html/baseStyles.js";
 import { escapeHtml } from "../../html-rendering/html/utils.js";
 
-export function renderConsciousnessPage({ rootId, rootName, layers, qs, userId }) {
+export function renderConsciousnessPage({ rootId, rootName, layers, qs, beingId }) {
   const css = `
     ${baseStyles}
     ${glassHeaderStyles}

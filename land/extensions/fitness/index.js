@@ -33,11 +33,11 @@ export async function init(core) {
   const runChat = core.llm?.runChat || null;
   configure({
     Node: core.models.Node,
-    Note: core.models.Note,
+    Artifact: core.models.Artifact,
     runChat: runChat
       ? async (opts) => {
-          if (opts.userId && opts.userId !== "SYSTEM") {
-            const hasLlm = await core.llm.userHasLlm(opts.userId);
+          if (opts.beingId && opts.beingId !== "SYSTEM") {
+            const hasLlm = await core.llm.userHasLlm(opts.beingId);
             if (!hasLlm) return { answer: null };
           }
           return core.llm.runChat({
@@ -118,13 +118,13 @@ export async function init(core) {
         if (!nodes?.history?.id) continue;
 
         // Cap History notes at 365
-        const Note = core.models.Node.db.model("Note");
-        const count = await Note.countDocuments({ nodeId: nodes.history.id });
+        const Artifact = core.models.Node.db.model("Artifact");
+        const count = await Artifact.countDocuments({ nodeId: nodes.history.id });
         if (count > 365) {
-          const old = await Note.find({ nodeId: nodes.history.id })
+          const old = await Artifact.find({ nodeId: nodes.history.id })
             .sort({ createdAt: 1 }).limit(count - 365).select("_id").lean();
           if (old.length > 0) {
-            await Note.deleteMany({ _id: { $in: old.map(n => n._id) } });
+            await Artifact.deleteMany({ _id: { $in: old.map(n => n._id) } });
             log.verbose("Fitness", `Capped history: deleted ${old.length} old entries`);
           }
         }
@@ -287,7 +287,7 @@ export async function init(core) {
     return current?.rootOwner ? { fitnessRootId: null, ownerId: String(current.rootOwner) } : null;
   }
 
-  core.hooks.register("afterNote", async ({ node }) => {
+  core.hooks.register("afterArtifact", async ({ node }) => {
     if (!node) return;
     const fm = node.metadata instanceof Map ? node.metadata.get("fitness") : node.metadata?.fitness;
     if (!fm?.role) return;
@@ -329,7 +329,7 @@ export async function init(core) {
   try {
     const { getExtension } = await import("../loader.js");
     const base = getExtension("treeos-base");
-    base?.exports?.registerSlot?.("apps-grid", "fitness", ({ userId, rootMap, tokenParam, tokenField, esc: e }) => {
+    base?.exports?.registerSlot?.("apps-grid", "fitness", ({ beingId, rootMap, tokenParam, tokenField, esc: e }) => {
       const entries = rootMap.get("Fitness") || [];
       const existing = entries.map(entry =>
         entry.ready
@@ -341,7 +341,7 @@ export async function init(core) {
         <div class="app-desc">Three languages: gym (weight x reps x sets), running (distance x time x pace), bodyweight (reps x sets or duration). Progressive overload tracked per modality.</div>
         ${entries.length > 0
           ? `<div style="display:flex;flex-wrap:wrap;">${existing}</div>`
-          : `<form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+          : `<form class="app-form" method="POST" action="/api/v1/user/${beingId}/apps/create">
               ${tokenField}<input type="hidden" name="app" value="fitness" />
               <input class="app-input" name="message" placeholder="What do you train? (e.g. hypertrophy 4 days, running, bodyweight)" required />
               <button class="app-start" type="submit">Start Fitness</button>

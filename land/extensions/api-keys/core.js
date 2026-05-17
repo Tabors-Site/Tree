@@ -2,13 +2,13 @@ import log from "../../seed/log.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
-import User from "../../seed/models/user.js";
-import { getUserMeta, batchSetUserMeta } from "../../seed/tree/userMetadata.js";
+import Being from "../../seed/models/being.js";
+import { getBeingMeta, batchSetBeingMeta } from "../../seed/tree/beingMetadata.js";
 
 const MAX_API_KEYS_PER_USER = 10;
 
 function getKeys(user) {
-  const raw = getUserMeta(user, "apiKeys");
+  const raw = getBeingMeta(user, "apiKeys");
   return Array.isArray(raw) ? raw : [];
 }
 
@@ -29,7 +29,7 @@ export async function compareApiKey(rawKey, keyHash) {
 
 export const createApiKey = async (req, res) => {
   try {
-    const userId = req.userId;
+    const beingId = req.beingId;
     const { name, revokeOld = false } = req.body;
 
     if (name && typeof name !== "string") {
@@ -42,12 +42,12 @@ export const createApiKey = async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "Key name cannot contain HTML tags");
     }
 
-    const user = await User.findById(userId);
+    const user = await Being.findById(beingId);
     if (!user) {
       return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     }
 
-    let keys = getUserMeta(user, "apiKeys");
+    let keys = getBeingMeta(user, "apiKeys");
     if (!Array.isArray(keys)) keys = [];
 
     if (revokeOld) {
@@ -60,7 +60,7 @@ export const createApiKey = async (req, res) => {
 
     const { rawKey, keyHash, keyPrefix } = await generateApiKey();
     keys = [...keys, { _id: crypto.randomUUID(), keyHash, keyPrefix, name: safeName, createdAt: new Date() }];
-    await batchSetUserMeta(userId, "apiKeys", keys);
+    await batchSetBeingMeta(beingId, "apiKeys", keys);
 
     return sendOk(res, {
       apiKey: rawKey,
@@ -74,7 +74,7 @@ export const createApiKey = async (req, res) => {
 
 export const listApiKeys = async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("metadata");
+    const user = await Being.findById(req.beingId).select("metadata");
     if (!user) {
       return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     }
@@ -102,13 +102,13 @@ export const deleteApiKey = async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "Key ID required");
     }
 
-    const user = await User.findById(req.userId);
+    const user = await Being.findById(req.beingId);
     if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     const keys = getKeys(user);
     const key = keys.find((k) => k._id === keyId);
     if (!key) return sendError(res, 404, ERR.NODE_NOT_FOUND, "API key not found");
     key.revoked = true;
-    await batchSetUserMeta(req.userId, "apiKeys", keys);
+    await batchSetBeingMeta(req.beingId, "apiKeys", keys);
 
     return sendOk(res, { message: "API key revoked" });
   } catch (err) {
@@ -149,7 +149,7 @@ export async function apiKeyAuthStrategy(req) {
   }
 
   const prefix = apiKey.slice(0, 8);
-  const candidates = await User.find({
+  const candidates = await Being.find({
     "metadata.apiKeys": {
       $elemMatch: { keyPrefix: prefix, revoked: { $ne: true } },
     },
@@ -168,9 +168,9 @@ export async function apiKeyAuthStrategy(req) {
 
       key.usageCount = (key.usageCount || 0) + 1;
       key.lastUsedAt = new Date();
-      await batchSetUserMeta(String(user._id), "apiKeys", keys);
+      await batchSetBeingMeta(String(user._id), "apiKeys", keys);
 
-      return { userId: user._id, username: user.username, extra: { apiKeyId: key._id } };
+      return { beingId: user._id, username: user.username, extra: { apiKeyId: key._id } };
     }
   }
 

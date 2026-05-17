@@ -10,8 +10,8 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { CONTENT_TYPE } from "../../seed/protocol.js";
+import Artifact from "../../seed/models/artifact.js";
+import { ARTIFACT_ORIGIN } from "../../seed/protocol.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 import { getDescendantIds, resolveRootNode } from "../../seed/tree/treeFetch.js";
 
@@ -39,7 +39,7 @@ function getExtension(name) {
 // STRATEGY 1: SEMANTIC SEARCH
 // ─────────────────────────────────────────────────────────────────────────
 
-async function searchSemantic(query, rootId, userId, opts) {
+async function searchSemantic(query, rootId, beingId, opts) {
   const embed = getExtension("embed");
   if (!embed?.exports?.findSimilar || !embed?.exports?.generateEmbedding) {
     return { strategy: "semantic", findings: [], skipped: true, reason: "embed not installed" };
@@ -47,7 +47,7 @@ async function searchSemantic(query, rootId, userId, opts) {
 
   let queryVector;
   try {
-    queryVector = await embed.exports.generateEmbedding(query, userId);
+    queryVector = await embed.exports.generateEmbedding(query, beingId);
   } catch {
     return { strategy: "semantic", findings: [], skipped: true, reason: "embedding failed" };
   }
@@ -97,9 +97,9 @@ async function searchStructural(query, nodeId, rootId, opts) {
     const escaped = queryWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     const regexPattern = escaped.join("|");
 
-    const notes = await Note.find({
+    const notes = await Artifact.find({
       nodeId: { $in: allIds },
-      contentType: CONTENT_TYPE.TEXT,
+      origin: ARTIFACT_ORIGIN.IBP,
       content: { $regex: regexPattern, $options: "i" },
     }).sort({ createdAt: -1 }).limit(50).select("_id content nodeId createdAt").lean();
 
@@ -143,9 +143,9 @@ async function searchMemory(nodeId, query, opts) {
     }
 
     const connectedIds = connections.slice(0, 10).map(c => c.nodeId || c.targetId || c);
-    const notes = await Note.find({
+    const notes = await Artifact.find({
       nodeId: { $in: connectedIds },
-      contentType: CONTENT_TYPE.TEXT,
+      origin: ARTIFACT_ORIGIN.IBP,
     }).sort({ createdAt: -1 }).limit(opts.maxFindingsPerStrategy || 10).select("_id content nodeId").lean();
 
     // Node name lookup
@@ -181,14 +181,14 @@ async function searchMemory(nodeId, query, opts) {
 // STRATEGY 4: CODEBOOK SEARCH
 // ─────────────────────────────────────────────────────────────────────────
 
-async function searchCodebook(nodeId, userId, query, opts) {
+async function searchCodebook(nodeId, beingId, query, opts) {
   const codebook = getExtension("codebook");
   if (!codebook?.exports?.getDictionary) {
     return { strategy: "codebook", findings: [], skipped: true, reason: "codebook not installed" };
   }
 
   try {
-    const dictionary = await codebook.exports.getDictionary(nodeId, userId);
+    const dictionary = await codebook.exports.getDictionary(nodeId, beingId);
     if (!dictionary || Object.keys(dictionary).length === 0) {
       return { strategy: "codebook", findings: [] };
     }
@@ -224,14 +224,14 @@ async function searchCodebook(nodeId, userId, query, opts) {
 // STRATEGY 5: PROFILE SEARCH
 // ─────────────────────────────────────────────────────────────────────────
 
-async function searchProfile(userId, query, opts) {
+async function searchProfile(beingId, query, opts) {
   const inverseTree = getExtension("inverse-tree");
   if (!inverseTree?.exports?.getInverseData) {
     return { strategy: "profile", findings: [], skipped: true, reason: "inverse-tree not installed", profileWeights: {} };
   }
 
   try {
-    const data = await inverseTree.exports.getInverseData(userId);
+    const data = await inverseTree.exports.getInverseData(beingId);
     const profile = data?.profile;
     if (!profile) return { strategy: "profile", findings: [], profileWeights: {} };
 
@@ -271,15 +271,15 @@ function emptyResult(query) {
  *
  * @param {string} nodeId - starting position
  * @param {string} query - what to find
- * @param {string} userId
+ * @param {string} beingId
  * @param {string} username
  * @param {object} opts - { rootId, similarityThreshold, maxFindingsPerAngle, maxScoutHistory }
  */
-export async function runScout(nodeId, query, userId, username, opts = {}) {
+export async function runScout(nodeId, query, beingId, username, opts = {}) {
   // Per-node scout lane — scout passes at the same node chain across runs.
   const rt = new OrchestratorRuntime({
     rootId: opts.rootId || nodeId,
-    userId,
+    beingId,
     username: username || "system",
     scope: "tree",
     purpose: "scout",
@@ -346,11 +346,11 @@ Return ONLY JSON:
 
     const startStrategies = Date.now();
     const [semantic, structural, memory, codebook, profile] = await Promise.all([
-      searchSemantic(query, rootId, userId, strategyOpts),
+      searchSemantic(query, rootId, beingId, strategyOpts),
       searchStructural(query, nodeId, rootId, strategyOpts),
       searchMemory(nodeId, query, strategyOpts),
-      searchCodebook(nodeId, userId, query, strategyOpts),
-      searchProfile(userId, query, strategyOpts),
+      searchCodebook(nodeId, beingId, query, strategyOpts),
+      searchProfile(beingId, query, strategyOpts),
     ]);
 
     const allStrategies = [semantic, structural, memory, codebook, profile];

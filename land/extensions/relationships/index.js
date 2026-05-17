@@ -5,7 +5,7 @@ import { handleMessage } from "./handler.js";
 export async function init(core) {
   configure({
     Node: core.models.Node,
-    Note: core.models.Note,
+    Artifact: core.models.Artifact,
     metadata: core.metadata,
   });
 
@@ -30,10 +30,10 @@ export async function init(core) {
     // At a relationships person node: show full interaction history
     const relMeta = meta?.relationships;
     if (relMeta?.role === "person") {
-      const { getNotes } = await import("../../seed/tree/notes.js");
-      const result = await getNotes({ nodeId: String(node._id), limit: 10 });
-      if (result?.notes?.length > 0) {
-        context.personHistory = result.notes.map(n => n.content);
+      const { getArtifacts } = await import("../../seed/tree/artifacts.js");
+      const result = await getArtifacts({ nodeId: String(node._id), limit: 10 });
+      if (result?.artifacts?.length > 0) {
+        context.personHistory = result.artifacts.map(n => n.content);
       }
       return;
     }
@@ -80,7 +80,7 @@ export async function init(core) {
   try {
     const { getExtension } = await import("../loader.js");
     const base = getExtension("treeos-base");
-    base?.exports?.registerSlot?.("apps-grid", "relationships", ({ userId, rootMap, tokenParam, tokenField, esc: e }) => {
+    base?.exports?.registerSlot?.("apps-grid", "relationships", ({ beingId, rootMap, tokenParam, tokenField, esc: e }) => {
       const entries = rootMap.get("Relationships") || [];
       const existing = entries.map(entry =>
         `<a class="app-active" href="/api/v1/root/${entry.id}/relationships?html${tokenParam}" style="margin-right:8px;margin-bottom:6px;">${e(entry.name)}</a>`
@@ -90,7 +90,7 @@ export async function init(core) {
         <div class="app-desc">People in your life. Track who matters, interactions, ideas for others. The tree notices when you mention someone.</div>
         ${entries.length > 0
           ? `<div style="display:flex;flex-wrap:wrap;">${existing}</div>`
-          : `<form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+          : `<form class="app-form" method="POST" action="/api/v1/user/${beingId}/apps/create">
               ${tokenField}<input type="hidden" name="app" value="relationships" />
               <input class="app-input" name="message" placeholder="Tell me about someone in your life" required />
               <button class="app-start" type="submit">Start Relationships</button>

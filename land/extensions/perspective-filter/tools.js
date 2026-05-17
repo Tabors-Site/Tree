@@ -9,7 +9,7 @@ export default [
       "Get the effective perspective filter for a node. Shows what cascade signals this node accepts, including rules inherited from parent nodes.",
     schema: {
       nodeId: z.string().describe("The node to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -58,7 +58,7 @@ export default [
       nodeId: z.string().describe("The node to configure."),
       accept: z.array(z.string()).optional().describe("Accept signals tagged with these topics. If set, only matching signals pass."),
       reject: z.array(z.string()).optional().describe("Reject signals tagged with these topics. Checked before accept list."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -97,7 +97,7 @@ export default [
       "Clear the perspective filter on a node so it inherits from its parent again.",
     schema: {
       nodeId: z.string().describe("The node to clear."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

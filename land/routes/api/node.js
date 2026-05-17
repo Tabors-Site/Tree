@@ -96,7 +96,7 @@ router.get("/node/:nodeId/chats", authenticate, async (req, res) => {
 const editStatusHandler = async (req, res) => {
   try {
     const { nodeId, version } = req.params;
-    const userId = req.userId;
+    const beingId = req.beingId;
 
     const status = req.body?.status || req.query?.status;
     const ALLOWED_STATUSES = ["active", "completed", "trimmed"];
@@ -117,7 +117,7 @@ const editStatusHandler = async (req, res) => {
       nodeId,
       status,
       isInherited,
-      userId,
+      beingId,
     });
 
     sendOk(res, result);
@@ -134,7 +134,7 @@ router.post("/node/:nodeId/:version/editStatus", authenticate, editStatusHandler
 router.post("/node/:nodeId/updateParent", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params; // child
-    const userId = req.userId;
+    const beingId = req.beingId;
 
     // new parent can come from body OR query
     const newParentId =
@@ -147,7 +147,7 @@ router.post("/node/:nodeId/updateParent", authenticate, async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "newParentId is required");
     }
 
-    const result = await updateParentRelationship(nodeId, newParentId, userId);
+    const result = await updateParentRelationship(nodeId, newParentId, beingId);
 
     sendOk(res, {
       nodeChild: result.nodeChild,
@@ -498,7 +498,7 @@ router.post("/node/:nodeId/extensions", authenticate, async (req, res) => {
       await setExtMeta(node, "extensions", config);
     }
     await node.save();
-    notifyScopeChange({ nodeId, blocked: config.blocked, restricted: config.restricted, allowed: config.allowed, userId: req.userId });
+    notifyScopeChange({ nodeId, blocked: config.blocked, restricted: config.restricted, allowed: config.allowed, beingId: req.beingId });
 
     sendOk(res, {
       blocked: config.blocked || [],
@@ -581,7 +581,7 @@ router.post("/node/:nodeId/createChild", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params; // parent id
     const { name, type, schedule, reeffectTime, values, goals, note } = req.body;
-    const userId = req.userId;
+    const beingId = req.beingId;
 
     if (!name || typeof name !== "string") {
       return sendError(res, 400, ERR.INVALID_INPUT, "Name is required");
@@ -608,7 +608,7 @@ router.post("/node/:nodeId/createChild", authenticate, async (req, res) => {
     const childNode = await createNode({
       name,
       parentId: parentNode._id,
-      userId,
+      beingId,
       type: type || null,
       note: note || null,
       metadata: metadata.size > 0 ? metadata : null,
@@ -627,9 +627,9 @@ router.post("/node/:nodeId/createChild", authenticate, async (req, res) => {
 router.post("/node/:nodeId/delete", authenticate, async (req, res) => {
   try {
     const { nodeId } = req.params;
-    const userId = req.userId;
+    const beingId = req.beingId;
 
-    const deletedNode = await deleteNodeBranch(nodeId, userId);
+    const deletedNode = await deleteNodeBranch(nodeId, beingId);
 
     return sendOk(res, {
       deletedNode: deletedNode._id,
@@ -643,7 +643,7 @@ router.post("/node/:nodeId/delete", authenticate, async (req, res) => {
 const editNameHandler = async (req, res) => {
   try {
     const { nodeId } = req.params;
-    const userId = req.userId;
+    const beingId = req.beingId;
 
     const newName = req.body?.name || req.query?.name;
 
@@ -654,7 +654,7 @@ const editNameHandler = async (req, res) => {
     const result = await editNodeName({
       nodeId,
       newName,
-      userId,
+      beingId,
     });
 
     sendOk(res, result);
@@ -672,7 +672,7 @@ router.post(
   async (req, res) => {
     try {
       const { nodeId } = req.params;
-      const userId = req.userId;
+      const beingId = req.beingId;
 
       // customType (free text) takes priority over select dropdown
       const customType = req.body?.customType?.trim();
@@ -682,7 +682,7 @@ router.post(
       const result = await editNodeType({
         nodeId,
         newType,
-        userId,
+        beingId,
       });
 
       sendOk(res, result);

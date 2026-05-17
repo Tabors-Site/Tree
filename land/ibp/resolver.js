@@ -2,7 +2,7 @@
 //
 // Given a parsed Stance, resolve what the Land server needs to ACT on:
 //   - zone:        "land" | "home" | "tree"
-//   - userId:      owning user (for home zone)
+//   - beingId:      owning user (for home zone)
 //   - rootId:      tree root (for tree zone)
 //   - nodeId:      target node (for tree zone)
 //   - chain:       [{ name, id }] top-down (land root → leaf)
@@ -16,7 +16,7 @@
 
 import { PortalError, PORTAL_ERR } from "./errors.js";
 import { getLandDomain } from "./address.js";
-import User from "../seed/models/user.js";
+import Being from "../seed/models/being.js";
 import Node from "../seed/models/node.js";
 import { getLandRootId } from "../seed/landRoot.js";
 import { resolveRootNode } from "../seed/tree/treeFetch.js";
@@ -27,7 +27,7 @@ import { resolveRootNode } from "../seed/tree/treeFetch.js";
  * @param {boolean} [opts.requireLandMatch=true] — when true, reject stances whose land doesn't match this server
  * @returns {Promise<{
  *   zone: "land"|"home"|"tree",
- *   userId: string|null,
+ *   beingId: string|null,
  *   rootId: string|null,
  *   nodeId: string|null,
  *   chain: Array<{name: string, id: string}>,
@@ -58,7 +58,7 @@ export async function resolveStance(stance, opts = {}) {
   if (path === "/") {
     return {
       zone: "land",
-      userId: null,
+      beingId: null,
       rootId: null,
       nodeId: null,
       chain: [],
@@ -86,7 +86,7 @@ export async function resolveStance(stance, opts = {}) {
       );
     }
 
-    const user = await User.findOne({ username }).select("_id username").lean();
+    const user = await Being.findOne({ username }).select("_id username").lean();
     if (!user) {
       throw new PortalError(
         PORTAL_ERR.USER_NOT_FOUND,
@@ -99,7 +99,7 @@ export async function resolveStance(stance, opts = {}) {
     if (subPath.length === 0) {
       return {
         zone: "home",
-        userId: user._id,
+        beingId: user._id,
         username: user.username,
         rootId: null,
         nodeId: null,
@@ -220,7 +220,7 @@ async function resolveNodePath({ startUnderParent, segments, ownerFilter, stance
 
   return {
     zone: "tree",
-    userId: contextUser?._id || null,
+    beingId: contextUser?._id || null,
     username: contextUser?.username || null,
     rootId,
     nodeId: leafNode._id,

@@ -14,8 +14,8 @@ import { page } from "../../html-rendering/html/layout.js";
 const router = express.Router();
 
 router.get("/dashboard/flow", authenticateLite, async (req, res) => {
-  if (!req.userId) return res.redirect("/login");
-  const injectedJs = `const USER_ID = ${JSON.stringify(req.userId)};\n` + JS;
+  if (!req.beingId) return res.redirect("/login");
+  const injectedJs = `const USER_ID = ${JSON.stringify(req.beingId)};\n` + JS;
   res.send(page({
     title: "Flow · TreeOS",
     bare: true,
@@ -365,7 +365,7 @@ async function resolveUnknownRoots(hops) {
     const wrapped = await fetchJson(API + "/node/" + nid);
     const n = wrapped?.node || wrapped;
     if (!n) { state.nodeToRoot[nid] = null; return; }
-    // rootOwner is a userId (not a root nodeId), so don't use it. Walk via
+    // rootOwner is a beingId (not a root nodeId), so don't use it. Walk via
     // the node's parent chain isn't cheap from here — instead, /node/:id
     // returns a "path" through the tree if the route supports it. As a
     // fallback treat any node whose id matches a known root as its own

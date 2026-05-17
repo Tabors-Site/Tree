@@ -58,7 +58,7 @@ Full reference: `extensions/EXTENSION_FORMAT.md`
 - **Routes** (HTTP endpoints at /api/v1)
 - **Tools** (MCP tools the AI can call)
 - **Modes** (custom AI conversation modes with system prompts)
-- **Hooks** (lifecycle event handlers: beforeNote, afterNote, enrichContext, etc.)
+- **Hooks** (lifecycle event handlers: beforeArtifact, afterArtifact, enrichContext, etc.)
 - **Jobs** (background tasks with start/stop)
 - **Orchestrator** (replace the entire conversation flow)
 - **CLI commands** (auto-generated from manifest declarations)
@@ -79,7 +79,7 @@ treeos?.exports?.registerSlot?.("apps-grid", "my-ext", (ctx) => {
 }, { priority: 50 });
 ```
 
-**emitSlotUpdate** pushes live UI updates via WebSocket. After data changes (afterNote, afterMetadataWrite hooks), call `emitSlotUpdate(core, userId, slotName, extName, context)` to re-render a slot fragment and push it to the client without a page refresh.
+**emitSlotUpdate** pushes live UI updates via WebSocket. After data changes (afterArtifact, afterMetadataWrite hooks), call `emitSlotUpdate(core, userId, slotName, extName, context)` to re-render a slot fragment and push it to the client without a page refresh.
 
 **inApp query param** is set when pages load inside the app shell iframe. Dashboard pages should skip their own chatbar when `inApp` is truthy because the app shell provides the chat panel. Pass `inApp: !!req.query.inApp` to your renderer and conditionally exclude chatbar HTML/CSS/JS.
 

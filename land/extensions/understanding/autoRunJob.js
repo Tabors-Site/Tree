@@ -4,7 +4,7 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import { findOrCreateUnderstandingRun } from "./core.js";
 import { orchestrateUnderstanding } from "./pipeline.js";
 import { userHasLlm } from "../../seed/llm/conversation.js";
@@ -33,7 +33,7 @@ let jobTimer = null;
 
 async function processTree(rootNode) {
   const rootId = rootNode._id.toString();
-  const userId = rootNode.rootOwner.toString();
+  const beingId = rootNode.rootOwner.toString();
 
   // Skip tiny trees
   if (!rootNode.children || rootNode.children.length < MIN_TREE_CHILDREN) {
@@ -42,7 +42,7 @@ async function processTree(rootNode) {
   }
 
   // Resolve username
-  const user = await User.findById(userId).select("username").lean();
+  const user = await Being.findById(beingId).select("username").lean();
   if (!user) {
  log.warn("Understanding", ` Understanding auto-run: no user for tree ${rootId}`);
     return;
@@ -50,7 +50,7 @@ async function processTree(rootNode) {
 
   // Skip if owner has no LLM and root has no LLM assigned
   const hasRootLlm = !!(rootNode.llmDefault && rootNode.llmDefault !== "none");
-  if (!hasRootLlm && !await userHasLlm(userId)) {
+  if (!hasRootLlm && !await userHasLlm(beingId)) {
  log.debug("Understanding", `  Skipping understanding for "${rootNode.name}" — owner has no LLM connection`);
     return;
   }
@@ -61,7 +61,7 @@ async function processTree(rootNode) {
     // Find existing run or create a new one
     const run = await findOrCreateUnderstandingRun(
       rootId,
-      userId,
+      beingId,
       NAV_PERSPECTIVE,
       true, // wasAi
     );
@@ -69,7 +69,7 @@ async function processTree(rootNode) {
     // Run the orchestrator
     await orchestrateUnderstanding({
       rootId,
-      userId,
+      beingId,
       username: user.username,
       runId: run.understandingRunId,
       source: "background",

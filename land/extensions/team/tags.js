@@ -2,7 +2,7 @@ import { NoteTag } from "./model.js";
 
 /**
  * Extract @mentions from text and rewrite to canonical usernames.
- * Returns { tagged: [userId, ...], rewrittenContent }.
+ * Returns { tagged: [beingId, ...], rewrittenContent }.
  */
 export async function extractTaggedUsersAndRewrite(content, User) {
   const mentionRegex = /@([\w-]+)/g;
@@ -16,7 +16,7 @@ export async function extractTaggedUsersAndRewrite(content, User) {
   const identifiers = matches.map((m) => m[1].toLowerCase());
 
   // fetch all users once
-  const users = await User.find({
+  const users = await Being.find({
     username: { $in: identifiers },
   }).collation({ locale: "en", strength: 2 }); // case-insensitive
 
@@ -60,7 +60,7 @@ export async function syncTagsForNote({ noteId, content, nodeId, taggedBy, User 
   }
 
   const usernames = matches.map((m) => m[1].toLowerCase());
-  const users = await User.find({
+  const users = await Being.find({
     username: { $in: usernames },
   }).collation({ locale: "en", strength: 2 });
 
@@ -70,9 +70,9 @@ export async function syncTagsForNote({ noteId, content, nodeId, taggedBy, User 
   await NoteTag.deleteMany({ noteId });
   if (taggedUserIds.length > 0) {
     await NoteTag.insertMany(
-      taggedUserIds.map((userId) => ({
+      taggedUserIds.map((beingId) => ({
         noteId,
-        userId,
+        beingId,
         nodeId,
         taggedBy,
       })),
@@ -90,16 +90,16 @@ export async function clearTagsForNote(noteId) {
 /**
  * Get all notes where a user was tagged (mentioned).
  */
-export async function getAllTagsForUser(userId, limit, startDate, endDate, Note) {
-  if (!userId) {
-    throw new Error("Missing required parameter: userId");
+export async function getAllTagsForUser(beingId, limit, startDate, endDate, Note) {
+  if (!beingId) {
+    throw new Error("Missing required parameter: beingId");
   }
 
   if (limit !== undefined && (typeof limit !== "number" || limit <= 0)) {
     throw new Error("Invalid limit: must be a positive number");
   }
 
-  const queryObj = { userId };
+  const queryObj = { beingId };
 
   if (startDate || endDate) {
     queryObj.createdAt = {};
@@ -115,8 +115,8 @@ export async function getAllTagsForUser(userId, limit, startDate, endDate, Note)
 
   // Fetch the actual notes
   const noteIds = [...new Set(tags.map((t) => t.noteId))];
-  const notes = await Note.find({ _id: { $in: noteIds } })
-    .populate("userId", "username")
+  const notes = await Artifact.find({ _id: { $in: noteIds } })
+    .populate("beingId", "username")
     .sort({ createdAt: -1 })
     .lean();
 
@@ -131,9 +131,9 @@ export async function getAllTagsForUser(userId, limit, startDate, endDate, Note)
       if (!note) return null;
       return {
         ...note,
-        authorId: note.userId?._id?.toString(),
-        authorUsername: note.userId?.username,
-        taggedBy: note.userId?._id?.toString(),
+        authorId: note.beingId?._id?.toString(),
+        authorUsername: note.beingId?.username,
+        taggedBy: note.beingId?._id?.toString(),
       };
     })
     .filter(Boolean);

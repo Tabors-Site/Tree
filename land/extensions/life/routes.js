@@ -13,7 +13,7 @@ const router = express.Router();
  */
 router.post("/life/add", authenticate, async (req, res) => {
   try {
-    const userId = req.userId;
+    const beingId = req.beingId;
     const { domain } = req.body;
 
     if (!domain) {
@@ -27,14 +27,14 @@ router.post("/life/add", authenticate, async (req, res) => {
     }
 
     // Find Life root or create one
-    let rootId = await findLifeRoot(userId);
+    let rootId = await findLifeRoot(beingId);
     if (!rootId) {
       const { scaffoldRoot } = await import("./core.js");
-      const result = await scaffoldRoot(userId);
+      const result = await scaffoldRoot(beingId);
       rootId = result.rootId;
     }
 
-    const result = await addDomain({ rootId, domain: normalized, userId });
+    const result = await addDomain({ rootId, domain: normalized, beingId });
 
     // Rebuild routing index
     try {
@@ -55,7 +55,7 @@ router.post("/life/add", authenticate, async (req, res) => {
  */
 router.get("/life/domains", authenticate, async (req, res) => {
   const available = getAvailableDomains();
-  const rootId = await findLifeRoot(req.userId);
+  const rootId = await findLifeRoot(req.beingId);
   let scaffolded = {};
   if (rootId) {
     scaffolded = await getDomainNodes(rootId);

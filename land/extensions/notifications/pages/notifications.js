@@ -1,7 +1,7 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { esc } from "../../html-rendering/html/utils.js";
 
-export function renderNotifications({ userId, notifications, total, username, token }) {
+export function renderNotifications({ beingId, notifications, total, username, token }) {
   const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
     const items = notifications
@@ -59,13 +59,13 @@ export function renderNotifications({ userId, notifications, total, username, to
   const body = `
   <div class="container">
     <div class="back-nav">
-      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">\u2190 Back to Profile</a>
+      <a href="/api/v1/user/${beingId}${tokenQS}" class="back-link">\u2190 Back to Profile</a>
     </div>
 
     <div class="header">
       <h1>
         Notifications for
-        <a href="/api/v1/user/${userId}${tokenQS}">@${esc(username)}</a>
+        <a href="/api/v1/user/${beingId}${tokenQS}">@${esc(username)}</a>
         ${notifications.length > 0 ? `<span class="message-count">${total}</span>` : ""}
       </h1>
       <div class="header-subtitle">Dream summaries and thoughts from your trees</div>

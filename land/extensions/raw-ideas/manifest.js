@@ -33,7 +33,7 @@ export default {
 
   needs: {
     services: ["llm", "session", "chat", "orchestrator", "contributions", "hooks"],
-    models: ["Node", "User", "Note"],
+    models: ["Node", "User", "Artifact"],
   },
 
   optional: {
@@ -58,13 +58,13 @@ export default {
       SCHEDULED_RAW_IDEA: "scheduled-raw-idea",
     },
     cli: [
-      { command: "ideas", scope: ["home"], description: "List raw ideas (-p pending, -a all, -q search)", method: "GET", endpoint: "/user/:userId/raw-ideas" },
-      { command: "idea <message...>", scope: ["home"], description: "AI places idea in the right tree", method: "POST", endpoint: "/user/:userId/raw-ideas/place", bodyMap: { content: 0 } },
-      { command: "idea-store <message...>", scope: ["home"], description: "Save idea without processing", method: "POST", endpoint: "/user/:userId/raw-ideas", bodyMap: { content: 0 } },
-      { command: "idea-place <rawIdeaId>", scope: ["home"], description: "Process a stored idea", method: "POST", endpoint: "/user/:userId/raw-ideas/:rawIdeaId/place" },
-      { command: "idea-transfer <rawIdeaId> <nodeId>", scope: ["home"], description: "Manually transfer idea to a node", method: "POST", endpoint: "/user/:userId/raw-ideas/:rawIdeaId/transfer", bodyMap: { nodeId: 1 } },
-      { command: "idea-auto <toggle>", scope: ["home"], description: "Toggle auto-placement (on/off)", method: "POST", endpoint: "/user/:userId/raw-ideas/auto", bodyMap: { enabled: 0 } },
-      { command: "rm-idea <id>", scope: ["home"], description: "Delete a raw idea", method: "DELETE", endpoint: "/user/:userId/raw-ideas/:id" },
+      { command: "ideas", scope: ["home"], description: "List raw ideas (-p pending, -a all, -q search)", method: "GET", endpoint: "/user/:beingId/raw-ideas" },
+      { command: "idea <message...>", scope: ["home"], description: "AI places idea in the right tree", method: "POST", endpoint: "/user/:beingId/raw-ideas/place", bodyMap: { content: 0 } },
+      { command: "idea-store <message...>", scope: ["home"], description: "Save idea without processing", method: "POST", endpoint: "/user/:beingId/raw-ideas", bodyMap: { content: 0 } },
+      { command: "idea-place <rawIdeaId>", scope: ["home"], description: "Process a stored idea", method: "POST", endpoint: "/user/:beingId/raw-ideas/:rawIdeaId/place" },
+      { command: "idea-transfer <rawIdeaId> <nodeId>", scope: ["home"], description: "Manually transfer idea to a node", method: "POST", endpoint: "/user/:beingId/raw-ideas/:rawIdeaId/transfer", bodyMap: { nodeId: 1 } },
+      { command: "idea-auto <toggle>", scope: ["home"], description: "Toggle auto-placement (on/off)", method: "POST", endpoint: "/user/:beingId/raw-ideas/auto", bodyMap: { enabled: 0 } },
+      { command: "rm-idea <id>", scope: ["home"], description: "Delete a raw idea", method: "DELETE", endpoint: "/user/:beingId/raw-ideas/:id" },
     ],
   },
 };

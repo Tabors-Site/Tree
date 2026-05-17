@@ -30,7 +30,7 @@ export default {
     hooks: {
       fires: ["breath:exhale"],
       listens: [
-        "afterNote",
+        "afterArtifact",
         "afterNodeCreate",
         "afterToolCall",
         "afterNavigate",

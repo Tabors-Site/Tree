@@ -8,7 +8,7 @@
 import { renderAppDashboard } from "../../html-rendering/html/appDashboard.js";
 import { timeAgo } from "../../html-rendering/html/utils.js";
 
-export function renderRecoveryDashboard({ rootId, rootName, status, milestones, patterns, history, token, userId, inApp }) {
+export function renderRecoveryDashboard({ rootId, rootName, status, milestones, patterns, history, token, beingId, inApp }) {
   const substances = status?.substances || {};
   const feelings = status?.feelings || {};
   const streaks = status?.streaks || {};
@@ -96,7 +96,7 @@ export function renderRecoveryDashboard({ rootId, rootName, status, milestones, 
   }
 
   return renderAppDashboard({
-    rootId, rootName, token, userId, inApp,
+    rootId, rootName, token, beingId, inApp,
     stats: stats.length > 0 ? stats : null,
     bars: bars.length > 0 ? bars : null,
     cards,

@@ -1,11 +1,15 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
-import User from "./models/user.js";
+import Being from "./models/being.js";
+import Node from "./models/node.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { v4 as uuidv4 } from "uuid";
 import { escapeRegex } from "./utils.js";
 import { getLandConfigValue } from "./landConfig.js";
+import { getLandRootId } from "./landRoot.js";
 import { ERR, ProtocolError } from "./protocol.js";
+import log from "./log.js";
 
 import path from "path";
 import { fileURLToPath } from "url";
@@ -38,68 +42,94 @@ function validatePassword(password) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// USER CREATION
+// BEING CREATION
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Check if this is the first user on the land.
+ * Check if this is the first human being on the land.
  */
-export async function isFirstUser() {
-  return (await User.countDocuments()) === 0;
+export async function isFirstBeing() {
+  return (await Being.countDocuments({ operatingMode: "human" })) === 0;
 }
 
 /**
- * Create the first user (admin) on a fresh land.
- * Handles the race condition where two concurrent requests both pass
- * the isFirstUser() check: creates the user, then verifies it is
- * actually the earliest. If it lost the race, demotes to non-admin.
+ * Create the first being (admin) on a fresh land. Race-resilient: if
+ * two concurrent registrations both pass the isFirstBeing() check,
+ * only the earliest insertion stays admin.
  */
-export async function createFirstUser(username, password) {
-  const user = await createUser(username, password, { isAdmin: true });
+export async function createFirstBeing(username, password) {
+  const being = await createBeing(username, password, { isAdmin: true });
 
-  // Post-creation race check: if multiple admins exist, the one
-  // with the earliest _id (UUID v4, but insertion order is what matters)
-  // keeps admin. Losers get demoted.
-  const adminCount = await User.countDocuments({ isAdmin: true });
+  const adminCount = await Being.countDocuments({ isAdmin: true, operatingMode: "human" });
   if (adminCount > 1) {
-    const earliest = await User.findOne({ isAdmin: true }).sort({ _id: 1 }).select("_id").lean();
-    if (earliest && earliest._id.toString() !== user._id.toString()) {
-      await User.updateOne({ _id: user._id }, { $set: { isAdmin: false } });
-      user.isAdmin = false;
+    const earliest = await Being.findOne({ isAdmin: true, operatingMode: "human" }).sort({ _id: 1 }).select("_id").lean();
+    if (earliest && earliest._id.toString() !== being._id.toString()) {
+      await Being.updateOne({ _id: being._id }, { $set: { isAdmin: false } });
+      being.isAdmin = false;
     }
   }
 
-  return user;
+  return being;
 }
 
 /**
- * Create a user. Hashes password via User schema pre-save hook.
- * Returns the saved user document.
+ * Create a being. Defaults to operatingMode="human" with a chosen
+ * password. AI being creation calls this with opts.operatingMode="ai"
+ * (typically with an auto-generated password) and opts.role/homePositionId.
+ *
+ * Password is hashed via Being schema's pre-save hook.
  */
-export async function createUser(username, password, opts = {}) {
+export async function createBeing(username, password, opts = {}) {
   username = validateUsername(username);
   validatePassword(password);
 
-  // Case-insensitive uniqueness check. The regex is needed because MongoDB
-  // collation support varies across deployments. The unique index on username
-  // (case-sensitive) is the safety net; this check provides a friendly error.
-  const existing = await User.findOne({
+  // Case-insensitive uniqueness check. Regex needed because Mongo
+  // collation support varies across deployments. The unique index on
+  // username is the safety net; this check produces a friendly error.
+  const existing = await Being.findOne({
     username: { $regex: `^${escapeRegex(username)}$`, $options: "i" },
   });
   if (existing) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Username already taken");
 
-  const user = new User({
+  const being = new Being({
     username,
     password,
+    operatingMode: opts.operatingMode || "human",
     isAdmin: opts.isAdmin || false,
+    role: opts.role || null,
+    homePositionId: opts.homePositionId || null,
+    llmSlot: opts.llmSlot || null,
+    isRemote: opts.isRemote || false,
+    homeLand: opts.homeLand || null,
   });
   try {
-    await user.save();
+    await being.save();
   } catch (err) {
     if (err.code === 11000) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Username already taken");
     throw err;
   }
-  return user;
+  return being;
+}
+
+/**
+ * Generate a unique username for a new AI being. Pattern:
+ * <role><suffix>, retrying with a longer suffix on collision. Used by
+ * extensions that scaffold AI beings (governing → ruler/planner/...).
+ */
+export async function generateUniqueName(role, opts = {}) {
+  const base = String(role || "being").replace(/[^a-z0-9-]/gi, "").slice(0, 24);
+  const attempts = opts.attempts || 8;
+  for (let i = 0; i < attempts; i++) {
+    const bits = 4 + i;
+    const suffix = crypto.randomBytes(bits).toString("hex").slice(0, 6);
+    const candidate = `${base}${suffix}`;
+    const clash = await Being.findOne({
+      username: { $regex: `^${escapeRegex(candidate)}$`, $options: "i" },
+    }).select("_id").lean();
+    if (!clash) return candidate;
+  }
+  // Last resort: full UUID slice
+  return `${base}${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -107,18 +137,18 @@ export async function createUser(username, password, opts = {}) {
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Verify a password against a user's stored hash.
+ * Verify a password against a being's stored hash.
  * bcrypt is intentionally slow. Timeout prevents extreme cost factors
  * from blocking the event loop for extended periods.
  */
 const BCRYPT_TIMEOUT_MS = 5000;
 
-export async function verifyPassword(user, password) {
-  if (!user?.password || !password) return false;
+export async function verifyPassword(being, password) {
+  if (!being?.password || !password) return false;
   let timer;
   try {
     return await Promise.race([
-      bcrypt.compare(password, user.password),
+      bcrypt.compare(password, being.password),
       new Promise((_, reject) => {
         timer = setTimeout(() => reject(new Error("Password verification timed out")), BCRYPT_TIMEOUT_MS);
       }),
@@ -133,19 +163,19 @@ export async function verifyPassword(user, password) {
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Generate a JWT for a user.
+ * Generate a JWT for a being.
  * Includes a unique jti for per-token revocation if needed.
  * Expiry is configurable via land config (default 30 days).
  */
-export function generateToken(user) {
+export function generateToken(being) {
   const expiresIn = getLandConfigValue("jwtExpiryDays")
     ? `${Math.max(1, Math.min(Number(getLandConfigValue("jwtExpiryDays")), 365))}d`
     : "30d";
 
   return jwt.sign(
     {
-      userId: user._id,
-      username: user.username,
+      beingId: being._id,
+      username: being.username,
       jti: crypto.randomUUID(),
     },
     JWT_SECRET,
@@ -154,15 +184,253 @@ export function generateToken(user) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// USER LOOKUP
+// BEING LOOKUP
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Find a user by username (case-insensitive).
+ * Find a being by username (case-insensitive).
  */
-export async function findUserByUsername(username) {
+export async function findBeingByUsername(username) {
   if (!username || typeof username !== "string") return null;
-  return User.findOne({
+  return Being.findOne({
     username: { $regex: `^${escapeRegex(username.trim())}$`, $options: "i" },
   }).select("+password");
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// UNIFIED BEING + HOME CREATION
+//
+// `createBeingWithHome` is the single kernel-level primitive for placing
+// a being in the world with a home. Same operation handles every case:
+//
+//   - Human registration: operatingMode="human", homeParent=land root.
+//     Creates the human's tree-root home territory.
+//   - System beings (auth, land-manager, citizen): homeNodeId=land root.
+//     No new node — the being just lives at the land root.
+//   - Ruler promotion: homeNodeId=the ruler-scope node. Existing node,
+//     no rootOwner change. embodiments.ruler.beingId stamped on it.
+//   - Trio members (Planner, Contractor, Foreman): homeParent=ruler scope,
+//     homeName/Type=role-specific. Fresh child node created; the role
+//     template runs from the registry; the being lives at the new node.
+//   - Worker leaf positions: same pattern as trio members.
+//
+// Atomic: rolls back the home node if being creation fails. The home
+// node's rootOwner is set when the being is a human (the home is a
+// real tree root); for AI beings it stays inherited (the home is a
+// structural sub-node within someone else's tree).
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Create a being and place it in the world at a home Node.
+ *
+ * @param {object} opts
+ * @param {"human"|"ai"} opts.operatingMode   required
+ * @param {string} [opts.username]            required for human; auto-generated for ai if missing
+ * @param {string} [opts.password]            required for human; auto-generated for ai if missing
+ * @param {string} [opts.role]                required for ai
+ * @param {string} [opts.llmSlot]
+ * @param {string} [opts.homeNodeId]          use this existing Node as the home
+ * @param {string} [opts.homeParent]          OR create a new child under this Node
+ * @param {string} [opts.homeName]            name for the new home (defaults derived)
+ * @param {string} [opts.homeType]            type for the new home (defaults derived)
+ * @param {object} [opts.homeMetadata]        initial metadata for the new home Node
+ * @param {function} [opts.scaffolding]       async ({being, home}) => {} for extra structure
+ * @param {boolean} [opts.isAdmin=false]
+ * @param {boolean} [opts.isRemote=false]
+ * @param {string} [opts.homeLand=null]
+ * @returns {Promise<{being: object, home: object}>}
+ */
+export async function createBeingWithHome(opts) {
+  const {
+    operatingMode,
+    role         = null,
+    llmSlot      = null,
+    homeNodeId   = null,
+    homeParent   = null,
+    homeName     = null,
+    homeType     = null,
+    homeMetadata = null,
+    scaffolding  = null,
+    isAdmin      = false,
+    isRemote     = false,
+    homeLand     = null,
+  } = opts || {};
+  let { username, password } = opts || {};
+
+  // ── Validate mode + required fields ──
+  if (operatingMode !== "human" && operatingMode !== "ai") {
+    throw new Error("createBeingWithHome requires operatingMode='human' or 'ai'");
+  }
+  if (operatingMode === "ai" && !role) {
+    throw new Error("createBeingWithHome: AI beings require a role");
+  }
+  if (!homeNodeId && !homeParent) {
+    throw new Error("createBeingWithHome requires either homeNodeId or homeParent");
+  }
+
+  // ── Resolve identity (auto-fill for AI) ──
+  if (!username) {
+    if (operatingMode === "ai") username = await generateUniqueName(role);
+    else throw new ProtocolError(400, ERR.INVALID_INPUT, "Username is required");
+  }
+  if (!password) {
+    if (operatingMode === "ai") password = crypto.randomBytes(32).toString("hex");
+    else throw new ProtocolError(400, ERR.INVALID_INPUT, "Password is required");
+  }
+
+  // ── Resolve the home Node ──
+  // Two paths:
+  //   A. homeNodeId: use an existing Node as the home. No structural
+  //      change to the tree.
+  //   B. homeParent: create a new child Node under the given parent.
+  //      Defaults for name/type come from the operating mode + role.
+  let homeNode = null;
+  let createdNewHome = false;
+
+  if (homeNodeId) {
+    homeNode = await Node.findById(homeNodeId);
+    if (!homeNode) throw new Error(`createBeingWithHome: home node ${homeNodeId} not found`);
+  } else {
+    const parent = await Node.findById(homeParent).select("_id").lean();
+    if (!parent) throw new Error(`createBeingWithHome: home parent ${homeParent} not found`);
+
+    const resolvedName = homeName
+      || (operatingMode === "human" ? `~${username}` : `${role}-home`);
+    const resolvedType = homeType
+      || (operatingMode === "human" ? "home-territory" : `${role}-home`);
+
+    homeNode = await Node.create({
+      _id:          uuidv4(),
+      name:         resolvedName,
+      type:         resolvedType,
+      parent:       homeParent,
+      rootOwner:    null,                  // set below for humans only
+      contributors: [],
+      status:       "active",
+      ...(homeMetadata ? { metadata: homeMetadata } : {}),
+    });
+    await Node.updateOne(
+      { _id: homeParent },
+      { $addToSet: { children: homeNode._id } },
+    );
+    createdNewHome = true;
+  }
+
+  // ── Create the being, rolling back the home on failure ──
+  let being;
+  try {
+    being = await createBeing(username, password, {
+      operatingMode,
+      role,
+      homePositionId: String(homeNode._id),
+      llmSlot,
+      isAdmin,
+      isRemote,
+      homeLand,
+    });
+  } catch (err) {
+    if (createdNewHome) {
+      try {
+        await Node.deleteOne({ _id: homeNode._id });
+        await Node.updateOne(
+          { _id: homeParent },
+          { $pull: { children: homeNode._id } },
+        );
+      } catch (rollbackErr) {
+        log.warn("auth", `createBeingWithHome rollback failed: ${rollbackErr.message}`);
+      }
+    }
+    throw err;
+  }
+
+  // ── Wire ownership on newly-created home nodes ──
+  // Human home territories are tree roots (rootOwner = the being).
+  // AI being homes are structural sub-nodes within someone else's tree;
+  // they inherit access from the parent and leave rootOwner null.
+  if (createdNewHome && operatingMode === "human") {
+    await Node.updateOne(
+      { _id: homeNode._id },
+      { $set: { rootOwner: being._id } },
+    );
+    homeNode.rootOwner = being._id;
+  }
+
+  // ── Register the embodiment home on the home Node ──
+  // Skipped for humans — humans aren't surfaced as embodiments at their
+  // own home. AI beings register under their role so the descriptor /
+  // authorize / TALK can resolve the specific being instance.
+  if (operatingMode === "ai" && role) {
+    try {
+      const { mergeExtMeta } = await import("./tree/extensionMetadata.js");
+      await mergeExtMeta(homeNode, "beings", {
+        [role]: {
+          beingId:     String(being._id),
+          installedAt: new Date().toISOString(),
+          installedBy: "createBeingWithHome",
+        },
+      });
+    } catch (err) {
+      log.warn("auth", `createBeingWithHome: failed to register ${role} home: ${err.message}`);
+    }
+  }
+
+  // ── Optional scaffolding (caller-supplied initial structure) ──
+  if (typeof scaffolding === "function") {
+    try {
+      await scaffolding({ being, home: homeNode });
+    } catch (err) {
+      log.warn("auth", `createBeingWithHome scaffolding callback failed: ${err.message}`);
+    }
+  }
+
+  return { being, home: homeNode };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// LEGACY HOME-TERRITORY HELPER
+//
+// Kept for the migration path; new callers should use
+// createBeingWithHome instead. Creates a home Node for an already-
+// existing being.
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function createHomeTerritory(being, opts = {}) {
+  if (!being?._id) throw new Error("createHomeTerritory requires a being");
+
+  // Idempotent: if the being already has a real home Node, return it.
+  if (being.homePositionId) {
+    const existing = await Node.findById(being.homePositionId).lean();
+    if (existing) return existing;
+  }
+
+  const landRootId = getLandRootId();
+  if (!landRootId) {
+    throw new Error("createHomeTerritory: land root not ready");
+  }
+
+  const parentId = opts.parentId || landRootId;
+  const name = opts.name || `~${being.username}`;
+  const type = opts.type || "home-territory";
+
+  const home = await Node.create({
+    _id: uuidv4(),
+    name,
+    type,
+    parent: parentId,
+    rootOwner: being._id,
+    contributors: [],
+    status: "active",
+  });
+
+  // Link parent's children list (mirrors createNode's behavior).
+  await Node.updateOne({ _id: parentId }, { $addToSet: { children: home._id } });
+
+  // Wire the home Node back onto the being.
+  await Being.updateOne(
+    { _id: being._id },
+    { $set: { homePositionId: String(home._id) } },
+  );
+  being.homePositionId = String(home._id);
+
+  return home;
 }

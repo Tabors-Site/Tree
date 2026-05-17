@@ -14,8 +14,8 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
-import Note from "../../seed/models/note.js";
+import Being from "../../seed/models/being.js";
+import Artifact from "../../seed/models/artifact.js";
 import Contribution from "../../seed/models/contribution.js";
 import log from "../../seed/log.js";
 
@@ -46,8 +46,8 @@ export async function exportLand(opts = {}) {
   log.info("Backup", `Starting full export at ${timestamp}`);
 
   const nodes = await Node.find({}).lean();
-  const users = await User.find({}).select("-password").lean();
-  const notes = await Note.find({}).lean();
+  const users = await Being.find({}).select("-password").lean();
+  const notes = await Artifact.find({}).lean();
 
   const retentionDays = parseInt(getLandConfigValue("contributionRetentionDays") || "365", 10);
   const cutoff = retentionDays > 0
@@ -91,7 +91,7 @@ export async function snapshotLand(opts = {}) {
   const timestamp = new Date().toISOString();
 
   const nodes = await Node.find({}).select("_id name type status parent children rootOwner contributors systemRole metadata visibility dateCreated").lean();
-  const users = await User.find({}).select("-password").lean();
+  const users = await Being.find({}).select("-password").lean();
 
   const data = {
     _backup: {
@@ -183,12 +183,12 @@ export async function importLand(input) {
       }
       return u;
     });
-    await User.insertMany(docs, { ordered: false });
+    await Being.insertMany(docs, { ordered: false });
     report.users = docs.length;
   }
 
   if (data.notes?.length > 0) {
-    await Note.insertMany(data.notes, { ordered: false });
+    await Artifact.insertMany(data.notes, { ordered: false });
     report.notes = data.notes.length;
   }
 

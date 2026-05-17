@@ -11,7 +11,7 @@ import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
 import { PortalError, PORTAL_ERR } from "../errors.js";
 
 export async function rename(ctx) {
-  const { userId, resolved, payload } = ctx;
+  const { beingId, resolved, payload } = ctx;
   const { name } = payload || {};
 
   if (!name || typeof name !== "string") {
@@ -30,7 +30,7 @@ export async function rename(ctx) {
 
   // Authorization: the kernel's editNodeName does not currently check tree
   // access on its own. Guard with resolveTreeAccess to fail fast.
-  const access = await resolveTreeAccess(resolved.nodeId, userId);
+  const access = await resolveTreeAccess(resolved.nodeId, beingId);
   if (!access?.ok || access.write !== true) {
     throw new PortalError(PORTAL_ERR.FORBIDDEN, "Not authorized to rename at this place");
   }
@@ -39,7 +39,7 @@ export async function rename(ctx) {
     await editNodeName({
       nodeId: resolved.nodeId,
       newName: name,
-      userId,
+      beingId,
     });
     return { nodeId: String(resolved.nodeId), name };
   } catch (err) {

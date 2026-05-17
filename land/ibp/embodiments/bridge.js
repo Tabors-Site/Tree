@@ -22,7 +22,7 @@ export function makeBridgeEmbodiment({ name, modeKey, zone, honoredIntents = ["c
     respondMode: "async",
     triggerOn: ["message"],
     async summon(message, ctx) {
-      if (!ctx.identity?.userId) {
+      if (!ctx.identity?.beingId) {
         return {
           content: `${name} only speaks to claimed beings. Sign in and try again.`,
           intent: "chat",
@@ -36,7 +36,9 @@ export function makeBridgeEmbodiment({ name, modeKey, zone, honoredIntents = ["c
       const rootId = zone === "tree" ? (ctx.resolved?.rootId || null) : null;
       const nodeId = zone === "tree" ? (ctx.nodeId || null)            : null;
       const result = await runChat({
-        userId:   ctx.identity.userId,
+        beingId:  ctx.identity.beingId,   // legacy alias for beingIn
+        beingIn:  ctx.identity.beingId,   // the human (or being) asking
+        beingOut: ctx.toBeing?._id || null, // the AI being responding
         username: ctx.identity.username,
         message:  String(message.content || ""),
         mode:     modeKey,

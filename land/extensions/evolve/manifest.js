@@ -12,7 +12,7 @@ export default {
 
   needs: {
     services: ["hooks", "llm", "metadata"],
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
   },
 
   optional: {
@@ -36,7 +36,7 @@ export default {
 
     hooks: {
       fires: [],
-      listens: ["afterNote", "afterLLMCall"],
+      listens: ["afterArtifact", "afterLLMCall"],
     },
 
     cli: [

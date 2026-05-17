@@ -11,7 +11,7 @@ export default function buildHtmlRoutes() {
   router.get("/root/:rootId/codebook", urlAuth, htmlOnly, async (req, res) => {
     try {
       const { rootId } = req.params;
-      const userId = req.userId;
+      const beingId = req.beingId;
       const root = await Node.findById(rootId).select("name children").lean();
       if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
 
@@ -40,7 +40,7 @@ export default function buildHtmlRoutes() {
       // Batch fetch metadata for all nodes
       const nodesWithCodebook = await Node.find({
         _id: { $in: nodeIds },
-        [`metadata.codebook.${userId}`]: { $exists: true },
+        [`metadata.codebook.${beingId}`]: { $exists: true },
       }).select("_id name metadata").lean();
 
       const entries = [];
@@ -48,7 +48,7 @@ export default function buildHtmlRoutes() {
         const meta = node.metadata instanceof Map
           ? node.metadata.get("codebook") || {}
           : node.metadata?.codebook || {};
-        const userEntry = meta[userId];
+        const userEntry = meta[beingId];
         if (!userEntry?.dictionary || Object.keys(userEntry.dictionary).length === 0) continue;
         entries.push({
           nodeId: String(node._id),

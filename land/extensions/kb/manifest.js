@@ -61,7 +61,7 @@ export default {
   },
 
   needs: {
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
     services: ["hooks", "llm", "metadata"],
   },
 

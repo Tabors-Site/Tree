@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { addPrestige, resolveVersion } from "./core.js";
-import { createNote } from "../../seed/tree/notes.js";
+import { createArtifact } from "../../seed/tree/artifacts.js";
 
 export default [
   {
@@ -10,7 +10,7 @@ export default [
     schema: {
       content: z.string().describe("The text content of the note."),
       nodeId: z.string().describe("The ID of the node the note belongs to."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -19,13 +19,13 @@ export default [
       destructiveHint: false,
       idempotentHint: false,
     },
-    handler: async ({ content, nodeId, userId, chatId, sessionId }) => {
+    handler: async ({ content, nodeId, beingId, chatId, sessionId }) => {
       try {
         const version = await resolveVersion(nodeId, "latest");
-        const result = await createNote({
-          contentType: "text",
+        const result = await createArtifact({
+          origin: "ibp",
           content,
-          userId,
+          beingId,
           nodeId,
           wasAi: true,
           chatId,
@@ -49,7 +49,7 @@ export default [
       nodeId: z
         .string()
         .describe("The unique ID of the node to add prestige to."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z
         .string()
         .nullable()
@@ -67,11 +67,11 @@ export default [
       idempotentHint: false,
       openWorldHint: false,
     },
-    handler: async ({ nodeId, userId, chatId, sessionId }) => {
+    handler: async ({ nodeId, beingId, chatId, sessionId }) => {
       try {
         const result = await addPrestige({
           nodeId,
-          userId,
+          beingId,
           wasAi: true,
           chatId,
           sessionId,

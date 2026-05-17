@@ -35,7 +35,7 @@ const VALID_INTENTS = new Set(["chat", "place", "query", "be"]);
 export async function handleTalk(socket, msg, ack) {
   const id = msg?.id || null;
   try {
-    const stanceString = extractStance(msg, "portal:talk");
+    const stanceString = extractStance(msg, "ibp:talk");
     const message = validateMessage(msg.message);
 
     const parsed = parseFromSocket(socket, stanceString);
@@ -45,27 +45,56 @@ export async function handleTalk(socket, msg, ack) {
     });
     const resolved = await resolveStance(expanded.right);
 
-    const embodimentName = resolved.embodiment;
-    if (!embodimentName) {
+    const qualifier = resolved.embodiment;
+    if (!qualifier) {
       throw new PortalError(
         PORTAL_ERR.EMBODIMENT_UNAVAILABLE,
-        "TALK requires a stance with an @embodiment qualifier",
+        "TALK requires a stance with an @qualifier",
       );
     }
     if (!resolved.nodeId && resolved.zone === "tree") {
       throw new PortalError(PORTAL_ERR.NODE_NOT_FOUND, "Stance does not resolve to a known node");
     }
 
+    // Resolve the qualifier to a specific Being:
+    //   1. Try a direct username lookup (the canonical addressing form,
+    //      e.g. @ruler435 or @auth).
+    //   2. If not found, treat the qualifier as a role shorthand and
+    //      look in metadata.beings.<role>.beingId at the resolved
+    //      position — accepts shorthand like @ruler when exactly one
+    //      ruler-role being lives at that node.
+    const Being = (await import("../../seed/models/being.js")).default;
+    let toBeing = await Being.findOne({ username: qualifier });
+    if (!toBeing && resolved.nodeId) {
+      const Node = (await import("../../seed/models/node.js")).default;
+      const targetNode = await Node.findById(resolved.nodeId).select("metadata").lean();
+      const emb = targetNode?.metadata instanceof Map
+        ? targetNode.metadata.get("beings")
+        : targetNode?.metadata?.embodiments;
+      const homeBeingId = emb?.[qualifier]?.beingId || null;
+      if (homeBeingId) toBeing = await Being.findById(homeBeingId);
+    }
+    if (!toBeing) {
+      throw new PortalError(
+        PORTAL_ERR.EMBODIMENT_UNAVAILABLE,
+        `No being addressable as "@${qualifier}" at this position`,
+      );
+    }
+
+    // Behavior comes from the role template registered in
+    // embodiments/registry.js. Identity (homePositionId, llmSlot,
+    // history) lives on the Being instance.
+    const embodimentName = toBeing.role || qualifier;
     const embodiment = getEmbodiment(embodimentName);
     if (!embodiment) {
       throw new PortalError(
         PORTAL_ERR.EMBODIMENT_UNAVAILABLE,
-        `Embodiment "${embodimentName}" is not registered on this land`,
+        `Role template "${embodimentName}" for being @${toBeing.username} is not registered`,
       );
     }
 
     // Stance Authorization gate.
-    const identity = socket.userId ? { userId: socket.userId, username: socket.username } : null;
+    const identity = socket.beingId ? { beingId: socket.beingId, username: socket.username } : null;
     const decision = await authorize({
       identity,
       verb: "talk",
@@ -88,13 +117,13 @@ export async function handleTalk(socket, msg, ack) {
       );
     }
 
-    // Inbox writes only make sense on a real node. Tree zone uses the
-    // node id; home zone uses the user id; land zone falls back to the
-    // land root node so land-level embodiments (land-manager, citizen)
-    // accumulate a record at the land root.
+    // Inbox writes attach to a real Node. Priority:
+    //   1. The resolved position's nodeId (tree zone or specific node)
+    //   2. The receiving being's home Node (every being has one)
+    //   3. The land root as final fallback for land-zone targets
     const inboxNodeId =
       resolved.nodeId
-      || resolved.userId
+      || toBeing.homePositionId
       || (resolved.zone === "land" ? getLandRootId() : null);
     if (!inboxNodeId) {
       throw new PortalError(
@@ -107,11 +136,12 @@ export async function handleTalk(socket, msg, ack) {
     const { messageId, sentAt } = await appendToInbox(inboxNodeId, embodimentName, message);
 
     const summonCtx = {
-      nodeId:    inboxNodeId,
+      nodeId:     inboxNodeId,
       embodiment: embodimentName,
+      toBeing,                                  // the resolved being instance (receiver)
       message:    { ...message, correlation: messageId, sentAt },
       resolved,
-      identity:   { userId: socket.userId, username: socket.username },
+      identity:   { beingId: socket.beingId, username: socket.username },
     };
 
     // Sync respond-mode: run summoning inline, ACK with the response.
@@ -134,7 +164,7 @@ export async function handleTalk(socket, msg, ack) {
 
     // Async respond-mode: ACK accepted immediately, run summoning in
     // the background, and push the response to the sender's socket via
-    // `portal:talk-reply` when it lands. Errors are surfaced through the
+    // `ibp:talk-reply` when it lands. Errors are surfaced through the
     // same channel so the client can render an inline error bubble.
     if (embodiment.respondMode === "async") {
       ackOk(ack, id, { status: "accepted", messageId });
@@ -151,13 +181,13 @@ export async function handleTalk(socket, msg, ack) {
             log.warn("Portal", `markInboxConsumed failed: ${err.message}`);
           }
           if (responseEntry && socket.connected) {
-            socket.emit("portal:talk-reply", responseEntry);
+            socket.emit("ibp:talk-reply", responseEntry);
           }
         })
         .catch((err) => {
           log.error("Portal", `async summoning failed: ${err.message}`);
           if (socket.connected) {
-            socket.emit("portal:talk-reply", {
+            socket.emit("ibp:talk-reply", {
               from:        `${pathOfResolved(resolved)}@${embodimentName}`,
               content:     `[${err.code || "error"}] ${err.message || "summoning failed"}`,
               intent:      "chat",
@@ -178,7 +208,7 @@ export async function handleTalk(socket, msg, ack) {
     if (isPortalError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("Portal", `portal:talk failed: ${err.message}`);
+    log.error("Portal", `ibp:talk failed: ${err.message}`);
     return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }

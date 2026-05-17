@@ -3,7 +3,7 @@
 /* LLM connection only. Sprout handles the rest.   */
 /* ─────────────────────────────────────────────── */
 
-export function renderSetup({ userId, username }) {
+export function renderSetup({ beingId, username }) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -244,7 +244,7 @@ export function renderSetup({ userId, username }) {
 
   <script>
     var CONFIG = {
-      userId: "${userId}",
+      beingId: "${beingId}",
     };
 
     function showStatus(id, msg, type) {
@@ -277,7 +277,7 @@ export function renderSetup({ userId, username }) {
 
       try {
         // Create connection
-        var createRes = await fetch("/api/v1/user/" + CONFIG.userId + "/custom-llm", {
+        var createRes = await fetch("/api/v1/user/" + CONFIG.beingId + "/custom-llm", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -291,7 +291,7 @@ export function renderSetup({ userId, username }) {
 
         // Set as default
         var connId = (createData.data && createData.data.connection && createData.data.connection._id) || (createData.connection && createData.connection._id);
-        var assignRes = await fetch("/api/v1/user/" + CONFIG.userId + "/llm-assign", {
+        var assignRes = await fetch("/api/v1/user/" + CONFIG.beingId + "/llm-assign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",

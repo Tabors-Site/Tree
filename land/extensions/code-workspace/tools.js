@@ -56,7 +56,7 @@ import { setSourceWriteMode, SOURCE_PROJECT_NAME, getSourceProject } from "./sou
 // rewrite — offsets don't matter). Reads and add-file calls reset the
 // counter.
 //
-// Scope: `${userId}:${filePath}`. Per-user so concurrent users don't
+// Scope: `${beingId}:${filePath}`. Per-user so concurrent users don't
 // interfere. 10-minute TTL so a long-idle file becomes free to edit
 // again without a re-read (the user probably forgot the file state by
 // then anyway). Module-local Map, bounded by the sweeper below.
@@ -65,19 +65,19 @@ import { setSourceWriteMode, SOURCE_PROJECT_NAME, getSourceProject } from "./sou
 const _editDrift = new Map(); // key → { editsSinceRead, lastTouch }
 const EDIT_DRIFT_TTL_MS = 10 * 60 * 1000;
 
-function _driftKey(userId, filePath) { return `${userId}:${filePath}`; }
-function _driftNoteRead(userId, filePath) {
-  _editDrift.set(_driftKey(userId, filePath), { editsSinceRead: 0, lastTouch: Date.now() });
+function _driftKey(beingId, filePath) { return `${beingId}:${filePath}`; }
+function _driftNoteRead(beingId, filePath) {
+  _editDrift.set(_driftKey(beingId, filePath), { editsSinceRead: 0, lastTouch: Date.now() });
 }
-function _driftNoteEdit(userId, filePath) {
-  const k = _driftKey(userId, filePath);
+function _driftNoteEdit(beingId, filePath) {
+  const k = _driftKey(beingId, filePath);
   const entry = _editDrift.get(k) || { editsSinceRead: 0, lastTouch: Date.now() };
   entry.editsSinceRead += 1;
   entry.lastTouch = Date.now();
   _editDrift.set(k, entry);
 }
-function _driftCheckBeforeEdit(userId, filePath) {
-  const k = _driftKey(userId, filePath);
+function _driftCheckBeforeEdit(beingId, filePath) {
+  const k = _driftKey(beingId, filePath);
   const entry = _editDrift.get(k);
   if (!entry) return null;
   if (Date.now() - entry.lastTouch > EDIT_DRIFT_TTL_MS) {
@@ -702,14 +702,14 @@ function formatEntrySummary(entry) {
  * debounced sync) so strategy wrappers like ws-create-server don't need to
  * re-implement branch rooting or project detection.
  *
- * Accepts { core, nodeId, userId, rootId, projectName?, filePath, content }.
+ * Accepts { core, nodeId, beingId, rootId, projectName?, filePath, content }.
  * Returns { ok, filePath, created } on success or { ok: false, error } on
  * rejection/failure. The filePath returned reflects any branch-root rewrite.
  */
 export async function writeFileInBranch({
   core = null,
   nodeId,
-  userId,
+  beingId,
   rootId,
   projectName,
   filePath,
@@ -749,7 +749,7 @@ export async function writeFileInBranch({
           projectNodeId: rootId,
           name: rootNode.name || "workspace",
           description: "Auto-initialized by strategy wrapper.",
-          userId,
+          beingId,
           core,
         });
         project = node;
@@ -760,10 +760,10 @@ export async function writeFileInBranch({
     const { fileNode, created } = await resolveOrCreateFile({
       projectNodeId: project._id,
       relPath: finalPath,
-      userId,
+      beingId,
       core,
     });
-    await writeFileContent({ fileNodeId: fileNode._id, content, userId });
+    await writeFileContent({ fileNodeId: fileNode._id, content, beingId });
     scheduleSync(project._id);
     return { ok: true, filePath: finalPath, created };
   } catch (err) {
@@ -776,7 +776,7 @@ export async function writeFileInBranch({
  * path-resolution rules, same project auto-detection, returns the file's
  * content as a string or null if the file doesn't exist.
  *
- * Accepts { nodeId, userId, rootId, projectName?, filePath }.
+ * Accepts { nodeId, beingId, rootId, projectName?, filePath }.
  * Returns { ok, filePath, content } on success or { ok: false, error } on
  * rejection/failure. Strategy wrappers use this instead of reaching into
  * workspace internals to read a peer file in their own branch.
@@ -827,7 +827,7 @@ function scheduleSync(projectId) {
   );
 }
 
-async function ensureProject({ rootId, currentNodeId, userId, core, name, workspacePath }) {
+async function ensureProject({ rootId, currentNodeId, beingId, core, name, workspacePath }) {
   // Priority 0: A RULER SCOPE IS ITS OWN WORKSPACE.
   //
   // Every Ruler-promoted node owns the files at its own scope; sub-
@@ -867,7 +867,7 @@ async function ensureProject({ rootId, currentNodeId, userId, core, name, worksp
           name: name || posNode.name,
           description: `Auto-initialized: ${reason}.`,
           workspacePath,
-          userId,
+          beingId,
           core,
         });
         return initRes.node;
@@ -909,7 +909,7 @@ async function ensureProject({ rootId, currentNodeId, userId, core, name, worksp
         name,
         description: `Auto-initialized: position name matched requested project name.`,
         workspacePath,
-        userId,
+        beingId,
         core,
       });
       return initRes.node;
@@ -941,7 +941,7 @@ async function ensureProject({ rootId, currentNodeId, userId, core, name, worksp
         name,
         description: "Auto-initialized: tree root name matched requested project name.",
         workspacePath,
-        userId,
+        beingId,
         core,
       });
       return initRes.node;
@@ -971,7 +971,7 @@ async function ensureProject({ rootId, currentNodeId, userId, core, name, worksp
         name: autoName,
         description: "Auto-initialized on first code write.",
         workspacePath,
-        userId,
+        beingId,
         core,
       });
       trace("ensureProject", "auto-init-done", `${autoName} at ${initRes.workspacePath}`);
@@ -992,7 +992,7 @@ async function ensureProject({ rootId, currentNodeId, userId, core, name, worksp
       parentId,
       name,
       type: "project",
-      userId,
+      beingId,
     });
   } else {
     const { v4: uuidv4 } = await import("uuid");
@@ -1009,7 +1009,7 @@ async function ensureProject({ rootId, currentNodeId, userId, core, name, worksp
     projectNodeId: projectNode._id,
     name,
     workspacePath,
-    userId,
+    beingId,
     core,
   });
   return node;
@@ -1032,11 +1032,11 @@ export default function getWorkspaceTools(core) {
         workspacePath: z.string().optional().describe("Absolute on-disk workspace path. Defaults to land/.workspaces/<nodeId>."),
       },
       annotations: { readOnlyHint: false },
-      async handler({ name, description, workspacePath, userId, rootId, nodeId }) {
+      async handler({ name, description, workspacePath, beingId, rootId, nodeId }) {
         if (!name) return text("workspace-init: name required");
         try {
           const project = await ensureProject({
-            rootId, currentNodeId: nodeId, userId, core, name, workspacePath,
+            rootId, currentNodeId: nodeId, beingId, core, name, workspacePath,
           });
           if (description) {
             await core?.metadata?.mergeExtMeta?.(project, "workspace", { description });
@@ -1067,7 +1067,7 @@ export default function getWorkspaceTools(core) {
         done: z.boolean().optional().describe("Required when append=true. Set false on intermediate chunks and true on the final chunk. The final call fires validators, schedules sync, and clears edit-drift state. Ignored when append is not set."),
       },
       annotations: { readOnlyHint: false },
-      async handler({ filePath, content, projectName, append, done, userId, rootId, nodeId }) {
+      async handler({ filePath, content, projectName, append, done, beingId, rootId, nodeId }) {
         const bytes = Buffer.byteLength(content || "", "utf8");
         const appendMode = append === true;
         if (appendMode && typeof done !== "boolean") {
@@ -1077,7 +1077,7 @@ export default function getWorkspaceTools(core) {
         const isFinalChunk = !appendMode || done === true;
         trace("workspace-add-file", "CALL", `path=${filePath} bytes=${bytes} rootId=${rootId} nodeId=${nodeId} projectName=${projectName || "(auto)"}${appendMode ? ` append done=${done}` : ""}`);
         try {
-          const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
+          const project = await ensureProject({ rootId, currentNodeId: nodeId, beingId, core, name: projectName });
           trace("workspace-add-file", "project", `${project.name} (${project._id})`);
           // Tree placement scope. Defaults to the outer project for top-
           // level branches and project-level calls. For a sub-branch with
@@ -1154,7 +1154,7 @@ export default function getWorkspaceTools(core) {
             }
           }
           const { fileNode, created } = await resolveOrCreateFile({
-            projectNodeId: scopeNodeId, relPath: filePath, userId, core,
+            projectNodeId: scopeNodeId, relPath: filePath, beingId, core,
           });
           trace("workspace-add-file", "file-node", `${created ? "created" : "reused"} ${filePath} (${fileNode._id})`);
 
@@ -1166,7 +1166,7 @@ export default function getWorkspaceTools(core) {
           await writeFileContent({
             fileNodeId: fileNode._id,
             content: writeContent,
-            userId,
+            beingId,
             partial: !isFinalChunk,
           });
           const totalBytes = Buffer.byteLength(writeContent, "utf8");
@@ -1177,7 +1177,7 @@ export default function getWorkspaceTools(core) {
             // Whole-file rewrite: the model's next edit starts from a
             // clean slate (it submitted the entire file, so line numbers
             // are whatever it just wrote). Clear drift state.
-            _driftNoteRead(userId, filePath);
+            _driftNoteRead(beingId, filePath);
             return text(`${created ? "Created" : "Updated"} ${filePath} (${totalBytes}b) on node ${fileNode._id} in project "${project.name}".${appendMode ? " Final chunk." : ""} Auto-sync scheduled.`);
           }
           return text(`Appended chunk to ${filePath} (+${bytes}b, ${totalBytes}b total). Send the next chunk with append=true; on the last chunk add done=true.`);
@@ -1210,9 +1210,9 @@ export default function getWorkspaceTools(core) {
         projectName: z.string().optional(),
       },
       annotations: { readOnlyHint: true },
-      async handler({ filePath, startLine, limit, projectName, userId, rootId, nodeId }) {
+      async handler({ filePath, startLine, limit, projectName, beingId, rootId, nodeId }) {
         try {
-          const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
+          const project = await ensureProject({ rootId, currentNodeId: nodeId, beingId, core, name: projectName });
           {
             // Reads are permissive across sibling branches — you can
             // read any peer's files for reference. Writes stay confined
@@ -1243,7 +1243,7 @@ export default function getWorkspaceTools(core) {
             : "";
           // Reset the edit-drift counter for this file: the model just
           // saw fresh line numbers, so the next edit is trusted.
-          _driftNoteRead(userId, filePath);
+          _driftNoteRead(beingId, filePath);
           return text(
             `${filePath} (${content.length}b, ${slice.totalLines} lines) — showing ${slice.rangeLabel}:\n` +
             "```\n" + slice.body + "\n```" + tail,
@@ -1283,7 +1283,7 @@ export default function getWorkspaceTools(core) {
           if (!sw?.readSiblingNode) return text(`workspace-peek-sibling-file: swarm extension unavailable.`);
           const result = await sw.readSiblingNode(nodeId, siblingName, filePath);
           if (!result) return text(`workspace-peek-sibling-file: no file at ${siblingName}/${filePath}.`);
-          const notes = Array.isArray(result.notes) ? result.notes : [];
+          const notes = Array.isArray(result.artifacts) ? result.artifacts : [];
           if (notes.length === 0) return text(`${siblingName}/${filePath} exists but has no content yet.`);
           const body = notes[0].content || "";
           const truncated = notes[0].truncated ? "\n\n... (truncated)" : "";
@@ -1316,7 +1316,7 @@ export default function getWorkspaceTools(core) {
         projectName: z.string().optional(),
       },
       annotations: { readOnlyHint: false },
-      async handler({ filePath, content, startLine, endLine, projectName, userId, rootId, nodeId }) {
+      async handler({ filePath, content, startLine, endLine, projectName, beingId, rootId, nodeId }) {
         const bytes = Buffer.byteLength(content || "", "utf8");
         trace("workspace-edit-file", "CALL", `path=${filePath} lines=${startLine}-${endLine ?? "(insert)"} bytes=${bytes}`);
 
@@ -1329,7 +1329,7 @@ export default function getWorkspaceTools(core) {
         try {
           const preResolved = await resolveBranchRootedPath(nodeId, filePath);
           const resolvedPath = preResolved?.error ? filePath : preResolved.filePath;
-          const driftMsg = _driftCheckBeforeEdit(userId, resolvedPath);
+          const driftMsg = _driftCheckBeforeEdit(beingId, resolvedPath);
           if (driftMsg) {
             trace("workspace-edit-file", "DRIFT-REJECTED", resolvedPath);
             return text(driftMsg);
@@ -1337,7 +1337,7 @@ export default function getWorkspaceTools(core) {
         } catch {}
 
         try {
-          const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
+          const project = await ensureProject({ rootId, currentNodeId: nodeId, beingId, core, name: projectName });
           // See workspace-add-file's matching block for the rationale.
           // Sub-branch path-"." writes go to the sub-plan's scope.
           let scopeNodeId = project._id;
@@ -1425,15 +1425,15 @@ export default function getWorkspaceTools(core) {
           }
 
           const { fileNode, created } = await resolveOrCreateFile({
-            projectNodeId: scopeNodeId, relPath: filePath, userId, core,
+            projectNodeId: scopeNodeId, relPath: filePath, beingId, core,
           });
           if (created) return text(`workspace-edit-file: ${filePath} did not exist. Use workspace-add-file to create it first.`);
 
-          // Find the current text note for this file.
-          const Note = (await import("../../seed/models/note.js")).default;
-          const note = await Note.findOne({ nodeId: fileNode._id, contentType: "text" })
+          // Find the current ibp-origin artifact for this file.
+          const Artifact = (await import("../../seed/models/artifact.js")).default;
+          const artifact = await Artifact.findOne({ nodeId: fileNode._id, origin: "ibp" })
             .sort({ createdAt: -1 });
-          if (!note) return text(`workspace-edit-file: ${filePath} has no content yet. Use workspace-add-file.`);
+          if (!artifact) return text(`workspace-edit-file: ${filePath} has no content yet. Use workspace-add-file.`);
 
           // Source-tree gate. workspace.js keeps checkSourceGate private, so we
           // inline the same ancestor walk here — editNote itself doesn't know
@@ -1459,17 +1459,17 @@ export default function getWorkspaceTools(core) {
             }
           }
 
-          // editNote wants 0-indexed lineStart/lineEnd. Convert from 1-indexed user values.
-          const { editNote } = await import("../../seed/tree/notes.js");
+          // editArtifact wants 0-indexed lineStart/lineEnd. Convert from 1-indexed user values.
+          const { editArtifact } = await import("../../seed/tree/artifacts.js");
           const lineStart0 = Math.max(0, (startLine | 0) - 1);
           const lineEnd0 = endLine != null ? Math.max(lineStart0, (endLine | 0) - 1) : null;
 
-          const oldLineCount = (note.content || "").split("\n").length;
+          const oldLineCount = (typeof artifact.content === "string" ? artifact.content : "").split("\n").length;
 
-          const result = await editNote({
-            noteId: note._id,
+          const result = await editArtifact({
+            artifactId: artifact._id,
             content,
-            userId: note.userId, // preserve original authorship so the edit is accepted
+            beingId: artifact.beingId, // preserve original authorship so the edit is accepted
             lineStart: lineStart0,
             lineEnd: lineEnd0,
             wasAi: true,
@@ -1477,7 +1477,7 @@ export default function getWorkspaceTools(core) {
 
           scheduleSync(project._id);
           trace("workspace-edit-file", "OK", `${filePath} ${result.message || "updated"}`);
-          _driftNoteEdit(userId, filePath);
+          _driftNoteEdit(beingId, filePath);
 
           // Post-edit context window. Edits that change line count leave the
           // agent's mental line-number map stale. A subsequent edit in the
@@ -1485,7 +1485,7 @@ export default function getWorkspaceTools(core) {
           // Surface the new total plus a small window of what actually
           // landed so the agent can self-correct offsets (and visually
           // verify it didn't accidentally drop a function it still calls).
-          const newText = result?.Note?.content ?? "";
+          const newText = typeof result?.artifact?.content === "string" ? result.artifact.content : "";
           const newLines = newText.length ? newText.split("\n") : [];
           const newTotal = newLines.length;
           const insertedCount = (content || "").split("\n").length;
@@ -1521,9 +1521,9 @@ export default function getWorkspaceTools(core) {
         projectName: z.string().optional(),
       },
       annotations: { readOnlyHint: true },
-      async handler({ projectName, userId, rootId, nodeId }) {
+      async handler({ projectName, beingId, rootId, nodeId }) {
         try {
-          const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
+          const project = await ensureProject({ rootId, currentNodeId: nodeId, beingId, core, name: projectName });
           const files = await walkProjectFiles(project._id);
           if (files.length === 0) return text(`Project "${project.name}" has no files yet.`);
           const lines = files.map(f => `  ${f.filePath} (${(f.content || "").length}b)`).join("\n");
@@ -1546,7 +1546,7 @@ export default function getWorkspaceTools(core) {
         projectName: z.string().optional(),
       },
       annotations: { readOnlyHint: false },
-      async handler({ filePath, projectName, userId, rootId, nodeId }) {
+      async handler({ filePath, projectName, beingId, rootId, nodeId }) {
         try {
           // Ruler-scope write guard: deletion is a write. A Worker
           // cannot delete files inside a sub-Ruler's scope; that
@@ -1556,16 +1556,16 @@ export default function getWorkspaceTools(core) {
             trace("workspace-delete-file", "SUB-RULER-SCOPE", subRulerGate.error.slice(0, 200));
             return text(`workspace-delete-file rejected: ${subRulerGate.error}`);
           }
-          const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
+          const project = await ensureProject({ rootId, currentNodeId: nodeId, beingId, core, name: projectName });
           const { fileNode, created } = await resolveOrCreateFile({
-            projectNodeId: project._id, relPath: filePath, userId, core,
+            projectNodeId: project._id, relPath: filePath, beingId, core,
           });
           if (created) return text(`workspace-delete-file: ${filePath} did not exist.`);
-          // Remove notes first, then the node itself via core tree helper
-          const Note = (await import("../../seed/models/note.js")).default;
-          await Note.deleteMany({ nodeId: fileNode._id });
+          // Remove artifacts first, then the node itself via core tree helper
+          const Artifact = (await import("../../seed/models/artifact.js")).default;
+          await Artifact.deleteMany({ nodeId: fileNode._id });
           if (core?.tree?.deleteNodeBranch) {
-            await core.tree.deleteNodeBranch(fileNode._id, userId);
+            await core.tree.deleteNodeBranch(fileNode._id, beingId);
           } else {
             await Node.deleteOne({ _id: fileNode._id });
             await Node.updateOne({ _id: fileNode.parent }, { $pull: { children: fileNode._id } });
@@ -1589,9 +1589,9 @@ export default function getWorkspaceTools(core) {
         projectName: z.string().optional(),
       },
       annotations: { readOnlyHint: false },
-      async handler({ projectName, userId, rootId, nodeId }) {
+      async handler({ projectName, beingId, rootId, nodeId }) {
         try {
-          const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
+          const project = await ensureProject({ rootId, currentNodeId: nodeId, beingId, core, name: projectName });
           const res = await syncUp(project._id);
           return text(`Synced "${res.projectName}" to ${res.workspacePath}. Wrote ${res.written.length} file(s), ${res.skipped.length} unchanged.`);
         } catch (e) {
@@ -1615,9 +1615,9 @@ export default function getWorkspaceTools(core) {
         projectName: z.string().optional(),
       },
       annotations: { readOnlyHint: false },
-      async handler({ binary, args, timeoutMs, projectName, userId, rootId, nodeId }) {
+      async handler({ binary, args, timeoutMs, projectName, beingId, rootId, nodeId }) {
         try {
-          const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
+          const project = await ensureProject({ rootId, currentNodeId: nodeId, beingId, core, name: projectName });
           // Sync first so disk matches tree
           await syncUp(project._id);
           const workspacePath = getWorkspacePath(project);
@@ -1652,9 +1652,9 @@ export default function getWorkspaceTools(core) {
         projectName: z.string().optional(),
       },
       annotations: { readOnlyHint: false },
-      async handler({ projectName, userId, rootId, nodeId }) {
+      async handler({ projectName, beingId, rootId, nodeId }) {
         try {
-          const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
+          const project = await ensureProject({ rootId, currentNodeId: nodeId, beingId, core, name: projectName });
           const { workspacePath } = await syncUp(project._id);
           // Install declared deps before running tests. Without this the
           // AI's test files fail with ERR_MODULE_NOT_FOUND on the first
@@ -1826,12 +1826,12 @@ export default function getWorkspaceTools(core) {
         projectName: z.string().optional(),
       },
       annotations: { readOnlyHint: false },
-      async handler({ method, path: urlPath, body, headers, projectName, userId, rootId, nodeId }) {
+      async handler({ method, path: urlPath, body, headers, projectName, beingId, rootId, nodeId }) {
         if (!urlPath || !urlPath.startsWith("/")) {
           return text(`workspace-probe: path must start with / (got "${urlPath}")`);
         }
         try {
-          const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
+          const project = await ensureProject({ rootId, currentNodeId: nodeId, beingId, core, name: projectName });
 
           // Resolve the branch context — what branch is the AI inside
           // when it fires this probe? Used for tree-state attribution
@@ -2057,9 +2057,9 @@ export default function getWorkspaceTools(core) {
         projectName: z.string().optional(),
       },
       annotations: { readOnlyHint: true },
-      async handler({ stream, lines, projectName, userId, rootId, nodeId }) {
+      async handler({ stream, lines, projectName, beingId, rootId, nodeId }) {
         try {
-          const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
+          const project = await ensureProject({ rootId, currentNodeId: nodeId, beingId, core, name: projectName });
           const entry = getEntryByNodeId(project._id);
           if (!entry) {
             return text(
@@ -2151,7 +2151,7 @@ export default function getWorkspaceTools(core) {
         projectName: z.string().optional(),
       },
       annotations: { readOnlyHint: true },
-      async handler({ all, projectName, userId, rootId, nodeId }) {
+      async handler({ all, projectName, beingId, rootId, nodeId }) {
         try {
           if (all) {
             const entries = allPreviewEntries();
@@ -2160,7 +2160,7 @@ export default function getWorkspaceTools(core) {
             return text(`Running previews (${entries.length}):\n` + lines.join("\n"));
           }
 
-          const project = await ensureProject({ rootId, currentNodeId: nodeId, userId, core, name: projectName });
+          const project = await ensureProject({ rootId, currentNodeId: nodeId, beingId, core, name: projectName });
           const entry = getEntryByNodeId(project._id);
           if (!entry) {
             return text(
@@ -2193,7 +2193,7 @@ export default function getWorkspaceTools(core) {
       description: "Show the enrichContext the AI receives for the current session's tree position. Re-runs the real hook pipeline (safe, read-only by default) and returns every extension-populated context key. Use this to verify the project plan tree, fresh signals, contracts, position breadcrumb, and aggregated detail match what you expect.",
       schema: {},
       annotations: { readOnlyHint: true },
-      async handler({ userId, rootId, nodeId, sessionId }) {
+      async handler({ beingId, rootId, nodeId, sessionId }) {
         try {
           if (!sessionId) {
             return text("workspace-show-context: no sessionId available for the current call.");

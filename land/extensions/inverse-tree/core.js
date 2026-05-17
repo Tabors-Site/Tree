@@ -6,8 +6,8 @@
  */
 
 import log from "../../seed/log.js";
-import User from "../../seed/models/user.js";
-import { getUserMeta, setUserMeta, batchSetUserMeta } from "../../seed/tree/userMetadata.js";
+import Being from "../../seed/models/being.js";
+import { getBeingMeta, setBeingMeta, batchSetBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _runChat = null;
@@ -34,12 +34,12 @@ export function getInverseConfig(landConfig) {
 
 const META_KEY = "inverse-tree";
 
-async function loadUser(userId) {
-  return User.findById(userId);
+async function loadUser(beingId) {
+  return Being.findById(beingId);
 }
 
 export function getInverseData(user) {
-  return getUserMeta(user, META_KEY);
+  return getBeingMeta(user, META_KEY);
 }
 
 function emptyState() {
@@ -68,9 +68,9 @@ function ensureState(data) {
   return data;
 }
 
-async function saveState(userId, data) {
+async function saveState(beingId, data) {
   data.lastUpdated = new Date().toISOString();
-  await batchSetUserMeta(userId, META_KEY, data);
+  await batchSetBeingMeta(beingId, META_KEY, data);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -81,8 +81,8 @@ async function saveState(userId, data) {
  * Record a signal from user behavior. Lightweight. No AI call.
  * Returns true if compression threshold was reached.
  */
-export async function recordSignal(userId, signal, config) {
-  const user = await loadUser(userId);
+export async function recordSignal(beingId, signal, config) {
+  const user = await loadUser(beingId);
   if (!user) return false;
 
   const data = ensureState(getInverseData(user));
@@ -114,7 +114,7 @@ export async function recordSignal(userId, signal, config) {
   }
 
   data.lastUpdated = new Date().toISOString();
-  await batchSetUserMeta(userId, META_KEY, data);
+  await batchSetBeingMeta(beingId, META_KEY, data);
 
   return data.stats.interactionsSinceCompression >= config.compressionInterval;
 }
@@ -130,14 +130,14 @@ const _compressing = new Set();
  * Run a compression pass. AI reads accumulated signals + current profile
  * and produces an updated user model.
  */
-export async function compress(userId) {
-  if (_compressing.has(userId)) return null;
-  _compressing.add(userId);
+export async function compress(beingId) {
+  if (_compressing.has(beingId)) return null;
+  _compressing.add(beingId);
 
   try {
     if (!_runChat) return null;
 
-    const user = await loadUser(userId);
+    const user = await loadUser(beingId);
     if (!user) return null;
 
     const data = ensureState(getInverseData(user));
@@ -200,7 +200,7 @@ export async function compress(userId) {
       `Be specific about which intentions have evidence of follow-through and which do not.`;
 
     const { answer } = await _runChat({
-      userId,
+      beingId,
       username: user.username,
       message: prompt,
       mode: "home:default",
@@ -231,15 +231,15 @@ export async function compress(userId) {
     data.stats.lastCompressed = new Date().toISOString();
 
     data.lastUpdated = new Date().toISOString();
-    await batchSetUserMeta(userId, META_KEY, data);
+    await batchSetBeingMeta(beingId, META_KEY, data);
 
     log.verbose("InverseTree", `Compressed profile for ${user.username}: ${Object.keys(newProfile).length} categories`);
     return newProfile;
   } catch (err) {
-    log.error("InverseTree", `Compression failed for ${userId}: ${err.message}`);
+    log.error("InverseTree", `Compression failed for ${beingId}: ${err.message}`);
     return null;
   } finally {
-    _compressing.delete(userId);
+    _compressing.delete(beingId);
   }
 }
 
@@ -247,15 +247,15 @@ export async function compress(userId) {
 // USER CORRECTIONS
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function addCorrection(userId, text) {
-  const user = await loadUser(userId);
+export async function addCorrection(beingId, text) {
+  const user = await loadUser(beingId);
   if (!user) throw new Error("User not found");
   const data = ensureState(getInverseData(user));
   data.corrections.push({ text, timestamp: new Date().toISOString() });
   // Cap corrections
   if (data.corrections.length > 50) data.corrections = data.corrections.slice(-50);
   data.lastUpdated = new Date().toISOString();
-  await batchSetUserMeta(userId, META_KEY, data);
+  await batchSetBeingMeta(beingId, META_KEY, data);
   return data.corrections;
 }
 
@@ -263,8 +263,8 @@ export async function addCorrection(userId, text) {
 // PROFILE ACCESS
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function getProfile(userId) {
-  const user = await User.findById(userId).lean();
+export async function getProfile(beingId) {
+  const user = await Being.findById(beingId).lean();
   if (!user) return null;
   const meta = user.metadata instanceof Map
     ? user.metadata.get(META_KEY) || {}
@@ -277,6 +277,6 @@ export async function getProfile(userId) {
   };
 }
 
-export async function resetProfile(userId) {
-  await batchSetUserMeta(userId, META_KEY, emptyState());
+export async function resetProfile(beingId) {
+  await batchSetBeingMeta(beingId, META_KEY, emptyState());
 }

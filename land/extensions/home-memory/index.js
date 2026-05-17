@@ -1,11 +1,11 @@
 import { v4 as uuidv4 } from "uuid";
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
+import Artifact from "../../seed/models/artifact.js";
 import Chat from "../../seed/models/chat.js";
-import User from "../../seed/models/user.js";
-import { createNote } from "../../seed/tree/notes.js";
-import { getNotes } from "../../seed/tree/notes.js";
+import Being from "../../seed/models/being.js";
+import { createArtifact } from "../../seed/tree/artifacts.js";
+import { getArtifacts } from "../../seed/tree/artifacts.js";
 import { getLandRootId } from "../../seed/landRoot.js";
 
 const MAX_MEMORIES = 200;
@@ -20,7 +20,7 @@ const _lastSummary = new Map();
 const _inFlight = new Set();
 
 // Track navigation patterns per user (in-memory, compressed on breath)
-const _navTracking = new Map(); // userId -> { trees: Map<rootId, { name, count, lastVisit }> }
+const _navTracking = new Map(); // beingId -> { trees: Map<rootId, { name, count, lastVisit }> }
 
 export async function init(core) {
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
@@ -30,14 +30,14 @@ export async function init(core) {
   const runChat = async (opts) => _runChatDirect({ ...opts, llmPriority: BG });
 
   // ── afterNavigate: track which trees the user visits ──────────────
-  core.hooks.register("afterNavigate", async ({ userId, rootId }) => {
-    if (!userId || !rootId) return;
+  core.hooks.register("afterNavigate", async ({ beingId, rootId }) => {
+    if (!beingId || !rootId) return;
 
     try {
-      let tracking = _navTracking.get(userId);
+      let tracking = _navTracking.get(beingId);
       if (!tracking) {
         tracking = { trees: new Map() };
-        _navTracking.set(userId, tracking);
+        _navTracking.set(beingId, tracking);
       }
 
       const root = await Node.findById(rootId).select("name").lean();
@@ -50,35 +50,35 @@ export async function init(core) {
   }, "home-memory");
 
   // ── afterSessionEnd: summarize home conversations ─────────────────
-  core.hooks.register("afterSessionEnd", async ({ sessionId, userId, type, meta }) => {
+  core.hooks.register("afterSessionEnd", async ({ sessionId, beingId, type, meta }) => {
     // Only care about home-zone user sessions. runOrchestration writes
     // `zone` into session meta — that's the authoritative signal. No
     // need to parse the visitorId shape.
     if (meta?.zone !== "home") return;
-    if (!userId) return;
+    if (!beingId) return;
 
     // Single in-flight run per user. Prevents stacking when multiple home
     // chats end in quick succession (each session-end fires this hook).
-    if (_inFlight.has(userId)) {
-      log.verbose("HomeMemory", `  skipping: summary already in flight for user ${userId.slice(0, 8)}`);
+    if (_inFlight.has(beingId)) {
+      log.verbose("HomeMemory", `  skipping: summary already in flight for user ${beingId.slice(0, 8)}`);
       return;
     }
 
     // Cooldown: don't summarize too frequently. Set on success only (see end
     // of summarizeSession), so failed runs can be retried on the next session.
-    const lastTime = _lastSummary.get(userId) || 0;
+    const lastTime = _lastSummary.get(beingId) || 0;
     const elapsed = Date.now() - lastTime;
     if (elapsed < SUMMARY_COOLDOWN_MS) {
       log.verbose("HomeMemory", `  skipping: cooldown active (${Math.round(elapsed / 1000)}s of ${SUMMARY_COOLDOWN_MS / 1000}s)`);
       return;
     }
 
-    log.info("HomeMemory", `Summarizing home session for user ${userId.slice(0, 8)}`);
-    _inFlight.add(userId);
+    log.info("HomeMemory", `Summarizing home session for user ${beingId.slice(0, 8)}`);
+    _inFlight.add(beingId);
     // Fire and forget. Always release the in-flight flag.
-    summarizeSession(userId, sessionId, runChat)
+    summarizeSession(beingId, sessionId, runChat)
       .catch(err => log.warn("HomeMemory", `Summary failed: ${err.message}`))
-      .finally(() => _inFlight.delete(userId));
+      .finally(() => _inFlight.delete(beingId));
   }, "home-memory");
 
   // ── beforeLLMCall: inject memories into home-zone system prompt ─────
@@ -86,13 +86,13 @@ export async function init(core) {
   // beforeLLMCall fires on every LLM call. We prepend memories to the
   // system message, same pattern as persona extension.
   core.hooks.register("beforeLLMCall", async (hookData) => {
-    const { messages, mode, userId } = hookData;
+    const { messages, mode, beingId } = hookData;
     if (!messages || !messages[0] || messages[0].role !== "system") return;
     if (!mode || !mode.startsWith("home:")) return;
-    if (!userId) return;
+    if (!beingId) return;
 
     try {
-      const homeTree = await getHomeTree(userId);
+      const homeTree = await getHomeTree(beingId);
       if (!homeTree) return;
 
       // Read recent memories
@@ -100,20 +100,20 @@ export async function init(core) {
         .select("_id").lean();
       if (!memoriesNode) return;
 
-      const result = await getNotes({ nodeId: String(memoriesNode._id), limit: 15 });
-      const memories = result?.notes || [];
+      const result = await getArtifacts({ nodeId: String(memoriesNode._id), limit: 15 });
+      const memories = result?.artifacts || [];
 
       // Read reminders
       let reminders = [];
       const remindersNode = await Node.findOne({ parent: String(homeTree._id), name: "reminders" })
         .select("_id").lean();
       if (remindersNode) {
-        const rResult = await getNotes({ nodeId: String(remindersNode._id), limit: 10 });
-        reminders = rResult?.notes || [];
+        const rResult = await getArtifacts({ nodeId: String(remindersNode._id), limit: 10 });
+        reminders = rResult?.artifacts || [];
       }
 
       // Build navigation summary from tracking
-      const tracking = _navTracking.get(userId);
+      const tracking = _navTracking.get(beingId);
       let navSummary = null;
       if (tracking && tracking.trees.size > 0) {
         const sorted = [...tracking.trees.entries()]
@@ -159,13 +159,13 @@ export async function init(core) {
     try {
       const root = await Node.findById(rootId).select("rootOwner").lean();
       if (!root?.rootOwner || String(root.rootOwner) === "SYSTEM") return;
-      const userId = String(root.rootOwner);
+      const beingId = String(root.rootOwner);
 
-      const lastTime = _lastCompress.get(userId) || 0;
+      const lastTime = _lastCompress.get(beingId) || 0;
       if (Date.now() - lastTime < 24 * 60 * 60 * 1000) return;
-      _lastCompress.set(userId, Date.now());
+      _lastCompress.set(beingId, Date.now());
 
-      await capMemories(userId);
+      await capMemories(beingId);
     } catch {}
   }, "home-memory");
 
@@ -178,8 +178,8 @@ export async function init(core) {
       const { default: buildHtmlRoutes } = await import("./htmlRoutes.js");
       htmlExt.router.use("/", buildHtmlRoutes());
     }
-    base?.exports?.registerSlot?.("user-quick-links", "home-memory", ({ userId, queryString }) =>
-      `<a href="/api/v1/user/${userId}/home-memory${queryString}" class="back-link">Home Memory</a>`,
+    base?.exports?.registerSlot?.("user-quick-links", "home-memory", ({ beingId, queryString }) =>
+      `<a href="/api/v1/user/${beingId}/home-memory${queryString}" class="back-link">Home Memory</a>`,
       { priority: 45 }
     );
   } catch {}
@@ -196,14 +196,14 @@ export async function init(core) {
  * Get or create the .home tree for a user.
  * .home is a child of the land root, hidden (dot-prefix), owned by the user.
  */
-async function getHomeTree(userId) {
+async function getHomeTree(beingId) {
   const landRootId = getLandRootId();
   if (!landRootId) return null;
 
   // Look for existing .home node owned by this user
   let home = await Node.findOne({
     parent: landRootId,
-    name: `.home-${userId.slice(0, 8)}`,
+    name: `.home-${beingId.slice(0, 8)}`,
   }).select("_id name").lean();
 
   if (home) return home;
@@ -213,11 +213,11 @@ async function getHomeTree(userId) {
 /**
  * Create the .home tree for a user. Called on first session summary.
  */
-async function createHomeTree(userId) {
+async function createHomeTree(beingId) {
   const landRootId = getLandRootId();
   if (!landRootId) return null;
 
-  const homeName = `.home-${userId.slice(0, 8)}`;
+  const homeName = `.home-${beingId.slice(0, 8)}`;
 
   const home = await Node.findOneAndUpdate(
     { parent: landRootId, name: homeName },
@@ -226,7 +226,7 @@ async function createHomeTree(userId) {
         _id: uuidv4(),
         name: homeName,
         parent: landRootId,
-        rootOwner: userId,
+        rootOwner: beingId,
         status: "active",
         children: [],
         contributors: [],
@@ -250,7 +250,7 @@ async function createHomeTree(userId) {
           _id: uuidv4(),
           name: childName,
           parent: String(home._id),
-          rootOwner: userId,
+          rootOwner: beingId,
           status: "active",
           children: [],
           contributors: [],
@@ -265,7 +265,7 @@ async function createHomeTree(userId) {
     );
   }
 
-  log.info("HomeMemory", `Created .home tree for user ${userId.slice(0, 8)}`);
+  log.info("HomeMemory", `Created .home tree for user ${beingId.slice(0, 8)}`);
   return home;
 }
 
@@ -279,15 +279,15 @@ const SUMMARY_WINDOW_MS = 12 * 60 * 60 * 1000; // 12 hours
  * compresses them into a single observation. Old chats are ignored. Already
  * summarized chats are ignored.
  */
-async function summarizeSession(userId, sessionId, runChat) {
+async function summarizeSession(beingId, sessionId, runChat) {
   // Build the time floor: chats must be newer than the most recent summary
   // AND newer than the rolling window. Whichever is later wins.
-  const lastTime = _lastSummary.get(userId) || 0;
+  const lastTime = _lastSummary.get(beingId) || 0;
   const windowFloor = Date.now() - SUMMARY_WINDOW_MS;
   const sinceTime = Math.max(lastTime, windowFloor);
 
   const chats = await Chat.find({
-    userId,
+    beingId,
     "aiContext.zone": "home",
     "startMessage.time": { $gt: new Date(sinceTime) },
   })
@@ -309,11 +309,11 @@ async function summarizeSession(userId, sessionId, runChat) {
   if (excerpt.length < 20) return;
 
   // Get user info
-  const user = await User.findById(userId).select("username").lean();
+  const user = await Being.findById(beingId).select("username").lean();
 
   // Get or create .home tree
-  let homeTree = await getHomeTree(userId);
-  if (!homeTree) homeTree = await createHomeTree(userId);
+  let homeTree = await getHomeTree(beingId);
+  if (!homeTree) homeTree = await createHomeTree(beingId);
   if (!homeTree) return;
 
   const memoriesNode = await Node.findOne({ parent: String(homeTree._id), name: "memories" })
@@ -331,7 +331,7 @@ async function summarizeSession(userId, sessionId, runChat) {
   let answer;
   try {
     const result = await runChat({
-      userId,
+      beingId,
       username: user?.username || "user",
       message:
         `You are summarizing a home-zone conversation for future reference. ` +
@@ -370,10 +370,10 @@ async function summarizeSession(userId, sessionId, runChat) {
   // Write memory
   if (memoryText && memoryText !== "routine check-in.") {
     try {
-      await createNote({
-        contentType: "text",
+      await createArtifact({
+        origin: "ibp",
         content: memoryText.trim(),
-        userId,
+        beingId,
         nodeId: String(memoriesNode._id),
         wasAi: true,
       });
@@ -393,10 +393,10 @@ async function summarizeSession(userId, sessionId, runChat) {
     if (remindersNode) {
       const reminderText = reminderLine.replace(/^REMINDER:\s*/, "").trim();
       if (reminderText.length > 3) {
-        await createNote({
-          contentType: "text",
+        await createArtifact({
+          origin: "ibp",
           content: reminderText,
-          userId,
+          beingId,
           nodeId: String(remindersNode._id),
           wasAi: true,
         });
@@ -406,15 +406,15 @@ async function summarizeSession(userId, sessionId, runChat) {
 
   // Only set cooldown after successful write so failed runs can be retried
   // immediately on the next session end instead of locking the user out for 4 hours.
-  _lastSummary.set(userId, Date.now());
-  log.info("HomeMemory", `Saved memory for ${user?.username || userId.slice(0, 8)}: "${memoryText?.slice(0, 60)}"`);
+  _lastSummary.set(beingId, Date.now());
+  log.info("HomeMemory", `Saved memory for ${user?.username || beingId.slice(0, 8)}: "${memoryText?.slice(0, 60)}"`);
 }
 
 /**
  * Cap memories at MAX_MEMORIES by deleting oldest.
  */
-async function capMemories(userId) {
-  const homeTree = await getHomeTree(userId);
+async function capMemories(beingId) {
+  const homeTree = await getHomeTree(beingId);
   if (!homeTree) return;
 
   for (const childName of ["memories", "reminders"]) {
@@ -423,16 +423,16 @@ async function capMemories(userId) {
     if (!node) continue;
 
     const max = childName === "memories" ? MAX_MEMORIES : MAX_REMINDERS;
-    const count = await Note.countDocuments({ nodeId: String(node._id) });
+    const count = await Artifact.countDocuments({ nodeId: String(node._id) });
     if (count <= max) continue;
 
-    const oldest = await Note.find({ nodeId: String(node._id) })
+    const oldest = await Artifact.find({ nodeId: String(node._id) })
       .sort({ createdAt: 1 })
       .limit(count - max)
       .select("_id")
       .lean();
     if (oldest.length > 0) {
-      await Note.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
+      await Artifact.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
       log.verbose("HomeMemory", `Capped ${childName}: deleted ${oldest.length} old entries`);
     }
   }

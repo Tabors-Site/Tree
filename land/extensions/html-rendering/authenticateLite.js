@@ -11,7 +11,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 /**
  * Lightweight auth for HTML page API calls. Never rejects (always calls next).
- * Sets req.userId if a valid JWT cookie, Bearer token, or share token is present.
+ * Sets req.beingId if a valid JWT cookie, Bearer token, or share token is present.
  * Share token support lets embedded fetch() calls work when the page was loaded
  * via a share URL (no cookie, no JWT).
  */
@@ -25,7 +25,7 @@ export default async function authenticateLite(req, res, next) {
     if (token) {
       try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        req.userId = decoded.userId || decoded.id || decoded._id;
+        req.beingId = decoded.beingId || decoded.id || decoded._id;
         req.username = decoded.username;
         req.authType = "jwt";
         return next();
@@ -37,13 +37,13 @@ export default async function authenticateLite(req, res, next) {
     // 2. Share token from query string (?token=...)
     const shareToken = req.query?.token;
     if (shareToken) {
-      const userId = req.params?.userId || req.query?.userId || null;
+      const beingId = req.params?.beingId || req.query?.beingId || null;
       const nodeId = req.params?.nodeId || req.params?.rootId || req.query?.nodeId || null;
 
-      if (userId || nodeId) {
-        const result = await resolveHtmlShareAccess({ userId, nodeId, shareToken });
+      if (beingId || nodeId) {
+        const result = await resolveHtmlShareAccess({ beingId, nodeId, shareToken });
         if (result.allowed) {
-          req.userId = result.matchedUserId;
+          req.beingId = result.matchedUserId;
           req.username = result.matchedUsername;
           req.authType = "share-token";
           req.isHtmlShare = true;
@@ -52,7 +52,7 @@ export default async function authenticateLite(req, res, next) {
       }
     }
 
-    // No auth matched. Continue without userId.
+    // No auth matched. Continue without beingId.
     next();
   } catch (err) {
     log.debug("AuthLite", `Auth failed: ${err.message}`);

@@ -1,19 +1,19 @@
 import express from "express";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import Node from "../../seed/models/node.js";
 import LlmConnection from "../../seed/models/llmConnection.js";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
 
 const router = express.Router();
 const MAX_STACK = 10;
 
 // ── User-Level Failover ──────────────────────────────────────────────────
 
-router.get("/user/:userId/llm-failover", authenticate, async (req, res) => {
+router.get("/user/:beingId/llm-failover", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("metadata").lean();
+    const user = await Being.findById(req.beingId).select("metadata").lean();
     const meta = user?.metadata instanceof Map ? Object.fromEntries(user.metadata) : (user?.metadata || {});
     const stack = meta.llm?.failoverStack || [];
     sendOk(res, { stack });
@@ -22,22 +22,22 @@ router.get("/user/:userId/llm-failover", authenticate, async (req, res) => {
   }
 });
 
-router.post("/user/:userId/llm-failover", authenticate, async (req, res) => {
+router.post("/user/:beingId/llm-failover", authenticate, async (req, res) => {
   try {
     const { connectionId } = req.body;
     if (!connectionId) return sendError(res, 400, ERR.INVALID_INPUT, "connectionId required");
 
-    const user = await User.findById(req.userId);
+    const user = await Being.findById(req.beingId);
     if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
-    const conn = await LlmConnection.findOne({ _id: connectionId, userId: req.userId }).lean();
+    const conn = await LlmConnection.findOne({ _id: connectionId, beingId: req.beingId }).lean();
     if (!conn) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Connection not found or not yours");
 
     if (user.llmDefault === connectionId) {
       return sendError(res, 400, ERR.INVALID_INPUT, "That is already your default connection. Failover is for backups.");
     }
 
-    const llmMeta = getUserMeta(user, "llm") || {};
+    const llmMeta = getBeingMeta(user, "llm") || {};
     const stack = llmMeta.failoverStack || [];
 
     if (stack.includes(connectionId)) return sendError(res, 400, ERR.INVALID_INPUT, "Already in failover stack");
@@ -45,7 +45,7 @@ router.post("/user/:userId/llm-failover", authenticate, async (req, res) => {
     stack.push(connectionId);
 
     llmMeta.failoverStack = stack;
-    setUserMeta(user, "llm", llmMeta);
+    setBeingMeta(user, "llm", llmMeta);
     await user.save();
 
     sendOk(res, { stack, added: conn.name || connectionId });
@@ -54,19 +54,19 @@ router.post("/user/:userId/llm-failover", authenticate, async (req, res) => {
   }
 });
 
-router.delete("/user/:userId/llm-failover/:connectionId", authenticate, async (req, res) => {
+router.delete("/user/:beingId/llm-failover/:connectionId", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user = await Being.findById(req.beingId);
     if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
-    const llmMeta = getUserMeta(user, "llm") || {};
+    const llmMeta = getBeingMeta(user, "llm") || {};
     const stack = llmMeta.failoverStack || [];
     const idx = stack.indexOf(req.params.connectionId);
     if (idx === -1) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Not in stack");
     stack.splice(idx, 1);
 
     llmMeta.failoverStack = stack;
-    setUserMeta(user, "llm", llmMeta);
+    setBeingMeta(user, "llm", llmMeta);
     await user.save();
 
     sendOk(res, { removed: req.params.connectionId, stack });
@@ -75,17 +75,17 @@ router.delete("/user/:userId/llm-failover/:connectionId", authenticate, async (r
   }
 });
 
-router.delete("/user/:userId/llm-failover", authenticate, async (req, res) => {
+router.delete("/user/:beingId/llm-failover", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user = await Being.findById(req.beingId);
     if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
-    const llmMeta = getUserMeta(user, "llm") || {};
+    const llmMeta = getBeingMeta(user, "llm") || {};
     const stack = llmMeta.failoverStack || [];
     const removed = stack.pop();
 
     llmMeta.failoverStack = stack;
-    setUserMeta(user, "llm", llmMeta);
+    setBeingMeta(user, "llm", llmMeta);
     await user.save();
 
     sendOk(res, { removed, stack });
@@ -118,11 +118,11 @@ router.post("/root/:rootId/llm-failover", authenticate, async (req, res) => {
     const root = await Node.findById(req.params.rootId).select("rootOwner llmDefault metadata").lean();
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
     if (!root.rootOwner) return sendError(res, 400, ERR.INVALID_INPUT, "Node is not a root");
-    if (root.rootOwner.toString() !== req.userId.toString()) {
+    if (root.rootOwner.toString() !== req.beingId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Only the root owner can manage tree failover");
     }
 
-    const conn = await LlmConnection.findOne({ _id: connectionId, userId: req.userId }).lean();
+    const conn = await LlmConnection.findOne({ _id: connectionId, beingId: req.beingId }).lean();
     if (!conn) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Connection not found or not yours");
 
     if (root.llmDefault === connectionId) {
@@ -142,7 +142,7 @@ router.post("/root/:rootId/llm-failover", authenticate, async (req, res) => {
     });
 
     const { clearUserClientCache } = await import("../../seed/llm/conversation.js");
-    clearUserClientCache(req.userId);
+    clearUserClientCache(req.beingId);
 
     sendOk(res, { stack, added: conn.name || connectionId });
   } catch (err) {
@@ -155,7 +155,7 @@ router.delete("/root/:rootId/llm-failover/:connectionId", authenticate, async (r
     const root = await Node.findById(req.params.rootId).select("rootOwner metadata").lean();
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
     if (!root.rootOwner) return sendError(res, 400, ERR.INVALID_INPUT, "Node is not a root");
-    if (root.rootOwner.toString() !== req.userId.toString()) {
+    if (root.rootOwner.toString() !== req.beingId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Only the root owner can manage tree failover");
     }
 
@@ -171,7 +171,7 @@ router.delete("/root/:rootId/llm-failover/:connectionId", authenticate, async (r
     });
 
     const { clearUserClientCache } = await import("../../seed/llm/conversation.js");
-    clearUserClientCache(req.userId);
+    clearUserClientCache(req.beingId);
 
     sendOk(res, { removed: req.params.connectionId, stack });
   } catch (err) {
@@ -184,7 +184,7 @@ router.delete("/root/:rootId/llm-failover", authenticate, async (req, res) => {
     const root = await Node.findById(req.params.rootId).select("rootOwner metadata").lean();
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
     if (!root.rootOwner) return sendError(res, 400, ERR.INVALID_INPUT, "Node is not a root");
-    if (root.rootOwner.toString() !== req.userId.toString()) {
+    if (root.rootOwner.toString() !== req.beingId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Only the root owner can manage tree failover");
     }
 
@@ -198,7 +198,7 @@ router.delete("/root/:rootId/llm-failover", authenticate, async (req, res) => {
     });
 
     const { clearUserClientCache } = await import("../../seed/llm/conversation.js");
-    clearUserClientCache(req.userId);
+    clearUserClientCache(req.beingId);
 
     sendOk(res, { removed, stack });
   } catch (err) {

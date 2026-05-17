@@ -29,7 +29,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 // Registrations are captured as { kind, name, ... } so replay can dispatch
 // to either tool() (shorthand, raw shape) or registerTool() (config form
 // with a pre-built zod schema including passthrough). Callers in the
-// loader use registerTool so context fields like userId/rootId/nodeId
+// loader use registerTool so context fields like beingId/rootId/nodeId
 // survive the MCP SDK's zod strip.
 const _toolRegistrations = []; // [{ kind: "tool"|"registerTool", ...fields }]
 
@@ -61,7 +61,7 @@ class ToolRegistryProxy {
    * annotations } config object and a handler. The inputSchema may be
    * a pre-built zod object (e.g. passthrough) so unknown fields survive
    * validation. This is how the loader registers extension tools so
-   * every handler can see its MCP context (userId/rootId/nodeId).
+   * every handler can see its MCP context (beingId/rootId/nodeId).
    */
   registerTool(name, config, handler) {
     _toolRegistrations.push({ kind: "registerTool", name, config, handler });
@@ -224,22 +224,22 @@ async function handleMcpRequest(req, res) {
     if (method === "tools/call") {
       const requestArgs = req.body?.params?.arguments ?? {};
 
-      if (!req.userId) {
+      if (!req.beingId) {
         return res.status(401).json({
           jsonrpc: "2.0", id: req.body.id,
           error: { code: -32602, message: "You are not authorized as this user" },
         });
       }
-      requestArgs.userId = req.userId;
+      requestArgs.beingId = req.beingId;
       // Visitor identity. Tools that maintain per-conversation
       // transient state (governing's Ruler/Foreman decision registers)
       // need this to key writes that runRulerTurn/runForemanTurn read
-      // back after the LLM call resolves. Falls back to userId for
+      // back after the LLM call resolves. Falls back to beingId for
       // backwards compatibility with non-WebSocket callers.
       if (req.visitorId) requestArgs.visitorId = req.visitorId;
 
       // Inject AI chat context
-      const contextKey = req.visitorId || req.userId;
+      const contextKey = req.visitorId || req.beingId;
       const aiCtx = getChatContext(contextKey);
       requestArgs.chatId = aiCtx.chatId;
       requestArgs.sessionId = aiCtx.sessionId;
@@ -265,8 +265,8 @@ async function handleMcpRequest(req, res) {
       // read-only tool like get-node-notes was being rejected with
       // "Invalid nodeId, or you are not in this tree" whenever the user had
       // read-only access to the tree — which is wrong and spammed the log.
-      if (nodeId && req.userId) {
-        const access = await resolveTreeAccess(nodeId, req.userId);
+      if (nodeId && req.beingId) {
+        const access = await resolveTreeAccess(nodeId, req.beingId);
         const readOnly = toolName ? isToolReadOnly(toolName) : false;
         const allowed = readOnly ? (access.canRead || access.canWrite) : access.canWrite;
         if (!allowed) {
@@ -297,7 +297,7 @@ async function handleMcpRequest(req, res) {
       }
     } else if (method !== "initialize" && method !== "notifications/initialized") {
       // Non-tool, non-init methods: auth check
-      if (!req.userId) {
+      if (!req.beingId) {
         return res.status(401).json({
           jsonrpc: "2.0", id: req.body.id,
           error: { code: -32602, message: "You are not authorized as this user" },

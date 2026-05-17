@@ -5,11 +5,11 @@ import { configure, processLLMCall, getCompetence } from "./core.js";
 export async function init(core) {
   configure({ metadata: core.metadata });
   // afterLLMCall: track which modes produced tool calls (proxy for finding answers)
-  core.hooks.register("afterLLMCall", async ({ userId, rootId, mode, hasToolCalls }) => {
-    if (!rootId || !userId || userId === "SYSTEM") return;
+  core.hooks.register("afterLLMCall", async ({ beingId, rootId, mode, hasToolCalls }) => {
+    if (!rootId || !beingId || beingId === "SYSTEM") return;
 
     try {
-      processLLMCall({ rootId, userId, mode, hasToolCalls });
+      processLLMCall({ rootId, beingId, mode, hasToolCalls });
     } catch (err) {
       log.debug("Competence", `afterLLMCall processing failed: ${err.message}`);
     }

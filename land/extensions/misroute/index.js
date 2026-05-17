@@ -18,8 +18,8 @@
  */
 
 import log from "../../seed/log.js";
-import User from "../../seed/models/user.js";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import Being from "../../seed/models/being.js";
+import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { getLoadedExtensionNames, getVocabularyForExtension, getExtensionDir } from "../loader.js";
 import {
   detectCorrection,
@@ -56,9 +56,9 @@ export async function init(core) {
   // model generation, so we can cheaply inspect the incoming user message
   // without adding latency to anything except the detection itself (regex).
   // We never cancel the call. This hook is observational.
-  core.hooks.register("beforeLLMCall", async ({ userId, rootId, mode, messages }) => {
+  core.hooks.register("beforeLLMCall", async ({ beingId, rootId, mode, messages }) => {
     try {
-      if (!userId || !messages) return;
+      if (!beingId || !messages) return;
       const message = extractLatestUserMessage(messages);
       if (!message) return;
 
@@ -75,9 +75,9 @@ export async function init(core) {
       const treeOrch = getExtension("tree-orchestrator");
       if (!treeOrch?.exports?.getLastRoutingRing) return;
 
-      // visitorId convention: tree=`${rootId}:${userId}`, home=`home:${userId}`,
-      // land=`land:${userId}`. See seed/llm/conversation.js around line 2017.
-      const visitorId = rootId ? `${rootId}:${userId}` : `home:${userId}`;
+      // visitorId convention: tree=`${rootId}:${beingId}`, home=`home:${beingId}`,
+      // land=`land:${beingId}`. See seed/llm/conversation.js around line 2017.
+      const visitorId = rootId ? `${rootId}:${beingId}` : `home:${beingId}`;
       const ring = treeOrch.exports.getLastRoutingRing(visitorId);
       if (!ring || ring.length < 2) return; // need at least previous + current
 
@@ -107,7 +107,7 @@ export async function init(core) {
       // logMisroute itself; we attach a catch to surface anything that
       // escapes the function (otherwise an unhandled rejection would crash).
       logMisroute({
-        userId,
+        beingId,
         rootId,
         correction,
         lastRouting,
@@ -167,9 +167,9 @@ export async function init(core) {
   // The misroute event is logged in the background (fire-and-forget).
   //
   // Returns: { rerouteMessage, forceMode, correctExtension } or null.
-  async function checkForCorrectionReroute({ message, visitorId, userId, rootId }) {
+  async function checkForCorrectionReroute({ message, visitorId, beingId, rootId }) {
     try {
-      if (!message || !visitorId || !userId) return null;
+      if (!message || !visitorId || !beingId) return null;
 
       if (!knownExtensions) refreshKnown();
       const correction = detectCorrection(message, knownExtensions);
@@ -203,7 +203,7 @@ export async function init(core) {
 
       // Log the misroute event in the background (don't block the orchestration)
       logMisroute({
-        userId,
+        beingId,
         rootId,
         correction,
         lastRouting,
@@ -228,10 +228,10 @@ export async function init(core) {
 
   // ── Storage helpers ──
 
-  async function loadMisroute(userId) {
-    const user = await User.findById(userId);
+  async function loadMisroute(beingId) {
+    const user = await Being.findById(beingId);
     if (!user) return { user: null, data: null };
-    const data = getUserMeta(user, "misroute") || { log: [], suggestions: [] };
+    const data = getBeingMeta(user, "misroute") || { log: [], suggestions: [] };
     if (!Array.isArray(data.log)) data.log = [];
     if (!Array.isArray(data.suggestions)) data.suggestions = [];
     return { user, data };
@@ -247,14 +247,14 @@ export async function init(core) {
       data.suggestions.sort((a, b) => (b.count || 0) - (a.count || 0));
       data.suggestions = data.suggestions.slice(0, MAX_SUGGESTIONS);
     }
-    setUserMeta(user, "misroute", data);
+    setBeingMeta(user, "misroute", data);
     await user.save();
   }
 
-  async function logMisroute({ userId, rootId, correction, lastRouting, correctionText }) {
-    const { user, data } = await loadMisroute(userId);
+  async function logMisroute({ beingId, rootId, correction, lastRouting, correctionText }) {
+    const { user, data } = await loadMisroute(beingId);
     if (!user) {
-      log.warn("Misroute", `logMisroute: user not found for userId=${String(userId).slice(0, 8)}`);
+      log.warn("Misroute", `logMisroute: user not found for beingId=${String(beingId).slice(0, 8)}`);
       return;
     }
 
@@ -340,19 +340,19 @@ export async function init(core) {
 
         // Personal threshold crossed and not yet personal-applied
         if (!target.personalApplied && (target.count || 0) >= PERSONAL_PROMOTE_THRESHOLD) {
-          personalPromotions.push({ suggestion: target, userId });
+          personalPromotions.push({ suggestion: target, beingId });
         }
 
         // Global threshold crossed and not yet auto-applied
         if (!target.autoApplied && (target.count || 0) >= AUTO_PROMOTE_THRESHOLD) {
-          promotionsToRun.push({ suggestion: target, userId });
+          promotionsToRun.push({ suggestion: target, beingId });
         }
       }
 
       // ── Auto-promote to personal vocabulary (lower threshold) ──
       // Personal entries live on user.metadata.personalVocab and only affect
       // this single user's routing. No file changes, no land-wide impact.
-      for (const { suggestion, userId: srcUserId } of personalPromotions) {
+      for (const { suggestion, beingId: srcUserId } of personalPromotions) {
         const promoted = await promotePersonal(suggestion, srcUserId);
         if (promoted) {
           suggestion.personalApplied = true;
@@ -367,7 +367,7 @@ export async function init(core) {
     // marks the suggestion as autoApplied, and triggers a routing index rebuild
     // for the affected tree so the new vocabulary takes effect immediately.
     const promotedExts = new Set();
-    for (const { suggestion, userId: srcUserId } of promotionsToRun) {
+    for (const { suggestion, beingId: srcUserId } of promotionsToRun) {
       const promoted = await promoteSuggestion(suggestion, srcUserId);
       if (promoted) {
         suggestion.autoApplied = true;
@@ -466,21 +466,21 @@ export async function init(core) {
   const express = (await import("express")).default;
   const router = express.Router();
 
-  // GET /user/:userId/misroute - HTML page (rendered when ?html is present)
-  router.get("/user/:userId/misroute", authenticated, async (req, res, next) => {
+  // GET /user/:beingId/misroute - HTML page (rendered when ?html is present)
+  router.get("/user/:beingId/misroute", authenticated, async (req, res, next) => {
     if (!("html" in req.query)) return next();
     try {
-      if (req.userId !== req.params.userId) {
+      if (req.beingId !== req.params.beingId) {
         return res.status(403).json({ status: "error", error: { code: "FORBIDDEN", message: "Not your account" } });
       }
       const { renderMisroutePage } = await import("./pages/misroutePage.js");
-      const user = await User.findById(req.params.userId).select("username metadata").lean();
+      const user = await Being.findById(req.params.beingId).select("username metadata").lean();
       if (!user) return res.status(404).json({ status: "error", error: { code: "USER_NOT_FOUND" } });
       const data = (user.metadata instanceof Map ? user.metadata.get("misroute") : user.metadata?.misroute)
         || { log: [], suggestions: [] };
-      const personalEntries = await listPersonalEntries(req.params.userId);
+      const personalEntries = await listPersonalEntries(req.params.beingId);
       res.send(renderMisroutePage({
-        userId: req.params.userId,
+        beingId: req.params.beingId,
         username: user.username,
         data,
         personalEntries,
@@ -493,19 +493,19 @@ export async function init(core) {
     }
   });
 
-  // GET /user/:userId/misroute - JSON (same data, no html flag)
-  router.get("/user/:userId/misroute", authenticated, async (req, res) => {
-    if (req.userId !== req.params.userId) {
+  // GET /user/:beingId/misroute - JSON (same data, no html flag)
+  router.get("/user/:beingId/misroute", authenticated, async (req, res) => {
+    if (req.beingId !== req.params.beingId) {
       return res.status(403).json({ status: "error", error: { code: "FORBIDDEN" } });
     }
-    const { data } = await loadMisroute(req.userId);
+    const { data } = await loadMisroute(req.beingId);
     if (!data) return res.json({ status: "ok", data: { log: [], suggestions: [] } });
     res.json({ status: "ok", data });
   });
 
   // GET /misroute - same as list, used by bare `misroute` command
   router.get("/misroute", authenticated, async (req, res) => {
-    const { data } = await loadMisroute(req.userId);
+    const { data } = await loadMisroute(req.beingId);
     if (!data) return res.json({ status: "ok", data: { log: [], suggestions: [] } });
     res.json({ status: "ok", data: {
       log: data.log.slice(0, 20),
@@ -517,14 +517,14 @@ export async function init(core) {
 
   // GET /misroute/list - recent misroutes
   router.get("/misroute/list", authenticated, async (req, res) => {
-    const { data } = await loadMisroute(req.userId);
+    const { data } = await loadMisroute(req.beingId);
     if (!data) return res.json({ status: "ok", data: [] });
     res.json({ status: "ok", data: data.log.slice(0, 50) });
   });
 
   // GET /misroute/suggestions - proposed vocabulary additions
   router.get("/misroute/suggestions", authenticated, async (req, res) => {
-    const { data } = await loadMisroute(req.userId);
+    const { data } = await loadMisroute(req.beingId);
     if (!data) return res.json({ status: "ok", data: [] });
     // Sort by count descending so the most-triggered suggestions surface first
     const sorted = [...data.suggestions].sort((a, b) => (b.count || 0) - (a.count || 0));
@@ -533,7 +533,7 @@ export async function init(core) {
 
   // DELETE /misroute - clear the log
   router.delete("/misroute", authenticated, async (req, res) => {
-    const { user, data } = await loadMisroute(req.userId);
+    const { user, data } = await loadMisroute(req.beingId);
     if (!user) return res.status(404).json({ status: "error", error: { code: "USER_NOT_FOUND" } });
     data.log = [];
     data.suggestions = [];
@@ -543,7 +543,7 @@ export async function init(core) {
 
   // GET /misroute/stats - counts by wrong -> correct pair
   router.get("/misroute/stats", authenticated, async (req, res) => {
-    const { data } = await loadMisroute(req.userId);
+    const { data } = await loadMisroute(req.beingId);
     if (!data) return res.json({ status: "ok", data: { pairs: [], total: 0 } });
     const pairs = {};
     for (const entry of data.log) {
@@ -572,7 +572,7 @@ export async function init(core) {
 
   // GET /misroute/personal - list this user's personal vocabulary entries
   router.get("/misroute/personal", authenticated, async (req, res) => {
-    const entries = await listPersonalEntries(req.userId);
+    const entries = await listPersonalEntries(req.beingId);
     res.json({ status: "ok", data: entries });
   });
 
@@ -584,14 +584,14 @@ export async function init(core) {
       if (!extension || !bucket || !pattern) {
         return res.status(400).json({ status: "error", error: { code: "INVALID_INPUT", message: "extension, bucket, pattern required" } });
       }
-      const result = await removePersonalPattern(req.userId, extension, bucket, pattern);
+      const result = await removePersonalPattern(req.beingId, extension, bucket, pattern);
       if (!result.removed) {
         return res.status(404).json({ status: "error", error: { code: "NOT_FOUND", message: result.reason } });
       }
 
       // Clear personalApplied marker on the matching suggestion so it can re-promote
       // if the misroute pattern reoccurs.
-      const { user, data } = await loadMisroute(req.userId);
+      const { user, data } = await loadMisroute(req.beingId);
       if (user && data) {
         for (const sug of data.suggestions) {
           if (sug.personalPattern === pattern && sug.correctExtension === extension) {
@@ -632,7 +632,7 @@ export async function init(core) {
       // Clear autoApplied marker on the matching suggestion so it can be re-promoted
       // if the misroute pattern reoccurs. Counter is preserved so the next correction
       // immediately triggers re-promotion.
-      const { user, data } = await loadMisroute(req.userId);
+      const { user, data } = await loadMisroute(req.beingId);
       if (user && data) {
         for (const sug of data.suggestions) {
           if (sug.appliedPattern === pattern && sug.correctExtension === extension) {
@@ -669,8 +669,8 @@ export async function init(core) {
   try {
     const { getExtension } = await import("../loader.js");
     const base = getExtension("treeos-base");
-    base?.exports?.registerSlot?.("user-quick-links", "misroute", ({ userId, queryString }) =>
-      `<li><a href="/api/v1/user/${userId}/misroute${queryString}">Misroutes</a></li>`,
+    base?.exports?.registerSlot?.("user-quick-links", "misroute", ({ beingId, queryString }) =>
+      `<li><a href="/api/v1/user/${beingId}/misroute${queryString}">Misroutes</a></li>`,
       { priority: 60 }
     );
   } catch {}
@@ -688,9 +688,9 @@ export async function init(core) {
       // Personal vocabulary lookup for the routing index. Returns
       // { extName: { nouns, verbs, adjectives } } as RegExp arrays.
       // Cached per user with a 5-minute TTL.
-      async getPersonalVocabularyForUser(userId) {
+      async getPersonalVocabularyForUser(beingId) {
         const { getPersonalVocabularyForUser } = await import("./personalVocab.js");
-        return getPersonalVocabularyForUser(userId);
+        return getPersonalVocabularyForUser(beingId);
       },
       // Cache invalidation hook for external writes.
       invalidatePersonalVocabCache,
@@ -698,7 +698,7 @@ export async function init(core) {
   };
 }
 
-// Lightweight auth middleware wrapper. Attaches userId from the authenticated
+// Lightweight auth middleware wrapper. Attaches beingId from the authenticated
 // session. If the user isn't authenticated, return 401.
 async function authenticated(req, res, next) {
   try {
@@ -706,7 +706,7 @@ async function authenticated(req, res, next) {
     const authenticate = mod.default;
     return authenticate(req, res, next);
   } catch {
-    if (req.userId) return next();
+    if (req.beingId) return next();
     return res.status(401).json({ status: "error", error: { code: "UNAUTHORIZED" } });
   }
 }

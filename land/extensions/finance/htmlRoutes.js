@@ -27,7 +27,7 @@ router.get("/root/:rootId/finance", urlAuth, htmlOnly, async (req, res) => {
       summary,
       recentTransactions,
       token: req.query.token || null,
-      userId: req.user?._id?.toString() || req.user?.id || null,
+      beingId: req.user?._id?.toString() || req.user?.id || null,
       inApp: !!req.query.inApp,
     }));
   } catch (err) {

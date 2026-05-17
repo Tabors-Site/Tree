@@ -10,7 +10,7 @@ import {
   getThesis,
   incrementNoteCount,
 } from "./core.js";
-import { CONTENT_TYPE } from "../../seed/protocol.js";
+import { ARTIFACT_ORIGIN } from "../../seed/protocol.js";
 
 // Per-root pending notes buffer for batched coherence checks.
 // rootId -> [{ noteId, content }]
@@ -20,18 +20,18 @@ export async function init(core) {
   core.llm.registerRootLlmSlot("purpose");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setRunChat(async (opts) => {
-    if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+    if (opts.beingId && opts.beingId !== "SYSTEM" && !await core.llm.userHasLlm(opts.beingId)) return { answer: null };
     return core.llm.runChat({ ...opts, llmPriority: BG });
   });
   setMetadata(core.metadata);
 
   const config = await getPurposeConfig();
 
-  // ── afterNote: coherence check + thesis re-derivation counter ──────
-  core.hooks.register("afterNote", async ({ note, nodeId, userId, contentType, action }) => {
-    if (contentType !== CONTENT_TYPE.TEXT) return;
+  // ── afterArtifact: coherence check + thesis re-derivation counter ──
+  core.hooks.register("afterArtifact", async ({ artifact, nodeId, beingId, origin, action }) => {
+    if (origin !== ARTIFACT_ORIGIN.IBP) return;
     if (action !== "create") return;
-    if (!userId || userId === "SYSTEM") return;
+    if (!beingId || beingId === "SYSTEM") return;
 
     // Find the tree root for this node
     let rootId;
@@ -50,13 +50,13 @@ export async function init(core) {
     } catch { return; }
     if (!rootId) return;
 
-    // Check if thesis exists. If not and we have enough notes, derive it.
+    // Check if thesis exists. If not and we have enough artifacts, derive it.
     const thesis = await getThesis(rootId);
     if (!thesis?.thesis) {
-      const Note = core.models.Note;
-      const noteCount = await Note.countDocuments({ nodeId: rootId, contentType: CONTENT_TYPE.TEXT });
-      if (noteCount >= 3) {
-        deriveThesis(rootId, userId).catch(err =>
+      const Artifact = core.models.Artifact;
+      const artifactCount = await Artifact.countDocuments({ nodeId: rootId, origin: ARTIFACT_ORIGIN.IBP });
+      if (artifactCount >= 3) {
+        deriveThesis(rootId, beingId).catch(err =>
           log.debug("Purpose", `Auto-derivation failed: ${err.message}`)
         );
       }
@@ -66,7 +66,7 @@ export async function init(core) {
     // Increment counter, re-derive if threshold hit
     const count = await incrementNoteCount(rootId);
     if (count >= config.rederiveInterval) {
-      deriveThesis(rootId, userId).catch(err =>
+      deriveThesis(rootId, beingId).catch(err =>
         log.debug("Purpose", `Re-derivation failed: ${err.message}`)
       );
     }
@@ -86,12 +86,12 @@ export async function init(core) {
     const batch = _pending.get(rootId).splice(0);
     _pending.delete(rootId);
 
-    checkCoherenceBatch(batch, rootId, userId)
+    checkCoherenceBatch(batch, rootId, beingId)
       .then(async (results) => {
-        const Note = core.models.Note;
+        const Artifact = core.models.Artifact;
         for (const r of results) {
           if (!r.noteId) continue;
-          await Note.findByIdAndUpdate(r.noteId, {
+          await Artifact.findByIdAndUpdate(r.noteId, {
             $set: {
               "metadata.purpose.coherence": r.score,
               "metadata.purpose.reason": r.reason,
@@ -111,9 +111,9 @@ export async function init(core) {
       // Same tree move: no thesis change
       if (oldRoot?._id?.toString() === newRoot?._id?.toString()) return;
 
-      // Cross-tree move: clear stale coherence scores on moved node's notes
-      const Note = core.models.Note;
-      await Note.updateMany(
+      // Cross-tree move: clear stale coherence scores on moved node's artifacts
+      const Artifact = core.models.Artifact;
+      await Artifact.updateMany(
         { nodeId, "metadata.purpose.coherence": { $exists: true } },
         { $unset: { "metadata.purpose.coherence": "", "metadata.purpose.reason": "" } },
       );
@@ -132,10 +132,10 @@ export async function init(core) {
     }
 
     // At any node: if the most recent note has a low coherence score, signal it
-    const Note = core.models.Note;
-    const recentNote = await Note.findOne({
+    const Artifact = core.models.Artifact;
+    const recentNote = await Artifact.findOne({
       nodeId: node._id,
-      contentType: CONTENT_TYPE.TEXT,
+      origin: ARTIFACT_ORIGIN.IBP,
       "metadata.purpose.coherence": { $exists: true },
     })
       .sort({ createdAt: -1 })

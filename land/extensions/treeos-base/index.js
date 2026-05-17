@@ -182,15 +182,15 @@ export async function init(core) {
         try {
           const landIdentity = _getLandIdentity();
           const landName = _getLandConfigValue("LAND_NAME") || landIdentity.name || "My Land";
-          const isLoggedIn = !!req.userId;
+          const isLoggedIn = !!req.beingId;
           let isAdmin = false;
           let username = null;
           if (isLoggedIn) {
-            const u = await core.models.User.findById(req.userId).select("isAdmin username").lean();
+            const u = await core.models.Being.findById(req.beingId).select("isAdmin username").lean();
             isAdmin = u?.isAdmin || false;
             username = u?.username || null;
           }
-          const userCount = await core.models.User.countDocuments({ isRemote: { $ne: true } });
+          const userCount = await core.models.Being.countDocuments({ isRemote: { $ne: true } });
           const treeCount = await core.models.Node.countDocuments({ rootOwner: { $nin: [null, "SYSTEM"] } });
           const { getLoadedExtensionNames: _getExts } = await import("../loader.js");
           res.send(renderWelcome({ landName, landUrl: landIdentity.baseUrl, isLoggedIn, isAdmin, username, extensionCount: _getExts().length, userCount, treeCount }));
@@ -205,7 +205,7 @@ export async function init(core) {
 
       registerPage("get", "/land", authenticate, async (req, res) => {
         try {
-          const user = await core.models.User.findById(req.userId).select("isAdmin").lean();
+          const user = await core.models.Being.findById(req.beingId).select("isAdmin").lean();
           if (!user?.isAdmin) return _sendError(res, 403, _ERR.FORBIDDEN, "Admin required");
 
           const landIdentity = _getLandIdentity();
@@ -214,7 +214,7 @@ export async function init(core) {
           const { getAllLandConfig } = await import("../../seed/landConfig.js");
           const { default: LandPeer } = await import("../../canopy/models/landPeer.js");
 
-          const userCount = await core.models.User.countDocuments({ isRemote: { $ne: true } });
+          const userCount = await core.models.Being.countDocuments({ isRemote: { $ne: true } });
           const treeCount = await core.models.Node.countDocuments({ rootOwner: { $nin: [null, "SYSTEM"] } });
           const peerCount = await LandPeer.countDocuments();
           const disabledList = _getLandConfigValue("disabledExtensions") || [];
@@ -250,7 +250,7 @@ export async function init(core) {
       registerPage("get", "/canopy/admin", authenticate, async (req, res) => {
         if (!isHtmlEnabled()) return _sendError(res, 404, _ERR.EXTENSION_NOT_FOUND, "HTML disabled");
         try {
-          const user = await core.models.User.findById(req.userId).select("isAdmin").lean();
+          const user = await core.models.Being.findById(req.beingId).select("isAdmin").lean();
           if (!user?.isAdmin) return _sendError(res, 403, _ERR.FORBIDDEN, "Admin required");
           const { getAllPeers } = await import("../../canopy/peers.js");
           const { getLandInfoPayload } = await import("../../canopy/identity.js");
@@ -262,7 +262,7 @@ export async function init(core) {
       registerPage("get", "/canopy/admin/invites", authenticate, async (req, res) => {
         if (!isHtmlEnabled()) return _sendError(res, 404, _ERR.EXTENSION_NOT_FOUND, "HTML disabled");
         try {
-          const user = await core.models.User.findById(req.userId).select("isAdmin").lean();
+          const user = await core.models.Being.findById(req.beingId).select("isAdmin").lean();
           if (!user?.isAdmin) return _sendError(res, 403, _ERR.FORBIDDEN, "Admin required");
           const mongoose = (await import("mongoose")).default;
           const CanopyEvent = mongoose.models.CanopyEvent;
@@ -277,7 +277,7 @@ export async function init(core) {
       registerPage("get", "/canopy/admin/horizon", authenticate, async (req, res) => {
         if (!isHtmlEnabled()) return _sendError(res, 404, _ERR.EXTENSION_NOT_FOUND, "HTML disabled");
         try {
-          const user = await core.models.User.findById(req.userId).select("isAdmin").lean();
+          const user = await core.models.Being.findById(req.beingId).select("isAdmin").lean();
           if (!user?.isAdmin) return _sendError(res, 403, _ERR.FORBIDDEN, "Admin required");
           res.send(renderCanopyHorizon({ hasHorizon: !!process.env.HORIZON_URL }));
         } catch (err) { _sendError(res, 500, _ERR.INTERNAL, err.message); }
@@ -290,9 +290,9 @@ export async function init(core) {
   }
 
   // ── Register core quick links (ones no extension owns) ──
-  registerSlot("user-quick-links", "treeos-base", ({ userId, queryString }) =>
-    `<li><a href="/api/v1/user/${userId}/shareToken${queryString}">Share Token</a></li>
-     <li><a href="/api/v1/user/${userId}/inverse${queryString}">Inverse Profile</a></li>`,
+  registerSlot("user-quick-links", "treeos-base", ({ beingId, queryString }) =>
+    `<li><a href="/api/v1/user/${beingId}/shareToken${queryString}">Share Token</a></li>
+     <li><a href="/api/v1/user/${beingId}/inverse${queryString}">Inverse Profile</a></li>`,
   { priority: 90 });
 
   log.info("TreeOS", `Registered ${tools.length} tools, 10 modes, navigation hook`);

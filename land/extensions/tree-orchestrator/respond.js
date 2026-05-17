@@ -22,7 +22,7 @@ export async function runRespond({
   socket,
   signal,
   username,
-  userId,
+  beingId,
   rootId,
   nodeContext,
   operationContext,
@@ -50,7 +50,7 @@ export async function runRespond({
   const respondMode = await resolveModeForNode("respond", getCurrentNodeId(visitorId) || rootId);
   await switchMode(visitorId, respondMode, {
     username,
-    userId,
+    beingId,
     rootId,
     nodeContext: nodeContext || null,
     operationContext: operationContext || null,
@@ -81,7 +81,7 @@ export async function runRespond({
 
   const response = await processMessage(visitorId, trigger, {
     username,
-    userId,
+    beingId,
     rootId,
     slot,
     signal,

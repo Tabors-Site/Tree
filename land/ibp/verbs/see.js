@@ -26,7 +26,7 @@ import { subscribePosition } from "../live.js";
 export async function handleSee(socket, msg, ack) {
   const id = msg?.id || null;
   try {
-    const { addressString } = extractPositionOrStance(msg, "portal:see");
+    const { addressString } = extractPositionOrStance(msg, "ibp:see");
 
     // Discovery short-circuit. `<land>/.discovery` is read by every client
     // right after socket open to learn capabilities and is implicitly
@@ -44,7 +44,7 @@ export async function handleSee(socket, msg, ack) {
     const resolved = await resolveStance(expanded.right);
 
     // Stance Authorization gate.
-    const identity = socket.userId ? { userId: socket.userId, username: socket.username } : null;
+    const identity = socket.beingId ? { beingId: socket.beingId, username: socket.username } : null;
     const decision = await authorize({
       identity,
       verb: "see",
@@ -78,7 +78,7 @@ export async function handleSee(socket, msg, ack) {
     if (isPortalError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("Portal", `portal:see failed: ${err.message}`);
+    log.error("Portal", `ibp:see failed: ${err.message}`);
     return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }

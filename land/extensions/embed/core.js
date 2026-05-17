@@ -10,8 +10,8 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { SYSTEM_ROLE, CONTENT_TYPE } from "../../seed/protocol.js";
+import Artifact from "../../seed/models/artifact.js";
+import { SYSTEM_ROLE, ARTIFACT_ORIGIN } from "../../seed/protocol.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 
 let _getClientForUser = null;
@@ -49,7 +49,7 @@ export async function getEmbedConfig() {
  * Generate a vector embedding for text content.
  * Uses the land's LLM connection with OpenAI-compatible embeddings endpoint.
  */
-export async function generateEmbedding(text, userId) {
+export async function generateEmbedding(text, beingId) {
   if (!_getClientForUser) throw new Error("LLM service not available");
   if (!text || text.trim().length === 0) return null;
 
@@ -58,7 +58,7 @@ export async function generateEmbedding(text, userId) {
 
   // Resolve the embedding client. Use the configured embedding model slot,
   // or fall back to the user's default LLM.
-  const { client, model } = await _getClientForUser(userId, config.embeddingModel || "main");
+  const { client, model } = await _getClientForUser(beingId, config.embeddingModel || "main");
   if (!client) throw new Error("No LLM connection available for embedding");
 
   try {
@@ -86,7 +86,7 @@ export async function generateEmbedding(text, userId) {
  * Store a vector on a note's metadata.
  */
 export async function storeVector(noteId, vector) {
-  await Note.findByIdAndUpdate(noteId, {
+  await Artifact.findByIdAndUpdate(noteId, {
     $set: {
       "metadata.embed.vector": vector,
       "metadata.embed.embeddedAt": new Date().toISOString(),
@@ -97,14 +97,14 @@ export async function storeVector(noteId, vector) {
 /**
  * Embed a single note. Returns the vector or null.
  */
-export async function embedNote(noteId, userId) {
-  const note = await Note.findById(noteId).select("content contentType").lean();
-  if (!note || note.contentType !== CONTENT_TYPE.TEXT || !note.content) return null;
+export async function embedNote(artifactId, beingId) {
+  const artifact = await Artifact.findById(artifactId).select("content origin").lean();
+  if (!artifact || artifact.origin !== ARTIFACT_ORIGIN.IBP || typeof artifact.content !== "string" || !artifact.content) return null;
 
-  const vector = await generateEmbedding(note.content, userId);
+  const vector = await generateEmbedding(artifact.content, beingId);
   if (!vector) return null;
 
-  await storeVector(noteId, vector);
+  await storeVector(artifactId, vector);
   return vector;
 }
 
@@ -204,9 +204,9 @@ export async function findSimilar(queryVector, rootId, opts = {}) {
   const nodeIds = await buildSearchScope(opts.nodeId || rootId, rootId, opts.searchAll || false);
 
   // Load embedded notes only from scoped nodes
-  const notes = await Note.find({
+  const notes = await Artifact.find({
     nodeId: { $in: nodeIds },
-    contentType: CONTENT_TYPE.TEXT,
+    origin: ARTIFACT_ORIGIN.IBP,
     "metadata.embed.vector": { $exists: true },
   })
     .select("_id nodeId content metadata")
@@ -252,11 +252,11 @@ export async function findSimilar(queryVector, rootId, opts = {}) {
  * Scoped to the node's local neighborhood by default.
  * Pass searchAll: true for land-wide.
  */
-export async function findRelatedAtNode(nodeId, userId, rootId, searchAll = false) {
+export async function findRelatedAtNode(nodeId, beingId, rootId, searchAll = false) {
   // Get the most recent note at this node
-  const note = await Note.findOne({
+  const note = await Artifact.findOne({
     nodeId,
-    contentType: CONTENT_TYPE.TEXT,
+    origin: ARTIFACT_ORIGIN.IBP,
   })
     .sort({ createdAt: -1 })
     .select("_id content metadata")
@@ -270,7 +270,7 @@ export async function findRelatedAtNode(nodeId, userId, rootId, searchAll = fals
     : note.metadata?.embed?.vector;
 
   if (!queryVector) {
-    queryVector = await generateEmbedding(note.content, userId);
+    queryVector = await generateEmbedding(note.content, beingId);
     if (!queryVector) return [];
   }
 
@@ -302,9 +302,9 @@ export async function findRelatedAtNode(nodeId, userId, rootId, searchAll = fals
  * Get embedding coverage stats.
  */
 export async function getEmbedStatus() {
-  const totalNotes = await Note.countDocuments({ contentType: CONTENT_TYPE.TEXT });
-  const embeddedNotes = await Note.countDocuments({
-    contentType: CONTENT_TYPE.TEXT,
+  const totalNotes = await Artifact.countDocuments({ origin: ARTIFACT_ORIGIN.IBP });
+  const embeddedNotes = await Artifact.countDocuments({
+    origin: ARTIFACT_ORIGIN.IBP,
     "metadata.embed.vector": { $exists: true },
   });
 
@@ -325,8 +325,8 @@ export async function getEmbedStatus() {
  * Re-embed all text notes. For use after changing embedding model.
  * Processes in batches, yields progress.
  */
-export async function rebuildEmbeddings(userId, onProgress) {
-  const notes = await Note.find({ contentType: CONTENT_TYPE.TEXT })
+export async function rebuildEmbeddings(beingId, onProgress) {
+  const notes = await Artifact.find({ origin: ARTIFACT_ORIGIN.IBP })
     .select("_id content")
     .lean();
 
@@ -337,7 +337,7 @@ export async function rebuildEmbeddings(userId, onProgress) {
     if (!note.content || note.content.trim().length === 0) continue;
 
     try {
-      const vector = await generateEmbedding(note.content, userId);
+      const vector = await generateEmbedding(note.content, beingId);
       if (vector) {
         await storeVector(note._id, vector);
         embedded++;

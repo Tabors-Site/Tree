@@ -8,12 +8,12 @@ import log from "../../seed/log.js";
 import { setNodeMode } from "../../seed/modes/registry.js";
 
 let _Node = null;
-let _Note = null;
+let _Artifact = null;
 let _metadata = null;
 
-export function configure({ Node, Note, metadata }) {
+export function configure({ Node, Artifact, metadata }) {
   _Node = Node;
-  _Note = Note;
+  _Artifact = Note;
   _metadata = metadata;
 }
 
@@ -29,15 +29,15 @@ export { ROLES };
 
 // ── Scaffold ──
 
-export async function scaffold(rootId, userId) {
+export async function scaffold(rootId, beingId) {
   if (!_Node) throw new Error("Relationships core not configured");
   const { createNode } = await import("../../seed/tree/treeManagement.js");
 
-  const logNode = await createNode({ name: "Log", parentId: rootId, userId });
-  const peopleNode = await createNode({ name: "People", parentId: rootId, userId });
-  const ideasNode = await createNode({ name: "Ideas", parentId: rootId, userId });
-  const profileNode = await createNode({ name: "Profile", parentId: rootId, userId });
-  const historyNode = await createNode({ name: "History", parentId: rootId, userId });
+  const logNode = await createNode({ name: "Log", parentId: rootId, beingId });
+  const peopleNode = await createNode({ name: "People", parentId: rootId, beingId });
+  const ideasNode = await createNode({ name: "Ideas", parentId: rootId, beingId });
+  const profileNode = await createNode({ name: "Profile", parentId: rootId, beingId });
+  const historyNode = await createNode({ name: "History", parentId: rootId, beingId });
 
   const tags = [
     [logNode, ROLES.LOG],
@@ -117,7 +117,7 @@ export async function completeSetup(rootId) {
  * Find or create a person node under People.
  * Returns { id, name, isNew }.
  */
-export async function findOrCreatePerson(rootId, personName, userId) {
+export async function findOrCreatePerson(rootId, personName, beingId) {
   const nodes = await findRelNodes(rootId);
   if (!nodes?.people) return null;
 
@@ -131,7 +131,7 @@ export async function findOrCreatePerson(rootId, personName, userId) {
 
   // Create new person node
   const { createNode } = await import("../../seed/tree/treeManagement.js");
-  const node = await createNode({ name: personName.trim(), parentId: peopleId, userId });
+  const node = await createNode({ name: personName.trim(), parentId: peopleId, beingId });
   await _metadata.setExtMeta(node, "relationships", { role: "person" });
   log.verbose("Relationships", `Created person: ${personName}`);
   return { id: String(node._id), name: node.name, isNew: true };
@@ -169,9 +169,9 @@ export async function getRecentInteractions(rootId, limit = 10) {
   const nodes = await findRelNodes(rootId);
   if (!nodes?.log) return [];
 
-  const { getNotes } = await import("../../seed/tree/notes.js");
-  const result = await getNotes({ nodeId: nodes.log.id, limit });
-  return result?.notes || [];
+  const { getArtifacts } = await import("../../seed/tree/artifacts.js");
+  const result = await getArtifacts({ nodeId: nodes.log.id, limit });
+  return result?.artifacts || [];
 }
 
 /**
@@ -181,7 +181,7 @@ export async function getIdeas(rootId) {
   const nodes = await findRelNodes(rootId);
   if (!nodes?.ideas) return [];
 
-  const { getNotes } = await import("../../seed/tree/notes.js");
-  const result = await getNotes({ nodeId: nodes.ideas.id, limit: 20 });
-  return result?.notes || [];
+  const { getArtifacts } = await import("../../seed/tree/artifacts.js");
+  const result = await getArtifacts({ nodeId: nodes.ideas.id, limit: 20 });
+  return result?.artifacts || [];
 }

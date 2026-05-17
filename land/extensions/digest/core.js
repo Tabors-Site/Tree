@@ -250,7 +250,7 @@ export async function generateDigest() {
   if (_runChat) {
     try {
       const { answer } = await _runChat({
-        userId: "SYSTEM",
+        beingId: "SYSTEM",
         username: "digest",
         message: prompt,
         mode: "tree:respond",

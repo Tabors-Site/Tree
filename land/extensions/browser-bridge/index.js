@@ -7,7 +7,7 @@
  */
 
 import log from "../../seed/log.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import {
   configure,
   registerConnection,
@@ -43,19 +43,19 @@ export async function init(core) {
         return;
       }
 
-      let userId = null;
+      let beingId = null;
       const { username, password } = data;
 
       // Method 1: API key (if api-keys extension data exists)
       if (apiKey) {
         try {
           // User imported at top of file
-          const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
+          const { getBeingMeta } = await import("../../seed/tree/beingMetadata.js");
           const { default: bcryptMod } = await import("bcrypt");
 
           const prefix = apiKey.slice(0, 8);
           log.debug("BrowserBridge", `API key auth attempt, prefix: ${prefix}`);
-          const candidates = await User.find({
+          const candidates = await Being.find({
             "metadata.apiKeys": {
               $elemMatch: { keyPrefix: prefix, revoked: { $ne: true } },
             },
@@ -64,18 +64,18 @@ export async function init(core) {
           log.debug("BrowserBridge", `Found ${candidates.length} candidates for prefix ${prefix}`);
 
           for (const user of candidates) {
-            const keys = getUserMeta(user, "apiKeys");
+            const keys = getBeingMeta(user, "apiKeys");
             if (!Array.isArray(keys)) continue;
             for (const key of keys) {
               if (key.revoked || key.keyPrefix !== prefix) continue;
               const match = await bcryptMod.compare(apiKey, key.keyHash);
               if (match) {
-                userId = String(user._id);
+                beingId = String(user._id);
                 socket.username = user.username;
                 break;
               }
             }
-            if (userId) break;
+            if (beingId) break;
           }
         } catch (err) {
           log.warn("BrowserBridge", `API key auth error: ${err.message}`);
@@ -83,17 +83,17 @@ export async function init(core) {
       }
 
       // Method 2: username + password (always available, no extension needed)
-      if (!userId && username && password) {
+      if (!beingId && username && password) {
         try {
           // User imported at top of file
           const { default: bcryptMod } = await import("bcrypt");
           log.debug("BrowserBridge", `Password auth attempt for user: ${username}`);
-          const user = await User.findOne({ username }).select("_id username password");
+          const user = await Being.findOne({ username }).select("_id username password");
           if (user) {
             const match = await bcryptMod.compare(password, user.password);
             log.debug("BrowserBridge", `Password match for ${username}: ${match}`);
             if (match) {
-              userId = String(user._id);
+              beingId = String(user._id);
               socket.username = user.username;
             }
           } else {
@@ -104,16 +104,16 @@ export async function init(core) {
         }
       }
 
-      if (!userId) {
+      if (!beingId) {
         socket.emit("browserAuthResult", { success: false, error: "Invalid API key" });
         return;
       }
 
-      // Set userId on socket (doesn't affect authSessions since it was null on connect)
-      socket.userId = userId;
+      // Set beingId on socket (doesn't affect authSessions since it was null on connect)
+      socket.beingId = beingId;
       socket._browserBridge = true;
 
-      registerConnection(userId, socket);
+      registerConnection(beingId, socket);
       socket.emit("browserAuthResult", { success: true });
     } catch (err) {
       socket.emit("browserAuthResult", { success: false, error: err.message });
@@ -132,24 +132,24 @@ export async function init(core) {
 
   // Unprompted: user navigated to a new page
   core.websocket.registerSocketHandler("pageNavigated", ({ socket, data }) => {
-    const userId = socket.userId;
-    if (!userId || !socket._browserBridge) return;
+    const beingId = socket.beingId;
+    if (!beingId || !socket._browserBridge) return;
     if (data?.url) {
-      setCurrentUrl(userId, data.url);
-      log.verbose("BrowserBridge", `${userId} navigated to ${data.url}`);
+      setCurrentUrl(beingId, data.url);
+      log.verbose("BrowserBridge", `${beingId} navigated to ${data.url}`);
     }
   });
 
   // ── beforeToolCall: site scoping guard ─────────────────────────────
 
   core.hooks.register("beforeToolCall", async (hookData) => {
-    const { toolName, args, userId } = hookData;
+    const { toolName, args, beingId } = hookData;
     if (!WRITE_TOOLS.has(toolName)) return;
 
     const nodeId = args?.nodeId;
     if (!nodeId) return;
 
-    const url = toolName === "browser-navigate" ? args?.url : getCurrentUrl(userId);
+    const url = toolName === "browser-navigate" ? args?.url : getCurrentUrl(beingId);
     if (!url) return;
 
     const access = await checkSiteAccess(nodeId, url);

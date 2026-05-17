@@ -8,7 +8,7 @@ export default [
     schema: {
       nodeId: z.string().describe("The node to set the watchlist on (inherits to children)."),
       toolName: z.string().describe("The tool name to watch (e.g. delete-node-branch, execute-shell)."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     handler: async ({ nodeId, toolName }) => {
@@ -26,7 +26,7 @@ export default [
     schema: {
       nodeId: z.string().describe("The node to modify."),
       toolName: z.string().describe("The tool name to stop watching."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     handler: async ({ nodeId, toolName }) => {
@@ -42,7 +42,7 @@ export default [
     name: "approve-pending",
     description: "Show pending approval requests. Tools waiting for operator decision.",
     schema: {
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     handler: async () => {
@@ -66,12 +66,12 @@ export default [
     schema: {
       requestId: z.string().describe("The request ID to resolve."),
       decision: z.enum(["approved", "rejected"]).describe("Approve or reject the tool call."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-    handler: async ({ requestId, decision, userId }) => {
+    handler: async ({ requestId, decision, beingId }) => {
       try {
-        const result = resolveRequest(requestId, decision, userId);
+        const result = resolveRequest(requestId, decision, beingId);
         if (!result) return { content: [{ type: "text", text: "Request not found or already resolved." }] };
         return { content: [{ type: "text", text: `${decision === "approved" ? "Approved" : "Rejected"}: ${result.toolName}. The AI will ${decision === "approved" ? "proceed" : "adapt"}.` }] };
       } catch (err) {

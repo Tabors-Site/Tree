@@ -7,7 +7,7 @@ function energyResolveSlots(slotName, ctx) {
   } catch { return ""; }
 }
 
-export function renderEnergy({ userId, user, energyAmount, additionalEnergy, plan, planExpiresAt, llmConnections, mainAssignment, rawIdeaAssignment, activeConn, hasLlm, connectionCount, isBasic, qs }) {
+export function renderEnergy({ beingId, user, energyAmount, additionalEnergy, plan, planExpiresAt, llmConnections, mainAssignment, rawIdeaAssignment, activeConn, hasLlm, connectionCount, isBasic, qs }) {
   const css = `
   /* =========================================================
      ENERGY STATUS
@@ -924,7 +924,7 @@ export function renderEnergy({ userId, user, energyAmount, additionalEnergy, pla
 <div class="container">
 
   <div class="back-nav">
-    <a href="/api/v1/user/${userId}${qs}" class="back-link">\u2190 Back to Profile</a>
+    <a href="/api/v1/user/${beingId}${qs}" class="back-link">\u2190 Back to Profile</a>
   </div>
 
   <!-- Energy Status -->
@@ -950,7 +950,7 @@ export function renderEnergy({ userId, user, energyAmount, additionalEnergy, pla
   </div>
 
   <!-- Payment sections (plans, energy purchase, checkout) -- registered by billing extension -->
-  ${energyResolveSlots("energy-payment", { userId, plan, planExpiresAt }) || '<div class="glass-card" style="animation-delay:0.15s;"><p style="color:rgba(255,255,255,0.4);font-size:0.9rem;">No payment system installed. Install the billing extension to enable plan upgrades and energy purchases.</p></div>'}
+  ${energyResolveSlots("energy-payment", { beingId, plan, planExpiresAt }) || '<div class="glass-card" style="animation-delay:0.15s;"><p style="color:rgba(255,255,255,0.4);font-size:0.9rem;">No payment system installed. Install the billing extension to enable plan upgrades and energy purchases.</p></div>'}
 
   <!-- Custom LLM -->
   <div class="glass-card" style="animation-delay: 0.3s;">
@@ -1179,7 +1179,7 @@ export function renderEnergy({ userId, user, energyAmount, additionalEnergy, pla
 
   const js = `
 function loadFailoverStack() {
-  fetch("/api/v1/user/${userId}/llm-failover${qs}", { credentials: "include" })
+  fetch("/api/v1/user/${beingId}/llm-failover${qs}", { credentials: "include" })
     .then(r => r.json())
     .then(data => {
       const inner = data.data || data;
@@ -1209,7 +1209,7 @@ function pushFailover() {
   const select = document.getElementById("failoverSelect");
   const connectionId = select.value;
   if (!connectionId) return;
-  fetch("/api/v1/user/${userId}/llm-failover${qs}", {
+  fetch("/api/v1/user/${beingId}/llm-failover${qs}", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -1224,7 +1224,7 @@ function pushFailover() {
 }
 
 function removeFailover(connId, index) {
-  fetch("/api/v1/user/${userId}/llm-failover/" + encodeURIComponent(connId) + "${qs}", {
+  fetch("/api/v1/user/${beingId}/llm-failover/" + encodeURIComponent(connId) + "${qs}", {
     method: "DELETE",
     credentials: "include",
   })
@@ -1237,7 +1237,7 @@ function removeFailover(connId, index) {
 
 loadFailoverStack();
 
-var userId = "${userId}";
+var beingId = "${beingId}";
 var currentPlan = "${plan}";
 var PLAN_PRICE = { basic: 0, standard: 20, premium: 100 };
 var PLAN_ORDER = ["basic", "standard", "premium"];
@@ -1450,13 +1450,13 @@ async function handleCheckout() {
 
   try {
     var body = {
-      userId: userId,
+      beingId: beingId,
       energyAmount: state.energyAdded > 0 ? state.energyAdded : 0,
       plan: state.selectedPlan || null,
       currentPlan: currentPlan,
     };
 
-    var res = await fetch("/api/v1/user/" + userId + "/purchase", {
+    var res = await fetch("/api/v1/user/" + beingId + "/purchase", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -1514,7 +1514,7 @@ async function addConnection() {
   }
 
   try {
-    var res = await fetch("/api/v1/user/" + userId + "/custom-llm", {
+    var res = await fetch("/api/v1/user/" + beingId + "/custom-llm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name, baseUrl: baseUrl, apiKey: apiKey, model: model }),
@@ -1564,7 +1564,7 @@ async function updateConnection() {
   if (apiKey) payload.apiKey = apiKey;
 
   try {
-    var res = await fetch("/api/v1/user/" + userId + "/custom-llm/" + connId, {
+    var res = await fetch("/api/v1/user/" + beingId + "/custom-llm/" + connId, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -1584,7 +1584,7 @@ async function updateConnection() {
 async function deleteConnection(connId) {
   if (!confirm("Delete this connection? This cannot be undone.")) return;
   try {
-    var res = await fetch("/api/v1/user/" + userId + "/custom-llm/" + connId, {
+    var res = await fetch("/api/v1/user/" + beingId + "/custom-llm/" + connId, {
       method: "DELETE",
     });
     if (res.ok) {
@@ -1600,7 +1600,7 @@ async function deleteConnection(connId) {
 
 async function assignSlot(slot, connId) {
   try {
-    var res = await fetch("/api/v1/user/" + userId + "/llm-assign", {
+    var res = await fetch("/api/v1/user/" + beingId + "/llm-assign", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ slot: slot, connectionId: connId || null }),

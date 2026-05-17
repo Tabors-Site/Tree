@@ -10,7 +10,7 @@
  * acquire and release, the lock expires automatically. A periodic sweep
  * cleans up expired entries.
  *
- * Each lock tracks its owner (userId or processId) so only the acquirer
+ * Each lock tracks its owner (beingId or processId) so only the acquirer
  * can release it. Locks can be renewed to prevent expiry during long
  * operations. A hard cap prevents unbounded memory growth.
  */
@@ -46,7 +46,7 @@ function decTotal() { _totalLocks = Math.max(0, _totalLocks - 1); }
  * @param {string} namespace - lock scope (e.g. "understand", "drain")
  * @param {string} key - resource identifier (e.g. rootId, runId)
  * @param {object} [opts]
- * @param {string} [opts.owner] - who is acquiring (userId, sessionId, etc.)
+ * @param {string} [opts.owner] - who is acquiring (beingId, sessionId, etc.)
  * @param {string} [opts.reason] - why (for debugging/logging)
  * @returns {boolean} true if lock acquired
  */

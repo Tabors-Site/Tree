@@ -47,7 +47,7 @@ export async function init(core) {
     if (!runChat) return;
     try {
       const { answer } = await runChat({
-        userId: String(root.rootOwner),
+        beingId: String(root.rootOwner),
         username: "system",
         message: `Rename this tree. Return ONLY the new name. 2-4 words. No quotes. No explanation.\n\n${summary}\n\nExamples: "Strength Training", "Keto Tracking", "Learning React", "Nicotine Recovery", "Team Wiki"`,
         mode: "home:default",

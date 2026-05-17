@@ -2,7 +2,7 @@ import { page } from "../../html-rendering/html/layout.js";
 import { escapeHtml } from "../../html-rendering/html/utils.js";
 import { glassCardStyles, glassHeaderStyles, responsiveBase } from "../../html-rendering/html/baseStyles.js";
 
-export function renderInverseProfile({ userId, username, profile, stats, corrections, lastUpdated, queryString }) {
+export function renderInverseProfile({ beingId, username, profile, stats, corrections, lastUpdated, queryString }) {
   const safeUsername = escapeHtml(username);
 
   const categories = Object.entries(profile || {});
@@ -226,7 +226,7 @@ export function renderInverseProfile({ userId, username, profile, stats, correct
       <div class="inverse-header">
         <h1>\uD83E\uDDE0 ${safeUsername}</h1>
         <div class="sub">as the AI sees you</div>
-        <a class="back-link" href="/api/v1/user/${userId}${queryString}">back to profile</a>
+        <a class="back-link" href="/api/v1/user/${beingId}${queryString}">back to profile</a>
       </div>
 
       ${statsHtml}

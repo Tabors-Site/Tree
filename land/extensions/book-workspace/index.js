@@ -413,9 +413,9 @@ export async function init(core) {
       if (!target || !Number.isFinite(target) || target <= 0) return;
 
       const mongoose = (await import("mongoose")).default;
-      const Note = mongoose.models.Note;
+      const Artifact = mongoose.models.Artifact;
       if (!Note) return;
-      const existingNotes = await Note.find({ nodeId: targetNodeId }).select("content").lean();
+      const existingNotes = await Artifact.find({ nodeId: targetNodeId }).select("content").lean();
       const currentChars = existingNotes.reduce((n, note) => n + String(note.content || "").length, 0);
       const capChars = target * CHARS_PER_WORD_EST * PROSE_CAP_MULTIPLIER;
 
@@ -518,16 +518,16 @@ export async function init(core) {
     } catch {}
   });
 
-  core.hooks.register("afterNote", async ({ note, node }) => {
+  core.hooks.register("afterArtifact", async ({ artifact, node }) => {
     try {
-      const nodeId = note?.nodeId || node?._id;
+      const nodeId = artifact?.nodeId || node?._id;
       if (!nodeId) return;
       const rootId = await findRootOf(nodeId);
       if (!rootId) return;
       const project = await findProjectForNode(rootId);
       if (!project) return;
-      const len = note?.content ? String(note.content).length : 0;
-      broadcast(rootId, "update", `note saved on ${node?.name || nodeId} (${len}b)`);
+      const len = typeof artifact?.content === "string" ? artifact.content.length : 0;
+      broadcast(rootId, "update", `artifact saved on ${node?.name || nodeId} (${len}b)`);
     } catch {}
   });
 
@@ -584,7 +584,7 @@ export { findProjectForNode, initProject, stampRole, countLeafChapters };
  *                                dispatches plan mode which sees the premise
  *                                in its enrichContext
  */
-export async function handleMessage(message, { userId, username, rootId, targetNodeId }) {
+export async function handleMessage(message, { beingId, username, rootId, targetNodeId }) {
   if (typeof message !== "string" || !message) return null;
 
   const { getExtension } = await import("../loader.js");
@@ -595,7 +595,7 @@ export async function handleMessage(message, { userId, username, rootId, targetN
   if (!needsIntakeFn(message)) return null;
 
   const projectId = targetNodeId || rootId;
-  if (!projectId || !userId) return null;
+  if (!projectId || !beingId) return null;
 
   // Ensure the project exists so we have somewhere to stash the premise
   // and a place for the architect to land. If the caller's at a fresh
@@ -641,7 +641,7 @@ export async function handleMessage(message, { userId, username, rootId, targetN
   // the CLI-initiated run as active, can show the Stop button, and can
   // actually abort it by clicking Stop. Any prior run on this project
   // (from either entry point) gets aborted first.
-  const cliVisitorId = `book-cli:${userId}:${projectId}`;
+  const cliVisitorId = `book-cli:${beingId}:${projectId}`;
   const controller = registerActiveRun({
     nodeId: projectId,
     projectNodeId: projectId,
@@ -654,7 +654,7 @@ export async function handleMessage(message, { userId, username, rootId, targetN
     log.info("BookWorkspace", `🐝 Intake dispatched for raw input (${message.length} chars)`);
     broadcast(projectId, "update", `intake thinking (tree:intake)…`);
     const intakeResult = await runChat({
-      userId, username,
+      beingId, username,
       message,
       mode: "tree:intake",
       rootId: rootId || projectId,

@@ -466,7 +466,7 @@ export async function dumpContextForSession(sessionId, core, { dryRun = true } =
       context,
       meta,
       nodeId: watcher.nodeId,
-      userId: sess.userId,
+      beingId: sess.beingId,
       sessionId,
       dumpMode: dryRun,
     });

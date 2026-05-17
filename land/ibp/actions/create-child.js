@@ -18,7 +18,7 @@ import { getLandDomain } from "../address.js";
 import { PortalError, PORTAL_ERR } from "../errors.js";
 
 export async function createChild(ctx) {
-  const { userId, resolved, payload } = ctx;
+  const { beingId, resolved, payload } = ctx;
   const { name, type = null } = payload || {};
 
   if (!name || typeof name !== "string") {
@@ -34,7 +34,7 @@ export async function createChild(ctx) {
 
   // Home zone: the new child is a tree root for that user.
   if (resolved.zone === "home") {
-    if (String(resolved.userId) !== String(userId)) {
+    if (String(resolved.beingId) !== String(beingId)) {
       throw new PortalError(
         PORTAL_ERR.FORBIDDEN,
         "Cannot create a tree root in another user's home",
@@ -45,7 +45,7 @@ export async function createChild(ctx) {
         name,
         type,
         isRoot: true,
-        userId,
+        beingId,
       });
       return shape(newNode);
     } catch (err) {
@@ -63,7 +63,7 @@ export async function createChild(ctx) {
         name,
         type,
         parentId: resolved.nodeId,
-        userId,
+        beingId,
       });
       return shape(newNode);
     } catch (err) {

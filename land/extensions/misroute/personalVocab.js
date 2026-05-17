@@ -25,15 +25,15 @@
  *     "food": { ... }
  *   }
  *
- * Cache: in-process Map keyed by userId. Compiled RegExp arrays per extension.
+ * Cache: in-process Map keyed by beingId. Compiled RegExp arrays per extension.
  * Invalidated on writes. 5-minute TTL on reads to handle external mutations.
  */
 
 import log from "../../seed/log.js";
-import User from "../../seed/models/user.js";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import Being from "../../seed/models/being.js";
+import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
 
-const _cache = new Map(); // userId -> { compiled: { extName: {nouns, verbs, adjectives}}, loadedAt }
+const _cache = new Map(); // beingId -> { compiled: { extName: {nouns, verbs, adjectives}}, loadedAt }
 const TTL_MS = 5 * 60 * 1000;
 const VALID_BUCKETS = new Set(["nouns", "verbs", "adjectives"]);
 
@@ -74,20 +74,20 @@ function compileVocab(raw) {
  * Use this when scoring messages: pass the entire object to queryIndexScored,
  * which slices the right extension at score time.
  */
-export async function getPersonalVocabularyForUser(userId) {
-  if (!userId) return {};
-  const cached = _cache.get(String(userId));
+export async function getPersonalVocabularyForUser(beingId) {
+  if (!beingId) return {};
+  const cached = _cache.get(String(beingId));
   if (cached && Date.now() - cached.loadedAt < TTL_MS) {
     return cached.compiled;
   }
   try {
-    const user = await User.findById(userId).select("metadata").lean();
+    const user = await Being.findById(beingId).select("metadata").lean();
     if (!user) return {};
     const raw = user.metadata instanceof Map
       ? user.metadata.get("personalVocab")
       : user.metadata?.personalVocab;
     const compiled = compileVocab(raw);
-    _cache.set(String(userId), { compiled, loadedAt: Date.now() });
+    _cache.set(String(beingId), { compiled, loadedAt: Date.now() });
     return compiled;
   } catch (err) {
     log.debug("Misroute", `personal vocab load failed: ${err.message}`);
@@ -99,16 +99,16 @@ export async function getPersonalVocabularyForUser(userId) {
  * Append a pattern to a user's personal vocabulary. Idempotent.
  * Invalidates the cache so the next routing call sees the new pattern.
  */
-export async function appendPersonalPattern(userId, extName, bucket, entry) {
-  if (!userId || !extName) return { added: false, reason: "missing-params" };
+export async function appendPersonalPattern(beingId, extName, bucket, entry) {
+  if (!beingId || !extName) return { added: false, reason: "missing-params" };
   if (!VALID_BUCKETS.has(bucket)) return { added: false, reason: "invalid-bucket" };
   if (!entry?.pattern) return { added: false, reason: "missing-pattern" };
 
   try {
-    const user = await User.findById(userId);
+    const user = await Being.findById(beingId);
     if (!user) return { added: false, reason: "user-not-found" };
 
-    const current = getUserMeta(user, "personalVocab") || {};
+    const current = getBeingMeta(user, "personalVocab") || {};
     if (!current[extName]) current[extName] = { nouns: [], verbs: [], adjectives: [] };
     if (!Array.isArray(current[extName][bucket])) current[extName][bucket] = [];
 
@@ -116,9 +116,9 @@ export async function appendPersonalPattern(userId, extName, bucket, entry) {
     if (existing) {
       existing.count = (existing.count || 1) + 1;
       existing.lastSeen = new Date().toISOString();
-      setUserMeta(user, "personalVocab", current);
+      setBeingMeta(user, "personalVocab", current);
       await user.save();
-      _cache.delete(String(userId));
+      _cache.delete(String(beingId));
       return { added: false, reason: "duplicate-incremented" };
     }
 
@@ -129,9 +129,9 @@ export async function appendPersonalPattern(userId, extName, bucket, entry) {
       count: 1,
     });
 
-    setUserMeta(user, "personalVocab", current);
+    setBeingMeta(user, "personalVocab", current);
     await user.save();
-    _cache.delete(String(userId));
+    _cache.delete(String(beingId));
     return { added: true };
   } catch (err) {
     log.error("Misroute", `appendPersonalPattern failed: ${err.message}`);
@@ -142,15 +142,15 @@ export async function appendPersonalPattern(userId, extName, bucket, entry) {
 /**
  * Remove a pattern from a user's personal vocabulary.
  */
-export async function removePersonalPattern(userId, extName, bucket, pattern) {
-  if (!userId || !extName || !VALID_BUCKETS.has(bucket) || !pattern) {
+export async function removePersonalPattern(beingId, extName, bucket, pattern) {
+  if (!beingId || !extName || !VALID_BUCKETS.has(bucket) || !pattern) {
     return { removed: false, reason: "invalid-params" };
   }
   try {
-    const user = await User.findById(userId);
+    const user = await Being.findById(beingId);
     if (!user) return { removed: false, reason: "user-not-found" };
 
-    const current = getUserMeta(user, "personalVocab") || {};
+    const current = getBeingMeta(user, "personalVocab") || {};
     if (!current[extName]?.[bucket]) return { removed: false, reason: "not-found" };
 
     const before = current[extName][bucket].length;
@@ -159,9 +159,9 @@ export async function removePersonalPattern(userId, extName, bucket, pattern) {
       return { removed: false, reason: "not-found" };
     }
 
-    setUserMeta(user, "personalVocab", current);
+    setBeingMeta(user, "personalVocab", current);
     await user.save();
-    _cache.delete(String(userId));
+    _cache.delete(String(beingId));
     return { removed: true };
   } catch (err) {
     log.error("Misroute", `removePersonalPattern failed: ${err.message}`);
@@ -173,10 +173,10 @@ export async function removePersonalPattern(userId, extName, bucket, pattern) {
  * List all personal vocabulary entries for a user, flattened across extensions.
  * Returns an array of { extName, bucket, pattern, addedAt, trigger, count }.
  */
-export async function listPersonalEntries(userId) {
-  if (!userId) return [];
+export async function listPersonalEntries(beingId) {
+  if (!beingId) return [];
   try {
-    const user = await User.findById(userId).select("metadata").lean();
+    const user = await Being.findById(beingId).select("metadata").lean();
     if (!user) return [];
     const raw = user.metadata instanceof Map
       ? user.metadata.get("personalVocab")
@@ -209,6 +209,6 @@ export async function listPersonalEntries(userId) {
  * Public so other extensions or admin tooling can force a reload after
  * external metadata edits.
  */
-export function invalidatePersonalVocabCache(userId) {
-  if (userId) _cache.delete(String(userId));
+export function invalidatePersonalVocabCache(beingId) {
+  if (beingId) _cache.delete(String(beingId));
 }

@@ -1,7 +1,7 @@
 // treeos/app/app.js - Dashboard page
 import express from "express";
 import { sendError, ERR } from "../../../seed/protocol.js";
-import User from "../../../seed/models/user.js";
+import Being from "../../../seed/models/being.js";
 import LlmConnection from "../../../seed/models/llmConnection.js";
 import authenticateLite from "../../html-rendering/authenticateLite.js";
 import { notFoundPage } from "../../html-rendering/notFoundPage.js";
@@ -27,11 +27,11 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
     if (!isHtmlEnabled()) {
       return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled. Use the SPA frontend.");
     }
-    if (!req.userId) {
+    if (!req.beingId) {
       return res.redirect("/login");
     }
 
-    const user = await User.findById(req.userId).select(
+    const user = await Being.findById(req.beingId).select(
       "username metadata llmDefault",
     );
 
@@ -39,8 +39,8 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
       return notFoundPage(req, res, "This user doesn't exist.");
     }
 
-    const userMetaModule = await import("../../../seed/tree/userMetadata.js");
-    const nav = userMetaModule.getUserMeta(user, "nav");
+    const userMetaModule = await import("../../../seed/tree/beingMetadata.js");
+    const nav = userMetaModule.getBeingMeta(user, "nav");
     const userRoots = Array.isArray(nav.roots) ? nav.roots : [];
 
     // Redirect to setup if user needs LLM (unless they skipped recently).
@@ -49,19 +49,19 @@ router.get("/dashboard", authenticateLite, async (req, res) => {
     if (!setupSkipped) {
       const hasMainLlm = !!user.llmDefault;
       if (!hasMainLlm) {
-        const connCount = await LlmConnection.countDocuments({ userId: req.userId });
+        const connCount = await LlmConnection.countDocuments({ beingId: req.beingId });
         if (connCount === 0) {
           return res.redirect("/setup");
         }
       }
     }
 
-    const { getUserMeta } = await import("../../../seed/tree/userMetadata.js");
-    const htmlShareToken = getUserMeta(user, "html")?.shareToken || "";
+    const { getBeingMeta } = await import("../../../seed/tree/beingMetadata.js");
+    const htmlShareToken = getBeingMeta(user, "html")?.shareToken || "";
     const { username } = user;
     const hasLlm =
       !!user.llmDefault ||
-      (await LlmConnection.countDocuments({ userId: req.userId })) > 0;
+      (await LlmConnection.countDocuments({ beingId: req.beingId })) > 0;
 
     const landName = getLandIdentity()?.name || "TreeOS";
 
@@ -1712,7 +1712,7 @@ body.show-bg-messages .mobile-mode-bar {
             <span class="loading-text">Loading...</span>
           </div>
         </div>
-        <iframe id="viewport" src="${req.query.rootId && UUID_RE.test(req.query.rootId) ? `/api/v1/root/${req.query.rootId}?html&token=${encodeURIComponent(htmlShareToken)}&inApp=1` : `/api/v1/user/${req.userId}?html&token=${encodeURIComponent(htmlShareToken)}&inApp=1`}" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-top-navigation-by-user-activation allow-top-navigation"></iframe>
+        <iframe id="viewport" src="${req.query.rootId && UUID_RE.test(req.query.rootId) ? `/api/v1/root/${req.query.rootId}?html&token=${encodeURIComponent(htmlShareToken)}&inApp=1` : `/api/v1/user/${req.beingId}?html&token=${encodeURIComponent(htmlShareToken)}&inApp=1`}" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-top-navigation-by-user-activation allow-top-navigation"></iframe>
       </div>
     </div>
   </div>
@@ -1784,10 +1784,10 @@ body.show-bg-messages .mobile-mode-bar {
   <script>
     // Config from server
     const CONFIG = {
-      userId: "${esc(req.userId)}",
-      username: ${JSON.stringify(username || req.userId || "")},
+      beingId: "${esc(req.beingId)}",
+      username: ${JSON.stringify(username || req.beingId || "")},
       htmlShareToken: "${esc(htmlShareToken)}",
-      homeUrl: "/api/v1/user/${esc(req.userId)}?html&token=${encodeURIComponent(htmlShareToken)}&inApp=1",
+      homeUrl: "/api/v1/user/${esc(req.beingId)}?html&token=${encodeURIComponent(htmlShareToken)}&inApp=1",
       hasLlm: ${!!hasLlm},
       landName: ${JSON.stringify(landName || "")},
     };
@@ -3437,7 +3437,7 @@ function goHome() {
         window.location.href = "/setup";
         return;
       }
-      const url = buildIframeUrl('/api/v1/user/' + CONFIG.userId + '/energy?html');
+      const url = buildIframeUrl('/api/v1/user/' + CONFIG.beingId + '/energy?html');
       loadingOverlay.classList.add("visible");
       currentIframeUrl = url;
       iframe.src = url;

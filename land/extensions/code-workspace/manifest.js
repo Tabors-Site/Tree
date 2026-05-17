@@ -81,7 +81,7 @@ export default {
 
   needs: {
     services: ["hooks", "metadata", "tree"],
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
     extensions: ["governing"],
   },
 
@@ -105,7 +105,7 @@ export default {
       listens: [
         "enrichContext",
         "afterBoot",
-        "afterNote",
+        "afterArtifact",
         "afterSessionEnd",
         "onCascade",
         "swarm:afterProjectInit",

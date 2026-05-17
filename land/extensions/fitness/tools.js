@@ -45,17 +45,17 @@ export default function getTools() {
       schema: {
         rootId: z.string().describe("Fitness root node ID."),
         modality: z.enum(["gym", "running", "home"]).describe("Which modality to add."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      handler: async ({ rootId, modality, userId }) => {
+      handler: async ({ rootId, modality, beingId }) => {
         try {
           let result;
-          if (modality === "gym") result = await scaffoldGym(rootId, userId);
-          else if (modality === "running") result = await scaffoldRunning(rootId, userId);
-          else if (modality === "home") result = await scaffoldHome(rootId, userId);
+          if (modality === "gym") result = await scaffoldGym(rootId, beingId);
+          else if (modality === "running") result = await scaffoldRunning(rootId, beingId);
+          else if (modality === "home") result = await scaffoldHome(rootId, beingId);
           else return { content: [{ type: "text", text: `Unknown modality: ${modality}` }] };
           return { content: [{ type: "text", text: `Created ${result.name} branch (${result.id})` }] };
         } catch (err) {
@@ -69,14 +69,14 @@ export default function getTools() {
       schema: {
         parentId: z.string().describe("Parent node ID (modality branch like Gym or Home)."),
         name: z.string().describe("Group name (e.g. Chest, Push, Morning Routine)."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      handler: async ({ parentId, name, userId }) => {
+      handler: async ({ parentId, name, beingId }) => {
         try {
-          const result = await addGroupNode({ parentId, name, userId });
+          const result = await addGroupNode({ parentId, name, beingId });
           return { content: [{ type: "text", text: `Created group "${result.name}" (${result.id})` }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Failed: ${err.message}` }] };
@@ -104,17 +104,17 @@ export default function getTools() {
         progressionPath: z.array(z.string()).optional()
           .describe("Variation progression for bodyweight (e.g. ['standard', 'diamond', 'archer'])."),
         rootId: z.string().describe("Fitness root node ID (for channel creation)."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      handler: async ({ groupId, name, exerciseType, unit, sets, startingValues, goals, progressionIncrement, progressionPath, rootId, userId }) => {
+      handler: async ({ groupId, name, exerciseType, unit, sets, startingValues, goals, progressionIncrement, progressionPath, rootId, beingId }) => {
         try {
           const result = await addExerciseNode({
             groupId, name, exerciseType, unit, sets,
             startingValues, goals, progressionIncrement, progressionPath,
-            rootId, userId,
+            rootId, beingId,
           });
           return { content: [{ type: "text", text: `Created exercise "${result.name}" (${result.id})` }] };
         } catch (err) {
@@ -129,12 +129,12 @@ export default function getTools() {
         exerciseId: z.string().optional().describe("Exercise node ID to remove."),
         exerciseName: z.string().optional().describe("Exercise name (case-insensitive substring). Requires rootId."),
         rootId: z.string().optional().describe("Fitness root node ID. Required when using exerciseName."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
-      handler: async ({ exerciseId, exerciseName, rootId, userId }) => {
+      handler: async ({ exerciseId, exerciseName, rootId, beingId }) => {
         try {
           let targetId = exerciseId;
           let targetName = null;
@@ -155,7 +155,7 @@ export default function getTools() {
             targetId = matches[0].id;
             targetName = matches[0].name;
           }
-          const ok = await removeExerciseNode(targetId, userId);
+          const ok = await removeExerciseNode(targetId, beingId);
           return { content: [{ type: "text", text: ok ? `Removed${targetName ? ` ${targetName}` : " exercise"}.` : "Failed to remove exercise." }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Failed: ${err.message}` }] };
@@ -167,7 +167,7 @@ export default function getTools() {
       description: "Mark fitness setup as complete after all modalities, groups, and exercises have been created.",
       schema: {
         rootId: z.string().describe("Fitness root node ID."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
@@ -194,7 +194,7 @@ export default function getTools() {
           weightIncrement: z.number().optional(),
           weeklyMilesGoal: z.number().optional(),
         }).describe("Profile settings."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
@@ -220,7 +220,7 @@ export default function getTools() {
           .describe("How this exercise is tracked."),
         unit: z.string().optional().describe("Unit: lb, kg, bodyweight, seconds, minutes, miles, km."),
         goals: z.record(z.number()).optional().describe("Optional goal values."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
@@ -260,21 +260,21 @@ export default function getTools() {
           variation: z.string().optional().describe("Bodyweight variation name."),
         }).passthrough()).describe("Parsed exercises from workout input."),
         date: z.string().optional().describe("Workout date (YYYY-MM-DD). Defaults to today."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       handler: async (args) => {
         try {
-          const { rootId, exercises, date, userId, chatId, sessionId } = args;
+          const { rootId, exercises, date, beingId, chatId, sessionId } = args;
           const fitnessNodes = await findFitnessNodes(rootId);
           if (!fitnessNodes) return { content: [{ type: "text", text: "Fitness tree not found." }] };
 
           const parsed = {
             exercises,
             date: date || new Date().toISOString().slice(0, 10),
-            _userId: userId,
+            _userId: beingId,
             _rootId: rootId,
           };
 
@@ -283,7 +283,7 @@ export default function getTools() {
 
           // Record session to History node
           const historyNodeId = fitnessNodes.history?.id;
-          const record = await recordSessionHistory(historyNodeId, parsed, delivered, userId, { chatId, sessionId });
+          const record = await recordSessionHistory(historyNodeId, parsed, delivered, beingId, { chatId, sessionId });
 
           // Build human-readable summary
           const { lines, summary } = buildWorkoutSummary(parsed, delivered);
@@ -330,7 +330,7 @@ export default function getTools() {
         exerciseName: z.string().optional().describe("Exercise name (case-insensitive substring match). Omit to list across all exercises."),
         group: z.string().optional().describe("Muscle group or modality name. Omit to search all groups."),
         limit: z.number().optional().describe("Max sessions to return per exercise. Default 10."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
       handler: async (args) => {
@@ -392,7 +392,7 @@ export default function getTools() {
         date: z.string().optional().describe("Session date YYYY-MM-DD to remove."),
         index: z.number().optional().describe("Absolute index in the full history array (0 = oldest). Use when two sessions share a date."),
         all: z.boolean().optional().describe("If true, delete every session matching exerciseName+date. Default false."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
       handler: async (args) => {
@@ -473,7 +473,7 @@ export default function getTools() {
       schema: {
         rootId: z.string().describe("Fitness root node ID."),
         modality: z.enum(["gym", "running", "home"]).optional().describe("Filter to one modality. Omit for everything."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
       handler: async (args) => {
@@ -532,7 +532,7 @@ export default function getTools() {
         modality: z.enum(["gym", "running", "home"]).optional().describe("Restrict to one modality."),
         exerciseName: z.string().optional().describe("Fuzzy substring to restrict to one exercise."),
         limit: z.number().optional().describe("Max sessions returned. Default 50."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
       handler: async (args) => {

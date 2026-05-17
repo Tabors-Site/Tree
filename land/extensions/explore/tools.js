@@ -12,15 +12,15 @@ export default [
       nodeId: z.string().describe("The node to explore from."),
       query: z.string().describe("What to find. Natural language."),
       deep: z.boolean().optional().default(false).describe("More iterations, lower confidence threshold."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       username: z.string().optional().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    handler: async ({ nodeId, query, deep, userId, username }) => {
+    handler: async ({ nodeId, query, deep, beingId, username }) => {
       try {
-        const map = await runExplore(nodeId, query, userId, username || "system", { deep });
+        const map = await runExplore(nodeId, query, beingId, username || "system", { deep });
         if (map.error) {
           return { content: [{ type: "text", text: map.error }] };
         }
@@ -52,7 +52,7 @@ export default [
     description: "Read the last exploration map at a position. Shows what was found without re-exploring.",
     schema: {
       nodeId: z.string().describe("The node to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -73,15 +73,15 @@ export default [
     schema: {
       nodeId: z.string().describe("The unexplored node to drill into."),
       query: z.string().describe("The same query or a refined one."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       username: z.string().optional().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    handler: async ({ nodeId, query, userId, username }) => {
+    handler: async ({ nodeId, query, beingId, username }) => {
       try {
-        const map = await runExplore(nodeId, query, userId, username || "system", {});
+        const map = await runExplore(nodeId, query, beingId, username || "system", {});
         if (map.error) {
           return { content: [{ type: "text", text: map.error }] };
         }

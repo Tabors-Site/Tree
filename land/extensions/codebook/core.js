@@ -5,14 +5,14 @@
  * has accumulated, runs a compression pass via runChat to extract a
  * dictionary of recurring concepts, shorthand, and compressed references.
  *
- * The dictionary lives in metadata.codebook on the node, namespaced by userId.
+ * The dictionary lives in metadata.codebook on the node, namespaced by beingId.
  * enrichContext injects it so the AI picks up the compressed language.
  */
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { SYSTEM_ROLE, CONTENT_TYPE } from "../../seed/protocol.js";
+import Artifact from "../../seed/models/artifact.js";
+import { SYSTEM_ROLE, ARTIFACT_ORIGIN } from "../../seed/protocol.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 // Held from init
@@ -54,8 +54,8 @@ export async function getCodebookConfig() {
  * Increment the note counter for a user-node pair.
  * Returns the new count.
  */
-export async function incrementNoteCount(nodeId, userId) {
-  const key = `metadata.codebook.${userId}.notesSinceCompression`;
+export async function incrementNoteCount(nodeId, beingId) {
+  const key = `metadata.codebook.${beingId}.notesSinceCompression`;
 
   const result = await Node.findByIdAndUpdate(
     nodeId,
@@ -69,14 +69,14 @@ export async function incrementNoteCount(nodeId, userId) {
     ? result.metadata.get("codebook") || {}
     : result.metadata?.codebook || {};
 
-  return meta[userId]?.notesSinceCompression || 0;
+  return meta[beingId]?.notesSinceCompression || 0;
 }
 
 /**
  * Reset the note counter after compression.
  */
-async function resetNoteCount(nodeId, userId) {
-  const key = `metadata.codebook.${userId}.notesSinceCompression`;
+async function resetNoteCount(nodeId, beingId) {
+  const key = `metadata.codebook.${beingId}.notesSinceCompression`;
   await Node.findByIdAndUpdate(nodeId, { $set: { [key]: 0 } });
 }
 
@@ -112,10 +112,10 @@ const _inFlight = new Set();
 /**
  * Run a compression pass for a user-node pair.
  * Loads recent notes, builds a prompt, calls runChat, parses the result,
- * and writes the dictionary to metadata.codebook.{userId}.dictionary.
+ * and writes the dictionary to metadata.codebook.{beingId}.dictionary.
  */
-export async function runCompression(nodeId, userId, username) {
-  const pairKey = `${nodeId}:${userId}`;
+export async function runCompression(nodeId, beingId, username) {
+  const pairKey = `${nodeId}:${beingId}`;
   if (_inFlight.has(pairKey)) return null;
   _inFlight.add(pairKey);
 
@@ -131,15 +131,15 @@ export async function runCompression(nodeId, userId, username) {
     const enough = await hasEnoughHistory(nodeId, config.minInteractions);
     if (!enough) {
       log.debug("Codebook", `Node ${nodeId} below interaction threshold, skipping compression`);
-      await resetNoteCount(nodeId, userId);
+      await resetNoteCount(nodeId, beingId);
       return null;
     }
 
     // Load recent notes at this node from this user
-    const notes = await Note.find({
+    const notes = await Artifact.find({
       nodeId,
-      userId,
-      contentType: CONTENT_TYPE.TEXT,
+      beingId,
+      origin: ARTIFACT_ORIGIN.IBP,
     })
       .sort({ createdAt: -1 })
       .limit(config.maxNotesForPrompt)
@@ -147,7 +147,7 @@ export async function runCompression(nodeId, userId, username) {
       .lean();
 
     if (notes.length < 3) {
-      await resetNoteCount(nodeId, userId);
+      await resetNoteCount(nodeId, beingId);
       return null;
     }
 
@@ -156,7 +156,7 @@ export async function runCompression(nodeId, userId, username) {
     const meta = node?.metadata instanceof Map
       ? node.metadata.get("codebook") || {}
       : node?.metadata?.codebook || {};
-    const existingDict = meta[userId]?.dictionary || null;
+    const existingDict = meta[beingId]?.dictionary || null;
 
     // Build compression prompt
     const noteTexts = notes
@@ -190,7 +190,7 @@ export async function runCompression(nodeId, userId, username) {
     }
 
     const { answer } = await _runChat({
-      userId,
+      beingId,
       username: username || "system",
       message: prompt,
       mode: "tree:respond",
@@ -205,7 +205,7 @@ export async function runCompression(nodeId, userId, username) {
 
     if (!answer) {
       log.debug("Codebook", `Compression returned empty for ${pairKey}`);
-      await resetNoteCount(nodeId, userId);
+      await resetNoteCount(nodeId, beingId);
       return null;
     }
 
@@ -213,7 +213,7 @@ export async function runCompression(nodeId, userId, username) {
     const dictionary = parseJsonSafe(answer);
     if (!dictionary || typeof dictionary !== "object" || Array.isArray(dictionary)) {
       log.warn("Codebook", `Compression produced invalid dictionary for ${pairKey}`);
-      await resetNoteCount(nodeId, userId);
+      await resetNoteCount(nodeId, beingId);
       return null;
     }
 
@@ -222,9 +222,9 @@ export async function runCompression(nodeId, userId, username) {
     const capped = Object.fromEntries(entries);
 
     // Write to metadata
-    const dictKey = `metadata.codebook.${userId}.dictionary`;
-    const tsKey = `metadata.codebook.${userId}.lastCompressed`;
-    const countKey = `metadata.codebook.${userId}.notesSinceCompression`;
+    const dictKey = `metadata.codebook.${beingId}.dictionary`;
+    const tsKey = `metadata.codebook.${beingId}.lastCompressed`;
+    const countKey = `metadata.codebook.${beingId}.notesSinceCompression`;
 
     await Node.findByIdAndUpdate(nodeId, {
       $set: {
@@ -251,7 +251,7 @@ export async function runCompression(nodeId, userId, username) {
 /**
  * Get the codebook dictionary for a user at a node.
  */
-export async function getCodebook(nodeId, userId) {
+export async function getCodebook(nodeId, beingId) {
   const node = await Node.findById(nodeId).select("metadata").lean();
   if (!node) return null;
 
@@ -259,13 +259,13 @@ export async function getCodebook(nodeId, userId) {
     ? node.metadata.get("codebook") || {}
     : node.metadata?.codebook || {};
 
-  return meta[userId] || null;
+  return meta[beingId] || null;
 }
 
 /**
  * Clear the codebook for a user at a node.
  */
-export async function clearCodebook(nodeId, userId) {
-  const key = `metadata.codebook.${userId}`;
+export async function clearCodebook(nodeId, beingId) {
+  const key = `metadata.codebook.${beingId}`;
   await Node.findByIdAndUpdate(nodeId, { $unset: { [key]: 1 } });
 }

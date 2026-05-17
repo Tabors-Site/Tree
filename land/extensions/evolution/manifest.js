@@ -52,7 +52,7 @@ export default {
 
     hooks: {
       fires: [],
-      listens: ["afterNote", "afterNodeCreate", "afterNavigate", "onCascade", "enrichContext"],
+      listens: ["afterArtifact", "afterNodeCreate", "afterNavigate", "onCascade", "enrichContext"],
     },
   },
 };

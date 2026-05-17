@@ -1,6 +1,6 @@
 # Server Protocol: IBP Wire-Level Rules
 
-This document specifies how lands respond to IBP's four verbs at the wire level. It is the bridge between the conceptual protocol spec ([protocol.md](protocol.md), which defines IBP) and the implementation in `land/portal/`.
+This document specifies how lands respond to IBP's four verbs at the wire level. It is the bridge between the conceptual protocol spec ([protocol.md](protocol.md), which defines IBP) and the implementation in `land/ibp/`.
 
 Read [protocol.md](protocol.md), [being-summoned.md](being-summoned.md), and [message-envelope.md](message-envelope.md) first.
 
@@ -35,10 +35,10 @@ Authentication: none required for bootstrap. Anyone can learn how to connect.
 Four ops, one per verb.
 
 ```
-portal:see   (verb: SEE)
-portal:do    (verb: DO)
-portal:talk  (verb: TALK)
-portal:be    (verb: BE)
+ibp:see   (verb: SEE)
+ibp:do    (verb: DO)
+ibp:talk  (verb: TALK)
+ibp:be    (verb: BE)
 ```
 
 Each is a Socket.IO event taking a request payload and returning an ack (or, for live SEE, a stream of emitted frames in addition to the ack).
@@ -119,8 +119,8 @@ Error codes are listed in [protocol.md](protocol.md).
 ### One-shot
 
 ```
-client emits portal:see { id, position: "<position>", identity?, live: false (or omitted) }
-       OR  portal:see { id, stance:   "<stance>",   identity?, live: false (or omitted) }
+client emits ibp:see { id, position: "<position>", identity?, live: false (or omitted) }
+       OR  ibp:see { id, stance:   "<stance>",   identity?, live: false (or omitted) }
 land responds with ack { id, status: "ok", data: <Position Description> }
 ```
 
@@ -129,14 +129,14 @@ Exactly one of `position` or `stance` must be present. `identity` is required ex
 ### Live
 
 ```
-client emits portal:see { id, position OR stance, identity, live: true }
+client emits ibp:see { id, position OR stance, identity, live: true }
 land responds with ack { id, status: "ok", data: <initial Position Description> }
 land emits portal:patch frames (any number, any time):
   { id, op: "patch", patch: [<RFC 6902 patches>] }
   { id, op: "replace", descriptor: <full descriptor> }
   { id, op: "invalidate" }
 client closes socket -> live SEE ends, no UNSUBSCRIBE needed
-client emits a new portal:see with same field -> new subscription, new id
+client emits a new ibp:see with same field -> new subscription, new id
 ```
 
 The land may emit `patch`, `replace`, or `invalidate` frames at its discretion. The client applies patches in order. If patches drift (the client missed a frame), the land emits `replace` or `invalidate` to recover.
@@ -158,7 +158,7 @@ The land checks for each SEE:
 ## DO wire rules
 
 ```
-client emits portal:do { id, action, position: "<position>", identity, payload }
+client emits ibp:do { id, action, position: "<position>", identity, payload }
 land responds with ack { id, status: "ok", data: <action-specific> }
 ```
 
@@ -182,9 +182,9 @@ land responds with ack { id, status: "ok", data: <action-specific> }
 For large uploads (`upload-artifact` with megabyte-scale bytes), the action supports chunking:
 
 ```
-client emits portal:do { id, action: "upload-artifact", position, identity, payload: { kind, name, contentType, chunk: 0, totalChunks: 5, bytes: <chunk 0> } }
+client emits ibp:do { id, action: "upload-artifact", position, identity, payload: { kind, name, contentType, chunk: 0, totalChunks: 5, bytes: <chunk 0> } }
 land responds with ack { id, status: "ok", data: { chunkAccepted: 0 } }
-client emits portal:do { id, action: "upload-artifact", payload: { chunk: 1, totalChunks: 5, bytes: <chunk 1>, uploadId: <returned in first ack> } }
+client emits ibp:do { id, action: "upload-artifact", payload: { chunk: 1, totalChunks: 5, bytes: <chunk 1>, uploadId: <returned in first ack> } }
 ... and so on
 final chunk: land responds with ack { id, status: "ok", data: { artifactId, position: "<position>/artifacts/<artifactId>" } }
 ```
@@ -194,7 +194,7 @@ Chunked uploads use a per-upload `uploadId` returned in the first ack and thread
 ## TALK wire rules
 
 ```
-client emits portal:talk { id, stance: "<stance>", identity, message }
+client emits ibp:talk { id, stance: "<stance>", identity, message }
 ```
 
 The land's TALK handler:
@@ -206,7 +206,7 @@ The land's TALK handler:
 5. Atomically: appends `message` to inbox + fires summoning per `triggerOn`.
 6. Per `respondMode`:
    - `sync`: holds ack open; when summoning completes, returns the response message inline as `data: <response envelope>`
-   - `async`: returns ack immediately with `data: { status: "accepted" }`; the response (if any) arrives later as a new portal:talk delivered to the sender's inbox
+   - `async`: returns ack immediately with `data: { status: "accepted" }`; the response (if any) arrives later as a new ibp:talk delivered to the sender's inbox
    - `none`: returns ack immediately with `data: { status: "accepted" }`
 
 ### Sync response delivery
@@ -231,8 +231,8 @@ For sync, the ack data is the full response message envelope:
 Sync may stream chunks. The land emits intermediate frames before the final ack:
 
 ```
-land emits portal:talk-delta { id, delta: "<partial content>" }
-land emits portal:talk-delta { id, delta: "<more content>" }
+land emits ibp:talk-delta { id, delta: "<partial content>" }
+land emits ibp:talk-delta { id, delta: "<more content>" }
 land responds with final ack { id, status: "ok", data: <complete response envelope> }
 ```
 
@@ -243,7 +243,7 @@ Embodiments declare `streaming: true` to opt into delta frames. Without that, th
 The originating client receives async responses through a live SEE on the sender's home position. When the response TALK is appended to the sender's inbox, the live SEE emits a patch frame that adds the new inbox entry.
 
 ```
-client A -> portal:talk { id: "talk-1", stance: "<ruler stance>", message: { from: "tabor@treeos.ai", ... } }
+client A -> ibp:talk { id: "talk-1", stance: "<ruler stance>", message: { from: "tabor@treeos.ai", ... } }
 client A <- ack { id: "talk-1", status: "ok", data: { status: "accepted" } }
 
 (time passes)
@@ -266,7 +266,7 @@ This means cascade arrivals are indistinguishable from user TALKs at the protoco
 ## BE wire rules
 
 ```
-client emits portal:be { id, operation, stance: "<stance>", payload?, identity?, from? }
+client emits ibp:be { id, operation, stance: "<stance>", payload?, identity?, from? }
 ```
 
 `stance` is the only address field. For fresh registration, the stance is the land's auth-being (typically `<land>/@auth`). The land's BE handler dispatches to the auth-being at the named stance's land.
@@ -351,35 +351,29 @@ Each extension migrates its routes in its own pass. When an extension is migrate
 
 The legacy WS chat handler (`land/seed/ws/websocket.js`) keeps running until TALK is proven and the migration completes. There may be a transition window where both chat handlers run; clients use the new one.
 
-## Phase 1 ops, discarded
-
-The earlier `portal:fetch`, `portal:resolve`, `portal:discover`, and stubbed `portal:speak`/`portal:subscribe`/`portal:unsubscribe` ops are removed. They were scaffolding for an earlier shape; the four new ops replace them entirely. No aliases.
-
-Anything still calling the old ops is updated in the same pass that wires the new ops.
-
 ## Implementation layout
 
-The new protocol lives in `land/portal/`. Verb handlers are in `land/portal/verbs/`:
+The new protocol lives in `land/ibp/`. Verb handlers are in `land/ibp/verbs/`:
 
-- `land/portal/verbs/see.js` SEE handler (one-shot and live)
-- `land/portal/verbs/do.js` DO action dispatcher
-- `land/portal/verbs/talk.js` TALK with inbox append and summoning trigger
-- `land/portal/verbs/be.js` BE operations via auth-being
+- `land/ibp/verbs/see.js` SEE handler (one-shot and live)
+- `land/ibp/verbs/do.js` DO action dispatcher
+- `land/ibp/verbs/talk.js` TALK with inbox append and summoning trigger
+- `land/ibp/verbs/be.js` BE operations via auth-being
 
 Shared utilities:
 
-- `land/portal/address.js` PA parser + server-context injection (existing)
-- `land/portal/resolver.js` PA to position resolution (existing, internal only)
-- `land/portal/descriptor.js` Position Description builder (existing, extended)
-- `land/portal/inbox.js` inbox kernel helpers (new)
-- `land/portal/errors.js` PortalError + error codes (existing, extended)
-- `land/portal/actions/` one file per kernel-named DO action (new)
+- `land/ibp/address.js` PA parser + server-context injection (existing)
+- `land/ibp/resolver.js` PA to position resolution (existing, internal only)
+- `land/ibp/descriptor.js` Position Description builder (existing, extended)
+- `land/ibp/inbox.js` inbox kernel helpers (new)
+- `land/ibp/errors.js` PortalError + error codes (existing, extended)
+- `land/ibp/actions/` one file per kernel-named DO action (new)
 
 Wiring:
 
-- `land/portal/protocol.js` registers the four ops on the Socket.IO instance
-- `land/portal/bootstrap-route.js` the single HTTP bootstrap endpoint
-- `land/portal/index.js` boot hook from `startup.js`
+- `land/ibp/protocol.js` registers the four ops on the Socket.IO instance
+- `land/ibp/bootstrap-route.js` the single HTTP bootstrap endpoint
+- `land/ibp/index.js` boot hook from `startup.js`
 
 ## Versioning
 
@@ -387,7 +381,7 @@ The protocol carries a version in the bootstrap response. Major versions are bre
 
 ```
 client connects
-client -> portal:see { position: "<land>/.discovery" }
+client -> ibp:see { position: "<land>/.discovery" }
 client checks protocolVersion against its supported list
 client proceeds or shows a version-mismatch error
 ```

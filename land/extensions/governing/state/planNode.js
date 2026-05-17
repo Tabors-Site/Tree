@@ -168,7 +168,7 @@ export async function appendLedger(nodeId, entry) {
  */
 export async function createPlanNode({
   parentNodeId,
-  userId,
+  beingId,
   name,
   systemSpec = null,
   wasAi = false,
@@ -176,7 +176,7 @@ export async function createPlanNode({
   sessionId = null,
 } = {}) {
   if (!parentNodeId) throw new Error("createPlanNode requires parentNodeId");
-  if (!userId) throw new Error("createPlanNode requires userId");
+  if (!beingId) throw new Error("createPlanNode requires beingId");
   if (!name || !String(name).trim()) throw new Error("createPlanNode requires name");
 
   const parentDoc = await Node.findById(parentNodeId).select("_id type").lean();
@@ -192,7 +192,7 @@ export async function createPlanNode({
     name: String(name).trim(),
     parentId: String(parentNodeId),
     type: "plan",
-    userId,
+    beingId,
     wasAi,
     chatId,
     sessionId,
@@ -238,7 +238,7 @@ export async function createPlanNode({
  */
 export async function ensurePlanAtScope({
   scopeNodeId,
-  userId,
+  beingId,
   name = "plans",
   systemSpec = null,
   wasAi = false,
@@ -258,13 +258,13 @@ export async function ensurePlanAtScope({
   }).select("_id name parent type metadata").lean();
 
   if (!planNode) {
-    if (!userId) {
-      throw new Error("ensurePlanAtScope requires userId to create a plan-type child");
+    if (!beingId) {
+      throw new Error("ensurePlanAtScope requires beingId to create a plan-type child");
     }
     try {
       planNode = await createPlanNode({
         parentNodeId: String(scopeNodeId),
-        userId,
+        beingId,
         name,
         systemSpec,
         wasAi, chatId, sessionId,
@@ -314,21 +314,45 @@ export async function ensurePlanAtScope({
       });
     }
 
-    // Declare the Planner's home at this position. embodiments is a
-    // kernel-aware namespace so writing it is permitted even though
-    // governing isn't its owner. The descriptor reads this to surface
-    // the Planner being at the plan trio node and route activity
-    // (chainstep state) to that being.
+    // Declare the Planner's home at this position via the unified
+    // primitive. The plan trio Node was created above; createBeingWithHome
+    // with homeNodeId places the Planner being at it, generates a unique
+    // username + random password, and writes
+    // metadata.beings.planner.beingId on the node. Skip if a
+    // planner is already at home here. After creation, merge governing
+    // lineage fields (scopeRulerId) alongside.
     const existingEmbodiments = node.metadata instanceof Map
-      ? node.metadata.get("embodiments")
+      ? node.metadata.get("beings")
       : node.metadata?.embodiments;
-    if (!existingEmbodiments?.planner) {
+    if (!existingEmbodiments?.planner?.beingId) {
+      const { createBeingWithHome } = await import("../../../seed/auth.js");
+      await createBeingWithHome({
+        operatingMode: "ai",
+        role:          "planner",
+        homeNodeId:    String(planNode._id),
+      });
       const { mergeExtMeta: kernelMergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-      await kernelMergeExtMeta(node, "embodiments", {
+      await kernelMergeExtMeta(node, "beings", {
         planner: {
-          installedAt: new Date().toISOString(),
-          installedBy: "governing",
+          installedBy:  "governing",
           scopeRulerId: String(scopeNodeId),
+        },
+      });
+      // Inner-being protection: TALK to the Planner at this trio is
+      // restricted to governing-role beings of THIS rulership. The
+      // `homeInDomain: <scopeNodeId>` check ensures the requester's
+      // home is within this rulership's subtree, so Rulers / sibling
+      // trio members of OTHER rulerships can't reach this Planner.
+      // Humans and citizens are filtered by the role list. The Ruler
+      // is how external beings interact with governance here.
+      await kernelMergeExtMeta(node, "permissions", {
+        talk: {
+          "@planner*": {
+            requires: {
+              role:         ["ruler", "planner", "contractor", "foreman"],
+              homeInDomain: String(scopeNodeId),
+            },
+          },
         },
       });
     }

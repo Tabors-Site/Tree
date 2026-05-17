@@ -15,82 +15,82 @@ import {
 describe("buildUserAiSessionKey", () => {
   test("tree zone with device", () => {
     assert.equal(
-      buildUserAiSessionKey({ userId: "u1", zone: "tree", rootId: "r1", device: "cli" }),
+      buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "cli" }),
       "user:u1:r1:cli",
     );
   });
 
   test("home zone with device", () => {
     assert.equal(
-      buildUserAiSessionKey({ userId: "u1", zone: "home", device: "web" }),
+      buildUserAiSessionKey({ beingId: "u1", zone: "home", device: "web" }),
       "user:u1:home:web",
     );
   });
 
   test("land zone with device", () => {
     assert.equal(
-      buildUserAiSessionKey({ userId: "u1", zone: "land", device: "http" }),
+      buildUserAiSessionKey({ beingId: "u1", zone: "land", device: "http" }),
       "user:u1:land:http",
     );
   });
 
   test("handle replaces device (explicit override)", () => {
-    const k = buildUserAiSessionKey({ userId: "u1", zone: "tree", rootId: "r1", device: "cli", handle: "shared" });
+    const k = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "cli", handle: "shared" });
     assert.equal(k, "user:u1:r1:shared");
     assert.ok(!k.includes("cli"), "handle should replace device, not append");
   });
 
   test("same handle from two devices produces one merged session", () => {
     // Invariant test — this is how cross-device merge works.
-    const a = buildUserAiSessionKey({ userId: "u1", zone: "tree", rootId: "r1", device: "web", handle: "shared" });
-    const b = buildUserAiSessionKey({ userId: "u1", zone: "tree", rootId: "r1", device: "cli", handle: "shared" });
+    const a = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "web", handle: "shared" });
+    const b = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "cli", handle: "shared" });
     assert.equal(a, b, "same handle must produce the same key regardless of device");
   });
 
   test("gateway-composed device (colons preserved)", () => {
     assert.equal(
-      buildUserAiSessionKey({ userId: "u1", zone: "tree", rootId: "r1", device: "telegram:12345" }),
+      buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "telegram:12345" }),
       "user:u1:r1:telegram:12345",
     );
   });
 
   test("canopy-proxied remote visitor device", () => {
     assert.equal(
-      buildUserAiSessionKey({ userId: "owner", zone: "tree", rootId: "r1", device: "canopy:other-land.org:remote-u" }),
+      buildUserAiSessionKey({ beingId: "owner", zone: "tree", rootId: "r1", device: "canopy:other-land.org:remote-u" }),
       "user:owner:r1:canopy:other-land.org:remote-u",
     );
   });
 
   test("two devices on same tree produce distinct keys (auto-decoupling)", () => {
-    const dashboard = buildUserAiSessionKey({ userId: "u1", zone: "tree", rootId: "r1", device: "web" });
-    const cli = buildUserAiSessionKey({ userId: "u1", zone: "tree", rootId: "r1", device: "cli" });
+    const dashboard = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "web" });
+    const cli = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "cli" });
     assert.notEqual(dashboard, cli);
   });
 
-  test("throws when userId missing", () => {
+  test("throws when beingId missing", () => {
     assert.throws(
       () => buildUserAiSessionKey({ zone: "tree", rootId: "r1", device: "web" }),
-      /userId required/,
+      /beingId required/,
     );
   });
 
   test("throws when zone missing", () => {
     assert.throws(
-      () => buildUserAiSessionKey({ userId: "u1", rootId: "r1", device: "web" }),
+      () => buildUserAiSessionKey({ beingId: "u1", rootId: "r1", device: "web" }),
       /zone required/,
     );
   });
 
   test("throws when tree zone missing rootId", () => {
     assert.throws(
-      () => buildUserAiSessionKey({ userId: "u1", zone: "tree", device: "web" }),
+      () => buildUserAiSessionKey({ beingId: "u1", zone: "tree", device: "web" }),
       /zone='tree' requires rootId/,
     );
   });
 
   test("throws when unknown zone", () => {
     assert.throws(
-      () => buildUserAiSessionKey({ userId: "u1", zone: "bogus", device: "web" }),
+      () => buildUserAiSessionKey({ beingId: "u1", zone: "bogus", device: "web" }),
       /unknown zone "bogus"/,
     );
   });
@@ -99,21 +99,21 @@ describe("buildUserAiSessionKey", () => {
     // This guard catches any entry point that forgets to pass device.
     // Without it, all such traffic collapses into a shared `…:default` key.
     assert.throws(
-      () => buildUserAiSessionKey({ userId: "u1", zone: "tree", rootId: "r1" }),
+      () => buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1" }),
       /device or handle required/,
     );
   });
 
   test("throws when device/handle sanitizes to empty", () => {
     assert.throws(
-      () => buildUserAiSessionKey({ userId: "u1", zone: "tree", rootId: "r1", device: "!!!" }),
+      () => buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "!!!" }),
       /reduced to empty after sanitization/,
     );
   });
 
   test("sanitizer strips disallowed characters but preserves colons, dots, and dashes", () => {
     assert.equal(
-      buildUserAiSessionKey({ userId: "u1", zone: "tree", rootId: "r1", device: "x/y\\z q:w-v.ext" }),
+      buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "x/y\\z q:w-v.ext" }),
       "user:u1:r1:xyzq:w-v.ext",
     );
   });
@@ -130,7 +130,7 @@ describe("resolveInternalAiSessionKey", () => {
     const { key, persist } = resolveInternalAiSessionKey({
       aiSessionKey: "user:u1:r1:web",
       scope: "tree", purpose: "reflect",  // ignored
-      userId: "u1", rootId: "r1",
+      beingId: "u1", rootId: "r1",
       makeEphemeral,
     });
     assert.equal(key, "user:u1:r1:web");
@@ -149,7 +149,7 @@ describe("resolveInternalAiSessionKey", () => {
   test("scope=tree + purpose builds tree-internal key", () => {
     const { key, persist } = resolveInternalAiSessionKey({
       scope: "tree", purpose: "reflect",
-      userId: "u1", rootId: "r1",
+      beingId: "u1", rootId: "r1",
       makeEphemeral,
     });
     assert.equal(key, "tree-internal:r1:reflect");
@@ -159,22 +159,22 @@ describe("resolveInternalAiSessionKey", () => {
   test("scope=tree with extra produces per-fork chain", () => {
     const { key } = resolveInternalAiSessionKey({
       scope: "tree", purpose: "analyze", extra: "security",
-      userId: "u1", rootId: "r1",
+      beingId: "u1", rootId: "r1",
       makeEphemeral,
     });
     assert.equal(key, "tree-internal:r1:analyze:security");
   });
 
-  test("scope=home + purpose builds home-internal key under userId", () => {
+  test("scope=home + purpose builds home-internal key under beingId", () => {
     const { key } = resolveInternalAiSessionKey({
       scope: "home", purpose: "reflect",
-      userId: "u1",
+      beingId: "u1",
       makeEphemeral,
     });
     assert.equal(key, "home-internal:u1:reflect");
   });
 
-  test("scope=land + purpose builds land-internal key (no userId/rootId)", () => {
+  test("scope=land + purpose builds land-internal key (no beingId/rootId)", () => {
     const { key } = resolveInternalAiSessionKey({
       scope: "land", purpose: "digest",
       makeEphemeral,
@@ -184,21 +184,21 @@ describe("resolveInternalAiSessionKey", () => {
 
   test("scope=tree without rootId throws", () => {
     assert.throws(
-      () => resolveInternalAiSessionKey({ scope: "tree", purpose: "x", userId: "u1", makeEphemeral }),
+      () => resolveInternalAiSessionKey({ scope: "tree", purpose: "x", beingId: "u1", makeEphemeral }),
       /scope='tree' requires rootId and purpose/,
     );
   });
 
   test("scope=tree without purpose throws", () => {
     assert.throws(
-      () => resolveInternalAiSessionKey({ scope: "tree", rootId: "r1", userId: "u1", makeEphemeral }),
+      () => resolveInternalAiSessionKey({ scope: "tree", rootId: "r1", beingId: "u1", makeEphemeral }),
       /scope='tree' requires rootId and purpose/,
     );
   });
 
   test("scope=home without purpose throws", () => {
     assert.throws(
-      () => resolveInternalAiSessionKey({ scope: "home", userId: "u1", makeEphemeral }),
+      () => resolveInternalAiSessionKey({ scope: "home", beingId: "u1", makeEphemeral }),
       /scope='home' requires/,
     );
   });
@@ -236,7 +236,7 @@ describe("resolveInternalAiSessionKey", () => {
   test("extra sanitizer strips disallowed characters", () => {
     const { key } = resolveInternalAiSessionKey({
       scope: "tree", purpose: "p", extra: "hello world/bad",
-      userId: "u", rootId: "r",
+      beingId: "u", rootId: "r",
       makeEphemeral,
     });
     // spaces and slashes stripped, colons preserved
@@ -250,23 +250,23 @@ describe("resolveInternalAiSessionKey", () => {
 
 describe("regression: per-device decoupling", () => {
   test("CLI and browser on same user+tree get different keys (no session sharing)", () => {
-    const cli = buildUserAiSessionKey({ userId: "u1", zone: "tree", rootId: "r1", device: "cli" });
-    const browser = buildUserAiSessionKey({ userId: "u1", zone: "tree", rootId: "r1", device: "web" });
+    const cli = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "cli" });
+    const browser = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "web" });
     assert.notEqual(cli, browser);
     // This is the invariant that prevents the browser's `endSession` from
     // aborting the CLI's in-flight chat (and vice versa).
   });
 
   test("Two Telegram chats for same user+tree get different keys", () => {
-    const chatA = buildUserAiSessionKey({ userId: "owner", zone: "tree", rootId: "r1", device: "telegram:111" });
-    const chatB = buildUserAiSessionKey({ userId: "owner", zone: "tree", rootId: "r1", device: "telegram:222" });
+    const chatA = buildUserAiSessionKey({ beingId: "owner", zone: "tree", rootId: "r1", device: "telegram:111" });
+    const chatB = buildUserAiSessionKey({ beingId: "owner", zone: "tree", rootId: "r1", device: "telegram:222" });
     assert.notEqual(chatA, chatB);
   });
 
   test("Internal lane key never collides with user key (prefix guarantees isolation)", () => {
-    const userKey = buildUserAiSessionKey({ userId: "u1", zone: "tree", rootId: "r1", device: "web" });
+    const userKey = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "web" });
     const { key: internalKey } = resolveInternalAiSessionKey({
-      scope: "tree", purpose: "reflect", userId: "u1", rootId: "r1",
+      scope: "tree", purpose: "reflect", beingId: "u1", rootId: "r1",
       makeEphemeral: () => "x",
     });
     assert.ok(userKey.startsWith("user:"));

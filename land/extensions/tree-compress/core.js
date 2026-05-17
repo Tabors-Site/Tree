@@ -11,8 +11,8 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { SYSTEM_ROLE, NODE_STATUS, CONTENT_TYPE } from "../../seed/protocol.js";
+import Artifact from "../../seed/models/artifact.js";
+import { SYSTEM_ROLE, NODE_STATUS, ARTIFACT_ORIGIN } from "../../seed/protocol.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
@@ -183,7 +183,7 @@ function buildParentPrompt(node, notes, childEssences, codebookDict) {
 /**
  * Compress a single node. Returns the essence or null on failure.
  */
-async function compressNode(nodeId, depthMap, userId, username, rootId, config) {
+async function compressNode(nodeId, depthMap, beingId, username, rootId, config) {
   const entry = depthMap.get(nodeId);
   if (!entry) return null;
   const { node } = entry;
@@ -195,7 +195,7 @@ async function compressNode(nodeId, depthMap, userId, username, rootId, config) 
   if (meta.compress?.status === "compressed" || meta.compress?.status === "absorbed") return meta.compress?.essence;
 
   // Load notes
-  const notes = await Note.find({ nodeId, contentType: CONTENT_TYPE.TEXT })
+  const notes = await Artifact.find({ nodeId, origin: ARTIFACT_ORIGIN.IBP })
     .sort({ createdAt: 1 })
     .limit(config.maxNotesPerCompression)
     .select("content")
@@ -257,7 +257,7 @@ async function compressNode(nodeId, depthMap, userId, username, rootId, config) 
 
   try {
     const { answer } = await _runChat({
-      userId,
+      beingId,
       username: username || "system",
       message: prompt,
       mode: "tree:respond",
@@ -317,7 +317,7 @@ async function compressNode(nodeId, depthMap, userId, username, rootId, config) 
         await _editStatus({
           nodeId,
           status: NODE_STATUS.TRIMMED,
-          userId,
+          beingId,
           wasAi: true,
           isInherited: false,
         });
@@ -345,7 +345,7 @@ async function compressNode(nodeId, depthMap, userId, username, rootId, config) 
 /**
  * Full compression: compress everything from leaves to ceiling.
  */
-export async function compressTree(rootId, userId, username) {
+export async function compressTree(rootId, beingId, username) {
   const config = await getCompressConfig();
   const depthMap = await buildDepthMap(rootId);
   const levels = getCompressionOrder(depthMap, config.compressionCeiling);
@@ -354,7 +354,7 @@ export async function compressTree(rootId, userId, username) {
 
   for (const level of levels) {
     for (const nodeId of level.nodeIds) {
-      const result = await compressNode(nodeId, depthMap, userId, username, rootId, config);
+      const result = await compressNode(nodeId, depthMap, beingId, username, rootId, config);
       if (result) nodesCompressed++;
     }
   }
@@ -366,7 +366,7 @@ export async function compressTree(rootId, userId, username) {
 /**
  * Branch compression: compress from a specific node downward.
  */
-export async function compressBranch(nodeId, userId, username) {
+export async function compressBranch(nodeId, beingId, username) {
   // Find root for this node
   let rootId;
   try {
@@ -386,7 +386,7 @@ export async function compressBranch(nodeId, userId, username) {
 
   for (const level of levels) {
     for (const nid of level.nodeIds) {
-      const result = await compressNode(nid, depthMap, userId, username, rootId, config);
+      const result = await compressNode(nid, depthMap, beingId, username, rootId, config);
       if (result) nodesCompressed++;
     }
   }
@@ -398,7 +398,7 @@ export async function compressBranch(nodeId, userId, username) {
 /**
  * Size-budget compression: compress until tree is under targetSizeBytes.
  */
-export async function compressToBudget(rootId, userId, username, targetSizeBytes) {
+export async function compressToBudget(rootId, beingId, username, targetSizeBytes) {
   const config = await getCompressConfig();
   const target = targetSizeBytes || config.targetSizeBytes;
   if (!target) return { nodesCompressed: 0, message: "No target size configured" };
@@ -417,7 +417,7 @@ export async function compressToBudget(rootId, userId, username, targetSizeBytes
 
     for (const nodeId of level.nodeIds) {
       if (currentSize <= target) break;
-      const result = await compressNode(nodeId, depthMap, userId, username, rootId, config);
+      const result = await compressNode(nodeId, depthMap, beingId, username, rootId, config);
       if (result) {
         nodesCompressed++;
         currentSize = await estimateTreeSize(rootId);
@@ -437,7 +437,7 @@ export async function compressToBudget(rootId, userId, username, targetSizeBytes
  * Decompress a node: restore to active. Notes become visible again.
  * Essence stays as a bonus.
  */
-export async function decompressNode(nodeId, userId) {
+export async function decompressNode(nodeId, beingId) {
   const node = await Node.findById(nodeId).select("status metadata").lean();
   if (!node) throw new Error("Node not found");
 
@@ -450,7 +450,7 @@ export async function decompressNode(nodeId, userId) {
     await _editStatus({
       nodeId,
       status: NODE_STATUS.ACTIVE,
-      userId,
+      beingId,
       wasAi: false,
       isInherited: false,
     });

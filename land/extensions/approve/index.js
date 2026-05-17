@@ -17,7 +17,7 @@ export async function init(core) {
 
   // beforeToolCall: intercept watched tools
   core.hooks.register("beforeToolCall", async (hookData) => {
-    const { toolName, args, userId, rootId } = hookData;
+    const { toolName, args, beingId, rootId } = hookData;
     const nodeId = args?.nodeId || rootId;
     if (!nodeId || !toolName) return;
 
@@ -32,7 +32,7 @@ export async function init(core) {
       toolName,
       args,
       nodeId,
-      userId,
+      beingId,
       rootId,
     });
 

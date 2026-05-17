@@ -1,6 +1,6 @@
 import UnderstandingRun from "./understandingRun.js";
 import UnderstandingNode from "./understandingNode.js";
-import { getNotes } from "../../seed/tree/notes.js";
+import { getArtifacts } from "../../seed/tree/artifacts.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 
 // Services wired from init() via setServices()
@@ -24,7 +24,7 @@ function containsHtml(str) {
  */
 export async function createUnderstandingRun(
   rootNodeId,
-  userId,
+  beingId,
   perspective = "general",
   wasAi = false,
   chatId = null,
@@ -51,7 +51,7 @@ export async function createUnderstandingRun(
     perspective = perspective.slice(0, MAX_PERSPECTIVE_LENGTH);
   }
   const run = await UnderstandingRun.create({
-    userId,
+    beingId,
     rootNodeId,
     perspective,
     nodeMap: {},
@@ -75,7 +75,7 @@ export async function createUnderstandingRun(
 
   const maxDepth = computeDerivedTopology(rootUNodeId, topology);
   const { energyUsed } = await useEnergy({
-    userId,
+    beingId,
     action: "understanding",
     payload: createdUNodes.size, // 2 energy per node
   });
@@ -84,7 +84,7 @@ export async function createUnderstandingRun(
   run.maxDepth = maxDepth;
   await run.save();
   await logContribution({
-    userId: userId,
+    beingId: beingId,
     nodeId: rootNodeId,
     wasAi,
     chatId,
@@ -116,7 +116,7 @@ export async function createUnderstandingRun(
  */
 export async function findOrCreateUnderstandingRun(
   rootNodeId,
-  userId,
+  beingId,
   perspective = "general",
   wasAi = false,
   chatId = null,
@@ -147,7 +147,7 @@ export async function findOrCreateUnderstandingRun(
 
   return createUnderstandingRun(
     rootNodeId,
-    userId,
+    beingId,
     perspective,
     wasAi,
     chatId,
@@ -258,7 +258,7 @@ function getPS(node, runId) {
  * ================================================================ */
 export async function getNextCompressionPayloadForLLM(
   understandingRunId,
-  userId,
+  beingId,
 ) {
   const run = await UnderstandingRun.findById(understandingRunId).lean();
   if (!run) throw new Error("UnderstandingRun not found");
@@ -361,18 +361,18 @@ export async function getNextCompressionPayloadForLLM(
         runId,
         perspective,
         "(node deleted)",
-        userId,
+        beingId,
         true,
       );
       autoCommittedAny = true;
       continue;
     }
 
-    const notesResult = await getNotes({
+    const notesResult = await getArtifacts({
       nodeId: realNode._id,
       version: realNode.prestige,
     });
-    const notes = notesResult.notes || [];
+    const notes = notesResult.artifacts || [];
 
     if (notes.length === 0) {
       await autoCommitLeaf(
@@ -380,7 +380,7 @@ export async function getNextCompressionPayloadForLLM(
         runId,
         perspective,
         "(no notes)",
-        userId,
+        beingId,
         true,
       );
       autoCommittedAny = true;
@@ -564,7 +564,7 @@ async function autoCommitLeaf(
   understandingRunId,
   perspective,
   encoding,
-  userId,
+  beingId,
   wasAi,
 ) {
   const node = await UnderstandingNode.findById(understandingNodeId);
@@ -588,7 +588,7 @@ async function autoCommitLeaf(
   });
   /*
   await logContribution({
-    userId,
+    beingId,
     nodeId: node.realNodeId,
     wasAi: true,
     action: "understanding",
@@ -614,7 +614,7 @@ export async function commitCompressionResult({
   encoding,
   understandingNodeId,
   currentLayer,
-  userId,
+  beingId,
   wasAi = true,
   chatId = null,
   sessionId = null,
@@ -650,13 +650,13 @@ export async function commitCompressionResult({
       contributionSnapshot: contribCount,
     });
     const { energyUsed } = await useEnergy({
-      userId,
+      beingId,
       action: "understanding",
       payload: 1,
     });
 
     await logContribution({
-      userId,
+      beingId,
       nodeId: node.realNodeId,
       wasAi,
       chatId,
@@ -727,13 +727,13 @@ export async function commitCompressionResult({
         contributionSnapshot: contribCount,
       });
       const { energyUsed } = await useEnergy({
-        userId,
+        beingId,
         action: "understanding",
         payload: 1,
       });
 
       await logContribution({
-        userId,
+        beingId,
         nodeId: node.realNodeId,
         wasAi,
         chatId,
@@ -952,7 +952,7 @@ async function markDirtyNodes(run, topology, structurallyDirty = new Set()) {
  * Prepare an existing run for incremental re-processing.
  * Rebuilds topology from current tree and marks dirty nodes.
  */
-export async function prepareIncrementalRun(understandingRunId, userId) {
+export async function prepareIncrementalRun(understandingRunId, beingId) {
   const run = await UnderstandingRun.findById(understandingRunId).lean();
   if (!run) throw new Error("UnderstandingRun not found");
 
@@ -970,7 +970,7 @@ export async function prepareIncrementalRun(understandingRunId, userId) {
  * Fetch all understanding runs for a given root node.
  */
 export async function listUnderstandingRuns(rootNodeId) {
-  const root = await Node.findById(rootNodeId).select("_id name userId").lean();
+  const root = await Node.findById(rootNodeId).select("_id name beingId").lean();
 
   if (!root) throw new Error("Root not found");
 

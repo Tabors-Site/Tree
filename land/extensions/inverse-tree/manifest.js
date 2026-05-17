@@ -44,17 +44,17 @@ export default {
         command: "inverse [action] [args...]", scope: ["tree"],
         description: "Your profile as the AI sees it. Actions: correct, reset.",
         method: "GET",
-        endpoint: "/user/:userId/inverse",
+        endpoint: "/user/:beingId/inverse",
         subcommands: {
-          "correct": { method: "POST", endpoint: "/user/:userId/inverse/correct", args: ["text"], description: "Override AI inference" },
-          "reset": { method: "POST", endpoint: "/user/:userId/inverse/reset", description: "Wipe profile, start fresh" },
+          "correct": { method: "POST", endpoint: "/user/:beingId/inverse/correct", args: ["text"], description: "Override AI inference" },
+          "reset": { method: "POST", endpoint: "/user/:beingId/inverse/reset", description: "Wipe profile, start fresh" },
         },
       },
     ],
 
     hooks: {
       fires: [],
-      listens: ["afterNote", "afterLLMCall", "afterToolCall", "afterNavigate", "enrichContext"],
+      listens: ["afterArtifact", "afterLLMCall", "afterToolCall", "afterNavigate", "enrichContext"],
     },
   },
 };

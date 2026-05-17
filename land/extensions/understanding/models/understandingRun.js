@@ -76,7 +76,7 @@ const UnderstandingRunSchema = new mongoose.Schema({
     type: Number,
     index: true,
   },
-  userId: {
+  beingId: {
     type: String,
     ref: "User",
     required: true,

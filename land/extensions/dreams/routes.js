@@ -17,12 +17,12 @@ async function loadRootAndAuthorize(req, res, { ownerOnly = false } = {}) {
     sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
     return null;
   }
-  const userId = req.userId.toString();
-  const isOwner = root.rootOwner.toString() === userId;
+  const beingId = req.beingId.toString();
+  const isOwner = root.rootOwner.toString() === beingId;
   const isContributor =
     !ownerOnly &&
     Array.isArray(root.contributors) &&
-    root.contributors.some((c) => (c.user || c).toString() === userId);
+    root.contributors.some((c) => (c.user || c).toString() === beingId);
   if (!isOwner && !isContributor) {
     sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     return null;
@@ -74,7 +74,7 @@ router.get("/root/:rootId/holdings/:itemId", authenticate, async (req, res) => {
 
     const item = await ShortMemory.findById(req.params.itemId).lean();
     if (!item || item.rootId !== req.params.rootId) {
-      return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Item not found");
+      return sendError(res, 404, ERR.ARTIFACT_NOT_FOUND, "Item not found");
     }
 
     return sendOk(res, {
@@ -107,7 +107,7 @@ router.post(
 
       const item = await ShortMemory.findById(req.params.itemId);
       if (!item || item.rootId !== req.params.rootId) {
-        return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Item not found");
+        return sendError(res, 404, ERR.ARTIFACT_NOT_FOUND, "Item not found");
       }
 
       if (item.status === "dismissed") {

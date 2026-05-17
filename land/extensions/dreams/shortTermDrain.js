@@ -9,7 +9,7 @@ import { SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
 import { buildDeepTreeSummary } from "../../seed/tree/treeFetch.js";
 import ShortMemory from "./model.js";
 import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -49,7 +49,7 @@ export async function drainTree(rootId) {
   }
 
   // Pre-init: load items and resolve user before creating runtime
-  let items, rootNode, userId, username;
+  let items, rootNode, beingId, username;
   try {
     items = await ShortMemory.find({
       rootId,
@@ -71,8 +71,8 @@ export async function drainTree(rootId) {
       releaseLock("drain", rootId);
       return { sessionId: null };
     }
-    userId = rootNode.rootOwner;
-    const user = await User.findById(userId).select("username").lean();
+    beingId = rootNode.rootOwner;
+    const user = await Being.findById(beingId).select("username").lean();
     username = user?.username || "user";
   } catch (err) {
     releaseLock("drain", rootId);
@@ -82,7 +82,7 @@ export async function drainTree(rootId) {
   // Lock already held, so don't use lockNamespace (we manage it manually)
   const rt = new OrchestratorRuntime({
     rootId,
-    userId,
+    beingId,
     username,
     // Tree-scoped drain lane — chains across drain passes.
     scope: "tree",

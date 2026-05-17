@@ -146,7 +146,7 @@ export async function classifyMidflight({ message, active, core }) {
 
     const result = await Promise.race([
       runChat({
-        userId: null,
+        beingId: null,
         username: "midflight-router",
         message: prompt,
         mode: "tree:code-ask",
@@ -219,7 +219,7 @@ export async function triggerPlanPivot({
   message,
   visitorId,
   socket,
-  userId,
+  beingId,
   username,
   rootId,
 }) {
@@ -328,7 +328,7 @@ export async function triggerPlanPivot({
 
     const { runChat } = await import("../../seed/llm/conversation.js");
     await runChat({
-      userId,
+      beingId,
       username,
       message: pivotPrompt,
       mode: "tree:governing-planner",

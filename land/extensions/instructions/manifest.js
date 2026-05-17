@@ -28,9 +28,9 @@ export default {
       { command: "instruct-clear", scope: ["tree"], description: "Clear instructions at current node", method: "DELETE", endpoint: "/node/:nodeId/instructions" },
       { command: "instruct-show", scope: ["tree"], description: "Show instructions at current node (including inherited)", method: "GET", endpoint: "/node/:nodeId/instructions" },
       // User-level (new)
-      { command: "instruct-me <text...>", scope: ["home", "tree"], description: "Add a personal instruction the AI follows everywhere", method: "POST", endpoint: "/user/:userId/instructions", bodyMap: { text: 0 } },
-      { command: "instruct-me-show", scope: ["home", "tree"], description: "Show all your personal instructions", method: "GET", endpoint: "/user/:userId/instructions" },
-      { command: "instruct-me-remove <id>", scope: ["home", "tree"], description: "Remove a personal instruction by id", method: "DELETE", endpoint: "/user/:userId/instructions/:id" },
+      { command: "instruct-me <text...>", scope: ["home", "tree"], description: "Add a personal instruction the AI follows everywhere", method: "POST", endpoint: "/user/:beingId/instructions", bodyMap: { text: 0 } },
+      { command: "instruct-me-show", scope: ["home", "tree"], description: "Show all your personal instructions", method: "GET", endpoint: "/user/:beingId/instructions" },
+      { command: "instruct-me-remove <id>", scope: ["home", "tree"], description: "Remove a personal instruction by id", method: "DELETE", endpoint: "/user/:beingId/instructions/:id" },
     ],
   },
 };

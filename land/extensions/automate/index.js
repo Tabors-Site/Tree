@@ -1,7 +1,7 @@
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
 import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
-import { createNote } from "../../seed/tree/notes.js";
+import { createArtifact } from "../../seed/tree/artifacts.js";
 
 // In-flight guard: one flow per tree at a time
 const _running = new Set();
@@ -164,7 +164,7 @@ async function runFlow(flowNode, rootId, ownerId, runChat, core) {
 
     try {
       const { answer } = await runChat({
-        userId: ownerId,
+        beingId: ownerId,
         username: "automate",
         message,
         mode,
@@ -191,26 +191,26 @@ async function runFlow(flowNode, rootId, ownerId, runChat, core) {
   ).join("\n\n");
 
   try {
-    await createNote({
-      contentType: "text",
+    await createArtifact({
+      origin: "ibp",
       content: `Flow run at ${new Date().toISOString()}\n\n${summary}`,
-      userId: ownerId,
+      beingId: ownerId,
       nodeId: String(flowNode._id),
       wasAi: true,
     });
   } catch {}
 
   // Cap notes on flow node at 30
-  const Note = (await import("../../seed/models/note.js")).default;
-  const noteCount = await Note.countDocuments({ nodeId: String(flowNode._id) });
+  const Artifact = (await import("../../seed/models/artifact.js")).default;
+  const noteCount = await Artifact.countDocuments({ nodeId: String(flowNode._id) });
   if (noteCount > 30) {
-    const oldest = await Note.find({ nodeId: String(flowNode._id) })
+    const oldest = await Artifact.find({ nodeId: String(flowNode._id) })
       .sort({ createdAt: 1 })
       .limit(noteCount - 30)
       .select("_id")
       .lean();
     if (oldest.length > 0) {
-      await Note.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
+      await Artifact.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
     }
   }
 

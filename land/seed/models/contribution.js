@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 
 const ContributionSchema = new mongoose.Schema({
   _id: { type: String, default: uuidv4 },
-  userId: { type: String, ref: "User", required: true },
+  beingId: { type: String, ref: "Being", required: true },
   nodeId: { type: String, ref: "Node" },
   wasAi: { type: Boolean, default: false },
   chatId: { type: String, ref: "Chat" },
@@ -34,7 +34,7 @@ const ContributionSchema = new mongoose.Schema({
 });
 
 // Query indexes for contributions
-ContributionSchema.index({ userId: 1, date: -1 }); // user contribution history
+ContributionSchema.index({ beingId: 1, date: -1 }); // being contribution history
 ContributionSchema.index({ nodeId: 1, date: -1 }); // node contribution history
 ContributionSchema.index({ chatId: 1 }, { sparse: true }); // finalizeChat: Contribution.find({ chatId })
 

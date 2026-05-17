@@ -232,7 +232,7 @@ function specTexts(ctx) {
  * sibling branch; the sandbox is enforced at injection, not at the call site.
  *
  * The user's handler still receives everything it declared in schema, plus
- * the MCP-standard injected fields (userId, nodeId, rootId, chatId, sessionId).
+ * the MCP-standard injected fields (beingId, nodeId, rootId, chatId, sessionId).
  */
 function wrapTool(tool) {
   if (!tool?.name) return tool;
@@ -245,21 +245,21 @@ function wrapTool(tool) {
     schema: tool.schema || {},
     annotations: tool.annotations || {},
     async handler(args) {
-      const { nodeId, userId, rootId } = args || {};
+      const { nodeId, beingId, rootId } = args || {};
       const cw = await loadCodeWorkspace();
 
       const writeFile = async (filePath, content) => {
         if (!cw?.writeFileInBranch) {
           return { ok: false, error: "code-workspace.writeFileInBranch unavailable" };
         }
-        return cw.writeFileInBranch({ nodeId, userId, rootId, filePath, content });
+        return cw.writeFileInBranch({ nodeId, beingId, rootId, filePath, content });
       };
 
       const readFile = async (filePath) => {
         if (!cw?.readFileInBranch) {
           return { ok: false, error: "code-workspace.readFileInBranch unavailable" };
         }
-        return cw.readFileInBranch({ nodeId, userId, rootId, filePath });
+        return cw.readFileInBranch({ nodeId, beingId, rootId, filePath });
       };
 
       const readWorkspaceFiles = async () => {

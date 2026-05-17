@@ -8,27 +8,27 @@ import { getLandConfigValue } from "./landConfig.js";
  * Core fires kernel hooks. Extensions fire their own and listen to each other's.
  *
  * Core hooks (fired by kernel):
- *   beforeNote         - Before note save. Modify { nodeId, content, userId, contentType, metadata }
- *   afterNote          - After note saved. React to { note, nodeId, userId, sizeKB, action }
- *   beforeContribution - Before contribution log. Modify { nodeId, action, userId, ...extensionData }
- *   beforeNodeCreate   - Before node creation. Modify/cancel { name, type, parentId, parentType, isRoot, userId, metadata }
- *   afterNodeCreate    - After node saved. React to { node, userId }
- *   beforeStatusChange - Before status write. Modify/validate { node, status, userId }
- *   afterStatusChange  - After status saved. React to { node, status, userId }
- *   beforeNodeDelete   - Before deletion. Cleanup { node, userId }
+ *   beforeArtifact     - Before artifact save. Modify { nodeId, content, beingId, origin, metadata }
+ *   afterArtifact      - After artifact saved. React to { artifact, nodeId, beingId, origin, sizeKB, action }
+ *   beforeContribution - Before contribution log. Modify { nodeId, action, beingId, ...extensionData }
+ *   beforeNodeCreate   - Before node creation. Modify/cancel { name, type, parentId, parentType, isRoot, beingId, metadata }
+ *   afterNodeCreate    - After node saved. React to { node, beingId }
+ *   beforeStatusChange - Before status write. Modify/validate { node, status, beingId }
+ *   afterStatusChange  - After status saved. React to { node, status, beingId }
+ *   beforeNodeDelete   - Before deletion. Cleanup { node, beingId }
  *   enrichContext      - During AI context build. Enrich { context, node, meta }
- *   beforeLLMCall      - Before LLM API call. Cancel { userId, rootId, mode, model, messageCount, hasTools }
- *   afterLLMCall       - After LLM API call. React to { userId, rootId, mode, model, usage, hasToolCalls }
- *   beforeToolCall     - Before MCP tool executes. Modify/cancel { toolName, args, userId, rootId, mode }
- *   afterToolCall      - After MCP tool executes. React to { toolName, args, result|error, success, userId, rootId, mode }
- *   beforeResponse     - Before AI response reaches client. Modify { content, userId, rootId, mode }
+ *   beforeLLMCall      - Before LLM API call. Cancel { beingId, rootId, mode, model, messageCount, hasTools }
+ *   afterLLMCall       - After LLM API call. React to { beingId, rootId, mode, model, usage, hasToolCalls }
+ *   beforeToolCall     - Before MCP tool executes. Modify/cancel { toolName, args, beingId, rootId, mode }
+ *   afterToolCall      - After MCP tool executes. React to { toolName, args, result|error, success, beingId, rootId, mode }
+ *   beforeResponse     - Before AI response reaches client. Modify { content, beingId, rootId, mode }
  *   beforeRegister     - Before user registration
  *   afterRegister      - After user registration
- *   afterSessionCreate - After session registered. { sessionId, userId, type, description, meta }
- *   afterSessionEnd    - After session ended. { sessionId, userId, type }
- *   afterNavigate      - After user navigates to a tree root. { userId, rootId, nodeId, socket }
+ *   afterSessionCreate - After session registered. { sessionId, beingId, type, description, meta }
+ *   afterSessionEnd    - After session ended. { sessionId, beingId, type }
+ *   afterNavigate      - After user navigates to a tree root. { beingId, rootId, nodeId, socket }
  *   afterMetadataWrite - After setExtMeta succeeds. { nodeId, extName, data }. Opt-in: zero overhead if no listeners.
- *   afterScopeChange   - After metadata.extensions.blocked/restricted changes. { nodeId, blocked, restricted, userId }
+ *   afterScopeChange   - After metadata.extensions.blocked/restricted changes. { nodeId, blocked, restricted, beingId }
  *   afterBoot          - Once after all extensions loaded, config initialized, server listening. Fires once.
  *   onDocumentPressure - Any document exceeds 80% of maxDocumentSizeBytes on a write. { documentType, documentId, currentSize, projectedSize, maxSize, percent }
  *   afterOwnershipChange - After rootOwner or contributors changed. { nodeId, action, targetUserId, previousOwnerId? }
@@ -59,10 +59,10 @@ import { getLandConfigValue } from "./landConfig.js";
  *
  * Usage in extensions:
  *   // Listen to a core hook
- *   core.hooks.register("afterNote", async (data) => { ... }, "my-ext");
+ *   core.hooks.register("afterArtifact", async (data) => { ... }, "my-ext");
  *
  *   // Fire your own hook for other extensions to listen to
- *   core.hooks.run("my-ext:afterProcess", { result, userId });
+ *   core.hooks.run("my-ext:afterProcess", { result, beingId });
  *
  *   // Listen to another extension's hook
  *   core.hooks.register("gateway:beforeDispatch", async (data) => { ... }, "my-ext");
@@ -184,7 +184,7 @@ function register(hookName, handler, extName = "unknown") {
   if (!registry.has(hookName)) {
     // Typo detection: warn if it looks like a misspelled core hook
     const CORE_HOOKS = [
-      "beforeNote", "afterNote", "beforeContribution",
+      "beforeArtifact", "afterArtifact", "beforeContribution",
       "beforeNodeCreate", "afterNodeCreate",
       "beforeStatusChange", "afterStatusChange", "beforeNodeDelete",
       "enrichContext", "onCascade", "onDocumentPressure",

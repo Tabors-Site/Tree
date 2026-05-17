@@ -12,20 +12,20 @@ export async function init(core) {
   core.llm.registerRootLlmSlot("evolve");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setRunChat(async (opts) => {
-    if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+    if (opts.beingId && opts.beingId !== "SYSTEM" && !await core.llm.userHasLlm(opts.beingId)) return { answer: null };
     return core.llm.runChat({ ...opts, llmPriority: BG });
   });
 
-  // afterNote: record note content patterns
-  core.hooks.register("afterNote", async ({ note, nodeId, userId, contentType, action }) => {
-    if (contentType !== "text" || action !== "create") return;
-    if (!userId || userId === "SYSTEM") return;
+  // afterArtifact: record ibp-origin artifact content patterns
+  core.hooks.register("afterArtifact", async ({ artifact, nodeId, beingId, origin, action }) => {
+    if (origin !== "ibp" || action !== "create") return;
+    if (!beingId || beingId === "SYSTEM") return;
 
     recordSignal({
-      type: "note",
-      content: (note?.content || "").slice(0, 200),
+      type: "artifact",
+      content: (typeof artifact?.content === "string" ? artifact.content : "").slice(0, 200),
       nodeId,
-      userId,
+      beingId,
     });
   }, "evolve");
 
@@ -35,8 +35,8 @@ export async function init(core) {
   // never fires because nothing in the recordSignal payload carried an
   // answer flag. Using responseText instead of passing a separate field
   // avoids a kernel-side hook-data change.
-  core.hooks.register("afterLLMCall", async ({ userId, rootId, mode, hasToolCalls, responseText }) => {
-    if (!userId || userId === "SYSTEM") return;
+  core.hooks.register("afterLLMCall", async ({ beingId, rootId, mode, hasToolCalls, responseText }) => {
+    if (!beingId || beingId === "SYSTEM") return;
 
     const hadAnswer = !!(responseText && String(responseText).trim());
 
@@ -46,7 +46,7 @@ export async function init(core) {
       hadToolCalls: !!hasToolCalls,
       mode: mode || "unknown",
       rootId,
-      userId,
+      beingId,
     });
   }, "evolve");
 

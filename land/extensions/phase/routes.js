@@ -5,10 +5,10 @@ import { getPhaseState, computeCycleStats } from "./core.js";
 
 const router = express.Router();
 
-// GET /user/:userId/phase - Current phase and session stats
-router.get("/user/:userId/phase", authenticate, async (req, res) => {
+// GET /user/:beingId/phase - Current phase and session stats
+router.get("/user/:beingId/phase", authenticate, async (req, res) => {
   try {
-    const phaseMeta = await getPhaseState(req.params.userId);
+    const phaseMeta = await getPhaseState(req.params.beingId);
     if (!phaseMeta) {
       return sendOk(res, {
         phase: null,
@@ -30,10 +30,10 @@ router.get("/user/:userId/phase", authenticate, async (req, res) => {
   }
 });
 
-// GET /user/:userId/phase/history - Phase patterns over time
-router.get("/user/:userId/phase/history", authenticate, async (req, res) => {
+// GET /user/:beingId/phase/history - Phase patterns over time
+router.get("/user/:beingId/phase/history", authenticate, async (req, res) => {
   try {
-    const phaseMeta = await getPhaseState(req.params.userId);
+    const phaseMeta = await getPhaseState(req.params.beingId);
     if (!phaseMeta?.history?.length) {
       return sendOk(res, { history: [], message: "No phase history yet." });
     }
@@ -52,10 +52,10 @@ router.get("/user/:userId/phase/history", authenticate, async (req, res) => {
   }
 });
 
-// GET /user/:userId/phase/cycle - Awareness vs attention ratio
-router.get("/user/:userId/phase/cycle", authenticate, async (req, res) => {
+// GET /user/:beingId/phase/cycle - Awareness vs attention ratio
+router.get("/user/:beingId/phase/cycle", authenticate, async (req, res) => {
   try {
-    const phaseMeta = await getPhaseState(req.params.userId);
+    const phaseMeta = await getPhaseState(req.params.beingId);
     if (!phaseMeta?.history?.length) {
       return sendOk(res, { cycle: null, message: "No phase history yet." });
     }

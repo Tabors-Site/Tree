@@ -1,4 +1,4 @@
-import { getUserMeta, setUserMeta } from "../../../seed/tree/userMetadata.js";
+import { getBeingMeta, setBeingMeta } from "../../../seed/tree/beingMetadata.js";
 
 let DAILY_LIMITS = {};
 export function setEnergyService(energy) { DAILY_LIMITS = energy.DAILY_LIMITS || {}; }
@@ -9,7 +9,7 @@ export function setEnergyService(energy) { DAILY_LIMITS = energy.DAILY_LIMITS ||
  *   { available: { amount, lastResetAt }, additional: { amount } }
  */
 function getEnergy(user) {
-  const energy = getUserMeta(user, "energy");
+  const energy = getBeingMeta(user, "energy");
   if (!energy.available) energy.available = { amount: 0, lastResetAt: null };
   if (!energy.additional) energy.additional = { amount: 0 };
   if (typeof energy.available.amount !== "number") energy.available.amount = 0;
@@ -26,8 +26,8 @@ const PLAN_DAILY_VALUE = {
 export function upgradeUserPlan(user, newPlan) {
   const now = Date.now();
 
-  const oldPlan = getUserMeta(user, "tiers").plan || "basic";
-  const billing = getUserMeta(user, "billing");
+  const oldPlan = getBeingMeta(user, "tiers").plan || "basic";
+  const billing = getBeingMeta(user, "billing");
   const expiresAt = billing.planExpiresAt?.getTime?.() || (typeof billing.planExpiresAt === "number" ? billing.planExpiresAt : 0);
 
   if (PLAN_DAILY_VALUE[newPlan] <= PLAN_DAILY_VALUE[oldPlan]) {
@@ -46,11 +46,11 @@ export function upgradeUserPlan(user, newPlan) {
     energy.additional.amount += compensationEnergy;
   }
 
-  setUserMeta(user, "tiers", { plan: newPlan });
+  setBeingMeta(user, "tiers", { plan: newPlan });
 
   energy.available.amount = DAILY_LIMITS[newPlan] ?? DAILY_LIMITS.basic;
   energy.available.lastResetAt = new Date();
-  setUserMeta(user, "energy", energy);
+  setBeingMeta(user, "energy", energy);
 
   return user;
 }

@@ -105,26 +105,26 @@ export function getHttpServer() { return _httpServerRef; }
 
 // Socket tracking
 const userSockets = new Map(); // visitorId → socket.id (1:1; each visitorId is unique per connection)
-const authSessions = new Map(); // userId → Set<socket.id> (N:1; a user can hold many concurrent sockets)
+const authSessions = new Map(); // beingId → Set<socket.id> (N:1; a user can hold many concurrent sockets)
 
 // Helpers for the N:1 authSessions map. Every emit-to-user function
 // uses these so a single user's events fan out to all their clients
 // (web tab, CLI shell, room agent, etc.) without the server having
 // to disconnect any of them.
-function addAuthSession(userId, socketId) {
-  if (!userId || !socketId) return;
-  let set = authSessions.get(userId);
-  if (!set) { set = new Set(); authSessions.set(userId, set); }
+function addAuthSession(beingId, socketId) {
+  if (!beingId || !socketId) return;
+  let set = authSessions.get(beingId);
+  if (!set) { set = new Set(); authSessions.set(beingId, set); }
   set.add(socketId);
 }
-function removeAuthSession(userId, socketId) {
-  const set = authSessions.get(userId);
+function removeAuthSession(beingId, socketId) {
+  const set = authSessions.get(beingId);
   if (!set) return;
   set.delete(socketId);
-  if (set.size === 0) authSessions.delete(userId);
+  if (set.size === 0) authSessions.delete(beingId);
 }
-function getAuthSocketIds(userId) {
-  const set = authSessions.get(userId);
+function getAuthSocketIds(beingId) {
+  const set = authSessions.get(beingId);
   return set ? [...set] : [];
 }
 
@@ -204,12 +204,12 @@ export function unregisterSocketHandler(event) {
 // ── Session registry sync helper ────────────────────────────────────────
 function syncRegistrySession(socket) {
   const sessionId = socket._aiSession?.id;
-  if (!sessionId || !socket.userId) return;
+  if (!sessionId || !socket.beingId) return;
   if (socket._registrySessionId === sessionId) return; // no change
   if (socket._registrySessionId) endSession(socket._registrySessionId);
   registerSession({
     sessionId,
-    userId: socket.userId,
+    beingId: socket.beingId,
     type: SESSION_TYPES.WEBSOCKET_CHAT,
     description: `Chat session for ${socket.username || "unknown"}`,
     meta: { visitorId: socket.visitorId },
@@ -219,8 +219,8 @@ function syncRegistrySession(socket) {
 }
 
 function emitNavigatorStatus(socket) {
-  if (!socket.userId) return;
-  const navId = getActiveNavigator(socket.userId);
+  if (!socket.beingId) return;
+  const navId = getActiveNavigator(socket.beingId);
   if (navId) {
     const session = getSession(navId);
     socket.emit(WS.NAVIGATOR_SESSION, {
@@ -270,11 +270,11 @@ async function resolvePerPositionVisitorId(socket, payload) {
     ? payload.sessionHandle
     : null;
   const device = socket.clientKind || "web";
-  const fallback = socket.visitorId || `user:${socket.userId}:transport:${device}`;
+  const fallback = socket.visitorId || `user:${socket.beingId}:transport:${device}`;
 
   if (typeof payload.rootId === "string" && payload.rootId.length > 0 && payload.rootId.length <= 36) {
     return buildUserAiSessionKey({
-      userId: socket.userId,
+      beingId: socket.beingId,
       zone: "tree",
       rootId: payload.rootId,
       device,
@@ -283,7 +283,7 @@ async function resolvePerPositionVisitorId(socket, payload) {
   }
   if (payload.zone === "home" || payload.zone === "land") {
     return buildUserAiSessionKey({
-      userId: socket.userId,
+      beingId: socket.beingId,
       zone: payload.zone,
       device,
       handle,
@@ -303,7 +303,7 @@ async function applyChatPositionFromPayload(visitorId, socket, payload, username
   if (typeof rootId === "string" && rootId.length > 0 && rootId.length <= 36) {
     let access = null;
     try {
-      access = await resolveTreeAccess(rootId, socket.userId);
+      access = await resolveTreeAccess(rootId, socket.beingId);
     } catch (err) {
       log.warn("WS", `resolveTreeAccess errored: ${err.message}`);
       return;
@@ -321,7 +321,7 @@ async function applyChatPositionFromPayload(visitorId, socket, payload, username
       const curr = getCurrentMode(visitorId);
       if ((curr?.split(":")[0] || null) !== "tree") {
         await switchMode(visitorId, "tree:converse", {
-          username, userId: socket.userId, rootId, currentNodeId: resolvedNode,
+          username, beingId: socket.beingId, rootId, currentNodeId: resolvedNode,
         });
         log.info("WS", `🌳 ${visitorId} → tree:converse (was ${curr || "unset"})`);
       }
@@ -343,7 +343,7 @@ async function applyChatPositionFromPayload(visitorId, socket, payload, username
     try {
       const curr = getCurrentMode(visitorId);
       if ((curr?.split(":")[0] || null) !== zone) {
-        await switchMode(visitorId, zoneBaseMode, { username, userId: socket.userId });
+        await switchMode(visitorId, zoneBaseMode, { username, beingId: socket.beingId });
         log.info("WS", `🏠 ${visitorId} → ${zoneBaseMode} (was ${curr || "unset"})`);
       }
     } catch (err) {
@@ -488,7 +488,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       else ipConnectionCounts.set(ip, c - 1);
     });
     const cookie = socket.request.headers.cookie;
-    socket.userId = null;
+    socket.beingId = null;
 
     // 1. Browser path: JWT in the `token` cookie. This is how the website
     //    has always authenticated its socket.
@@ -497,7 +497,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       if (tokenMatch) {
         try {
           const decoded = jwt.verify(tokenMatch[1], JWT_SECRET);
-          socket.userId = decoded.userId;
+          socket.beingId = decoded.beingId;
           socket.username = decoded.username;
           socket.jwt = tokenMatch[1];
         } catch (tokenErr) {
@@ -511,12 +511,12 @@ export function initWebSocketServer(httpServer, originPolicy) {
     //    (the browser session is the source of truth). API keys are
     //    not accepted here — clients without a JWT should exchange
     //    their API key via /auth/exchange first.
-    if (!socket.userId) {
+    if (!socket.beingId) {
       const auth = socket.handshake.auth || {};
       if (auth.token) {
         try {
           const decoded = jwt.verify(auth.token, JWT_SECRET);
-          socket.userId = decoded.userId;
+          socket.beingId = decoded.beingId;
           socket.username = decoded.username;
           socket.jwt = auth.token;
         } catch (tokenErr) {
@@ -528,7 +528,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
     // Client identity tags. `clientKind` names the source (web, cli,
     // room-agent, mobile, …); `clientInstance` names the specific
     // copy (a browser tab uuid, a CLI process pid, a room
-    // subscription id). Together with userId they uniquely identify
+    // subscription id). Together with beingId they uniquely identify
     // this connection, so two sockets from the same user coexist
     // without kicking each other. Fall back to web/socket.id so
     // unpatched clients still work.
@@ -546,32 +546,32 @@ export function initWebSocketServer(httpServer, originPolicy) {
   });
 
   io.on("connection", (socket) => {
-    const userId = socket.userId;
+    const beingId = socket.beingId;
     log.debug("WS",
-      `🔗 Socket connected: ${socket.id} (user: ${userId || "anon"})`,
+      `🔗 Socket connected: ${socket.id} (user: ${beingId || "anon"})`,
     );
 
     // Track auth session. Multiple sockets per user are supported:
     // the set grows, nothing gets disconnected. CLI + browser + mobile
-    // all coexist under the same userId.
-    if (userId) {
-      addAuthSession(userId, socket.id);
+    // all coexist under the same beingId.
+    if (beingId) {
+      addAuthSession(beingId, socket.id);
     }
 
     socket.on("ready", () => {
-      log.verbose("WS", `App ready: ${userId}`);
+      log.verbose("WS", `App ready: ${beingId}`);
     });
 
     // ── REGISTER ──────────────────────────────────────────────────────
     socket.on("register", async () => {
-      const userId = socket.userId;
+      const beingId = socket.beingId;
       const username = socket.username;
 
       if (!socket.jwt) {
         socket.emit(WS.REGISTERED, { success: false, error: "Unauthorized" });
         return;
       }
-      if (!socket.username || !socket.userId) {
+      if (!socket.username || !socket.beingId) {
         socket.emit(WS.REGISTERED, {
           success: false,
           error: "Invalid token claims",
@@ -587,13 +587,13 @@ export function initWebSocketServer(httpServer, originPolicy) {
       // same tab or a re-exec of the same CLI pid.
       //
       // Shape matches `buildUserAiSessionKey` in seed/llm/sessionKeys.js:
-      //   user:${userId}:transport:${clientKind}:${clientInstance}
+      //   user:${beingId}:transport:${clientKind}:${clientInstance}
       // The `transport:` segment distinguishes this tab-level fallback
-      // key from the zone-specific user keys (`user:${userId}:${rootId}:${device}`)
+      // key from the zone-specific user keys (`user:${beingId}:${rootId}:${device}`)
       // that every chat builds via buildUserAiSessionKey. This fallback
       // is only reached when the client hasn't yet sent payload context
       // (urlChanged / first chat). It should eventually be deletable.
-      const visitorId = `user:${userId}:transport:${socket.clientKind || "web"}:${socket.clientInstance || socket.id.slice(0, 8)}`;
+      const visitorId = `user:${beingId}:transport:${socket.clientKind || "web"}:${socket.clientInstance || socket.id.slice(0, 8)}`;
       const oldSocketId = userSockets.get(visitorId);
       if (oldSocketId && oldSocketId !== socket.id) {
         io.sockets.sockets.get(oldSocketId)?.disconnect(true);
@@ -610,7 +610,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       try {
         // Create internal JWT with visitorId so MCP can route contribution context
         const mcpJwt = jwt.sign(
-          { userId: String(userId), username, visitorId },
+          { beingId: String(beingId), username, visitorId },
           JWT_SECRET,
           { expiresIn: "24h" },
         );
@@ -643,7 +643,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       try {
         const result = await switchMode(visitorId, modeKey, {
           username: socket.username,
-          userId: socket.userId,
+          beingId: socket.beingId,
           rootId: getRootId(visitorId),
         });
         socket.emit(WS.MODE_SWITCHED, result);
@@ -681,11 +681,11 @@ export function initWebSocketServer(httpServer, originPolicy) {
       let visitorId;
       if (newBigMode === BIG_MODES.TREE && rootId) {
         visitorId = buildUserAiSessionKey({
-          userId: socket.userId, zone: "tree", rootId, device: _device,
+          beingId: socket.beingId, zone: "tree", rootId, device: _device,
         });
       } else if (newBigMode === BIG_MODES.HOME || newBigMode === BIG_MODES.LAND) {
         visitorId = buildUserAiSessionKey({
-          userId: socket.userId, zone: newBigMode, device: _device,
+          beingId: socket.beingId, zone: newBigMode, device: _device,
         });
       } else {
         // Unknown/transitional URL — keep the old fallback.
@@ -709,11 +709,11 @@ export function initWebSocketServer(httpServer, originPolicy) {
       // Without this, a crafted WebSocket message could point the AI at another user's tree.
       // Only check for tree navigation (not home/land which have no tree context).
       const targetId = rootId || nodeId;
-      if (targetId && socket.userId && newBigMode === BIG_MODES.TREE) {
+      if (targetId && socket.beingId && newBigMode === BIG_MODES.TREE) {
         try {
-          const access = await resolveTreeAccess(targetId, socket.userId);
+          const access = await resolveTreeAccess(targetId, socket.beingId);
           if (!access.ok || !access.canWrite) {
-            log.warn("WS", `Access denied: ${socket.userId} tried to navigate to ${targetId}`);
+            log.warn("WS", `Access denied: ${socket.beingId} tried to navigate to ${targetId}`);
             rootId = null;
             nodeId = null;
           }
@@ -727,8 +727,8 @@ export function initWebSocketServer(httpServer, originPolicy) {
       if (rootId) {
         setRootId(visitorId, rootId);
         setCurrentNodeId(visitorId, rootId); // root is also current node
-        if (socket.userId) {
-          hooks.run("afterNavigate", { userId: socket.userId, rootId, nodeId: rootId, socket }).catch(() => {});
+        if (socket.beingId) {
+          hooks.run("afterNavigate", { beingId: socket.beingId, rootId, nodeId: rootId, socket }).catch(() => {});
         }
       } else if (nodeId) {
         // Viewing a non-root node — update currentNodeId only
@@ -738,8 +738,8 @@ export function initWebSocketServer(httpServer, originPolicy) {
           setRootId(visitorId, nodeId);
         }
         // In-tree navigation hook (distinct from afterNavigate which fires on root load)
-        if (socket.userId) {
-          hooks.run("onNodeNavigate", { userId: socket.userId, rootId: getRootId(visitorId), nodeId, socket }).catch(() => {});
+        if (socket.beingId) {
+          hooks.run("onNodeNavigate", { beingId: socket.beingId, rootId: getRootId(visitorId), nodeId, socket }).catch(() => {});
         }
       }
 
@@ -803,7 +803,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
         try {
           const result = await switchBigMode(visitorId, newBigMode, {
             username: socket.username,
-            userId: socket.userId,
+            beingId: socket.beingId,
             rootId: getRootId(visitorId),
           });
           socket.emit(WS.MODE_SWITCHED, { ...result, carriedMessages: [] });
@@ -872,11 +872,11 @@ export function initWebSocketServer(httpServer, originPolicy) {
       let visitorId;
       if (urlBigMode === BIG_MODES.TREE && urlRootId) {
         visitorId = buildUserAiSessionKey({
-          userId: socket.userId, zone: "tree", rootId: urlRootId, device: _device,
+          beingId: socket.beingId, zone: "tree", rootId: urlRootId, device: _device,
         });
       } else if (urlBigMode === BIG_MODES.HOME || urlBigMode === BIG_MODES.LAND) {
         visitorId = buildUserAiSessionKey({
-          userId: socket.userId, zone: urlBigMode, device: _device,
+          beingId: socket.beingId, zone: urlBigMode, device: _device,
         });
       } else {
         visitorId = socket.visitorId;
@@ -950,7 +950,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
           const targetBigMode = urlBigMode || BIG_MODES.HOME;
           const result = await switchBigMode(visitorId, targetBigMode, {
             username: socket.username,
-            userId: socket.userId,
+            beingId: socket.beingId,
             rootId: getRootId(visitorId),
           });
           currentMode = result.modeKey;
@@ -993,13 +993,13 @@ export function initWebSocketServer(httpServer, originPolicy) {
     // ── CHAT ──────────────────────────────────────────────────────────
 
     /** Check if user has LLM access (own connection or tree owner's). */
-    async function checkLlmAccess(userId, visitorId) {
-      if (await userHasLlm(userId)) return true;
+    async function checkLlmAccess(beingId, visitorId) {
+      if (await userHasLlm(beingId)) return true;
       const activeRootId = getRootId(visitorId);
       if (!activeRootId) return false;
       const rootNode = await Node.findById(activeRootId).select("rootOwner llmDefault").lean();
       return rootNode
-        && rootNode.rootOwner.toString() !== userId.toString()
+        && rootNode.rootOwner.toString() !== beingId.toString()
         && rootNode.llmDefault && rootNode.llmDefault !== "none";
     }
 
@@ -1109,7 +1109,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
       // 7. LLM access gate.
       try {
-        if (!(await checkLlmAccess(socket.userId, visitorId))) {
+        if (!(await checkLlmAccess(socket.beingId, visitorId))) {
           return emitChatError(
             socket,
             ERR.LLM_NOT_CONFIGURED,
@@ -1164,7 +1164,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
           const { runOrchestration } = await import("../llm/conversation.js");
           const result = await runOrchestration({
             zone: bigMode,
-            userId: socket.userId,
+            beingId: socket.beingId,
             username,
             message,
             rootId: getRootId(visitorId),
@@ -1255,11 +1255,11 @@ export function initWebSocketServer(httpServer, originPolicy) {
       // dispatch, etc.) can drain their per-user abort registries.
       // The kernel can't import extension state directly (seed never
       // reaches into extensions); the hook is the contracted surface.
-      const userIdForCancel = socket.visitorId || socket.userId;
+      const userIdForCancel = socket.visitorId || socket.beingId;
       if (userIdForCancel) {
         try {
           hooks.run("request:cancelled", {
-            userId: String(userIdForCancel),
+            beingId: String(userIdForCancel),
             visitorId: socket.visitorId || null,
             socketId: socket.id || null,
           }).catch(() => {});
@@ -1329,23 +1329,23 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
     // ── NAVIGATOR CONTROL ──────────────────────────────────────────────
     socket.on("detachNavigator", () => {
-      if (socket.userId) {
-        clearActiveNavigator(socket.userId);
+      if (socket.beingId) {
+        clearActiveNavigator(socket.beingId);
         emitNavigatorStatus(socket);
       }
     });
 
     socket.on("attachNavigator", ({ sessionId }) => {
-      if (!socket.userId || !sessionId) return;
-      setActiveNavigator(socket.userId, sessionId);
+      if (!socket.beingId || !sessionId) return;
+      setActiveNavigator(socket.beingId, sessionId);
       emitNavigatorStatus(socket);
     });
 
     // ── STOP SESSION ──────────────────────────────────────────────────
     socket.on("stopSession", ({ sessionId }) => {
-      if (!socket.userId || !sessionId) return;
+      if (!socket.beingId || !sessionId) return;
       const session = getSession(sessionId);
-      if (!session || session.userId !== String(socket.userId)) return;
+      if (!session || session.beingId !== String(socket.beingId)) return;
       log.debug("WS",
         `🛑 Session stopped by user: ${session.type} [${sessionId.slice(0, 8)}]`,
       );
@@ -1366,7 +1366,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
     for (const [event, handler] of _socketHandlers) {
       socket.on(event, async (data) => {
         try {
-          await handler({ socket, userId: socket.userId, visitorId: socket.visitorId, data });
+          await handler({ socket, beingId: socket.beingId, visitorId: socket.visitorId, data });
         } catch (err) {
           log.error("WS", `Socket handler "${event}" error:`, err.message);
         }
@@ -1382,7 +1382,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
         await resetConversation(visitorId, {
           username: socket.username,
-          userId: socket.userId,
+          beingId: socket.beingId,
         });
 
         rotateSession(socket);
@@ -1441,8 +1441,8 @@ export function initWebSocketServer(httpServer, originPolicy) {
         }
       }
 
-      if (userId) {
-        removeAuthSession(userId, socket.id);
+      if (beingId) {
+        removeAuthSession(beingId, socket.id);
       }
 
       if (socket.visitorId) {
@@ -1466,8 +1466,8 @@ export function initWebSocketServer(httpServer, originPolicy) {
   // Subscribe to session changes → sync navigator badge on every
   // active socket for this user (web tabs, CLIs, etc. all get the
   // refresh so the navigator indicator stays consistent).
-  function syncNavigatorOnSessionChange({ userId }) {
-    for (const socketId of getAuthSocketIds(userId)) {
+  function syncNavigatorOnSessionChange({ beingId }) {
+    for (const socketId of getAuthSocketIds(beingId)) {
       const s = io.sockets.sockets.get(socketId);
       if (s) emitNavigatorStatus(s);
     }
@@ -1490,7 +1490,7 @@ export function emitToVisitor(visitorId, event, data) {
 }
 
 export function emitNavigate({
-  userId,
+  beingId,
   url,
   replace = false,
   sessionId = null,
@@ -1500,7 +1500,7 @@ export function emitNavigate({
   // If sessionId provided, only allow if this session is the active navigator
   if (sessionId && !canNavigate(sessionId)) {
     log.debug("WS",
-      `🚫 Nav blocked: session ${sessionId.slice(0, 8)} is not active navigator for user ${userId}`,
+      `🚫 Nav blocked: session ${sessionId.slice(0, 8)} is not active navigator for user ${beingId}`,
     );
     return;
   }
@@ -1508,19 +1508,19 @@ export function emitNavigate({
   // Fan out to every active socket for this user (web tab, CLI, …).
   // Each client chooses whether to react to the navigate event — the
   // CLI currently ignores it, the browser follows it.
-  const socketIds = getAuthSocketIds(userId);
+  const socketIds = getAuthSocketIds(beingId);
   if (socketIds.length === 0) return;
   for (const socketId of socketIds) {
     io.to(socketId).emit(WS.NAVIGATE, { url, replace });
   }
   log.debug("WS",
-    `📍 Navigated user ${userId} to ${url} (session: ${sessionId ? sessionId.slice(0, 8) : "ungated"}, fanout: ${socketIds.length})`,
+    `📍 Navigated user ${beingId} to ${url} (session: ${sessionId ? sessionId.slice(0, 8) : "ungated"}, fanout: ${socketIds.length})`,
   );
 }
 
-export function emitReload({ userId }) {
+export function emitReload({ beingId }) {
   if (!io) return;
-  for (const socketId of getAuthSocketIds(userId)) {
+  for (const socketId of getAuthSocketIds(beingId)) {
     io.to(socketId).emit(WS.RELOAD);
   }
 }
@@ -1551,21 +1551,21 @@ export function emitBroadcast(event, data) {
   io.emit(event, data);
 }
 
-export function emitToUser(userId, event, data) {
+export function emitToUser(beingId, event, data) {
   if (!io) return;
-  for (const socketId of getAuthSocketIds(userId)) {
+  for (const socketId of getAuthSocketIds(beingId)) {
     io.to(socketId).emit(event, data);
   }
 }
 
-export function isUserOnline(userId) {
-  const set = authSessions.get(String(userId));
+export function isUserOnline(beingId) {
+  const set = authSessions.get(String(beingId));
   return !!(set && set.size > 0);
 }
 
-export function notifyTreeChange({ userId, nodeId, changeType, details }) {
+export function notifyTreeChange({ beingId, nodeId, changeType, details }) {
   if (!io) return;
-  for (const socketId of getAuthSocketIds(userId)) {
+  for (const socketId of getAuthSocketIds(beingId)) {
     io.to(socketId).emit(WS.TREE_CHANGED, { nodeId, changeType, details });
   }
 }

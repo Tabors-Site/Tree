@@ -54,7 +54,7 @@ router.get("/root/:rootId/study", urlAuth, htmlOnly, async (req, res) => {
       completed,
       history,
       token: req.query.token || null,
-      userId: req.userId,
+      beingId: req.beingId,
       qs: req.query,
       inApp: !!req.query.inApp,
     }));

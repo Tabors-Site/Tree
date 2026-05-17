@@ -1,9 +1,9 @@
 import { v4 as uuidv4 } from "uuid";
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
+import Artifact from "../../seed/models/artifact.js";
 import { getContextForAi } from "../../seed/tree/treeFetch.js";
-import { createNote } from "../../seed/tree/notes.js";
+import { createArtifact } from "../../seed/tree/artifacts.js";
 
 const MAX_THOUGHTS = 200;
 
@@ -92,7 +92,7 @@ async function think(rootId, runChat) {
 
       // One thought
       const { answer } = await runChat({
-        userId: ownerId,
+        beingId: ownerId,
         username: "inner",
         message:
           `You are the tree's internal monologue. You are looking at the node "${randomNode.name}" ` +
@@ -109,24 +109,24 @@ async function think(rootId, runChat) {
       if (!answer || answer.length < 5) return;
 
       // Write the thought as a note on .inner
-      await createNote({
-        contentType: "text",
+      await createArtifact({
+        origin: "ibp",
         content: answer.trim(),
-        userId: ownerId,
+        beingId: ownerId,
         nodeId: String(innerNode._id),
         wasAi: true,
       });
 
       // Cap at MAX_THOUGHTS
-      const noteCount = await Note.countDocuments({ nodeId: String(innerNode._id) });
+      const noteCount = await Artifact.countDocuments({ nodeId: String(innerNode._id) });
       if (noteCount > MAX_THOUGHTS) {
-        const oldest = await Note.find({ nodeId: String(innerNode._id) })
+        const oldest = await Artifact.find({ nodeId: String(innerNode._id) })
           .sort({ createdAt: 1 })
           .limit(noteCount - MAX_THOUGHTS)
           .select("_id")
           .lean();
         if (oldest.length > 0) {
-          await Note.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
+          await Artifact.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
         }
       }
 

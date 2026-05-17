@@ -39,8 +39,8 @@ router.get("/go", authenticate, async (req, res) => {
   try {
     const query = req.query.q || req.query.destination || "";
     const result = query.trim()
-      ? await findDestination(query, req.userId)
-      : await listPositions(req.userId);
+      ? await findDestination(query, req.beingId)
+      : await listPositions(req.beingId);
 
     // Attach a pre-formatted `answer` string so the CLI's generic
     // response printer renders a clean, ID-bearing hint instead of

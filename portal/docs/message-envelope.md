@@ -236,7 +236,7 @@ The Ruler responds to "begin" some seconds later, after firing-and-forgetting a 
 }
 ```
 
-Arrives in tabor's home inbox. The portal client listening with `portal:see { stance: "tabor@treeos.ai", live: true }` receives the inbox update and renders it in the chat panel that opened with `msg-001`.
+Arrives in tabor's home inbox. The portal client listening with `ibp:see { stance: "tabor@treeos.ai", live: true }` receives the inbox update and renders it in the chat panel that opened with `msg-001`.
 
 ### Plan-card action
 

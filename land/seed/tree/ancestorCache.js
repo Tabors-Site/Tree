@@ -246,10 +246,10 @@ export function resolveExtensionScopeFromChain(ancestors, confinedExtensions) {
  * Returns the same shape as resolveTreeAccess().
  *
  * @param {string} startNodeId - the node being accessed
- * @param {string} userId - the user requesting access
+ * @param {string} beingId - the user requesting access
  * @param {Array<object>} ancestors - from getAncestorChain or snapshotAncestors
  */
-export function resolveTreeAccessFromChain(startNodeId, userId, ancestors) {
+export function resolveTreeAccessFromChain(startNodeId, beingId, ancestors) {
   if (!ancestors || ancestors.length === 0) {
     return { ok: false, error: ERR.NODE_NOT_FOUND, message: "Node not found." };
   }
@@ -274,7 +274,7 @@ export function resolveTreeAccessFromChain(startNodeId, userId, ancestors) {
     }
 
     // Accumulate contributors
-    if (!isContributor && userId && node.contributors?.some(id => id === userId)) {
+    if (!isContributor && beingId && node.contributors?.some(id => id === beingId)) {
       isContributor = true;
     }
 
@@ -303,7 +303,7 @@ export function resolveTreeAccessFromChain(startNodeId, userId, ancestors) {
     };
   }
 
-  const isOwner = !!(userId && ownerNode.rootOwner === userId);
+  const isOwner = !!(beingId && ownerNode.rootOwner === beingId);
 
   // Circuit breaker: tripped trees deny write access
   const circuit = ownerNode.metadata?.circuit;

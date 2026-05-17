@@ -6,7 +6,7 @@ import log from "../../../seed/log.js";
 import { sendError, ERR } from "../../../seed/protocol.js";
 import express from "express";
 import authenticateLite from "../../html-rendering/authenticateLite.js";
-import User from "../../../seed/models/user.js";
+import Being from "../../../seed/models/being.js";
 import LlmConnection from "../../../seed/models/llmConnection.js";
 import { renderSetup } from "./setupPage.js";
 import { isHtmlEnabled } from "../../html-rendering/config.js";
@@ -19,18 +19,18 @@ router.get("/setup", authenticateLite, async (req, res) => {
       return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled. Use the SPA frontend.");
     }
 
-    if (!req.userId) {
+    if (!req.beingId) {
       return res.redirect("/login?redirect=/setup");
     }
 
-    const user = await User.findById(req.userId)
+    const user = await Being.findById(req.beingId)
       .select("username metadata llmDefault")
       .lean();
     if (!user) {
       return res.redirect("/login?redirect=/setup");
     }
 
-    const connCount = await LlmConnection.countDocuments({ userId: req.userId });
+    const connCount = await LlmConnection.countDocuments({ beingId: req.beingId });
     const hasMainLlm = !!(user.llmDefault);
     const needsLlm = !hasMainLlm && connCount === 0;
 
@@ -39,7 +39,7 @@ router.get("/setup", authenticateLite, async (req, res) => {
       return res.redirect("/chat");
     }
 
-    return res.send(renderSetup({ userId: req.userId, username: user.username }));
+    return res.send(renderSetup({ beingId: req.beingId, username: user.username }));
   } catch (err) {
     log.error("HTML", "Setup page error:", err.message);
     return res.status(500).send("Something went wrong");

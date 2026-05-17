@@ -9,7 +9,7 @@ export default [
       "with and what it has no data on. Based on accumulated query history.",
     schema: {
       nodeId: z.string().describe("The node to check competence for."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

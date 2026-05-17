@@ -24,7 +24,7 @@ export default {
     "self-knowledge. Collect, act, collect again. Each cycle deeper than the last.",
 
   needs: {
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
     services: ["hooks", "llm"],
   },
 

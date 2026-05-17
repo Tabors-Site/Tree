@@ -31,7 +31,7 @@ export default {
 
   needs: {
     services: ["hooks"],
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
     extensions: ["propagation"],
   },
 

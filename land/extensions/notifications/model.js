@@ -7,7 +7,7 @@ const NotificationSchema = new mongoose.Schema({
     default: uuidv4,
   },
 
-  userId: {
+  beingId: {
     type: String,
     ref: "User",
     required: true,
@@ -42,7 +42,7 @@ const NotificationSchema = new mongoose.Schema({
   },
 });
 
-NotificationSchema.index({ userId: 1, createdAt: -1 });
+NotificationSchema.index({ beingId: 1, createdAt: -1 });
 
 const Notification = mongoose.model("Notification", NotificationSchema);
 export default Notification;

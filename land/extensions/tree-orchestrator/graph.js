@@ -49,10 +49,10 @@ export function serializeContextForEval(context) {
   return parts.join("\n");
 }
 
-export async function evaluateCondition(conditionText, { rootId, nodeId, userId, signal, slot }) {
+export async function evaluateCondition(conditionText, { rootId, nodeId, beingId, signal, slot }) {
   try {
     const { getContextForAi } = await import("../../seed/tree/treeFetch.js");
-    const context = await getContextForAi(nodeId, { userId });
+    const context = await getContextForAi(nodeId, { beingId });
     const contextStr = serializeContextForEval(context);
 
     if (!contextStr || contextStr.length < 10) {
@@ -63,7 +63,7 @@ export async function evaluateCondition(conditionText, { rootId, nodeId, userId,
 
     // Get LLM client (reuse existing resolution chain)
     const modeConnectionId = await resolveRootLlmForMode(rootId, "tree:librarian");
-    const clientInfo = await getClientForUser(userId, slot, modeConnectionId);
+    const clientInfo = await getClientForUser(beingId, slot, modeConnectionId);
     if (clientInfo.noLlm) {
       return { result: "unknown", confidence: 0, reasoning: "no LLM configured" };
     }
@@ -136,7 +136,7 @@ export function resolveFork(forkNode, evaluation) {
 
 const MAX_FANOUT_ITEMS = 20;
 
-export async function resolveSet({ extName, rootId, quantifier, temporalScope, nodeId, userId, message }) {
+export async function resolveSet({ extName, rootId, quantifier, temporalScope, nodeId, beingId, message }) {
   try {
     // Check if extension provides a custom resolver.
     // The extension is the authority on what "all my X" means inside its domain.
@@ -145,7 +145,7 @@ export async function resolveSet({ extName, rootId, quantifier, temporalScope, n
     const { getExtension } = await import("../loader.js");
     const ext = extName ? getExtension(extName) : null;
     if (ext?.exports?.resolveSet) {
-      const custom = await ext.exports.resolveSet({ quantifier, temporalScope, rootId, userId, message });
+      const custom = await ext.exports.resolveSet({ quantifier, temporalScope, rootId, beingId, message });
       if (custom?.length > 0) return custom.slice(0, MAX_FANOUT_ITEMS);
     }
 
@@ -172,7 +172,7 @@ export async function resolveSet({ extName, rootId, quantifier, temporalScope, n
     const items = [];
     for (const child of children.slice(0, MAX_FANOUT_ITEMS)) {
       try {
-        const ctx = await getContextForAi(child._id, { userId });
+        const ctx = await getContextForAi(child._id, { beingId });
         items.push({ nodeId: String(child._id), name: child.name, context: ctx });
       } catch {
         // Skip nodes that fail enrichment
@@ -367,7 +367,7 @@ export async function executeGraph(node, message, visitorId, opts) {
     return runModeAndReturn(visitorId, node.mode, message, {
       socket: opts.socket,
       username: opts.username,
-      userId: opts.userId,
+      beingId: opts.beingId,
       rootId: opts.rootId,
       signal: opts.signal,
       slot: opts.slot,
@@ -401,7 +401,7 @@ export async function executeGraph(node, message, visitorId, opts) {
     return runChain(chain, message, visitorId, {
       socket: opts.socket,
       username: opts.username,
-      userId: opts.userId,
+      beingId: opts.beingId,
       rootId: opts.rootId,
       signal: opts.signal,
       slot: opts.slot,
@@ -416,7 +416,7 @@ export async function executeGraph(node, message, visitorId, opts) {
     const evaluation = await evaluateCondition(node.condition.text, {
       rootId: opts.rootId,
       nodeId: opts.currentNodeId,
-      userId: opts.userId,
+      beingId: opts.beingId,
       signal: opts.signal,
       slot: opts.slot,
     });
@@ -446,7 +446,7 @@ export async function executeGraph(node, message, visitorId, opts) {
       quantifier: node.itemResolver.quantifier,
       temporalScope: node.itemResolver.temporalScope,
       nodeId: node.targetNodeId || opts.currentNodeId,
-      userId: opts.userId,
+      beingId: opts.beingId,
       message,
     });
 
@@ -456,7 +456,7 @@ export async function executeGraph(node, message, visitorId, opts) {
       return runModeAndReturn(visitorId, node.mode, message, {
         socket: opts.socket,
         username: opts.username,
-        userId: opts.userId,
+        beingId: opts.beingId,
         rootId: opts.rootId,
         signal: opts.signal,
         slot: opts.slot,
@@ -497,7 +497,7 @@ export async function executeGraph(node, message, visitorId, opts) {
     return runModeAndReturn(visitorId, node.mode, message, {
       socket: opts.socket,
       username: opts.username,
-      userId: opts.userId,
+      beingId: opts.beingId,
       rootId: opts.rootId,
       signal: opts.signal,
       slot: opts.slot,

@@ -1,6 +1,6 @@
 import log from "../../seed/log.js";
 import express from "express";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
@@ -15,9 +15,9 @@ const router = express.Router();
 
 // ── List connections ─────────────────────────────────────────────────────
 
-router.get("/user/:userId/custom-llm", authenticate, async (req, res) => {
+router.get("/user/:beingId/custom-llm", authenticate, async (req, res) => {
   try {
-    const connections = await getConnectionsForUser(req.params.userId);
+    const connections = await getConnectionsForUser(req.params.beingId);
     return sendOk(res, { connections });
   } catch (err) {
     return sendError(res, 500, ERR.INTERNAL, err.message);
@@ -26,14 +26,14 @@ router.get("/user/:userId/custom-llm", authenticate, async (req, res) => {
 
 // ── Add connection ───────────────────────────────────────────────────────
 
-router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
+router.post("/user/:beingId/custom-llm", authenticate, async (req, res) => {
   try {
     const { name, baseUrl, model } = req.body;
     const apiKey = req.body.apiKey || "none";
     if (!name || !baseUrl || !model) {
       return sendError(res, 400, ERR.INVALID_INPUT, "Missing required fields: name, baseUrl, model");
     }
-    const result = await addLlmConnection(req.params.userId, {
+    const result = await addLlmConnection(req.params.beingId, {
       name,
       baseUrl,
       apiKey,
@@ -41,11 +41,11 @@ router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
     });
 
     try {
-      const user = await User.findById(req.params.userId)
+      const user = await Being.findById(req.params.beingId)
         .select("llmDefault metadata")
         .lean();
       if (!user?.llmDefault) {
-        await assignConnection(req.params.userId, "main", result._id);
+        await assignConnection(req.params.beingId, "main", result._id);
       }
     } catch (assignErr) {
       log.error("LLM", "Auto-assign main failed:", assignErr.message);
@@ -63,7 +63,7 @@ router.post("/user/:userId/custom-llm", authenticate, async (req, res) => {
 // ── Update connection ────────────────────────────────────────────────────
 
 router.put(
-  "/user/:userId/custom-llm/:connectionId",
+  "/user/:beingId/custom-llm/:connectionId",
   authenticate,
   async (req, res) => {
     try {
@@ -72,7 +72,7 @@ router.put(
         return sendError(res, 400, ERR.INVALID_INPUT, "Missing required fields: baseUrl, model");
       }
       const result = await updateLlmConnection(
-        req.params.userId,
+        req.params.beingId,
         req.params.connectionId,
         { name, baseUrl, apiKey, model },
       );
@@ -87,12 +87,12 @@ router.put(
 // ── Delete connection ────────────────────────────────────────────────────
 
 router.delete(
-  "/user/:userId/custom-llm/:connectionId",
+  "/user/:beingId/custom-llm/:connectionId",
   authenticate,
   async (req, res) => {
     try {
       await deleteLlmConnection(
-        req.params.userId,
+        req.params.beingId,
         req.params.connectionId,
       );
       return sendOk(res, { removed: true });
@@ -105,12 +105,12 @@ router.delete(
 
 // ── User slot assignment ─────────────────────────────────────────────────
 
-router.post("/user/:userId/llm-assign", authenticate, async (req, res) => {
+router.post("/user/:beingId/llm-assign", authenticate, async (req, res) => {
   try {
     const { slot, connectionId } = req.body;
     if (!slot) return sendError(res, 400, ERR.INVALID_INPUT, "slot is required");
     const result = await assignConnection(
-      req.params.userId,
+      req.params.beingId,
       slot,
       connectionId || null,
     );

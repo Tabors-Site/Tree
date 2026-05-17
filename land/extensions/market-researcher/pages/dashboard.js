@@ -7,7 +7,7 @@
 
 import { renderAppDashboard } from "../../html-rendering/html/appDashboard.js";
 
-export function renderResearchDashboard({ rootId, rootName, sectors, findings, watchlist, token, userId, inApp }) {
+export function renderResearchDashboard({ rootId, rootName, sectors, findings, watchlist, token, beingId, inApp }) {
   const allSectors = sectors || [];
   const allFindings = findings || [];
   const wl = watchlist || [];
@@ -68,7 +68,7 @@ export function renderResearchDashboard({ rootId, rootName, sectors, findings, w
     rootId,
     rootName: rootName || "Market Research",
     token,
-    userId,
+    beingId,
     inApp: !!inApp,
     subtitle: new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
     hero,

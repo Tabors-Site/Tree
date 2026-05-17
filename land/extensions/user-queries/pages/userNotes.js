@@ -1,7 +1,7 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { esc, escapeHtml } from "../../html-rendering/html/utils.js";
 
-export function renderUserNotes({ userId, user, notes, processedNotes, query, token }) {
+export function renderUserNotes({ beingId, user, notes, processedNotes, query, token }) {
   const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
   const css = `
@@ -269,7 +269,7 @@ export function renderUserNotes({ userId, user, notes, processedNotes, query, to
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
+      <a href="/api/v1/user/${beingId}${tokenQS}" class="back-link">
         \u2190 Back to Profile
       </a>
     </div>
@@ -278,14 +278,14 @@ export function renderUserNotes({ userId, user, notes, processedNotes, query, to
     <div class="header">
       <h1>
         Notes by
-<a href="/api/v1/user/${userId}${tokenQS}">${escapeHtml(user.username)}</a>
+<a href="/api/v1/user/${beingId}${tokenQS}">${escapeHtml(user.username)}</a>
       </h1>
       <div class="header-subtitle">
         View and manage your last 200 notes across every tree
       </div>
 
       <!-- Search Form -->
-      <form method="GET" action="/api/v1/user/${userId}/notes" class="search-form">
+      <form method="GET" action="/api/v1/user/${beingId}/notes" class="search-form">
         <input type="hidden" name="token" value="${esc(token)}">
         <input type="hidden" name="html" value="">
         <input

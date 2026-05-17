@@ -16,7 +16,7 @@ async function ensureModels() {
     Node = mod.default;
   }
   if (!User) {
-    const mod = await import("../../seed/models/user.js");
+    const mod = await import("../../seed/models/being.js");
     User = mod.default;
   }
 }
@@ -111,16 +111,16 @@ function buildEncryptedConfig(type, config, direction) {
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────
 
-async function verifyRootAccess(userId, rootId) {
+async function verifyRootAccess(beingId, rootId) {
   const root = await Node.findById(rootId)
     .select("rootOwner contributors")
     .lean();
   if (!root) throw new Error("Root not found");
   if (!root.rootOwner) throw new Error("Node is not a root");
 
-  const isOwner = root.rootOwner.toString() === userId.toString();
+  const isOwner = root.rootOwner.toString() === beingId.toString();
   const isContributor = (root.contributors || []).some(
-    (c) => c.toString() === userId.toString(),
+    (c) => c.toString() === beingId.toString(),
   );
 
   if (!isOwner && !isContributor) {
@@ -148,11 +148,11 @@ function sanitizeChannel(channel) {
 // ─────────────────────────────────────────────────────────────────────────
 
 export async function addGatewayChannel(
-  userId,
+  beingId,
   rootId,
   { name, type, direction, mode, config, notificationTypes, queueBehavior },
 ) {
-  await verifyRootAccess(userId, rootId);
+  await verifyRootAccess(beingId, rootId);
 
   const count = await GatewayChannel.countDocuments({ rootId });
   if (count >= MAX_CHANNELS_PER_ROOT) {
@@ -192,7 +192,7 @@ export async function addGatewayChannel(
   // Tier check for input channels (if handler requires it)
   const hasInput = safeDirection === "input" || safeDirection === "input-output";
   if (hasInput && handler.requiredTiers && handler.requiredTiers.length > 0) {
-    const user = await User.findById(userId).select("isAdmin metadata").lean();
+    const user = await Being.findById(beingId).select("isAdmin metadata").lean();
     const userPlan = (user?.metadata?.tiers?.plan) || "basic";
     if (!user || (!user.isAdmin && !handler.requiredTiers.includes(userPlan))) {
       throw new Error(
@@ -224,7 +224,7 @@ export async function addGatewayChannel(
   const safeQueueBehavior = queueBehavior === "silent" ? "silent" : "respond";
 
   const channel = await GatewayChannel.create({
-    userId,
+    beingId,
     rootId,
     name: name.trim(),
     type,
@@ -249,8 +249,8 @@ export async function addGatewayChannel(
   return sanitizeChannel(channel);
 }
 
-export async function updateGatewayChannel(userId, channelId, updates) {
-  const channel = await GatewayChannel.findOne({ _id: channelId, userId });
+export async function updateGatewayChannel(beingId, channelId, updates) {
+  const channel = await GatewayChannel.findOne({ _id: channelId, beingId });
   if (!channel) throw new Error("Channel not found");
 
   const wasEnabled = channel.enabled;
@@ -311,10 +311,10 @@ export async function updateGatewayChannel(userId, channelId, updates) {
   return sanitizeChannel(channel);
 }
 
-export async function deleteGatewayChannel(userId, channelId) {
+export async function deleteGatewayChannel(beingId, channelId) {
   const channel = await GatewayChannel.findOneAndDelete({
     _id: channelId,
-    userId,
+    beingId,
   });
   if (!channel) throw new Error("Channel not found");
 

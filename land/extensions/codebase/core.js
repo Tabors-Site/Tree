@@ -10,7 +10,7 @@ import path from "path";
 import os from "os";
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
+import Artifact from "../../seed/models/artifact.js";
 import { v4 as uuidv4 } from "uuid";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -125,7 +125,7 @@ export function isGitUrl(str) {
  * Ingest a directory or git URL into a tree node.
  * Creates child nodes for directories, notes for files.
  */
-export async function ingest(parentNodeId, dirPath, userId, opts = {}) {
+export async function ingest(parentNodeId, dirPath, beingId, opts = {}) {
   const repoRoot = opts.repoRoot || dirPath;
   const gitignore = opts.gitignore || await loadGitignore(repoRoot);
   const depth = opts.depth || 0;
@@ -161,11 +161,11 @@ export async function ingest(parentNodeId, dirPath, userId, opts = {}) {
 
     if (entry.isDirectory()) {
       // Create a node for the directory
-      const dirNode = await createCodeNode(parentNodeId, entry.name, userId, "directory");
+      const dirNode = await createCodeNode(parentNodeId, entry.name, beingId, "directory");
       stats.dirs++;
 
       // Recurse
-      await ingest(String(dirNode._id), entryPath, userId, {
+      await ingest(String(dirNode._id), entryPath, beingId, {
         repoRoot, gitignore, depth: depth + 1, stats,
       });
     } else if (entry.isFile()) {
@@ -193,11 +193,11 @@ export async function ingest(parentNodeId, dirPath, userId, opts = {}) {
         // Write file content directly to Note model.
         // Bypasses createNote's text limit, hooks, and validation.
         // Code files can be large. No hooks needed for bulk ingestion.
-        await Note.create({
+        await Artifact.create({
           _id: uuidv4(),
-          contentType: "text",
+          origin: "ibp",
           content: `// ${entry.name}\n${fileContent}`,
-          userId,
+          beingId,
           nodeId: parentNodeId,
           wasAi: false,
           metadata: { code: { fileName: entry.name, language, lines: lines.length, truncated } },
@@ -219,7 +219,7 @@ export async function ingest(parentNodeId, dirPath, userId, opts = {}) {
  * Create a child node with code metadata.
  * Uses the kernel's createNode for proper hook firing and parent linkage.
  */
-async function createCodeNode(parentId, name, userId, role) {
+async function createCodeNode(parentId, name, beingId, role) {
   const { createNode: kernelCreateNode } = await import("../../seed/tree/treeManagement.js");
 
   // Check if already exists (idempotent re-ingestion)
@@ -229,7 +229,7 @@ async function createCodeNode(parentId, name, userId, role) {
   const node = await kernelCreateNode({
     name,
     parentId,
-    userId,
+    beingId,
     metadata: { code: { role } },
   });
   return node;
@@ -245,7 +245,7 @@ export async function searchCode(rootId, query, type = "text") {
   // BFS: collect all nodes in the tree
   const queue = [rootId];
   const visited = new Set();
-  const Note = (await import("../../seed/models/note.js")).default;
+  const Artifact = (await import("../../seed/models/artifact.js")).default;
 
   while (queue.length > 0 && results.length < 20) {
     const batch = queue.splice(0, 50);
@@ -260,7 +260,7 @@ export async function searchCode(rootId, query, type = "text") {
       if (node.children?.length) queue.push(id);
 
       // Search notes on this node
-      const notes = await Note.find({ nodeId: id, contentType: "text" })
+      const notes = await Artifact.find({ nodeId: id, origin: "ibp" })
         .select("content")
         .lean();
 

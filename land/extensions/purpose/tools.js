@@ -7,7 +7,7 @@ export default [
     description: "Show this tree's root thesis and coherence stats. The one sentence everything in this tree should serve.",
     schema: {
       rootId: z.string().describe("The tree root."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -29,14 +29,14 @@ export default [
     description: "Force re-derivation of the thesis from the current tree state. The thesis evolves but always connects to the root.",
     schema: {
       rootId: z.string().describe("The tree root."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    handler: async ({ rootId, userId }) => {
+    handler: async ({ rootId, beingId }) => {
       try {
-        const thesis = await deriveThesis(rootId, userId);
+        const thesis = await deriveThesis(rootId, beingId);
         if (!thesis) return { content: [{ type: "text", text: "Could not derive thesis. Check that notes exist at the root." }] };
         return { content: [{ type: "text", text: `Thesis: ${thesis}` }] };
       } catch (err) {
@@ -50,14 +50,14 @@ export default [
     schema: {
       rootId: z.string().describe("The tree root."),
       text: z.string().describe("The text to check against the thesis."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-    handler: async ({ rootId, text, userId }) => {
+    handler: async ({ rootId, text, beingId }) => {
       try {
-        const result = await checkCoherence(text, rootId, userId);
+        const result = await checkCoherence(text, rootId, beingId);
         if (!result) return { content: [{ type: "text", text: "No thesis available. Derive one first." }] };
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {

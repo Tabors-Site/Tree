@@ -8,7 +8,7 @@ export default [
       "Show detected behavioral patterns and pending extension proposals. " +
       "The tree noticed what users do that no extension handles.",
     schema: {
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     handler: async () => {
@@ -49,7 +49,7 @@ export default [
     description: "Dismiss a detected pattern. The tree won't suggest it again.",
     schema: {
       patternId: z.string().describe("The pattern ID to dismiss."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     handler: async ({ patternId }) => {
@@ -67,7 +67,7 @@ export default [
     description: "Approve a proposal for building. Marks it as accepted.",
     schema: {
       proposalId: z.string().describe("The proposal ID to approve."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     handler: async ({ proposalId }) => {

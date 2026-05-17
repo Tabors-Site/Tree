@@ -40,18 +40,18 @@ function extractTargetNodeId(treeResult) {
 
 export async function orchestrateRawIdeaPlacement({
   rawIdeaId,
-  userId,
+  beingId,
   username,
   withResponse = false,
   source = "orchestrator",
 }) {
   // Load and validate raw idea before creating runtime
   const rawIdea = await RawIdea.findById(rawIdeaId);
-  if (!rawIdea || rawIdea.userId === DELETED) {
+  if (!rawIdea || rawIdea.beingId === DELETED) {
  log.warn("Raw Ideas", `Raw idea ${rawIdeaId} not found or already placed`);
     return withResponse ? { success: false, reason: "Raw idea not found" } : undefined;
   }
-  if (rawIdea.userId !== userId) {
+  if (rawIdea.beingId !== beingId) {
  log.warn("Raw Ideas", `Raw idea ${rawIdeaId} ownership mismatch`);
     return withResponse ? { success: false, reason: "Not authorized" } : undefined;
   }
@@ -70,7 +70,7 @@ export async function orchestrateRawIdeaPlacement({
   // Resolve LLM provider for the slot
   let llmProvider;
   try {
-    const clientInfo = await getClientForUser(userId, "rawIdea");
+    const clientInfo = await getClientForUser(beingId, "rawIdea");
     llmProvider = {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
@@ -82,7 +82,7 @@ export async function orchestrateRawIdeaPlacement({
 
   const rt = new OrchestratorRuntime({
     rootId: "pending", // will be set after root selection
-    userId,
+    beingId,
     username,
     // Per-idea lane under the user's home — each raw idea gets its own
     // chain so ideas processed in parallel don't cross-contaminate.
@@ -108,7 +108,7 @@ export async function orchestrateRawIdeaPlacement({
 
   // Log contribution: AI started processing
   await logContribution({
-    userId,
+    beingId,
     nodeId: DELETED,
     wasAi: true,
     sessionId: rt.sessionId,
@@ -130,7 +130,7 @@ export async function orchestrateRawIdeaPlacement({
       output: { status: "stuck", reason },
     });
     logContribution({
-      userId,
+      beingId,
       nodeId: DELETED,
       wasAi: true,
       chatId: rt.mainChatId,
@@ -144,7 +144,7 @@ export async function orchestrateRawIdeaPlacement({
   try {
     // PHASE 1: Choose best-fit root
     const nav = getExtension("navigation")?.exports;
-    const roots = nav ? await nav.getUserRootsWithNames(userId) : [];
+    const roots = nav ? await nav.getUserRootsWithNames(beingId) : [];
     if (!roots || roots.length === 0) {
       await markStuck("No trees available for this user");
       return withResponse ? { success: false, reason: "No trees available for this user" } : undefined;
@@ -190,7 +190,7 @@ export async function orchestrateRawIdeaPlacement({
       message: rawIdea.content,
       socket: nullSocket,
       username,
-      userId,
+      beingId,
       signal: rt.signal,
       sessionId: rt.sessionId,
       rootId: chosenRootId,
@@ -262,7 +262,7 @@ export async function orchestrateRawIdeaPlacement({
     }
 
     await logContribution({
-      userId,
+      beingId,
       nodeId: targetNodeId,
       wasAi: true,
       chatId: rt.mainChatId,
@@ -304,7 +304,7 @@ export async function orchestrateRawIdeaPlacement({
         output: { status: "stuck", reason: err.message },
       });
       logContribution({
-        userId,
+        beingId,
         nodeId: DELETED,
         wasAi: true,
         chatId: rt.mainChatId,

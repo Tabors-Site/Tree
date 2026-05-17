@@ -18,7 +18,7 @@ function goalColor(current, goal) {
   return "rgba(255,255,255,0.08)";
 }
 
-export function renderFitnessDashboard({ rootId, rootName, state, weekly, profile, token, userId, inApp }) {
+export function renderFitnessDashboard({ rootId, rootName, state, weekly, profile, token, beingId, inApp }) {
   const modalities = state?.modalities || [];
   const groups = state?.groups || {};
   const today = new Date();
@@ -27,7 +27,7 @@ export function renderFitnessDashboard({ rootId, rootName, state, weekly, profil
   // If no exercises, use generic dashboard with empty state
   if (Object.keys(groups).length === 0) {
     return renderAppDashboard({
-      rootId, rootName, token, userId, inApp,
+      rootId, rootName, token, beingId, inApp,
       tags: modalities.map(m => ({ label: m, color: m === "gym" ? "#667eea" : m === "running" ? "#48bb78" : "#ecc94b" })),
       emptyState: { title: "No exercises configured yet", message: "Type a message below to get started." },
       commands: [
@@ -193,8 +193,8 @@ export function renderFitnessDashboard({ rootId, rootName, state, weekly, profil
       </div>`;
   }
 
-  const navHtml = userId
-    ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><a href="/api/v1/user/${esc(userId)}/apps?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">\u2190 Apps</a><div style="display:flex;gap:16px;"><a href="/api/v1/root/${esc(rootId)}?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">Tree</a><a href="/api/v1/user/${esc(userId)}/llm?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM</a></div></div>`
+  const navHtml = beingId
+    ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><a href="/api/v1/user/${esc(beingId)}/apps?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">\u2190 Apps</a><div style="display:flex;gap:16px;"><a href="/api/v1/root/${esc(rootId)}?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">Tree</a><a href="/api/v1/user/${esc(beingId)}/llm?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM</a></div></div>`
     : "";
 
   const body = `

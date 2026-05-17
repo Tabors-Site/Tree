@@ -125,7 +125,7 @@ The Land server (existing TreeOS server in `../land/`) is the backend. It alread
 - a WebSocket layer for live events
 - legacy HTTP routes and an HTML dashboard surface
 
-This portal sits opposite the Land server. It speaks IBP: four WS verbs (SEE / DO / TALK / BE) carrying Portal Addresses, plus a single HTTP bootstrap endpoint. The Land server gains an IBP layer in `land/portal/` that exposes these verbs. The legacy HTTP routes keep working during migration; each extension's routes retire as it migrates to `do set-meta` plus TALK.
+This portal sits opposite the Land server. It speaks IBP: four WS verbs (SEE / DO / TALK / BE) carrying Portal Addresses, plus a single HTTP bootstrap endpoint. The Land server gains an IBP layer in `land/ibp/` that exposes these verbs. The legacy HTTP routes keep working during migration; each extension's routes retire as it migrates to `do set-meta` plus TALK.
 
 Future: the same portal opens any TreeOS-speaking land. Federation (Canopy) means a portal session can navigate across lands. A bridge connects a stance on one land to a stance on another.
 
@@ -149,13 +149,12 @@ IBP's surface is four WebSocket verbs, each with a distinct address rule:
 
 The build sequence:
 
-1. Demolish the earlier portal scaffolding (`portal:fetch`, `portal:resolve`, `portal:discover`) in one commit. No aliases.
-2. Build SEE fresh. Full Position Description for all three zones; live SEE streams RFC 6902 patches.
-3. Build DO with four named actions plus `set-meta` to prove the dispatch pattern.
-4. Build TALK and the inbox. Sync respond-mode first, with one demonstration embodiment.
-5. Build BE. Auth-being handles register/claim/release/switch.
-6. Add async respond-mode. Response routing back to the originator's inbox.
-7. Finish the Portal shell. Land/Home/Tree zone renderers, tabs, navigator, identity panel.
+1. Build SEE fresh. Full Position Description for all three zones; live SEE streams RFC 6902 patches.
+2. Build DO with four named actions plus `set-meta` to prove the dispatch pattern.
+3. Build TALK and the inbox. Sync respond-mode first, with one demonstration embodiment.
+4. Build BE. Auth-being handles register/claim/release/switch.
+5. Add async respond-mode. Response routing back to the originator's inbox.
+6. Finish the Portal shell. Land/Home/Tree zone renderers, tabs, navigator, identity panel.
 
 The first version proves the concept: sign in as a being at a land, navigate to your home, see your tree, talk to beings at scopes. All over IBP.
 

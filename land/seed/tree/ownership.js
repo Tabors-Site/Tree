@@ -12,7 +12,7 @@
  */
 
 import Node from "../models/node.js";
-import User from "../models/user.js";
+import Being from "../models/being.js";
 import { resolveTreeAccess } from "./treeAccess.js";
 import { invalidateNode } from "./ancestorCache.js";
 import { hooks } from "../hooks.js";
@@ -229,21 +229,21 @@ async function assertOwnerOrAdmin(nodeId, actorId) {
   const access = await resolveTreeAccess(nodeId, actorId);
   if (access.ok && access.isOwner) return;
 
-  const actor = await User.findById(actorId).select("isAdmin").lean();
+  const actor = await Being.findById(actorId).select("isAdmin").lean();
   if (actor?.isAdmin) return;
 
   throw new Error("Only the tree owner or admin can perform this action");
 }
 
 async function assertAdmin(actorId) {
-  const actor = await User.findById(actorId).select("isAdmin").lean();
+  const actor = await Being.findById(actorId).select("isAdmin").lean();
   if (!actor?.isAdmin) {
     throw new Error("Only an admin can perform this action");
   }
 }
 
-async function assertUserExists(userId) {
-  if (!userId) throw new Error("User ID is required");
-  const user = await User.findById(userId).select("_id").lean();
+async function assertUserExists(beingId) {
+  if (!beingId) throw new Error("User ID is required");
+  const user = await Being.findById(beingId).select("_id").lean();
   if (!user) throw new Error("User not found");
 }

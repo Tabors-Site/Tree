@@ -11,7 +11,7 @@ const UNREACHABLE_STATUSES = new Set(["blocked", "dead", "unreachable"]);
  * The home land resolves the user's actual LLM connection, runs inference,
  * and deducts energy. Tool execution stays local on the calling land.
  */
-export function createCanopyLlmProxyClient({ userId, homeLand, slot }) {
+export function createCanopyLlmProxyClient({ beingId, homeLand, slot }) {
   return {
     _isCanopyProxy: true,
     chat: {
@@ -31,7 +31,7 @@ export function createCanopyLlmProxyClient({ userId, homeLand, slot }) {
             );
           }
 
-          const token = await signCanopyToken(userId, homeLand);
+          const token = await signCanopyToken(beingId, homeLand);
           const baseUrl = getPeerBaseUrl(peer);
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 19 * 60 * 1000);
@@ -41,7 +41,7 @@ export function createCanopyLlmProxyClient({ userId, homeLand, slot }) {
             opts.signal.addEventListener("abort", () => controller.abort());
           }
 
-          log.debug("Canopy", "LLM proxy call to %s for user %s (slot: %s)", homeLand, userId, slot || "main");
+          log.debug("Canopy", "LLM proxy call to %s for user %s (slot: %s)", homeLand, beingId, slot || "main");
 
           try {
             const res = await fetch(baseUrl + "/canopy/llm/proxy", {

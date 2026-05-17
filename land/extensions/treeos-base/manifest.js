@@ -27,7 +27,7 @@ export default {
 
   needs: {
     services: ["websocket", "llm"],
-    models: ["Node", "User", "Note", "Contribution"],
+    models: ["Node", "User", "Artifact", "Contribution"],
   },
 
   optional: {

@@ -13,14 +13,14 @@ import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 // ── Dependencies ──
 
 let _Node = null;
-let _Note = null;
+let _Artifact = null;
 let _runChat = null;
 let _metadata = null;
 let _hooks = null;
 
-export function configure({ Node, Note, runChat, metadata, hooks }) {
+export function configure({ Node, Artifact, runChat, metadata, hooks }) {
   _Node = Node;
-  _Note = Note;
+  _Artifact = Note;
   _runChat = runChat;
   _metadata = metadata;
   _hooks = hooks;
@@ -48,22 +48,22 @@ const ROLES = {
 
 // ── Scaffold ──
 
-export async function scaffold(rootId, userId) {
+export async function scaffold(rootId, beingId) {
   if (!_Node) throw new Error("Recovery core not configured");
   const { createNode } = await import("../../seed/tree/treeManagement.js");
 
-  const logNode = await createNode({ name: "Log", parentId: rootId, userId });
-  const substanceNode = await createNode({ name: "Substance", parentId: rootId, userId });
-  const feelingsNode = await createNode({ name: "Feelings", parentId: rootId, userId });
-  const cravingsNode = await createNode({ name: "Cravings", parentId: feelingsNode._id, userId });
-  const moodNode = await createNode({ name: "Mood", parentId: feelingsNode._id, userId });
-  const energyNode = await createNode({ name: "Energy", parentId: feelingsNode._id, userId });
-  const patternsNode = await createNode({ name: "Patterns", parentId: rootId, userId });
-  const journalNode = await createNode({ name: "Journal", parentId: rootId, userId });
-  const milestonesNode = await createNode({ name: "Milestones", parentId: rootId, userId });
-  const supportNode = await createNode({ name: "Support", parentId: rootId, userId });
-  const profileNode = await createNode({ name: "Profile", parentId: rootId, userId });
-  const historyNode = await createNode({ name: "History", parentId: rootId, userId });
+  const logNode = await createNode({ name: "Log", parentId: rootId, beingId });
+  const substanceNode = await createNode({ name: "Substance", parentId: rootId, beingId });
+  const feelingsNode = await createNode({ name: "Feelings", parentId: rootId, beingId });
+  const cravingsNode = await createNode({ name: "Cravings", parentId: feelingsNode._id, beingId });
+  const moodNode = await createNode({ name: "Mood", parentId: feelingsNode._id, beingId });
+  const energyNode = await createNode({ name: "Energy", parentId: feelingsNode._id, beingId });
+  const patternsNode = await createNode({ name: "Patterns", parentId: rootId, beingId });
+  const journalNode = await createNode({ name: "Journal", parentId: rootId, beingId });
+  const milestonesNode = await createNode({ name: "Milestones", parentId: rootId, beingId });
+  const supportNode = await createNode({ name: "Support", parentId: rootId, beingId });
+  const profileNode = await createNode({ name: "Profile", parentId: rootId, beingId });
+  const historyNode = await createNode({ name: "History", parentId: rootId, beingId });
 
   // Tag roles
   const tags = [
@@ -105,19 +105,19 @@ export async function scaffold(rootId, userId) {
 /**
  * Add a substance to track. Creates a child under /Substance with Schedule and Doses children.
  */
-export async function addSubstance(rootId, substanceName, userId, config = {}) {
+export async function addSubstance(rootId, substanceName, beingId, config = {}) {
   const nodes = await findRecoveryNodes(rootId);
   if (!nodes?.substance) throw new Error("Recovery tree not scaffolded");
 
   const { createNode } = await import("../../seed/tree/treeManagement.js");
 
-  const substNode = await createNode({ name: substanceName, parentId: nodes.substance.id, userId });
+  const substNode = await createNode({ name: substanceName, parentId: nodes.substance.id, beingId });
   await _metadata.setExtMeta(substNode, "recovery", { role: ROLES.SUBSTANCE_ITEM, substanceName: substanceName.toLowerCase() });
 
-  const scheduleNode = await createNode({ name: "Schedule", parentId: substNode._id, userId });
+  const scheduleNode = await createNode({ name: "Schedule", parentId: substNode._id, beingId });
   await _metadata.setExtMeta(scheduleNode, "recovery", { role: ROLES.SCHEDULE, substance: substanceName.toLowerCase() });
 
-  const dosesNode = await createNode({ name: "Doses", parentId: substNode._id, userId });
+  const dosesNode = await createNode({ name: "Doses", parentId: substNode._id, beingId });
   await _metadata.setExtMeta(dosesNode, "recovery", { role: ROLES.DOSES, substance: substanceName.toLowerCase() });
 
   // Initialize dose values
@@ -214,11 +214,11 @@ export async function completeSetup(rootId) {
 
 // ── Parse check-in ──
 
-export async function parseCheckIn(message, userId, username, rootId) {
+export async function parseCheckIn(message, beingId, username, rootId) {
   if (!_runChat) throw new Error("LLM not configured");
 
   const { answer } = await _runChat({
-    userId,
+    beingId,
     username,
     message,
     mode: "tree:recovery-log",
@@ -283,7 +283,7 @@ export async function recordEnergy(nodes, level) {
 const MILESTONE_DAYS = [1, 3, 7, 14, 21, 30, 60, 90, 100, 180, 365];
 
 export async function checkMilestones(nodes, substance, streak) {
-  if (!nodes.milestones || !_Note) return null;
+  if (!nodes.milestones || !_Artifact) return null;
 
   for (const day of MILESTONE_DAYS) {
     if (streak !== day) continue;
@@ -305,12 +305,12 @@ export async function checkMilestones(nodes, substance, streak) {
     const text = `Day ${day}: ${messages[day] || `${day} days.`}`;
 
     try {
-      const { createNote } = await import("../../seed/tree/notes.js");
-      await createNote({
+      const { createArtifact } = await import("../../seed/tree/artifacts.js");
+      await createArtifact({
         nodeId: nodes.milestones.id,
         content: text,
-        contentType: "text",
-        userId: "SYSTEM",
+        origin: "ibp",
+        beingId: "SYSTEM",
       });
     } catch {}
 
@@ -429,12 +429,12 @@ export async function checkDailyReset(rootId) {
   // Archive to History
   if (nodes.history) {
     try {
-      const { createNote } = await import("../../seed/tree/notes.js");
-      await createNote({
+      const { createArtifact } = await import("../../seed/tree/artifacts.js");
+      await createArtifact({
         nodeId: nodes.history.id,
         content: JSON.stringify(summary),
-        contentType: "text",
-        userId: "SYSTEM",
+        origin: "ibp",
+        beingId: "SYSTEM",
       });
     } catch (err) {
       log.debug("Recovery", `History write failed: ${err.message}`);
@@ -506,9 +506,9 @@ export async function getStatus(rootId) {
 
 export async function getPatterns(rootId) {
   const nodes = await findRecoveryNodes(rootId);
-  if (!nodes?.patterns || !_Note) return [];
+  if (!nodes?.patterns || !_Artifact) return [];
 
-  const notes = await _Note.find({ nodeId: nodes.patterns.id })
+  const notes = await _Artifact.find({ nodeId: nodes.patterns.id })
     .sort({ createdAt: -1 })
     .limit(20)
     .select("content createdAt")
@@ -521,9 +521,9 @@ export async function getPatterns(rootId) {
 
 export async function getMilestones(rootId) {
   const nodes = await findRecoveryNodes(rootId);
-  if (!nodes?.milestones || !_Note) return [];
+  if (!nodes?.milestones || !_Artifact) return [];
 
-  const notes = await _Note.find({ nodeId: nodes.milestones.id })
+  const notes = await _Artifact.find({ nodeId: nodes.milestones.id })
     .sort({ createdAt: -1 })
     .limit(50)
     .select("content createdAt")
@@ -534,9 +534,9 @@ export async function getMilestones(rootId) {
 
 export async function getHistory(rootId, days = 7) {
   const nodes = await findRecoveryNodes(rootId);
-  if (!nodes?.history || !_Note) return [];
+  if (!nodes?.history || !_Artifact) return [];
 
-  const notes = await _Note.find({ nodeId: nodes.history.id })
+  const notes = await _Artifact.find({ nodeId: nodes.history.id })
     .sort({ createdAt: -1 })
     .limit(days)
     .select("content")

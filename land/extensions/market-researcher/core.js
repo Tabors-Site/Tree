@@ -9,12 +9,12 @@ import log from "../../seed/log.js";
 import { setNodeMode } from "../../seed/modes/registry.js";
 
 let _Node = null;
-let _Note = null;
+let _Artifact = null;
 let _metadata = null;
 
-export function configure({ Node, Note, metadata }) {
+export function configure({ Node, Artifact, metadata }) {
   _Node = Node;
-  _Note = Note;
+  _Artifact = Note;
   _metadata = metadata;
 }
 
@@ -30,15 +30,15 @@ export { ROLES };
 
 // -- Scaffold --
 
-export async function scaffold(rootId, userId) {
+export async function scaffold(rootId, beingId) {
   if (!_Node) throw new Error("Market researcher core not configured");
   const { createNode } = await import("../../seed/tree/treeManagement.js");
 
-  const logNode = await createNode({ name: "Log", parentId: rootId, userId });
-  const sectorsNode = await createNode({ name: "Sectors", parentId: rootId, userId });
-  const findingsNode = await createNode({ name: "Findings", parentId: rootId, userId });
-  const watchlistNode = await createNode({ name: "Watchlist", parentId: rootId, userId });
-  const profileNode = await createNode({ name: "Profile", parentId: rootId, userId });
+  const logNode = await createNode({ name: "Log", parentId: rootId, beingId });
+  const sectorsNode = await createNode({ name: "Sectors", parentId: rootId, beingId });
+  const findingsNode = await createNode({ name: "Findings", parentId: rootId, beingId });
+  const watchlistNode = await createNode({ name: "Watchlist", parentId: rootId, beingId });
+  const profileNode = await createNode({ name: "Profile", parentId: rootId, beingId });
 
   const tags = [
     [logNode, ROLES.LOG],
@@ -138,9 +138,9 @@ export async function getRecentFindings(rootId, limit = 15) {
   const nodes = await findResearchNodes(rootId);
   if (!nodes?.findings) return [];
 
-  const { getNotes } = await import("../../seed/tree/notes.js");
-  const result = await getNotes({ nodeId: nodes.findings.id, limit });
-  return result?.notes || [];
+  const { getArtifacts } = await import("../../seed/tree/artifacts.js");
+  const result = await getArtifacts({ nodeId: nodes.findings.id, limit });
+  return result?.artifacts || [];
 }
 
 // -- Watchlist --

@@ -20,7 +20,7 @@ import { getExtension } from "../loader.js";
 
 let Node = null;
 let Contribution = null;
-let Note = null;
+let _Artifact = null;
 let logContribution = null;
 let runChat = null;
 let useEnergy = async () => ({ energyUsed: 0 });
@@ -29,7 +29,7 @@ let _metadata = null;
 export function setServices({ models, contributions, llm, energy, metadata }) {
   Node = models.Node;
   Contribution = models.Contribution;
-  Note = models.Note;
+  _Artifact = models.Artifact;
   logContribution = contributions.logContribution;
   runChat = llm.runChat;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
@@ -53,13 +53,13 @@ async function getDormancyDays() {
  * Scan a tree for prune candidates.
  * Returns the list and writes it to metadata.prune.candidates on the root.
  */
-export async function scanForCandidates(rootId, userId) {
-  await useEnergy({ userId, action: "pruneScan" });
+export async function scanForCandidates(rootId, beingId) {
+  await useEnergy({ beingId, action: "pruneScan" });
 
   const dormancyMs = (await getDormancyDays()) * 24 * 60 * 60 * 1000;
   const cutoff = new Date(Date.now() - dormancyMs);
 
-  // Get all nodes in this tree (walk from root, not rootOwner which is a userId)
+  // Get all nodes in this tree (walk from root, not rootOwner which is a beingId)
   const { getDescendantIds } = await import("../../seed/tree/treeFetch.js");
   const allIds = await getDescendantIds(rootId, { maxResults: 10000 });
   const nodes = await Node.find({ _id: { $in: allIds }, status: "active" })
@@ -78,7 +78,7 @@ export async function scanForCandidates(rootId, userId) {
   const activeNodeIds = new Set(recentContribs.map(c => c.nodeId.toString()));
 
   // Get recent notes
-  const recentNotes = await Note.find({
+  const recentNotes = await _Artifact.find({
     nodeId: { $in: nodeIds },
     dateCreated: { $gte: cutoff },
   }).select("nodeId").lean();
@@ -152,7 +152,7 @@ export async function scanForCandidates(rootId, userId) {
  * 3. Set status to "trimmed"
  * 4. Log as contribution
  */
-export async function confirmPrune(rootId, userId, username) {
+export async function confirmPrune(rootId, beingId, username) {
   const root = await Node.findById(rootId);
   if (!root) throw new Error("Tree not found");
 
@@ -165,7 +165,7 @@ export async function confirmPrune(rootId, userId, username) {
 
   for (const candidate of candidates) {
     try {
-      const result = await pruneNode(candidate, rootId, userId, username);
+      const result = await pruneNode(candidate, rootId, beingId, username);
       pruned++;
       if (result.absorbed) absorbed++;
     } catch (err) {
@@ -181,7 +181,7 @@ export async function confirmPrune(rootId, userId, username) {
     date: new Date().toISOString(),
     pruned,
     absorbed,
-    userId,
+    beingId,
   });
   // Cap history
   if (pruneMeta.history.length > 50) {
@@ -193,7 +193,7 @@ export async function confirmPrune(rootId, userId, username) {
   return { pruned, absorbed };
 }
 
-async function pruneNode(candidate, rootId, userId, username) {
+async function pruneNode(candidate, rootId, beingId, username) {
   const node = await Node.findById(candidate.nodeId)
     .select("_id name parent status metadata")
     .lean();
@@ -202,15 +202,15 @@ async function pruneNode(candidate, rootId, userId, username) {
 
   // Energy for absorption check
   try {
-    await useEnergy({ userId, action: "pruneAbsorb" });
+    await useEnergy({ beingId, action: "pruneAbsorb" });
   } catch {
     // No energy, skip absorption, just trim
-    await trimNode(candidate.nodeId, userId);
+    await trimNode(candidate.nodeId, beingId);
     return { absorbed: false };
   }
 
   // Get the node's content for the AI to evaluate
-  const notes = await Note.find({ nodeId: candidate.nodeId })
+  const notes = await _Artifact.find({ nodeId: candidate.nodeId })
     .select("content")
     .sort({ dateCreated: -1 })
     .limit(5)
@@ -223,7 +223,7 @@ async function pruneNode(candidate, rootId, userId, username) {
     // Ask the AI: is anything here worth preserving?
     try {
       const result = await runChat({
-        userId,
+        beingId,
         username,
         message:
           `This node "${node.name}" is being pruned (no activity in ${(await getDormancyDays())} days). ` +
@@ -257,11 +257,11 @@ async function pruneNode(candidate, rootId, userId, username) {
   }
 
   // Trim the node
-  await trimNode(candidate.nodeId, userId);
+  await trimNode(candidate.nodeId, beingId);
 
   // Log contribution
   await logContribution({
-    userId,
+    beingId,
     nodeId: candidate.nodeId,
     wasAi: true,
     action: "prune:trimmed",
@@ -277,7 +277,7 @@ async function pruneNode(candidate, rootId, userId, username) {
   return { absorbed: didAbsorb };
 }
 
-async function trimNode(nodeId, userId) {
+async function trimNode(nodeId, beingId) {
   await Node.updateOne({ _id: nodeId }, { $set: { status: "trimmed" } });
 }
 
@@ -285,7 +285,7 @@ async function trimNode(nodeId, userId) {
 // UNDO: restore a pruned node
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function undoPrune(nodeId, userId) {
+export async function undoPrune(nodeId, beingId) {
   const node = await Node.findById(nodeId).select("status name").lean();
   if (!node) throw new Error("Node not found");
   if (node.status !== "trimmed") throw new Error("Node is not trimmed");
@@ -293,7 +293,7 @@ export async function undoPrune(nodeId, userId) {
   await Node.updateOne({ _id: nodeId }, { $set: { status: "active" } });
 
   await logContribution({
-    userId,
+    beingId,
     nodeId,
     wasAi: false,
     action: "prune:restored",
@@ -312,7 +312,7 @@ export async function undoPrune(nodeId, userId) {
  * This is permanent. The data is deleted from the database.
  * Only runs if purgeGraceDays is set in land config (default: off).
  */
-export async function purge(rootId, userId) {
+export async function purge(rootId, beingId) {
   let graceDays;
   try {
     const { getLandConfigValue } = await import("../../seed/landConfig.js");
@@ -339,7 +339,7 @@ export async function purge(rootId, userId) {
 
   // Delete notes, contributions, then nodes
   const ids = trimmed.map(n => n._id);
-  await Note.deleteMany({ nodeId: { $in: ids } });
+  await _Artifact.deleteMany({ nodeId: { $in: ids } });
   await Contribution.deleteMany({ nodeId: { $in: ids } });
   await Node.deleteMany({ _id: { $in: ids } });
 

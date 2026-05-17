@@ -7,8 +7,8 @@ let _jobTimer = null;
 export async function init(core) {
   configure({ metadata: core.metadata });
   // enrichContext: surface delegate suggestions when the suggested user is nearby
-  core.hooks.register("enrichContext", async ({ context, node, meta, userId }) => {
-    if (!userId) return;
+  core.hooks.register("enrichContext", async ({ context, node, meta, beingId }) => {
+    if (!beingId) return;
     if (node.systemRole) return; // skip system nodes
 
     // Need a rootId to look up suggestions
@@ -25,7 +25,7 @@ export async function init(core) {
     if (!rootId) return;
 
     try {
-      const nearby = await getNearbySuggestions(String(node._id), userId, rootId);
+      const nearby = await getNearbySuggestions(String(node._id), beingId, rootId);
       if (nearby.length === 0) return;
 
       context.delegateSuggestions = nearby.map(s => ({

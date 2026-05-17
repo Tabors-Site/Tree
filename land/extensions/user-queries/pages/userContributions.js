@@ -1,7 +1,7 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { esc, escapeHtml, actionColorClass } from "../../html-rendering/html/utils.js";
 
-export async function renderUserContributions({ userId, contributions, username, getNodeName, token }) {
+export async function renderUserContributions({ beingId, contributions, username, getNodeName, token }) {
   const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
   const link = (id, label) =>
@@ -181,7 +181,7 @@ export async function renderUserContributions({ userId, contributions, username,
 
         case "rawIdea": {
           const ri = c.rawIdeaAction || {};
-          const ideaRef = `<a href="/api/v1/user/${userId}/raw-ideas/${ri.rawIdeaId}${tokenQS}"><code>${esc(ri.rawIdeaId)}</code></a>`;
+          const ideaRef = `<a href="/api/v1/user/${beingId}/raw-ideas/${ri.rawIdeaId}${tokenQS}"><code>${esc(ri.rawIdeaId)}</code></a>`;
           if (ri.action === "add") return `Captured a raw idea ${ideaRef}`;
           if (ri.action === "delete")
             return `Discarded raw idea <code>${esc(ri.rawIdeaId)}</code>`;
@@ -399,13 +399,13 @@ export async function renderUserContributions({ userId, contributions, username,
   const bodyHtml = `
   <div class="container">
     <div class="back-nav">
-      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">\u2190 Back to Profile</a>
+      <a href="/api/v1/user/${beingId}${tokenQS}" class="back-link">\u2190 Back to Profile</a>
     </div>
 
     <div class="header">
       <h1>
         Contributions by
-        <a href="/api/v1/user/${userId}${tokenQS}">@${esc(username)}</a>
+        <a href="/api/v1/user/${beingId}${tokenQS}">@${esc(username)}</a>
         ${contributions.length > 0 ? `<span class="message-count">${contributions.length}</span>` : ""}
       </h1>
       <div class="header-subtitle">Activity &amp; change history</div>

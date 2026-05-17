@@ -8,10 +8,10 @@
 import express from "express";
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import mongoose from "mongoose";
 import { sendOk, sendError, ERR, DELETED } from "../../seed/protocol.js";
-import { getUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getTreeStructure } from "../../seed/tree/treeData.js";
 import { getContributions } from "../../seed/tree/contributions.js";
@@ -205,10 +205,10 @@ export function buildTreeosHtmlRoutes() {
   // APPS
   // ===================================================================
 
-  router.get("/user/:userId/apps", urlAuth, htmlOnly, async (req, res) => {
+  router.get("/user/:beingId/apps", urlAuth, htmlOnly, async (req, res) => {
     try {
-      const { userId } = req.params;
-      const user = await User.findById(userId).select("username").lean();
+      const { beingId } = req.params;
+      const user = await Being.findById(beingId).select("username").lean();
       if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
       // rootMap: appKey -> [{ id, name, ready }]
@@ -231,7 +231,7 @@ export function buildTreeosHtmlRoutes() {
       let foundViaLife = false;
       if (life?.exports?.getDomainNodes && life?.exports?.findLifeRoot) {
         try {
-          const lifeRootId = await life.exports.findLifeRoot(userId);
+          const lifeRootId = await life.exports.findLifeRoot(beingId);
           if (lifeRootId) {
             const domainNodes = await life.exports.getDomainNodes(lifeRootId);
             for (const [key, info] of Object.entries(domainNodes)) {
@@ -245,7 +245,7 @@ export function buildTreeosHtmlRoutes() {
       // Fallback: scan all roots only if life didn't find anything
       if (!foundViaLife) {
         const roots = await Node.find({
-          rootOwner: userId,
+          rootOwner: beingId,
           parent: { $ne: DELETED },
         }).select("_id name metadata").lean();
         const EXTENSIONS = Object.keys(NAME_MAP);
@@ -262,12 +262,12 @@ export function buildTreeosHtmlRoutes() {
       // Find Life root ID for chat routing (reuse from discovery if available)
       let chatRootId = null;
       if (life?.exports?.findLifeRoot) {
-        try { chatRootId = await life.exports.findLifeRoot(userId); } catch {}
+        try { chatRootId = await life.exports.findLifeRoot(beingId); } catch {}
       }
 
       const { renderAppsPage } = await import("./pages/appsPage.js");
       res.send(renderAppsPage({
-        userId,
+        beingId,
         username: user.username,
         rootMap,
         lifeRootId: chatRootId,
@@ -279,10 +279,10 @@ export function buildTreeosHtmlRoutes() {
     }
   });
 
-  router.post("/user/:userId/apps/create", authenticate, async (req, res) => {
+  router.post("/user/:beingId/apps/create", authenticate, async (req, res) => {
     try {
-      const { userId } = req.params;
-      if (req.userId !== userId) return sendError(res, 403, ERR.FORBIDDEN, "Not your account");
+      const { beingId } = req.params;
+      if (req.beingId !== beingId) return sendError(res, 403, ERR.FORBIDDEN, "Not your account");
 
       const { app: appKey, message } = req.body;
       if (!appKey || !message) return sendError(res, 400, ERR.INVALID_INPUT, "app and message required");
@@ -308,9 +308,9 @@ export function buildTreeosHtmlRoutes() {
       // Try life extension for organized scaffolding under Life tree
       const life = getExtension("life");
       if (life?.exports?.addDomain && !appDef.multiInstance) {
-        let lifeRootId = await life.exports.findLifeRoot(userId);
+        let lifeRootId = await life.exports.findLifeRoot(beingId);
         if (!lifeRootId) {
-          const result = await life.exports.scaffoldRoot(userId);
+          const result = await life.exports.scaffoldRoot(beingId);
           lifeRootId = result.rootId;
         }
 
@@ -320,7 +320,7 @@ export function buildTreeosHtmlRoutes() {
           return res.redirect(`/api/v1/root/${domains[appKey].id}/${appDef.dashboardPath}${qs}${msgParam}`);
         }
 
-        const { id: domainId } = await life.exports.addDomain({ rootId: lifeRootId, domain: appKey, userId });
+        const { id: domainId } = await life.exports.addDomain({ rootId: lifeRootId, domain: appKey, beingId });
         return res.redirect(`/api/v1/root/${domainId}/${appDef.dashboardPath}${qs}${msgParam}`);
       }
 
@@ -337,7 +337,7 @@ export function buildTreeosHtmlRoutes() {
 
       const treeName = appDef.multiInstance ? (message.slice(0, 80) || appDef.treeName) : appDef.treeName;
       const { createNode } = await import("../../seed/tree/treeManagement.js");
-      const rootNode = await createNode({ name: treeName, isRoot: true, userId });
+      const rootNode = await createNode({ name: treeName, isRoot: true, beingId });
       return res.redirect(`/api/v1/root/${rootNode._id}/${appDef.dashboardPath}${qs}${msgParam}`);
     } catch (err) {
       log.error("HTML", "App create error:", err.message);
@@ -349,25 +349,25 @@ export function buildTreeosHtmlRoutes() {
   // ===================================================================
 
   // Share token management page
-  router.get("/user/:userId/llm", urlAuth, async (req, res) => {
+  router.get("/user/:beingId/llm", urlAuth, async (req, res) => {
     try {
-      const { userId } = req.params;
+      const { beingId } = req.params;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
-      const connections = await getConnectionsForUser(userId);
-      const user = await User.findById(userId).select("username llmDefault metadata").lean();
+      const connections = await getConnectionsForUser(beingId);
+      const user = await Being.findById(beingId).select("username llmDefault metadata").lean();
 
       if (!wantHtml || !isHtmlEnabled()) {
         return sendOk(res, { connections, mainAssignment: user?.llmDefault || null });
       }
 
-      const userSlots = getUserMeta(user, "userLlm")?.slots || {};
+      const userSlots = getBeingMeta(user, "userLlm")?.slots || {};
       const { getAllUserLlmSlots } = await import("../../seed/llm/connections.js");
       const allUserSlots = getAllUserLlmSlots();
       const token = req.query.token ?? "";
       const qs = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
 
       return res.send(renderLlmPage({
-        userId,
+        beingId,
         username: user?.username || "",
         connections,
         mainAssignment: user?.llmDefault || null,
@@ -384,40 +384,40 @@ export function buildTreeosHtmlRoutes() {
     }
   });
 
-  router.get("/user/:userId/shareToken", urlAuth, htmlOnly, async (req, res) => {
+  router.get("/user/:beingId/shareToken", urlAuth, htmlOnly, async (req, res) => {
     try {
-      const { userId } = req.params;
-      const user = await User.findById(userId).select("username metadata").lean();
+      const { beingId } = req.params;
+      const user = await Being.findById(beingId).select("username metadata").lean();
       if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
       const token = req.query.token ?? "";
       const tqs = token ? `?token=${encodeURIComponent(token)}&html` : "?html";
-      const { getUserMeta: _gum } = await import("../../seed/tree/userMetadata.js");
+      const { getBeingMeta: _gum } = await import("../../seed/tree/beingMetadata.js");
       const htmlMeta = _gum(user, "html");
       const savedShareToken = htmlMeta?.shareToken || null;
-      return res.send(renderShareToken({ userId, user, token, tokenQS: tqs, savedShareToken }));
+      return res.send(renderShareToken({ beingId, user, token, tokenQS: tqs, savedShareToken }));
     } catch (err) {
       log.error("HTML", "Share token page error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
 
-  router.get("/user/:userId", urlAuth, htmlOnly, async (req, res) => {
+  router.get("/user/:beingId", urlAuth, htmlOnly, async (req, res) => {
     try {
-      const userId = req.params.userId;
-      const user = await User.findById(userId).exec();
+      const beingId = req.params.beingId;
+      const user = await Being.findById(beingId).exec();
       if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
       (getExtension("energy")?.exports?.maybeResetEnergy || (() => false))(user);
 
-      const roots = (await getExtension("navigation")?.exports?.getUserRootsWithNames(userId)) || [];
-      const billingMeta = getUserMeta(user, "billing");
+      const roots = (await getExtension("navigation")?.exports?.getUserRootsWithNames(beingId)) || [];
+      const billingMeta = getBeingMeta(user, "billing");
       const plan = billingMeta.plan || "basic";
-      const energyData = getUserMeta(user, "energy");
+      const energyData = getBeingMeta(user, "energy");
       const energy = energyData.available;
       const extraEnergy = energyData.additional;
 
       const ENERGY_RESET_MS = 24 * 60 * 60 * 1000;
-      const storageUsedKB = getUserMeta(user, "storage").usageKB || 0;
+      const storageUsedKB = getBeingMeta(user, "storage").usageKB || 0;
       const lastResetAt = energy?.lastResetAt ? new Date(energy.lastResetAt) : null;
       const nextResetAt = lastResetAt ? new Date(lastResetAt.getTime() + ENERGY_RESET_MS) : null;
       const resetTimeLabel = nextResetAt
@@ -425,7 +425,7 @@ export function buildTreeosHtmlRoutes() {
         : "...";
 
       return res.send(renderUserProfile({
-        userId,
+        beingId,
         user,
         roots,
         queryString: buildQS(req),
@@ -828,12 +828,12 @@ export function buildTreeosHtmlRoutes() {
       const isDeleted = rootNode.parent === DELETED;
       const isRoot = !!rootNode.rootOwner;
       const isPublicAccess = !!req.isPublicAccess;
-      const isOwner = rootMeta?.rootOwner?._id?.toString() === req.userId?.toString();
+      const isOwner = rootMeta?.rootOwner?._id?.toString() === req.beingId?.toString();
       const queryAvailable = isPublicAccess
         ? !!((rootMeta?.llmDefault && rootMeta.llmDefault !== "none") || req.canopyVisitor)
         : false;
 
-      const currentUserId = req.userId ? req.userId.toString() : null;
+      const currentUserId = req.beingId ? req.beingId.toString() : null;
       const token = req.query.token ?? "";
 
       let deferredItems = [];
@@ -878,7 +878,7 @@ export function buildTreeosHtmlRoutes() {
       return res.send(renderRootOverview({
         allData, rootMeta, ancestors: allData.ancestors || [],
         isOwner, isDeleted, isRoot, isPublicAccess, queryAvailable,
-        currentUserId, queryString, nodeId, userId: req.userId,
+        currentUserId, queryString, nodeId, beingId: req.beingId,
         token, deferredItems, ownerConnections, allRootSlots,
         scaffoldedExtensions, blockedExtensions, allowedExtensions,
       }));
@@ -898,11 +898,11 @@ export function buildTreeosHtmlRoutes() {
       const root = await Node.findById(rootId).select("name llmDefault metadata rootOwner").lean();
       if (!root) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Tree not found");
 
-      const userId = req.userId;
-      const isOwner = root.rootOwner && String(root.rootOwner) === String(userId);
+      const beingId = req.beingId;
+      const isOwner = root.rootOwner && String(root.rootOwner) === String(beingId);
       if (!isOwner) return sendError(res, 403, ERR.FORBIDDEN, "Only the tree owner can manage LLM assignments");
 
-      const connections = await getConnectionsForUser(userId);
+      const connections = await getConnectionsForUser(beingId);
       const qs = buildQS(req);
 
       const meta = root.metadata instanceof Map ? Object.fromEntries(root.metadata) : (root.metadata || {});
@@ -917,7 +917,7 @@ export function buildTreeosHtmlRoutes() {
         slots: llmSlots,
         allSlots,
         qs,
-        userId,
+        beingId,
       }));
     } catch (err) {
       log.error("HTML", "Node LLM page error:", err.message);
@@ -937,9 +937,9 @@ export function buildTreeosHtmlRoutes() {
         .populate("rootOwner", "username").lean();
       if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
 
-      const isAuthenticated = !!req.userId;
-      const isOwner = isAuthenticated && String(root.rootOwner?._id) === String(req.userId);
-      const isContributor = isAuthenticated && (root.contributors || []).map(String).includes(String(req.userId));
+      const isAuthenticated = !!req.beingId;
+      const isOwner = isAuthenticated && String(root.rootOwner?._id) === String(req.beingId);
+      const isContributor = isAuthenticated && (root.contributors || []).map(String).includes(String(req.beingId));
       if (root.visibility !== "public" && !isOwner && !isContributor) {
         return sendError(res, 403, ERR.FORBIDDEN, "This tree is not public.");
       }
@@ -1021,9 +1021,9 @@ export function buildTreeosHtmlRoutes() {
       const { nodeId, version, noteId } = req.params;
       const qs = buildQS(req);
       const tqs = tokenQS(req);
-      const Note = (await import("../../seed/models/note.js")).default;
-      const note = await Note.findById(noteId).lean();
-      if (!note) return notFoundPage?.(req, res, "This note doesn't exist or may have been removed.") || sendError(res, 404, ERR.NOTE_NOT_FOUND, "Note not found");
+      const Artifact = (await import("../../seed/models/artifact.js")).default;
+      const note = await Artifact.findById(noteId).lean();
+      if (!note) return notFoundPage?.(req, res, "This note doesn't exist or may have been removed.") || sendError(res, 404, ERR.ARTIFACT_NOT_FOUND, "Note not found");
       if (note.contentType !== "text") return res.redirect(`/api/v1/node/${nodeId}/${version}/notes/${noteId}${tqs}`);
       return res.send(renderEditorPage({
         nodeId, version, noteId, noteContent: note.content || "", qs, tokenQS: tqs, originalLength: (note.content || "").length,
@@ -1037,7 +1037,7 @@ export function buildTreeosHtmlRoutes() {
   router.get("/node/:nodeId/:version/notes", urlAuth, htmlOnly, async (req, res) => {
     try {
       const { nodeId, version } = req.params;
-      const Note = (await import("../../seed/models/note.js")).default;
+      const Artifact = (await import("../../seed/models/artifact.js")).default;
       const limit = Math.min(Number(req.query.limit) || 50, 200);
       const query = { nodeId };
       // Version lives in metadata.version (set by prestige beforeNote hook), not a top-level field
@@ -1046,15 +1046,15 @@ export function buildTreeosHtmlRoutes() {
       if (req.query.startDate) query.createdAt = { ...query.createdAt, $gte: new Date(req.query.startDate) };
       if (req.query.endDate) query.createdAt = { ...query.createdAt, $lte: new Date(req.query.endDate) };
 
-      const notes = await Note.find(query)
-        .populate("userId", "username")
+      const notes = await Artifact.find(query)
+        .populate("beingId", "username")
         .sort({ date: -1 }).limit(limit).lean();
 
       const nodeName = await getNodeName(nodeId);
       const token = req.query.token || "";
       return res.send(renderNotesList({
         nodeId, version: Number(version), token, nodeName,
-        notes, currentUserId: req.userId,
+        notes, currentUserId: req.beingId,
       }));
     } catch (err) {
       log.error("HTML", "Notes list render error:", err.message);
@@ -1065,9 +1065,9 @@ export function buildTreeosHtmlRoutes() {
   router.get("/node/:nodeId/:version/notes/:noteId", authenticateLite, htmlOnly, async (req, res) => {
     try {
       const { nodeId, version, noteId } = req.params;
-      const Note = (await import("../../seed/models/note.js")).default;
-      const note = await Note.findById(noteId).populate("userId", "username").lean();
-      if (!note) return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Note not found");
+      const Artifact = (await import("../../seed/models/artifact.js")).default;
+      const note = await Artifact.findById(noteId).populate("beingId", "username").lean();
+      if (!note) return sendError(res, 404, ERR.ARTIFACT_NOT_FOUND, "Note not found");
 
       const token = req.query.token || "";
       const hasToken = !!token;
@@ -1076,7 +1076,7 @@ export function buildTreeosHtmlRoutes() {
       // Public share link (no token): back goes to land home, no editor
       // Authenticated (token or JWT): back goes to notes list, editor available
       let back, backText;
-      if (hasToken || req.userId) {
+      if (hasToken || req.beingId) {
         back = `/api/v1/node/${nodeId}/${version}/notes${qs}`;
         backText = "\u2190 Back to Notes";
       } else {
@@ -1087,13 +1087,13 @@ export function buildTreeosHtmlRoutes() {
         backText = "\u2190 Back to Home";
       }
 
-      const safeUsername = escapeHtml?.(note.userId?.username || "Unknown") || (note.userId?.username || "Unknown");
-      const userLink = hasToken || req.userId
-        ? `<a href="/api/v1/user/${note.userId?._id || ""}${qs}">${safeUsername}</a>`
+      const safeUsername = escapeHtml?.(note.beingId?.username || "Unknown") || (note.beingId?.username || "Unknown");
+      const userLink = hasToken || req.beingId
+        ? `<a href="/api/v1/user/${note.beingId?._id || ""}${qs}">${safeUsername}</a>`
         : `<span>${safeUsername}</span>`;
 
       if (note.contentType === "text") {
-        return res.send(renderTextNote({ back, backText, userLink, editorButton: hasToken || !!req.userId, note, hasToken }));
+        return res.send(renderTextNote({ back, backText, userLink, editorButton: hasToken || !!req.beingId, note, hasToken }));
       }
 
       // File note
@@ -1122,14 +1122,14 @@ export function buildTreeosHtmlRoutes() {
   // POST create note -> redirect to notes list
   router.post("/node/:nodeId/:version/notes", authenticate, htmlOnly, async (req, res, next) => {
     try {
-      const { createNote } = await import("../../seed/tree/notes.js");
+      const { createArtifact } = await import("../../seed/tree/artifacts.js");
       const { nodeId, version } = req.params;
 
       if (req.body.content) {
-        await createNote({
-          contentType: "text",
+        await createArtifact({
+          origin: "ibp",
           content: req.body.content,
-          userId: req.userId,
+          beingId: req.beingId,
           nodeId,
         });
       }
@@ -1149,7 +1149,7 @@ export function buildTreeosHtmlRoutes() {
       await editNodeStatus({
         nodeId: req.params.nodeId,
         newStatus: req.body.status,
-        userId: req.userId,
+        beingId: req.beingId,
       });
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
@@ -1165,7 +1165,7 @@ export function buildTreeosHtmlRoutes() {
       await editNodeName({
         nodeId: req.params.nodeId,
         newName: req.body.name,
-        userId: req.userId,
+        beingId: req.beingId,
       });
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
@@ -1181,7 +1181,7 @@ export function buildTreeosHtmlRoutes() {
       await updateParent({
         nodeId: req.params.nodeId,
         newParentId: req.body.newParentId,
-        userId: req.userId,
+        beingId: req.beingId,
       });
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
@@ -1257,7 +1257,7 @@ export function buildTreeosHtmlRoutes() {
       await reorderChildren({
         nodeId: req.params.nodeId,
         children: req.body.children,
-        userId: req.userId,
+        beingId: req.beingId,
       });
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
@@ -1270,8 +1270,8 @@ export function buildTreeosHtmlRoutes() {
   router.delete("/node/:nodeId", authenticate, htmlOnly, async (req, res) => {
     try {
       const { deleteNodeBranch } = await import("../../seed/tree/treeManagement.js");
-      await deleteNodeBranch(req.params.nodeId, req.userId);
-      return res.redirect(`/api/v1/user/${req.userId}/deleted${tokenQS(req)}`);
+      await deleteNodeBranch(req.params.nodeId, req.beingId);
+      return res.redirect(`/api/v1/user/${req.beingId}/deleted${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Delete node redirect error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
@@ -1286,8 +1286,8 @@ export function buildTreeosHtmlRoutes() {
   router.post("/node/:nodeId/delete", authenticate, htmlOnly, async (req, res) => {
     try {
       const { deleteNodeBranch } = await import("../../seed/tree/treeManagement.js");
-      await deleteNodeBranch(req.params.nodeId, req.userId);
-      return res.redirect(`/api/v1/user/${req.userId}/deleted${tokenQS(req)}`);
+      await deleteNodeBranch(req.params.nodeId, req.beingId);
+      return res.redirect(`/api/v1/user/${req.beingId}/deleted${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Delete node error:", err.message);
       sendError(res, 500, ERR.INTERNAL, err.message);
@@ -1298,7 +1298,7 @@ export function buildTreeosHtmlRoutes() {
   router.post("/node/:nodeId/:version/editName", authenticate, htmlOnly, async (req, res) => {
     try {
       const { editNodeName } = await import("../../seed/tree/treeManagement.js");
-      await editNodeName({ nodeId: req.params.nodeId, newName: req.body.name, userId: req.userId });
+      await editNodeName({ nodeId: req.params.nodeId, newName: req.body.name, beingId: req.beingId });
       return res.redirect(`/api/v1/node/${req.params.nodeId}/${req.params.version}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Edit name error:", err.message);
@@ -1309,7 +1309,7 @@ export function buildTreeosHtmlRoutes() {
   router.post("/node/:nodeId/editName", authenticate, htmlOnly, async (req, res) => {
     try {
       const { editNodeName } = await import("../../seed/tree/treeManagement.js");
-      await editNodeName({ nodeId: req.params.nodeId, newName: req.body.name, userId: req.userId });
+      await editNodeName({ nodeId: req.params.nodeId, newName: req.body.name, beingId: req.beingId });
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Edit name error:", err.message);
@@ -1321,7 +1321,7 @@ export function buildTreeosHtmlRoutes() {
   router.post("/node/:nodeId/editType", authenticate, htmlOnly, async (req, res) => {
     try {
       const { editNodeType } = await import("../../seed/tree/treeManagement.js");
-      await editNodeType({ nodeId: req.params.nodeId, newType: req.body.type || null, userId: req.userId });
+      await editNodeType({ nodeId: req.params.nodeId, newType: req.body.type || null, beingId: req.beingId });
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Edit type error:", err.message);
@@ -1333,7 +1333,7 @@ export function buildTreeosHtmlRoutes() {
   router.post("/node/:nodeId/:version/editStatus", authenticate, htmlOnly, async (req, res) => {
     try {
       const { editStatus } = await import("../../seed/tree/statuses.js");
-      await editStatus({ nodeId: req.params.nodeId, status: req.body.status, userId: req.userId });
+      await editStatus({ nodeId: req.params.nodeId, status: req.body.status, beingId: req.beingId });
       return res.redirect(`/api/v1/node/${req.params.nodeId}/${req.params.version}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Edit status error:", err.message);
@@ -1344,7 +1344,7 @@ export function buildTreeosHtmlRoutes() {
   router.post("/node/:nodeId/editStatus", authenticate, htmlOnly, async (req, res) => {
     try {
       const { editStatus } = await import("../../seed/tree/statuses.js");
-      await editStatus({ nodeId: req.params.nodeId, status: req.body.status, userId: req.userId });
+      await editStatus({ nodeId: req.params.nodeId, status: req.body.status, beingId: req.beingId });
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Edit status error:", err.message);
@@ -1358,7 +1358,7 @@ export function buildTreeosHtmlRoutes() {
       const { createNode } = await import("../../seed/tree/treeManagement.js");
       const names = (req.body.name || "").split(",").map(n => n.trim()).filter(Boolean);
       for (const name of names) {
-        await createNode({ name, parentId: req.params.nodeId, userId: req.userId });
+        await createNode({ name, parentId: req.params.nodeId, beingId: req.beingId });
       }
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
@@ -1371,7 +1371,7 @@ export function buildTreeosHtmlRoutes() {
   router.post("/node/:nodeId/updateParent", authenticate, htmlOnly, async (req, res) => {
     try {
       const { updateParentRelationship: updateParent } = await import("../../seed/tree/treeManagement.js");
-      await updateParent({ nodeId: req.params.nodeId, newParentId: req.body.parentId, userId: req.userId });
+      await updateParent({ nodeId: req.params.nodeId, newParentId: req.body.parentId, beingId: req.beingId });
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Update parent error:", err.message);
@@ -1384,7 +1384,7 @@ export function buildTreeosHtmlRoutes() {
     try {
       const prestigeExt = getExtension("prestige");
       if (!prestigeExt?.exports?.addPrestige) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Prestige extension not loaded");
-      await prestigeExt.exports.addPrestige(req.params.nodeId, req.userId);
+      await prestigeExt.exports.addPrestige(req.params.nodeId, req.beingId);
       return res.redirect(`/api/v1/node/${req.params.nodeId}${tokenQS(req)}`);
     } catch (err) {
       log.error("HTML", "Prestige error:", err.message);
@@ -1396,7 +1396,7 @@ export function buildTreeosHtmlRoutes() {
     try {
       const prestigeExt = getExtension("prestige");
       if (!prestigeExt?.exports?.addPrestige) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Prestige extension not loaded");
-      await prestigeExt.exports.addPrestige(req.params.nodeId, req.userId);
+      await prestigeExt.exports.addPrestige(req.params.nodeId, req.beingId);
       const node = await Node.findById(req.params.nodeId).select("metadata").lean();
       const meta = node?.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node?.metadata || {});
       const current = meta.prestige?.current || 0;
@@ -1449,13 +1449,13 @@ export function buildTreeosHtmlRoutes() {
   });
 
   // POST create tree -> redirect
-  router.post("/user/:userId/trees", authenticate, htmlOnly, async (req, res) => {
+  router.post("/user/:beingId/trees", authenticate, htmlOnly, async (req, res) => {
     try {
       const { createNode } = await import("../../seed/tree/treeManagement.js");
       const rootNode = await createNode({
         name: req.body.name || "New Tree",
         isRoot: true,
-        userId: req.userId,
+        beingId: req.beingId,
       });
       return res.redirect(`/api/v1/root/${rootNode._id}${tokenQS(req)}`);
     } catch (err) {
@@ -1532,7 +1532,7 @@ export function buildTreeosHtmlRoutes() {
         blocked: extConfig.blocked || [],
         restricted: extConfig.restricted || {},
         allowed: extConfig.allowed || [],
-        userId: req.user?._id ? String(req.user._id) : undefined,
+        beingId: req.user?._id ? String(req.user._id) : undefined,
       });
 
       const qs = req.query.token ? `?token=${req.query.token}&html` : "?html";

@@ -14,11 +14,11 @@ import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 let _Node = null;
 let _runChat = null;
 let _metadata = null;
-let _Note = null;
+let _Artifact = null;
 
-export function configure({ Node, Note, runChat, metadata }) {
+export function configure({ Node, Artifact, runChat, metadata }) {
   _Node = Node;
-  _Note = Note;
+  _Artifact = Note;
   _runChat = runChat;
   _metadata = metadata;
 }
@@ -40,26 +40,26 @@ export const STRUCTURAL_ROLES = ["log", "daily", "meals", "profile", "history", 
  * Create the food tree structure under a root node.
  * Returns the node IDs for each role.
  */
-export async function scaffold(foodRootId, userId) {
+export async function scaffold(foodRootId, beingId) {
   if (!_Node) throw new Error("Food core not configured");
 
   const { createNode } = await import("../../seed/tree/treeManagement.js");
 
   // Create core child nodes
-  const logNode = await createNode({ name: "Log", parentId: foodRootId, userId });
-  const proteinNode = await createNode({ name: "Protein", parentId: foodRootId, userId });
-  const carbsNode = await createNode({ name: "Carbs", parentId: foodRootId, userId });
-  const fatsNode = await createNode({ name: "Fats", parentId: foodRootId, userId });
-  const dailyNode = await createNode({ name: "Daily", parentId: foodRootId, userId });
-  const profileNode = await createNode({ name: "Profile", parentId: foodRootId, userId });
-  const historyNode = await createNode({ name: "History", parentId: foodRootId, userId });
+  const logNode = await createNode({ name: "Log", parentId: foodRootId, beingId });
+  const proteinNode = await createNode({ name: "Protein", parentId: foodRootId, beingId });
+  const carbsNode = await createNode({ name: "Carbs", parentId: foodRootId, beingId });
+  const fatsNode = await createNode({ name: "Fats", parentId: foodRootId, beingId });
+  const dailyNode = await createNode({ name: "Daily", parentId: foodRootId, beingId });
+  const profileNode = await createNode({ name: "Profile", parentId: foodRootId, beingId });
+  const historyNode = await createNode({ name: "History", parentId: foodRootId, beingId });
 
   // Create Meals subtree for pattern tracking
-  const mealsNode = await createNode({ name: "Meals", parentId: foodRootId, userId });
-  const breakfastNode = await createNode({ name: "Breakfast", parentId: mealsNode._id, userId });
-  const lunchNode = await createNode({ name: "Lunch", parentId: mealsNode._id, userId });
-  const dinnerNode = await createNode({ name: "Dinner", parentId: mealsNode._id, userId });
-  const snacksNode = await createNode({ name: "Snacks", parentId: mealsNode._id, userId });
+  const mealsNode = await createNode({ name: "Meals", parentId: foodRootId, beingId });
+  const breakfastNode = await createNode({ name: "Breakfast", parentId: mealsNode._id, beingId });
+  const lunchNode = await createNode({ name: "Lunch", parentId: mealsNode._id, beingId });
+  const dinnerNode = await createNode({ name: "Dinner", parentId: mealsNode._id, beingId });
+  const snacksNode = await createNode({ name: "Snacks", parentId: mealsNode._id, beingId });
 
   // Tag each node with its food role
   const nodes = [
@@ -93,9 +93,9 @@ export async function scaffold(foodRootId, userId) {
     const channelsExt = getExtension("channels");
     if (channelsExt?.exports?.createChannel) {
       const create = channelsExt.exports.createChannel;
-      await create({ sourceNodeId: String(logNode._id), targetNodeId: String(proteinNode._id), channelName: "protein-log", direction: "outbound", filter: { tags: ["protein"] }, userId });
-      await create({ sourceNodeId: String(logNode._id), targetNodeId: String(carbsNode._id), channelName: "carbs-log", direction: "outbound", filter: { tags: ["carbs"] }, userId });
-      await create({ sourceNodeId: String(logNode._id), targetNodeId: String(fatsNode._id), channelName: "fats-log", direction: "outbound", filter: { tags: ["fats"] }, userId });
+      await create({ sourceNodeId: String(logNode._id), targetNodeId: String(proteinNode._id), channelName: "protein-log", direction: "outbound", filter: { tags: ["protein"] }, beingId });
+      await create({ sourceNodeId: String(logNode._id), targetNodeId: String(carbsNode._id), channelName: "carbs-log", direction: "outbound", filter: { tags: ["carbs"] }, beingId });
+      await create({ sourceNodeId: String(logNode._id), targetNodeId: String(fatsNode._id), channelName: "fats-log", direction: "outbound", filter: { tags: ["fats"] }, beingId });
       log.info("Food", "Channels created: protein-log, carbs-log, fats-log");
     } else {
       log.warn("Food", "Channels extension not available. Cascade routing will use direct delivery.");
@@ -146,7 +146,7 @@ export async function scaffold(foodRootId, userId) {
                 channelName: "food-fitness",
                 direction: "bidirectional",
                 filter: { tags: ["nutrition", "workout"] },
-                userId,
+                beingId,
               });
               log.info("Food", "Channel created: food-fitness (bidirectional with Fitness/Log)");
             }
@@ -263,15 +263,15 @@ export function detectMealSlot(message, when) {
 /**
  * Write a meal note to the appropriate Meals/{slot} child node.
  */
-export async function writeMealNote(foodNodes, mealSlot, summary, userId, ctx = {}) {
+export async function writeMealNote(foodNodes, mealSlot, summary, beingId, ctx = {}) {
   if (!foodNodes?.mealSlots?.[mealSlot]) return;
   try {
-    const { createNote } = await import("../../seed/tree/notes.js");
-    await createNote({
+    const { createArtifact } = await import("../../seed/tree/artifacts.js");
+    await createArtifact({
       nodeId: foodNodes.mealSlots[mealSlot].id,
       content: summary,
-      contentType: "text",
-      userId,
+      origin: "ibp",
+      beingId,
       wasAi: ctx.chatId != null || ctx.wasAi === true,
       chatId: ctx.chatId ?? null,
       sessionId: ctx.sessionId ?? null,
@@ -284,11 +284,11 @@ export async function writeMealNote(foodNodes, mealSlot, summary, userId, ctx = 
 /**
  * Parse food input into structured macros via one LLM call.
  */
-export async function parseFood(message, userId, username, rootId) {
+export async function parseFood(message, beingId, username, rootId) {
   if (!_runChat) throw new Error("LLM not configured");
 
   const { answer } = await _runChat({
-    userId,
+    beingId,
     username,
     message,
     mode: "tree:food-log",
@@ -424,12 +424,12 @@ export async function checkDailyReset(rootId) {
           summary[`hit${role.charAt(0).toUpperCase() + role.slice(1)}Goal`] = macros[role] >= goals[role];
         }
       }
-      const { createNote } = await import("../../seed/tree/notes.js");
-      await createNote({
+      const { createArtifact } = await import("../../seed/tree/artifacts.js");
+      await createArtifact({
         nodeId: foodNodes.history.id,
         content: JSON.stringify(summary),
-        contentType: "text",
-        userId: "SYSTEM",
+        origin: "ibp",
+        beingId: "SYSTEM",
       });
     } catch (err) {
       log.debug("Food", `History note write failed: ${err.message}`);
@@ -452,9 +452,9 @@ export async function checkDailyReset(rootId) {
     }
   };
 
-  if (foodNodes.history && _Note) {
+  if (foodNodes.history && _Artifact) {
     try {
-      const recentNotes = await _Note.find({ nodeId: foodNodes.history.id })
+      const recentNotes = await _Artifact.find({ nodeId: foodNodes.history.id })
         .sort({ createdAt: -1 }).limit(7).select("content").lean();
       const days = recentNotes.map(n => { try { return JSON.parse(n.content); } catch { return null; } }).filter(Boolean);
       await resetMetrics(days.length > 0, days);
@@ -469,11 +469,11 @@ export async function checkDailyReset(rootId) {
   // Clear meal slot notes (Breakfast, Lunch, Dinner, Snacks).
   // These are ephemeral "today's meals" buckets. The data is already archived
   // in the History node and the Log node. Meal slots empty each day.
-  if (foodNodes.mealSlots && _Note) {
+  if (foodNodes.mealSlots && _Artifact) {
     for (const [slot, info] of Object.entries(foodNodes.mealSlots)) {
       if (!info?.id) continue;
       try {
-        await _Note.deleteMany({ nodeId: info.id });
+        await _Artifact.deleteMany({ nodeId: info.id });
         log.verbose("Food", `  Cleared meal slot: ${slot}`);
       } catch (err) {
         log.debug("Food", `  Failed to clear ${slot}: ${err.message}`);
@@ -496,9 +496,9 @@ export async function checkDailyReset(rootId) {
       const daysSinceWeekly = lastWeekly
         ? Math.floor((new Date(today) - new Date(lastWeekly)) / 86400000)
         : 8; // force first weekly if never written
-      if (daysSinceWeekly >= 7 && foodNodes.history && _Note) {
+      if (daysSinceWeekly >= 7 && foodNodes.history && _Artifact) {
         try {
-          const weekNotes = await _Note.find({ nodeId: foodNodes.history.id })
+          const weekNotes = await _Artifact.find({ nodeId: foodNodes.history.id })
             .sort({ createdAt: -1 }).limit(7).select("content").lean();
           const weekDays = weekNotes
             .map(n => { try { return JSON.parse(n.content); } catch { return null; } })
@@ -525,12 +525,12 @@ export async function checkDailyReset(rootId) {
               averages, hitRates,
               calories: { avg: avgCal, total: totalCal },
             };
-            const { createNote } = await import("../../seed/tree/notes.js");
-            await createNote({
+            const { createArtifact } = await import("../../seed/tree/artifacts.js");
+            await createArtifact({
               nodeId: foodNodes.history.id,
               content: JSON.stringify(weeklySummary),
-              contentType: "text",
-              userId: "SYSTEM",
+              origin: "ibp",
+              beingId: "SYSTEM",
             });
             await _metadata.setExtMeta(rootNode, "food", {
               ...existing, lastResetDate: today, lastWeeklySummaryDate: today,
@@ -600,9 +600,9 @@ export async function getDailyPicture(foodRootId, { historyDays = 7 } = {}) {
   picture._valueRoles = valueRoles;
 
   // Get profile from Profile node
-  if (foodNodes.profile && _Note) {
+  if (foodNodes.profile && _Artifact) {
     try {
-      const profileNote = await _Note.findOne({ nodeId: foodNodes.profile.id })
+      const profileNote = await _Artifact.findOne({ nodeId: foodNodes.profile.id })
         .sort({ createdAt: -1 })
         .select("content")
         .lean();
@@ -621,8 +621,8 @@ export async function getDailyPicture(foodRootId, { historyDays = 7 } = {}) {
   // Get history from History node notes
   if (foodNodes.history) {
     try {
-      const Note = _Note || (await import("../../seed/models/note.js")).default;
-      const historyNotes = await Note.find({ nodeId: foodNodes.history.id })
+      const Note = _Artifact || (await import("../../seed/models/note.js")).default;
+      const historyNotes = await _Artifact.find({ nodeId: foodNodes.history.id })
         .sort({ createdAt: -1 })
         .limit(historyDays)
         .select("content")
@@ -636,8 +636,8 @@ export async function getDailyPicture(foodRootId, { historyDays = 7 } = {}) {
   // Get recent meals from Log node
   if (foodNodes.log) {
     try {
-      const Note = _Note || (await import("../../seed/models/note.js")).default;
-      const recentNotes = await Note.find({ nodeId: foodNodes.log.id })
+      const Note = _Artifact || (await import("../../seed/models/note.js")).default;
+      const recentNotes = await _Artifact.find({ nodeId: foodNodes.log.id })
         .sort({ createdAt: -1 })
         .limit(10)
         .select("content createdAt")
@@ -667,10 +667,10 @@ export async function getDailyPicture(foodRootId, { historyDays = 7 } = {}) {
   // Get meals by slot (Breakfast, Lunch, Dinner, Snacks)
   if (foodNodes.mealSlots) {
     picture.mealsBySlot = {};
-    const Note = _Note || (await import("../../seed/models/note.js")).default;
+    const Note = _Artifact || (await import("../../seed/models/note.js")).default;
     for (const [slot, node] of Object.entries(foodNodes.mealSlots)) {
       try {
-        const notes = await Note.find({ nodeId: node.id })
+        const notes = await _Artifact.find({ nodeId: node.id })
           .sort({ createdAt: -1 })
           .limit(5)
           .select("content createdAt")
@@ -699,18 +699,18 @@ export async function getDailyPicture(foodRootId, { historyDays = 7 } = {}) {
 /**
  * Save the user's food profile and set goals on macro nodes.
  */
-export async function saveProfile(foodRootId, profile, foodNodes, userId) {
+export async function saveProfile(foodRootId, profile, foodNodes, beingId) {
   if (!_Node) return;
 
   // Write profile as a note on the Profile node
   if (foodNodes?.profile) {
     try {
-      const { createNote } = await import("../../seed/tree/notes.js");
-      await createNote({
+      const { createArtifact } = await import("../../seed/tree/artifacts.js");
+      await createArtifact({
         nodeId: foodNodes.profile.id,
         content: JSON.stringify(profile),
-        contentType: "text",
-        userId: userId || "SYSTEM",
+        origin: "ibp",
+        beingId: beingId || "SYSTEM",
       });
     } catch (err) {
       log.debug("Food", `Profile note write failed: ${err.message}`);
@@ -751,8 +751,8 @@ export async function getHistory(foodRootId, { limit = 90, type = null } = {}) {
   const foodNodes = await findFoodNodes(foodRootId);
   if (!foodNodes?.history) return [];
 
-  const Note = _Note || (await import("../../seed/models/note.js")).default;
-  const notes = await Note.find({ nodeId: foodNodes.history.id })
+  const Note = _Artifact || (await import("../../seed/models/note.js")).default;
+  const notes = await _Artifact.find({ nodeId: foodNodes.history.id })
     .sort({ createdAt: -1 })
     .limit(limit * 2) // over-fetch to account for type filtering
     .select("content createdAt")
@@ -783,7 +783,7 @@ export async function getHistory(foodRootId, { limit = 90, type = null } = {}) {
 //   "days" / "history"            -> daily summary notes from History
 //   (no match, default)           -> meal slots (the most common intent)
 
-export async function resolveSet({ rootId, quantifier, temporalScope, userId, message }) {
+export async function resolveSet({ rootId, quantifier, temporalScope, beingId, message }) {
   if (!_Node) return [];
   const msg = (message || "").toLowerCase();
 
@@ -793,36 +793,36 @@ export async function resolveSet({ rootId, quantifier, temporalScope, userId, me
   // Macros: protein, carbs, fats, etc.
   if (/\b(macros?|nutrients?|protein|carbs?|fats?|calories?)\b/.test(msg)
       && !/\b(meal|meals|food|foods|entr)/.test(msg)) {
-    return resolveMacros(foodNodes, userId, quantifier);
+    return resolveMacros(foodNodes, beingId, quantifier);
   }
 
   // History / days: daily summaries
   if (/\b(days?|history|daily summaries|summaries)\b/.test(msg)) {
-    return resolveDailySummaries(foodNodes, temporalScope, userId, quantifier);
+    return resolveDailySummaries(foodNodes, temporalScope, beingId, quantifier);
   }
 
   // Foods / entries / log items: individual meal entries from Log
   if (/\b(foods?|entries|entries?|log\s+items?|items?|what\s+i\s+ate)\b/.test(msg)) {
-    return resolveLogEntries(foodNodes, temporalScope, userId, quantifier);
+    return resolveLogEntries(foodNodes, temporalScope, beingId, quantifier);
   }
 
   // Default: meals (meal slot nodes with their notes)
-  return resolveMealSlots(foodNodes, userId, quantifier);
+  return resolveMealSlots(foodNodes, beingId, quantifier);
 }
 
-async function resolveMealSlots(foodNodes, userId, quantifier) {
+async function resolveMealSlots(foodNodes, beingId, quantifier) {
   if (!foodNodes.mealSlots) return [];
   const slots = Object.values(foodNodes.mealSlots);
   if (slots.length === 0) return [];
 
   const { getContextForAi } = await import("../../seed/tree/treeFetch.js");
-  const Note = _Note || (await import("../../seed/models/note.js")).default;
+  const Note = _Artifact || (await import("../../seed/models/note.js")).default;
   const items = [];
   for (const slot of slots) {
     try {
-      const ctx = await getContextForAi(slot.id, { userId });
+      const ctx = await getContextForAi(slot.id, { beingId });
       // Also fetch the notes attached to this meal slot for richer context
-      const notes = await Note.find({ nodeId: slot.id })
+      const notes = await _Artifact.find({ nodeId: slot.id })
         .sort({ createdAt: -1 })
         .limit(10)
         .select("content createdAt").lean();
@@ -843,7 +843,7 @@ async function resolveMealSlots(foodNodes, userId, quantifier) {
     : items;
 }
 
-async function resolveMacros(foodNodes, userId, quantifier) {
+async function resolveMacros(foodNodes, beingId, quantifier) {
   // Collect all child nodes of food root that have metadata.values (tracked macros)
   const children = await _Node.find({ parent: foodNodes.protein?.id || foodNodes.carbs?.id }).select("parent").lean().catch(() => []);
   // Simpler: query food root children directly and filter to value-tracked ones
@@ -863,7 +863,7 @@ async function resolveMacros(foodNodes, userId, quantifier) {
   const items = [];
   for (const m of macroIds) {
     try {
-      const ctx = await getContextForAi(m.id, { userId });
+      const ctx = await getContextForAi(m.id, { beingId });
       items.push({ nodeId: m.id, name: m.name, context: ctx });
     } catch {
       items.push({ nodeId: m.id, name: m.name, context: { name: m.name } });
@@ -874,9 +874,9 @@ async function resolveMacros(foodNodes, userId, quantifier) {
     : items;
 }
 
-async function resolveDailySummaries(foodNodes, temporalScope, userId, quantifier) {
+async function resolveDailySummaries(foodNodes, temporalScope, beingId, quantifier) {
   if (!foodNodes.history) return [];
-  const Note = _Note || (await import("../../seed/models/note.js")).default;
+  const Note = _Artifact || (await import("../../seed/models/note.js")).default;
 
   // Determine date range from temporalScope
   const now = new Date();
@@ -890,7 +890,7 @@ async function resolveDailySummaries(foodNodes, temporalScope, userId, quantifie
     startDate = new Date(now.getTime() - temporalScope.count * unitMs);
   }
 
-  const notes = await Note.find({
+  const notes = await _Artifact.find({
     nodeId: foodNodes.history.id,
     createdAt: { $gte: startDate },
   }).sort({ createdAt: -1 }).select("_id content createdAt").lean();
@@ -910,9 +910,9 @@ async function resolveDailySummaries(foodNodes, temporalScope, userId, quantifie
     : items;
 }
 
-async function resolveLogEntries(foodNodes, temporalScope, userId, quantifier) {
+async function resolveLogEntries(foodNodes, temporalScope, beingId, quantifier) {
   if (!foodNodes.log) return [];
-  const Note = _Note || (await import("../../seed/models/note.js")).default;
+  const Note = _Artifact || (await import("../../seed/models/note.js")).default;
 
   const now = new Date();
   let startDate = new Date(now.getTime() - 86400000); // default: today
@@ -921,7 +921,7 @@ async function resolveLogEntries(foodNodes, temporalScope, userId, quantifier) {
     startDate = new Date(now.getTime() - unitMs);
   }
 
-  const notes = await Note.find({
+  const notes = await _Artifact.find({
     nodeId: foodNodes.log.id,
     createdAt: { $gte: startDate },
   }).sort({ createdAt: -1 }).select("_id content createdAt").lean();

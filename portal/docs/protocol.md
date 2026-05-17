@@ -48,9 +48,9 @@ This is what makes beings categorically different from data in TreeOS. Anyone bu
 
 ## Transport
 
-WebSocket only. Socket.IO ops named `portal:see`, `portal:do`, `portal:talk`, `portal:be`. The connection is the IBP session; closing the connection ends all live subscriptions.
+WebSocket only. Socket.IO ops named `ibp:see`, `ibp:do`, `ibp:talk`, `ibp:be`. The connection is the IBP session; closing the connection ends all live subscriptions.
 
-A single HTTP endpoint exists for bootstrap: `GET /.well-known/treeos-portal` returns the WebSocket URL and IBP protocol version. The client opens a socket and never speaks HTTP for IBP verbs again. Everything else, including capability discovery, flows through `portal:see` on the `.discovery` position of a land.
+A single HTTP endpoint exists for bootstrap: `GET /.well-known/treeos-portal` returns the WebSocket URL and IBP protocol version. The client opens a socket and never speaks HTTP for IBP verbs again. Everything else, including capability discovery, flows through `ibp:see` on the `.discovery` position of a land.
 
 The legacy `land/routes/api/*` HTTP routes continue running during migration, but they are not part of IBP. Nothing new wires through them.
 
@@ -436,7 +436,7 @@ Error codes are unified with the land's existing semantic error vocabulary in `s
 | `ACTION_NOT_SUPPORTED` | DO action name is unknown or not permitted at this position. |
 | `INVALID_INTENT` | TALK message's `intent` is not in the addressed embodiment's `honoredIntents`. |
 
-These five live in the portal layer (`land/portal/errors.js`) and may be returned by any of the four verbs as appropriate.
+These five live in the portal layer (`land/ibp/errors.js`) and may be returned by any of the four verbs as appropriate.
 
 ### Error envelope detail
 

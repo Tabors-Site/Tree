@@ -8,7 +8,7 @@ import { PortalClient } from "../portal-client.js";
  *   1. User enters land URL + username + password (and chooses register or claim).
  *   2. PortalClient.bootstrap(landUrl) → { ws, protocolVersion, land }.
  *   3. Open a temporary, unauthenticated PortalClient socket.
- *   4. portal:be { operation: "claim" | "register", land: "<land>", payload }
+ *   4. ibp:be { operation: "claim" | "register", land: "<land>", payload }
  *      → { identityToken, beingAddress }.
  *   5. Disconnect the temporary socket; hand the token up to App, which
  *      opens a real authenticated PortalClient.

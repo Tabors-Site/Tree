@@ -52,7 +52,7 @@ export default {
     //   authenticateLite                         - Lightweight auth for HTML page API calls
     //   notFoundPage(req, res, message)          - Render a 404 error page
     //   errorHtml(status, title, message)        - Render a generic error page
-    //   resolveHtmlShareAccess({ userId, nodeId, shareToken })  - Validate share tokens
+    //   resolveHtmlShareAccess({ beingId, nodeId, shareToken })  - Validate share tokens
     //   resolvePublicRoot(nodeId)                - Resolve public tree access
     //   isPublic(visibility)                     - Check if a visibility value is public
     //   hasTreeLlm(root)                         - Check if a tree has an LLM assigned

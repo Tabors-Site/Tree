@@ -332,7 +332,7 @@ function getDisabledExtensions(configFn) {
 let AVAILABLE_SERVICES = new Set();
 
 const AVAILABLE_MODELS = new Set([
-  "User", "Node", "Contribution", "Note",
+  "Being", "Node", "Contribution", "Artifact",
 ]);
 
 function validateNeeds(manifest, core) {
@@ -863,7 +863,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
               // IMPORTANT: register via registerTool() with a pre-built
               // passthrough zod object so the SDK does NOT strip context
               // fields that the MCP HTTP layer injects on every call
-              // (userId, rootId, nodeId, chatId, sessionId). The shorthand
+              // (beingId, rootId, nodeId, chatId, sessionId). The shorthand
               // server.tool() wraps raw shapes in a strict z.object which
               // silently drops unknown fields, leaving every tool handler
               // blind to its own position in the tree. This broke tools
@@ -986,6 +986,20 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         }
       }
 
+      // Register the extension's default permission rules (if any) on
+      // the protocol-layer permission defaults registry. Authorize
+      // consults this registry as the layer-3 fallback when no
+      // metadata.permissions rule matches at the target or any ancestor.
+      // Idempotent — re-registering replaces this extension's prior rules.
+      if (manifest.provides?.defaultPermissions) {
+        try {
+          const { registerDefaultPermissions } = await import("../ibp/defaultPermissions.js");
+          registerDefaultPermissions(manifest.name, manifest.provides.defaultPermissions);
+        } catch (err) {
+          log.warn("Extensions", `default-permissions registration failed for "${manifest.name}": ${err.message}`);
+        }
+      }
+
       // Store
       loaded.set(manifest.name, { manifest, instance, dir });
 
@@ -1038,7 +1052,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 // initialize. Kept here so we don't import across the seed boundary for
 // one list.
 const CORE_HOOKS_VALID = new Set([
-  "beforeNote", "afterNote", "beforeContribution",
+  "beforeArtifact", "afterArtifact", "beforeContribution",
   "beforeNodeCreate", "afterNodeCreate",
   "beforeStatusChange", "afterStatusChange", "beforeNodeDelete",
   "enrichContext", "onCascade", "onDocumentPressure",
@@ -1606,6 +1620,12 @@ export async function uninstallExtension(name) {
       const { clearToolOwnersForExtension, clearModeOwnersForExtension } = await import("../seed/tree/extensionScope.js");
       clearToolOwnersForExtension(name);
       clearModeOwnersForExtension(name);
+    } catch {}
+    // Drop this extension's default permission rules from the registry
+    // so authorize stops consulting them post-uninstall.
+    try {
+      const { unregisterDefaultPermissions } = await import("../ibp/defaultPermissions.js");
+      unregisterDefaultPermissions(name);
     } catch {}
   }
 

@@ -150,7 +150,7 @@ export function getCachedTimeline(rootId) {
  * Signal newly due items via notifications and gateway.
  * Only fires once per item per cycle (deduped by notified set).
  */
-export async function signalDueItems(rootId, timeline, userId) {
+export async function signalDueItems(rootId, timeline, beingId) {
   if (!timeline?.due?.length && !timeline?.overdue?.length) return;
 
   const items = [...(timeline.due || []), ...(timeline.overdue || [])];
@@ -171,7 +171,7 @@ export async function signalDueItems(rootId, timeline, userId) {
         nodeId: item.nodeId,
         nodeName: item.nodeName,
         scheduledFor: item.scheduledFor,
-        userId,
+        beingId,
       }).catch(() => {});
     }
   }
@@ -184,7 +184,7 @@ export async function signalDueItems(rootId, timeline, userId) {
       for (const item of newItems) {
         const isDue = item.overdueSince != null;
         notifExt.exports.Notification.create({
-          userId,
+          beingId,
           rootId,
           type: "schedule:due",
           title: `${item.nodeName} is ${isDue ? "due now" : "overdue"}`,

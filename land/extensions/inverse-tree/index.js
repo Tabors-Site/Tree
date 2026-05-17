@@ -11,7 +11,7 @@ export async function init(core) {
   core.llm.registerRootLlmSlot?.("inverseTree");
 
   setRunChat(async (opts) => {
-    if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+    if (opts.beingId && opts.beingId !== "SYSTEM" && !await core.llm.userHasLlm(opts.beingId)) return { answer: null };
     return core.llm.runChat({ ...opts, llmPriority: BG });
   });
 
@@ -30,29 +30,29 @@ export async function init(core) {
     /\bcommit to\b/i, /\baiming for\b/i, /\btarget(ing)?\b/i,
   ];
 
-  core.hooks.register("afterNote", async ({ note, nodeId, userId, contentType, action }) => {
-    if (contentType !== "text") return;
+  core.hooks.register("afterArtifact", async ({ artifact, nodeId, beingId, origin, action }) => {
+    if (origin !== "ibp") return;
     if (action !== "create") return;
-    if (!userId || userId === "SYSTEM") return;
+    if (!beingId || beingId === "SYSTEM") return;
 
-    // Don't track notes on system nodes
+    // Don't track artifacts on system nodes
     try {
       const node = await Node.findById(nodeId).select("systemRole name").lean();
       if (node?.systemRole) return;
 
-      const content = note.content || "";
+      const content = typeof artifact?.content === "string" ? artifact.content : "";
 
       // Check for future-tense commitments
       const isIntention = INTENTION_PATTERNS.some((p) => p.test(content));
 
       const signal = isIntention
         ? { type: "intention", topic: node?.name || nodeId, value: content.slice(0, 200), rootId: null }
-        : { type: "note", topic: node?.name || nodeId, rootId: null };
+        : { type: "artifact", topic: node?.name || nodeId, rootId: null };
 
-      const shouldCompress = await recordSignal(userId, signal, config);
+      const shouldCompress = await recordSignal(beingId, signal, config);
 
       if (shouldCompress) {
-        compress(userId).catch((err) =>
+        compress(beingId).catch((err) =>
           log.debug("InverseTree", `Background compression failed: ${err.message}`),
         );
       }
@@ -62,11 +62,11 @@ export async function init(core) {
   }, "inverse-tree");
 
   // ── afterLLMCall: track activity patterns ──────────────────────────
-  core.hooks.register("afterLLMCall", async ({ userId, rootId, mode, model, usage }) => {
-    if (!userId || userId === "SYSTEM") return;
+  core.hooks.register("afterLLMCall", async ({ beingId, rootId, mode, model, usage }) => {
+    if (!beingId || beingId === "SYSTEM") return;
 
     try {
-      const shouldCompress = await recordSignal(userId, {
+      const shouldCompress = await recordSignal(beingId, {
         type: "llm",
         mode: mode || "unknown",
         rootId: rootId || null,
@@ -74,7 +74,7 @@ export async function init(core) {
       }, config);
 
       if (shouldCompress) {
-        compress(userId).catch((err) =>
+        compress(beingId).catch((err) =>
           log.debug("InverseTree", `Background compression failed: ${err.message}`),
         );
       }
@@ -84,11 +84,11 @@ export async function init(core) {
   }, "inverse-tree");
 
   // ── afterToolCall: track tool usage patterns ───────────────────────
-  core.hooks.register("afterToolCall", async ({ toolName, args, success, userId, rootId, mode }) => {
-    if (!userId || userId === "SYSTEM") return;
+  core.hooks.register("afterToolCall", async ({ toolName, args, success, beingId, rootId, mode }) => {
+    if (!beingId || beingId === "SYSTEM") return;
 
     try {
-      const shouldCompress = await recordSignal(userId, {
+      const shouldCompress = await recordSignal(beingId, {
         type: "tool",
         toolName,
         success,
@@ -96,7 +96,7 @@ export async function init(core) {
       }, config);
 
       if (shouldCompress) {
-        compress(userId).catch((err) =>
+        compress(beingId).catch((err) =>
           log.debug("InverseTree", `Background compression failed: ${err.message}`),
         );
       }
@@ -110,19 +110,19 @@ export async function init(core) {
   // they visit repeatedly. This is the data that lets the profile say
   // "tabor is most active 10pm-2am in /Health/Fitness" rather than just
   // "tabor writes notes about fitness."
-  core.hooks.register("afterNavigate", async ({ userId, rootId, nodeId }) => {
-    if (!userId || userId === "SYSTEM") return;
+  core.hooks.register("afterNavigate", async ({ beingId, rootId, nodeId }) => {
+    if (!beingId || beingId === "SYSTEM") return;
     if (!rootId) return;
 
     try {
-      const shouldCompress = await recordSignal(userId, {
+      const shouldCompress = await recordSignal(beingId, {
         type: "navigation",
         rootId,
         nodeId: nodeId || rootId,
       }, config);
 
       if (shouldCompress) {
-        compress(userId).catch((err) =>
+        compress(beingId).catch((err) =>
           log.debug("InverseTree", `Background compression failed: ${err.message}`),
         );
       }
@@ -137,8 +137,8 @@ export async function init(core) {
   // on weekends. profileZones config controls this. Default: ["home", "tree"].
   const profileZones = config.profileZones || ["home", "tree"];
 
-  core.hooks.register("enrichContext", async ({ context, node, meta, userId }) => {
-    if (!userId) return;
+  core.hooks.register("enrichContext", async ({ context, node, meta, beingId }) => {
+    if (!beingId) return;
 
     // Determine zone from node: system nodes = land zone, rootOwner = tree zone root,
     // no rootOwner + no systemRole = somewhere in a tree or home
@@ -154,7 +154,7 @@ export async function init(core) {
 
     try {
       const User = core.models.User;
-      const user = await User.findById(userId).select("metadata").lean();
+      const user = await Being.findById(beingId).select("metadata").lean();
       if (!user) return;
 
       const inverseData = user.metadata instanceof Map

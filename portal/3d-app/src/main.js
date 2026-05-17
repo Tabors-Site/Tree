@@ -31,7 +31,7 @@ const state = {
   descriptor: null,
   // Whichever non-auth being currently has the talk panel open.
   currentTalkBeing: null,
-  // Correlation id -> embodiment, for routing async portal:talk-reply
+  // Correlation id -> embodiment, for routing async ibp:talk-reply
   // events back to the being whose bubble should be updated.
   pendingTalks: new Map(),
   // Navigation history. Linear; back/forward step through it without
@@ -138,7 +138,7 @@ function handleDescriptorEvent(_event) {
   }, 100); // debounce a touch so a flurry of patches collapses into one render
 }
 
-// Async TALK reply arrives via `portal:talk-reply`. Look up which being
+// Async TALK reply arrives via `ibp:talk-reply`. Look up which being
 // the reply belongs to (by correlation id) and swap the thinking bubble
 // for the real content.
 function handleTalkReply(entry) {
@@ -304,9 +304,9 @@ function openTalkPanel(being) {
   });
 }
 
-// Build the TALK envelope and dispatch via portal:talk. Sync embodiments
+// Build the TALK envelope and dispatch via ibp:talk. Sync embodiments
 // return their response on the ack; async embodiments ACK accepted and
-// later push a `portal:talk-reply` event handled by handleTalkReply().
+// later push a `ibp:talk-reply` event handled by handleTalkReply().
 // While we wait for an async reply, we show an animated thinking bubble
 // above the being's head.
 async function sendTalk(being, text) {
@@ -336,7 +336,7 @@ async function sendTalk(being, text) {
     const reply = await state.client.talk(stance, message);
     if (reply?.status === "accepted") {
       // Async path: server kicked off summoning; show thinking dots and
-      // wait for `portal:talk-reply` to swap them for real content.
+      // wait for `ibp:talk-reply` to swap them for real content.
       state.pendingTalks.set(correlation, being.embodiment);
       state.scene.showBeingThinking(being.embodiment);
       return;

@@ -3,7 +3,7 @@ import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { getLatestSnapshot, ensurePulseNode } from "./core.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
+import Artifact from "../../seed/models/artifact.js";
 
 const router = express.Router();
 
@@ -24,7 +24,7 @@ router.get("/pulse", authenticate, async (req, res) => {
 router.get("/pulse/history", authenticate, async (req, res) => {
   try {
     const nodeId = await ensurePulseNode();
-    const notes = await Note.find({ nodeId, contentType: "text" })
+    const notes = await Artifact.find({ nodeId, origin: "ibp" })
       .sort({ createdAt: -1 })
       .limit(10)
       .select("content createdAt metadata")

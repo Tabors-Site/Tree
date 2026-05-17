@@ -108,7 +108,7 @@ router.post("/root/:nodeId/book/generate", authenticate, async (req, res) => {
     const { shareId } = await coreGenerateBook({
       nodeId,
       settings,
-      userId: req.userId,
+      beingId: req.beingId,
     });
 
     return sendOk(res, {

@@ -162,7 +162,7 @@ router.get("/node/:nodeId/:version/transactions", htmlAuth, async (req, res) => 
       nodeId,
       version: parsedVersion,
       includePending: true,
-      userId: req.userId,
+      beingId: req.beingId,
     });
 
     const wantHtml = "html" in req.query;
@@ -210,7 +210,7 @@ router.post(
 
       const transaction = await createTransaction({
         ...normalized,
-        userId: req.userId,
+        beingId: req.beingId,
       });
 
       if ("html" in req.query) {
@@ -237,7 +237,7 @@ router.post(
 
   async (req, res) => {
     try {
-      const tx = await applyApproval(req.params.transactionId, req.userId);
+      const tx = await applyApproval(req.params.transactionId, req.beingId);
 
       if ("html" in req.query) {
         const qs = [];
@@ -262,7 +262,7 @@ router.post(
 
   async (req, res) => {
     try {
-      await denyTransaction(req.params.transactionId, req.userId);
+      await denyTransaction(req.params.transactionId, req.beingId);
 
       if ("html" in req.query) {
         const qs = [];
@@ -430,7 +430,7 @@ router.post("/root/:nodeId/transaction-policy", authenticate, async (req, res) =
     const result = await setTransactionPolicy({
       rootNodeId: nodeId,
       policy,
-      userId: req.userId,
+      beingId: req.beingId,
     });
 
     if ("html" in req.query) {

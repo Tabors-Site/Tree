@@ -8,7 +8,7 @@ export default [
       "Show today's daily briefing. What happened overnight, what needs attention, " +
       "what the tree did on its own, what's healthy, what's drifting.",
     schema: {
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -45,7 +45,7 @@ export default [
     name: "digest-history",
     description: "Past daily briefings.",
     schema: {
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

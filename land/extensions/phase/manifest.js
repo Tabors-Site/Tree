@@ -63,7 +63,7 @@ export default {
 
     hooks: {
       fires: [],
-      listens: ["afterNote", "afterNodeCreate", "afterNavigate", "afterToolCall", "enrichContext"],
+      listens: ["afterArtifact", "afterNodeCreate", "afterNavigate", "afterToolCall", "enrichContext"],
     },
 
     cli: [
@@ -71,10 +71,10 @@ export default {
         command: "phase [action]", scope: ["tree"],
         description: "Current phase and session stats. Actions: history, cycle.",
         method: "GET",
-        endpoint: "/user/:userId/phase",
+        endpoint: "/user/:beingId/phase",
         subcommands: {
-          "history": { method: "GET", endpoint: "/user/:userId/phase/history", description: "Your phase patterns over time" },
-          "cycle": { method: "GET", endpoint: "/user/:userId/phase/cycle", description: "Awareness vs attention ratio" },
+          "history": { method: "GET", endpoint: "/user/:beingId/phase/history", description: "Your phase patterns over time" },
+          "cycle": { method: "GET", endpoint: "/user/:beingId/phase/cycle", description: "Awareness vs attention ratio" },
         },
       },
     ],

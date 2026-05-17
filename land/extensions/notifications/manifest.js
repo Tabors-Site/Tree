@@ -4,8 +4,8 @@ export default {
   builtFor: "TreeOS",
   description:
     "The notification infrastructure for the entire extension ecosystem. Owns the Notification " +
-    "model, a Mongoose schema with userId, rootId, type, title, content, dreamSessionIds, and " +
-    "createdAt fields, indexed by userId and createdAt for fast reverse-chronological queries. " +
+    "model, a Mongoose schema with beingId, rootId, type, title, content, dreamSessionIds, and " +
+    "createdAt fields, indexed by beingId and createdAt for fast reverse-chronological queries. " +
     "This extension does not generate notifications itself. It provides the storage layer and " +
     "query API that other extensions use to create and retrieve notifications.\n\n" +
     "Extensions like dreams, gateway, and any custom extension create notifications by importing " +
@@ -14,10 +14,10 @@ export default {
     "'dream-thought'), allowing each extension to define its own notification taxonomy. The " +
     "rootId field ties every notification to a specific tree, so notifications can be scoped " +
     "per-tree or queried globally for a user.\n\n" +
-    "The query function getNotifications supports filtering by userId (required), rootId " +
+    "The query function getNotifications supports filtering by beingId (required), rootId " +
     "(optional), and sinceDays (only return notifications from the last N days). Pagination " +
     "is handled through limit (default 50, max 100) and offset parameters. The GET " +
-    "/user/:userId/notifications route exposes this query function over HTTP with optional " +
+    "/user/:beingId/notifications route exposes this query function over HTTP with optional " +
     "authentication, so both authenticated clients and public consumers can access notifications " +
     "where permitted. Results include the notification array and total count for pagination. " +
     "The extension exports both getNotifications and the Notification model for direct use by " +

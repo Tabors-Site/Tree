@@ -9,7 +9,7 @@ export async function init(core) {
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setServices({
     runChat: async (opts) => {
-      if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+      if (opts.beingId && opts.beingId !== "SYSTEM" && !await core.llm.userHasLlm(opts.beingId)) return { answer: null };
       return core.llm.runChat({ ...opts, llmPriority: BG });
     },
     editStatus,
@@ -62,7 +62,7 @@ export async function init(core) {
       if (!root?.rootOwner) return;
 
       const User = core.models.User;
-      const user = await User.findById(root.rootOwner).select("username").lean();
+      const user = await Being.findById(root.rootOwner).select("username").lean();
       if (!user) return;
 
       // Read the actual max metadata bytes from the circuit config, not a hardcoded guess
@@ -116,7 +116,7 @@ export async function init(core) {
 
       const Node = core.models.Node;
       const User = core.models.User;
-      const user = await User.findById(root.rootOwner).select("username").lean();
+      const user = await Being.findById(root.rootOwner).select("username").lean();
       if (!user) return;
 
       log.info("TreeCompress", `Document pressure (${percent}%) on node ${documentId}. Starting targeted compression.`);
@@ -138,7 +138,7 @@ export async function init(core) {
   }, "tree-compress");
 
   // ── beforeNote: warn on trimmed nodes ──────────────────────────────
-  core.hooks.register("beforeNote", async (hookData) => {
+  core.hooks.register("beforeArtifact", async (hookData) => {
     const Node = core.models.Node;
     const node = await Node.findById(hookData.nodeId).select("status").lean();
     if (node?.status === "trimmed") {

@@ -112,7 +112,7 @@ export async function init(core) {
   // enrichContext: inject resolved persona into the structured context object.
   // Used by tools (persona-get) and by any extension that wants to read
   // the effective persona at a position.
-  core.hooks.register("enrichContext", async ({ context, node, meta, userId }) => {
+  core.hooks.register("enrichContext", async ({ context, node, meta, beingId }) => {
     if (!node?._id) return;
 
     let chain;

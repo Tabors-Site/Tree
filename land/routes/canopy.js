@@ -29,7 +29,7 @@ import {
   getFailedEvents,
   retryEvent,
 } from "../canopy/events.js";
-import User from "../seed/models/user.js";
+import Being from "../seed/models/being.js";
 import RemoteUser from "../canopy/models/remoteUser.js";
 import LandPeer from "../canopy/models/landPeer.js";
 import Node from "../seed/models/node.js";
@@ -37,7 +37,7 @@ import authenticate from "../seed/middleware/authenticate.js";
 import { getExtension } from "../extensions/loader.js";
 import { lookupLandByDomain, searchLands, searchPublicTrees } from "../canopy/horizon.js";
 import { isPrivateHost } from "../canopy/security.js";
-import { getUserMeta } from "../seed/tree/userMetadata.js";
+import { getBeingMeta } from "../seed/tree/beingMetadata.js";
 import { addContributor } from "../seed/tree/ownership.js";
 
 
@@ -52,7 +52,7 @@ router.use(express.json({ limit: "100kb" }));
  */
 async function requireAdmin(req, res, next) {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user || !user.isAdmin) {
       return sendError(res, 403, ERR.FORBIDDEN, "Requires admin permissions");
     }
@@ -126,7 +126,7 @@ router.get("/canopy/redirect", (req, res) => {
  */
 router.get("/canopy/user/:username", authenticateCanopy, async (req, res) => {
   try {
-    const user = await User.findOne({
+    const user = await Being.findOne({
       username: req.params.username,
       isRemote: { $ne: true },
     })
@@ -138,7 +138,7 @@ router.get("/canopy/user/:username", authenticateCanopy, async (req, res) => {
     }
 
     sendOk(res, {
-      userId: user._id,
+      beingId: user._id,
       username: user.username,
       landDomain: getLandIdentity().domain,
     });
@@ -179,7 +179,7 @@ router.get("/canopy/public-trees", async (req, res) => {
 
     const results = await Promise.all(
       trees.map(async (tree) => {
-        const owner = await User.findById(tree.rootOwner)
+        const owner = await Being.findById(tree.rootOwner)
           .select("username")
           .lean();
         return {
@@ -394,8 +394,8 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
     const { messages, tools, tool_choice, slot } = req.body;
 
     // Resolve the local (non-remote) user
-    const user = await User.findOne({
-      _id: req.canopy.userId,
+    const user = await Being.findOne({
+      _id: req.canopy.beingId,
       isRemote: { $ne: true },
     }).select("_id metadata").lean();
 
@@ -405,7 +405,7 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
 
     // Verify user has a relationship with the calling land
     const callingLand = req.canopy.sourceLandDomain;
-    const canopyMeta = getUserMeta(user, "canopy");
+    const canopyMeta = getBeingMeta(user, "canopy");
     const remoteRoots = canopyMeta.remoteRoots || [];
     const hasRelationship = remoteRoots.some(
       (rr) => rr.landDomain?.toLowerCase() === callingLand?.toLowerCase()
@@ -426,7 +426,7 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
     const energySvc = getExtension("energy")?.exports;
     if (energySvc?.checkEnergy) {
       try {
-        await energySvc.checkEnergy({ userId: user._id.toString(), action: "proxyLlm" });
+        await energySvc.checkEnergy({ beingId: user._id.toString(), action: "proxyLlm" });
       } catch (energyErr) {
         return sendError(res, 429, ERR.RATE_LIMITED, "Insufficient energy for proxy LLM call");
       }
@@ -442,7 +442,7 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
 
     // Deduct energy after successful LLM response
     if (energySvc?.useEnergy) {
-      energySvc.useEnergy({ userId: user._id.toString(), action: "proxyLlm" }).catch(() => {});
+      energySvc.useEnergy({ beingId: user._id.toString(), action: "proxyLlm" }).catch(() => {});
     }
 
     sendOk(res, {
@@ -470,7 +470,7 @@ router.post("/canopy/notify", authenticateCanopy, async (req, res) => {
     const { targetUserId, notificationType } = req.body;
 
     // Verify the target user is local
-    const user = await User.findById(targetUserId).select("_id username isRemote").lean();
+    const user = await Being.findById(targetUserId).select("_id username isRemote").lean();
     if (!user || user.isRemote) {
       return sendError(res, 404, ERR.USER_NOT_FOUND, "Target user not found on this land");
     }
@@ -714,7 +714,7 @@ router.post("/canopy/admin/peer/discover", authenticate, requireAdmin, async (re
  */
 router.all("/canopy/proxy/:domain/*", authenticate, async (req, res) => {
   // Per-user rate limit: 60 requests per minute
-  if (!checkCanopyRateLimit(`proxy:${req.userId}`, 60)) {
+  if (!checkCanopyRateLimit(`proxy:${req.beingId}`, 60)) {
     return sendError(res, 429, ERR.RATE_LIMITED, "Proxy rate limit exceeded");
   }
 
@@ -725,7 +725,7 @@ router.all("/canopy/proxy/:domain/*", authenticate, async (req, res) => {
     const forwardPath = "/" + req.params[0];
 
     const result = await proxyToRemoteLand({
-      userId: req.userId,
+      beingId: req.beingId,
       targetLandDomain: domain,
       method: req.method,
       path: forwardPath,

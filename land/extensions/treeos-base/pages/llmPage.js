@@ -10,7 +10,7 @@ function esc(s) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-export function renderLlmPage({ userId, username, connections, mainAssignment, userSlots, allUserSlots = [], treeSlots, rootId, rootName, qs }) {
+export function renderLlmPage({ beingId, username, connections, mainAssignment, userSlots, allUserSlots = [], treeSlots, rootId, rootName, qs }) {
   const activeConn = mainAssignment ? connections.find(c => c._id === mainAssignment) : null;
 
   const connCards = connections.length > 0
@@ -53,7 +53,7 @@ export function renderLlmPage({ userId, username, connections, mainAssignment, u
   const body = `
     <div class="container">
       <div class="back-nav">
-        <a href="/api/v1/user/${esc(userId)}${qs}" class="back-link">Home</a>
+        <a href="/api/v1/user/${esc(beingId)}${qs}" class="back-link">Home</a>
         ${rootId ? `<a href="/api/v1/root/${esc(rootId)}${qs}" class="back-link">Back to ${esc(rootName || "Tree")}</a>` : ""}
       </div>
 
@@ -147,7 +147,7 @@ export function renderLlmPage({ userId, username, connections, mainAssignment, u
   `;
 
   const js = `
-    var userId = "${esc(userId)}";
+    var beingId = "${esc(beingId)}";
     var qs = "${esc(qs)}";
 
     document.getElementById("addForm").onsubmit = async function(e) {
@@ -155,7 +155,7 @@ export function renderLlmPage({ userId, username, connections, mainAssignment, u
       var form = e.target;
       var status = document.getElementById("addStatus");
       try {
-        var res = await fetch("/api/v1/user/" + userId + "/custom-llm", {
+        var res = await fetch("/api/v1/user/" + beingId + "/custom-llm", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -178,7 +178,7 @@ export function renderLlmPage({ userId, username, connections, mainAssignment, u
     document.querySelectorAll(".set-default-btn").forEach(function(btn) {
       btn.onclick = async function() {
         try {
-          await fetch("/api/v1/user/" + userId + "/llm-assign", {
+          await fetch("/api/v1/user/" + beingId + "/llm-assign", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
@@ -193,7 +193,7 @@ export function renderLlmPage({ userId, username, connections, mainAssignment, u
       btn.onclick = async function() {
         if (!confirm("Remove this connection?")) return;
         try {
-          await fetch("/api/v1/user/" + userId + "/custom-llm/" + btn.dataset.id, {
+          await fetch("/api/v1/user/" + beingId + "/custom-llm/" + btn.dataset.id, {
             method: "DELETE",
             credentials: "include",
           });
@@ -209,7 +209,7 @@ export function renderLlmPage({ userId, username, connections, mainAssignment, u
         var connId = sel.value || null;
         var status = document.getElementById("slotStatus");
         try {
-          var res = await fetch("/api/v1/user/" + userId + "/llm-assign", {
+          var res = await fetch("/api/v1/user/" + beingId + "/llm-assign", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",

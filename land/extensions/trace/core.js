@@ -8,8 +8,8 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { CONTENT_TYPE } from "../../seed/protocol.js";
+import Artifact from "../../seed/models/artifact.js";
+import { ARTIFACT_ORIGIN } from "../../seed/protocol.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 
@@ -30,7 +30,7 @@ try {
 /**
  * Expand query words using codebook dictionary entries if available.
  */
-async function expandQuery(query, nodeId, userId) {
+async function expandQuery(query, nodeId, beingId) {
   const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
 
   try {
@@ -38,7 +38,7 @@ async function expandQuery(query, nodeId, userId) {
     const codebook = getExtension("codebook");
     if (!codebook?.exports?.getDictionary) return queryWords;
 
-    const dictionary = await codebook.exports.getDictionary(nodeId, userId);
+    const dictionary = await codebook.exports.getDictionary(nodeId, beingId);
     if (!dictionary || Object.keys(dictionary).length === 0) return queryWords;
 
     const expanded = new Set(queryWords);
@@ -70,13 +70,13 @@ async function searchNotes(rootId, queryWords, opts = {}) {
   // Build filter
   const noteQuery = {
     nodeId: { $in: allIds },
-    contentType: CONTENT_TYPE.TEXT,
+    origin: ARTIFACT_ORIGIN.IBP,
   };
   if (opts.since) noteQuery.createdAt = { $gte: opts.since };
-  if (opts.userId) noteQuery.userId = opts.userId;
+  if (opts.beingId) noteQuery.beingId = opts.beingId;
 
-  const notes = await Note.find(noteQuery)
-    .select("_id nodeId content createdAt userId")
+  const notes = await Artifact.find(noteQuery)
+    .select("_id nodeId content createdAt beingId")
     .sort({ createdAt: 1 }) // chronological
     .lean();
 
@@ -96,7 +96,7 @@ async function searchNotes(rootId, queryWords, opts = {}) {
       nodeId: String(n.nodeId),
       content: n.content.slice(0, 300),
       date: n.createdAt,
-      userId: n.userId,
+      beingId: n.beingId,
       score,
     });
   }
@@ -107,13 +107,13 @@ async function searchNotes(rootId, queryWords, opts = {}) {
 /**
  * Run semantic search if embed is available and merge results.
  */
-async function addSemanticResults(matches, rootId, query, userId) {
+async function addSemanticResults(matches, rootId, query, beingId) {
   try {
     const { getExtension } = await import("../loader.js");
     const embed = getExtension("embed");
     if (!embed?.exports?.findSimilar || !embed?.exports?.generateEmbedding) return matches;
 
-    const queryVector = await embed.exports.generateEmbedding(query, userId);
+    const queryVector = await embed.exports.generateEmbedding(query, beingId);
     if (!queryVector) return matches;
 
     const similar = await embed.exports.findSimilar(queryVector, rootId, {
@@ -137,7 +137,7 @@ async function addSemanticResults(matches, rootId, query, userId) {
           nodeId: s.nodeId,
           content: (s.snippet || s.content || "").slice(0, 300),
           date: s.date || null,
-          userId: s.userId || null,
+          beingId: s.beingId || null,
           score: s.similarity || 0.7,
         });
       }
@@ -166,15 +166,15 @@ async function addSemanticResults(matches, rootId, query, userId) {
  *
  * @param {string} rootId - tree root
  * @param {string} query - concept to trace
- * @param {string} userId
+ * @param {string} beingId
  * @param {string} username
  * @param {object} opts - { since, minScore, maxResults }
  */
-export async function runTrace(rootId, query, userId, username, opts = {}) {
+export async function runTrace(rootId, query, beingId, username, opts = {}) {
   // Tree-wide trace lane — repeated traces on the same tree chain.
   const rt = new OrchestratorRuntime({
     rootId,
-    userId,
+    beingId,
     username: username || "system",
     scope: "tree",
     purpose: "trace",
@@ -193,7 +193,7 @@ export async function runTrace(rootId, query, userId, username, opts = {}) {
 
   try {
     // Step 1: Expand query with codebook
-    const queryWords = await expandQuery(query, rootId, userId);
+    const queryWords = await expandQuery(query, rootId, beingId);
 
     rt.trackStep("tree:trace", {
       input: { phase: "expand-query", originalQuery: query },
@@ -211,12 +211,12 @@ export async function runTrace(rootId, query, userId, username, opts = {}) {
     const startSearch = Date.now();
     let matches = await searchNotes(rootId, queryWords, {
       since: opts.since ? new Date(opts.since) : null,
-      userId: opts.filterUserId || null,
+      beingId: opts.filterUserId || null,
       minScore: opts.minScore || 0.3,
     });
 
     // Add semantic results if embed is available
-    matches = await addSemanticResults(matches, rootId, query, userId);
+    matches = await addSemanticResults(matches, rootId, query, beingId);
 
     // Cap results
     const maxResults = opts.maxResults || 100;

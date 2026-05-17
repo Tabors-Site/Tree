@@ -13,7 +13,7 @@ export async function init(core) {
 
   setServices({
     runChat: async (opts) => {
-      if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+      if (opts.beingId && opts.beingId !== "SYSTEM" && !await core.llm.userHasLlm(opts.beingId)) return { answer: null };
       return core.llm.runChat({ ...opts, llmPriority: BG });
     },
     deliverCascade,
@@ -23,7 +23,7 @@ export async function init(core) {
     emitToUser: core.websocket?.emitToUser || (() => {}),
     hooks: core.hooks,
     Node: core.models.Node,
-    Note: core.models.Note,
+    Artifact: core.models.Artifact,
   });
 
   // Register the review mode
@@ -36,11 +36,11 @@ export async function init(core) {
     core.llm.registerModeAssignment("tree:review", "review");
   }
 
-  // ── afterNote: trigger review when content is written ──
-  core.hooks.register("afterNote", async ({ note, nodeId, userId, contentType, action }) => {
-    if (contentType !== "text") return;
+  // ── afterArtifact: trigger review when content is written ──
+  core.hooks.register("afterArtifact", async ({ artifact, nodeId, beingId, origin, action }) => {
+    if (origin !== "ibp") return;
     if (action !== "create" && action !== "edit") return;
-    if (!userId || userId === "SYSTEM") return;
+    if (!beingId || beingId === "SYSTEM") return;
 
     const node = await core.models.Node.findById(nodeId).select("systemRole metadata").lean();
     if (!node || node.systemRole) return;
@@ -48,18 +48,18 @@ export async function init(core) {
     const config = getReviewConfig(node);
     if (!config.partner) return;
     if (config.status !== "idle") return;
-    if (config.trigger !== "afterNote") return;
+    if (config.trigger !== "afterArtifact") return;
 
-    // Track userId for notification on completion
+    // Track beingId for notification on completion
     try {
       const fullNode = await core.models.Node.findById(nodeId);
       if (fullNode) {
         const cfg = getReviewConfig(fullNode);
-        await core.metadata.setExtMeta(fullNode, "peer-review", { ...cfg, _lastUserId: userId });
+        await core.metadata.setExtMeta(fullNode, "peer-review", { ...cfg, _lastUserId: beingId });
       }
     } catch {}
 
-    triggerReview(nodeId, note, userId).catch((err) => {
+    triggerReview(nodeId, artifact, beingId).catch((err) => {
       log.debug("PeerReview", `Background trigger failed: ${err.message}`);
     });
   }, "peer-review");

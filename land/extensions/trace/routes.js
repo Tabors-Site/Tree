@@ -23,7 +23,7 @@ router.post("/node/:nodeId/trace", authenticate, async (req, res) => {
       // Use nodeId as root
     }
 
-    const result = await runTrace(rootId, query, req.userId, req.username || "system", { since });
+    const result = await runTrace(rootId, query, req.beingId, req.username || "system", { since });
     if (result.error) {
       return sendError(res, 409, ERR.RESOURCE_CONFLICT, result.error);
     }

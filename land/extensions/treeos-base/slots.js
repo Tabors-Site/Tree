@@ -128,12 +128,12 @@ export function resolveSlots(slotName, context = {}, opts = {}) {
  * The client-side script replaces the matching data-slot container.
  *
  * @param {object} core - core services bundle (needs core.websocket)
- * @param {string} userId - target user
+ * @param {string} beingId - target user
  * @param {string} slotName - which slot to update
  * @param {string} extName - which extension's fragment to update
  * @param {object} context - passed to the render function
  */
-export function emitSlotUpdate(core, userId, slotName, extName, context = {}) {
+export function emitSlotUpdate(core, beingId, slotName, extName, context = {}) {
   const registered = slots.get(slotName);
   if (!registered) return;
 
@@ -143,7 +143,7 @@ export function emitSlotUpdate(core, userId, slotName, extName, context = {}) {
   try {
     const html = slot.render(context);
     if (html && typeof html === "string" && core.websocket?.emitToUser) {
-      core.websocket.emitToUser(userId, "slotUpdate", {
+      core.websocket.emitToUser(beingId, "slotUpdate", {
         slotName,
         extName,
         html,

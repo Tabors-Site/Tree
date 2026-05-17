@@ -19,11 +19,12 @@
 // that newcomers see).
 
 import {
-  createUser,
-  findUserByUsername,
+  createBeingWithHome,
+  findBeingByUsername,
   verifyPassword,
   generateToken,
 } from "../../seed/auth.js";
+import { getLandRootId } from "../../seed/landRoot.js";
 import { PortalError, PORTAL_ERR } from "../errors.js";
 import { getLandDomain } from "../address.js";
 
@@ -48,16 +49,26 @@ export const authBeing = Object.freeze({
     if (!password || typeof password !== "string") {
       throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`password` is required");
     }
-    let user;
+    let being;
     try {
-      user = await createUser(username, password);
+      // Atomic: creates the Being row AND a home territory Node owned
+      // by the being, parented under the land root. createBeingWithHome
+      // rolls back the home Node if the Being insert fails so a half-
+      // created identity never survives.
+      const result = await createBeingWithHome({
+        operatingMode: "human",
+        username,
+        password,
+        homeParent:    getLandRootId(),
+      });
+      being = result.being;
     } catch (err) {
       throw mapKernelError(err);
     }
-    const identityToken = generateToken(user);
+    const identityToken = generateToken(being);
     return {
       identityToken,
-      beingAddress: `${getLandDomain()}/@${user.username}`,
+      beingAddress: `${getLandDomain()}/@${being.username}`,
       welcome: TREEOS_AUTH_WELCOME,
     };
   },
@@ -70,7 +81,7 @@ export const authBeing = Object.freeze({
     if (!password || typeof password !== "string") {
       throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`password` is required");
     }
-    const user = await findUserByUsername(username);
+    const user = await findBeingByUsername(username);
     if (!user) {
       throw new PortalError(PORTAL_ERR.USER_NOT_FOUND, "No such user on this land");
     }

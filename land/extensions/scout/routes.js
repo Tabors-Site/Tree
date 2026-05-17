@@ -18,7 +18,7 @@ router.post("/node/:nodeId/scout", authenticate, async (req, res) => {
     const rootNode = await resolveRootNode(req.params.nodeId);
     const rootId = String(rootNode._id);
 
-    const result = await runScout(req.params.nodeId, query, req.userId, req.username || "system", { rootId });
+    const result = await runScout(req.params.nodeId, query, req.beingId, req.username || "system", { rootId });
     if (result.error) {
       return sendError(res, 409, ERR.RESOURCE_CONFLICT, result.error);
     }

@@ -8,7 +8,7 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 import { v4 as uuidv4 } from "uuid";
 
@@ -80,15 +80,15 @@ async function findStalledNodes(rootId, stalledDays) {
 
 /**
  * Score contributors for a stalled node based on available signals.
- * Returns sorted array of { userId, username, score, reasons }.
+ * Returns sorted array of { beingId, username, score, reasons }.
  */
 async function scoreContributors(stalledNode, rootId, contributors) {
   if (!contributors || contributors.length === 0) return [];
 
   const scored = [];
 
-  for (const userId of contributors) {
-    const user = await User.findById(userId).select("_id username metadata").lean();
+  for (const beingId of contributors) {
+    const user = await Being.findById(beingId).select("_id username metadata").lean();
     if (!user) continue;
 
     let score = 0;
@@ -147,7 +147,7 @@ async function scoreContributors(stalledNode, rootId, contributors) {
       const { getExtension } = await import("../loader.js");
       const invExt = getExtension("inverse-tree");
       if (invExt?.exports?.getInverseData) {
-        const data = await invExt.exports.getInverseData(userId);
+        const data = await invExt.exports.getInverseData(beingId);
         const profile = data?.profile;
         if (profile?.topics) {
           const nodeName = (stalledNode.nodeName || "").toLowerCase();
@@ -179,7 +179,7 @@ async function scoreContributors(stalledNode, rootId, contributors) {
 
     if (score > 0) {
       scored.push({
-        userId: String(user._id),
+        beingId: String(user._id),
         username: user.username,
         score: Math.min(score, 1.0),
         reasons,
@@ -240,7 +240,7 @@ export async function generateSuggestions(rootId) {
       nodeId: node.nodeId,
       nodeName: node.nodeName,
       daysSilent: node.daysSilent,
-      suggestedUserId: best.userId,
+      suggestedUserId: best.beingId,
       suggestedUsername: best.username,
       score: best.score,
       reasons: best.reasons,
@@ -276,7 +276,7 @@ export async function generateSuggestions(rootId) {
 /**
  * Get pending suggestions for a tree.
  */
-export async function getSuggestions(rootId, userId) {
+export async function getSuggestions(rootId, beingId) {
   const root = await Node.findById(rootId).select("metadata").lean();
   if (!root) return [];
 
@@ -286,9 +286,9 @@ export async function getSuggestions(rootId, userId) {
 
   const suggestions = meta.suggestions || [];
 
-  // If userId provided, filter to suggestions for this user
-  if (userId) {
-    return suggestions.filter(s => s.status === "pending" && s.suggestedUserId === userId);
+  // If beingId provided, filter to suggestions for this user
+  if (beingId) {
+    return suggestions.filter(s => s.status === "pending" && s.suggestedUserId === beingId);
   }
   return suggestions.filter(s => s.status === "pending");
 }
@@ -296,7 +296,7 @@ export async function getSuggestions(rootId, userId) {
 /**
  * Dismiss a suggestion.
  */
-export async function dismissSuggestion(rootId, suggestionId, userId) {
+export async function dismissSuggestion(rootId, suggestionId, beingId) {
   const root = await Node.findById(rootId);
   if (!root) return null;
 
@@ -306,7 +306,7 @@ export async function dismissSuggestion(rootId, suggestionId, userId) {
   if (!suggestion) return null;
 
   suggestion.status = "dismissed";
-  suggestion.dismissedBy = userId;
+  suggestion.dismissedBy = beingId;
   suggestion.dismissedAt = new Date().toISOString();
 
   await _metadata.setExtMeta(root, "delegate", meta);
@@ -316,7 +316,7 @@ export async function dismissSuggestion(rootId, suggestionId, userId) {
 /**
  * Accept a suggestion.
  */
-export async function acceptSuggestion(rootId, suggestionId, userId) {
+export async function acceptSuggestion(rootId, suggestionId, beingId) {
   const root = await Node.findById(rootId);
   if (!root) return null;
 
@@ -326,7 +326,7 @@ export async function acceptSuggestion(rootId, suggestionId, userId) {
   if (!suggestion) return null;
 
   suggestion.status = "accepted";
-  suggestion.acceptedBy = userId;
+  suggestion.acceptedBy = beingId;
   suggestion.acceptedAt = new Date().toISOString();
 
   await _metadata.setExtMeta(root, "delegate", meta);
@@ -338,8 +338,8 @@ export async function acceptSuggestion(rootId, suggestionId, userId) {
  * Returns suggestions where the user is the suggested person AND
  * the stalled node is nearby (same parent, sibling, or child).
  */
-export async function getNearbySuggestions(nodeId, userId, rootId) {
-  if (!userId || !rootId) return [];
+export async function getNearbySuggestions(nodeId, beingId, rootId) {
+  if (!beingId || !rootId) return [];
 
   const root = await Node.findById(rootId).select("metadata").lean();
   if (!root) return [];
@@ -349,7 +349,7 @@ export async function getNearbySuggestions(nodeId, userId, rootId) {
     : root.metadata?.delegate || {};
 
   const pending = (meta.suggestions || []).filter(
-    s => s.status === "pending" && s.suggestedUserId === userId
+    s => s.status === "pending" && s.suggestedUserId === beingId
   );
 
   if (pending.length === 0) return [];

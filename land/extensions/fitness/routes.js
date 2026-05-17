@@ -3,7 +3,7 @@ import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import log from "../../seed/log.js";
 import NodeModel from "../../seed/models/node.js";
-import UserModel from "../../seed/models/user.js";
+import UserModel from "../../seed/models/being.js";
 import { handleMessage } from "./handler.js";
 
 let Node = NodeModel;
@@ -29,7 +29,7 @@ router.get("/root/:rootId/fitness", async (req, res, next) => {
         [state, weekly, profile] = await Promise.all([core.getExerciseState(rootId), core.getWeeklyStats(rootId), core.getProfile(rootId)]);
       }
       const { renderFitnessDashboard } = await import("./pages/dashboard.js");
-      res.send(renderFitnessDashboard({ rootId, rootName: root.name, state, weekly, profile, token: req.query.token || null, userId: req.userId, inApp: !!req.query.inApp }));
+      res.send(renderFitnessDashboard({ rootId, rootName: root.name, state, weekly, profile, token: req.query.token || null, beingId: req.beingId, inApp: !!req.query.inApp }));
     });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, "Dashboard failed");
@@ -55,9 +55,9 @@ router.post("/root/:rootId/fitness", authenticate, async (req, res) => {
     const root = await Node.findById(rootId).select("rootOwner contributors name").lean();
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
 
-    const userId = req.userId;
-    const isOwner = root.rootOwner?.toString() === userId;
-    const isContributor = root.contributors?.some(c => c.toString() === userId);
+    const beingId = req.beingId;
+    const isOwner = root.rootOwner?.toString() === beingId;
+    const isContributor = root.contributors?.some(c => c.toString() === beingId);
     if (!isOwner && !isContributor) {
       return sendError(res, 403, ERR.FORBIDDEN, "No access to this tree");
     }
@@ -67,10 +67,10 @@ router.post("/root/:rootId/fitness", authenticate, async (req, res) => {
       return sendError(res, 403, ERR.EXTENSION_BLOCKED, "Fitness is blocked on this branch.");
     }
 
-    const user = await UserModel.findById(userId).select("username").lean();
+    const user = await UserModel.findById(beingId).select("username").lean();
     const username = user?.username || "user";
 
-    const result = await handleMessage(message, { userId, username, rootId, res });
+    const result = await handleMessage(message, { beingId, username, rootId, res });
     if (!res.headersSent) sendOk(res, result);
   } catch (err) {
     log.error("Fitness", "Route error:", err.message);

@@ -60,7 +60,7 @@ export async function scanChapters({ projectNodeId, contracts, plan, subPlan }) 
   const chapters = await collectChapters(projectNodeId);
 
   const mongoose = (await import("mongoose")).default;
-  const Note = mongoose.models.Note;
+  const Artifact = mongoose.models.Artifact;
   if (!Note) return { skipped: true, reason: "Note model unavailable" };
 
   // Extract character list from contracts for the mention / pronoun audit.
@@ -112,7 +112,7 @@ export async function scanChapters({ projectNodeId, contracts, plan, subPlan }) 
     return { skipped: true, reason: "no chapters found" };
   }
   for (const ch of chapters) {
-    const notes = await Note.find({ nodeId: ch._id })
+    const notes = await Artifact.find({ nodeId: ch._id })
       .sort({ createdAt: 1 })
       .select("content")
       .lean();

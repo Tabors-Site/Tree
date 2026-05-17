@@ -1,7 +1,7 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { escapeHtml } from "../../html-rendering/html/utils.js";
 
-export function renderDeletedBranches({ userId, user, deleted, token }) {
+export function renderDeletedBranches({ beingId, user, deleted, token }) {
   const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
   const css = `
@@ -221,7 +221,7 @@ export function renderDeletedBranches({ userId, user, deleted, token }) {
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
+      <a href="/api/v1/user/${beingId}${tokenQS}" class="back-link">
         \u2190 Back to Profile
       </a>
     </div>
@@ -230,7 +230,7 @@ export function renderDeletedBranches({ userId, user, deleted, token }) {
     <div class="header">
       <h1>
         Deleted Branches for
-        <a href="/api/v1/user/${userId}${tokenQS}">${user.username}</a>
+        <a href="/api/v1/user/${beingId}${tokenQS}">${user.username}</a>
       </h1>
       <div class="header-subtitle">
         Recover deleted trees and branches as new trees or merge them into existing ones.
@@ -259,7 +259,7 @@ export function renderDeletedBranches({ userId, user, deleted, token }) {
             <!-- Revive as Root -->
             <form
               method="POST"
-              action="/api/v1/user/${userId}/deleted/${_id}/reviveAsRoot?token=${encodeURIComponent(token)}&html"
+              action="/api/v1/user/${beingId}/deleted/${_id}/reviveAsRoot?token=${encodeURIComponent(token)}&html"
               class="revive-as-root-form"
             >
               <button type="submit">Revive as Root</button>
@@ -268,7 +268,7 @@ export function renderDeletedBranches({ userId, user, deleted, token }) {
             <!-- Revive into Branch -->
             <form
               method="POST"
-              action="/api/v1/user/${userId}/deleted/${_id}/revive?token=${encodeURIComponent(token)}&html"
+              action="/api/v1/user/${beingId}/deleted/${_id}/revive?token=${encodeURIComponent(token)}&html"
               class="revive-into-branch-form"
             >
               <input

@@ -2,7 +2,7 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import { getLearnState, pauseLearn, resumeLearn, stopLearn, processQueue } from "./core.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 
 const router = express.Router();
 
@@ -35,8 +35,8 @@ router.post("/node/:nodeId/learn/resume", authenticate, async (req, res) => {
 
     if (state.status === "paused") await resumeLearn(nodeId);
 
-    const user = await User.findById(req.userId).select("username").lean();
-    const updated = await processQueue(nodeId, req.userId, user?.username, 10);
+    const user = await Being.findById(req.beingId).select("username").lean();
+    const updated = await processQueue(nodeId, req.beingId, user?.username, 10);
     sendOk(res, updated);
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);

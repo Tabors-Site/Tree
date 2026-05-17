@@ -328,7 +328,7 @@ pre.flash::before {
   `;
 
   return page({
-    title: `Note by ${escapeHtml(note.userId?.username || "User")} - TreeOS`,
+    title: `Note by ${escapeHtml(note.beingId?.username || "User")} - TreeOS`,
     css,
     body,
     js,

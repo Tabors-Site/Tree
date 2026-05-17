@@ -50,7 +50,7 @@ function trackSignalDepth(signalId, depth) {
 
 /**
  * Check if cascade should fire for a content write at a node.
- * Called by afterNote and afterStatusChange hooks in the kernel.
+ * Called by afterArtifact and afterStatusChange hooks in the kernel.
  *
  * @param {string} nodeId - the node where content was written
  * @param {object} writeContext - what was written (note data, status change, etc.)

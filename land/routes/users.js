@@ -3,8 +3,8 @@ import { hooks } from "../seed/hooks.js";
 import { sendOk, sendError, ERR, ProtocolError } from "../seed/protocol.js";
 import { getLandConfigValue } from "../seed/landConfig.js";
 import {
-  createUser, createFirstUser, verifyPassword, generateToken,
-  isFirstUser, findUserByUsername,
+  createBeing, createFirstBeing, verifyPassword, generateToken,
+  isFirstBeing, findBeingByUsername,
 } from "../seed/auth.js";
 
 function cookieDomain(req) {
@@ -28,15 +28,15 @@ const register = async (req, res) => {
     // First user bootstraps the land as admin.
     // Bypasses beforeRegister hook intentionally: no extensions loaded yet,
     // no email to verify, no invite to check. The land needs an operator.
-    const first = await isFirstUser();
+    const first = await isFirstBeing();
 
     if (first) {
-      const user = await createFirstUser(username, password);
+      const user = await createFirstBeing(username, password);
       hooks.run("afterRegister", { user, req }).catch(() => {});
       const token = generateToken(user);
       return sendOk(res, {
         firstUser: true, token,
-        userId: user._id.toString(), username: user.username, isAdmin: true,
+        beingId: user._id.toString(), username: user.username, isAdmin: true,
       }, 201);
     }
 
@@ -52,12 +52,12 @@ const register = async (req, res) => {
     }
     if (hookData.handled) return;
 
-    const user = await createUser(username, password);
+    const user = await createBeing(username, password);
     hooks.run("afterRegister", { user, req }).catch(() => {});
     const token = generateToken(user);
 
     sendOk(res, {
-      token, userId: user._id.toString(), username: user.username, isAdmin: false,
+      token, beingId: user._id.toString(), username: user.username, isAdmin: false,
     }, 201);
   } catch (error) {
     if (error instanceof ProtocolError) {
@@ -76,7 +76,7 @@ const login = async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "Username and password are required");
     }
 
-    const user = await findUserByUsername(username);
+    const user = await findBeingByUsername(username);
 
     // Constant-time rejection: always run bcrypt.compare even if user doesn't exist.
     // Without this, an attacker can distinguish "user not found" (fast, no bcrypt)
@@ -105,7 +105,7 @@ const login = async (req, res) => {
 
     sendOk(res, {
       token,
-      userId: user._id.toString(),
+      beingId: user._id.toString(),
       username: user.username,
       isAdmin: user.isAdmin || false,
     });

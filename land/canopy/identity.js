@@ -139,12 +139,12 @@ export function getLandInfoPayload() {
  * Sign a CanopyToken JWT for authenticating requests to a remote land.
  * Used when proxying a local user's request to a remote land.
  */
-export async function signCanopyToken(userId, targetDomain) {
+export async function signCanopyToken(beingId, targetDomain) {
   const identity = getLandIdentity();
   const privateKey = await importPKCS8(identity.privateKey, "EdDSA");
 
   const token = await new SignJWT({
-    sub: userId,
+    sub: beingId,
     iss: identity.domain,
     aud: targetDomain,
     landId: identity.landId,

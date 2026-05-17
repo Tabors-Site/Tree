@@ -27,7 +27,7 @@ export default function createRouter(core) {
         slug: req.params.slug,
         published: true,
       }).lean();
-      if (!post) return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Post not found");
+      if (!post) return sendError(res, 404, ERR.ARTIFACT_NOT_FOUND, "Post not found");
       sendOk(res, { post });
     } catch (err) {
       log.error("Blog", "Blog post error:", err.message);
@@ -37,7 +37,7 @@ export default function createRouter(core) {
 
   router.post("/blog/posts", authenticate, async (req, res) => {
     try {
-      const user = await User.findById(req.userId)
+      const user = await Being.findById(req.beingId)
         .select("isAdmin username")
         .lean();
       if (!user || !user.isAdmin) {
@@ -56,7 +56,7 @@ export default function createRouter(core) {
         summary: summary || "",
         publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
         published: published !== undefined ? published : true,
-        author: req.userId,
+        author: req.beingId,
         authorName: user.username,
       });
 
@@ -72,7 +72,7 @@ export default function createRouter(core) {
 
   router.put("/blog/posts/:slug", authenticate, async (req, res) => {
     try {
-      const user = await User.findById(req.userId).select("isAdmin").lean();
+      const user = await Being.findById(req.beingId).select("isAdmin").lean();
       if (!user || !user.isAdmin) {
         return sendError(res, 403, ERR.FORBIDDEN, "Requires admin");
       }
@@ -90,7 +90,7 @@ export default function createRouter(core) {
         updates,
         { new: true },
       );
-      if (!post) return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Post not found");
+      if (!post) return sendError(res, 404, ERR.ARTIFACT_NOT_FOUND, "Post not found");
       sendOk(res, { post });
     } catch (err) {
       if (err.code === 11000) {
@@ -103,13 +103,13 @@ export default function createRouter(core) {
 
   router.delete("/blog/posts/:slug", authenticate, async (req, res) => {
     try {
-      const user = await User.findById(req.userId).select("isAdmin").lean();
+      const user = await Being.findById(req.beingId).select("isAdmin").lean();
       if (!user || !user.isAdmin) {
         return sendError(res, 403, ERR.FORBIDDEN, "Requires admin");
       }
 
       const post = await BlogPost.findOneAndDelete({ slug: req.params.slug });
-      if (!post) return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Post not found");
+      if (!post) return sendError(res, 404, ERR.ARTIFACT_NOT_FOUND, "Post not found");
       sendOk(res, { deleted: req.params.slug });
     } catch (err) {
       log.error("Blog", "Blog delete error:", err.message);

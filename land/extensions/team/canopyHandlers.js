@@ -20,7 +20,7 @@ export async function handleInviteOffer(req, res, { User, RemoteUser, validateCa
     req.body;
   const sourceLandDomain = req.canopy.sourceLandDomain;
 
-  const localUser = await User.findOne({
+  const localUser = await Being.findOne({
     username: receivingUsername,
     isRemote: { $ne: true },
   });
@@ -52,7 +52,7 @@ export async function handleInviteOffer(req, res, { User, RemoteUser, validateCa
     return sendOk(res, {
       inviteId: existingInvite._id,
       message: "Invite already pending",
-      userId: localUser._id,
+      beingId: localUser._id,
       username: localUser.username,
     });
   }
@@ -71,7 +71,7 @@ export async function handleInviteOffer(req, res, { User, RemoteUser, validateCa
   sendOk(res, {
     inviteId: invite._id,
     message: "Invite offer received",
-    userId: localUser._id,
+    beingId: localUser._id,
     username: localUser.username,
   });
 }
@@ -86,7 +86,7 @@ export async function handleInviteAccept(req, res, { User, Node, RemoteUser, val
     return sendError(res, 400, ERR.INVALID_INPUT, "Validation failed", { errors: validation.errors });
   }
 
-  const { inviteId, userId, username } = req.body;
+  const { inviteId, beingId, username } = req.body;
 
   const invite = await Invite.findOneAndUpdate(
     { _id: inviteId, status: "pending" },
@@ -105,24 +105,24 @@ export async function handleInviteAccept(req, res, { User, Node, RemoteUser, val
   }
 
   // SECURITY: Check if this UUID belongs to a local user.
-  const existingLocal = await User.findOne({ _id: userId, isRemote: { $ne: true } });
+  const existingLocal = await Being.findOne({ _id: beingId, isRemote: { $ne: true } });
   if (existingLocal) {
     await Invite.findByIdAndUpdate(inviteId, { $set: { status: "pending" } });
     return sendError(res, 403, ERR.FORBIDDEN, "User ID conflicts with a local user. Invite rejected.");
   }
 
   // Find or create ghost user atomically
-  const ghostCount = await User.countDocuments({
+  const ghostCount = await Being.countDocuments({
     isRemote: true,
     homeLand: req.canopy.sourceLandDomain,
   });
 
   const ghostUsername = username
     ? `${username}@${req.canopy.sourceLandDomain}`
-    : `${req.canopy.sourceLandDomain}_${userId.slice(0, 8)}`;
+    : `${req.canopy.sourceLandDomain}_${beingId.slice(0, 8)}`;
 
-  let ghostUser = await User.findOne({
-    _id: userId,
+  let ghostUser = await Being.findOne({
+    _id: beingId,
     isRemote: true,
     homeLand: req.canopy.sourceLandDomain,
   });
@@ -134,17 +134,17 @@ export async function handleInviteAccept(req, res, { User, Node, RemoteUser, val
     }
 
     try {
-      ghostUser = await User.create({
-        _id: userId,
+      ghostUser = await Being.create({
+        _id: beingId,
         username: ghostUsername,
-        email: `${userId}@${req.canopy.sourceLandDomain}`,
+        email: `${beingId}@${req.canopy.sourceLandDomain}`,
         password: "$2b$00$REMOTE_NOLOGIN_PLACEHOLDER.......................",
         isRemote: true,
         homeLand: req.canopy.sourceLandDomain,
       });
     } catch (createErr) {
       if (createErr.code === 11000) {
-        ghostUser = await User.findOne({ _id: userId, isRemote: true });
+        ghostUser = await Being.findOne({ _id: beingId, isRemote: true });
         if (!ghostUser) {
           return sendError(res, 409, ERR.RESOURCE_CONFLICT, "User ID conflicts with a local account");
         }
@@ -155,7 +155,7 @@ export async function handleInviteAccept(req, res, { User, Node, RemoteUser, val
   }
 
   // afterOwnershipChange hook updates metadata.nav.roots for the ghost user
-  await addContributor(invite.rootId, userId, invite.userInviting);
+  await addContributor(invite.rootId, beingId, invite.userInviting);
 
   sendOk(res, { message: "Invite accepted" });
 }
@@ -221,7 +221,7 @@ export async function handleInviteRemote(req, res, {
     return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
   }
 
-  if (rootNode.rootOwner !== req.userId) {
+  if (rootNode.rootOwner !== req.beingId) {
     return sendError(res, 403, ERR.FORBIDDEN, "Only the tree owner can invite remote users");
   }
 
@@ -240,7 +240,7 @@ export async function handleInviteRemote(req, res, {
   }
 
   const peerBaseUrl = getPeerBaseUrl(peer);
-  const lookupToken = await signCanopyToken(req.userId, domain);
+  const lookupToken = await signCanopyToken(req.beingId, domain);
   const resolveRes = await fetch(
     `${peerBaseUrl}/canopy/user/${encodeURIComponent(username)}`,
     {
@@ -256,9 +256,9 @@ export async function handleInviteRemote(req, res, {
   const remoteUserInfo = await resolveRes.json();
 
   await RemoteUser.findOneAndUpdate(
-    { _id: remoteUserInfo.userId },
+    { _id: remoteUserInfo.beingId },
     {
-      _id: remoteUserInfo.userId,
+      _id: remoteUserInfo.beingId,
       username: remoteUserInfo.username,
       homeLandDomain: domain,
       displayName: remoteUserInfo.username,
@@ -268,18 +268,18 @@ export async function handleInviteRemote(req, res, {
   );
 
   const invite = await Invite.create({
-    userInviting: req.userId,
-    userReceiving: remoteUserInfo.userId,
+    userInviting: req.beingId,
+    userReceiving: remoteUserInfo.beingId,
     rootId,
     status: "pending",
   });
 
   const identity = getLandIdentity();
-  const owner = await User.findById(req.userId).select("username").lean();
+  const owner = await Being.findById(req.beingId).select("username").lean();
 
   await queueCanopyEvent(domain, "invite_offer", {
     sourceInviteId: invite._id,
-    invitingUserId: req.userId,
+    invitingUserId: req.beingId,
     invitingUsername: owner?.username || "unknown",
     receivingUsername: username,
     rootId,
@@ -303,7 +303,7 @@ export async function handleAdminInvites(req, res, { User, Node, RemoteUser, get
   }
 
   const invites = await Invite.find({
-    userReceiving: req.userId,
+    userReceiving: req.beingId,
   }).lean();
 
   for (const inv of invites) {
@@ -319,8 +319,8 @@ export async function handleAdminInvites(req, res, { User, Node, RemoteUser, get
   const userTrees = await Node.find({
     rootOwner: { $nin: [null, "SYSTEM"] },
     $or: [
-      { rootOwner: req.userId },
-      { contributors: req.userId },
+      { rootOwner: req.beingId },
+      { contributors: req.beingId },
     ],
     "versions.0.status": "active",
   })
@@ -330,7 +330,7 @@ export async function handleAdminInvites(req, res, { User, Node, RemoteUser, get
   const localTrees = userTrees.map((t) => ({
     _id: t._id,
     name: t.name || "Untitled",
-    isOwner: t.rootOwner === req.userId,
+    isOwner: t.rootOwner === req.beingId,
   }));
 
   const renderCanopyInvites = getExtension("html-rendering")?.exports?.renderCanopyInvites;

@@ -148,7 +148,7 @@ export const nullSocket = Object.freeze({
   emit: () => {},
   to: function () { return this; },
   broadcast: Object.freeze({ emit: () => {} }),
-  userId: null,
+  beingId: null,
   username: "system",
   visitorId: "system",
 });

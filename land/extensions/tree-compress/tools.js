@@ -11,7 +11,7 @@ export default [
     schema: {
       rootId: z.string().describe("The tree root to compress."),
       targetSizeBytes: z.number().optional().describe("If set, stop when tree is under this size (budget mode)."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -21,12 +21,12 @@ export default [
       idempotentHint: false,
       openWorldHint: true,
     },
-    handler: async ({ rootId, targetSizeBytes, userId }) => {
+    handler: async ({ rootId, targetSizeBytes, beingId }) => {
       try {
         let username = null;
         try {
-          const User = (await import("../../seed/models/user.js")).default;
-          const user = await User.findById(userId).select("username").lean();
+          const User = (await import("../../seed/models/being.js")).default;
+          const user = await Being.findById(beingId).select("username").lean();
           username = user?.username;
         } catch (err) {
           log.debug("TreeCompress", "Username lookup failed:", err.message);
@@ -34,9 +34,9 @@ export default [
 
         let result;
         if (targetSizeBytes) {
-          result = await compressToBudget(rootId, userId, username, targetSizeBytes);
+          result = await compressToBudget(rootId, beingId, username, targetSizeBytes);
         } else {
-          result = await compressTree(rootId, userId, username);
+          result = await compressTree(rootId, beingId, username);
         }
 
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
@@ -50,7 +50,7 @@ export default [
     description: "Compress from this node downward only. Does not affect the rest of the tree.",
     schema: {
       nodeId: z.string().describe("The node to start compressing from."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -60,18 +60,18 @@ export default [
       idempotentHint: false,
       openWorldHint: true,
     },
-    handler: async ({ nodeId, userId }) => {
+    handler: async ({ nodeId, beingId }) => {
       try {
         let username = null;
         try {
-          const User = (await import("../../seed/models/user.js")).default;
-          const user = await User.findById(userId).select("username").lean();
+          const User = (await import("../../seed/models/being.js")).default;
+          const user = await Being.findById(beingId).select("username").lean();
           username = user?.username;
         } catch (err) {
           log.debug("TreeCompress", "Username lookup failed:", err.message);
         }
 
-        const result = await compressBranch(nodeId, userId, username);
+        const result = await compressBranch(nodeId, beingId, username);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Branch compression failed: ${err.message}` }] };
@@ -83,7 +83,7 @@ export default [
     description: "Show compression state of a tree. Compressed, absorbed, uncompressed counts. History of runs.",
     schema: {
       rootId: z.string().describe("The tree root to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -107,7 +107,7 @@ export default [
     description: "Restore a trimmed node to active. Its notes become visible again. Its essence stays as a bonus.",
     schema: {
       nodeId: z.string().describe("The node to decompress."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -117,9 +117,9 @@ export default [
       idempotentHint: true,
       openWorldHint: false,
     },
-    handler: async ({ nodeId, userId }) => {
+    handler: async ({ nodeId, beingId }) => {
       try {
-        const result = await decompressNode(nodeId, userId);
+        const result = await decompressNode(nodeId, beingId);
         return { content: [{ type: "text", text: result.message }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Decompress failed: ${err.message}` }] };

@@ -151,7 +151,7 @@ export default function getFlagTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { userId, nodeId, modeKey } = args;
+        const { beingId, nodeId, modeKey } = args;
         if (!nodeId) {
           return text("governing-flag-issue: no nodeId in context; substrate bug.");
         }
@@ -213,7 +213,7 @@ export default function getFlagTools(_core) {
             blocking: !!args.blocking,
             proposedResolution: proposedResolution || null,
           },
-          userId: userId || null,
+          beingId: beingId || null,
           sourceWorkerScopeId: nodeId,
           sourceWorkerType: workerType,
         });

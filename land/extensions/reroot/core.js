@@ -12,7 +12,7 @@ import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 import { getExtension } from "../loader.js";
 
 let Node = null;
-let Note = null;
+let _Artifact = null;
 let logContribution = null;
 let runChat = null;
 let useEnergy = async () => ({ energyUsed: 0 });
@@ -20,7 +20,7 @@ let _metadata = null;
 
 export function setServices({ models, contributions, llm, energy, metadata }) {
   Node = models.Node;
-  Note = models.Note;
+  _Artifact = models.Artifact;
   logContribution = contributions.logContribution;
   runChat = llm.runChat;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
@@ -64,8 +64,8 @@ Tree snapshot:
 /**
  * Analyze a tree and generate a reorganization proposal.
  */
-export async function analyze(rootId, userId, username) {
-  await useEnergy({ userId, action: "rerootAnalyze" });
+export async function analyze(rootId, beingId, username) {
+  await useEnergy({ beingId, action: "rerootAnalyze" });
 
   // Build the tree snapshot
   const snapshot = await buildTreeSnapshot(rootId);
@@ -80,7 +80,7 @@ export async function analyze(rootId, userId, username) {
   const prompt = ANALYSIS_PROMPT.replace("{snapshot}", snapshotText);
 
   const result = await runChat({
-    userId,
+    beingId,
     username,
     message: prompt,
     mode: "tree:respond",
@@ -132,7 +132,7 @@ export async function analyze(rootId, userId, username) {
   rerootMeta.proposal = {
     moves: validMoves,
     generatedAt: new Date().toISOString(),
-    generatedBy: userId,
+    generatedBy: beingId,
     status: "pending",
   };
   await _metadata.setExtMeta(root, "reroot", rerootMeta);
@@ -161,7 +161,7 @@ export async function getProposal(rootId) {
 // APPLY
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function applyProposal(rootId, userId) {
+export async function applyProposal(rootId, beingId) {
   const root = await Node.findById(rootId);
   if (!root) throw new Error("Tree not found");
 
@@ -184,7 +184,7 @@ export async function applyProposal(rootId, userId) {
       await updateParentRelationship(
         move.nodeId,
         move.proposedParentId,
-        userId,
+        beingId,
         true, // wasAi
         null, null,
         { skipCacheInvalidation: true },
@@ -207,7 +207,7 @@ export async function applyProposal(rootId, userId) {
   // Update proposal status
   proposal.status = "applied";
   proposal.appliedAt = new Date().toISOString();
-  proposal.appliedBy = userId;
+  proposal.appliedBy = beingId;
   proposal.results = results;
 
   // Add to history
@@ -225,7 +225,7 @@ export async function applyProposal(rootId, userId) {
 
   // Log contribution
   await logContribution({
-    userId,
+    beingId,
     nodeId: rootId,
     wasAi: true,
     action: "reroot:applied",
@@ -243,7 +243,7 @@ export async function applyProposal(rootId, userId) {
 // REJECT
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function rejectProposal(rootId, userId) {
+export async function rejectProposal(rootId, beingId) {
   const root = await Node.findById(rootId);
   if (!root) throw new Error("Tree not found");
 
@@ -254,7 +254,7 @@ export async function rejectProposal(rootId, userId) {
 
   rerootMeta.proposal.status = "rejected";
   rerootMeta.proposal.rejectedAt = new Date().toISOString();
-  rerootMeta.proposal.rejectedBy = userId;
+  rerootMeta.proposal.rejectedBy = beingId;
   await _metadata.setExtMeta(root, "reroot", rerootMeta);
 
   log.verbose("Reroot", `Proposal rejected for tree ${rootId}`);
@@ -289,7 +289,7 @@ async function buildTreeSnapshot(rootId) {
 
   // Get content summary for each node (first note, truncated)
   const nodeIds = nodes.map(n => n._id.toString());
-  const recentNotes = await Note.find({ nodeId: { $in: nodeIds } })
+  const recentNotes = await _Artifact.find({ nodeId: { $in: nodeIds } })
     .sort({ dateCreated: -1 })
     .select("nodeId content")
     .lean();

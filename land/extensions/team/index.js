@@ -9,7 +9,7 @@ export async function init(core) {
   const { User } = core.models;
 
   // ── Hook: beforeNote (rewrite @mentions to canonical usernames) ────
-  core.hooks.register("beforeNote", async (hookData) => {
+  core.hooks.register("beforeArtifact", async (hookData) => {
     if (hookData.contentType === "text" && hookData.content) {
       const { rewrittenContent } = await extractTaggedUsersAndRewrite(hookData.content, User);
       hookData.content = rewrittenContent;
@@ -17,8 +17,8 @@ export async function init(core) {
   }, "team");
 
   // ── Hook: afterNote (sync NoteTag records) ────────────────────────
-  core.hooks.register("afterNote", async (data) => {
-    const { note, action, nodeId, userId } = data;
+  core.hooks.register("afterArtifact", async (data) => {
+    const { note, action, nodeId, beingId } = data;
 
     if (action === "delete") {
       await clearTagsForNote(note._id);
@@ -30,7 +30,7 @@ export async function init(core) {
         noteId: note._id,
         content: note.content,
         nodeId,
-        taggedBy: userId,
+        taggedBy: beingId,
         User,
       });
     }
@@ -43,11 +43,11 @@ export async function init(core) {
   const { Node, Note } = core.models;
   const { logContribution } = core.contributions;
 
-  // Pre-bound: callers just pass inviteId/userId/acceptInvite, no deps needed
-  async function boundRespondToInvite({ inviteId, userId, acceptInvite }) {
+  // Pre-bound: callers just pass inviteId/beingId/acceptInvite, no deps needed
+  async function boundRespondToInvite({ inviteId, beingId, acceptInvite }) {
     return respondToInvite({
       inviteId,
-      userId,
+      beingId,
       acceptInvite,
       Node,
       User,
@@ -62,8 +62,8 @@ export async function init(core) {
   try {
     const { getExtension } = await import("../loader.js");
     const treeos = getExtension("treeos-base");
-    treeos?.exports?.registerSlot?.("user-quick-links", "team", ({ userId, queryString }) =>
-      `<li><a href="/api/v1/user/${userId}/invites${queryString}">Invites</a></li>`,
+    treeos?.exports?.registerSlot?.("user-quick-links", "team", ({ beingId, queryString }) =>
+      `<li><a href="/api/v1/user/${beingId}/invites${queryString}">Invites</a></li>`,
       { priority: 35 }
     );
 

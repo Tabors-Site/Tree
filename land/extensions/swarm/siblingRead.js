@@ -206,9 +206,9 @@ async function collectNode(nodeId) {
 async function readNodeNotes(nodeId, { maxNoteLength }) {
   try {
     const mongoose = (await import("mongoose")).default;
-    const Note = mongoose.models.Note;
-    if (!Note) return [];
-    const notes = await Note.find({ nodeId })
+    const Artifact = mongoose.models.Artifact;
+    if (!Artifact) return [];
+    const notes = await Artifact.find({ nodeId })
       .sort({ createdAt: -1 })
       .limit(MAX_NOTES_PER_NODE)
       .select("content type createdAt")

@@ -4,12 +4,12 @@ import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import authenticate from "../../seed/middleware/authenticate.js";
 
 let Node = null;
-let Note = null;
+let _Artifact = null;
 let Contribution = null;
 let _metadata = null;
 export function setModels(models) {
   Node = models.Node;
-  Note = models.Note;
+  _Artifact = models.Artifact;
   Contribution = models.Contribution;
 }
 export function setMetadata(metadata) { _metadata = metadata; }
@@ -39,7 +39,7 @@ router.get("/root/:rootId/intent", authenticate, async (req, res) => {
     const intentNode = await Node.findOne({ parent: rootId, name: ".intent" }).select("_id").lean();
     let recentExecutions = [];
     if (intentNode) {
-      recentExecutions = await Note.find({ nodeId: intentNode._id })
+      recentExecutions = await _Artifact.find({ nodeId: intentNode._id })
         .sort({ dateCreated: -1 })
         .limit(20)
         .select("content dateCreated")
@@ -112,7 +112,7 @@ router.get("/root/:rootId/intent/history", authenticate, async (req, res) => {
       .limit(50)
       .lean();
 
-    // Filter to this tree's nodes (walk from root, not rootOwner which is a userId)
+    // Filter to this tree's nodes (walk from root, not rootOwner which is a beingId)
     const { getDescendantIds } = await import("../../seed/tree/treeFetch.js");
     const allIds = await getDescendantIds(rootId, { maxResults: 10000 });
     const nodeIds = new Set(allIds.map(id => String(id)));
@@ -158,7 +158,7 @@ router.post("/root/:rootId/intent/reject", authenticate, async (req, res) => {
     meta.rejections.push({
       pattern: description || id,
       rejectedAt: new Date().toISOString(),
-      rejectedBy: req.userId,
+      rejectedBy: req.beingId,
     });
 
     await _metadata.setExtMeta(root, "intent", meta);

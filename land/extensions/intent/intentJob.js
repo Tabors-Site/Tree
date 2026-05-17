@@ -143,17 +143,17 @@ async function runCycle() {
 
 async function processTree(root) {
   const rootId = root._id.toString();
-  const userId = root.rootOwner?.toString();
-  if (!userId) return;
+  const beingId = root.rootOwner?.toString();
+  if (!beingId) return;
 
-  const user = await User.findById(userId).select("username").lean();
+  const user = await Being.findById(beingId).select("username").lean();
   if (!user) return;
 
   // Tree-scoped intent lane — successive intent cycles on the same tree
   // chain so the AI remembers prior proposals and their outcomes.
   const rt = new OrchestratorRuntime({
     rootId,
-    userId,
+    beingId,
     username: user.username,
     scope: "tree",
     purpose: "intent",
@@ -197,7 +197,7 @@ async function processTree(root) {
 
     // 2. Energy check for generation
     try {
-      await useEnergy({ userId, action: "intentGenerate" });
+      await useEnergy({ beingId, action: "intentGenerate" });
     } catch {
       log.debug("Intent", `Insufficient energy for intent generation on ${root.name}`);
       rt.setResult("Insufficient energy", "tree:respond");
@@ -253,7 +253,7 @@ async function processTree(root) {
       }
 
       try {
-        const execResult = await executeIntent(rt, intent, rootId, userId, user.username, intentNodeId);
+        const execResult = await executeIntent(rt, intent, rootId, beingId, user.username, intentNodeId);
         recentExecutions.push({
           action: intent.action,
           reason: intent.reason,
@@ -294,10 +294,10 @@ async function processTree(root) {
 // EXECUTION
 // ─────────────────────────────────────────────────────────────────────────
 
-async function executeIntent(rt, intent, rootId, userId, username, intentNodeId) {
+async function executeIntent(rt, intent, rootId, beingId, username, intentNodeId) {
   // Energy check per execution
   try {
-    await useEnergy({ userId, action: "intentExecute" });
+    await useEnergy({ beingId, action: "intentExecute" });
   } catch {
     log.debug("Intent", `Insufficient energy for intent execution: ${intent.action}`);
     return null;
@@ -336,7 +336,7 @@ async function executeIntent(rt, intent, rootId, userId, username, intentNodeId)
 
   // Log as contribution
   await logContribution({
-    userId,
+    beingId,
     nodeId: intent.targetNodeId,
     wasAi: true,
     action: "intent:executed",
@@ -379,16 +379,16 @@ async function ensureIntentNode(rootId) {
 
 async function writeIntentResult(intentNodeId, intent, result, error) {
   try {
-    const { createNote } = await import("../../seed/tree/notes.js");
+    const { createArtifact } = await import("../../seed/tree/artifacts.js");
     const content = error
       ? `[FAILED] ${intent.action}\nReason: ${intent.reason}\nError: ${error}`
       : `[${intent.priority || "medium"}] ${intent.action}\nReason: ${intent.reason}\nResult: ${(result || "completed").slice(0, 2000)}`;
 
-    await createNote({
+    await createArtifact({
       nodeId: intentNodeId,
       content,
-      contentType: "text",
-      userId: "SYSTEM",
+      origin: "ibp",
+      beingId: "SYSTEM",
     });
   } catch (err) {
     log.debug("Intent", `Failed to write intent result note: ${err.message}`);

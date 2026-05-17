@@ -41,7 +41,7 @@ export async function handleDo(socket, msg, ack) {
   try {
     const action = typeof msg?.action === "string" ? msg.action : null;
     if (!action) {
-      throw new PortalError(PORTAL_ERR.INVALID_INPUT, "portal:do requires an `action` field");
+      throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp:do requires an `action` field");
     }
     const handler = ACTIONS[action];
     if (!handler) {
@@ -52,7 +52,7 @@ export async function handleDo(socket, msg, ack) {
       );
     }
 
-    const positionString = extractPosition(msg, "portal:do");
+    const positionString = extractPosition(msg, "ibp:do");
 
     const parsed = parseFromSocket(socket, positionString);
     const expanded = expand(parsed, {
@@ -62,7 +62,7 @@ export async function handleDo(socket, msg, ack) {
     const resolved = await resolveStance(expanded.right);
 
     // Stance Authorization gate.
-    const identity = socket.userId ? { userId: socket.userId, username: socket.username } : null;
+    const identity = socket.beingId ? { beingId: socket.beingId, username: socket.username } : null;
     const namespace = action === "set-meta" || action === "clear-meta"
       ? msg?.payload?.namespace
       : undefined;
@@ -83,7 +83,7 @@ export async function handleDo(socket, msg, ack) {
 
     const ctx = {
       socket,
-      userId: socket.userId,
+      beingId: socket.beingId,
       username: socket.username,
       resolved,
       payload: msg.payload || {},
@@ -95,7 +95,7 @@ export async function handleDo(socket, msg, ack) {
     if (isPortalError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("Portal", `portal:do failed: ${err.message}`);
+    log.error("Portal", `ibp:do failed: ${err.message}`);
     return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }

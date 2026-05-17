@@ -14,8 +14,8 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { CONTENT_TYPE, SYSTEM_ROLE } from "../../seed/protocol.js";
+import Artifact from "../../seed/models/artifact.js";
+import { ARTIFACT_ORIGIN, SYSTEM_ROLE } from "../../seed/protocol.js";
 import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 
 let LLM_PRIORITY;
@@ -156,9 +156,9 @@ async function scoreCandidate(candidate, query, queryVector) {
       const embedExt = getExtension("embed");
       if (embedExt?.exports?.findSimilar) {
         // Get the note vector for this candidate
-        const note = await Note.findOne({
+        const note = await Artifact.findOne({
           nodeId: candidate.nodeId,
-          contentType: CONTENT_TYPE.TEXT,
+          origin: ARTIFACT_ORIGIN.IBP,
           "metadata.embed.vector": { $exists: true },
         }).sort({ createdAt: -1 }).select("metadata").lean();
 
@@ -215,9 +215,9 @@ async function sampleNotes(candidates, explored, maxPerNode) {
   for (const candidate of candidates) {
     if (explored.has(candidate.nodeId)) continue;
 
-    const notes = await Note.find({
+    const notes = await Artifact.find({
       nodeId: candidate.nodeId,
-      contentType: CONTENT_TYPE.TEXT,
+      origin: ARTIFACT_ORIGIN.IBP,
     })
       .sort({ createdAt: -1 })
       .limit(maxPerNode)
@@ -274,11 +274,11 @@ function buildEvalPrompt(query, samples, previousFindings) {
  *
  * @param {string} nodeId - starting position
  * @param {string} query - what to find
- * @param {string} userId
+ * @param {string} beingId
  * @param {string} username
  * @param {object} opts - { deep, rootId }
  */
-export async function runExplore(nodeId, query, userId, username, opts = {}) {
+export async function runExplore(nodeId, query, beingId, username, opts = {}) {
   const config = await getExploreConfig();
   const maxIterations = opts.deep ? config.maxIterations * 2 : config.maxIterations;
   const threshold = opts.deep ? config.confidenceThreshold * 0.7 : config.confidenceThreshold;
@@ -299,7 +299,7 @@ export async function runExplore(nodeId, query, userId, username, opts = {}) {
   // repeat explorations see prior findings; different nodes fork via extra.
   const rt = new OrchestratorRuntime({
     rootId: rootId || nodeId,
-    userId,
+    beingId,
     username: username || "system",
     scope: "tree",
     purpose: "explore",
@@ -324,7 +324,7 @@ export async function runExplore(nodeId, query, userId, username, opts = {}) {
       const { getExtension } = await import("../loader.js");
       const embedExt = getExtension("embed");
       if (embedExt?.exports?.generateEmbedding) {
-        queryVector = await embedExt.exports.generateEmbedding(query, userId);
+        queryVector = await embedExt.exports.generateEmbedding(query, beingId);
       }
     } catch (err) {
       log.debug("Explore", "Query vector generation failed:", err.message);
@@ -460,9 +460,9 @@ export async function runExplore(nodeId, query, userId, username, opts = {}) {
     }
 
     // ── Phase 5: Assemble map ────────────────────────────────────────────
-    const totalNotes = await Note.countDocuments({
+    const totalNotes = await Artifact.countDocuments({
       nodeId: { $in: allNodes.map(n => n.nodeId) },
-      contentType: CONTENT_TYPE.TEXT,
+      origin: ARTIFACT_ORIGIN.IBP,
     });
 
     const coverageStr = totalNotes > 0 ? `${((totalNotesRead / totalNotes) * 100).toFixed(2)}%` : "0%";

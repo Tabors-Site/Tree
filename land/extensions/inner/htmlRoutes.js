@@ -3,7 +3,7 @@ import { sendError, ERR } from "../../seed/protocol.js";
 import urlAuth from "../html-rendering/urlAuth.js";
 import { htmlOnly, buildQS } from "../html-rendering/htmlHelpers.js";
 import Node from "../../seed/models/node.js";
-import { getNotes } from "../../seed/tree/notes.js";
+import { getArtifacts } from "../../seed/tree/artifacts.js";
 import { getExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { renderConsciousnessPage } from "./pages/consciousness.js";
 
@@ -24,20 +24,20 @@ export default function buildHtmlRoutes() {
       // Layer 1: .inner notes
       const innerNode = await Node.findOne({ parent: rootId, name: ".inner" }).select("_id").lean();
       if (innerNode) {
-        const result = await getNotes({ nodeId: String(innerNode._id), limit: 20 });
-        layers.inner = result?.notes || [];
+        const result = await getArtifacts({ nodeId: String(innerNode._id), limit: 20 });
+        layers.inner = result?.artifacts || [];
 
         // Layer 2: .inner.reflect notes
         const reflectNode = await Node.findOne({ parent: String(innerNode._id), name: ".reflect" }).select("_id").lean();
         if (reflectNode) {
-          const rResult = await getNotes({ nodeId: String(reflectNode._id), limit: 10 });
-          layers.reflect = rResult?.notes || [];
+          const rResult = await getArtifacts({ nodeId: String(reflectNode._id), limit: 10 });
+          layers.reflect = rResult?.artifacts || [];
 
           // Layer 3: .inner.reflect.compare notes
           const compareNode = await Node.findOne({ parent: String(reflectNode._id), name: ".compare" }).select("_id").lean();
           if (compareNode) {
-            const cResult = await getNotes({ nodeId: String(compareNode._id), limit: 5 });
-            layers.compare = cResult?.notes || [];
+            const cResult = await getArtifacts({ nodeId: String(compareNode._id), limit: 5 });
+            layers.compare = cResult?.artifacts || [];
           }
         }
       }
@@ -54,7 +54,7 @@ export default function buildHtmlRoutes() {
         rootName: root.name,
         layers,
         qs,
-        userId: req.userId,
+        beingId: req.beingId,
       }));
     } catch (err) {
       sendError(res, 500, ERR.INTERNAL, "Consciousness page failed");

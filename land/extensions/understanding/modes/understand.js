@@ -13,7 +13,7 @@ export default {
     "understanding-process",
   ],
 
-  buildSystemPrompt({ username, userId, rootId }) {
+  buildSystemPrompt({ username, beingId, rootId }) {
     return `
 You are in UNDERSTAND mode. Root: ${rootId}
 

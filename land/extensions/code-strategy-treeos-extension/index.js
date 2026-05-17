@@ -74,7 +74,7 @@ const strategy = defineStrategy({
         scope: z.enum(["global", "confined"]).optional().describe("'global' (default) or 'confined'."),
         needsExtensions: z.array(z.string()).optional().describe("Other extensions this one depends on."),
         needsServices: z.array(z.string()).optional().describe("Core services required."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
@@ -106,7 +106,7 @@ const strategy = defineStrategy({
       description: "Add a custom AI mode file to an extension scaffold.",
       schema: {
         key: z.string().describe("Mode key, e.g. 'tree:my-ext-plan'. Must match ^[a-z]+:[a-z0-9_-]+$."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
@@ -130,7 +130,7 @@ const strategy = defineStrategy({
       description: "Add an MCP tool file to an extension scaffold.",
       schema: {
         name: z.string().describe("Tool name, kebab-case (e.g. 'my-ext-list')."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
@@ -154,7 +154,7 @@ const strategy = defineStrategy({
         "Verify the extension scaffold: manifest.js parses and declares a name, " +
         "index.js exports async init. PASS/FAIL with any missing pieces listed.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },

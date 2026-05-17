@@ -13,9 +13,9 @@ import { ERR } from "../protocol.js";
  * contributors[] at ANY node between the current position and
  * the ownership boundary, they have write access.
  *
- * userId is normalized to string. Callers can pass ObjectId or string.
+ * beingId is normalized to string. Callers can pass ObjectId or string.
  */
-export async function resolveTreeAccess(nodeId, userId) {
+export async function resolveTreeAccess(nodeId, beingId) {
   if (!nodeId) {
     return {
       ok: false,
@@ -24,9 +24,9 @@ export async function resolveTreeAccess(nodeId, userId) {
     };
   }
 
-  // Normalize userId to string for consistent comparison with cached ancestor data.
+  // Normalize beingId to string for consistent comparison with cached ancestor data.
   // Ancestor cache stores all IDs as strings. ObjectId === String is always false.
-  const safeUserId = userId ? String(userId) : null;
+  const safeUserId = beingId ? String(beingId) : null;
 
   const ancestors = await getAncestorChain(String(nodeId));
   if (!ancestors) {

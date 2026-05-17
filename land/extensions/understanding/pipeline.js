@@ -101,7 +101,7 @@ async function getRootEncoding(run) {
 
 export async function orchestrateUnderstanding({
   rootId,
-  userId,
+  beingId,
   username,
   runId,
   source = "orchestrator",
@@ -128,13 +128,13 @@ export async function orchestrateUnderstanding({
     : 0;
 
   // Prepare incremental run
-  const { dirtyCount, totalNodes } = await prepareIncrementalRun(understandingRunId, userId);
+  const { dirtyCount, totalNodes } = await prepareIncrementalRun(understandingRunId, beingId);
   log.debug("Understanding", `Incremental prep: ${dirtyCount}/${totalNodes} nodes dirty`);
 
   await UnderstandingRun.findByIdAndUpdate(understandingRunId, { status: "running" });
 
   // Check if already complete before spinning up resources
-  const firstPayload = await getNextCompressionPayloadForLLM(understandingRunId, userId);
+  const firstPayload = await getNextCompressionPayloadForLLM(understandingRunId, beingId);
   if (!firstPayload) {
     await UnderstandingRun.findByIdAndUpdate(understandingRunId, {
       status: "completed",
@@ -161,7 +161,7 @@ export async function orchestrateUnderstanding({
   // the same tree chain so the second pass sees the first's compression.
   const rt = new OrchestratorRuntime({
     rootId,
-    userId,
+    beingId,
     username,
     scope: "tree",
     purpose: "understand",
@@ -195,9 +195,9 @@ export async function orchestrateUnderstanding({
   updateSessionMeta(rt.sessionId, { runId: understandingRunId });
 
   if (isSite) {
-    setActiveNavigator(userId, rt.sessionId);
+    setActiveNavigator(beingId, rt.sessionId);
     const sess = getSession(rt.sessionId);
-    emitToUser(userId, WS.NAVIGATOR_SESSION, {
+    emitToUser(beingId, WS.NAVIGATOR_SESSION, {
       sessionId: rt.sessionId,
       type: sess?.type || SESSION_TYPES.UNDERSTANDING_ORCHESTRATE,
       description: sess?.description || `Understanding: ${runPerspective}`,
@@ -222,7 +222,7 @@ export async function orchestrateUnderstanding({
     while (true) {
       if (rt.aborted) throw new Error("Session stopped");
 
-      const payload = await getNextCompressionPayloadForLLM(understandingRunId, userId);
+      const payload = await getNextCompressionPayloadForLLM(understandingRunId, beingId);
       if (!payload) break;
 
       const prompt = buildSummarizationPrompt(payload);
@@ -266,7 +266,7 @@ export async function orchestrateUnderstanding({
             encoding: "(empty)",
             understandingNodeId: nodeId,
             currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
-            userId,
+            beingId,
             wasAi: true,
             chatId: rt.mainChatId,
             sessionId: rt.sessionId,
@@ -288,7 +288,7 @@ export async function orchestrateUnderstanding({
         encoding: summaryText,
         understandingNodeId: payload.target.understandingNodeId,
         currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
-        userId,
+        beingId,
         wasAi: true,
         chatId: rt.mainChatId,
         sessionId: rt.sessionId,
@@ -299,7 +299,7 @@ export async function orchestrateUnderstanding({
 
       if (isSite) {
         emitNavigate({
-          userId,
+          beingId,
           url: `/api/v1/root/${rootId}/understandings/run/${understandingRunId}/${payload.target.understandingNodeId}?html`,
           sessionId: rt.sessionId,
         });
@@ -331,7 +331,7 @@ export async function orchestrateUnderstanding({
 
     if (isSite) {
       emitNavigate({
-        userId,
+        beingId,
         url: `/api/v1/root/${rootId}/understandings/run/${understandingRunId}?html`,
         sessionId: rt.sessionId,
       });

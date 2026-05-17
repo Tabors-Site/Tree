@@ -1,7 +1,7 @@
 import log from "../../seed/log.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import Stripe from "stripe";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import { validatePurchase } from "./core/validatePurchase.js";
 import { getLandUrl } from "../../canopy/identity.js";
 
@@ -10,9 +10,9 @@ const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SEC
 export async function createPurchaseSession(req, res) {
   if (!stripe) return sendError(res, 500, ERR.INTERNAL, "Stripe is not configured");
   try {
-    const { userId, plan, energyAmount } = req.body;
+    const { beingId, plan, energyAmount } = req.body;
 
-    const user = await User.findById(userId);
+    const user = await Being.findById(beingId);
     if (!user) {
       return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
     }
@@ -75,7 +75,7 @@ export async function createPurchaseSession(req, res) {
       ],
 
       metadata: {
-        userId,
+        beingId,
         plan: plan || "",
         energyAmount: String(energyAmount || 0),
       },

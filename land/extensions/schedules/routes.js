@@ -25,7 +25,7 @@ async function useLatest(req, res, next) {
 const editScheduleHandler = async (req, res) => {
   try {
     const { nodeId, version } = req.params;
-    const userId = req.userId;
+    const beingId = req.beingId;
 
     const newSchedule = req.body?.newSchedule || req.query?.newSchedule;
     const reeffectTime = req.body?.reeffectTime ?? req.query?.reeffectTime;
@@ -39,7 +39,7 @@ const editScheduleHandler = async (req, res) => {
       versionIndex: Number(version),
       newSchedule,
       reeffectTime: Number(reeffectTime),
-      userId,
+      beingId,
     });
 
     if ("html" in req.query) {

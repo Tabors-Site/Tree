@@ -89,7 +89,7 @@ export const ERR = Object.freeze({
   // Data
   NODE_NOT_FOUND:         "NODE_NOT_FOUND",
   USER_NOT_FOUND:         "USER_NOT_FOUND",
-  NOTE_NOT_FOUND:         "NOTE_NOT_FOUND",
+  ARTIFACT_NOT_FOUND:     "ARTIFACT_NOT_FOUND",
   TREE_NOT_FOUND:         "TREE_NOT_FOUND",
 
   // Auth
@@ -237,12 +237,30 @@ export const SYSTEM_ROLE = Object.freeze({
 });
 
 // ============================================================================
-// CONTENT TYPES
+// ARTIFACT ORIGINS
 // ============================================================================
+//
+// What system the artifact's underlying representation comes from.
+// Origin determines how the artifact is fetched, stored, kept in sync,
+// addressed, and transferred. The content field's shape varies by origin:
+//
+//   IBP        : TreeOS native. content is a string (text) or null
+//                (metadata-only object). Always in sync; TreeOS owns it.
+//   FILESYSTEM : Bridges to a file on disk. content is { path, size,
+//                mimeType }. Bytes live outside TreeOS.
+//   WEB        : Bridges to a URL. content is { url, fetchedAt?, cache? }.
+//                Live content lives at the URL.
+//   CROSS_LAND : Bridges to an artifact on another TreeOS land.
+//                content is { land, artifactRef }.
+//
+// Future kinds (git, database, stream, service) plug in as new bridging
+// patterns without altering the schema shape.
 
-export const CONTENT_TYPE = Object.freeze({
-  TEXT: "text",
-  FILE: "file",
+export const ARTIFACT_ORIGIN = Object.freeze({
+  IBP:        "ibp",
+  FILESYSTEM: "filesystem",
+  WEB:        "web",
+  CROSS_LAND: "cross-land",
 });
 
 // ============================================================================

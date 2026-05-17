@@ -290,7 +290,7 @@ Registers a custom LLM connection on the identity's user record.
 
 ## Extension-registered DO actions
 
-The kernel mints only the primitives listed above. **Extensions can register their own named DO actions** when they expose a direct manipulation surface that doesn't reduce to a single metadata write. The action goes through the same `portal:do` dispatcher; the action's payload schema and behavior are owned by the extension.
+The kernel mints only the primitives listed above. **Extensions can register their own named DO actions** when they expose a direct manipulation surface that doesn't reduce to a single metadata write. The action goes through the same `ibp:do` dispatcher; the action's payload schema and behavior are owned by the extension.
 
 Common examples from existing extensions (each implemented by an extension, not by the kernel):
 

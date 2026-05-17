@@ -28,7 +28,7 @@ import { PortalError, PORTAL_ERR } from "../errors.js";
 const RESERVED_FROM_SET_META = new Set(["inbox"]);
 
 export async function setMeta(ctx) {
-  const { userId, resolved, payload } = ctx;
+  const { beingId, resolved, payload } = ctx;
   const { namespace, data, merge = true } = payload || {};
 
   if (!namespace || typeof namespace !== "string") {
@@ -54,7 +54,7 @@ export async function setMeta(ctx) {
     throw new PortalError(PORTAL_ERR.NODE_NOT_FOUND, "Resolved address has no nodeId");
   }
 
-  const access = await resolveTreeAccess(resolved.nodeId, userId);
+  const access = await resolveTreeAccess(resolved.nodeId, beingId);
   if (!access?.ok || access.write !== true) {
     throw new PortalError(PORTAL_ERR.FORBIDDEN, "Not authorized to write metadata at this place");
   }

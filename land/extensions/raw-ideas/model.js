@@ -15,7 +15,7 @@ const RawIdeaSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  userId: {
+  beingId: {
     type: String,
     ref: "User",
     required: true,

@@ -1,7 +1,7 @@
 import express from "express";
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import { sendError, ERR } from "../../seed/protocol.js";
 import urlAuth from "../html-rendering/urlAuth.js";
 import { htmlOnly, buildQS, tokenQS } from "../html-rendering/htmlHelpers.js";
@@ -11,10 +11,10 @@ import { renderNotifications } from "./pages/notifications.js";
 export default function buildNotificationsHtmlRoutes() {
   const router = express.Router();
 
-  router.get("/user/:userId/notifications", urlAuth, htmlOnly, async (req, res) => {
+  router.get("/user/:beingId/notifications", urlAuth, htmlOnly, async (req, res) => {
     try {
-      const { userId } = req.params;
-      const user = await User.findById(userId).select("username").lean();
+      const { beingId } = req.params;
+      const user = await Being.findById(beingId).select("username").lean();
       if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
       const notifExt = getExtension("notifications");
@@ -22,10 +22,10 @@ export default function buildNotificationsHtmlRoutes() {
 
       const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
       const offset = parseInt(req.query.offset, 10) || 0;
-      const { notifications, total } = await notifExt.exports.getNotifications({ userId, limit, offset });
+      const { notifications, total } = await notifExt.exports.getNotifications({ beingId, limit, offset });
 
       return res.send(renderNotifications({
-        userId,
+        beingId,
         notifications,
         total,
         username: user.username,

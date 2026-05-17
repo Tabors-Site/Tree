@@ -30,7 +30,7 @@ export default {
           includeNotes: true,
           includeChildren: true,
           includeParentChain: true,
-          userId: null,
+          beingId: null,
         });
       } catch {}
     }

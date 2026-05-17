@@ -15,14 +15,14 @@ import {
   editNodeType,
 } from "../../seed/tree/treeManagement.js";
 import {
-  createNote,
-  editNote,
-  getNotes,
-  deleteNoteAndFile,
-  transferNote,
-  getAllNotesByUser,
-  searchNotesByUser,
-} from "../../seed/tree/notes.js";
+  createArtifact,
+  editArtifact,
+  getArtifacts,
+  deleteArtifactAndFile,
+  transferArtifact,
+  getAllArtifactsByUser,
+  searchArtifactsByUser,
+} from "../../seed/tree/artifacts.js";
 import { editStatus } from "../../seed/tree/statuses.js";
 import {
   getContributions,
@@ -265,7 +265,7 @@ export function buildTools() {
       },
       handler: async ({ nodeId, limit, startDate, endDate }) => {
         try {
-          const result = await getNotes({
+          const result = await getArtifacts({
             nodeId,
             limit,
             startDate,
@@ -325,7 +325,7 @@ export function buildTools() {
       description:
         "Fetches all notes written by a specific user (optionally limited to the most recent N). Recommend limit 10 or less. Use get-searched-notes-by-user if looking for specifics.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z
           .string()
           .nullable()
@@ -350,18 +350,18 @@ export function buildTools() {
         idempotentHint: true,
         openWorldHint: false,
       },
-      handler: async ({ userId, limit, startDate, endDate }) => {
+      handler: async ({ beingId, limit, startDate, endDate }) => {
         if (typeof limit === "number" && limit > 20) {
           limit = 20;
         }
         try {
-          const result = await getAllNotesByUser(
-            userId,
+          const result = await getAllArtifactsByUser(
+            beingId,
             limit,
             startDate,
             endDate,
           );
-          const trimmedNotes = result.notes.slice(0, 20);
+          const trimmedNotes = result.artifacts.slice(0, 20);
           return json(trimmedNotes);
         } catch (err) {
           return text(
@@ -375,7 +375,7 @@ export function buildTools() {
       name: "get-searched-notes-by-user",
       description: "Search text notes by a user based on text matching.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z
           .string()
           .nullable()
@@ -399,13 +399,13 @@ export function buildTools() {
         idempotentHint: true,
         openWorldHint: false,
       },
-      handler: async ({ userId, query, limit, startDate, endDate }) => {
+      handler: async ({ beingId, query, limit, startDate, endDate }) => {
         try {
           if (typeof limit === "number" && limit > 40) {
             limit = 40;
           }
-          const result = await searchNotesByUser({
-            userId,
+          const result = await searchArtifactsByUser({
+            beingId,
             query,
             limit,
             startDate,
@@ -423,7 +423,7 @@ export function buildTools() {
       description:
         "Fetches all notes where a specific user was tagged (optionally limited to the most recent N). May be referenced as mail.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z
           .string()
           .nullable()
@@ -448,7 +448,7 @@ export function buildTools() {
         idempotentHint: true,
         openWorldHint: false,
       },
-      handler: async ({ userId, limit, startDate, endDate }) => {
+      handler: async ({ beingId, limit, startDate, endDate }) => {
         if (typeof limit === "number" && limit > 20) {
           limit = 20;
         }
@@ -456,9 +456,9 @@ export function buildTools() {
           const { getAllTagsForUser } = await import(
             "../../extensions/team/tags.js"
           );
-          const Note = (await import("../../seed/models/note.js")).default;
+          const Artifact = (await import("../../seed/models/artifact.js")).default;
           const result = await getAllTagsForUser(
-            userId,
+            beingId,
             limit,
             startDate,
             endDate,
@@ -478,7 +478,7 @@ export function buildTools() {
       description:
         "Fetches contributions made by a specific user (optionally limited).",
       schema: {
-        userId: z
+        beingId: z
           .string()
           .describe(
             "The ID of the user to fetch contributions for.",
@@ -497,13 +497,13 @@ export function buildTools() {
         idempotentHint: true,
         openWorldHint: false,
       },
-      handler: async ({ userId, limit, startDate, endDate }) => {
+      handler: async ({ beingId, limit, startDate, endDate }) => {
         if (typeof limit === "number" && limit > 30) {
           limit = 30;
         }
         try {
           const result = await getContributionsByUser(
-            userId,
+            beingId,
             limit,
             startDate,
             endDate,
@@ -522,7 +522,7 @@ export function buildTools() {
       description:
         "Fetches all root nodes (roots, trees) owned by a user. READ-ONLY.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: {
         readOnlyHint: true,
@@ -530,16 +530,16 @@ export function buildTools() {
         idempotentHint: true,
         openWorldHint: false,
       },
-      handler: async ({ userId }) => {
+      handler: async ({ beingId }) => {
         try {
           // Roots live in metadata.nav.roots, managed by the navigation extension.
           const nav = getExtension("navigation");
           if (nav?.exports?.getUserRootsWithNames) {
-            const roots = await nav.exports.getUserRootsWithNames(userId);
+            const roots = await nav.exports.getUserRootsWithNames(beingId);
             return json(roots);
           }
           // Fallback: query nodes directly by rootOwner (works without navigation extension)
-          const roots = await Node.find({ rootOwner: userId })
+          const roots = await Node.find({ rootOwner: beingId })
             .select("_id name status type dateCreated visibility")
             .lean();
           return json(roots);
@@ -748,7 +748,7 @@ export function buildTools() {
           .describe(
             "If true, propagate the status to child nodes recursively. Typically true unless otherwise specified.",
           ),
-        userId: z
+        beingId: z
           .string()
           .describe(
             "ID of the user making the status edit (for contribution logging).",
@@ -775,7 +775,7 @@ export function buildTools() {
         status,
         prestige,
         isInherited,
-        userId,
+        beingId,
         chatId,
         sessionId,
       }) => {
@@ -784,7 +784,7 @@ export function buildTools() {
             nodeId,
             status,
             isInherited,
-            userId,
+            beingId,
             wasAi: true,
             chatId,
             sessionId,
@@ -806,7 +806,7 @@ export function buildTools() {
         content: z
           .string()
           .describe("The text content of the note."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z
           .string()
           .nullable()
@@ -829,16 +829,16 @@ export function buildTools() {
       },
       handler: async ({
         content,
-        userId,
+        beingId,
         nodeId,
         chatId,
         sessionId,
       }) => {
         try {
-          const result = await createNote({
-            contentType: "text",
+          const result = await createArtifact({
+            origin: "ibp",
             content,
-            userId,
+            beingId,
             nodeId,
             wasAi: true,
             chatId,
@@ -889,7 +889,7 @@ export function buildTools() {
           .describe(
             "End line (0-indexed, exclusive). Lines [lineStart, lineEnd) are replaced.",
           ),
-        userId: z
+        beingId: z
           .string()
           .describe(
             "ID of the user making the edit (for contribution logging).",
@@ -916,15 +916,15 @@ export function buildTools() {
         content,
         lineStart,
         lineEnd,
-        userId,
+        beingId,
         chatId,
         sessionId,
       }) => {
         try {
-          const result = await editNote({
+          const result = await editArtifact({
             noteId,
             content,
-            userId,
+            beingId,
             lineStart: lineStart ?? null,
             lineEnd: lineEnd ?? null,
             wasAi: true,
@@ -957,7 +957,7 @@ export function buildTools() {
           .describe(
             "Target version (defaults to latest).",
           ),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z
           .string()
           .nullable()
@@ -979,15 +979,15 @@ export function buildTools() {
         noteId,
         targetNodeId,
         prestige,
-        userId,
+        beingId,
         chatId,
         sessionId,
       }) => {
         try {
-          const result = await transferNote({
+          const result = await transferArtifact({
             noteId,
             targetNodeId,
-            userId,
+            beingId,
             prestige: prestige ?? null,
             wasAi: true,
             chatId,
@@ -1009,7 +1009,7 @@ export function buildTools() {
         noteId: z
           .string()
           .describe("The ID of the note to delete."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z
           .string()
           .nullable()
@@ -1033,11 +1033,11 @@ export function buildTools() {
         idempotentHint: false,
         openWorldHint: false,
       },
-      handler: async ({ noteId, userId, chatId, sessionId }) => {
+      handler: async ({ noteId, beingId, chatId, sessionId }) => {
         try {
-          const result = await deleteNoteAndFile({
+          const result = await deleteArtifactAndFile({
             noteId,
-            userId,
+            beingId,
             wasAi: true,
             chatId,
             sessionId,
@@ -1059,7 +1059,7 @@ export function buildTools() {
         parentId: z
           .string()
           .describe("ID of the parent node."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z
           .string()
           .nullable()
@@ -1092,7 +1092,7 @@ export function buildTools() {
       handler: async ({
         name,
         parentId,
-        userId,
+        beingId,
         note,
         type,
         chatId,
@@ -1102,7 +1102,7 @@ export function buildTools() {
           const newNode = await createNode({
             name,
             parentId,
-            userId,
+            beingId,
             type: type ?? null,
             note: note ?? null,
             wasAi: true,
@@ -1137,7 +1137,7 @@ export function buildTools() {
           .describe(
             "Optional semantic type. Core types: goal, plan, task, knowledge, resource, identity. Custom types are valid.",
           ),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z
           .string()
           .nullable()
@@ -1159,7 +1159,7 @@ export function buildTools() {
         name,
         note,
         type,
-        userId,
+        beingId,
         chatId,
         sessionId,
         rootId,
@@ -1171,7 +1171,7 @@ export function buildTools() {
           const rootNode = await createNode({
             name,
             isRoot: true,
-            userId,
+            beingId,
             type: type ?? null,
             note: note ?? null,
             wasAi: true,
@@ -1200,7 +1200,7 @@ export function buildTools() {
           .describe(
             "Parent node ID for the root of this subtree. Required.",
           ),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z
           .string()
           .nullable()
@@ -1221,7 +1221,7 @@ export function buildTools() {
       handler: async ({
         nodeData,
         parentId,
-        userId,
+        beingId,
         chatId,
         sessionId,
       }) => {
@@ -1230,7 +1230,7 @@ export function buildTools() {
             await createNodeBranch(
               nodeData,
               parentId,
-              userId,
+              beingId,
               true, // wasAi
               chatId,
               sessionId,
@@ -1257,7 +1257,7 @@ export function buildTools() {
         nodeId: z
           .string()
           .describe("ID of the node branch to delete."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z
           .string()
           .nullable()
@@ -1275,11 +1275,11 @@ export function buildTools() {
         idempotentHint: false,
         openWorldHint: false,
       },
-      handler: async ({ nodeId, userId, chatId, sessionId }) => {
+      handler: async ({ nodeId, beingId, chatId, sessionId }) => {
         try {
           const deletedNode = await deleteNodeBranch(
             nodeId,
-            userId,
+            beingId,
             true, // wasAi
             chatId,
             sessionId,
@@ -1308,7 +1308,7 @@ export function buildTools() {
         newName: z
           .string()
           .describe("The new name to assign to the node."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z
           .string()
           .nullable()
@@ -1329,7 +1329,7 @@ export function buildTools() {
       handler: async ({
         nodeId,
         newName,
-        userId,
+        beingId,
         chatId,
         sessionId,
       }) => {
@@ -1338,7 +1338,7 @@ export function buildTools() {
             await editNodeName({
               nodeId,
               newName,
-              userId,
+              beingId,
               wasAi: true,
               chatId,
               sessionId,
@@ -1367,7 +1367,7 @@ export function buildTools() {
           .describe(
             "Type label or null to clear. Core types: goal, plan, task, knowledge, resource, identity. Custom types are valid.",
           ),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z
           .string()
           .nullable()
@@ -1388,7 +1388,7 @@ export function buildTools() {
       handler: async ({
         nodeId,
         newType,
-        userId,
+        beingId,
         chatId,
         sessionId,
       }) => {
@@ -1397,7 +1397,7 @@ export function buildTools() {
             await editNodeType({
               nodeId,
               newType,
-              userId,
+              beingId,
               wasAi: true,
               chatId,
               sessionId,
@@ -1424,7 +1424,7 @@ export function buildTools() {
         nodeNewParentId: z
           .string()
           .describe("The ID of the new parent node."),
-        userId: z
+        beingId: z
           .string()
           .describe(
             "The user performing the operation (optional).",
@@ -1449,7 +1449,7 @@ export function buildTools() {
       handler: async ({
         nodeChildId,
         nodeNewParentId,
-        userId,
+        beingId,
         chatId,
         sessionId,
       }) => {
@@ -1458,7 +1458,7 @@ export function buildTools() {
             await updateParentRelationship(
               nodeChildId,
               nodeNewParentId,
-              userId,
+              beingId,
               true, // wasAi
               chatId,
               sessionId,

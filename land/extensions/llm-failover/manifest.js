@@ -30,9 +30,9 @@ export default {
 
     cli: [
       // User-level failover
-      { command: "llm failover", scope: ["home"], description: "Show your failover stack", method: "GET", endpoint: "/user/:userId/llm-failover" },
-      { command: "llm failover-push <connectionId>", scope: ["home"], description: "Add a connection to your failover stack", method: "POST", endpoint: "/user/:userId/llm-failover", body: ["connectionId"] },
-      { command: "llm failover-pop", scope: ["home"], description: "Remove last connection from your failover stack", method: "DELETE", endpoint: "/user/:userId/llm-failover" },
+      { command: "llm failover", scope: ["home"], description: "Show your failover stack", method: "GET", endpoint: "/user/:beingId/llm-failover" },
+      { command: "llm failover-push <connectionId>", scope: ["home"], description: "Add a connection to your failover stack", method: "POST", endpoint: "/user/:beingId/llm-failover", body: ["connectionId"] },
+      { command: "llm failover-pop", scope: ["home"], description: "Remove last connection from your failover stack", method: "DELETE", endpoint: "/user/:beingId/llm-failover" },
       // Tree-level failover
       { command: "llm tree-failover", scope: ["tree"], description: "Show tree failover stack", method: "GET", endpoint: "/root/:rootId/llm-failover" },
       { command: "llm tree-failover-push <connectionId>", scope: ["tree"], description: "Add a connection to tree failover stack", method: "POST", endpoint: "/root/:rootId/llm-failover", body: ["connectionId"] },

@@ -9,7 +9,7 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import { analyzeTree, getEvolutionConfig } from "./core.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 
@@ -88,7 +88,7 @@ async function run() {
         continue;
       }
 
-      const user = await User.findById(root.rootOwner).select("username").lean();
+      const user = await Being.findById(root.rootOwner).select("username").lean();
       if (!user) continue;
 
       try {

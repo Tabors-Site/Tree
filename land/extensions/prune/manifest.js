@@ -43,7 +43,7 @@ export default {
 
   needs: {
     services: ["llm", "hooks", "contributions"],
-    models: ["Node", "Contribution", "Note"],
+    models: ["Node", "Contribution", "Artifact"],
   },
 
   optional: {

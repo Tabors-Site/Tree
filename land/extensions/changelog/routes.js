@@ -6,12 +6,12 @@ import { getChangelog, summarizeChangelog, parseSince } from "./core.js";
 const router = express.Router();
 
 // GET /node/:nodeId/changelog
-// Query params: since (24h, 7d, 2w, 30d, ISO date), userId, land (boolean)
+// Query params: since (24h, 7d, 2w, 30d, ISO date), beingId, land (boolean)
 router.get("/node/:nodeId/changelog", authenticate, async (req, res) => {
   try {
     const opts = {
       since: req.query.since || "24h",
-      userId: req.query.userId || null,
+      beingId: req.query.beingId || null,
       land: req.query.land === "true",
       limit: parseInt(req.query.limit) || 500,
     };
@@ -29,7 +29,7 @@ router.get("/node/:nodeId/changelog", authenticate, async (req, res) => {
     const narrative = await summarizeChangelog(
       req.params.nodeId,
       contributions,
-      req.userId,
+      req.beingId,
       req.username || "system",
       opts,
     );

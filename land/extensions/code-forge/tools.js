@@ -91,7 +91,7 @@ export default function getForgeTools(core) {
         adopt: z.boolean().optional().describe("If true, promote the workspace project at the current tree position into a forge extension instead of creating a new sibling project. Existing files are preserved. Default: auto (promotes if you're already inside a workspace project)."),
       },
       annotations: { readOnlyHint: false },
-      async handler({ name, description, adopt, userId, rootId, nodeId }) {
+      async handler({ name, description, adopt, beingId, rootId, nodeId }) {
         const err = nameError(name);
         if (err) return text(`forge-init: ${err}`);
         try {
@@ -138,7 +138,7 @@ export default function getForgeTools(core) {
             const parentId = nodeId || rootId;
             let node;
             if (core?.tree?.createNode) {
-              node = await core.tree.createNode({ parentId, name, type: "extension", userId });
+              node = await core.tree.createNode({ parentId, name, type: "extension", beingId });
             } else {
               const { v4: uuidv4 } = await import("uuid");
               node = await Node.create({ _id: uuidv4(), name, type: "extension", parent: parentId, status: "active" });
@@ -149,7 +149,7 @@ export default function getForgeTools(core) {
               name,
               description,
               workspacePath: targetDir,
-              userId,
+              beingId,
               core,
             });
             projectNode = initRes.node;
@@ -189,7 +189,7 @@ export default function getForgeTools(core) {
           const existingFiles = await ws.walkFiles(projectNode._id);
           const existingPaths = new Set(existingFiles.map((f) => f.filePath));
           const stubs = {
-            "manifest.js": `export default {\n  name: ${JSON.stringify(name)},\n  version: "0.0.1",\n  builtFor: "TreeOS",\n  description: ${JSON.stringify(description || "")},\n\n  needs: {\n    services: [],\n    models: ["Node", "Note"],\n  },\n\n  provides: {\n    tools: true,\n  },\n};\n`,
+            "manifest.js": `export default {\n  name: ${JSON.stringify(name)},\n  version: "0.0.1",\n  builtFor: "TreeOS",\n  description: ${JSON.stringify(description || "")},\n\n  needs: {\n    services: [],\n    models: ["Node", "Artifact"],\n  },\n\n  provides: {\n    tools: true,\n  },\n};\n`,
             "index.js": `import log from "../../seed/log.js";\nimport { z } from "zod";\n\nexport async function init(core) {\n  log.info(${JSON.stringify(name)}, "Loaded.");\n  return {\n    tools: [],\n  };\n}\n`,
             "lib.js": `// Pure helpers live here. Tests import from this file directly,\n// which keeps them independent of core / DB / init().\n`,
             "test.js": `import test from "node:test";\nimport assert from "node:assert";\n\ntest(${JSON.stringify(`${name} scaffold smoke test`)}, () => {\n  assert.ok(true);\n});\n`,
@@ -202,7 +202,7 @@ export default function getForgeTools(core) {
               kept.push(filePath);
               continue;
             }
-            await ws.addFile({ projectNodeId: projectNode._id, relPath: filePath, content, userId, core });
+            await ws.addFile({ projectNodeId: projectNode._id, relPath: filePath, content, beingId, core });
             added.push(filePath);
           }
 
@@ -236,7 +236,7 @@ export default function getForgeTools(core) {
         content: z.string(),
       },
       annotations: { readOnlyHint: false },
-      async handler({ name, filePath, content, userId, rootId }) {
+      async handler({ name, filePath, content, beingId, rootId }) {
         const err = nameError(name);
         if (err) return text(`forge-write-file: ${err}`);
         try {
@@ -244,7 +244,7 @@ export default function getForgeTools(core) {
           const project = await ws.getProjectByName(rootId, name);
           if (!project) return text(`forge-write-file: no forge project "${name}" under this tree root. Call forge-init first.`);
           const { fileNode, created } = await ws.addFile({
-            projectNodeId: project._id, relPath: filePath, content, userId, core,
+            projectNodeId: project._id, relPath: filePath, content, beingId, core,
           });
           return text(`${created ? "Created" : "Updated"} ${filePath} in "${name}" on node ${fileNode._id}.`);
         } catch (e) {
@@ -264,12 +264,12 @@ export default function getForgeTools(core) {
         filePath: z.string(),
       },
       annotations: { readOnlyHint: true },
-      async handler({ name, filePath, userId, rootId }) {
+      async handler({ name, filePath, beingId, rootId }) {
         try {
           const ws = await requireWorkspace();
           const project = await ws.getProjectByName(rootId, name);
           if (!project) return text(`forge-read-file: no forge project "${name}".`);
-          const content = await ws.readFile({ projectNodeId: project._id, relPath: filePath, userId, core });
+          const content = await ws.readFile({ projectNodeId: project._id, relPath: filePath, beingId, core });
           const trimmed = content.length > 20000 ? content.slice(0, 20000) + "\n... (truncated)" : content;
           return text(`${filePath} in "${name}":\n\`\`\`\n${trimmed}\n\`\`\``);
         } catch (e) {
@@ -408,7 +408,7 @@ export default function getForgeTools(core) {
       description: "Install a forge project on this land: sync to disk, validate, flag restart-required. The extension is materialized at land/extensions/<name>/ and the loader picks it up at next boot.",
       schema: { name: z.string() },
       annotations: { readOnlyHint: false },
-      async handler({ name, rootId, userId }) {
+      async handler({ name, rootId, beingId }) {
         const err = nameError(name);
         if (err) return text(`forge-install-local: ${err}`);
         try {

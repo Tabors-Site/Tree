@@ -13,7 +13,7 @@ import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
 import { PortalError, PORTAL_ERR, isPortalError } from "../errors.js";
 
 export async function changeStatus(ctx) {
-  const { userId, resolved, payload } = ctx;
+  const { beingId, resolved, payload } = ctx;
   const { status, isInherited } = payload || {};
 
   if (!status || typeof status !== "string") {
@@ -30,7 +30,7 @@ export async function changeStatus(ctx) {
     throw new PortalError(PORTAL_ERR.NODE_NOT_FOUND, "Resolved address has no nodeId");
   }
 
-  const access = await resolveTreeAccess(resolved.nodeId, userId);
+  const access = await resolveTreeAccess(resolved.nodeId, beingId);
   if (!access?.ok || access.write !== true) {
     throw new PortalError(PORTAL_ERR.FORBIDDEN, "Not authorized to change status at this place");
   }
@@ -40,7 +40,7 @@ export async function changeStatus(ctx) {
       nodeId: resolved.nodeId,
       status,
       isInherited: isInherited === true,
-      userId,
+      beingId,
     });
     return { nodeId: String(resolved.nodeId), status };
   } catch (err) {

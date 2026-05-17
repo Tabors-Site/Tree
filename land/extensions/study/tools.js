@@ -22,15 +22,15 @@ export default function getTools() {
         rootId: z.string().describe("Study root node ID."),
         topic: z.string().describe("Topic name or URL to queue."),
         priority: z.number().optional().describe("Priority (higher = study sooner). Default 0."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      handler: async ({ rootId, topic, priority, userId }) => {
+      handler: async ({ rootId, topic, priority, beingId }) => {
         try {
           const isUrl = /^https?:\/\//.test(topic);
-          const result = await addToQueue(rootId, topic, userId, { url: isUrl ? topic : null, priority });
+          const result = await addToQueue(rootId, topic, beingId, { url: isUrl ? topic : null, priority });
           return { content: [{ type: "text", text: `Queued: "${result.name}"` }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Failed: ${err.message}` }] };
@@ -43,14 +43,14 @@ export default function getTools() {
       schema: {
         activeNodeId: z.string().describe("The Active node ID (parent of topics)."),
         topicName: z.string().describe("Topic name."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      handler: async ({ activeNodeId, topicName, userId }) => {
+      handler: async ({ activeNodeId, topicName, beingId }) => {
         try {
-          const result = await addTopic(activeNodeId, topicName, userId);
+          const result = await addTopic(activeNodeId, topicName, beingId);
           return { content: [{ type: "text", text: `Created topic "${result.name}" (${result.id})` }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Failed: ${err.message}` }] };
@@ -65,14 +65,14 @@ export default function getTools() {
         subtopicName: z.string().describe("Subtopic/concept name (e.g. 'useState', 'Closures')."),
         order: z.number().optional().describe("Learning order (lower = learn first)."),
         prerequisites: z.array(z.string()).optional().describe("Names of subtopics that should be learned first."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      handler: async ({ topicId, subtopicName, order, prerequisites, userId }) => {
+      handler: async ({ topicId, subtopicName, order, prerequisites, beingId }) => {
         try {
-          const result = await addSubtopic(topicId, subtopicName, userId, { order, prerequisites });
+          const result = await addSubtopic(topicId, subtopicName, beingId, { order, prerequisites });
           return { content: [{ type: "text", text: `Added subtopic "${result.name}" (mastery: 0%)` }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Failed: ${err.message}` }] };
@@ -88,14 +88,14 @@ export default function getTools() {
         subtopicId: z.string().describe("Subtopic node ID."),
         score: z.number().min(0).max(100).optional().describe("Mastery score (0-100)."),
         masteryScore: z.number().min(0).max(100).optional().describe("Alias for score."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      handler: async ({ subtopicId, score, masteryScore, userId }) => {
+      handler: async ({ subtopicId, score, masteryScore, beingId }) => {
         try {
-          const result = await updateMastery(subtopicId, score ?? masteryScore ?? 0, userId);
+          const result = await updateMastery(subtopicId, score ?? masteryScore ?? 0, beingId);
           const status = result.complete ? "Complete!" : `${result.mastery}%`;
           return { content: [{ type: "text", text: `Mastery updated: ${status}` }] };
         } catch (err) {
@@ -109,14 +109,14 @@ export default function getTools() {
       schema: {
         rootId: z.string().describe("Study root node ID."),
         queueItemId: z.string().describe("Queue item node ID to activate."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      handler: async ({ rootId, queueItemId, userId }) => {
+      handler: async ({ rootId, queueItemId, beingId }) => {
         try {
-          const result = await moveToActive(rootId, queueItemId, userId);
+          const result = await moveToActive(rootId, queueItemId, beingId);
           return { content: [{ type: "text", text: `Activated: "${result.name}" (${result.topicId}). Ready to build curriculum.` }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Failed: ${err.message}` }] };
@@ -130,14 +130,14 @@ export default function getTools() {
         rootId: z.string().describe("Study root node ID."),
         gapName: z.string().describe("The missing concept (e.g. 'Closures')."),
         detectedDuring: z.string().describe("What was being studied when the gap was found."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-      handler: async ({ rootId, gapName, detectedDuring, userId }) => {
+      handler: async ({ rootId, gapName, detectedDuring, beingId }) => {
         try {
-          const result = await addGap(rootId, gapName, detectedDuring, userId);
+          const result = await addGap(rootId, gapName, detectedDuring, beingId);
           if (result?.existed) return { content: [{ type: "text", text: `Gap already tracked: "${gapName}"` }] };
           return { content: [{ type: "text", text: `Gap detected: "${gapName}" (found while studying ${detectedDuring})` }] };
         } catch (err) {
@@ -150,7 +150,7 @@ export default function getTools() {
       description: "Mark study setup as complete after initial configuration.",
       schema: {
         rootId: z.string().describe("Study root node ID."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
@@ -174,7 +174,7 @@ export default function getTools() {
           dailyStudyMinutes: z.number().optional(),
           preferredTime: z.string().optional(),
         }).describe("Learning profile settings."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },

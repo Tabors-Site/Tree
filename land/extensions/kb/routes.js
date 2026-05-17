@@ -3,7 +3,7 @@ import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import log from "../../seed/log.js";
 import NodeModel from "../../seed/models/node.js";
-import UserModel from "../../seed/models/user.js";
+import UserModel from "../../seed/models/being.js";
 import {
   isInitialized,
   getStatus,
@@ -46,7 +46,7 @@ router.get("/root/:rootId/kb", async (req, res, next) => {
         stale,
         unplaced,
         token: req.query.token || null,
-        userId: req.userId,
+        beingId: req.beingId,
         hasEmbed,
         hasScout,
         inApp: !!req.query.inApp,
@@ -71,9 +71,9 @@ router.post("/root/:rootId/kb", authenticate, async (req, res) => {
     const root = await NodeModel.findById(rootId).select("rootOwner contributors").lean();
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
 
-    const userId = req.userId;
-    const isOwner = root.rootOwner?.toString() === userId;
-    const isContributor = root.contributors?.some(c => c.toString() === userId);
+    const beingId = req.beingId;
+    const isOwner = root.rootOwner?.toString() === beingId;
+    const isContributor = root.contributors?.some(c => c.toString() === beingId);
     if (!isOwner && !isContributor) return sendError(res, 403, ERR.FORBIDDEN, "No access");
 
     const { isExtensionBlockedAtNode } = await import("../../seed/tree/extensionScope.js");
@@ -81,10 +81,10 @@ router.post("/root/:rootId/kb", authenticate, async (req, res) => {
       return sendError(res, 403, ERR.EXTENSION_BLOCKED, "KB is blocked on this branch.");
     }
 
-    const user = await UserModel.findById(userId).select("username").lean();
+    const user = await UserModel.findById(beingId).select("username").lean();
     const username = user?.username || "user";
 
-    const result = await handleMessage(message, { userId, username, rootId, res });
+    const result = await handleMessage(message, { beingId, username, rootId, res });
 
     if (result.error) {
       if (!res.headersSent) sendError(res, result.status || 500, result.code || ERR.FORBIDDEN, result.message);

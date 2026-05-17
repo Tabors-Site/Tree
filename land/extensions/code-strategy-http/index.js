@@ -59,7 +59,7 @@ const strategy = defineStrategy({
           .optional()
           .describe("Routes to wire. If empty, emits a / health handler only."),
         filePath: z.string().optional().describe("Target filename. Defaults to 'server.js'."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
@@ -87,7 +87,7 @@ const strategy = defineStrategy({
         "Check every client-side fetch targets a defined server route. PASS " +
         "if coherent; FAIL lists the mismatches.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },

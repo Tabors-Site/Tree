@@ -39,7 +39,7 @@ router.post("/node/:nodeId/cascade/trigger", authenticate, async (req, res) => {
   try {
     const result = await checkCascade(req.params.nodeId, {
       action: "manual-cascade",
-      triggeredBy: req.userId,
+      triggeredBy: req.beingId,
     });
     if (!result) {
       return sendOk(res, { message: "Cascade did not fire. Check cascadeEnabled and node config." });

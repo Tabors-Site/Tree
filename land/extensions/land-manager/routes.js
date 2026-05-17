@@ -1,17 +1,17 @@
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import log from "../../seed/log.js";
 import { sendOk, sendError, ERR, DELETED } from "../../seed/protocol.js";
-import { getUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 
 const router = express.Router();
 
 // GET /land/status - land overview (admin only)
 router.get("/land/status", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user?.isAdmin) {
       return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     }
@@ -22,7 +22,7 @@ router.get("/land/status", authenticate, async (req, res) => {
     const land = getLandIdentity();
     const loaded = getLoadedExtensionNames();
     const manifests = getLoadedManifests();
-    const userCount = await User.countDocuments({ isRemote: { $ne: true } });
+    const userCount = await Being.countDocuments({ isRemote: { $ne: true } });
     const treeCount = await Node.countDocuments({ rootOwner: { $ne: null }, parent: { $ne: DELETED } });
 
     let peerCount = 0;
@@ -45,18 +45,18 @@ router.get("/land/status", authenticate, async (req, res) => {
 // GET /land/users - list users (admin only)
 router.get("/land/users", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user?.isAdmin) {
       return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     }
 
-    const users = await User.find({ isRemote: { $ne: true } })
+    const users = await Being.find({ isRemote: { $ne: true } })
       .select("username isAdmin metadata")
       .lean();
 
     sendOk(res, {
       users: users.map(u => {
-        const nav = getUserMeta(u, "nav");
+        const nav = getBeingMeta(u, "nav");
         return {
           username: u.username,
           isAdmin: u.isAdmin || false,
@@ -73,7 +73,7 @@ router.get("/land/users", authenticate, async (req, res) => {
 // POST /land/chat - land management chat (admin only)
 router.post("/land/chat", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin username").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin username").lean();
     if (!user?.isAdmin) {
       return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     }
@@ -84,7 +84,7 @@ router.post("/land/chat", authenticate, async (req, res) => {
     const { runChat } = await import("../../seed/llm/conversation.js");
 
     const { answer, chatId } = await runChat({
-      userId: req.userId,
+      beingId: req.beingId,
       username: user.username,
       message,
       mode: "land:manager",
@@ -103,7 +103,7 @@ router.post("/land/chat", authenticate, async (req, res) => {
 // GET /land/extensions - list loaded extensions
 router.get("/land/extensions", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     const { getLoadedManifests } = await import("../../extensions/loader.js");
     const { getLandConfigValue } = await import("../../seed/landConfig.js");
@@ -118,7 +118,7 @@ router.get("/land/extensions", authenticate, async (req, res) => {
 // GET /land/extensions/:name - single extension info
 router.get("/land/extensions/:name", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     const { getLoadedManifests } = await import("../../extensions/loader.js");
     const manifests = getLoadedManifests();
@@ -133,7 +133,7 @@ router.get("/land/extensions/:name", authenticate, async (req, res) => {
 // POST /land/extensions/:name/disable
 router.post("/land/extensions/:name/disable", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     const { getLandConfigValue, setLandConfigValue } = await import("../../seed/landConfig.js");
     const { hasExtension } = await import("../../extensions/loader.js");
@@ -155,7 +155,7 @@ router.post("/land/extensions/:name/disable", authenticate, async (req, res) => 
 // POST /land/extensions/:name/enable
 router.post("/land/extensions/:name/enable", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
     const { getLandConfigValue, setLandConfigValue } = await import("../../seed/landConfig.js");
     const disabled = getLandConfigValue("disabledExtensions") || [];

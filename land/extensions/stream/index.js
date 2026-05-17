@@ -200,7 +200,7 @@ export async function init(core) {
           message: combined,
           visitorId,
           socket,
-          userId: socket.userId,
+          beingId: socket.beingId,
           username: socket.username,
           rootId,
         }).catch((err) => log.warn("Stream", `pivot failed: ${err.message}`));

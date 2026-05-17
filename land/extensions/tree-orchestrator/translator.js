@@ -8,9 +8,9 @@ export function setServices({ llm }) {
   getClientForUser = llm.getClientForUser;
 }
 
-async function getLlm(userId, rootId, modeKey, slot) {
+async function getLlm(beingId, rootId, modeKey, slot) {
   const overrideId = rootId ? await resolveRootLlmForMode(rootId, modeKey) : null;
-  const { client, model, isCustom, connectionId, noLlm } = await getClientForUser(userId, slot, overrideId);
+  const { client, model, isCustom, connectionId, noLlm } = await getClientForUser(beingId, slot, overrideId);
   if (noLlm) throw new Error("NO_LLM");
   return { client, model, llmProvider: { isCustom, model, connectionId: connectionId || null } };
 }
@@ -36,8 +36,8 @@ Lean toward converse. The AI at the position will figure out what to do.
 no_fit means genuinely unrelated, not just tangential.
 Match confidence to domain fit. 0.85+ for obvious. 0.3 for stretch. 0.0 for no_fit.`;
 
-export async function classify({ message, userId, conversationMemory, treeSummary, signal, slot, rootId }) {
-  const { client, model, llmProvider } = await getLlm(userId, rootId, "tree:librarian", slot);
+export async function classify({ message, beingId, conversationMemory, treeSummary, signal, slot, rootId }) {
+  const { client, model, llmProvider } = await getLlm(beingId, rootId, "tree:librarian", slot);
 
   let userContent = "";
   if (treeSummary) userContent += `Tree:\n${treeSummary}\n\n`;

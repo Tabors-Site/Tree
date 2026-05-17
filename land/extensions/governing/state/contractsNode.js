@@ -25,7 +25,7 @@ const NS = "governing";
  * Ruler — typically governing.findRulerScope or runRulerCycle's
  * currentNodeId after promotion.
  */
-export async function ensureContractsNode({ scopeNodeId, userId, core }) {
+export async function ensureContractsNode({ scopeNodeId, beingId, core }) {
   if (!scopeNodeId) return null;
 
   // Direct probe for an existing contracts-type child.
@@ -45,7 +45,7 @@ export async function ensureContractsNode({ scopeNodeId, userId, core }) {
         parentId: String(scopeNodeId),
         name: "contracts",
         type: "contracts",
-        userId,
+        beingId,
         wasAi: true,
       });
     }
@@ -102,20 +102,40 @@ export async function ensureContractsNode({ scopeNodeId, userId, core }) {
         });
       }
 
-      // Declare the Contractor's home at this position. The descriptor
-      // reads metadata.embodiments to surface beings at home, so this
-      // makes the Contractor visible inside the contracts trio node
-      // with live activity from its chainsteps.
+      // Declare the Contractor's home via the unified primitive. The
+      // contracts trio Node was just created; createBeingWithHome places
+      // the Contractor being at it, generates a unique username + random
+      // password, and writes metadata.beings.contractor.beingId.
+      // After creation, merge governing's scopeRulerId alongside.
       const existingEmbodiments = node.metadata instanceof Map
-        ? node.metadata.get("embodiments")
+        ? node.metadata.get("beings")
         : node.metadata?.embodiments;
-      if (!existingEmbodiments?.contractor) {
+      if (!existingEmbodiments?.contractor?.beingId) {
+        const { createBeingWithHome } = await import("../../../seed/auth.js");
+        await createBeingWithHome({
+          operatingMode: "ai",
+          role:          "contractor",
+          homeNodeId:    String(created._id),
+        });
         const { mergeExtMeta: kernelMergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-        await kernelMergeExtMeta(node, "embodiments", {
+        await kernelMergeExtMeta(node, "beings", {
           contractor: {
-            installedAt: new Date().toISOString(),
-            installedBy: "governing",
+            installedBy:  "governing",
             scopeRulerId: String(scopeNodeId),
+          },
+        });
+        // Inner-being protection: only governing-role beings of THIS
+        // rulership can TALK to the Contractor. The scoped
+        // `homeInDomain` keeps other rulerships' beings out; the role
+        // list keeps humans / citizens out.
+        await kernelMergeExtMeta(node, "permissions", {
+          talk: {
+            "@contractor*": {
+              requires: {
+                role:         ["ruler", "planner", "contractor", "foreman"],
+                homeInDomain: String(scopeNodeId),
+              },
+            },
           },
         });
       }

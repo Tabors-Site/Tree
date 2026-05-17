@@ -14,7 +14,7 @@ import { getLandUrl } from "../../canopy/identity.js";
 import { userHasLlm } from "../../seed/llm/conversation.js";
 import { orchestrateRawIdeaPlacement } from "./pipeline.js";
 import RawIdea from "./model.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import {
   createRawIdea as coreCreateRawIdea,
   getRawIdeas as coreGetRawIdeas,
@@ -36,7 +36,7 @@ import { renderRawIdeasList, renderRawIdeaText, renderRawIdeaFile } from "./page
 function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
   const fn = getExtension("html-rendering")?.exports?.notFoundPage;
   if (fn) return fn(req, res, message);
-  return sendError(res, 404, ERR.NOTE_NOT_FOUND, message);
+  return sendError(res, 404, ERR.ARTIFACT_NOT_FOUND, message);
 }
 
 const router = express.Router();
@@ -68,14 +68,14 @@ function escapeHtml(str) {
 
 // POST create raw idea
 router.post(
-  "/user/:userId/raw-ideas",
+  "/user/:beingId/raw-ideas",
   authenticate,
   preUploadCheck,
   upload.single("file"),
   async (req, res) => {
     try {
-      const { userId } = req.params;
-      if (req.userId.toString() !== userId.toString()) {
+      const { beingId } = req.params;
+      if (req.beingId.toString() !== beingId.toString()) {
         return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
 
@@ -83,13 +83,13 @@ router.post(
       const result = await coreCreateRawIdea({
         contentType,
         content: contentType === "file" ? req.file.filename : req.body.content,
-        userId: req.userId,
+        beingId: req.beingId,
         file: req.file,
       });
 
       if ("html" in req.query) {
         return res.redirect(
-          `/api/v1/user/${userId}?token=${req.query.token ?? ""}&html`,
+          `/api/v1/user/${beingId}?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -101,9 +101,9 @@ router.post(
 );
 
 // GET list raw ideas (requires auth: JWT or share token)
-router.get("/user/:userId/raw-ideas", htmlAuth, async (req, res) => {
+router.get("/user/:beingId/raw-ideas", htmlAuth, async (req, res) => {
   try {
-    const userId = req.params.userId;
+    const beingId = req.params.beingId;
     const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
     const startDate = req.query.startDate;
     const endDate = req.query.endDate;
@@ -121,11 +121,11 @@ router.get("/user/:userId/raw-ideas", htmlAuth, async (req, res) => {
     let result;
     if (query.trim() !== "") {
       result = await coreSearchRawIdeasByUser({
-        userId, query, limit, startDate, endDate, status: statusFilter,
+        beingId, query, limit, startDate, endDate, status: statusFilter,
       });
     } else {
       result = await coreGetRawIdeas({
-        userId, limit, startDate, endDate, status: statusFilter,
+        beingId, limit, startDate, endDate, status: statusFilter,
       });
     }
 
@@ -138,11 +138,11 @@ router.get("/user/:userId/raw-ideas", htmlAuth, async (req, res) => {
       return sendOk(res, { rawIdeas });
     }
 
-    const user = await User.findById(userId).lean();
+    const user = await Being.findById(beingId).lean();
     const token = req.query.token ?? "";
 
     const tabUrl = (s) => {
-      const base = `/api/v1/user/${userId}/raw-ideas`;
+      const base = `/api/v1/user/${beingId}/raw-ideas`;
       const params = new URLSearchParams();
       if (token) params.set("token", token);
       params.set("html", "");
@@ -160,29 +160,29 @@ router.get("/user/:userId/raw-ideas", htmlAuth, async (req, res) => {
 
     return res.send(
       renderRawIdeasList({
-        userId, user, rawIdeas, query, statusFilter, tabs, tabUrl, token, AUTO_PLACE_ELIGIBLE,
+        beingId, user, rawIdeas, query, statusFilter, tabs, tabUrl, token, AUTO_PLACE_ELIGIBLE,
       }),
     );
   } catch (err) {
- log.error("Raw Ideas", "Error in /user/:userId/raw-ideas:", err);
+ log.error("Raw Ideas", "Error in /user/:beingId/raw-ideas:", err);
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
 
 // POST toggle auto-place
 router.post(
-  "/user/:userId/raw-ideas/auto-place",
+  "/user/:beingId/raw-ideas/auto-place",
   authenticate,
   async (req, res) => {
     try {
-      if (req.userId.toString() !== req.params.userId.toString()) {
+      if (req.beingId.toString() !== req.params.beingId.toString()) {
         return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
       const enabled = req.body?.enabled;
       if (typeof enabled !== "boolean") {
         return sendError(res, 400, ERR.INVALID_INPUT, "enabled (boolean) is required");
       }
-      const result = await coreToggleAutoPlace({ userId: req.userId, enabled });
+      const result = await coreToggleAutoPlace({ beingId: req.beingId, enabled });
       return sendOk(res, { enabled: result.enabled });
     } catch (err) {
       const status = err.message.includes("only available on") ? 403 : 500;
@@ -194,22 +194,22 @@ router.post(
 
 // DELETE raw idea
 router.delete(
-  "/user/:userId/raw-ideas/:rawIdeaId",
+  "/user/:beingId/raw-ideas/:rawIdeaId",
   authenticate,
   async (req, res) => {
     try {
-      const { userId, rawIdeaId } = req.params;
-      if (req.userId.toString() !== userId.toString()) {
+      const { beingId, rawIdeaId } = req.params;
+      if (req.beingId.toString() !== beingId.toString()) {
         return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
       const rawIdea = await RawIdea.findById(rawIdeaId);
       if (!rawIdea) {
-        return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Raw idea not found");
+        return sendError(res, 404, ERR.ARTIFACT_NOT_FOUND, "Raw idea not found");
       }
       if (rawIdea.status === "processing" || rawIdea.status === "succeeded") {
         return sendError(res, 409, ERR.RESOURCE_CONFLICT, `Cannot delete a raw idea with status "${rawIdea.status}"`);
       }
-      const result = await coreDeleteRawIdeaAndFile({ rawIdeaId, userId: req.userId });
+      const result = await coreDeleteRawIdeaAndFile({ rawIdeaId, beingId: req.beingId });
       return sendOk(res, result);
     } catch (err) {
       sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -219,13 +219,13 @@ router.delete(
 
 // POST transfer raw idea to note
 router.post(
-  "/user/:userId/raw-ideas/:rawIdeaId/transfer",
+  "/user/:beingId/raw-ideas/:rawIdeaId/transfer",
   authenticate,
   async (req, res) => {
     try {
-      const { userId, rawIdeaId } = req.params;
+      const { beingId, rawIdeaId } = req.params;
       const { nodeId } = req.body;
-      if (req.userId.toString() !== userId.toString()) {
+      if (req.beingId.toString() !== beingId.toString()) {
         return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
       if (!rawIdeaId || !nodeId) {
@@ -235,11 +235,11 @@ router.post(
       if (rawIdeaCheck?.status === "processing") {
         return sendError(res, 409, ERR.RESOURCE_CONFLICT, "Cannot transfer a raw idea while it is being processed");
       }
-      const result = await coreConvertRawIdeaToNote({ rawIdeaId, userId: req.userId, nodeId });
+      const result = await coreConvertRawIdeaToNote({ rawIdeaId, beingId: req.beingId, nodeId });
 
       if ("html" in req.query) {
         return res.redirect(
-          `/api/v1/user/${userId}/raw-ideas?token=${req.query.token ?? ""}&html`,
+          `/api/v1/user/${beingId}/raw-ideas?token=${req.query.token ?? ""}&html`,
         );
       }
       return sendOk(res, { note: result.note });
@@ -251,22 +251,22 @@ router.post(
 );
 
 // GET single raw idea
-router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
+router.get("/user/:beingId/raw-ideas/:rawIdeaId", async (req, res) => {
   try {
-    const { userId, rawIdeaId } = req.params;
+    const { beingId, rawIdeaId } = req.params;
     const rawIdea = await RawIdea.findById(rawIdeaId)
-      .populate("userId", "username")
+      .populate("beingId", "username")
       .lean();
 
     if (!rawIdea) {
       return notFoundPage(req, res, "This raw idea doesn't exist or may have been removed.");
     }
 
-    const rawUserId = rawIdea.userId?._id?.toString?.() ?? rawIdea.userId;
+    const rawUserId = rawIdea.beingId?._id?.toString?.() ?? rawIdea.beingId;
     if (["deleted", "empty", "null", "system"].includes(rawUserId)) {
       return notFoundPage(req, res, "This raw idea doesn't exist or may have been removed.");
     }
-    if (rawUserId !== userId.toString()) {
+    if (rawUserId !== beingId.toString()) {
       return notFoundPage(req, res, "This raw idea doesn't exist or may have been removed.");
     }
 
@@ -274,24 +274,24 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
     const tokenQS = token ? `?token=${token}&html` : `?html`;
     const hasToken = !!token;
     const back = hasToken
-      ? `/api/v1/user/${userId}/raw-ideas${tokenQS}`
+      ? `/api/v1/user/${beingId}/raw-ideas${tokenQS}`
       : getLandUrl();
     const backText = hasToken ? "← Back to Raw Ideas" : "← Back to Home";
     const userLink =
-      rawIdea.userId && rawIdea.userId !== "empty"
-        ? `<a href="/api/v1/user/${rawIdea.userId._id}${tokenQS}">
-               ${escapeHtml(rawIdea.userId.username ?? String(rawIdea.userId))}
+      rawIdea.beingId && rawIdea.beingId !== "empty"
+        ? `<a href="/api/v1/user/${rawIdea.beingId._id}${tokenQS}">
+               ${escapeHtml(rawIdea.beingId.username ?? String(rawIdea.beingId))}
              </a>`
         : "Unknown user";
 
     if (req.query.html !== undefined && getExtension("html-rendering")) {
       if (rawIdea.contentType === "text") {
         return res.send(
-          renderRawIdeaText({ userId, rawIdea, back, backText, userLink, hasToken, token }),
+          renderRawIdeaText({ beingId, rawIdea, back, backText, userLink, hasToken, token }),
         );
       }
       return res.send(
-        renderRawIdeaFile({ userId, rawIdea, back, backText, userLink, hasToken, token }),
+        renderRawIdeaFile({ beingId, rawIdea, back, backText, userLink, hasToken, token }),
       );
     }
 
@@ -301,7 +301,7 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
     if (rawIdea.contentType === "file") {
       const filePath = path.join(uploadsFolder, rawIdea.content);
       if (!fs.existsSync(filePath)) {
-        return sendError(res, 404, ERR.NOTE_NOT_FOUND, "File not found");
+        return sendError(res, 404, ERR.ARTIFACT_NOT_FOUND, "File not found");
       }
       return res.sendFile(filePath);
     }
@@ -318,27 +318,27 @@ router.get("/user/:userId/raw-ideas/:rawIdeaId", async (req, res) => {
 
 const TIMEOUT_MS = 19 * 60 * 1000;
 
-router.post("/user/:userId/raw-ideas/place", authenticate, async (req, res) => {
+router.post("/user/:beingId/raw-ideas/place", authenticate, async (req, res) => {
   try {
-    if (req.userId.toString() !== req.params.userId.toString()) {
+    if (req.beingId.toString() !== req.params.beingId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
     const content = req.body?.content;
     if (!content || typeof content !== "string" || !content.trim()) {
       return sendError(res, 400, ERR.INVALID_INPUT, "content (text string) is required");
     }
-    if (!(await userHasLlm(req.userId))) {
+    if (!(await userHasLlm(req.beingId))) {
       return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
     }
-    const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
+    const alreadyProcessing = await RawIdea.findOne({ beingId: req.beingId.toString(), status: "processing" });
     if (alreadyProcessing) {
       return sendError(res, 409, ERR.ORCHESTRATOR_LOCKED, "Another idea is already being placed. Please wait for it to finish.");
     }
-    const result = await coreCreateRawIdea({ contentType: "text", content: content.trim(), userId: req.userId });
-    const user = await User.findById(req.userId).select("username").lean();
+    const result = await coreCreateRawIdea({ contentType: "text", content: content.trim(), beingId: req.beingId });
+    const user = await Being.findById(req.beingId).select("username").lean();
     const source = req.body?.source === "user" ? "user" : "api";
     orchestrateRawIdeaPlacement({
-      rawIdeaId: result.rawIdea._id, userId: req.userId, username: user?.username || "unknown", source,
+      rawIdeaId: result.rawIdea._id, beingId: req.beingId, username: user?.username || "unknown", source,
  }).catch((err) => log.error("Raw Ideas", "Raw-idea orchestration failed:", err.message));
     return sendOk(res, { message: "Orchestration started", rawIdeaId: result.rawIdea._id }, 202);
   } catch (err) {
@@ -347,28 +347,28 @@ router.post("/user/:userId/raw-ideas/place", authenticate, async (req, res) => {
   }
 });
 
-router.post("/user/:userId/raw-ideas/chat", authenticate, async (req, res) => {
+router.post("/user/:beingId/raw-ideas/chat", authenticate, async (req, res) => {
   try {
-    if (req.userId.toString() !== req.params.userId.toString()) {
+    if (req.beingId.toString() !== req.params.beingId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
     const content = req.body?.content;
     if (!content || typeof content !== "string" || !content.trim()) {
       return sendError(res, 400, ERR.INVALID_INPUT, "content (text string) is required");
     }
-    if (!(await userHasLlm(req.userId))) {
+    if (!(await userHasLlm(req.beingId))) {
       return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
     }
-    const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
+    const alreadyProcessing = await RawIdea.findOne({ beingId: req.beingId.toString(), status: "processing" });
     if (alreadyProcessing) {
       return sendError(res, 409, ERR.ORCHESTRATOR_LOCKED, "Another idea is already being placed. Please wait for it to finish.");
     }
-    const result = await coreCreateRawIdea({ contentType: "text", content: content.trim(), userId: req.userId });
-    const user = await User.findById(req.userId).select("username").lean();
+    const result = await coreCreateRawIdea({ contentType: "text", content: content.trim(), beingId: req.beingId });
+    const user = await Being.findById(req.beingId).select("username").lean();
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; if (!res.headersSent) sendError(res, 500, ERR.TIMEOUT, "Request timed out."); }, TIMEOUT_MS);
     const source = req.body?.source === "user" ? "user" : "api";
-    const orchResult = await orchestrateRawIdeaPlacement({ rawIdeaId: result.rawIdea._id, userId: req.userId, username: user?.username || "unknown", withResponse: true, source });
+    const orchResult = await orchestrateRawIdeaPlacement({ rawIdeaId: result.rawIdea._id, beingId: req.beingId, username: user?.username || "unknown", withResponse: true, source });
     clearTimeout(timer);
     if (timedOut) return;
     if (!orchResult || !orchResult.success) return sendError(res, 503, ERR.LLM_FAILED, orchResult?.reason || "Could not process the idea.");
@@ -379,21 +379,21 @@ router.post("/user/:userId/raw-ideas/chat", authenticate, async (req, res) => {
   }
 });
 
-router.post("/user/:userId/raw-ideas/:rawIdeaId/place", authenticate, async (req, res) => {
+router.post("/user/:beingId/raw-ideas/:rawIdeaId/place", authenticate, async (req, res) => {
   try {
     const { rawIdeaId } = req.params;
-    if (req.userId.toString() !== req.params.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
+    if (req.beingId.toString() !== req.params.beingId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     const rawIdea = await RawIdea.findById(rawIdeaId);
-    if (!rawIdea || rawIdea.userId === DELETED) return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Raw idea not found");
-    if (rawIdea.userId.toString() !== req.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
+    if (!rawIdea || rawIdea.beingId === DELETED) return sendError(res, 404, ERR.ARTIFACT_NOT_FOUND, "Raw idea not found");
+    if (rawIdea.beingId.toString() !== req.beingId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     if (rawIdea.contentType === "file") return sendError(res, 400, ERR.INVALID_TYPE, "File ideas cannot be auto-placed");
     if (rawIdea.status && rawIdea.status !== "pending") return sendError(res, 409, ERR.RESOURCE_CONFLICT, `Already ${rawIdea.status}`);
-    if (!(await userHasLlm(req.userId))) return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
-    const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
+    if (!(await userHasLlm(req.beingId))) return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
+    const alreadyProcessing = await RawIdea.findOne({ beingId: req.beingId.toString(), status: "processing" });
     if (alreadyProcessing) return sendError(res, 409, ERR.ORCHESTRATOR_LOCKED, "Another idea is already being placed. Please wait for it to finish.");
-    const user = await User.findById(req.userId).select("username").lean();
+    const user = await Being.findById(req.beingId).select("username").lean();
     const source = req.body?.source === "user" ? "user" : "api";
- orchestrateRawIdeaPlacement({ rawIdeaId, userId: req.userId, username: user?.username || "unknown", source }).catch((err) => log.error("Raw Ideas", "Raw-idea orchestration failed:", err.message));
+ orchestrateRawIdeaPlacement({ rawIdeaId, beingId: req.beingId, username: user?.username || "unknown", source }).catch((err) => log.error("Raw Ideas", "Raw-idea orchestration failed:", err.message));
     return sendOk(res, { message: "Orchestration started" }, 202);
   } catch (err) {
  log.error("Raw Ideas", "raw-idea orchestrate error:", err);
@@ -401,23 +401,23 @@ router.post("/user/:userId/raw-ideas/:rawIdeaId/place", authenticate, async (req
   }
 });
 
-router.post("/user/:userId/raw-ideas/:rawIdeaId/chat", authenticate, async (req, res) => {
+router.post("/user/:beingId/raw-ideas/:rawIdeaId/chat", authenticate, async (req, res) => {
   try {
     const { rawIdeaId } = req.params;
-    if (req.userId.toString() !== req.params.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
+    if (req.beingId.toString() !== req.params.beingId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     const rawIdea = await RawIdea.findById(rawIdeaId);
-    if (!rawIdea || rawIdea.userId === DELETED) return sendError(res, 404, ERR.NOTE_NOT_FOUND, "Raw idea not found");
-    if (rawIdea.userId.toString() !== req.userId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
+    if (!rawIdea || rawIdea.beingId === DELETED) return sendError(res, 404, ERR.ARTIFACT_NOT_FOUND, "Raw idea not found");
+    if (rawIdea.beingId.toString() !== req.beingId.toString()) return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     if (rawIdea.contentType === "file") return sendError(res, 400, ERR.INVALID_TYPE, "File ideas cannot be auto-placed");
     if (rawIdea.status && rawIdea.status !== "pending") return sendError(res, 409, ERR.RESOURCE_CONFLICT, `Already ${rawIdea.status}`);
-    if (!(await userHasLlm(req.userId))) return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
-    const alreadyProcessing = await RawIdea.findOne({ userId: req.userId.toString(), status: "processing" });
+    if (!(await userHasLlm(req.beingId))) return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection. Visit /setup to set one up.");
+    const alreadyProcessing = await RawIdea.findOne({ beingId: req.beingId.toString(), status: "processing" });
     if (alreadyProcessing) return sendError(res, 409, ERR.ORCHESTRATOR_LOCKED, "Another idea is already being placed. Please wait for it to finish.");
-    const user = await User.findById(req.userId).select("username").lean();
+    const user = await Being.findById(req.beingId).select("username").lean();
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; if (!res.headersSent) sendError(res, 500, ERR.TIMEOUT, "Request timed out."); }, TIMEOUT_MS);
     const source = req.body?.source === "user" ? "user" : "api";
-    const result = await orchestrateRawIdeaPlacement({ rawIdeaId, userId: req.userId, username: user?.username || "unknown", withResponse: true, source });
+    const result = await orchestrateRawIdeaPlacement({ rawIdeaId, beingId: req.beingId, username: user?.username || "unknown", withResponse: true, source });
     clearTimeout(timer);
     if (timedOut) return;
     if (!result || !result.success) return sendError(res, 503, ERR.LLM_FAILED, result?.reason || "Could not process the idea.");

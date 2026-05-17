@@ -154,7 +154,7 @@ async function resolveStudioContext(nodeId) {
 // return them as studio "chapters" — same shape the page renders.
 async function collectSubtreeBranches(startNodeId) {
   const mongoose = (await import("mongoose")).default;
-  const Note = mongoose.models.Note;
+  const Artifact = mongoose.models.Artifact;
   const out = [];
   const seenNames = new Set();
   const visited = new Set([String(startNodeId)]);
@@ -172,7 +172,7 @@ async function collectSubtreeBranches(startNodeId) {
     const role = bwMeta?.role || swMeta?.role;
     const isAuthorial = role === "chapter" || role === "part" || role === "scene" || role === "branch";
     if (isAuthorial && String(id) !== String(startNodeId)) {
-      const notes = Note ? await Note.find({ nodeId: id })
+      const notes = Artifact ? await Artifact.find({ nodeId: id })
         .sort({ createdAt: 1 }).limit(20).select("content type createdAt").lean() : [];
       out.push({
         nodeId: String(id),
@@ -413,10 +413,10 @@ router.post("/:nodeId/bookstudio/contracts", authenticate, express.json(), async
 // ── POST /api/v1/:nodeId/bookstudio/start ───────────────────────
 router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (req, res) => {
   const { nodeId } = req.params;
-  // `authenticate` middleware populates req.userId and req.username (not
+  // `authenticate` middleware populates req.beingId and req.username (not
   // req.user). Reading req.user?.username here was always undefined →
   // book chats ended up labeled "operator" instead of the actual user.
-  const userId = req.userId || null;
+  const beingId = req.beingId || null;
   const username = req.username || "operator";
   try {
     const node = await Node.findById(nodeId).lean();
@@ -464,11 +464,11 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
           `(characters, setting, voice, theme, depth hint). If seed chapters ` +
           `exist, honor them; extend if scope warrants. Premise: ${premise}`;
 
-    if (!userId) {
-      return sendError(res, 401, ERR.UNAUTHORIZED, "userId required to dispatch architect");
+    if (!beingId) {
+      return sendError(res, 401, ERR.UNAUTHORIZED, "beingId required to dispatch architect");
     }
 
-    const visitorId = `bookstudio:${userId}:${nodeId}`;
+    const visitorId = `bookstudio:${beingId}:${nodeId}`;
     const controller = registerActiveRun({
       nodeId,
       projectNodeId: projectId,
@@ -487,7 +487,7 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
         if (isWriteScope) {
           broadcast(nodeId, "update", `writer thinking (tree:book-write)…`);
           const wResult = await runChat({
-            userId, username,
+            beingId, username,
             message: userMsg,
             mode: "tree:book-write",
             rootId: projectId,
@@ -528,7 +528,7 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
           broadcast(nodeId, "update", `intake thinking (tree:intake)…`);
           try {
             const intakeResult = await runChat({
-              userId, username,
+              beingId, username,
               message: userMsg,
               mode: "tree:intake",
               rootId: String(ctx?.project?._id || nodeId),
@@ -604,7 +604,7 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
           });
           await governing.ensurePlanAtScope({
             scopeNodeId: projectId,
-            userId,
+            beingId,
             systemSpec: typeof architectInput === "string" ? architectInput.slice(0, 500) : null,
           });
         } catch (err) {
@@ -617,7 +617,7 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
         const priorOrdinal = priorEmission?.ordinal || 0;
 
         const plannerResult = await runChat({
-          userId, username,
+          beingId, username,
           message: architectInput,
           mode: "tree:governing-planner",
           rootId: String(ctx?.project?._id || nodeId),
@@ -699,7 +699,7 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
           `sub-domains must agree on. Emit via governing-emit-contracts.`;
         try {
           const contractorResult = await runChat({
-            userId, username,
+            beingId, username,
             message: contractorMessage,
             mode: "tree:governing-contractor",
             rootId: String(ctx?.project?._id || nodeId),
@@ -740,7 +740,7 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
           rootChatId: null,
           sessionId: null,
           visitorId,
-          userId,
+          beingId,
           username,
           rootId: projectId,
           signal: controller.signal,
@@ -768,7 +768,7 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
               ? extractBookWriteMessage(bMessage)
               : bMessage;
             const bResult = await runChat({
-              userId, username,
+              beingId, username,
               message: bookMessage,
               mode: bMode,
               rootId: projectId,
@@ -998,7 +998,7 @@ router.get("/:nodeId/bookstudio/chats", (req, res, next) => htmlAuth(req, res, n
     })
       .sort({ "startMessage.time": -1 })
       .limit(80)
-      .select("_id userId sessionId chainIndex rootChatId parentChatId dispatchOrigin startMessage endMessage aiContext treeContext")
+      .select("_id beingId sessionId chainIndex rootChatId parentChatId dispatchOrigin startMessage endMessage aiContext treeContext")
       .lean();
 
     const shaped = chats.map(c => ({

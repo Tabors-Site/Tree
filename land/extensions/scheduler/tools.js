@@ -17,7 +17,7 @@ export default [
       "Get the schedule timeline for the current tree. Shows due, upcoming, and overdue items. " +
       "Use this to check what's happening today or this week.",
     schema: {
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       rootId: z.string().describe("The tree root to check."),
@@ -74,7 +74,7 @@ export default [
       "streak, and recent completions. Use this to understand how consistent someone is " +
       "with a recurring item.",
     schema: {
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       nodeId: z.string().describe("The node to check reliability for."),

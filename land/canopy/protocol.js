@@ -35,7 +35,7 @@ export function validateCanopyRequest(type, body) {
 
     case "invite_accept":
       if (!body.inviteId) errors.push("missing inviteId");
-      if (!body.userId) errors.push("missing userId");
+      if (!body.beingId) errors.push("missing beingId");
       break;
 
     case "invite_decline":

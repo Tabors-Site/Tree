@@ -15,7 +15,7 @@ async function updateSchedule({
   nodeId,
   newSchedule,
   reeffectTime,
-  userId,
+  beingId,
   wasAi = false,
   chatId = null,
   sessionId = null,
@@ -51,7 +51,7 @@ async function updateSchedule({
     }
   }
   const { energyUsed } = await useEnergy({
-    userId,
+    beingId,
     action: "editSchedule",
   });
 
@@ -60,7 +60,7 @@ async function updateSchedule({
   const scheduleEdited = { date: formattedDate, reeffectTime };
 
   await logContribution({
-    userId,
+    beingId,
     nodeId,
     wasAi,
     chatId,

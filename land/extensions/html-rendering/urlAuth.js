@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import { resolvePublicRoot, isPublic } from "./publicAccess.js";
 import { errorHtml } from "./notFoundPage.js";
 import { resolveHtmlShareAccess } from "./shareAuth.js";
@@ -73,14 +73,14 @@ export default async function urlAuth(req, res, next) {
         return sendError(res, 401, ERR.UNAUTHORIZED, "CanopyToken audience mismatch");
       }
 
-      const ghostUser = await User.findOne({
+      const ghostUser = await Being.findOne({
         _id: payload.sub,
         isRemote: true,
         homeLand: payload.iss,
       });
 
       if (ghostUser) {
-        req.userId = ghostUser._id;
+        req.beingId = ghostUser._id;
         req.username = ghostUser.username;
         req.authType = "canopy";
         req.isHtmlShare = false;
@@ -96,8 +96,8 @@ export default async function urlAuth(req, res, next) {
           req.publicRootId = rootInfo.rootId;
           req.publicRootOwner = rootInfo.rootOwner;
           req.publicLlmDefault = rootInfo.llmDefault;
-          req.userId = null;
-          req.canopyVisitor = { userId: payload.sub, homeLand: payload.iss };
+          req.beingId = null;
+          req.canopyVisitor = { beingId: payload.sub, homeLand: payload.iss };
           req.isHtmlShare = false;
           return next();
         }
@@ -113,7 +113,7 @@ export default async function urlAuth(req, res, next) {
       try {
         const result = await handler(req);
         if (result) {
-          req.userId = result.userId;
+          req.beingId = result.beingId;
           req.username = result.username;
           req.authType = name;
           req.isHtmlShare = false;
@@ -145,7 +145,7 @@ export default async function urlAuth(req, res, next) {
     if (jwtToken && JWT_SECRET) {
       try {
         const decoded = jwt.verify(jwtToken, JWT_SECRET);
-        req.userId = decoded.userId;
+        req.beingId = decoded.beingId;
         req.username = decoded.username;
         req.authType = "jwt";
         req.isHtmlShare = false;
@@ -174,7 +174,7 @@ export default async function urlAuth(req, res, next) {
           req.publicRootId = rootInfo.rootId;
           req.publicRootOwner = rootInfo.rootOwner;
           req.publicLlmDefault = rootInfo.llmDefault;
-          req.userId = null;
+          req.beingId = null;
           req.isHtmlShare = false;
           return next();
         }
@@ -187,8 +187,8 @@ export default async function urlAuth(req, res, next) {
       return sendError(res, 401, ERR.UNAUTHORIZED, "No share token provided");
     }
 
-    const userId =
-      req.params?.userId || req.body?.userId || req.query?.userId || null;
+    const beingId =
+      req.params?.beingId || req.body?.beingId || req.query?.beingId || null;
 
     const shareNodeId =
       req.params?.nodeId ||
@@ -197,16 +197,16 @@ export default async function urlAuth(req, res, next) {
       req.params?.rootId ||
       null;
 
-    if (!userId && !shareNodeId) {
+    if (!beingId && !shareNodeId) {
       if (wantsHtml(req)) {
         return errorPage(res, 400, "Invalid Link",
           "This link is missing required information. Please check that you have the full URL.");
       }
-      return sendError(res, 400, ERR.INVALID_INPUT, "userId or nodeId is required for shared access");
+      return sendError(res, 400, ERR.INVALID_INPUT, "beingId or nodeId is required for shared access");
     }
 
     const result = await resolveHtmlShareAccess({
-      userId,
+      beingId,
       nodeId: shareNodeId,
       shareToken,
     });
@@ -219,7 +219,7 @@ export default async function urlAuth(req, res, next) {
       return sendError(res, 403, ERR.FORBIDDEN, "Invalid or unauthorized share token");
     }
 
-    req.userId = result.matchedUserId;
+    req.beingId = result.matchedUserId;
     req.username = result.matchedUsername;
     req.rootId = result.rootId ?? null;
     req.isHtmlShare = true;

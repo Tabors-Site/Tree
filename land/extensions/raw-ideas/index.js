@@ -23,14 +23,14 @@ export async function init(core) {
   try {
     const { getExtension } = await import("../loader.js");
     const treeos = getExtension("treeos-base");
-    treeos?.exports?.registerSlot?.("user-quick-links", "raw-ideas", ({ userId, queryString }) =>
-      `<li><a href="/api/v1/user/${userId}/raw-ideas${queryString}">Raw Ideas</a></li>`,
+    treeos?.exports?.registerSlot?.("user-quick-links", "raw-ideas", ({ beingId, queryString }) =>
+      `<li><a href="/api/v1/user/${beingId}/raw-ideas${queryString}">Raw Ideas</a></li>`,
       { priority: 15 }
     );
-    treeos?.exports?.registerSlot?.("user-profile-sections", "raw-ideas", ({ userId, queryString }) =>
+    treeos?.exports?.registerSlot?.("user-profile-sections", "raw-ideas", ({ beingId, queryString }) =>
       `<div class="glass-card raw-ideas-section">
         <h2>Capture a Raw Idea</h2>
-        <form method="POST" action="/api/v1/user/${userId}/raw-ideas${queryString}"
+        <form method="POST" action="/api/v1/user/${beingId}/raw-ideas${queryString}"
               enctype="multipart/form-data" class="raw-idea-form" id="rawIdeaForm">
           <textarea name="content" placeholder="What's on your mind?" id="rawIdeaInput"
                     rows="1" maxlength="5000" autofocus></textarea>

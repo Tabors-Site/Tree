@@ -7,7 +7,7 @@ import { OrchestratorRuntime } from "../../seed/orchestrators/runtime.js";
 import { buildUserAiSessionKey } from "../../seed/llm/sessionKeys.js";
 import GatewayChannel from "./model.js";
 import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import { getOrchestrator } from "../../seed/orchestrators/registry.js";
 import {
   userHasLlm,
@@ -96,7 +96,7 @@ export async function processGatewayMessage(
       const Chat = (await import("../../seed/models/chat.js")).default;
       await Chat.updateMany(
         {
-          userId: channel.userId,
+          beingId: channel.beingId,
           "endMessage.time": null,
           "aiContext.zone": { $in: ["tree", "classifier", "gateway"] },
         },
@@ -129,11 +129,11 @@ export async function processGatewayMessage(
   }
 
   // 4. Resolve channel creator's user
-  const user = await User.findById(channel.userId).select("_id username").lean();
+  const user = await Being.findById(channel.beingId).select("_id username").lean();
   if (!user) return { error: "Channel owner not found" };
 
   // 5. Check tree access
-  const access = await resolveTreeAccess(channel.rootId, channel.userId);
+  const access = await resolveTreeAccess(channel.rootId, channel.beingId);
   if (!access.isOwner && !access.isContributor) {
     return { error: "Channel owner no longer has tree access" };
   }
@@ -142,7 +142,7 @@ export async function processGatewayMessage(
   const rootCheck = await Node.findById(channel.rootId)
     .select("rootOwner llmAssignments")
     .lean();
-  const hasUserLlm = await userHasLlm(channel.userId);
+  const hasUserLlm = await userHasLlm(channel.beingId);
   const hasRootLlm = !!(rootCheck?.llmDefault && rootCheck.llmDefault !== "none");
   if (!hasUserLlm && !hasRootLlm) {
     return { error: "No LLM connection configured" };
@@ -174,21 +174,21 @@ export async function processGatewayMessage(
       // Gateway traffic doesn't fit any TreeOS zone cleanly — the sender
       // might be a human (Telegram, Discord), an email thread, or a
       // programmatic webhook. We map it to the closest primitive: a user
-      // session under the tree owner (channel.userId), with the external
+      // session under the tree owner (channel.beingId), with the external
       // channel+conversation as the "device" segment. That's who owns
       // the channel, who pays for the LLM, and whose access gates apply.
       // Each external conversation (Telegram chat, email thread, webhook
       // source) gets its own key so parallel conversations stay isolated;
       // the owner's own `web`/`cli` sessions are untouched.
       const aiSessionKey = buildUserAiSessionKey({
-        userId: channel.userId,
+        beingId: channel.beingId,
         zone: "tree",
         rootId: channel.rootId,
         device: `${channel.type}:${channelId}`,
       });
       const rt = new OrchestratorRuntime({
         rootId: channel.rootId,
-        userId: channel.userId,
+        beingId: channel.beingId,
         username: user.username,
         aiSessionKey,
         sessionType: SESSION_TYPES.GATEWAY_INPUT,
@@ -217,7 +217,7 @@ export async function processGatewayMessage(
           message: labeledMessage,
           socket: nullSocket,
           username: user.username,
-          userId: channel.userId,
+          beingId: channel.beingId,
           signal: abort.signal,
           sessionId: rt.sessionId,
           rootId: channel.rootId,

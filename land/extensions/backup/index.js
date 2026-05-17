@@ -10,7 +10,7 @@ const router = express.Router();
 // POST /backup/full - trigger full backup
 router.post("/backup/full", async (req, res) => {
   try {
-    const user = await (await import("../../seed/models/user.js")).default.findById(req.userId).select("isAdmin").lean();
+    const user = await (await import("../../seed/models/being.js")).default.findById(req.beingId).select("isAdmin").lean();
     if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
 
     const backupPath = getLandConfigValue("backupPath") || "./backups";
@@ -27,7 +27,7 @@ router.post("/backup/full", async (req, res) => {
 // POST /backup/snapshot - trigger snapshot
 router.post("/backup/snapshot", async (req, res) => {
   try {
-    const user = await (await import("../../seed/models/user.js")).default.findById(req.userId).select("isAdmin").lean();
+    const user = await (await import("../../seed/models/being.js")).default.findById(req.beingId).select("isAdmin").lean();
     if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
 
     const backupPath = getLandConfigValue("backupPath") || "./backups";
@@ -44,7 +44,7 @@ router.post("/backup/snapshot", async (req, res) => {
 // POST /backup/restore - restore from backup
 router.post("/backup/restore", async (req, res) => {
   try {
-    const user = await (await import("../../seed/models/user.js")).default.findById(req.userId).select("isAdmin").lean();
+    const user = await (await import("../../seed/models/being.js")).default.findById(req.beingId).select("isAdmin").lean();
     if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
 
     const { file } = req.body;
@@ -60,7 +60,7 @@ router.post("/backup/restore", async (req, res) => {
 // GET /backup/list - list available backups
 router.get("/backup/list", async (req, res) => {
   try {
-    const user = await (await import("../../seed/models/user.js")).default.findById(req.userId).select("isAdmin").lean();
+    const user = await (await import("../../seed/models/being.js")).default.findById(req.beingId).select("isAdmin").lean();
     if (!user?.isAdmin) return sendError(res, 403, ERR.FORBIDDEN, "Admin required");
 
     const backupPath = getLandConfigValue("backupPath") || "./backups";

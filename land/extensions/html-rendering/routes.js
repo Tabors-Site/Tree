@@ -4,8 +4,8 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import authenticate from "../../seed/middleware/authenticate.js";
 import urlAuth from "./urlAuth.js";
-import User from "../../seed/models/user.js";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import Being from "../../seed/models/being.js";
+import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import {
   renderLoginPage,
@@ -30,16 +30,16 @@ router.use((req, _res, next) => {
 // VERIFY token (returns share token + user info for frontend)
 router.post("/verify-token", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId)
+    const user = await Being.findById(req.beingId)
       .select("metadata")
       .lean();
 
-    const htmlMeta = getUserMeta(user, "html");
+    const htmlMeta = getBeingMeta(user, "html");
     const HTMLShareToken = htmlMeta?.shareToken || null;
 
     let hasLlm = false;
     try {
-      const fullUser = await User.findById(req.userId)
+      const fullUser = await Being.findById(req.beingId)
         .select("llmDefault metadata")
         .lean();
       if (fullUser?.llmDefault) {
@@ -48,7 +48,7 @@ router.post("/verify-token", authenticate, async (req, res) => {
         let LlmConnection;
         try { LlmConnection = (await import("../../seed/models/llmConnection.js")).default; } catch { }
         if (LlmConnection) {
-          const connCount = await LlmConnection.countDocuments({ userId: req.userId });
+          const connCount = await LlmConnection.countDocuments({ beingId: req.beingId });
           hasLlm = connCount > 0;
         }
       }
@@ -57,7 +57,7 @@ router.post("/verify-token", authenticate, async (req, res) => {
     }
 
     sendOk(res, {
-      userId: req.userId,
+      beingId: req.beingId,
       username: req.username,
       HTMLShareToken,
       hasLlm,
@@ -81,7 +81,7 @@ router.get("/auth-redirect", async (req, res) => {
     if (!token) return res.redirect(`/login?redirect=${encodeURIComponent(destination)}`);
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (!decoded?.userId) return res.redirect(`/login?redirect=${encodeURIComponent(destination)}`);
+    if (!decoded?.beingId) return res.redirect(`/login?redirect=${encodeURIComponent(destination)}`);
 
     return res.redirect(destination);
   } catch {
@@ -90,16 +90,16 @@ router.get("/auth-redirect", async (req, res) => {
 });
 
 // Share token management (JSON API). HTML rendering handled by treeos htmlRoutes.
-router.get("/user/:userId/shareToken", authenticate, async (req, res, next) => {
+router.get("/user/:beingId/shareToken", authenticate, async (req, res, next) => {
   try {
     if ("html" in req.query) return next("route"); // treeos htmlRoutes handles HTML
 
-    const { userId } = req.params;
-    const user = await User.findById(userId).select("username metadata").lean();
+    const { beingId } = req.params;
+    const user = await Being.findById(beingId).select("username metadata").lean();
     if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
-    const htmlMeta = getUserMeta(user, "html");
-    return sendOk(res, { userId, shareToken: htmlMeta?.shareToken || null });
+    const htmlMeta = getBeingMeta(user, "html");
+    return sendOk(res, { beingId, shareToken: htmlMeta?.shareToken || null });
   } catch (err) {
     log.error("HTML", "Share token error:", err.message);
     sendError(res, 500, ERR.INTERNAL, err.message);
@@ -107,12 +107,12 @@ router.get("/user/:userId/shareToken", authenticate, async (req, res, next) => {
 });
 
 // POST share token update (JWT only, never share token auth)
-router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
+router.post("/user/:beingId/shareToken", authenticate, async (req, res) => {
   try {
-    if (req.userId.toString() !== req.params.userId.toString()) {
+    if (req.beingId.toString() !== req.params.beingId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
-    const user = await User.findById(req.userId);
+    const user = await Being.findById(req.beingId);
     if (!user) return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
 
     let { htmlShareToken } = req.body;
@@ -127,12 +127,12 @@ router.post("/user/:userId/shareToken", authenticate, async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "htmlShareToken may only contain URL-safe characters");
     }
 
-    setUserMeta(user, "html", { shareToken: htmlShareToken });
+    setBeingMeta(user, "html", { shareToken: htmlShareToken });
     await user.save();
 
     const token = req.query.token ?? "";
     if ("html" in req.query) {
-      return res.redirect(`/api/v1/user/${req.params.userId}/shareToken?token=${encodeURIComponent(token)}&html`);
+      return res.redirect(`/api/v1/user/${req.params.beingId}/shareToken?token=${encodeURIComponent(token)}&html`);
     }
     return sendOk(res, { htmlShareToken });
   } catch (err) {

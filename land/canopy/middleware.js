@@ -155,7 +155,7 @@ export async function authenticateCanopy(req, res, next) {
 
     // Attach canopy context to request
     req.canopy = {
-      userId: payload.sub,
+      beingId: payload.sub,
       sourceLandDomain: issuerDomain,
       sourceLandId: payload.landId,
       peer,

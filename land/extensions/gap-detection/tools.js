@@ -8,7 +8,7 @@ export default [
       "Show extension gaps detected at a node. Lists extension namespaces that appeared in cascade signals but are not installed on this land.",
     schema: {
       nodeId: z.string().describe("The node to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -44,7 +44,7 @@ export default [
     description: "Clear gap records for a node. Use after installing the missing extension.",
     schema: {
       nodeId: z.string().describe("The node to clear."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

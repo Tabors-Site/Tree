@@ -29,7 +29,7 @@ function getNavExports() {
 // LIST ALL POSITIONS
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function listPositions(userId) {
+export async function listPositions(beingId) {
   // Tree roots = direct children of land root, excluding system nodes
   const landRoot = await Node.findOne({ systemRole: "land-root" }).select("_id").lean();
   if (!landRoot) return { trees: [], extensions: [] };
@@ -41,8 +41,8 @@ export async function listPositions(userId) {
 
   // Filter to roots this user owns or contributes to
   const userRoots = allRoots.filter(r =>
-    String(r.rootOwner) === String(userId) ||
-    (r.contributors || []).some(c => String(c) === String(userId))
+    String(r.rootOwner) === String(beingId) ||
+    (r.contributors || []).some(c => String(c) === String(beingId))
   );
 
   // Deduplicate by name (keep newest)
@@ -82,17 +82,17 @@ export async function listPositions(userId) {
 // FIND DESTINATION
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function findDestination(query, userId) {
+export async function findDestination(query, beingId) {
   const target = query.toLowerCase().trim();
-  if (!target) return listPositions(userId);
+  if (!target) return listPositions(beingId);
 
   const matches = [];
 
   // Get user's roots
   const nav = getNavExports();
   const roots = nav?.getUserRootsWithNames
-    ? await nav.getUserRootsWithNames(userId)
-    : await Node.find({ rootOwner: userId }).select("_id name").lean();
+    ? await nav.getUserRootsWithNames(beingId)
+    : await Node.find({ rootOwner: beingId }).select("_id name").lean();
 
   const routing = getRoutingExports();
 

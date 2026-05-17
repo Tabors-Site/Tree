@@ -23,7 +23,7 @@ const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
  */
 export async function logContribution(params) {
   const {
-    userId, nodeId, action,
+    beingId, nodeId, action,
     wasAi = false,
     chatId = null,
     sessionId = null,
@@ -33,15 +33,15 @@ export async function logContribution(params) {
     ...extensionRest
   } = params;
 
-  if (!userId || !nodeId || !action) {
-    throw new Error("logContribution requires userId, nodeId, and action");
+  if (!beingId || !nodeId || !action) {
+    throw new Error("logContribution requires beingId, nodeId, and action");
   }
   if (typeof action !== "string" || action.length > MAX_ACTION_LENGTH) {
     throw new Error(`logContribution: action must be a string under ${MAX_ACTION_LENGTH} chars`);
   }
 
   // beforeContribution hook: extensions can modify or cancel
-  const hookData = { nodeId, action, userId, ...extensionRest };
+  const hookData = { nodeId, action, beingId, ...extensionRest };
   const hookResult = await hooks.run("beforeContribution", hookData);
   if (hookResult.cancelled) {
     const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
@@ -51,7 +51,7 @@ export async function logContribution(params) {
   // Build extensionData from rest params + hook additions
   const extData = {};
   let hasExtData = false;
-  const coreKeys = new Set(["nodeId", "action", "userId"]);
+  const coreKeys = new Set(["nodeId", "action", "beingId"]);
 
   for (const [k, v] of Object.entries(extensionRest)) {
     if (v == null || DANGEROUS_KEYS.has(k)) continue;
@@ -82,7 +82,7 @@ export async function logContribution(params) {
   }
 
   // Build doc with only defined fields (avoids storing nulls in MongoDB)
-  const doc = { userId, nodeId, action, date: new Date() };
+  const doc = { beingId, nodeId, action, date: new Date() };
   if (wasAi) doc.wasAi = true;
   if (chatId) doc.chatId = chatId;
   if (sessionId) doc.sessionId = sessionId;
@@ -150,7 +150,7 @@ export async function getContributions({ nodeId, limit, offset, startDate, endDa
   const safeOffset = Math.max(0, Number(offset) || 0);
 
   const contributions = await Contribution.find(query)
-    .populate("userId", "username")
+    .populate("beingId", "username")
     .populate("nodeId", "name")
     .sort({ date: -1 })
     .skip(safeOffset)
@@ -163,14 +163,14 @@ export async function getContributions({ nodeId, limit, offset, startDate, endDa
 /**
  * Get contributions by a specific user.
  */
-export async function getContributionsByUser(userId, limit, startDate, endDate) {
-  if (!userId) throw new Error("Missing required parameter: userId");
+export async function getContributionsByUser(beingId, limit, startDate, endDate) {
+  if (!beingId) throw new Error("Missing required parameter: beingId");
 
-  const query = { userId, ...buildDateFilter(startDate, endDate) };
+  const query = { beingId, ...buildDateFilter(startDate, endDate) };
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), MAX_QUERY_LIMIT());
 
   const contributions = await Contribution.find(query)
-    .populate("userId", "username")
+    .populate("beingId", "username")
     .populate("nodeId", "name")
     .sort({ date: -1 })
     .limit(safeLimit)

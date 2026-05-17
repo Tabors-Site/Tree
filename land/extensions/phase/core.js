@@ -11,7 +11,7 @@
 // so the AI adapts its behavior.
 
 import log from "../../seed/log.js";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { getExtension } from "../loader.js";
 
 let User = null;
@@ -47,17 +47,17 @@ function transitionSummaryEnabled() {
  * Record an interaction signal for a user.
  * Called from hook handlers (afterNote, afterNodeCreate, etc.)
  *
- * @param {string} userId
+ * @param {string} beingId
  * @param {string} type - "navigate" | "write" | "create" | "tool" | "query" | "read"
  * @param {string} [nodeId] - which node the interaction happened at
  */
-export async function recordSignal(userId, type, nodeId) {
-  if (!userId || !User) return;
+export async function recordSignal(beingId, type, nodeId) {
+  if (!beingId || !User) return;
 
-  const user = await User.findById(userId);
+  const user = await Being.findById(beingId);
   if (!user) return;
 
-  const phaseMeta = getUserMeta(user, "phase");
+  const phaseMeta = getBeingMeta(user, "phase");
   if (!phaseMeta.window) phaseMeta.window = [];
 
   const signal = {
@@ -87,15 +87,15 @@ export async function recordSignal(userId, type, nodeId) {
   }
 
   // Atomic write to avoid clobbering other metadata namespaces
-  const { batchSetUserMeta } = await import("../../seed/tree/userMetadata.js");
-  await batchSetUserMeta(userId, "phase", phaseMeta);
+  const { batchSetBeingMeta } = await import("../../seed/tree/beingMetadata.js");
+  await batchSetBeingMeta(beingId, "phase", phaseMeta);
 
   // Feed inverse-tree if installed
   if (previousPhase !== detected.phase) {
     try {
       const inverse = getExtension("inverse-tree");
       if (inverse?.exports?.recordSignal) {
-        inverse.exports.recordSignal(userId, "phase-transition", {
+        inverse.exports.recordSignal(beingId, "phase-transition", {
           from: previousPhase,
           to: detected.phase,
           confidence: detected.confidence,
@@ -233,11 +233,11 @@ export function buildPhaseContext(phaseMeta) {
 // READ (for routes)
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function getPhaseState(userId) {
+export async function getPhaseState(beingId) {
   if (!User) return null;
-  const user = await User.findById(userId).lean();
+  const user = await Being.findById(beingId).lean();
   if (!user) return null;
-  return getUserMeta(user, "phase");
+  return getBeingMeta(user, "phase");
 }
 
 export function computeCycleStats(history) {

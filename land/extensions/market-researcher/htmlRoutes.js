@@ -29,7 +29,7 @@ router.get("/root/:rootId/market-researcher", urlAuth, htmlOnly, async (req, res
       findings,
       watchlist,
       token: req.query.token || null,
-      userId: req.user?._id?.toString() || req.user?.id || null,
+      beingId: req.user?._id?.toString() || req.user?.id || null,
       inApp: !!req.query.inApp,
     }));
   } catch (err) {

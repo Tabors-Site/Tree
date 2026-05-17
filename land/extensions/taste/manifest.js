@@ -34,7 +34,7 @@ export default {
     hooks: {
       fires: [],
       listens: [
-        "afterNote",
+        "afterArtifact",
         "beforeNodeDelete",
         "afterToolCall",
         "onNodeNavigate",

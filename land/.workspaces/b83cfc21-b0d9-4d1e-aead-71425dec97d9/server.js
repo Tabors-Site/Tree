@@ -78,19 +78,19 @@ function simulateMutualAttraction() {
     return Math.random() < 0.3;
 }
 
-function hasSwipe(data, userId, targetId) {
+function hasSwipe(data, beingId, targetId) {
     return data.swipes.some(
-        s => s.userId === userId && s.targetId === targetId
+        s => s.beingId === beingId && s.targetId === targetId
     );
 }
 
-async function addSwipe(data, userId, targetId, direction, targetProfile) {
-    if (hasSwipe(data, userId, targetId)) {
+async function addSwipe(data, beingId, targetId, direction, targetProfile) {
+    if (hasSwipe(data, beingId, targetId)) {
         return { userHasSwiped: true, matched: true, otherInfo: null };
     }
 
     const timestamp = Date.now();
-    data.swipes.push({ userId, targetId, direction, timestamp });
+    data.swipes.push({ beingId, targetId, direction, timestamp });
     await saveData(data);
 
     if (direction === SWIPE_LEFT) {
@@ -100,7 +100,7 @@ async function addSwipe(data, userId, targetId, direction, targetProfile) {
     const matched = simulateMutualAttraction();
     if (matched) {
         data.matches.push({
-            userId,
+            beingId,
             matchId: targetId,
             targetProfile: targetProfile,
             timestamp
@@ -112,9 +112,9 @@ async function addSwipe(data, userId, targetId, direction, targetProfile) {
     return { userHasSwiped: false, matched: false, otherInfo: null };
 }
 
-function getMatches(data, userId) {
+function getMatches(data, beingId) {
     return data.matches
-        .filter(m => m.userId === userId)
+        .filter(m => m.beingId === beingId)
         .map(m => ({
             name: m.targetProfile.name,
             age: m.targetProfile.age,
@@ -124,22 +124,22 @@ function getMatches(data, userId) {
         }));
 }
 
-function getSwipedUsers(data, userId) {
+function getSwipedUsers(data, beingId) {
     return data.swipes
-        .filter(s => s.userId === userId && s.direction === SWIPE_RIGHT)
+        .filter(s => s.beingId === beingId && s.direction === SWIPE_RIGHT)
         .map(s => s.targetId);
 }
 
-function getMessages(data, userId, matchId) {
+function getMessages(data, beingId, matchId) {
     return data.messages
-        .filter(m => (m.userId === userId && m.toUserId === matchId) || (m.userId === matchId && m.toUserId === userId))
+        .filter(m => (m.beingId === beingId && m.toUserId === matchId) || (m.beingId === matchId && m.toUserId === beingId))
         .sort((a, b) => a.timestamp - b.timestamp);
 }
 
-async function sendMessage(data, userId, toUserId, message) {
+async function sendMessage(data, beingId, toUserId, message) {
     const msg = {
         id: Date.now(),
-        userId,
+        beingId,
         toUserId,
         message,
         timestamp: Date.now()
@@ -150,7 +150,7 @@ async function sendMessage(data, userId, toUserId, message) {
 }
 
 function getUserId(urlParams) {
-    const userIdParam = urlParams.get('userId');
+    const userIdParam = urlParams.get('beingId');
     if (userIdParam) {
         const parsed = parseInt(userIdParam, 10);
         if (!isNaN(parsed) && parsed > 0) {
@@ -163,7 +163,7 @@ function getUserId(urlParams) {
 const requestHandler = (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const urlParams = new URLSearchParams(url.search);
-    const userId = getUserId(urlParams);
+    const beingId = getUserId(urlParams);
     
     if (url.pathname.startsWith('/public/')) {
         const filePath = path.join(__dirname, 'public', url.pathname.substring(1));
@@ -206,7 +206,7 @@ const requestHandler = (req, res) => {
         });
     } else if (url.pathname === '/api/profiles') {
         const data = loadData();
-        const swipedUsers = getSwipedUsers(data, userId);
+        const swipedUsers = getSwipedUsers(data, beingId);
         const allUsers = generateMockUsers();
         const remainingUsers = allUsers.filter(u => !swipedUsers.includes(u.id));
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -220,11 +220,11 @@ const requestHandler = (req, res) => {
         req.on('end', async () => {
             try {
                 const data = loadData();
-                const { userId: targetId, direction } = JSON.parse(body);
+                const { beingId: targetId, direction } = JSON.parse(body);
                 const allUsers = generateMockUsers();
                 const targetProfile = allUsers.find(u => u.id === targetId);
                 
-                const result = await addSwipe(data, userId, targetId, direction, targetProfile);
+                const result = await addSwipe(data, beingId, targetId, direction, targetProfile);
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(result));
@@ -235,13 +235,13 @@ const requestHandler = (req, res) => {
         });
     } else if (url.pathname === '/api/matches') {
         const data = loadData();
-        const matches = getMatches(data, userId);
+        const matches = getMatches(data, beingId);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(matches));
     } else if (url.pathname === '/api/stats') {
         const data = loadData();
-        const totalSwipedRight = data.swipes.filter(s => s.userId === userId && s.direction === SWIPE_RIGHT).length;
-        const totalMatches = data.matches.filter(m => m.userId === userId).length;
+        const totalSwipedRight = data.swipes.filter(s => s.beingId === beingId && s.direction === SWIPE_RIGHT).length;
+        const totalMatches = data.matches.filter(m => m.beingId === beingId).length;
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             swipedRight: totalSwipedRight,
@@ -257,7 +257,7 @@ const requestHandler = (req, res) => {
         }
         
         const data = loadData();
-        const messages = getMessages(data, userId, matchId);
+        const messages = getMessages(data, beingId, matchId);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(messages));
     } else if (url.pathname === '/api/send-message') {
@@ -277,7 +277,7 @@ const requestHandler = (req, res) => {
                     return;
                 }
                 
-                const msg = await sendMessage(data, userId, matchId, message);
+                const msg = await sendMessage(data, beingId, matchId, message);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(msg));
             } catch (err) {

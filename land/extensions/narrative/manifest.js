@@ -27,7 +27,7 @@ export default {
     "'pushing isn't working.' Writes metadata.narrative.initiative on the tree root.",
 
   needs: {
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
     services: ["hooks", "llm"],
   },
 

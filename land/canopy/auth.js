@@ -6,7 +6,7 @@
  */
 
 import log from "../seed/log.js";
-import User from "../seed/models/user.js";
+import Being from "../seed/models/being.js";
 import { verifyCanopyToken, getLandIdentity } from "./identity.js";
 import { getPeerByDomain } from "./peers.js";
 
@@ -65,7 +65,7 @@ export function registerCanopyAuth(authStrategies) {
       // These don't map to a ghost user. They represent the remote land itself.
       if (payload.sub === "system") {
         return {
-          userId: "system",
+          beingId: "system",
           username: "system",
           extra: {
             canopy: {
@@ -78,7 +78,7 @@ export function registerCanopyAuth(authStrategies) {
         };
       }
 
-      const ghostUser = await User.findOne({
+      const ghostUser = await Being.findOne({
         _id: payload.sub,
         isRemote: true,
         homeLand: payload.iss,
@@ -91,7 +91,7 @@ export function registerCanopyAuth(authStrategies) {
       }
 
       return {
-        userId: ghostUser._id,
+        beingId: ghostUser._id,
         username: ghostUser.username,
         extra: {
           canopy: {

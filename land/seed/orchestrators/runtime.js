@@ -41,7 +41,7 @@ function mcpConnectRetries() { return Math.max(0, Math.min(Number(getLandConfigV
 
 export class OrchestratorRuntime {
   constructor({
-    rootId, userId, username, sessionType, description,
+    rootId, beingId, username, sessionType, description,
     modeKeyForLlm, source = "orchestrator", slot = "main",
     lockNamespace, lockKey, llmPriority,
 
@@ -57,18 +57,18 @@ export class OrchestratorRuntime {
     purpose = null,
     extra = null,
   }) {
-    if (!userId) throw new Error("OrchestratorRuntime requires userId");
+    if (!beingId) throw new Error("OrchestratorRuntime requires beingId");
 
     // ── Build the ai-chat session key ─────────────────────────────────
     // Shares the resolver with runChat so pipelines and one-shot LLM
     // calls produce identically-shaped keys for the same intent.
     const { key: resolvedKey } = resolveInternalAiSessionKey({
-      aiSessionKey, scope, purpose, extra, userId, rootId,
+      aiSessionKey, scope, purpose, extra, beingId, rootId,
       makeEphemeral: randomUUID,
     });
 
     this.rootId = rootId;
-    this.userId = userId;
+    this.beingId = beingId;
     this.username = username || "system";
     this.visitorId = resolvedKey;
     this.sessionType = sessionType;
@@ -142,7 +142,7 @@ export class OrchestratorRuntime {
     const initWork = async () => {
       // Session + abort
       const { sessionId } = createSession({
-        userId: this.userId,
+        beingId: this.beingId,
         type: this.sessionType,
         description: this.description,
         meta: { rootId: this.rootId, visitorId: this.visitorId },
@@ -154,7 +154,7 @@ export class OrchestratorRuntime {
       // LLM provider resolution
       try {
         const modeConnectionId = await resolveRootLlmForMode(this.rootId, this.modeKeyForLlm);
-        const clientInfo = await getClientForUser(this.userId, this.slot, modeConnectionId);
+        const clientInfo = await getClientForUser(this.beingId, this.slot, modeConnectionId);
         this.llmProvider = {
           isCustom: clientInfo.isCustom,
           model: clientInfo.model,
@@ -166,7 +166,7 @@ export class OrchestratorRuntime {
 
       // Chat root record
       const mainChat = await startChat({
-        userId: this.userId,
+        beingId: this.beingId,
         sessionId: this.sessionId,
         message: startMessage || this.description,
         source: this.source,
@@ -227,7 +227,7 @@ export class OrchestratorRuntime {
 
     await switchMode(this.visitorId, modeKey, {
       username: this.username,
-      userId: this.userId,
+      beingId: this.beingId,
       rootId: this.rootId,
       clearHistory: true,
       ...modeCtx,
@@ -236,7 +236,7 @@ export class OrchestratorRuntime {
     const startTime = new Date();
     const result = await processMessage(this.visitorId, prompt, {
       username: this.username,
-      userId: this.userId,
+      beingId: this.beingId,
       rootId: this.rootId,
       signal: this.signal,
       llmPriority: this.llmPriority,
@@ -265,7 +265,7 @@ export class OrchestratorRuntime {
     const trackedOutput = parsed ?? result?.content ?? result?.answer ?? null;
 
     trackChainStep({
-      userId: this.userId,
+      beingId: this.beingId,
       sessionId: this.sessionId,
       rootChatId: this.mainChatId,
       chainIndex: this.chainIndex++,
@@ -306,13 +306,13 @@ export class OrchestratorRuntime {
   } = {}) {
     if (this._cleaned) return null;
     if (this.chainIndex > MAX_CHAIN_STEPS()) return null;
-    if (!this.sessionId || !this.userId) return null;
+    if (!this.sessionId || !this.beingId) return null;
 
     const chainIndex = this.chainIndex++;
     const resolvedTreeContext = typeof treeContext === "function" ? treeContext() : treeContext;
 
     const chat = await startChainStep({
-      userId: this.userId,
+      beingId: this.beingId,
       sessionId: this.sessionId,
       rootChatId: this.mainChatId,
       chainIndex,
@@ -358,7 +358,7 @@ export class OrchestratorRuntime {
     if (this._cleaned || this.chainIndex > MAX_CHAIN_STEPS()) return;
     const resolvedTreeContext = typeof treeContext === "function" ? treeContext(output) : treeContext;
     trackChainStep({
-      userId: this.userId,
+      beingId: this.beingId,
       sessionId: this.sessionId,
       rootChatId: this.mainChatId,
       chainIndex: this.chainIndex++,
@@ -442,7 +442,7 @@ export class OrchestratorRuntime {
 
   async _connectMcp() {
     const internalJwt = jwt.sign(
-      { userId: this.userId, username: this.username, visitorId: this.visitorId },
+      { beingId: this.beingId, username: this.username, visitorId: this.visitorId },
       JWT_SECRET,
       { expiresIn: "4h" },
     );

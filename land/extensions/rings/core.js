@@ -18,14 +18,14 @@ import log from "../../seed/log.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _Node = null;
-let _Note = null;
+let _Artifact = null;
 let _runChat = null;
 let _metadata = null;
 let _getExtension = null;
 
-export function configure({ Node, Note, runChat, metadata, getExtension }) {
+export function configure({ Node, Artifact, runChat, metadata, getExtension }) {
   _Node = Node;
-  _Note = Note;
+  _Artifact = Note;
   _runChat = runChat;
   _metadata = metadata;
   _getExtension = getExtension;
@@ -89,7 +89,7 @@ export function getDefaultRingState() {
 
 // ── Find or create .rings node ──
 
-async function getRingsNode(rootId, userId) {
+async function getRingsNode(rootId, beingId) {
   const children = await _Node.find({ parent: rootId }).select("_id name systemRole").lean();
   let ringsNode = children.find(c => c.name === RINGS_NODE_NAME);
   if (!ringsNode) {
@@ -107,7 +107,7 @@ export async function getRings(rootId) {
   const ringsNode = children.find(c => c.name === RINGS_NODE_NAME);
   if (!ringsNode) return { rings: [], annual: [] };
 
-  const notes = await _Note.find({ nodeId: ringsNode._id, contentType: "text" })
+  const notes = await _Artifact.find({ nodeId: ringsNode._id, origin: "ibp" })
     .sort({ createdAt: -1 }).lean();
 
   const rings = [];
@@ -152,7 +152,7 @@ export async function addTopicMention(rootId, word) {
 
 // ── Exhale tick: update rate, detect phase, progress hardening ──
 
-export async function onExhale(rootId, userId, username) {
+export async function onExhale(rootId, beingId, username) {
   if (!_Node || !_metadata) return;
 
   const root = await _Node.findById(rootId).select("metadata dateCreated children").lean();
@@ -207,7 +207,7 @@ export async function onExhale(rootId, userId, username) {
       // Week 3: synthesize character
       try {
         const charData = await buildCharacterData(rootId, ringState);
-        const synthesized = await synthesizeCharacter(charData, rootId, userId, username);
+        const synthesized = await synthesizeCharacter(charData, rootId, beingId, username);
         ringState.character = synthesized.character;
         ringState.essence = synthesized.essence;
       } catch (err) {
@@ -218,7 +218,7 @@ export async function onExhale(rootId, userId, username) {
 
   // ── Dormancy: solidify ring ──
   if (newPhase === "dormant" && ringState.character) {
-    await solidifyRing(rootId, userId, ringState);
+    await solidifyRing(rootId, beingId, ringState);
     // Reset for new ring
     const fresh = getDefaultRingState();
     await _metadata.setExtMeta(root, "rings", fresh);
@@ -233,12 +233,12 @@ export async function onExhale(rootId, userId, username) {
     if (!ringState.character) {
       try {
         const charData = await buildCharacterData(rootId, ringState);
-        const synthesized = await synthesizeCharacter(charData, rootId, userId, username);
+        const synthesized = await synthesizeCharacter(charData, rootId, beingId, username);
         ringState.character = synthesized.character;
         ringState.essence = synthesized.essence;
       } catch {}
     }
-    await solidifyRing(rootId, userId, ringState);
+    await solidifyRing(rootId, beingId, ringState);
     const fresh = getDefaultRingState();
     await _metadata.setExtMeta(root, "rings", fresh);
     return;
@@ -297,7 +297,7 @@ export async function assembleRingData(rootId) {
 
 // ── LLM character synthesis ──
 
-async function synthesizeCharacter(data, rootId, userId, username) {
+async function synthesizeCharacter(data, rootId, beingId, username) {
   if (!_runChat) return { character: "Character synthesis unavailable.", essence: "Data collected." };
 
   const prompt = `You are analyzing a tree's growth ring. This ring formed over ${data.ringDuration} through natural activity phases. Based on the data, write:
@@ -319,7 +319,7 @@ Respond with JSON only: { "character": "...", "essence": "..." }`;
 
   try {
     const { answer } = await _runChat({
-      userId, username, message: prompt,
+      beingId, username, message: prompt,
       mode: "tree:respond", rootId,
       slot: "rings", llmPriority: 4,
     });
@@ -336,10 +336,10 @@ Respond with JSON only: { "character": "...", "essence": "..." }`;
 
 // ── Solidify a completed ring ──
 
-async function solidifyRing(rootId, userId, ringState) {
+async function solidifyRing(rootId, beingId, ringState) {
   const data = await buildCharacterData(rootId, ringState);
-  const ringsNode = await getRingsNode(rootId, userId);
-  const { createNote } = await import("../../seed/tree/notes.js");
+  const ringsNode = await getRingsNode(rootId, beingId);
+  const { createArtifact } = await import("../../seed/tree/artifacts.js");
 
   const ring = {
     period: "ring",
@@ -355,11 +355,11 @@ async function solidifyRing(rootId, userId, ringState) {
     essence: ringState.essence,
   };
 
-  await createNote({
+  await createArtifact({
     nodeId: String(ringsNode._id),
     content: JSON.stringify(ring, null, 2),
-    contentType: "text",
-    userId,
+    origin: "ibp",
+    beingId,
   });
 
   log.info("Rings", `Ring solidified for ${String(rootId).slice(0, 8)}: ${ring.started} to ${ring.ended} (${ring.duration})`);
@@ -372,13 +372,13 @@ async function solidifyRing(rootId, userId, ringState) {
     return d.getFullYear() === year;
   });
   if (yearRings.length >= 2) {
-    await compressAnnual(rootId, userId, ringState, yearRings, year);
+    await compressAnnual(rootId, beingId, ringState, yearRings, year);
   }
 }
 
 // ── Annual compression ──
 
-async function compressAnnual(rootId, userId, ringState, yearRings, year) {
+async function compressAnnual(rootId, beingId, ringState, yearRings, year) {
   const summaries = yearRings.map(r =>
     `${r.started} to ${r.ended} (${r.duration}): ${r.character || "no character"}`
   ).join("\n");
@@ -389,10 +389,10 @@ async function compressAnnual(rootId, userId, ringState, yearRings, year) {
   if (_runChat) {
     try {
       const owner = await _Node.findById(rootId).select("rootOwner").lean();
-      const user = owner?.rootOwner ? await (await import("../../seed/models/user.js")).default.findById(owner.rootOwner).select("username").lean() : null;
+      const user = owner?.rootOwner ? await (await import("../../seed/models/being.js")).default.findById(owner.rootOwner).select("username").lean() : null;
 
       const { answer } = await _runChat({
-        userId, username: user?.username || "unknown",
+        beingId, username: user?.username || "unknown",
         message: `Compress these ${yearRings.length} tree rings into one annual ring for year ${year}.\n\nRings:\n${summaries}\n\nWrite:\n1. CHARACTER: 3-4 sentences. The year's arc.\n2. ESSENCE: One sentence. The year in one breath.\n\nJSON only: { "character": "...", "essence": "..." }`,
         mode: "tree:respond", rootId, slot: "rings", llmPriority: 4,
       });
@@ -410,24 +410,24 @@ async function compressAnnual(rootId, userId, ringState, yearRings, year) {
     essence,
   };
 
-  const ringsNode = await getRingsNode(rootId, userId);
-  const { createNote } = await import("../../seed/tree/notes.js");
-  await createNote({
+  const ringsNode = await getRingsNode(rootId, beingId);
+  const { createArtifact } = await import("../../seed/tree/artifacts.js");
+  await createArtifact({
     nodeId: String(ringsNode._id),
     content: JSON.stringify(annualRing, null, 2),
-    contentType: "text",
-    userId,
+    origin: "ibp",
+    beingId,
   });
 
   // Delete individual rings for this year
-  const allNotes = await _Note.find({ nodeId: ringsNode._id, contentType: "text" }).lean();
+  const allNotes = await _Artifact.find({ nodeId: ringsNode._id, origin: "ibp" }).lean();
   for (const note of allNotes) {
     try {
       const r = JSON.parse(note.content);
       if (r.period === "ring") {
         const d = new Date(r.ended || r.started);
         if (d.getFullYear() === year) {
-          await _Note.findByIdAndDelete(note._id);
+          await _Artifact.findByIdAndDelete(note._id);
         }
       }
     } catch {}

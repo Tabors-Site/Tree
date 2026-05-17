@@ -11,7 +11,7 @@ const ShortMemorySchema = new mongoose.Schema({
     ref: "Node",
     required: true,
   },
-  userId: {
+  beingId: {
     type: String,
     ref: "User",
     required: true,
@@ -79,7 +79,7 @@ const ShortMemorySchema = new mongoose.Schema({
 });
 
 ShortMemorySchema.index({ rootId: 1, status: 1 });
-ShortMemorySchema.index({ userId: 1, status: 1 });
+ShortMemorySchema.index({ beingId: 1, status: 1 });
 
 const ShortMemory = mongoose.model("ShortMemory", ShortMemorySchema);
 export default ShortMemory;

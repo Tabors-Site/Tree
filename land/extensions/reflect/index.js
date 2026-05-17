@@ -102,10 +102,10 @@ function detectState(entries) {
 
 export async function init(core) {
   // afterLLMCall: record the exchange pattern
-  core.hooks.register("afterLLMCall", async ({ userId, rootId, mode, usage, hasToolCalls }) => {
-    if (!rootId || !userId || userId === "SYSTEM") return;
+  core.hooks.register("afterLLMCall", async ({ beingId, rootId, mode, usage, hasToolCalls }) => {
+    if (!rootId || !beingId || beingId === "SYSTEM") return;
 
-    const key = `${rootId}:${userId}`;
+    const key = `${rootId}:${beingId}`;
     if (!windows.has(key)) windows.set(key, []);
     const window = windows.get(key);
 
@@ -123,8 +123,8 @@ export async function init(core) {
   }, "reflect");
 
   // enrichContext: inject conversational state
-  core.hooks.register("enrichContext", async ({ context, userId }) => {
-    if (!userId) return;
+  core.hooks.register("enrichContext", async ({ context, beingId }) => {
+    if (!beingId) return;
 
     // Find the session for this user. We check all sessions since
     // enrichContext doesn't receive sessionId directly.

@@ -15,11 +15,11 @@ import { deliverCascade } from "../../seed/tree/cascade.js";
 import { v4 as uuidv4 } from "uuid";
 
 let Node = null;
-let Note = null;
+let _Artifact = null;
 let _metadata = null;
 export function setServices({ models, metadata }) {
   Node = models.Node;
-  Note = models.Note;
+  _Artifact = models.Artifact;
   if (metadata) _metadata = metadata;
 }
 
@@ -69,7 +69,7 @@ export async function createChannel({
   channelName,
   direction = "bidirectional",
   filter = null,
-  userId,
+  beingId,
 }) {
   if (!CHANNEL_NAME_RE.test(channelName)) {
     throw new Error("Channel name must be 1-50 alphanumeric characters, hyphens, or underscores");
@@ -115,7 +115,7 @@ export async function createChannel({
       direction,
       filter,
       createdAt: now,
-      createdBy: userId,
+      createdBy: beingId,
       active: true,
     });
 
@@ -130,7 +130,7 @@ export async function createChannel({
       direction: reverseDirection,
       filter,
       createdAt: now,
-      createdBy: userId,
+      createdBy: beingId,
       active: true,
     });
 
@@ -147,7 +147,7 @@ export async function createChannel({
     direction,
     filter,
     invitedAt: now,
-    invitedBy: userId,
+    invitedBy: beingId,
   });
 
   // Also send a cascade signal so the target's operator is notified
@@ -180,7 +180,7 @@ export async function createChannel({
 // ACCEPT INVITATION
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function acceptInvite(nodeId, channelName, userId) {
+export async function acceptInvite(nodeId, channelName, beingId) {
   const node = await Node.findById(nodeId).select("_id name metadata").lean();
   if (!node) throw new Error("Node not found");
 
@@ -202,7 +202,7 @@ export async function acceptInvite(nodeId, channelName, userId) {
       : "bidirectional",
     filter: invite.filter || null,
     createdAt: now,
-    createdBy: userId,
+    createdBy: beingId,
     active: true,
   });
 
@@ -236,7 +236,7 @@ export async function acceptInvite(nodeId, channelName, userId) {
 // REMOVE
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function removeChannel(nodeId, channelName, userId) {
+export async function removeChannel(nodeId, channelName, beingId) {
   // Remove from this side
   const removed = await removeSubscription(nodeId, channelName);
   if (!removed) throw new Error(`Channel "${channelName}" not found on this node`);
@@ -490,7 +490,7 @@ Respond briefly as yourself (${agent.label || "agent"}).`;
   const mode = agent.modeHint || "tree:converse";
 
   const runResult = await runChat({
-    userId: subscription.createdBy || agent.userId || "system",
+    beingId: subscription.createdBy || agent.beingId || "system",
     username: agent.label || "agent",
     message,
     mode,
@@ -532,7 +532,7 @@ Respond briefly as yourself (${agent.label || "agent"}).`;
       content: cleanedAnswer,
       authorSubId: subscription._subId,
       authorLabel,
-      userId: subscription.createdBy || agent.userId || "system",
+      beingId: subscription.createdBy || agent.beingId || "system",
       signalId,
       depth,
     });
@@ -568,12 +568,12 @@ Respond briefly as yourself (${agent.label || "agent"}).`;
  * Write a note on the room node with the authoring subscription id
  * embedded in cascade payload so self-ignore works when cascade fires.
  */
-async function postNoteToRoomAs({ roomNodeId, content, authorSubId, authorLabel, userId, signalId, depth }) {
-  const { createNote } = await import("../../seed/tree/notes.js");
-  await createNote({
-    contentType: "text",
+async function postNoteToRoomAs({ roomNodeId, content, authorSubId, authorLabel, beingId, signalId, depth }) {
+  const { createArtifact } = await import("../../seed/tree/artifacts.js");
+  await createArtifact({
+    origin: "ibp",
     content,
-    userId,
+    beingId,
     nodeId: roomNodeId,
     wasAi: true,
     metadata: {
@@ -667,9 +667,9 @@ export async function closeRoom(roomNodeId) {
  *
  * Returns the room node id.
  */
-export async function createRoom({ name, parentNodeId, userId, maxMessages = 60 }) {
+export async function createRoom({ name, parentNodeId, beingId, maxMessages = 60 }) {
   if (!name || typeof name !== "string") throw new Error("Room name is required");
-  if (!userId) throw new Error("userId is required");
+  if (!beingId) throw new Error("beingId is required");
 
   const parentId = parentNodeId || null;
   if (!parentId) throw new Error("parentNodeId is required (pick a node to host the room under)");
@@ -683,7 +683,7 @@ export async function createRoom({ name, parentNodeId, userId, maxMessages = 60 
     type: "room",
     parent: parentId,
     status: "active",
-    rootOwner: parentDoc.rootOwner || userId,
+    rootOwner: parentDoc.rootOwner || beingId,
   });
   await Node.updateOne({ _id: parentId }, { $addToSet: { children: roomNode._id } });
 
@@ -694,7 +694,7 @@ export async function createRoom({ name, parentNodeId, userId, maxMessages = 60 
   const roomDoc = await Node.findById(roomNode._id);
   await setRoomMeta(roomDoc, {
     status: "open",
-    createdBy: userId,
+    createdBy: beingId,
     createdAt: new Date().toISOString(),
     maxMessages,
     postCount: 0,
@@ -716,7 +716,7 @@ export async function createRoom({ name, parentNodeId, userId, maxMessages = 60 
  * this subscription; each delivery invokes orchestrateTreeRequest at the
  * agent's (rootId, nodeId) with the optional modeHint.
  */
-export async function addAgentParticipant({ roomNodeId, rootId, nodeId, modeHint, label, userId }) {
+export async function addAgentParticipant({ roomNodeId, rootId, nodeId, modeHint, label, beingId }) {
   if (!roomNodeId || !rootId || !nodeId) throw new Error("roomNodeId, rootId, nodeId required");
   const roomDoc = await Node.findById(roomNodeId);
   if (!roomDoc) throw new Error("Room not found");
@@ -732,10 +732,10 @@ export async function addAgentParticipant({ roomNodeId, rootId, nodeId, modeHint
     direction: "outbound",
     filter: null,
     createdAt: new Date().toISOString(),
-    createdBy: userId,
+    createdBy: beingId,
     active: true,
     participantType: "agent",
-    agent: { rootId, nodeId, modeHint: modeHint || null, label: label || null, userId: userId || null },
+    agent: { rootId, nodeId, modeHint: modeHint || null, label: label || null, beingId: beingId || null },
     cooldownMs: 500,
     lastPostAt: null,
   };
@@ -751,7 +751,7 @@ export async function addAgentParticipant({ roomNodeId, rootId, nodeId, modeHint
  * notifications) plus a mirror subscription on the user's home node so
  * they see the room in their channel list.
  */
-export async function addUserParticipant({ roomNodeId, userHomeNodeId, label, userId }) {
+export async function addUserParticipant({ roomNodeId, userHomeNodeId, label, beingId }) {
   if (!roomNodeId || !userHomeNodeId) throw new Error("roomNodeId and userHomeNodeId required");
   const roomDoc = await Node.findById(roomNodeId);
   if (!roomDoc) throw new Error("Room not found");
@@ -772,7 +772,7 @@ export async function addUserParticipant({ roomNodeId, userHomeNodeId, label, us
     direction: "outbound",
     filter: null,
     createdAt: new Date().toISOString(),
-    createdBy: userId,
+    createdBy: beingId,
     active: true,
     participantType: "user",
   });
@@ -786,14 +786,14 @@ export async function addUserParticipant({ roomNodeId, userHomeNodeId, label, us
     direction: "inbound",
     filter: null,
     createdAt: new Date().toISOString(),
-    createdBy: userId,
+    createdBy: beingId,
     active: true,
     participantType: "user-mirror",
     roomRef: String(roomNodeId),
   });
 
   await incrementParticipantCount(roomNodeId);
-  log.info("Channels", `User ${userId} joined room ${roomNodeId}`);
+  log.info("Channels", `User ${beingId} joined room ${roomNodeId}`);
   return { subId, role: "user" };
 }
 
@@ -802,7 +802,7 @@ export async function addUserParticipant({ roomNodeId, userHomeNodeId, label, us
  * delivery (no notifications, no orchestration). Useful for trees that
  * want the room to show in their own channel view without any cost.
  */
-export async function addObserverParticipant({ roomNodeId, label, partnerId, userId }) {
+export async function addObserverParticipant({ roomNodeId, label, partnerId, beingId }) {
   if (!roomNodeId) throw new Error("roomNodeId required");
   const roomDoc = await Node.findById(roomNodeId);
   if (!roomDoc) throw new Error("Room not found");
@@ -817,7 +817,7 @@ export async function addObserverParticipant({ roomNodeId, label, partnerId, use
     direction: "outbound",
     filter: null,
     createdAt: new Date().toISOString(),
-    createdBy: userId,
+    createdBy: beingId,
     active: true,
     participantType: "observer",
   });
@@ -885,7 +885,7 @@ async function decrementParticipantCount(roomNodeId) {
  * Writes the note + fires cascade with the user's identity so agent
  * self-ignore works correctly.
  */
-export async function postToRoom({ roomNodeId, content, userId, authorLabel }) {
+export async function postToRoom({ roomNodeId, content, beingId, authorLabel }) {
   if (!roomNodeId) throw new Error("roomNodeId required");
   if (!content || typeof content !== "string") throw new Error("content required");
   const roomDoc = await Node.findById(roomNodeId).select("_id name metadata").lean();
@@ -896,13 +896,13 @@ export async function postToRoom({ roomNodeId, content, userId, authorLabel }) {
     throw new Error("Room at capacity. Raise maxMessages or archive.");
   }
 
-  const label = authorLabel || `user:${userId}`;
+  const label = authorLabel || `user:${beingId}`;
   await postNoteToRoomAs({
     roomNodeId: String(roomNodeId),
     content,
     authorSubId: null, // user posts have no sub to self-ignore against
     authorLabel: label,
-    userId,
+    beingId,
     signalId: uuidv4(),
     depth: 0,
   });
@@ -916,7 +916,7 @@ export async function postToRoom({ roomNodeId, content, userId, authorLabel }) {
 export async function readRoomTranscript({ roomNodeId, limit = 100 }) {
   if (!roomNodeId) throw new Error("roomNodeId required");
   if (!Note) return [];
-  const notes = await Note.find({ nodeId: roomNodeId, contentType: "text" })
+  const notes = await _Artifact.find({ nodeId: roomNodeId, origin: "ibp" })
     .sort({ createdAt: 1 })
     .limit(limit)
     .lean();
@@ -927,7 +927,7 @@ export async function readRoomTranscript({ roomNodeId, limit = 100 }) {
     wasAi: !!n.wasAi,
     authorSubId: n?.metadata?.room?.authorSubId || null,
     authorLabel: n?.metadata?.room?.authorLabel || null,
-    authorUserId: n.userId || null,
+    authorUserId: n.beingId || null,
   }));
 }
 
@@ -936,9 +936,9 @@ export async function readRoomTranscript({ roomNodeId, limit = 100 }) {
  * created, joined, or that are public under their trees). For now: list
  * every node whose metadata.channels.room is present.
  */
-export async function listRooms({ userId } = {}) {
+export async function listRooms({ beingId } = {}) {
   const filter = { "metadata.channels.room": { $exists: true } };
-  // Rough scoping: if userId supplied, limit to rooms whose rootOwner matches,
+  // Rough scoping: if beingId supplied, limit to rooms whose rootOwner matches,
   // plus rooms the user is a participant in (detected via their home node
   // having a user-mirror subscription). For v1 we keep it permissive.
   const nodes = await Node.find(filter).select("_id name metadata rootOwner parent").lean();

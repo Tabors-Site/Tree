@@ -18,7 +18,7 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
+import Artifact from "../../seed/models/artifact.js";
 import { v4 as uuidv4 } from "uuid";
 import log from "../../seed/log.js";
 import { logContribution } from "../../seed/tree/contributions.js";
@@ -141,7 +141,7 @@ export async function findProjectByName(rootId, name) {
  *
  * Safe to call multiple times — idempotent if already initialized.
  */
-export async function initProject({ projectNodeId, name, description, workspacePath, userId, core }) {
+export async function initProject({ projectNodeId, name, description, workspacePath, beingId, core }) {
   const node = await Node.findById(projectNodeId);
   if (!node) throw new Error(`Project node ${projectNodeId} not found`);
 
@@ -317,7 +317,7 @@ async function findChildByName(parentId, childName) {
  *
  * Returns { fileNode, created: boolean, segments }.
  */
-export async function resolveOrCreateFile({ projectNodeId, relPath, userId, core }) {
+export async function resolveOrCreateFile({ projectNodeId, relPath, beingId, core }) {
   const segments = splitPath(relPath);
   const dirs = segments.slice(0, -1);
   const fileName = segments[segments.length - 1];
@@ -330,7 +330,7 @@ export async function resolveOrCreateFile({ projectNodeId, relPath, userId, core
     let child = await findChildByName(cursor._id, segment);
     if (!child) {
       const created = core?.tree?.createNode
-        ? await core.tree.createNode({ parentId: cursor._id, name: segment, type: "directory", userId })
+        ? await core.tree.createNode({ parentId: cursor._id, name: segment, type: "directory", beingId })
         : await Node.create({
             _id: uuidv4(),
             name: segment,
@@ -359,7 +359,7 @@ export async function resolveOrCreateFile({ projectNodeId, relPath, userId, core
   let fileNode = await findChildByName(cursor._id, fileName);
   if (!fileNode) {
     const newDoc = core?.tree?.createNode
-      ? await core.tree.createNode({ parentId: cursor._id, name: fileName, type: "file", userId })
+      ? await core.tree.createNode({ parentId: cursor._id, name: fileName, type: "file", beingId })
       : await Node.create({
           _id: uuidv4(),
           name: fileName,
@@ -418,7 +418,7 @@ async function persistNodeMeta(node, data, core) {
  * Read a file node's current content (the most recent text note).
  */
 export async function readFileContent(fileNodeId) {
-  const note = await Note.findOne({ nodeId: fileNodeId, contentType: "text" })
+  const note = await Artifact.findOne({ nodeId: fileNodeId, origin: "ibp" })
     .sort({ createdAt: -1 })
     .lean();
   return note?.content ?? "";
@@ -431,9 +431,9 @@ export async function readFileContent(fileNodeId) {
  * file content on nodes. Bypasses beforeNote/afterNote for bulk code edits
  * because file content can be larger than the user-facing note size cap.
  */
-// Fallback userId for writes that come from non-authenticated paths
+// Fallback beingId for writes that come from non-authenticated paths
 // (boot hooks, background jobs, tests). The Note schema requires a
-// userId, but our file-content notes are bulk-ingested-style and don't
+// beingId, but our file-content notes are bulk-ingested-style and don't
 // need to attribute to a real user. We use a stable sentinel so all
 // workspace writes share the same synthetic author.
 const WORKSPACE_SYSTEM_USER = "00000000-0000-0000-0000-code-workspace";
@@ -499,25 +499,25 @@ async function checkSourceGate(fileNodeId) {
   }
 }
 
-export async function writeFileContent({ fileNodeId, content, userId, partial = false }) {
+export async function writeFileContent({ fileNodeId, content, beingId, partial = false }) {
   await checkSourceGate(fileNodeId);
 
   // Snapshot the existing content BEFORE we delete, so we can detect
   // edit-vs-create and fire the right hook action. This matters for
   // the afterNote validators (syntax, contract, dead-receiver) that
   // care whether a file is being rewritten or created for the first time.
-  const existing = await Note.findOne({ nodeId: fileNodeId, contentType: "text" })
+  const existing = await Artifact.findOne({ nodeId: fileNodeId, origin: "ibp" })
     .sort({ createdAt: -1 })
     .lean();
   const isEdit = !!existing;
   const previousSize = existing?.content ? Buffer.byteLength(existing.content, "utf8") : 0;
 
-  await Note.deleteMany({ nodeId: fileNodeId });
-  const note = await Note.create({
+  await Artifact.deleteMany({ nodeId: fileNodeId });
+  const note = await Artifact.create({
     _id: uuidv4(),
-    contentType: "text",
+    origin: "ibp",
     content: content ?? "",
-    userId: userId || WORKSPACE_SYSTEM_USER,
+    beingId: beingId || WORKSPACE_SYSTEM_USER,
     nodeId: fileNodeId,
   });
 
@@ -541,11 +541,11 @@ export async function writeFileContent({ fileNodeId, content, userId, partial = 
   // rejects writes, just reacts to them.
   try {
     const { hooks } = await import("../../seed/hooks.js");
-    hooks.run("afterNote", {
+    hooks.run("afterArtifact", {
       note,
       nodeId: fileNodeId,
-      userId: userId || WORKSPACE_SYSTEM_USER,
-      contentType: "text",
+      beingId: beingId || WORKSPACE_SYSTEM_USER,
+      origin: "ibp",
       sizeKB,
       deltaKB,
       action: isEdit ? "edit" : "create",
@@ -558,7 +558,7 @@ export async function writeFileContent({ fileNodeId, content, userId, partial = 
   // user metrics, blame walks).
   try {
     await logContribution({
-      userId: userId || WORKSPACE_SYSTEM_USER,
+      beingId: beingId || WORKSPACE_SYSTEM_USER,
       nodeId: fileNodeId,
       action: "note",
       noteAction: {

@@ -10,14 +10,14 @@ export default [
       nodeId: z.string().describe("The node to find related content for."),
       rootId: z.string().optional().describe("Tree root to search within. Auto-resolved if omitted."),
       searchAll: z.boolean().optional().default(false).describe("Search entire tree instead of scoped neighborhood."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    handler: async ({ nodeId, rootId, searchAll, userId }) => {
+    handler: async ({ nodeId, rootId, searchAll, beingId }) => {
       try {
-        const results = await findRelatedAtNode(nodeId, userId, rootId, searchAll);
+        const results = await findRelatedAtNode(nodeId, beingId, rootId, searchAll);
         if (results.length === 0) {
           return { content: [{ type: "text", text: "No semantically related notes found. Either no notes are embedded yet, or nothing passes the similarity threshold." }] };
         }
@@ -45,7 +45,7 @@ export default [
     name: "embed-status",
     description: "Show embedding coverage. How many notes have vectors, what percentage of the total.",
     schema: {
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -63,14 +63,14 @@ export default [
     name: "embed-rebuild",
     description: "Re-embed all text notes. Use after changing the embedding model. Token-intensive.",
     schema: {
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    handler: async ({ userId }) => {
+    handler: async ({ beingId }) => {
       try {
-        const result = await rebuildEmbeddings(userId);
+        const result = await rebuildEmbeddings(beingId);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Rebuild failed: ${err.message}` }] };

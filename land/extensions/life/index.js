@@ -21,13 +21,13 @@ export async function init(core) {
   // Create a bare Life root on registration. No domains scaffolded.
   // Sprout handles domain creation from conversation.
   core.hooks.register("afterRegister", async ({ user }) => {
-    const userId = user?._id ? String(user._id) : null;
-    if (!userId) return;
+    const beingId = user?._id ? String(user._id) : null;
+    if (!beingId) return;
     try {
-      const existing = await findLifeRoot(userId);
+      const existing = await findLifeRoot(beingId);
       if (!existing) {
-        await scaffoldRoot(userId);
-        log.info("Life", `Created bare Life root for new user ${userId.slice(0, 8)}`);
+        await scaffoldRoot(beingId);
+        log.info("Life", `Created bare Life root for new user ${beingId.slice(0, 8)}`);
       }
     } catch (err) {
       log.warn("Life", `Failed to create Life root on register: ${err.message}`);

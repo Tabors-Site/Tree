@@ -6,7 +6,7 @@ import Notification from "./model.js";
 /**
  * Get notifications for a user, optionally filtered by rootId.
  * @param {object} opts
- * @param {string} opts.userId   - required
+ * @param {string} opts.beingId   - required
  * @param {string} [opts.rootId] - filter to a single tree
  * @param {number} [opts.limit]  - max results (default 50, max 100)
  * @param {number} [opts.offset] - pagination offset
@@ -14,13 +14,13 @@ import Notification from "./model.js";
  * @returns {{ notifications: object[], total: number }}
  */
 export async function getNotifications({
-  userId,
+  beingId,
   rootId,
   limit = 50,
   offset = 0,
   sinceDays,
 } = {}) {
-  const filter = { userId };
+  const filter = { beingId };
   if (rootId) filter.rootId = rootId;
   if (sinceDays) {
     const since = new Date();

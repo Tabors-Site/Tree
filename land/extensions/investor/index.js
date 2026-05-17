@@ -5,7 +5,7 @@ import { handleMessage } from "./handler.js";
 export async function init(core) {
   configure({
     Node: core.models.Node,
-    Note: core.models.Note,
+    Artifact: core.models.Artifact,
     metadata: core.metadata,
   });
 
@@ -78,7 +78,7 @@ export async function init(core) {
   try {
     const { getExtension } = await import("../loader.js");
     const base = getExtension("treeos-base");
-    base?.exports?.registerSlot?.("apps-grid", "investor", ({ userId, rootMap, tokenParam, tokenField, esc: e }) => {
+    base?.exports?.registerSlot?.("apps-grid", "investor", ({ beingId, rootMap, tokenParam, tokenField, esc: e }) => {
       const entries = rootMap.get("Investor") || [];
       const existing = entries.map(entry =>
         `<a class="app-active" href="/api/v1/root/${entry.id}/investor?html${tokenParam}" style="margin-right:8px;margin-bottom:6px;">${e(entry.name)}</a>`
@@ -88,7 +88,7 @@ export async function init(core) {
         <div class="app-desc">Track holdings, cost basis, gains and losses. Portfolio allocation. The AI helps you think through decisions without predicting.</div>
         ${entries.length > 0
           ? `<div style="display:flex;flex-wrap:wrap;">${existing}</div>`
-          : `<form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+          : `<form class="app-form" method="POST" action="/api/v1/user/${beingId}/apps/create">
               ${tokenField}<input type="hidden" name="app" value="investor" />
               <input class="app-input" name="message" placeholder="What did you buy or sell?" required />
               <button class="app-start" type="submit">Start Investor</button>

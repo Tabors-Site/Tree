@@ -43,7 +43,7 @@ export default {
 
   needs: {
     services: ["llm", "hooks"],
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
   },
 
   optional: {
@@ -77,7 +77,7 @@ export default {
 
     hooks: {
       fires: [],
-      listens: ["afterNote", "enrichContext"],
+      listens: ["afterArtifact", "enrichContext"],
     },
   },
 };

@@ -24,7 +24,7 @@ import { formatMemoryContext, pushMemory } from "./state.js";
 import { emitStatus, buildSocketBridge } from "./dispatch.js";
 
 export async function runBeMode(message, {
-  visitorId, socket, username, userId, rootId,
+  visitorId, socket, username, beingId, rootId,
   signal, slot, sessionId, onToolLoopCheckpoint,
   currentNodeId, modesUsed,
 }) {
@@ -42,7 +42,7 @@ export async function runBeMode(message, {
             log.verbose("Tree Orchestrator", `  BE mode: delegating to ${extName}.handleMessage`);
             emitStatus(socket, "intent", "");
             const decision = await ext.exports.handleMessage("be", {
-              userId, username, rootId, targetNodeId: String(currentNodeId),
+              beingId, username, rootId, targetNodeId: String(currentNodeId),
             });
             // Resolve coach mode via registry, NOT string concatenation.
             // Extension name and mode prefix don't always match
@@ -62,13 +62,13 @@ export async function runBeMode(message, {
             }
 
             await switchMode(visitorId, resolvedMode, {
-              username, userId, rootId,
+              username, beingId, rootId,
               currentNodeId: String(currentNodeId),
               conversationMemory: formatMemoryContext(visitorId),
               clearHistory: decision?.setup || false,
             });
             const result = await processMessage(visitorId, decision?.message || message, {
-              username, userId, rootId, signal, slot, onToolLoopCheckpoint,
+              username, beingId, rootId, signal, slot, onToolLoopCheckpoint,
               ...buildSocketBridge(socket, signal),
             });
             emitStatus(socket, "done", "");
@@ -81,11 +81,11 @@ export async function runBeMode(message, {
           if (coachMode) {
             log.verbose("Tree Orchestrator", `  BE mode: switching to ${coachMode}`);
             await switchMode(visitorId, coachMode, {
-              username, userId, rootId,
+              username, beingId, rootId,
               conversationMemory: formatMemoryContext(visitorId),
               clearHistory: true,
             });
-            const result = await processMessage(visitorId, message, { username, userId, rootId, signal, socket, sessionId });
+            const result = await processMessage(visitorId, message, { username, beingId, rootId, signal, socket, sessionId });
             modesUsed.push(coachMode);
             return { success: true, answer: result?.content || "", modeKey: coachMode, modesUsed, rootId };
           }
@@ -124,7 +124,7 @@ export async function runBeMode(message, {
           emitStatus(socket, "intent", "");
           try {
             const decision = await ext.exports.handleMessage("be", {
-              userId, username, rootId, targetNodeId: targetId,
+              beingId, username, rootId, targetNodeId: targetId,
             });
             // Use the first registered -coach mode for this extension.
             // Extension name ≠ mode prefix in general (code-workspace
@@ -139,13 +139,13 @@ export async function runBeMode(message, {
             }
 
             await switchMode(visitorId, resolvedMode, {
-              username, userId, rootId,
+              username, beingId, rootId,
               currentNodeId: targetId,
               conversationMemory: formatMemoryContext(visitorId),
               clearHistory: decision?.setup || false,
             });
             const result = await processMessage(visitorId, decision?.message || message, {
-              username, userId, rootId, signal, slot, onToolLoopCheckpoint,
+              username, beingId, rootId, signal, slot, onToolLoopCheckpoint,
               ...buildSocketBridge(socket, signal),
             });
             emitStatus(socket, "done", "");
@@ -163,11 +163,11 @@ export async function runBeMode(message, {
   // ── Tier 3: No extensions found. Generic tree:be. ──
   log.verbose("Tree Orchestrator", `  BE mode: switching to tree:be`);
   await switchMode(visitorId, "tree:be", {
-    username, userId, rootId,
+    username, beingId, rootId,
     conversationMemory: formatMemoryContext(visitorId),
     clearHistory: true,
   });
-  const result = await processMessage(visitorId, message, { username, userId, rootId, signal, socket, sessionId });
+  const result = await processMessage(visitorId, message, { username, beingId, rootId, signal, socket, sessionId });
   modesUsed.push("tree:be");
   return { success: true, answer: result?.content || "", modeKey: "tree:be", modesUsed, rootId };
 }

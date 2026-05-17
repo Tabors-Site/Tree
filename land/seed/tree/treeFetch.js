@@ -1,8 +1,8 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import Node from "../models/node.js";
-import Note from "../models/note.js";
+import Artifact from "../models/artifact.js";
 import { hooks } from "../hooks.js";
-import { NODE_STATUS, DELETED, CONTENT_TYPE, SYSTEM_OWNER } from "../protocol.js";
+import { NODE_STATUS, DELETED, ARTIFACT_ORIGIN, SYSTEM_OWNER } from "../protocol.js";
 import { getAncestorChain } from "./ancestorCache.js";
 import { getLandConfigValue } from "../landConfig.js";
 
@@ -121,14 +121,14 @@ export async function getDescendantIds(nodeId, { maxResults = 10000 } = {}) {
   return [...visited];
 }
 
-export async function getDeletedBranchesForUser(userId) {
-  if (!userId) {
-    throw new Error("userId is required");
+export async function getDeletedBranchesForUser(beingId) {
+  if (!beingId) {
+    throw new Error("beingId is required");
   }
 
   const deletedNodes = await Node.find({
     parent: DELETED,
-    rootOwner: userId,
+    rootOwner: beingId,
   })
     .select("_id name")
     .lean()
@@ -243,7 +243,7 @@ export async function buildDeepTreeSummary(
     const ctx = await getContextForAi(nodeId, {
       includeChildren: true,
       includeParentChain: false,
-      includeNotes: true,
+      includeArtifacts: true,
     });
 
     const indent = "  ".repeat(depth);
@@ -256,9 +256,9 @@ export async function buildDeepTreeSummary(
             .join(", ")})`
         : "";
 
-    const noteStr =
-      ctx.noteCount > 0
-        ? ` [${ctx.noteCount} note${ctx.noteCount > 1 ? "s" : ""}]`
+    const artifactStr =
+      ctx.artifactCount > 0
+        ? ` [${ctx.artifactCount} artifact${ctx.artifactCount > 1 ? "s" : ""}]`
         : "";
 
     // Append truncated encoding if available
@@ -273,7 +273,7 @@ export async function buildDeepTreeSummary(
     }
 
     const idStr = includeIds ? ` [id:${ctx.id}]` : "";
-    let line = `${indent}- ${ctx.name}${idStr}${noteStr}${valueStr}${encodingStr}`;
+    let line = `${indent}- ${ctx.name}${idStr}${artifactStr}${valueStr}${encodingStr}`;
 
     if (depth < TREE_SUMMARY_MAX_DEPTH && ctx.children?.length > 0) {
       const childLines = [];
@@ -534,7 +534,7 @@ export async function getContextForAi(nodeId, options = {}) {
   if (!nodeId) throw new Error("nodeId is required");
 
   const {
-    includeNotes = true,
+    includeArtifacts = true,
     includeSiblings = false,
     includeChildren = true,
     includeParentChain = false,
@@ -565,36 +565,36 @@ export async function getContextForAi(nodeId, options = {}) {
     context,
     node,
     meta,
-    userId: options.userId || null,
+    beingId: options.beingId || null,
     message: options.message || null,
   });
 
-  // ---- Notes ----
-  if (includeNotes) {
-    const noteCount = await Note.countDocuments({
+  // ---- Artifacts ----
+  if (includeArtifacts) {
+    const artifactCount = await Artifact.countDocuments({
       nodeId: node._id,
-      contentType: CONTENT_TYPE.TEXT,
+      origin: ARTIFACT_ORIGIN.IBP,
     });
 
-    context.noteCount = noteCount;
+    context.artifactCount = artifactCount;
 
-    if (noteCount > 0) {
-      const recentNotes = await Note.find({
+    if (artifactCount > 0) {
+      const recentArtifacts = await Artifact.find({
         nodeId: node._id,
-        contentType: CONTENT_TYPE.TEXT,
+        origin: ARTIFACT_ORIGIN.IBP,
       })
         .sort({ _id: -1 })
-        .limit(Number(getLandConfigValue("treeSummaryRecentNotes")) || 3)
-        .populate("userId", "username -_id")
+        .limit(Number(getLandConfigValue("treeSummaryRecentArtifacts")) || Number(getLandConfigValue("treeSummaryRecentNotes")) || 3)
+        .populate("beingId", "username -_id")
         .lean()
         .exec();
 
       const MAX_PREVIEW = Number(getLandConfigValue("treeSummaryPreviewChars")) || 200;
-      context.notes = recentNotes.map((n) => {
-        const content = n.content || "";
+      context.artifacts = recentArtifacts.map((a) => {
+        const content = typeof a.content === "string" ? a.content : "";
         return {
-          id: n._id.toString(),
-          username: n.userId?.username || "Unknown",
+          id: a._id.toString(),
+          username: a.beingId?.username || "Unknown",
           preview:
             content.length > MAX_PREVIEW
               ? content.slice(0, MAX_PREVIEW) + "…"

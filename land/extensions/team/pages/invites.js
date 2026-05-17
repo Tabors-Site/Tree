@@ -1,7 +1,7 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { esc, escapeHtml } from "../../html-rendering/html/utils.js";
 
-export function renderInvites({ userId, invites, token }) {
+export function renderInvites({ beingId, invites, token }) {
   const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
   const css = `
@@ -191,11 +191,11 @@ export function renderInvites({ userId, invites, token }) {
             <strong>${esc(i.rootId.name)}${esc(landTag)}</strong>
           </div>
           <div class="invite-actions">
-            <form method="POST" action="/api/v1/user/${userId}/invites/${i._id}${tokenQS}">
+            <form method="POST" action="/api/v1/user/${beingId}/invites/${i._id}${tokenQS}">
               <input type="hidden" name="accept" value="true" />
               <button type="submit" class="accept-button">Accept</button>
             </form>
-            <form method="POST" action="/api/v1/user/${userId}/invites/${i._id}${tokenQS}">
+            <form method="POST" action="/api/v1/user/${beingId}/invites/${i._id}${tokenQS}">
               <input type="hidden" name="accept" value="false" />
               <button type="submit" class="decline-button">Decline</button>
             </form>
@@ -211,7 +211,7 @@ export function renderInvites({ userId, invites, token }) {
   const body = `
   <div class="container">
     <div class="back-nav">
-      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
+      <a href="/api/v1/user/${beingId}${tokenQS}" class="back-link">
         \u2190 Back to Profile
       </a>
     </div>

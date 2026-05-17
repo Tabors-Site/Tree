@@ -1,7 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "../log.js";
 import jwt from "jsonwebtoken";
-import User from "../models/user.js";
+import Being from "../models/being.js";
 import { resolveTreeAccess } from "../tree/treeAccess.js";
 import { authStrategies } from "../services.js";
 import { sendError, ERR } from "../protocol.js";
@@ -30,7 +30,7 @@ export default async function authenticate(req, res, next) {
       const decoded = jwt.verify(token, JWT_SECRET);
 
       // Verify user still exists and token hasn't been revoked
-      const user = await User.findById(decoded.userId).lean();
+      const user = await Being.findById(decoded.beingId).lean();
       if (!user) {
         return sendError(res, 401, ERR.UNAUTHORIZED, "User no longer exists");
       }
@@ -46,7 +46,7 @@ export default async function authenticate(req, res, next) {
         }
       }
 
-      req.userId = decoded.userId;
+      req.beingId = decoded.beingId;
       req.username = decoded.username;
       req.authType = "jwt";
 
@@ -61,7 +61,7 @@ export default async function authenticate(req, res, next) {
       try {
         const result = await handler(req);
         if (result) {
-          req.userId = result.userId;
+          req.beingId = result.beingId;
           req.username = result.username;
           req.authType = name;
           // Extension strategies can attach extra context under a namespaced key.
@@ -90,7 +90,7 @@ export default async function authenticate(req, res, next) {
 
 /**
  * Optional auth: same pipeline as authenticate but doesn't reject.
- * If no credentials match, req.userId stays null and the request continues.
+ * If no credentials match, req.beingId stays null and the request continues.
  * Use for routes that serve both authenticated users and anonymous/public access.
  */
 export async function authenticateOptional(req, res, next) {
@@ -105,7 +105,7 @@ export async function authenticateOptional(req, res, next) {
     if (token) {
       try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        const user = await User.findById(decoded.userId).lean();
+        const user = await Being.findById(decoded.beingId).lean();
         if (user) {
           const authMeta = user.metadata instanceof Map
             ? user.metadata.get("auth")
@@ -113,7 +113,7 @@ export async function authenticateOptional(req, res, next) {
           const invalidBefore = authMeta?.tokensInvalidBefore
             ? new Date(authMeta.tokensInvalidBefore).getTime() / 1000 : 0;
           if (!decoded.iat || decoded.iat >= invalidBefore) {
-            req.userId = decoded.userId;
+            req.beingId = decoded.beingId;
             req.username = decoded.username;
             req.authType = "jwt";
             return next();
@@ -129,7 +129,7 @@ export async function authenticateOptional(req, res, next) {
       try {
         const result = await handler(req);
         if (result) {
-          req.userId = result.userId;
+          req.beingId = result.beingId;
           req.username = result.username;
           req.authType = name;
           if (result.extra && typeof result.extra === "object") {
@@ -171,7 +171,7 @@ async function attachTreeAccess(req, res) {
 
   if (!nodeId) return true;
 
-  const access = await resolveTreeAccess(nodeId, req.userId);
+  const access = await resolveTreeAccess(nodeId, req.beingId);
 
   if (!access.ok) {
     const mapped = TREE_ACCESS_ERRORS[access.error] || { http: 500, code: ERR.INTERNAL };

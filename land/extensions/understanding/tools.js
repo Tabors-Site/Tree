@@ -18,7 +18,7 @@ export default [
         .optional()
         .default("general")
         .describe("Perspective for this understanding run."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z
         .string()
         .nullable()
@@ -36,10 +36,10 @@ export default [
       idempotentHint: false,
       openWorldHint: false,
     },
-    handler: async ({ rootNodeId, perspective, userId, chatId, sessionId }) => {
+    handler: async ({ rootNodeId, perspective, beingId, chatId, sessionId }) => {
       const result = await createUnderstandingRun(
         rootNodeId,
-        userId,
+        beingId,
         perspective,
         true,
         chatId,
@@ -70,7 +70,7 @@ export default [
       rootNodeId: z
         .string()
         .describe("Root node ID to list understandings for."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z
         .string()
         .nullable()
@@ -252,7 +252,7 @@ Then IMMEDIATELY call understanding-capture with:
       currentLayer,
       encoding,
       rootNodeId,
-      userId,
+      beingId,
       chatId,
       sessionId,
     }) => {
@@ -262,7 +262,7 @@ Then IMMEDIATELY call understanding-capture with:
         understandingNodeId,
         currentLayer,
         encoding,
-        userId,
+        beingId,
         wasAi: true,
         chatId,
         sessionId,
@@ -312,7 +312,7 @@ Then IMMEDIATELY call understanding-capture with:
         .describe(
           "Omit on first call. Include your summary from previous task on subsequent calls.",
         ),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z
         .string()
         .nullable()
@@ -334,7 +334,7 @@ Then IMMEDIATELY call understanding-capture with:
       understandingRunId,
       rootNodeId,
       previousResult,
-      userId,
+      beingId,
       chatId,
       sessionId,
     }) => {
@@ -347,7 +347,7 @@ Then IMMEDIATELY call understanding-capture with:
             encoding: previousResult.encoding,
             understandingNodeId: previousResult.understandingNodeId,
             currentLayer: previousResult.currentLayer,
-            userId,
+            beingId,
             wasAi: true,
             chatId,
             sessionId,
@@ -392,7 +392,7 @@ Then IMMEDIATELY call understanding-capture with:
       // 3. Get next payload
       const payload = await getNextCompressionPayloadForLLM(
         understandingRunId,
-        userId,
+        beingId,
       );
 
       // 4. Done

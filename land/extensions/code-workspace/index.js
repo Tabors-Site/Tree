@@ -380,7 +380,7 @@ function buildServeTools(previewPort) {
         "at //<host>:" + previewPort + "/preview/<slug>/. Idempotent — reusing an already-running preview.",
       schema: { projectNodeId: z.string().optional() },
       annotations: { readOnlyHint: false },
-      async handler({ projectNodeId, userId, rootId, nodeId }) {
+      async handler({ projectNodeId, beingId, rootId, nodeId }) {
         try {
           const targetId = projectNodeId || rootId || nodeId;
           const project = await loadProjectNode(targetId);
@@ -399,7 +399,7 @@ function buildServeTools(previewPort) {
       description: "Stop a running preview for the workspace project at the current tree position.",
       schema: { projectNodeId: z.string().optional() },
       annotations: { readOnlyHint: false },
-      async handler({ projectNodeId, userId, rootId, nodeId }) {
+      async handler({ projectNodeId, beingId, rootId, nodeId }) {
         try {
           const targetId = projectNodeId || rootId || nodeId;
           const project = await loadProjectNode(targetId);
@@ -417,7 +417,7 @@ function buildServeTools(previewPort) {
       description: "Report the running state of the preview for the current workspace project.",
       schema: { projectNodeId: z.string().optional() },
       annotations: { readOnlyHint: true },
-      async handler({ projectNodeId, userId, rootId, nodeId }) {
+      async handler({ projectNodeId, beingId, rootId, nodeId }) {
         try {
           const targetId = projectNodeId || rootId || nodeId;
           const project = await loadProjectNode(targetId);
@@ -440,7 +440,7 @@ function buildServeTools(previewPort) {
  * is metadata.swarm on each node; plan.md is just a projection for disk
  * consumption + the git history.
  */
-async function writeSwarmPlan({ projectNode, userRequest, userId, core }) {
+async function writeSwarmPlan({ projectNode, userRequest, beingId, core }) {
   try {
     const { default: NodeModel } = await import("../../seed/models/node.js");
 
@@ -583,10 +583,10 @@ async function writeSwarmPlan({ projectNode, userRequest, userId, core }) {
     const { fileNode } = await resolveOrCreateFile({
       projectNodeId: projectNode._id,
       relPath: "plan.md",
-      userId: userId || null,
+      beingId: beingId || null,
       core,
     });
-    await writeFileContent({ fileNodeId: fileNode._id, content, userId: userId || null });
+    await writeFileContent({ fileNodeId: fileNode._id, content, beingId: beingId || null });
     log.info("CodeWorkspace", `📄 Swarm: wrote plan.md at ${projectNode.name} (from distributed subPlan)`);
   } catch (err) {
     log.warn("CodeWorkspace", `writeSwarmPlan failed: ${err.message}`);
@@ -1081,9 +1081,9 @@ export async function init(core) {
   // and lateral-propagate contract-affecting signals to siblings. This
   // is the main driver of self-similar state maintenance.
   core.hooks.register(
-    "afterNote",
-    async ({ note, nodeId, contentType, action, chatId }) => {
-      if (contentType !== "text") return;
+    "afterArtifact",
+    async ({ artifact, nodeId, origin, action, chatId }) => {
+      if (origin !== "ibp") return;
       if (!nodeId) return;
       try {
         const sw = await swarm();
@@ -1091,10 +1091,10 @@ export async function init(core) {
         const found = await sw.findBranchContext(nodeId);
         if (!found) return;
         const { branchNode, projectNode } = found;
-        // Pulled from afterNote hookData; threaded into appendSignal below
+        // Pulled from afterArtifact hookData; threaded into appendSignal below
         // so AI forensics can attribute the signal emission to the
-        // capture that caused this note write. Silently null for
-        // background note writes (no chat context), in which case the
+        // capture that caused this artifact write. Silently null for
+        // background writes (no chat context), in which case the
         // forensics layer no-ops.
         const emitterChatId = chatId || null;
 
@@ -1106,7 +1106,7 @@ export async function init(core) {
         const filePath = fileMeta?.filePath || fileNode?.name || String(nodeId);
 
         // Flat event log on the project root for the dashboard / history.
-        const summary = summarizeWrite(note?.content || "");
+        const summary = summarizeWrite(typeof artifact?.content === "string" ? artifact.content : "");
         await sw.recordEvent({
           projectNodeId: projectNode._id,
           event: {
@@ -1124,7 +1124,7 @@ export async function init(core) {
         // project root gets its aggregatedDetail merged.
         const classification = classifyWrite({
           filePath,
-          content: note?.content || "",
+          content: artifact?.content || "",
         });
         await sw.rollUpDetail({
           fromNodeId: nodeId,
@@ -1209,11 +1209,11 @@ export async function init(core) {
         // it up); otherwise attaches to the project root. On success,
         // prunes any prior syntax-error signals for this file.
         const signalTargetId = branchNode?._id || projectNode?._id;
-        if (signalTargetId && note?.content != null) {
+        if (signalTargetId && artifact?.content != null) {
           try {
             const validation = validateSyntax({
               filePath,
-              content: note.content,
+              content: artifact.content,
             });
             if (validation._skipped) {
               log.warn(
@@ -1252,11 +1252,11 @@ export async function init(core) {
 
         // Dead-receiver detection (phase 4a). Only fires when the file
         // PARSES — running on broken syntax would just produce noise.
-        if (signalTargetId && note?.content && /\.[cm]?js$/.test(filePath)) {
+        if (signalTargetId && artifact?.content && /\.[cm]?js$/.test(filePath)) {
           try {
             const drResult = detectDeadReceivers({
               filePath,
-              content: note.content,
+              content: artifact.content,
             });
             if (drResult.issues.length > 0) {
               for (const issue of drResult.issues) {
@@ -1286,9 +1286,9 @@ export async function init(core) {
         // Phase 2 contract extraction + diff. Backend writes declare
         // contracts on the project root; frontend writes diff their fetch
         // expectations against declared contracts and emit mismatches.
-        if (projectNode && note?.content) {
+        if (projectNode && artifact?.content) {
           try {
-            const fileContent = note.content;
+            const fileContent = artifact.content;
 
             const backendResult = extractBackendContracts({
               filePath,
@@ -1400,7 +1400,7 @@ export async function init(core) {
           try {
             await refreshChildSummary({
               branchNode,
-              reason: "afterNote",
+              reason: "afterArtifact",
               core,
             });
           } catch (refreshErr) {
@@ -1506,7 +1506,7 @@ export async function init(core) {
 
   // Auto-sync is handled inline by the write tools (see tools.js). We
   // can't use an afterNote hook here because writeFileContent calls
-  // Note.create directly (bypassing the note CRUD hooks) so code file
+  // Artifact.create directly (bypassing the note CRUD hooks) so code file
   // content can exceed the user note size cap. The tools call
   // scheduleSync right after every write, which debounces per project.
 
@@ -1553,7 +1553,7 @@ export async function init(core) {
         await initProject({
           projectNodeId: projectNode._id,
           name: projectNode.name || null,
-          userId: owner?.userId || null,
+          beingId: owner?.beingId || null,
           core,
         });
       } catch (err) {
@@ -2092,7 +2092,7 @@ export async function init(core) {
         await writeSwarmPlan({
           projectNode: projectDoc,
           userRequest,
-          userId: null,
+          beingId: null,
           core,
         });
       } catch (err) {
@@ -2275,12 +2275,12 @@ export async function init(core) {
       async addFile(args) {
         const { resolveOrCreateFile, writeFileContent } = await import("./workspace.js");
         const { fileNode, created } = await resolveOrCreateFile(args);
-        await writeFileContent({ fileNodeId: fileNode._id, content: args.content, userId: args.userId });
+        await writeFileContent({ fileNodeId: fileNode._id, content: args.content, beingId: args.beingId });
         return { fileNode, created };
       },
-      async readFile({ projectNodeId, relPath, userId, core: c }) {
+      async readFile({ projectNodeId, relPath, beingId, core: c }) {
         const { resolveOrCreateFile, readFileContent } = await import("./workspace.js");
-        const { fileNode, created } = await resolveOrCreateFile({ projectNodeId, relPath, userId, core: c });
+        const { fileNode, created } = await resolveOrCreateFile({ projectNodeId, relPath, beingId, core: c });
         if (created) return "";
         return readFileContent(fileNode._id);
       },

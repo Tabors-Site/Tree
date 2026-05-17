@@ -10,7 +10,7 @@ export async function init(core) {
 
   const Node = core.models.Node;
 
-  core.hooks.register("beforeNote", async (data) => {
+  core.hooks.register("beforeArtifact", async (data) => {
     const node = await Node.findById(data.nodeId).select("metadata").lean();
     if (!node) return;
     const prestige = core.metadata.getExtMeta(node, "prestige");

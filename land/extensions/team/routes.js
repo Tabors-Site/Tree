@@ -38,7 +38,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
         const horizon = await import("../../canopy/horizon.js");
 
         const result = await sendRemoteInvite({
-          userInvitingId: req.userId,
+          userInvitingId: req.beingId,
           canopyId: userReceiving,
           rootId,
           Node,
@@ -63,7 +63,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
       }
 
       await createInvite({
-        userInvitingId: req.userId,
+        userInvitingId: req.beingId,
         userReceiving,
         rootId,
         isToBeOwner: false,
@@ -99,7 +99,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
       }
 
       await createInvite({
-        userInvitingId: req.userId,
+        userInvitingId: req.beingId,
         userReceiving,
         rootId,
         isToBeOwner: true,
@@ -135,7 +135,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
       }
 
       await createInvite({
-        userInvitingId: req.userId,
+        userInvitingId: req.beingId,
         userReceiving,
         rootId,
         isToBeOwner: false,
@@ -150,7 +150,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
       if ("html" in req.query) {
         return res.redirect(
-          `/api/v1/user/${req.userId}?token=${req.query.token ?? ""}&html`,
+          `/api/v1/user/${req.beingId}?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -166,8 +166,8 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
       const { rootId } = req.params;
 
       await createInvite({
-        userInvitingId: req.userId,
-        userReceiving: req.userId,
+        userInvitingId: req.beingId,
+        userReceiving: req.beingId,
         rootId,
         isToBeOwner: false,
         isUninviting: true,
@@ -181,7 +181,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
       if ("html" in req.query) {
         return res.redirect(
-          `/api/v1/user/${req.userId}?token=${req.query.token ?? ""}&html`,
+          `/api/v1/user/${req.beingId}?token=${req.query.token ?? ""}&html`,
         );
       }
 
@@ -193,15 +193,15 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
   // ── Invite list + respond (moved from routes/api/user.js) ─────────
 
-  router.get("/user/:userId/invites", htmlAuth, async (req, res) => {
+  router.get("/user/:beingId/invites", htmlAuth, async (req, res) => {
     try {
-      const { userId } = req.params;
+      const { beingId } = req.params;
 
-      if (req.userId.toString() !== userId.toString()) {
+      if (req.beingId.toString() !== beingId.toString()) {
         return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
       }
 
-      const invites = await getPendingInvitesForUser(userId);
+      const invites = await getPendingInvitesForUser(beingId);
 
       const wantHtml = "html" in req.query;
       if (!wantHtml || !getExtension("html-rendering")) {
@@ -209,22 +209,22 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
       }
 
       const token = req.query.token ?? "";
-      return res.send(renderInvites({ userId, invites, token }));
+      return res.send(renderInvites({ beingId, invites, token }));
     } catch (err) {
       sendError(res, 500, ERR.INTERNAL, err.message);
     }
   });
 
   router.post(
-    "/user/:userId/invites/:inviteId",
+    "/user/:beingId/invites/:inviteId",
     authenticate,
 
     async (req, res) => {
       try {
-        const { userId, inviteId } = req.params;
+        const { beingId, inviteId } = req.params;
         const { accept } = req.body;
 
-        if (req.userId.toString() !== userId.toString()) {
+        if (req.beingId.toString() !== beingId.toString()) {
           return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
         }
 
@@ -232,7 +232,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
         await respondToInvite({
           inviteId,
-          userId: req.userId,
+          beingId: req.beingId,
           acceptInvite,
           Node,
           User,
@@ -243,7 +243,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
         if ("html" in req.query) {
           return res.redirect(
-            `/api/v1/user/${userId}/invites?token=${req.query.token ?? ""}&html`,
+            `/api/v1/user/${beingId}/invites?token=${req.query.token ?? ""}&html`,
           );
         }
 
@@ -256,9 +256,9 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
 
   // ── Tags (moved from extensions/user-queries) ─────────────────────
 
-  router.get("/user/:userId/tags", htmlAuth, async (req, res) => {
+  router.get("/user/:beingId/tags", htmlAuth, async (req, res) => {
     try {
-      const userId = req.params.userId;
+      const beingId = req.params.beingId;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
       const startDate = req.query.startDate;
       const endDate = req.query.endDate;
@@ -271,9 +271,9 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
         return sendError(res, 400, ERR.INVALID_INPUT, "Invalid limit: must be a positive number");
       }
 
-      const result = await getAllTagsForUser(userId, limit, startDate, endDate, Note);
+      const result = await getAllTagsForUser(beingId, limit, startDate, endDate, Note);
 
-      const notes = result.notes.map((n) => ({
+      const notes = result.artifacts.map((n) => ({
         ...n,
         content: n.contentType === "file" ? `/api/v1/uploads/${n.content}` : n.content,
       }));
@@ -282,9 +282,9 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
         return sendOk(res, { taggedBy: result.taggedBy, notes });
       }
 
-      const user = await User.findById(userId).lean();
+      const user = await Being.findById(beingId).lean();
       const getNodeName = (await import("../../routes/api/helpers/getNameById.js")).default;
-      return res.send(await renderUserTags({ userId, user, notes, getNodeName, token }));
+      return res.send(await renderUserTags({ beingId, user, notes, getNodeName, token }));
     } catch (err) {
       sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }

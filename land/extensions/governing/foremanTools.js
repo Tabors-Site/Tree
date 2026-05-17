@@ -69,9 +69,9 @@ export default function getForemanTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, userId, username, rootId, chatId, sessionId, recordNodeId, stepIndex, branchName, reason } = args;
+        const { visitorId, beingId, username, rootId, chatId, sessionId, recordNodeId, stepIndex, branchName, reason } = args;
         if (!visitorId) return text("foreman-retry-branch: missing visitorId; substrate bug.");
-        if (!userId) return text("foreman-retry-branch: missing userId; substrate bug.");
+        if (!beingId) return text("foreman-retry-branch: missing beingId; substrate bug.");
         if (!recordNodeId || typeof stepIndex !== "number" || !branchName) {
           return text("foreman-retry-branch: recordNodeId, stepIndex, branchName all required.");
         }
@@ -180,7 +180,7 @@ export default function getForemanTools(_core) {
         const spawn = spawnRoleAsChainstepAsync({
           modeKey: "tree:governing-ruler",
           message: briefing,
-          userId,
+          beingId,
           username,
           rootId: rootId || null,
           nodeId: String(branchScopeId),

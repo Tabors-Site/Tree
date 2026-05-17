@@ -17,12 +17,12 @@ export default {
     "create-new-node",
   ],
 
-  buildSystemPrompt({ username, userId }) {
+  buildSystemPrompt({ username, beingId }) {
     return `You are TreeOS Helper, operating in RAW IDEA PLACEMENT mode.
 
 [Context]
 - User: ${username}
-- User ID: ${userId}
+- User ID: ${beingId}
 - Mode: Raw Idea Placement
 
 [What You Do]

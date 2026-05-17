@@ -8,14 +8,14 @@ import log from "./log.js";
 import { hooks as hooksModule } from "./hooks.js";
 import { registerMode, setDefaultMode, setNodeMode } from "./modes/registry.js";
 import { registerOrchestrator, getOrchestrator } from "./orchestrators/registry.js";
-import User from "./models/user.js";
+import Being from "./models/being.js";
 import Node from "./models/node.js";
 import Contribution from "./models/contribution.js";
-import Note from "./models/note.js";
+import Artifact from "./models/artifact.js";
 
 import { logContribution } from "./tree/contributions.js";
 import { resolveTreeAccess } from "./tree/treeAccess.js";
-import { createUser, createFirstUser, verifyPassword, generateToken, isFirstUser, findUserByUsername } from "./auth.js";
+import { createBeing, createFirstBeing, verifyPassword, generateToken, isFirstBeing, findBeingByUsername } from "./auth.js";
 
 import {
   createSession, endSession, registerSession,
@@ -49,11 +49,11 @@ import { OrchestratorRuntime } from "./orchestrators/runtime.js";
 import { acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks } from "./orchestrators/locks.js";
 import { ok, error, sendOk, sendError, ERR, WS, CASCADE } from "./protocol.js";
 import { getExtMeta, readNs, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, batchSetExtMeta, unsetExtMeta } from "./tree/extensionMetadata.js";
-import { getUserMeta, setUserMeta, incUserMeta, pushUserMeta, batchSetUserMeta, unsetUserMeta, addToUserMetaSet } from "./tree/userMetadata.js";
+import { getBeingMeta, setBeingMeta, incBeingMeta, pushBeingMeta, batchSetBeingMeta, unsetBeingMeta, addToBeingMetaSet } from "./tree/beingMetadata.js";
 import { deliverCascade } from "./tree/cascade.js";
 import { isUserRoot, getLandRootId } from "./landRoot.js";
 import { createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType } from "./tree/treeManagement.js";
-import { createNote, editNote, deleteNoteAndFile, transferNote, getNotes } from "./tree/notes.js";
+import { createArtifact, editArtifact, deleteArtifactAndFile, transferArtifact, getArtifacts } from "./tree/artifacts.js";
 import { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, getExtensionAtScope, isToolReadOnly, getToolOwner, getModeOwner, getModesOwnedBy } from "./tree/extensionScope.js";
 import {
   addContributor, removeContributor,
@@ -114,7 +114,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     contributions: { logContribution },
     auth: {
       resolveTreeAccess,
-      createUser, verifyPassword, generateToken, isFirstUser, findUserByUsername,
+      createBeing, verifyPassword, generateToken, isFirstBeing, findBeingByUsername,
       registerStrategy: (name, handler, extName = "unknown") => {
         if (!_allowedStrategyExtensions.has(extName)) {
           log.warn("Auth", `Strategy "${name}" from "${extName}" rejected: extension must declare provides.authStrategies in manifest`);
@@ -162,7 +162,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     orchestrator: { OrchestratorRuntime, acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks },
 
     // --- Shared models (core protocol, always available) ---
-    models: { User, Node, Contribution, Note },
+    models: { Being, Node, Contribution, Artifact },
 
     // --- Hook system ---
     hooks: hooksModule,
@@ -181,8 +181,8 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       isUserRoot, getLandRootId,
     },
 
-    // --- Notes (programmatic note CRUD) ---
-    notes: { createNote, editNote, deleteNoteAndFile, transferNote, getNotes },
+    // --- Artifacts (programmatic artifact CRUD) ---
+    artifacts: { createArtifact, editArtifact, deleteArtifactAndFile, transferArtifact, getArtifacts },
 
     // --- Node locks (structural mutation locks, tier 3 only) ---
     nodeLocks: { acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple, isNodeLocked, getStats: getNodeLockStats },
@@ -191,7 +191,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     metadata: { getExtMeta, readNs, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, batchSetExtMeta, unsetExtMeta },
 
     // --- User metadata (namespace-enforced read/write for extension data on users) ---
-    userMetadata: { getUserMeta, setUserMeta, incUserMeta, pushUserMeta, batchSetUserMeta, unsetUserMeta, addToUserMetaSet },
+    userMetadata: { getBeingMeta, setBeingMeta, incBeingMeta, pushBeingMeta, batchSetBeingMeta, unsetBeingMeta, addToBeingMetaSet },
 
     // --- Extension scope (check blocked/allowed status at positions) ---
     //

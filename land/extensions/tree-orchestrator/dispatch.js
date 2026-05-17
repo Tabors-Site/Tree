@@ -61,31 +61,31 @@ export function emitStatus(socket, phase, text) {
  * Safe when socket is null — each callback becomes a no-op. Signal check
  * mirrors the old onToolResults guard so an aborted run stops emitting.
  */
-export function buildSocketBridge(socket, signal = null, userId = null) {
+export function buildSocketBridge(socket, signal = null, beingId = null) {
   // Two emit paths in priority:
-  //   1. userId → emitToUser fan-out. Reaches every socket the user
+  //   1. beingId → emitToUser fan-out. Reaches every socket the user
   //      has open right now (browser tabs, CLI, mobile sheet), and
   //      survives the original request's socket closing. This is
   //      what makes the chat panel a live dashboard for the
   //      rulership tree — sub-Ruler events from any depth flow back.
-  //   2. socket → direct emit. Fallback when userId is unknown
-  //      (older call sites that didn't thread userId). Same shape
+  //   2. socket → direct emit. Fallback when beingId is unknown
+  //      (older call sites that didn't thread beingId). Same shape
   //      as before; events go only to the captured socket.
   //
   // Both paths gated on signal.aborted so a cancelled run stops
   // emitting cleanly.
   let liveEmit = null;
-  if (userId) {
+  if (beingId) {
     // Lazy-import to avoid bringing seed-ws into module-init order
     // — buildSocketBridge is called per-spawn, the import resolves
     // once and cached.
     let cachedFn = null;
     liveEmit = (event, payload) => {
       if (signal?.aborted) return;
-      if (cachedFn) { try { cachedFn(String(userId), event, payload); } catch {} return; }
+      if (cachedFn) { try { cachedFn(String(beingId), event, payload); } catch {} return; }
       import("../../seed/ws/websocket.js").then((m) => {
         cachedFn = m.emitToUser;
-        try { cachedFn(String(userId), event, payload); } catch {}
+        try { cachedFn(String(beingId), event, payload); } catch {}
       }).catch(() => {
         // Fall back to direct socket emit if the user-room import
         // fails — preserve the old single-socket behavior rather
@@ -157,12 +157,12 @@ export function emitModeResult(socket, modeKey, result) {
  * through this helper.
  */
 export async function pinBranchPosition(visitorId, branchNodeId, branchMode, {
-  username, userId, rootId,
+  username, beingId, rootId,
 }) {
   const branchIdStr = String(branchNodeId);
   setCurrentNodeId(visitorId, branchIdStr);
   await switchMode(visitorId, branchMode, {
-    username, userId, rootId,
+    username, beingId, rootId,
     currentNodeId: branchIdStr,
     clearHistory: true,
   });
@@ -177,10 +177,10 @@ export async function pinBranchPosition(visitorId, branchNodeId, branchMode, {
 // SHARED: RESOLVE LLM PROVIDER
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function resolveLlmProvider(userId, rootId, modeKey, slot) {
+export async function resolveLlmProvider(beingId, rootId, modeKey, slot) {
   try {
     const modeConnectionId = await resolveRootLlmForMode(rootId, modeKey);
-    const clientInfo = await getClientForUser(userId, slot, modeConnectionId);
+    const clientInfo = await getClientForUser(beingId, slot, modeConnectionId);
     return {
       isCustom: clientInfo.isCustom,
       model: clientInfo.model,
@@ -225,7 +225,7 @@ export async function resolveLlmProvider(userId, rootId, modeKey, slot) {
  */
 export async function runRulerCycle({
   visitorId, originalMode, message,
-  username, userId, rootId, signal, slot,
+  username, beingId, rootId, signal, slot,
   readOnly, onToolLoopCheckpoint, socket,
   sessionId, rootChatId, rt,
   skipRespond,
@@ -242,7 +242,7 @@ export async function runRulerCycle({
   if (!currentNodeId) currentNodeId = rootId || null;
 
   const baseOpts = {
-    username, userId, rootId, signal, slot,
+    username, beingId, rootId, signal, slot,
     readOnly, onToolLoopCheckpoint, socket,
     sessionId, rootChatId, rt,
     skipRespond,
@@ -280,10 +280,10 @@ export async function runRulerCycle({
             : governing.PROMOTED_FROM?.ROOT,
         });
       }
-      if (governing?.ensurePlanAtScope && userId) {
+      if (governing?.ensurePlanAtScope && beingId) {
         const planNode = await governing.ensurePlanAtScope({
           scopeNodeId: currentNodeId,
-          userId,
+          beingId,
           systemSpec: typeof message === "string" ? message.slice(0, 500) : null,
           wasAi: false,
           chatId: rootChatId,
@@ -337,7 +337,7 @@ export async function runRulerCycle({
   // workspace mode). That bug masked governing-planner's prompt under
   // tree:code-plan's prompt for the entire Ruler cycle.
   const switchOpts = {
-    username, userId, rootId,
+    username, beingId, rootId,
     currentNodeId: currentNodeId || rootId,
     clearHistory: false,
   };
@@ -449,7 +449,7 @@ export async function runRulerCycle({
       try {
         await governing.appendExecutionRecord({
           rulerNodeId: currentNodeId,
-          userId,
+          beingId,
           core: null,
           planEmissionRef: structuredEmission._emissionNodeId,
           planEmission: structuredEmission,
@@ -585,7 +585,7 @@ export async function runRulerCycle({
       }
       await governing.appendExecutionRecord({
         rulerNodeId: currentNodeId,
-        userId,
+        beingId,
         core: null,
         planEmissionRef: structuredEmission._emissionNodeId,
         planEmission: structuredEmission,
@@ -609,7 +609,7 @@ export async function runRulerCycle({
  * should call this instead of inlining the same 20 lines.
  */
 export async function runModeAndReturn(visitorId, mode, message, {
-  socket, username, userId, rootId, signal, slot,
+  socket, username, beingId, rootId, signal, slot,
   currentNodeId, readOnly = false, clearHistory = false,
   onToolLoopCheckpoint, modesUsed,
   targetNodeId = null,
@@ -772,7 +772,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
   } catch {}
 
   await switchMode(visitorId, mode, {
-    username, userId, rootId,
+    username, beingId, rootId,
     currentNodeId: currentNodeId || targetNodeId,
     conversationMemory: memory,
     clearHistory,
@@ -794,7 +794,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
     const { runRulerTurn } = await import("./ruling.js");
     result = await runRulerTurn({
       visitorId, message,
-      username, userId, rootId,
+      username, beingId, rootId,
       currentNodeId: currentNodeId || targetNodeId || rootId,
       signal, slot, socket,
       sessionId, rootChatId, rt,
@@ -803,7 +803,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
     });
   } else {
     result = await runSteppedMode(visitorId, mode, message, {
-      username, userId, rootId, signal, slot,
+      username, beingId, rootId, signal, slot,
       readOnly, onToolLoopCheckpoint, socket,
       sessionId, rootChatId, rt,
       skipRespond,
@@ -1172,7 +1172,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
  * results pass forward as context.
  */
 export async function runChain(chain, message, visitorId, {
-  socket, username, userId, rootId, signal, slot,
+  socket, username, beingId, rootId, signal, slot,
   onToolLoopCheckpoint, modesUsed,
 }) {
   emitStatus(socket, "intent", "Chaining extensions...");
@@ -1186,7 +1186,7 @@ export async function runChain(chain, message, visitorId, {
 
     const stepNodeId = step.targetNodeId || getCurrentNodeId(visitorId) || rootId;
     await switchMode(visitorId, step.mode, {
-      username, userId, rootId,
+      username, beingId, rootId,
       currentNodeId: stepNodeId,
       conversationMemory: context,
       clearHistory: true,
@@ -1194,7 +1194,7 @@ export async function runChain(chain, message, visitorId, {
 
     const stepResult = await processMessage(visitorId,
       isLast ? context : `${context}\n\nDo this step and return what you produced.`, {
-        username, userId, rootId, signal, slot,
+        username, beingId, rootId, signal, slot,
         onToolLoopCheckpoint,
         onToolResults(results) {
           if (signal?.aborted) return;
@@ -1458,7 +1458,7 @@ async function runLeafGroupAtScope({
   leafSteps,
   workerType,
   projectNode,
-  visitorId, userId, username, rootId,
+  visitorId, beingId, username, rootId,
   signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
   stashedPlanText,
   allBranchNames,
@@ -1533,7 +1533,7 @@ async function runLeafGroupAtScope({
   // Pin position to the Ruler scope so the Worker's writes land here.
   setCurrentNodeId(visitorId, String(projectNode._id));
   await switchMode(visitorId, modeKey, {
-    username, userId, rootId,
+    username, beingId, rootId,
     currentNodeId: String(projectNode._id),
     clearHistory: false,
   });
@@ -1627,7 +1627,7 @@ async function runLeafGroupAtScope({
   const flagsBefore = await snapshotFlagQueue(governing, projectNode._id);
 
   const workerResult = await runSteppedMode(visitorId, modeKey, rulerWorkerMessage, {
-    username, userId, rootId, signal, slot,
+    username, beingId, rootId, signal, slot,
     readOnly: false, onToolLoopCheckpoint, socket,
     sessionId, rootChatId, rt,
     currentNodeId: String(projectNode._id),
@@ -1675,7 +1675,7 @@ async function runBranchStepAtScope({
   branchStep,
   projectNode,
   sw,
-  visitorId, userId, username, rootId,
+  visitorId, beingId, username, rootId,
   signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
   architectChatId, userRequest,
 }) {
@@ -1707,7 +1707,7 @@ async function runBranchStepAtScope({
     architectChatId,
     sessionId,
     visitorId,
-    userId,
+    beingId,
     username,
     rootId,
     signal,
@@ -1731,7 +1731,7 @@ async function runBranchStepAtScope({
     emitStatus,
     runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot, markerChatId }) => {
       setActiveRequest(visitorId, {
-        socket, username, userId, signal,
+        socket, username, beingId, signal,
         sessionId,
         rootId,
         rootChatId,
@@ -1739,13 +1739,13 @@ async function runBranchStepAtScope({
         rt: (getActiveRequest(visitorId) || {}).rt,
       });
       const branchIdStr = await pinBranchPosition(visitorId, branchNodeId, branchMode, {
-        username, userId, rootId,
+        username, beingId, rootId,
       });
       const { runRulerTurn } = await import("./ruling.js");
       const cycleResult = await runRulerTurn({
         visitorId,
         message: branchMessage,
-        username, userId, rootId,
+        username, beingId, rootId,
         currentNodeId: branchIdStr,
         signal, slot: branchSlot, socket,
         sessionId, rootChatId, rt,
@@ -1865,7 +1865,7 @@ async function markLeafBatchFailed(recordNodeId, leafSteps, error) {
 async function wakeForemanForLeafFailure({
   projectNode, recordNodeIdForRollup,
   workerType, leafSteps, error,
-  visitorId, username, userId, rootId,
+  visitorId, username, beingId, rootId,
   signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
 }) {
   if (!projectNode?._id) return;
@@ -1891,7 +1891,7 @@ async function wakeForemanForLeafFailure({
     await runForemanTurn({
       visitorId,
       message: summary,
-      username, userId, rootId,
+      username, beingId, rootId,
       currentNodeId: String(projectNode._id),
       signal, slot, socket,
       sessionId, rootChatId, rt,
@@ -1919,7 +1919,7 @@ async function wakeForemanForLeafFailure({
 async function wakeForemanForBranchFailure({
   projectNode, recordNodeIdForRollup,
   branchStep, rolledUpStatus, error,
-  visitorId, username, userId, rootId,
+  visitorId, username, beingId, rootId,
   signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
 }) {
   if (!projectNode?._id) return;
@@ -1944,7 +1944,7 @@ async function wakeForemanForBranchFailure({
     await runForemanTurn({
       visitorId,
       message: summary,
-      username, userId, rootId,
+      username, beingId, rootId,
       currentNodeId: String(projectNode._id),
       signal, slot, socket,
       sessionId, rootChatId, rt,
@@ -1995,7 +1995,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
   } = planData || {};
 
   const {
-    visitorId, userId, username, rootId: ctxRootId,
+    visitorId, beingId, username, rootId: ctxRootId,
     sessionId, signal, slot, socket, onToolLoopCheckpoint, rt,
     rootChatId: ctxRootChatId,
   } = runtimeCtx || {};
@@ -2111,7 +2111,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
       if (planEmission?._emissionNodeId) {
         const recordOut = await governing.appendExecutionRecord({
           rulerNodeId: projectNode._id,
-          userId,
+          beingId,
           core: null,
           planEmissionRef: planEmission._emissionNodeId,
           planEmission,
@@ -2322,7 +2322,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
           leafSteps: group.steps,
           workerType: group.workerType,
           projectNode,
-          visitorId, userId, username, rootId,
+          visitorId, beingId, username, rootId,
           signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
           stashedPlanText,
           allBranchNames,
@@ -2350,7 +2350,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
           workerType: group.workerType || "build",
           leafSteps: group.steps,
           error: leafBatchError,
-          visitorId, username, userId, rootId,
+          visitorId, username, beingId, rootId,
           signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
         });
       }
@@ -2361,7 +2361,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
           branchStep: group.step,
           projectNode,
           sw,
-          visitorId, userId, username, rootId,
+          visitorId, beingId, username, rootId,
           signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
           architectChatId, userRequest,
         });
@@ -2398,7 +2398,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
           branchStep: group.step,
           rolledUpStatus,
           error: branchStepError,
-          visitorId, username, userId, rootId,
+          visitorId, username, beingId, rootId,
           signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
         });
       }
@@ -2533,7 +2533,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
             await runForemanTurn({
               visitorId,
               message: summary,
-              username, userId, rootId,
+              username, beingId, rootId,
               currentNodeId: String(projectNode._id),
               signal, slot, socket,
               sessionId, rootChatId, rt,
@@ -2594,7 +2594,7 @@ export async function dispatchResumePlan(rulerScopeNodeId, runtimeCtx) {
   }
 
   const {
-    visitorId, userId, username, rootId,
+    visitorId, beingId, username, rootId,
     sessionId, signal, slot, socket, onToolLoopCheckpoint, rt,
     rootChatId, defaultBranchMode,
   } = runtimeCtx || {};
@@ -2629,7 +2629,7 @@ export async function dispatchResumePlan(rulerScopeNodeId, runtimeCtx) {
       rootChatId,
       sessionId,
       visitorId,
-      userId,
+      beingId,
       username,
       rootId,
       signal,
@@ -2647,19 +2647,19 @@ export async function dispatchResumePlan(rulerScopeNodeId, runtimeCtx) {
       emitStatus,
       runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot, markerChatId }) => {
         setActiveRequest(visitorId, {
-          socket, username, userId, signal,
+          socket, username, beingId, signal,
           sessionId, rootId, rootChatId,
           slot, onToolLoopCheckpoint,
           rt: (getActiveRequest(visitorId) || {}).rt,
         });
         const branchIdStr = await pinBranchPosition(visitorId, branchNodeId, branchMode, {
-          username, userId, rootId,
+          username, beingId, rootId,
         });
         const { runRulerTurn } = await import("./ruling.js");
         return await runRulerTurn({
           visitorId,
           message: branchMessage,
-          username, userId, rootId,
+          username, beingId, rootId,
           currentNodeId: branchIdStr,
           signal, slot: branchSlot, socket,
           sessionId, rootChatId, rt,

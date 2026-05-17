@@ -10,7 +10,7 @@ export default {
 
   needs: {
     services: ["hooks", "llm", "metadata", "tree"],
-    models: ["Node", "Note", "User"],
+    models: ["Node", "Artifact", "User"],
   },
 
   optional: {

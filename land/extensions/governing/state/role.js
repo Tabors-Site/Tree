@@ -81,27 +81,53 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, core }) {
     await setExtMeta(node, NS, data);
   }
 
-  // Declare the Ruler's home at this position. embodiments is a
-  // kernel-aware namespace (CORE_NAMESPACES) — multiple extensions
-  // register being homes there. The descriptor reads this directly to
-  // surface the Ruler at home for SEE; activity field on the descriptor
-  // shows the chainstep state when the Ruler is summoned. Merging so
-  // existing stance permission profiles (arrival/owner) on the same
-  // namespace are preserved.
+  // Declare the Ruler's home at this position. The Ruler's home IS
+  // the existing scope node (we don't create a new child) — so
+  // createBeingWithHome is called with homeNodeId pointing at it.
+  // The primitive handles being creation, password generation,
+  // metadata.beings.ruler registration with beingId, and rollback
+  // on failure. Idempotent: skipped if a Ruler is already at home here.
   try {
+    const existingEmb = node.metadata instanceof Map
+      ? node.metadata.get("beings")
+      : node.metadata?.embodiments;
+    if (!existingEmb?.ruler?.beingId) {
+      const { createBeingWithHome } = await import("../../../seed/auth.js");
+      await createBeingWithHome({
+        operatingMode: "ai",
+        role:          "ruler",
+        homeNodeId:    String(nodeId),
+      });
+    }
+    // Augment the embodiments.ruler entry with governing's lineage info
+    // (when/why/how the promotion happened). The createBeingWithHome
+    // call above wrote the canonical { beingId, installedAt, installedBy }
+    // fields; this merge layers governing's own bookkeeping alongside.
     const home = {
       installedAt: data.acceptedAt,
       installedBy: "governing",
       from:        data.promotedFrom,
     };
     if (core?.metadata?.mergeExtMeta) {
-      await core.metadata.mergeExtMeta(node, "embodiments", { ruler: home });
+      await core.metadata.mergeExtMeta(node, "beings", { ruler: home });
     } else {
       const { mergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-      await mergeExtMeta(node, "embodiments", { ruler: home });
+      await mergeExtMeta(node, "beings", { ruler: home });
     }
+
+    // Stamp the Ruler's open TALK policy: anyone — humans, citizens,
+    // federated visitors — can address the Ruler at this scope. The
+    // Ruler is the entry point for governance interactions; inner
+    // beings (Planner, Contractor, Foreman) inside the rulership get
+    // their own restrictive rules at their trio nodes.
+    const { mergeExtMeta: kernelMergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
+    await kernelMergeExtMeta(node, "permissions", {
+      talk: {
+        "@ruler*": { requires: {} },
+      },
+    });
   } catch (err) {
-    log.warn("Governing", `embodiments.ruler home write failed for ${String(nodeId).slice(0, 8)}: ${err.message}`);
+    log.warn("Governing", `embodiments.ruler home/permissions write failed for ${String(nodeId).slice(0, 8)}: ${err.message}`);
   }
 
   // Promotion is a load-bearing lifecycle event — surface it in logs

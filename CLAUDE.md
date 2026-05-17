@@ -9,7 +9,7 @@ Open source operating system for AI agents. Minimal kernel + modular extensions 
 ## CRITICAL: Three Layers
 
 ### Kernel (cannot change without forking)
-The data contract. Node schema, User schema, Note model, Contribution model. The API protocol (chat/place/query behavioral contracts). The hook system. The mode registry. The orchestrator registry. The extension loader. Federation (Canopy). These define what TreeOS IS. Do not add fields to Node or User schemas. Do not import from extensions/ into kernel files.
+The data contract. Node schema, Being schema, Artifact model, Contribution model. The API protocol (chat/place/query behavioral contracts). The hook system. The mode registry. The orchestrator registry. The extension loader. Federation (Canopy). These define what TreeOS IS. Do not add fields to Node or Being schemas. Do not import from extensions/ into kernel files.
 
 ### Core (ships with every land, replaceable)
 The reference implementation. The AI conversation loop (`processMessage`, `runChat`, `runPipeline`). The WebSocket server. The MCP bridge. Session management. `OrchestratorRuntime`. `parseJsonSafe`. The built-in tree modes (navigate, structure, edit, respond, librarian, notes). These ship by default but can be overridden by extensions. A custom orchestrator can replace the entire conversation flow. Custom modes can replace how the AI thinks at any node.
@@ -44,15 +44,15 @@ land/
 │       ├── treeManagement.js    # createNode, deleteNode
 │       ├── treeFetch.js         # getContextForAi, navigation, path building
 │       ├── treeData.js           # getTree, getNodeForAi, getTreeStructure
-│       ├── notes.js             # Note CRUD (fires beforeNote/afterNote hooks)
+│       ├── artifacts.js         # Artifact CRUD (fires beforeArtifact/afterArtifact hooks)
 │       ├── statuses.js          # Status changes (fires beforeStatusChange/afterStatusChange hooks)
 │       ├── contributions.js     # Audit trail queries
 │       ├── extensionMetadata.js # getExtMeta/setExtMeta for node.metadata
 │       └── userMetadata.js      # getUserMeta/setUserMeta for user.metadata
 ├── seed/models/       # Kernel models (6 files, zero extension models)
 │   ├── node.js        # _id, name, type, status, dateCreated, llmDefault, visibility, children, parent, rootOwner, contributors, systemRole, metadata
-│   ├── user.js        # _id, username, password, llmDefault, isAdmin, isRemote, homeLand, metadata
-│   ├── note.js        # Text or file content attached to nodes
+│   ├── being.js       # _id, username, operatingMode, password, role, homePositionId, llmSlot, isAdmin, isRemote, homeLand, metadata
+│   ├── artifact.js    # A thing inside a node. Fields: nodeId, beingId, origin (ibp/filesystem/web/cross-land), content (shape varies), metadata
 │   ├── contribution.js # Audit trail
 │   ├── chat.js        # AI conversation sessions
 │   └── llmConnection.js # LLM endpoint storage
@@ -253,8 +253,8 @@ Two rules, no exceptions. Before hooks run sequential because they can cancel. A
 | Hook | Type | Purpose |
 |------|------|---------|
 | beforeNodeCreate | before | Gate node creation. Enforce naming, child limits, compliance. |
-| beforeNote | before | Modify note data, tag version |
-| afterNote | after | React to note create/edit/delete |
+| beforeArtifact | before | Modify artifact data before save. Payload: { nodeId, content, beingId, origin, metadata }. |
+| afterArtifact | after | React to artifact create/edit/delete. Payload: { artifact, nodeId, beingId, origin, sizeKB, action }. |
 | beforeContribution | before | Modify contribution data. Extensions add to extensionData via hook. |
 | afterNodeCreate | after | Initialize extension data |
 | beforeStatusChange | before | Validate, intercept |

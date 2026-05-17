@@ -1,7 +1,7 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { esc } from "../../html-rendering/html/utils.js";
 
-export function renderApiKeyCreated({ userId, safeName, rawKey, token }) {
+export function renderApiKeyCreated({ beingId, safeName, rawKey, token }) {
   const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
   const css = `
@@ -63,8 +63,8 @@ export function renderApiKeyCreated({ userId, safeName, rawKey, token }) {
   const body = `
   <div class="container">
     <div class="back-nav">
-      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">&lt;- Back to Profile</a>
-      <a href="/api/v1/user/${userId}/api-keys${tokenQS}" class="back-link">API Keys</a>
+      <a href="/api/v1/user/${beingId}${tokenQS}" class="back-link">&lt;- Back to Profile</a>
+      <a href="/api/v1/user/${beingId}/api-keys${tokenQS}" class="back-link">API Keys</a>
     </div>
 
     <div class="card">
@@ -106,7 +106,7 @@ export function renderApiKeyCreated({ userId, safeName, rawKey, token }) {
   });
 }
 
-export function renderApiKeysList({ userId, user, apiKeys, token, errorParam }) {
+export function renderApiKeysList({ beingId, user, apiKeys, token, errorParam }) {
   const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
   const css = `
@@ -419,7 +419,7 @@ export function renderApiKeysList({ userId, user, apiKeys, token, errorParam }) 
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
+      <a href="/api/v1/user/${beingId}${tokenQS}" class="back-link">
         \u2190 Back to Profile
       </a>
     </div>
@@ -435,7 +435,7 @@ export function renderApiKeysList({ userId, user, apiKeys, token, errorParam }) 
     <!-- Create API Key -->
     <div class="create-card">
       <form class="create-form" method="POST" action="/api/v1/user/${
-        userId
+        beingId
       }/api-keys?token=${encodeURIComponent(token)}&html">
         <input type="text" name="name" placeholder="Key name (optional)" />
         <button type="submit">Create Key</button>
@@ -536,7 +536,7 @@ export function renderApiKeysList({ userId, user, apiKeys, token, errorParam }) 
 
       try {
         const res = await fetch(
-          "/api/v1/user/${userId}/api-keys/" + keyId + qs,
+          "/api/v1/user/${beingId}/api-keys/" + keyId + qs,
           { method: "DELETE" }
         );
 

@@ -3,24 +3,24 @@ import mongoose from "mongoose";
 import Node from "../models/node.js";
 import { logContribution } from "./contributions.js";
 import { containsHtml } from "../utils.js";
-import User from "../models/user.js";
-import { createNote } from "./notes.js";
+import Being from "../models/being.js";
+import { createArtifact } from "./artifacts.js";
 import { resolveTreeAccess } from "./treeAccess.js";
 import { isDescendant } from "./treeFetch.js";
 import { hooks } from "../hooks.js";
 import { getLandRootId } from "../landRoot.js";
 import { invalidateAll, invalidateNode } from "./ancestorCache.js";
 import log from "../log.js";
-import { NODE_STATUS, DELETED, CONTENT_TYPE, ERR, ProtocolError, SYSTEM_OWNER } from "../protocol.js";
+import { NODE_STATUS, DELETED, ARTIFACT_ORIGIN, ERR, ProtocolError, SYSTEM_OWNER } from "../protocol.js";
 import { acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple } from "./nodeLocks.js";
 import { getLandConfigValue } from "../landConfig.js";
 
-async function getUserOrThrow(userId) {
-  if (!userId) {
+async function getUserOrThrow(beingId) {
+  if (!beingId) {
     throw new Error("User ID is required");
   }
 
-  const user = await User.findById(userId);
+  const user = await Being.findById(beingId);
   if (!user) {
     throw new Error("User not found");
   }
@@ -32,7 +32,7 @@ export async function createNode({
   name,
   parentId = null,
   isRoot = false,
-  userId,
+  beingId,
   type = null,
   note = null,
   metadata = null,
@@ -66,7 +66,7 @@ export async function createNode({
   if (!isRoot && !parentId) {
     throw new Error("Non-root nodes require a parentId");
   }
-  const user = validatedUser ?? (await getUserOrThrow(userId));
+  const user = validatedUser ?? (await getUserOrThrow(beingId));
 
   // beforeNodeCreate: extensions can modify or cancel.
   // parentType included so extensions can validate parent-child type compatibility.
@@ -75,7 +75,7 @@ export async function createNode({
     const parentDoc = await Node.findById(parentId).select("type").lean();
     parentType = parentDoc?.type || null;
   }
-  const hookData = { name, type, parentId, parentType, isRoot, userId, metadata: metadata || new Map() };
+  const hookData = { name, type, parentId, parentType, isRoot, beingId, metadata: metadata || new Map() };
   const hookResult = await hooks.run("beforeNodeCreate", hookData);
   if (hookResult.cancelled) {
     const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
@@ -130,7 +130,7 @@ export async function createNode({
       await Node.findByIdAndUpdate(parentId, { $addToSet: { children: newNode._id } });
 
       await logContribution({
-        userId: user._id,
+        beingId: user._id,
         nodeId: parentId,
         wasAi,
         chatId,
@@ -147,7 +147,7 @@ export async function createNode({
   }
 
   await logContribution({
-    userId: user._id,
+    beingId: user._id,
     nodeId: newNode._id,
     wasAi,
     chatId,
@@ -157,10 +157,10 @@ export async function createNode({
   });
 
   if (note?.trim()) {
-    await createNote({
-      contentType: CONTENT_TYPE.TEXT,
+    await createArtifact({
+      origin: ARTIFACT_ORIGIN.IBP,
       content: note,
-      userId: user._id,
+      beingId: user._id,
       nodeId: newNode._id,
       wasAi,
       chatId,
@@ -172,9 +172,9 @@ export async function createNode({
   // updates metadata.nav.roots before the response goes back to the CLI.
   // Non-root nodes fire-and-forget (hooks are independent reactions).
   if (isRoot) {
-    await hooks.run("afterNodeCreate", { node: newNode, userId: user._id }).catch(() => {});
+    await hooks.run("afterNodeCreate", { node: newNode, beingId: user._id }).catch(() => {});
   } else {
-    hooks.run("afterNodeCreate", { node: newNode, userId: user._id }).catch(() => {});
+    hooks.run("afterNodeCreate", { node: newNode, beingId: user._id }).catch(() => {});
   }
 
   return newNode;
@@ -217,12 +217,12 @@ export async function createSystemNode({ name, parentId, metadata = null }) {
 export async function createNodeBranch(
   nodeData,
   parentId,
-  userId,
+  beingId,
   wasAi = false,
   chatId = null,
   sessionId = null,
 ) {
-  const user = await getUserOrThrow(userId);
+  const user = await getUserOrThrow(beingId);
 
   return createNodeBranchInternal(
     nodeData,
@@ -256,7 +256,7 @@ async function createNodeBranchInternal(
   const newNode = await createNode({
     name,
     parentId,
-    userId: user._id,
+    beingId: user._id,
     type: type || null,
     note: note || null,
     metadata: metadataMap,
@@ -289,14 +289,14 @@ async function createNodeBranchInternal(
 
 export async function deleteNodeBranch(
   nodeId,
-  userId,
+  beingId,
   wasAi = false,
   chatId = null,
   sessionId = null,
 ) {
   const nodeToDelete = await Node.findById(nodeId);
   if (!nodeToDelete) throw new Error("Node not found");
-  const access = await resolveTreeAccess(nodeId, userId);
+  const access = await resolveTreeAccess(nodeId, beingId);
   if (!access.isOwner || (!access.isRoot && !!nodeToDelete.rootOwner)) {
     throw new Error("Invalid delete attempt. Must be owner and not root.");
   }
@@ -307,7 +307,7 @@ export async function deleteNodeBranch(
     throw new Error("Node has already been deleted");
   }
   // beforeNodeDelete hook (before hooks can cancel)
-  const hookResult = await hooks.run("beforeNodeDelete", { node: nodeToDelete, userId });
+  const hookResult = await hooks.run("beforeNodeDelete", { node: nodeToDelete, beingId });
   if (hookResult.cancelled) {
     const code = hookResult.timedOut ? ERR.HOOK_TIMEOUT : ERR.HOOK_CANCELLED;
     throw new ProtocolError(500, code, hookResult.reason || "Node deletion blocked");
@@ -319,7 +319,7 @@ export async function deleteNodeBranch(
   const locked = await acquireMultiple(lockIds, sessionId);
   if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Nodes are being modified");
   try {
-    nodeToDelete.rootOwner = userId;
+    nodeToDelete.rootOwner = beingId;
     nodeToDelete.parent = DELETED;
     await nodeToDelete.save();
 
@@ -329,7 +329,7 @@ export async function deleteNodeBranch(
       });
 
       await logContribution({
-        userId,
+        beingId,
         nodeId: oldParent.toString(),
         wasAi,
         chatId,
@@ -345,7 +345,7 @@ export async function deleteNodeBranch(
     releaseMultiple(lockIds, sessionId);
   }
   await logContribution({
-    userId,
+    beingId,
     nodeId: nodeId,
     wasAi,
     chatId,
@@ -364,7 +364,7 @@ export async function deleteNodeBranch(
 export async function updateParentRelationship(
   nodeChildId,
   nodeNewParentId,
-  userId,
+  beingId,
   wasAi = false,
   chatId = null,
   sessionId = null,
@@ -388,8 +388,8 @@ export async function updateParentRelationship(
   }
 
   // Resolve tree access for both nodes
-  const childAccess = await resolveTreeAccess(nodeChildId, userId);
-  const newParentAccess = await resolveTreeAccess(nodeNewParentId, userId);
+  const childAccess = await resolveTreeAccess(nodeChildId, beingId);
+  const newParentAccess = await resolveTreeAccess(nodeNewParentId, beingId);
 
   // CASE 1: Same tree → user must have write access (owner OR contributor)
   if (childAccess.rootId === newParentAccess.rootId) {
@@ -458,7 +458,7 @@ export async function updateParentRelationship(
   // Contributions logged outside the transaction (audit trail, not structural)
   if (oldParent) {
     await logContribution({
-      userId,
+      beingId,
       nodeId: oldParent._id.toString(),
       wasAi,
       chatId,
@@ -469,7 +469,7 @@ export async function updateParentRelationship(
   }
 
   await logContribution({
-    userId,
+    beingId,
     nodeId: nodeChildId,
     wasAi,
     chatId,
@@ -482,7 +482,7 @@ export async function updateParentRelationship(
   });
 
   await logContribution({
-    userId,
+    beingId,
     nodeId: nodeNewParentId.toString(),
     wasAi,
     chatId,
@@ -498,14 +498,14 @@ export async function updateParentRelationship(
   }
   releaseMultiple(lockIds, sessionId);
 
-  hooks.run("afterNodeMove", { nodeId: nodeChildId.toString(), oldParentId: oldParentId.toString(), newParentId: nodeNewParentId.toString(), userId }).catch(() => {});
+  hooks.run("afterNodeMove", { nodeId: nodeChildId.toString(), oldParentId: oldParentId.toString(), newParentId: nodeNewParentId.toString(), beingId }).catch(() => {});
 
   return { nodeChild, nodeNewParent };
 }
 export async function editNodeName({
   nodeId,
   newName,
-  userId,
+  beingId,
   wasAi = false,
   chatId = null,
   sessionId = null,
@@ -545,7 +545,7 @@ export async function editNodeName({
   await Node.findByIdAndUpdate(nodeId, { $set: { name: newName } });
 
   await logContribution({
-    userId,
+    beingId,
     nodeId,
     action: "editName",
     wasAi,
@@ -564,7 +564,7 @@ export async function editNodeName({
 export async function reviveNodeBranch({
   deletedNodeId,
   targetParentId,
-  userId,
+  beingId,
   wasAi = false,
 }) {
   const deletedNode = await Node.findById(deletedNodeId);
@@ -591,12 +591,12 @@ export async function reviveNodeBranch({
 
   // Lock BEFORE access check to prevent TOCTOU race
   const lockIds = [deletedNodeId.toString(), targetParentId.toString()];
-  const locked = await acquireMultiple(lockIds, userId);
+  const locked = await acquireMultiple(lockIds, beingId);
   if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Nodes are being modified");
   try {
     // Access check inside lock window
-    const deletedAccess = await resolveTreeAccess(deletedNodeId, userId);
-    const targetAccess = await resolveTreeAccess(targetParentId, userId);
+    const deletedAccess = await resolveTreeAccess(deletedNodeId, beingId);
+    const targetAccess = await resolveTreeAccess(targetParentId, beingId);
     if (!deletedAccess.isOwner || !targetAccess.isOwner) {
       throw new Error("You must own both branches to revive a node");
     }
@@ -607,14 +607,14 @@ export async function reviveNodeBranch({
     await Node.findByIdAndUpdate(targetParentId, { $addToSet: { children: deletedNodeId } });
 
     await logContribution({
-      userId,
+      beingId,
       nodeId: targetParentId,
       wasAi,
       action: "updateChild",
       updateChild: { action: "added", childId: deletedNodeId.toString() },
     });
     await logContribution({
-      userId,
+      beingId,
       nodeId: deletedNodeId,
       wasAi,
       action: "branchLifecycle",
@@ -629,7 +629,7 @@ export async function reviveNodeBranch({
 }
 export async function reviveNodeBranchAsRoot({
   deletedNodeId,
-  userId,
+  beingId,
   wasAi = false,
 }) {
   const deletedNode = await Node.findById(deletedNodeId);
@@ -646,26 +646,26 @@ export async function reviveNodeBranchAsRoot({
   // Lock BEFORE access check to prevent TOCTOU race
   const landRootId = getLandRootId();
   const lockIds = [deletedNodeId.toString(), landRootId].filter(Boolean);
-  const locked = await acquireMultiple(lockIds, userId);
+  const locked = await acquireMultiple(lockIds, beingId);
   if (!locked) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Nodes are being modified");
   try {
     // Access check inside lock window
-    const access = await resolveTreeAccess(deletedNodeId, userId);
+    const access = await resolveTreeAccess(deletedNodeId, beingId);
     if (!access.isOwner) {
       throw new Error("Only the owner can revive this branch as a root");
     }
     deletedNode.parent = landRootId;
-    deletedNode.rootOwner = userId;
+    deletedNode.rootOwner = beingId;
     await deletedNode.save();
 
-    hooks.run("afterOwnershipChange", { nodeId: deletedNodeId, action: "setOwner", targetUserId: userId }).catch(() => {});
+    hooks.run("afterOwnershipChange", { nodeId: deletedNodeId, action: "setOwner", targetUserId: beingId }).catch(() => {});
 
     if (landRootId) {
       await Node.findByIdAndUpdate(landRootId, { $addToSet: { children: deletedNodeId } });
     }
 
     await logContribution({
-      userId,
+      beingId,
       nodeId: deletedNodeId,
       wasAi,
       action: "branchLifecycle",
@@ -682,7 +682,7 @@ export async function reviveNodeBranchAsRoot({
 export async function editNodeType({
   nodeId,
   newType,
-  userId,
+  beingId,
   wasAi = false,
   chatId = null,
   sessionId = null,
@@ -721,7 +721,7 @@ export async function editNodeType({
   await Node.findByIdAndUpdate(nodeId, { $set: { type: newType } });
 
   await logContribution({
-    userId,
+    beingId,
     nodeId,
     action: "editType",
     wasAi,
@@ -741,7 +741,7 @@ export async function editNodeType({
 export async function reorderChildren({
   nodeId,
   children: newOrder,
-  userId,
+  beingId,
   wasAi = false,
   chatId = null,
   sessionId = null,
@@ -761,7 +761,7 @@ export async function reorderChildren({
   await Node.updateOne({ _id: nodeId }, { $set: { children: newOrder } });
 
   await logContribution({
-    userId,
+    beingId,
     nodeId,
     action: "reorder",
     wasAi,

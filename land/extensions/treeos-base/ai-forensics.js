@@ -43,7 +43,7 @@ export function setCaptureEmitter(fn) {
 function emitCaptureUpdated(capture) {
   if (!_emitToUser || !capture) return;
   try {
-    _emitToUser(capture.userId, "captureUpdated", {
+    _emitToUser(capture.beingId, "captureUpdated", {
       chatId: capture.chatId,
       captureId: String(capture._id || ""),
       rootId: capture.rootId || null,
@@ -333,7 +333,7 @@ export async function onBeforeLLMCall(data) {
     const draft = {
       chatId: data.chatId,
       sessionId: data.sessionId || null,
-      userId: data.userId || null,
+      beingId: data.beingId || null,
       rootId: data.rootId || null,
       nodeId: data.nodeId || null,
       mode: data.mode || null,
@@ -362,7 +362,7 @@ export async function onBeforeLLMCall(data) {
       const doc = await AiCapture.create({
         chatId: draft.chatId,
         sessionId: draft.sessionId,
-        userId: draft.userId,
+        beingId: draft.beingId,
         rootId: draft.rootId,
         nodeId: draft.nodeId,
         mode: draft.mode,

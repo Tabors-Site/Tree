@@ -1,18 +1,18 @@
 import log from "../../seed/log.js";
 import tools from "./tools.js";
 import { setServices, embedNote, findSimilar, getEmbedConfig } from "./core.js";
-import { CONTENT_TYPE } from "../../seed/protocol.js";
+import { ARTIFACT_ORIGIN } from "../../seed/protocol.js";
 
 export async function init(core) {
   setServices({
     getClientForUser: core.llm.getClientForUser,
   });
 
-  // ── afterNote: embed every new text note ───────────────────────────
-  core.hooks.register("afterNote", async ({ note, nodeId, userId, contentType, action }) => {
-    if (contentType !== CONTENT_TYPE.TEXT) return;
+  // ── afterArtifact: embed every new ibp-origin artifact ─────────────
+  core.hooks.register("afterArtifact", async ({ artifact, nodeId, beingId, origin, action }) => {
+    if (origin !== ARTIFACT_ORIGIN.IBP) return;
     if (action !== "create" && action !== "edit") return;
-    if (!userId || userId === "SYSTEM") return;
+    if (!beingId || beingId === "SYSTEM") return;
 
     // Skip system nodes
     try {
@@ -21,15 +21,15 @@ export async function init(core) {
       if (node?.systemRole) return;
     } catch { return; }
 
-    // Embed in background, don't block note write
-    embedNote(note._id || note.id, userId).catch((err) => {
-      log.debug("Embed", `Background embedding failed for note at ${nodeId}: ${err.message}`);
+    // Embed in background, don't block artifact write
+    embedNote(artifact._id || artifact.id, beingId).catch((err) => {
+      log.debug("Embed", `Background embedding failed for artifact at ${nodeId}: ${err.message}`);
     });
   }, "embed");
 
   // ── enrichContext: inject semantically related notes ────────────────
-  core.hooks.register("enrichContext", async ({ context, node, meta, userId }) => {
-    if (!userId) return;
+  core.hooks.register("enrichContext", async ({ context, node, meta, beingId }) => {
+    if (!beingId) return;
     if (node.systemRole) return;
 
     // Don't run expensive search on every enrichContext. Only if the node
@@ -51,10 +51,10 @@ export async function init(core) {
     if (!rootId) return;
 
     // Get the most recent note's vector at this node
-    const Note = core.models.Note;
-    const recentNote = await Note.findOne({
+    const Artifact = core.models.Artifact;
+    const recentNote = await Artifact.findOne({
       nodeId: node._id,
-      contentType: CONTENT_TYPE.TEXT,
+      origin: ARTIFACT_ORIGIN.IBP,
       "metadata.embed.vector": { $exists: true },
     })
       .sort({ createdAt: -1 })

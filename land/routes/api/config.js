@@ -2,7 +2,7 @@ import log from "../../seed/log.js";
 import express from "express";
 import authenticate, { authenticateOptional } from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR, NODE_STATUS } from "../../seed/protocol.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import Node from "../../seed/models/node.js";
 import { getLandRoot } from "../../seed/landRoot.js";
 import {
@@ -58,7 +58,7 @@ router.get("/land/config/:key", authenticate, async (req, res) => {
  */
 router.put("/land/config/:key", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user || !user.isAdmin) {
       return sendError(res, 403, ERR.FORBIDDEN, "Admin access required");
     }
@@ -151,7 +151,7 @@ router.get("/land/extensions/:name", authenticate, async (req, res) => {
  */
 router.post("/land/extensions/:name/disable", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user || !user.isAdmin) {
       return sendError(res, 403, ERR.FORBIDDEN, "Admin access required");
     }
@@ -187,7 +187,7 @@ router.post("/land/extensions/:name/disable", authenticate, async (req, res) => 
  */
 router.post("/land/extensions/:name/enable", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user || !user.isAdmin) {
       return sendError(res, 403, ERR.FORBIDDEN, "Admin access required");
     }
@@ -218,7 +218,7 @@ router.post("/land/extensions/:name/enable", authenticate, async (req, res) => {
  */
 router.post("/land/extensions/:name/uninstall", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user || !user.isAdmin) {
       return sendError(res, 403, ERR.FORBIDDEN, "Admin access required");
     }
@@ -264,7 +264,7 @@ router.post("/land/extensions/:name/uninstall", authenticate, async (req, res) =
  */
 router.post("/land/extensions/install", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user || !user.isAdmin) {
       return sendError(res, 403, ERR.FORBIDDEN, "Admin access required");
     }
@@ -303,7 +303,7 @@ router.post("/land/extensions/install", authenticate, async (req, res) => {
  */
 router.post("/land/extensions/:name/publish", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user || !user.isAdmin) {
       return sendError(res, 403, ERR.FORBIDDEN, "Admin access required");
     }
@@ -396,7 +396,7 @@ router.post("/land/extensions/:name/comment", authenticate, async (req, res) => 
     const { signCanopyToken } = await import("../../canopy/identity.js");
     const token = await signCanopyToken("extension-comment", "horizon");
 
-    const user = await User.findById(req.userId).select("username").lean();
+    const user = await Being.findById(req.beingId).select("username").lean();
 
     const dirRes = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}/comments`, {
       method: "POST",
@@ -444,7 +444,7 @@ router.post("/land/extensions/:name/react", authenticate, async (req, res) => {
     const { signCanopyToken } = await import("../../canopy/identity.js");
     const token = await signCanopyToken("extension-react", "horizon");
 
-    const user = await User.findById(req.userId).select("username").lean();
+    const user = await Being.findById(req.beingId).select("username").lean();
 
     const dirRes = await fetch(`${horizonUrl}/extensions/${encodeURIComponent(name)}/react`, {
       method: "POST",
@@ -489,8 +489,8 @@ router.get("/land/root", authenticateOptional, async (req, res) => {
     // Fetch fresh from DB so we see newly created trees (cache may be stale)
     const landRoot = await Node.findById(landRootCached._id).select("_id name children").lean();
 
-    const userId = req.userId;
-    const isAnon = !userId;
+    const beingId = req.beingId;
+    const isAnon = !beingId;
 
     // Fetch all Land root children with the fields we need to filter
     const children = await Node.find({ _id: { $in: landRoot.children } })
@@ -501,8 +501,8 @@ router.get("/land/root", authenticateOptional, async (req, res) => {
     const visible = children.filter((c) => {
       if (isAnon) return c.visibility === "public";
       if (c.systemRole) return true;
-      if (c.rootOwner && String(c.rootOwner) === String(userId)) return true;
-      if (c.contributors && c.contributors.map(String).includes(String(userId))) return true;
+      if (c.rootOwner && String(c.rootOwner) === String(beingId)) return true;
+      if (c.contributors && c.contributors.map(String).includes(String(beingId))) return true;
       if (c.visibility === "public") return true;
       return false;
     });
@@ -515,7 +515,7 @@ router.get("/land/root", authenticateOptional, async (req, res) => {
         name: c.name,
         systemRole: isAnon ? null : (c.systemRole || null),
         rootOwner: c.rootOwner || null,
-        isOwned: !isAnon && c.rootOwner && String(c.rootOwner) === String(userId),
+        isOwned: !isAnon && c.rootOwner && String(c.rootOwner) === String(beingId),
         isPublic: c.visibility === "public" || false,
         queryAvailable: c.visibility === "public" && !!(c.llmDefault && c.llmDefault !== "none"),
         metadata: c.metadata || null,

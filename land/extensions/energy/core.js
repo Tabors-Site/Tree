@@ -1,6 +1,6 @@
 import log from "../../seed/log.js";
 import fs from "fs";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
 
 // Services wired from init() via setServices()
 let User = null;
@@ -139,28 +139,28 @@ export function calculateEnergyCost(action, payload) {
 }
 
 export function maybeResetEnergy(user) {
-  const energy = getUserMeta(user, "energy");
+  const energy = getBeingMeta(user, "energy");
   if (!energy.available) return false;
 
   const now = Date.now();
   const DAY_MS = 24 * 60 * 60 * 1000;
 
-  const billing = getUserMeta(user, "billing");
+  const billing = getBeingMeta(user, "billing");
   const expiresAt = billing.planExpiresAt?.getTime?.() || (typeof billing.planExpiresAt === "number" ? billing.planExpiresAt : 0);
 
-  const currentPlan = getUserMeta(user, "tiers").plan || "basic";
+  const currentPlan = getBeingMeta(user, "tiers").plan || "basic";
   if (
     currentPlan !== "basic" &&
     !user.isAdmin &&
     expiresAt > 0 &&
     now > expiresAt
   ) {
-    setUserMeta(user, "tiers", { plan: "basic" });
-    setUserMeta(user, "billing", { ...billing, planExpiresAt: null });
+    setBeingMeta(user, "tiers", { plan: "basic" });
+    setBeingMeta(user, "billing", { ...billing, planExpiresAt: null });
 
     energy.available.amount = DAILY_LIMITS.basic ?? DAILY_LIMITS["basic"];
     energy.available.lastResetAt = new Date();
-    setUserMeta(user, "energy", energy);
+    setBeingMeta(user, "energy", energy);
     assignConnection(user._id, "main", null);
     assignConnection(user._id, "rawIdea", null);
     Node.updateMany(
@@ -184,12 +184,12 @@ export function maybeResetEnergy(user) {
 
   if (now - lastReset < DAY_MS) return false;
 
-  const resetPlan = getUserMeta(user, "tiers").plan || "basic";
+  const resetPlan = getBeingMeta(user, "tiers").plan || "basic";
   const limit = DAILY_LIMITS[resetPlan] ?? DAILY_LIMITS.basic;
 
   energy.available.amount = limit;
   energy.available.lastResetAt = new Date();
-  setUserMeta(user, "energy", energy);
+  setBeingMeta(user, "energy", energy);
 
   return true;
 }
@@ -205,16 +205,16 @@ export class EnergyError extends Error {
 const MAX_FILE_MB_STANDARD = 1024; // 1 GB
 
 export async function useEnergy({
-  userId,
+  beingId,
   action,
   payload = null,
   file = null,
 }) {
-  if (!userId) {
+  if (!beingId) {
     throw new EnergyError("Not authenticated");
   }
 
-  const user = await User.findById(userId);
+  const user = await Being.findById(beingId);
   if (!user) {
     if (file?.path) {
       await fs.promises.unlink(file.path).catch(() => {});
@@ -227,7 +227,7 @@ export async function useEnergy({
   if (
     (action === "note" || action === "rawIdea") &&
     payload?.type === "file" &&
-    (getUserMeta(user, "tiers").plan || "basic") === "basic"
+    (getBeingMeta(user, "tiers").plan || "basic") === "basic"
   ) {
     if (file?.path) {
       await fs.promises.unlink(file.path).catch(() => {});
@@ -240,7 +240,7 @@ export async function useEnergy({
 
   if (
     payload?.type === "file" &&
-    (getUserMeta(user, "tiers").plan || "basic") === "standard" &&
+    (getBeingMeta(user, "tiers").plan || "basic") === "standard" &&
     payload.sizeMB > MAX_FILE_MB_STANDARD
   ) {
     if (file?.path) {
@@ -255,7 +255,7 @@ export async function useEnergy({
 
   const cost = calculateEnergyCost(action, payload);
 
-  const energy = getUserMeta(user, "energy");
+  const energy = getBeingMeta(user, "energy");
   const baseEnergy = energy.available.amount || 0;
   const extraEnergy = energy.additional?.amount || 0;
   const totalEnergy = baseEnergy + extraEnergy;
@@ -289,8 +289,8 @@ export async function useEnergy({
 
   // Use atomic $set to avoid clobbering other metadata namespaces
   // that may have been modified concurrently (e.g. navigation adding roots).
-  const { batchSetUserMeta } = await import("../../seed/tree/userMetadata.js");
-  await batchSetUserMeta(userId, "energy", {
+  const { batchSetBeingMeta } = await import("../../seed/tree/beingMetadata.js");
+  await batchSetBeingMeta(beingId, "energy", {
     available: energy.available,
     additional: energy.additional,
   });

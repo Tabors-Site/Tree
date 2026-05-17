@@ -19,12 +19,12 @@ export async function init(core) {
     Node: core.models.Node,
   });
 
-  // ── afterNote: track AI-generated content signals ──────────────────
-  core.hooks.register("afterNote", async ({ note, nodeId, action }) => {
+  // ── afterArtifact: track AI-generated content signals ─────────────
+  core.hooks.register("afterArtifact", async ({ artifact, nodeId, action }) => {
     if (action === "create") {
-      await recordCreateSignal(nodeId, note._id);
+      await recordCreateSignal(nodeId, artifact._id);
     } else if (action === "edit") {
-      await recordEditSignal(nodeId, note._id);
+      await recordEditSignal(nodeId, artifact._id);
     }
   }, "taste");
 

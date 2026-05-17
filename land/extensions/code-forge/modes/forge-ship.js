@@ -70,7 +70,7 @@ export default {
 
   needs: {
     services: [],
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
   },
 
   provides: {
@@ -96,7 +96,7 @@ export async function init(core) {
         annotations: { readOnlyHint: true },
         async handler(args) {
           // Lazy imports for DB models:
-          // const Note = (await import("../../seed/models/note.js")).default;
+          // const Artifact = (await import("../../seed/models/artifact.js")).default;
           return { content: [{ type: "text", text: "..." }] };
         },
       },

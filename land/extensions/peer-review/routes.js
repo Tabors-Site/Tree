@@ -61,7 +61,7 @@ router.post("/node/:nodeId/review/partner", authenticate, async (req, res) => {
     const config = {
       ...existing,
       partner: partnerId,
-      trigger: "afterNote",
+      trigger: "afterArtifact",
       status: existing.status === "paused" ? "paused" : "idle",
     };
     if (maxRounds !== undefined) config.maxRounds = Math.max(1, Math.min(Number(maxRounds) || 5, 20));

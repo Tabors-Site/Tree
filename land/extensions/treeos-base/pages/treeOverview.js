@@ -18,7 +18,7 @@ export function renderRootOverview({
   currentUserId,
   queryString,
   nodeId,
-  userId,
+  beingId,
   token,
   deferredItems,
   ownerConnections,
@@ -200,7 +200,7 @@ export function renderRootOverview({
 <ul class="contributors-list">
 ${rootMeta.contributors
   .map((u) => {
-    const isSelf = u._id.toString() === userId?.toString();
+    const isSelf = u._id.toString() === beingId?.toString();
 
     return `
 <li>
@@ -1253,7 +1253,7 @@ transition:
       ${resolveSlots("tree-quick-links", {
         rootId: allData._id,
         nodeId: allData._id,
-        userId: currentUserId,
+        beingId: currentUserId,
         queryString,
         _scaffoldedExtensions: scaffoldedExtensions,
         _blockedExtensions: blockedExtensions,
@@ -1291,13 +1291,13 @@ transition:
     </div>
     ` : ""}
 
-    ${!isPublicAccess ? resolveSlots("tree-holdings", { rootId: nodeId, nodeId, queryString, token, userId, deferredItems, deferredHtml, rootMeta, _scaffoldedExtensions: scaffoldedExtensions, _blockedExtensions: blockedExtensions }) : ""}
+    ${!isPublicAccess ? resolveSlots("tree-holdings", { rootId: nodeId, nodeId, queryString, token, beingId, deferredItems, deferredHtml, rootMeta, _scaffoldedExtensions: scaffoldedExtensions, _blockedExtensions: blockedExtensions }) : ""}
 
     <!-- Tree Settings Section -->
 ${
   !isPublicAccess && (isOwner ||
   rootMeta?.contributors?.some(
-    (c) => c._id.toString() === userId?.toString(),
+    (c) => c._id.toString() === beingId?.toString(),
   ))
     ? `
 
@@ -1324,18 +1324,18 @@ ${
   </div>
 </div>
 
-  ${resolveSlots("tree-dream", { rootId: nodeId, nodeId, queryString, token, userId, rootMeta, _scaffoldedExtensions: scaffoldedExtensions, _blockedExtensions: blockedExtensions })}
+  ${resolveSlots("tree-dream", { rootId: nodeId, nodeId, queryString, token, beingId, rootMeta, _scaffoldedExtensions: scaffoldedExtensions, _blockedExtensions: blockedExtensions })}
   ` : ""}
 
-  ${resolveSlots("tree-team", { rootId: nodeId, nodeId, queryString, token, userId, isOwner, rootMeta, ownerHtml, contributorsHtml, inviteFormHtml })}
+  ${resolveSlots("tree-team", { rootId: nodeId, nodeId, queryString, token, beingId, isOwner, rootMeta, ownerHtml, contributorsHtml, inviteFormHtml })}
 
-  ${resolveSlots("tree-transaction-policy", { rootId: nodeId, nodeId, queryString, token, userId, isOwner, policyHtml })}
+  ${resolveSlots("tree-transaction-policy", { rootId: nodeId, nodeId, queryString, token, beingId, isOwner, policyHtml })}
 
 
-  ${isOwner ? resolveSlots("tree-owner-sections", { rootId: nodeId, nodeId, queryString, token, userId, _scaffoldedExtensions: scaffoldedExtensions, _blockedExtensions: blockedExtensions }) : ""}
+  ${isOwner ? resolveSlots("tree-owner-sections", { rootId: nodeId, nodeId, queryString, token, beingId, _scaffoldedExtensions: scaffoldedExtensions, _blockedExtensions: blockedExtensions }) : ""}
 
   ${
-    !isOwner && userId
+    !isOwner && beingId
       ? `
 <div class="content-card">
   <div class="section-header">
@@ -1346,7 +1346,7 @@ ${
     action="/api/v1/root/${nodeId}/remove-user?token=${encodeURIComponent(token)}&html"
     onsubmit="return confirm('Are you sure you want to leave this tree?')"
   >
-    <input type="hidden" name="userReceiving" value="${userId}" />
+    <input type="hidden" name="userReceiving" value="${beingId}" />
     <button
       type="submit"
       style="

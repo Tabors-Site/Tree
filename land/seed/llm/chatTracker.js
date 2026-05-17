@@ -76,9 +76,9 @@ setInterval(() => {
  * the other's in-flight chat.
  */
 export function ensureSession(socket) {
-  const scopeKey = `ws:${socket.visitorId || socket.userId}`;
+  const scopeKey = `ws:${socket.visitorId || socket.beingId}`;
   const { sessionId, reused } = createSession({
-    userId: socket.userId,
+    beingId: socket.beingId,
     type: SESSION_TYPES.WEBSOCKET_CHAT,
     scopeKey,
     description: `Chat session for ${socket.username || "unknown"}`,
@@ -86,7 +86,7 @@ export function ensureSession(socket) {
   });
 
   if (!reused) {
-    log.debug("AI", `New AI session for ${socket.visitorId || socket.userId}: ${sessionId}`);
+    log.debug("AI", `New AI session for ${socket.visitorId || socket.beingId}: ${sessionId}`);
   }
 
   socket._aiSession = { id: sessionId, lastActivity: Date.now() };
@@ -99,15 +99,15 @@ export function ensureSession(socket) {
  */
 export function rotateSession(socket) {
   const { sessionId } = createSession({
-    userId: socket.userId,
+    beingId: socket.beingId,
     type: SESSION_TYPES.WEBSOCKET_CHAT,
-    scopeKey: `ws:${socket.visitorId || socket.userId}`,
+    scopeKey: `ws:${socket.visitorId || socket.beingId}`,
     idleTTL: 0, // force new session by treating any existing as expired
     description: `Chat session for ${socket.username || "unknown"}`,
     meta: { visitorId: socket.visitorId },
   });
 
-  log.debug("AI", `Rotated AI session for ${socket.visitorId || socket.userId}: ${sessionId}`);
+  log.debug("AI", `Rotated AI session for ${socket.visitorId || socket.beingId}: ${sessionId}`);
 
   socket._aiSession = { id: sessionId, lastActivity: Date.now() };
   return sessionId;
@@ -173,7 +173,16 @@ function MAX_CHAT_CONTENT_BYTES() { return Math.max(10000, Math.min(Number(getLa
  * This is the user's original message. chainIndex 0.
  */
 export async function startChat({
-  userId,
+  // The asker being — who initiated this chat. Stored in `beingIn`.
+  // Legacy callers may still pass `beingId` (post-sed rename); either
+  // name is accepted, with `beingIn` winning when both are present.
+  beingIn,
+  beingId,
+  // The responder being — who this chat is addressed to. Stored in
+  // `beingOut`. Optional: legacy callers and background system chats
+  // may omit it. When the asker is also the responder (a being
+  // talking to itself), pass the same id for both.
+  beingOut = null,
   sessionId,
   message,
   source = "user",
@@ -189,6 +198,7 @@ export async function startChat({
   // hierarchy under the original user message.
   parentChatId = null,
 }) {
+  const askerBeingId = beingIn || beingId;
   const safeModeKey = modeKey || "home:default";
   const colonIdx = safeModeKey.indexOf(":");
   const zone = colonIdx > 0 ? safeModeKey.slice(0, colonIdx) : safeModeKey;
@@ -227,7 +237,8 @@ export async function startChat({
 
   const chat = await Chat.create({
     _id: chatId,
-    userId,
+    beingIn: askerBeingId,
+    beingOut: beingOut || null,
     sessionId: sessionId || uuidv4(),
     chainIndex: resolvedChainIndex,
     rootChatId: resolvedRootChatId,
@@ -369,21 +380,42 @@ function capFullBytes(value, isString = false) {
 }
 
 /**
- * Find the most recently active chainstep (Chat doc) bound to a given
- * (nodeId, modeKey) pair. "Active" means `endMessage.time` is still null
- * (the chainstep has not been finalized).
+ * Find the most recently active chainstep (Chat doc) where the given
+ * being is the responder. "Active" means `endMessage.time` is still
+ * null (the chainstep has not been finalized).
  *
  * Used by the Position Description's per-being `activity` field. When a
- * being is summoned at a position, its chainstep is bound to that node
- * via `treeContext.targetNodeId` and to its mode via `aiContext.mode`.
+ * being's chainstep is running, the Chat's `beingOut` points at it; we
+ * surface the latest one so the descriptor reflects "this being is
+ * currently doing X."
  *
- * @param {string} nodeId   the tree node where the being is invocable
- * @param {string} modeKey  the mode the being runs in (e.g. "tree:governing-ruler")
+ * @param {string} beingOut  the responder being's id (the being whose
+ *                            home / position we're rendering)
  * @returns {Promise<object|null>}  a lean Chat document, or null if none active
+ */
+export async function getLatestActiveChainstepForBeing(beingOut) {
+  if (!beingOut) return null;
+  try {
+    return await Chat.findOne({
+      beingOut,
+      "endMessage.time": null,
+    })
+      .select("_id startMessage toolCalls aiContext treeContext parentChatId rootChatId chainIndex beingIn beingOut")
+      .sort({ "startMessage.time": -1 })
+      .lean();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Legacy lookup: find the most recently active chainstep bound to a
+ * (nodeId, modeKey) pair. Kept for callers that haven't migrated to
+ * being-keyed lookups yet (older descriptor paths, e.g. when a chat
+ * row was inserted before beingOut was populated).
  */
 export async function getLatestActiveChainstep(nodeId, modeKey) {
   if (!nodeId || !modeKey) return null;
-  // Mode key format is "zone:mode". Split for the indexed lookup.
   const [zone, ...rest] = modeKey.split(":");
   const mode = rest.join(":");
   if (!zone || !mode) return null;
@@ -394,7 +426,7 @@ export async function getLatestActiveChainstep(nodeId, modeKey) {
       "aiContext.mode":           mode,
       "endMessage.time":          null,
     })
-      .select("_id startMessage toolCalls aiContext treeContext parentChatId rootChatId chainIndex")
+      .select("_id startMessage toolCalls aiContext treeContext parentChatId rootChatId chainIndex beingIn beingOut")
       .sort({ "startMessage.time": -1 })
       .lean();
   } catch {
@@ -467,7 +499,7 @@ function MAX_CHAIN_STEP_CONTENT() { return Math.max(500, Math.min(Number(getLand
  * Fire-and-forget. Never blocks the orchestrator.
  */
 export function trackChainStep({
-  userId,
+  beingId,
   sessionId,
   chainIndex,
   rootChatId = null,
@@ -480,7 +512,7 @@ export function trackChainStep({
   llmProvider = null,
   treeContext,
 }) {
-  if (!sessionId || !userId) return;
+  if (!sessionId || !beingId) return;
 
   const safeKey = modeKey || "orchestrator:step";
   const cIdx = safeKey.indexOf(":");
@@ -510,7 +542,7 @@ export function trackChainStep({
 
   // Fire and forget. Don't await, don't block the chain.
   Chat.create({
-    userId,
+    beingId,
     sessionId,
     chainIndex,
     rootChatId,
@@ -544,7 +576,7 @@ export function trackChainStep({
  * bounded chainIndex steps so each step has its own visible phase.
  */
 export async function startChainStep({
-  userId,
+  beingId,
   sessionId,
   chainIndex,
   rootChatId = null,
@@ -558,7 +590,7 @@ export async function startChainStep({
   systemPrompt = null,
   enrichedContext = null,
 }) {
-  if (!sessionId || !userId) return null;
+  if (!sessionId || !beingId) return null;
 
   const safeKey = modeKey || "orchestrator:step";
   const cIdx = safeKey.indexOf(":");
@@ -574,7 +606,7 @@ export async function startChainStep({
   try {
     const chat = await Chat.create({
       _id: uuidv4(),
-      userId,
+      beingId,
       sessionId,
       chainIndex,
       rootChatId,

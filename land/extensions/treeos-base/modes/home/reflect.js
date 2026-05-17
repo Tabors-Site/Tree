@@ -19,7 +19,7 @@ export default {
     "get-raw-ideas-by-user",
   ],
 
-  buildSystemPrompt({ username, userId }) {
+  buildSystemPrompt({ username, beingId }) {
     const tz = getLandConfigValue("timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone;
     return `You are a reflection assistant for ${username}.
 

@@ -1,7 +1,7 @@
 // `position` — 2D coordinates for nodes, beings, and artifacts.
 //
 // Universal placement substrate. Owns `metadata.position` on any node
-// (and `metadata.embodiments.<stance>.position` for AI beings on the
+// (and `metadata.beings.<stance>.position` for AI beings on the
 // land/tree root). Land plots, top-down maps, and 3D scenes all share
 // this single coordinate system; renderers project however they like.
 //

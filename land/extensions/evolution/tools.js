@@ -8,7 +8,7 @@ export default [
     description: "Show structural fitness metrics for a node. Activity, cascade, revisit, growth, codebook, and dormancy scores.",
     schema: {
       nodeId: z.string().describe("The node to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -28,7 +28,7 @@ export default [
     description: "Show discovered structural patterns for this tree. What configurations correlate with high activity? What structures go dormant?",
     schema: {
       rootId: z.string().describe("The tree root."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -50,22 +50,22 @@ export default [
     description: "Force a full structural analysis of this tree. Calculates fitness for every node and asks the AI to discover patterns. Token-intensive.",
     schema: {
       rootId: z.string().describe("The tree root to analyze."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    handler: async ({ rootId, userId }) => {
+    handler: async ({ rootId, beingId }) => {
       try {
         let username = null;
         try {
-          const User = (await import("../../seed/models/user.js")).default;
-          const user = await User.findById(userId).select("username").lean();
+          const User = (await import("../../seed/models/being.js")).default;
+          const user = await Being.findById(beingId).select("username").lean();
           username = user?.username;
         } catch (err) {
           log.debug("Evolution", "username lookup failed:", err.message);
         }
-        const result = await analyzeTree(rootId, userId, username);
+        const result = await analyzeTree(rootId, beingId, username);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Analysis failed: ${err.message}` }] };
@@ -78,12 +78,12 @@ export default [
     schema: {
       nodeId: z.string().describe("The node to get suggestions for."),
       rootId: z.string().describe("The tree root (for pattern context)."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    handler: async ({ nodeId, rootId, userId }) => {
+    handler: async ({ nodeId, rootId, beingId }) => {
       try {
         const fitness = await calculateFitness(nodeId);
         const patterns = await getPatterns(rootId);
@@ -109,7 +109,7 @@ export default [
     description: "List dormant branches that stopped growing and might need pruning or compression.",
     schema: {
       rootId: z.string().describe("The tree root."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

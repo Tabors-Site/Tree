@@ -13,11 +13,11 @@ async function resolveReceivingUser(User, userReceiving, escapeRegex) {
   let receivingUser = null;
 
   if (isValidUUID(userReceiving)) {
-    receivingUser = await User.findById(userReceiving);
+    receivingUser = await Being.findById(userReceiving);
   }
 
   if (!receivingUser) {
-    receivingUser = await User.findOne({
+    receivingUser = await Being.findOne({
       username: { $regex: `^${escapeRegex(userReceiving)}$`, $options: "i" },
     });
   }
@@ -46,7 +46,7 @@ export async function createInvite({
     );
   }
 
-  const invitingUser = await User.findById(userInvitingId);
+  const invitingUser = await Being.findById(userInvitingId);
   if (!invitingUser) throw new Error("Inviting user not found");
 
   const receivingUser = await resolveReceivingUser(User, userReceiving, escapeRegex);
@@ -105,7 +105,7 @@ export async function createInvite({
     inviteAction.action = "invite";
 
     await logContribution({
-      userId: userInvitingId,
+      beingId: userInvitingId,
       nodeId: node.id,
       action: "invite",
       inviteAction,
@@ -140,7 +140,7 @@ export async function createInvite({
     inviteAction.action = "switchOwner";
 
     await logContribution({
-      userId: userInvitingId,
+      beingId: userInvitingId,
       nodeId: node.id,
       action: "invite",
       inviteAction,
@@ -172,7 +172,7 @@ export async function createInvite({
       inviteAction.action = "removeContributor";
 
       await logContribution({
-        userId: userInvitingId,
+        beingId: userInvitingId,
         nodeId: node.id,
         action: "invite",
         inviteAction,
@@ -199,14 +199,14 @@ export async function createInvite({
       inviteAction.action = "removeContributor";
 
       await logContribution({
-        userId: userInvitingId,
+        beingId: userInvitingId,
         nodeId: node.id,
         action: "invite",
         inviteAction,
 
       });
       await logContribution({
-        userId: userInvitingId,
+        beingId: userInvitingId,
         nodeId: node.id,
         action: "branchLifecycle",
 
@@ -240,7 +240,7 @@ export async function createInvite({
       inviteAction.action = "removeContributor";
 
       await logContribution({
-        userId: userInvitingId,
+        beingId: userInvitingId,
         nodeId: node.id,
         action: "invite",
         inviteAction,
@@ -256,7 +256,7 @@ export async function createInvite({
   throw new Error("Invalid invite operation");
 }
 
-export async function respondToInvite({ inviteId, userId, acceptInvite, Node, User, logContribution, queueCanopyEvent, ownership }) {
+export async function respondToInvite({ inviteId, beingId, acceptInvite, Node, User, logContribution, queueCanopyEvent, ownership }) {
   // Atomic status transition prevents double-processing
   const invite = await Invite.findOneAndUpdate(
     { _id: inviteId, status: "pending" },
@@ -265,7 +265,7 @@ export async function respondToInvite({ inviteId, userId, acceptInvite, Node, Us
   );
   if (!invite) throw new Error("Invite not found");
 
-  if (invite.userReceiving.toString() !== userId.toString()) {
+  if (invite.userReceiving.toString() !== beingId.toString()) {
     // Revert status since this user shouldn't have changed it
     await Invite.findByIdAndUpdate(inviteId, { $set: { status: "pending" } });
     throw new Error("Invite not intended for this user");
@@ -275,9 +275,9 @@ export async function respondToInvite({ inviteId, userId, acceptInvite, Node, Us
   if (invite.remoteLandDomain) {
     if (acceptInvite) {
       // Avoid duplicates: only add if rootId + landDomain combo doesn't exist
-      await User.updateOne(
+      await Being.updateOne(
         {
-          _id: userId,
+          _id: beingId,
           "metadata.canopy.remoteRoots": {
             $not: { $elemMatch: { rootId: invite.rootId, landDomain: invite.remoteLandDomain } }
           }
@@ -293,10 +293,10 @@ export async function respondToInvite({ inviteId, userId, acceptInvite, Node, Us
         }
       );
 
-      const acceptingUser = await User.findById(userId).select("username").lean();
+      const acceptingUser = await Being.findById(beingId).select("username").lean();
       await queueCanopyEvent(invite.remoteLandDomain, "invite_accept", {
         inviteId: invite.remoteInviteId || invite._id,
-        userId,
+        beingId,
         username: acceptingUser?.username || null,
       });
     } else {
@@ -314,14 +314,14 @@ export async function respondToInvite({ inviteId, userId, acceptInvite, Node, Us
   const node = await Node.findById(invite.rootId);
   if (!node) throw new Error("Node not found");
 
-  const inviteAction = { receivingId: userId };
+  const inviteAction = { receivingId: beingId };
 
   if (acceptInvite) {
     // Kernel validates user exists, prevents adding owner as contributor, invalidates cache
     // If addContributor fails (inviter lost ownership, user became owner, etc.),
     // revert the invite status so it can be retried or re-issued.
     try {
-      await ownership.addContributor(invite.rootId, userId, invite.userInviting);
+      await ownership.addContributor(invite.rootId, beingId, invite.userInviting);
     } catch (err) {
       await Invite.findByIdAndUpdate(inviteId, { $set: { status: "pending" } });
       throw err;
@@ -334,7 +334,7 @@ export async function respondToInvite({ inviteId, userId, acceptInvite, Node, Us
   }
 
   await logContribution({
-    userId,
+    beingId,
     nodeId: node.id,
     action: "invite",
     inviteAction,
@@ -348,9 +348,9 @@ export async function respondToInvite({ inviteId, userId, acceptInvite, Node, Us
   };
 }
 
-export async function getPendingInvitesForUser(userId) {
+export async function getPendingInvitesForUser(beingId) {
   return Invite.find({
-    userReceiving: userId,
+    userReceiving: beingId,
     status: "pending",
   })
     .populate("userInviting", "username isRemote homeLand")

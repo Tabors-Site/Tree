@@ -1,7 +1,7 @@
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import Contribution from "../../seed/models/contribution.js";
 import log from "../../seed/log.js";
 
@@ -10,7 +10,7 @@ const router = express.Router();
 // POST /land/activity - ask about land activity
 router.post("/land/activity", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin username").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin username").lean();
     if (!user || !user.isAdmin) {
       return sendError(res, 403, ERR.FORBIDDEN, "Requires admin.");
     }
@@ -22,7 +22,7 @@ router.post("/land/activity", authenticate, async (req, res) => {
     const { runChat } = await import("../../seed/llm/conversation.js");
 
     const { answer, chatId } = await runChat({
-      userId: req.userId,
+      beingId: req.beingId,
       username: user.username,
       message: query,
       mode: "land:monitor",
@@ -39,7 +39,7 @@ router.post("/land/activity", authenticate, async (req, res) => {
 // GET /land/activity - quick stats without AI (for dashboards, health checks)
 router.get("/land/activity", authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("isAdmin").lean();
+    const user = await Being.findById(req.beingId).select("isAdmin").lean();
     if (!user || !user.isAdmin) {
       return sendError(res, 403, ERR.FORBIDDEN, "Requires god-tier.");
     }
@@ -65,7 +65,7 @@ router.get("/land/activity", authenticate, async (req, res) => {
       Contribution.countDocuments({ date: { $gte: oneWeekAgo } }),
       Chat.countDocuments({ "startMessage.time": { $gte: oneDayAgo } }),
       Chat.countDocuments({ "startMessage.time": { $gte: oneWeekAgo } }),
-      User.countDocuments({}),
+      Being.countDocuments({}),
     ]);
 
     // Action breakdown today

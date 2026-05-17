@@ -14,7 +14,7 @@ import { page } from "../../html-rendering/html/layout.js";
 import { esc, timeAgo } from "../../html-rendering/html/utils.js";
 import { glassCardStyles, responsiveBase } from "../../html-rendering/html/baseStyles.js";
 
-export function renderMisroutePage({ userId, username, data, personalEntries, token, inApp }) {
+export function renderMisroutePage({ beingId, username, data, personalEntries, token, inApp }) {
   const tokenParam = token ? `&token=${esc(token)}` : "";
   const queryString = `?html${tokenParam}`;
 
@@ -372,7 +372,7 @@ export function renderMisroutePage({ userId, username, data, personalEntries, to
 
   const body = `
     <div class="mis-container">
-      ${!inApp ? `<a class="back-link" href="/api/v1/user/${userId}/profile${queryString}">&larr; Profile</a>` : ""}
+      ${!inApp ? `<a class="back-link" href="/api/v1/user/${beingId}/profile${queryString}">&larr; Profile</a>` : ""}
 
       <div class="page-header">
         <div class="page-title">Misroutes</div>

@@ -1,18 +1,18 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 /**
- * User metadata helpers.
- * Same pattern as extensionMetadata.js but for User documents.
+ * Being metadata helpers.
+ * Same pattern as extensionMetadata.js but for Being documents.
  * Extensions own their data in metadata. Core provides read/write only.
  * Document size guard protects against 16MB BSON limit.
  *
- * setUserMeta is synchronous (modifies in-memory document). Caller must
- * await user.save() to persist. This matches the Mongoose document pattern
+ * setBeingMeta is synchronous (modifies in-memory document). Caller must
+ * await being.save() to persist. This matches the Mongoose document pattern
  * used by all 35+ callers.
  */
 
 import { guardMetadataWrite } from "./documentGuard.js";
 import { getLandConfigValue } from "../landConfig.js";
-import User from "../models/user.js";
+import Being from "../models/being.js";
 
 const MAX_KEY_LENGTH = 50;
 function MAX_VALUE_BYTES() { return Math.max(1024, Math.min(Number(getLandConfigValue("metadataNamespaceMaxBytes")) || 524288, 2 * 1024 * 1024)); }
@@ -46,7 +46,7 @@ function measureDepth(value, current = 0, seen) {
  * Read from user metadata. Works with both Mongoose docs and .lean() plain objects.
  * Returns the stored value or an empty object.
  */
-export function getUserMeta(user, key) {
+export function getBeingMeta(user, key) {
   if (!user || !user.metadata) return {};
   const data = user.metadata instanceof Map
     ? user.metadata.get(key)
@@ -61,13 +61,13 @@ export function getUserMeta(user, key) {
  * Validates: key name, data size, data serializability, nesting depth,
  * total document size. Throws on failure.
  */
-export function setUserMeta(user, key, data) {
-  if (!user) throw new Error("setUserMeta: user is required");
+export function setBeingMeta(user, key, data) {
+  if (!user) throw new Error("setBeingMeta: user is required");
 
   // Key validation
-  if (!key || typeof key !== "string") throw new Error("setUserMeta: key must be a non-empty string");
-  if (key.length > MAX_KEY_LENGTH) throw new Error(`setUserMeta: key "${key.slice(0, 20)}..." exceeds ${MAX_KEY_LENGTH} chars`);
-  if (DANGEROUS_KEYS.has(key)) throw new Error(`setUserMeta: key "${key}" is not allowed`);
+  if (!key || typeof key !== "string") throw new Error("setBeingMeta: key must be a non-empty string");
+  if (key.length > MAX_KEY_LENGTH) throw new Error(`setBeingMeta: key "${key.slice(0, 20)}..." exceeds ${MAX_KEY_LENGTH} chars`);
+  if (DANGEROUS_KEYS.has(key)) throw new Error(`setBeingMeta: key "${key}" is not allowed`);
 
   // Data validation
   if (data != null) {
@@ -75,14 +75,14 @@ export function setUserMeta(user, key, data) {
     try {
       size = Buffer.byteLength(JSON.stringify(data), "utf8");
     } catch {
-      throw new Error(`setUserMeta: data for "${key}" is not serializable`);
+      throw new Error(`setBeingMeta: data for "${key}" is not serializable`);
     }
     if (size > MAX_VALUE_BYTES()) {
-      throw new Error(`setUserMeta: data for "${key}" exceeds ${MAX_VALUE_BYTES() / 1024}KB limit (${Math.round(size / 1024)}KB)`);
+      throw new Error(`setBeingMeta: data for "${key}" exceeds ${MAX_VALUE_BYTES() / 1024}KB limit (${Math.round(size / 1024)}KB)`);
     }
     const depth = measureDepth(data);
     if (depth > maxNestingDepth()) {
-      throw new Error(`setUserMeta: data for "${key}" exceeds max nesting depth of ${maxNestingDepth()}`);
+      throw new Error(`setBeingMeta: data for "${key}" exceeds max nesting depth of ${maxNestingDepth()}`);
     }
   }
 
@@ -104,18 +104,18 @@ export function setUserMeta(user, key, data) {
 /**
  * Atomic increment on a single key within a user's metadata namespace.
  * Uses MongoDB $inc. No read-modify-write. No race conditions.
- * Accepts user document or userId string.
+ * Accepts user document or beingId string.
  *
- *   await incUserMeta(userId, "storage", "usageKB", 42);
+ *   await incBeingMeta(beingId, "storage", "usageKB", 42);
  */
-export async function incUserMeta(user, key, field, amount = 1) {
+export async function incBeingMeta(user, key, field, amount = 1) {
   if (!user || !key || !field) return false;
   if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
   if (DANGEROUS_KEYS.has(field)) return false;
   if (typeof amount !== "number" || !isFinite(amount)) return false;
-  const userId = String(user._id || user);
-  await User.updateOne(
-    { _id: userId },
+  const beingId = String(user._id || user);
+  await Being.updateOne(
+    { _id: beingId },
     { $inc: { [`metadata.${key}.${field}`]: amount } }
   );
   return true;
@@ -125,17 +125,17 @@ export async function incUserMeta(user, key, field, amount = 1) {
  * Atomic push to an array within a user's metadata namespace.
  * Uses MongoDB $push with $slice for a capped circular buffer.
  *
- *   await pushUserMeta(userId, "phase", "history", { phase, ts }, 50);
+ *   await pushBeingMeta(beingId, "phase", "history", { phase, ts }, 50);
  */
-export async function pushUserMeta(user, key, field, item, maxLength = 100) {
+export async function pushBeingMeta(user, key, field, item, maxLength = 100) {
   if (!user || !key || !field) return false;
   if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
   if (DANGEROUS_KEYS.has(field)) return false;
   const safeCap = Math.min(Math.max(1, maxLength), 1000);
   try { JSON.stringify(item); } catch { return false; }
-  const userId = String(user._id || user);
-  await User.updateOne(
-    { _id: userId },
+  const beingId = String(user._id || user);
+  await Being.updateOne(
+    { _id: beingId },
     { $push: { [`metadata.${key}.${field}`]: { $each: [item], $slice: -safeCap } } }
   );
   return true;
@@ -145,15 +145,15 @@ export async function pushUserMeta(user, key, field, item, maxLength = 100) {
  * Atomic add-to-set within a user's metadata namespace.
  * Uses MongoDB $addToSet. No duplicates. No read-modify-write.
  *
- *   await addToUserMetaSet(userId, "nav", "roots", rootId);
+ *   await addToBeingMetaSet(beingId, "nav", "roots", rootId);
  */
-export async function addToUserMetaSet(user, key, field, item) {
+export async function addToBeingMetaSet(user, key, field, item) {
   if (!user || !key || !field) return false;
   if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
   if (DANGEROUS_KEYS.has(field)) return false;
-  const userId = String(user._id || user);
-  await User.updateOne(
-    { _id: userId },
+  const beingId = String(user._id || user);
+  await Being.updateOne(
+    { _id: beingId },
     { $addToSet: { [`metadata.${key}.${field}`]: item } },
   );
   return true;
@@ -163,14 +163,14 @@ export async function addToUserMetaSet(user, key, field, item) {
  * Atomic multi-field set within a user's metadata namespace.
  * Uses MongoDB $set on individual keys. No read-modify-write.
  *
- *   await batchSetUserMeta(userId, "energy", { available: 100, lastReset: now });
+ *   await batchSetBeingMeta(beingId, "energy", { available: 100, lastReset: now });
  */
-export async function batchSetUserMeta(user, key, fields) {
+export async function batchSetBeingMeta(user, key, fields) {
   if (!user || !key || !fields || typeof fields !== "object") return false;
   if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
   const entries = Object.entries(fields);
   if (entries.length === 0 || entries.length > 100) return false;
-  const userId = String(user._id || user);
+  const beingId = String(user._id || user);
   const updates = {};
   for (const [field, value] of entries) {
     if (DANGEROUS_KEYS.has(field)) continue;
@@ -178,7 +178,7 @@ export async function batchSetUserMeta(user, key, fields) {
     updates[`metadata.${key}.${field}`] = value;
   }
   if (Object.keys(updates).length === 0) return false;
-  await User.updateOne({ _id: userId }, { $set: updates });
+  await Being.updateOne({ _id: beingId }, { $set: updates });
   return true;
 }
 
@@ -186,14 +186,14 @@ export async function batchSetUserMeta(user, key, fields) {
  * Atomic namespace removal from a user's metadata.
  * Uses MongoDB $unset. The key is removed entirely, not set to null.
  *
- *   await unsetUserMeta(userId, "old-extension");
+ *   await unsetBeingMeta(beingId, "old-extension");
  */
-export async function unsetUserMeta(user, key) {
+export async function unsetBeingMeta(user, key) {
   if (!user || !key) return false;
   if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
-  const userId = String(user._id || user);
-  await User.updateOne(
-    { _id: userId },
+  const beingId = String(user._id || user);
+  await Being.updateOne(
+    { _id: beingId },
     { $unset: { [`metadata.${key}`]: "" } }
   );
   return true;

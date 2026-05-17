@@ -181,7 +181,7 @@ async function resolveBranchParentId({ rootProjectId, parentBranchName, hint }) 
  * with role=branch + the branch spec / path / files. Enables cascade
  * so writes inside the branch fire kernel propagation.
  */
-async function ensureBranchNode({ rootProjectId, branch, userId, core }) {
+async function ensureBranchNode({ rootProjectId, branch, beingId, core }) {
   const parent = await Node.findById(rootProjectId).select("_id children");
   if (!parent) throw new Error(`Swarm: parent node ${rootProjectId} not found`);
 
@@ -199,7 +199,7 @@ async function ensureBranchNode({ rootProjectId, branch, userId, core }) {
         parentId: parent._id,
         name: branch.name,
         type: "branch",
-        userId,
+        beingId,
       });
     } else {
       branchNode = await Node.create({
@@ -329,7 +329,7 @@ async function resolveBranchMode({ branch, defaultBranchMode, branchNodeId }) {
  */
 async function retryFailedBranches({
   results, branches, runBranch, rootProjectNode,
-  sessionId, userId, username, visitorId, rootId,
+  sessionId, beingId, username, visitorId, rootId,
   signal, slot, socket, onToolLoopCheckpoint, rootChatId,
   core, emitStatus, rt, defaultBranchMode,
 }) {
@@ -423,7 +423,7 @@ async function retryFailedBranches({
               `${failed.length} branch${failed.length === 1 ? "" : "es"} ` +
               `failed during execution. Decide retry / mark-failed / wait per branch, ` +
               `or escalate the whole situation to the Ruler.`,
-            username, userId, rootId,
+            username, beingId, rootId,
             currentNodeId: String(rulerScope._id),
             signal, slot, socket,
             sessionId, rootChatId, rt,
@@ -488,7 +488,7 @@ async function retryFailedBranches({
   const p = await plan();
   const rootPlan = await p.ensurePlanAtScope(
     rootProjectNode._id,
-    { userId },
+    { beingId },
     core,
   );
   const rootPlanNodeId = rootPlan ? String(rootPlan._id) : String(rootProjectNode._id);
@@ -550,7 +550,7 @@ async function retryFailedBranches({
         message: retryMessage,
         branchNodeId: branchNode._id,
         slot: branch.slot || slot,
-        visitorId, username, userId, rootId,
+        visitorId, username, beingId, rootId,
         signal, onToolLoopCheckpoint, socket,
       });
 
@@ -660,7 +660,7 @@ async function retryFailedBranches({
 async function runScoutLoop({
   rootProjectNode, workspaceAnchorNode = null,
   results, branches, core, socket, signal,
-  runBranch, sessionId, userId, username, visitorId, rootId,
+  runBranch, sessionId, beingId, username, visitorId, rootId,
   slot, onToolLoopCheckpoint, rootChatId, rt, defaultBranchMode,
 }) {
   if (!Array.isArray(branches) || branches.length < 2) {
@@ -765,7 +765,7 @@ async function runScoutLoop({
       });
       await retryFailedBranches({
         results, branches, runBranch, rootProjectNode,
-        sessionId, userId, username, visitorId, rootId,
+        sessionId, beingId, username, visitorId, rootId,
         signal, slot, socket, onToolLoopCheckpoint, rootChatId,
         core, emitStatus: () => {}, rt, defaultBranchMode,
       });
@@ -808,7 +808,7 @@ async function runScoutLoop({
  */
 export async function runBranchSwarm({
   branches, rootProjectNode, rootChatId, architectChatId, sessionId,
-  visitorId, userId, username, rootId, signal, slot, socket,
+  visitorId, beingId, username, rootId, signal, slot, socket,
   onToolLoopCheckpoint, core, runBranch, emitStatus, userRequest,
   rt, resumeMode = false, defaultBranchMode = null,
   // workspaceAnchorNode: the node whose content-workspace (the
@@ -870,7 +870,7 @@ export async function runBranchSwarm({
     if (planAtScopeCache.has(key)) return planAtScopeCache.get(key);
     const planNode = await p.ensurePlanAtScope(
       scopeId,
-      { userId, systemSpec: userRequest },
+      { beingId, systemSpec: userRequest },
       core,
     );
     const planNodeId = planNode ? String(planNode._id) : null;
@@ -953,7 +953,7 @@ export async function runBranchSwarm({
       });
     }
     const chat = await startChainStep({
-      userId, sessionId,
+      beingId, sessionId,
       chainIndex: fallbackChainIdx++,
       rootChatId: rootChatId || null,
       parentChatId: markerParent,
@@ -1172,7 +1172,7 @@ export async function runBranchSwarm({
         parentBranchName: branch.parentBranch,
         hint: branch.parentNodeId,
       });
-      branchNode = await ensureBranchNode({ rootProjectId: parentId, branch, userId, core });
+      branchNode = await ensureBranchNode({ rootProjectId: parentId, branch, beingId, core });
     } catch (err) {
       log.error("Swarm", `Failed to create branch "${qualifiedName}": ${err.message}`);
       results.push({ name: qualifiedName, status: "error", error: err.message, parentBranch: branch.parentBranch });
@@ -1275,7 +1275,7 @@ export async function runBranchSwarm({
           message: branchMessage,
           branchNodeId: branchNode._id,
           slot: branch.slot || slot,
-          visitorId, username, userId, rootId,
+          visitorId, username, beingId, rootId,
           signal: branchAbort.signal,
           onToolLoopCheckpoint, socket,
           // Dispatch-marker chatId → worker-turn parent. Nests every
@@ -1452,7 +1452,7 @@ export async function runBranchSwarm({
   if (!signal?.aborted) {
     await retryFailedBranches({
       results, branches, runBranch, rootProjectNode,
-      sessionId, userId, username, visitorId, rootId,
+      sessionId, beingId, username, visitorId, rootId,
       signal, slot, socket, onToolLoopCheckpoint, rootChatId,
       core, emitStatus, rt, defaultBranchMode,
     });
@@ -1499,7 +1499,7 @@ export async function runBranchSwarm({
         `🔄 Re-running retry after cross-branch handlers flipped statuses`);
       await retryFailedBranches({
         results, branches, runBranch, rootProjectNode,
-        sessionId, userId, username, visitorId, rootId,
+        sessionId, beingId, username, visitorId, rootId,
         signal, slot, socket, onToolLoopCheckpoint, rootChatId,
         core, emitStatus, rt, defaultBranchMode,
       });
@@ -1517,7 +1517,7 @@ export async function runBranchSwarm({
       const scoutOutcome = await runScoutLoop({
         rootProjectNode, workspaceAnchorNode,
         results, branches, core, socket, signal,
-        runBranch, sessionId, userId, username, visitorId, rootId,
+        runBranch, sessionId, beingId, username, visitorId, rootId,
         slot, onToolLoopCheckpoint, rootChatId, rt, defaultBranchMode,
       });
       if (scoutOutcome.cycles > 0) {

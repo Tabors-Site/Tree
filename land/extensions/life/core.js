@@ -39,29 +39,29 @@ import { DELETED } from "../../seed/protocol.js";
 /**
  * Create the Life root node for a user. No groups or domains yet.
  */
-export async function scaffoldRoot(userId) {
+export async function scaffoldRoot(beingId) {
   const { createNode } = await import("../../seed/tree/treeManagement.js");
   const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
-  const root = await createNode({ name: "Life", isRoot: true, userId });
+  const root = await createNode({ name: "Life", isRoot: true, beingId });
   const rootId = String(root._id);
   await setExtMeta(root, "life", { initialized: true });
-  log.info("Life", `Scaffolded Life root for user ${userId}: ${rootId}`);
+  log.info("Life", `Scaffolded Life root for user ${beingId}: ${rootId}`);
   return { rootId };
 }
 
 /**
  * Find the Life root node for a user. Returns the ID string or null.
  */
-export async function findLifeRoot(userId) {
+export async function findLifeRoot(beingId) {
   const Node = (await import("../../seed/models/node.js")).default;
   // Check by metadata first, then fall back to name match
   const root = await Node.findOne({
-    rootOwner: userId,
+    rootOwner: beingId,
     parent: { $nin: [DELETED, null] },
     "metadata.life.initialized": true,
   }).select("_id").lean()
     || await Node.findOne({
-      rootOwner: userId,
+      rootOwner: beingId,
       name: "Life",
       parent: { $nin: [DELETED, null] },
     }).select("_id").lean();
@@ -117,26 +117,26 @@ export function getAvailableDomains() {
 /**
  * Scaffold selected domains under a single tree or as separate trees.
  */
-export async function scaffold({ selections, singleTree, userId, username }) {
+export async function scaffold({ selections, singleTree, beingId, username }) {
   const { createNode } = await import("../../seed/tree/treeManagement.js");
   const Node = (await import("../../seed/models/node.js")).default;
   const results = [];
 
   if (singleTree) {
     // Find existing Life root or create one
-    let rootId = await findLifeRoot(userId);
+    let rootId = await findLifeRoot(beingId);
     let root;
     if (rootId) {
       root = await Node.findById(rootId);
       // Ensure rootOwner is set (fixes manually created Life nodes)
       if (root && !root.rootOwner) {
-        root.rootOwner = userId;
+        root.rootOwner = beingId;
         await root.save();
       }
       root = root?.toObject ? root.toObject() : root;
       log.verbose("Life", `Found existing Life root: ${rootId}`);
     } else {
-      root = await createNode({ name: "Life", isRoot: true, userId });
+      root = await createNode({ name: "Life", isRoot: true, beingId });
       rootId = String(root._id);
       const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
       await setExtMeta(root, "life", { initialized: true });
@@ -152,7 +152,7 @@ export async function scaffold({ selections, singleTree, userId, username }) {
       if (existing) {
         groupNodes[group] = String(existing._id);
       } else {
-        const node = await createNode({ name: group, parentId: rootId, userId });
+        const node = await createNode({ name: group, parentId: rootId, beingId });
         groupNodes[group] = String(node._id);
       }
     }
@@ -180,14 +180,14 @@ export async function scaffold({ selections, singleTree, userId, username }) {
         if (existing) {
           domainId = String(existing._id);
         } else {
-          const domainNode = await createNode({ name: domainName, parentId, userId });
+          const domainNode = await createNode({ name: domainName, parentId, beingId });
           domainId = String(domainNode._id);
         }
 
         // Call the extension's scaffold
         const ext = getExtension(sel);
         if (ext?.exports?.scaffold) {
-          await ext.exports.scaffold(domainId, userId);
+          await ext.exports.scaffold(domainId, beingId);
 
           // Set modes.respond so the routing index finds this node
           const DOMAIN_MODES = {
@@ -200,7 +200,7 @@ export async function scaffold({ selections, singleTree, userId, username }) {
           };
           if (DOMAIN_MODES[sel]) {
             const { setNodeMode } = await import("../../seed/modes/registry.js");
-            await setNodeMode(domainId, "respond", DOMAIN_MODES[sel], userId);
+            await setNodeMode(domainId, "respond", DOMAIN_MODES[sel], beingId);
           }
 
           results.push({ name: sel, id: domainId, status: "ok" });
@@ -214,7 +214,7 @@ export async function scaffold({ selections, singleTree, userId, username }) {
     }
 
     // Wire channels between related domains
-    await wireChannels(selections, rootId, userId);
+    await wireChannels(selections, rootId, beingId);
 
     // Rebuild routing index so new domain nodes are immediately routable
     try {
@@ -231,13 +231,13 @@ export async function scaffold({ selections, singleTree, userId, username }) {
         const root = await createNode({
           name: sel.charAt(0).toUpperCase() + sel.slice(1),
           isRoot: true,
-          userId,
+          beingId,
         });
         const rootId = String(root._id);
 
         const ext = getExtension(sel);
         if (ext?.exports?.scaffold) {
-          await ext.exports.scaffold(rootId, userId);
+          await ext.exports.scaffold(rootId, beingId);
           results.push({ name: sel, rootId, status: "ok" });
         } else {
           results.push({ name: sel, rootId, status: "no-scaffold" });
@@ -249,7 +249,7 @@ export async function scaffold({ selections, singleTree, userId, username }) {
     }
 
     // Wire channels between related separate trees
-    await wireChannelsSeparate(selections, results, userId);
+    await wireChannelsSeparate(selections, results, beingId);
 
     return { type: "separate", results };
   }
@@ -258,7 +258,7 @@ export async function scaffold({ selections, singleTree, userId, username }) {
 /**
  * Add a domain to an existing Life tree.
  */
-export async function addDomain({ rootId, domain, userId }) {
+export async function addDomain({ rootId, domain, beingId }) {
   const { createNode } = await import("../../seed/tree/treeManagement.js");
   const Node = (await import("../../seed/models/node.js")).default;
 
@@ -268,7 +268,7 @@ export async function addDomain({ rootId, domain, userId }) {
   let groupNode = children.find(c => c.name === group);
 
   if (!groupNode && group) {
-    const node = await createNode({ name: group, parentId: rootId, userId });
+    const node = await createNode({ name: group, parentId: rootId, beingId });
     groupNode = node;
   }
 
@@ -288,13 +288,13 @@ export async function addDomain({ rootId, domain, userId }) {
   if (existing) {
     domainId = String(existing._id);
   } else {
-    const domainNode = await createNode({ name: domainName, parentId, userId });
+    const domainNode = await createNode({ name: domainName, parentId, beingId });
     domainId = String(domainNode._id);
   }
 
   const ext = getExtension(domain);
   if (ext?.exports?.scaffold) {
-    await ext.exports.scaffold(domainId, userId);
+    await ext.exports.scaffold(domainId, beingId);
 
     const DOMAIN_MODES = {
       food: "tree:food-coach", fitness: "tree:fitness-plan",
@@ -302,19 +302,19 @@ export async function addDomain({ rootId, domain, userId }) {
     };
     if (DOMAIN_MODES[domain]) {
       const { setNodeMode } = await import("../../seed/modes/registry.js");
-      await setNodeMode(domainId, "respond", DOMAIN_MODES[domain], userId);
+      await setNodeMode(domainId, "respond", DOMAIN_MODES[domain], beingId);
     }
   }
 
   // Wire any new channels
   const existingDomains = await getInstalledDomains(rootId);
   existingDomains.push(domain);
-  await wireChannels(existingDomains, rootId, userId);
+  await wireChannels(existingDomains, rootId, beingId);
 
   // Ensure Life root is in user's nav list
   try {
     const nav = getExtension("navigation");
-    if (nav?.exports?.addRoot) await nav.exports.addRoot(userId, rootId);
+    if (nav?.exports?.addRoot) await nav.exports.addRoot(beingId, rootId);
   } catch {}
 
   return { name: domain, id: domainId, status: "ok" };
@@ -355,7 +355,7 @@ async function getInstalledDomains(rootId) {
 /**
  * Wire channels between related domains in a single tree.
  */
-async function wireChannels(selections, rootId, userId) {
+async function wireChannels(selections, rootId, beingId) {
   const ch = getExtension("channels");
   if (!ch?.exports?.createChannel) return;
 
@@ -387,7 +387,7 @@ async function wireChannels(selections, rootId, userId) {
           channelName: `${a}-${b}`,
           direction: "bidirectional",
           filter: { tags: [a, b] },
-          userId,
+          beingId,
         });
         log.info("Life", `Channel: ${a} <-> ${b}`);
       } catch (err) {
@@ -400,7 +400,7 @@ async function wireChannels(selections, rootId, userId) {
 /**
  * Wire channels between separate tree roots.
  */
-async function wireChannelsSeparate(selections, results, userId) {
+async function wireChannelsSeparate(selections, results, beingId) {
   const ch = getExtension("channels");
   if (!ch?.exports?.createChannel) return;
 
@@ -418,7 +418,7 @@ async function wireChannelsSeparate(selections, results, userId) {
           channelName: `${a}-${b}`,
           direction: "bidirectional",
           filter: { tags: [a, b] },
-          userId,
+          beingId,
         });
         log.info("Life", `Channel: ${a} <-> ${b} (cross-tree)`);
       } catch (err) {

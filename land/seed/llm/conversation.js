@@ -6,7 +6,7 @@ import { hooks } from "../hooks.js";
 
 import OpenAI from "openai";
 import crypto from "crypto";
-import User from "../models/user.js";
+import Being from "../models/being.js";
 import Node from "../models/node.js";
 import { snapshotAncestors, resolveExtensionScopeFromChain, getAncestorChain } from "../tree/ancestorCache.js";
 import { isDbHealthy } from "../dbConfig.js";
@@ -172,7 +172,7 @@ function releaseLlmSlot() {
 
 // ── LLM Failover ────────────────────────────────────────────────────────
 // The kernel provides the retry mechanism. Extensions register a resolver
-// that returns fallback connection IDs for a given userId/rootId context.
+// that returns fallback connection IDs for a given beingId/rootId context.
 //
 // 500 is deliberately NOT in the retryable set. Local inference backends
 // (ollama/qwen3/etc) return 500 for deterministic failures like tool-call
@@ -252,7 +252,7 @@ let _failoverResolver = null;
 /**
  * Register a failover resolver. Extensions call this to supply fallback
  * connection IDs when the primary LLM connection fails.
- * @param {Function} resolver - async (userId, rootId) => string[] of connectionIds
+ * @param {Function} resolver - async (beingId, rootId) => string[] of connectionIds
  */
 export function registerFailoverResolver(resolver) {
   _failoverResolver = resolver;
@@ -263,11 +263,11 @@ export function registerFailoverResolver(resolver) {
  * registered failover resolver for fallback connections and try each one.
  * @param {Function} callFn - async (openaiClient, model) => response
  * @param {object} primaryClient - { client, model, connectionId, ... }
- * @param {string} userId
+ * @param {string} beingId
  * @param {string|null} rootId
  * @returns {object} { response, usedClient }
  */
-async function callWithFailover(callFn, primaryClient, userId, rootId) {
+async function callWithFailover(callFn, primaryClient, beingId, rootId) {
   // Try primary
   try {
     const response = await callFn(primaryClient.client, primaryClient.model);
@@ -292,7 +292,7 @@ async function callWithFailover(callFn, primaryClient, userId, rootId) {
   }
 
   // Ask the extension for fallback connection IDs
-  const stack = await _failoverResolver(userId, rootId);
+  const stack = await _failoverResolver(beingId, rootId);
   if (!stack || stack.length === 0) {
     throw new Error("Primary LLM connection failed and no failover connections configured.");
   }
@@ -375,7 +375,7 @@ function decrypt(encryptedText) {
 // PER-USER LLM CLIENT CACHE
 // ─────────────────────────────────────────────────────────────────────────
 
-// Cache: userId → { client, model, fetchedAt }
+// Cache: beingId → { client, model, fetchedAt }
 const userClientCache = new Map();
 let CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 min
 let PROXY_CACHE_TTL = 60 * 1000; // 1 min for canopy proxy clients
@@ -406,7 +406,7 @@ async function resolveConnection(connectionId, cacheKey) {
   if (!conn || !conn.baseUrl || !conn.encryptedApiKey) return null;
 
   // Admin users can use private/internal IPs (e.g. local Ollama)
-  const owner = await User.findById(conn.userId).select("isAdmin").lean();
+  const owner = await Being.findById(conn.beingId).select("isAdmin").lean();
 
   if (!owner?.isAdmin) {
     try {
@@ -456,8 +456,8 @@ async function resolveConnection(connectionId, cacheKey) {
   return entry;
 }
 
-export async function getClientForUser(userId, slot, overrideConnectionId) {
-  if (!userId)
+export async function getClientForUser(beingId, slot, overrideConnectionId) {
+  if (!beingId)
     return {
       client: null,
       model: null,
@@ -487,7 +487,7 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
   }
 
   // 2. Normal slot-based resolution from user.llmAssignments
-  const cacheKey = userId + ":" + slot;
+  const cacheKey = beingId + ":" + slot;
   const cached = userClientCache.get(cacheKey);
   const ttl = cached?.isCanopyProxy ? PROXY_CACHE_TTL : CLIENT_CACHE_TTL;
   if (cached && Date.now() - cached.fetchedAt < ttl) {
@@ -495,7 +495,7 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
   }
 
   try {
-    const user = await User.findById(userId).select("llmDefault metadata").lean();
+    const user = await Being.findById(beingId).select("llmDefault metadata").lean();
     const meta = user?.metadata || {};
     const extSlots = meta?.userLlm?.slots || {};
     let connectionId = slot === "main" ? user?.llmDefault : (extSlots[slot] || null);
@@ -510,15 +510,15 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
       if (entry) return entry;
     }
   } catch (err) {
-    log.error("LLM", `Failed to load custom LLM for user ${userId}: ${err.message}`);
+    log.error("LLM", `Failed to load custom LLM for user ${beingId}: ${err.message}`);
   }
 
   // Check if this is a remote user whose LLM lives on their home land
   try {
-    const remoteCheck = await User.findById(userId).select("isRemote homeLand").lean();
+    const remoteCheck = await Being.findById(beingId).select("isRemote homeLand").lean();
     if (remoteCheck?.isRemote && remoteCheck.homeLand) {
       const { createCanopyLlmProxyClient } = await import("../../canopy/llmProxy.js");
-      const proxyClient = createCanopyLlmProxyClient({ userId, homeLand: remoteCheck.homeLand, slot });
+      const proxyClient = createCanopyLlmProxyClient({ beingId, homeLand: remoteCheck.homeLand, slot });
       const proxyEntry = {
         client: proxyClient,
         model: null,
@@ -531,7 +531,7 @@ export async function getClientForUser(userId, slot, overrideConnectionId) {
       return proxyEntry;
     }
   } catch (err) {
-    log.error("LLM", `Failed to create canopy LLM proxy for user ${userId}: ${err.message}`);
+    log.error("LLM", `Failed to create canopy LLM proxy for user ${beingId}: ${err.message}`);
   }
 
   // Land-level default LLM (operator-configured fallback for all users)
@@ -617,10 +617,10 @@ export async function resolveRootLlmForMode(rootId, modeKey) {
 /**
  * Clear cached client for a user (call when they update/revoke their LLM config).
  */
-export function clearUserClientCache(userId) {
+export function clearUserClientCache(beingId) {
   // Clear all slot entries for this user
   for (const key of userClientCache.keys()) {
-    if (key === userId || key.startsWith(userId + ":")) {
+    if (key === beingId || key.startsWith(beingId + ":")) {
       userClientCache.delete(key);
     }
   }
@@ -630,13 +630,13 @@ export function clearUserClientCache(userId) {
  * Quick check: does this user have any custom LLM connection available?
  * Returns true if user.llmAssignments.main is set OR they have at least one connection.
  */
-export async function userHasLlm(userId) {
-  if (!userId) return false;
-  const user = await User.findById(userId).select("metadata").lean();
+export async function userHasLlm(beingId) {
+  if (!beingId) return false;
+  const user = await Being.findById(beingId).select("metadata").lean();
   const userMeta = user?.metadata || {};
   const userLlm = userMeta?.userLlm?.slots || {};
   if (userLlm.main) return true;
-  const count = await LlmConnection.countDocuments({ userId });
+  const count = await LlmConnection.countDocuments({ beingId });
   if (count > 0) return true;
   // Land default available?
   return !!getLandConfigValue("landLlmConnection");
@@ -664,7 +664,7 @@ export async function userHasLlm(userId) {
 const sessions = new Map();
 let MAX_CONVERSATION_SESSIONS = 50000; // hard cap to prevent OOM from leaked sessions
 
-// Persistent sessionId map for runChat (zone+rootId+userId -> sessionId).
+// Persistent sessionId map for runChat (zone+rootId+beingId -> sessionId).
 // Chains Chat documents together. Capped at 10K entries.
 const _runChatSessions = new Map();
 
@@ -896,7 +896,7 @@ async function resolveLLMClient(ctx, session, visitorId) {
     (rootId ? await resolveRootLlmForMode(rootId, session.modeKey) : null);
 
   const clientEntry = await getClientForUser(
-    ctx.userId,
+    ctx.beingId,
     ctx.slot,
     modeConnectionId,
   );
@@ -922,7 +922,7 @@ async function resolveLLMClient(ctx, session, visitorId) {
   if (!client) {
     const jwt = (await import("jsonwebtoken")).default;
     const mcpJwt = jwt.sign(
-      { userId: String(ctx.userId), username: ctx.username, visitorId },
+      { beingId: String(ctx.beingId), username: ctx.username, visitorId },
       process.env.JWT_SECRET,
       { expiresIn: "24h" },
     );
@@ -935,7 +935,7 @@ async function resolveLLMClient(ctx, session, visitorId) {
 /**
  * Handle conversation loop trimming, fresh mode init, max message trim, add user message.
  * @param {object} session - Conversation session state
- * @param {object} ctx - Request context (username, userId, rootId, etc.)
+ * @param {object} ctx - Request context (username, beingId, rootId, etc.)
  * @param {string} message - The user's message to add
  * @param {object} mode - The resolved mode object
  * @param {string} visitorId - Session visitor identifier (for logging)
@@ -953,7 +953,7 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
 
     const systemPrompt = await buildPromptForMode(session.modeKey, {
       username: ctx.username,
-      userId: ctx.userId,
+      beingId: ctx.beingId,
       visitorId,
       rootId: session.rootId,
       currentNodeId: session.currentNodeId,
@@ -993,7 +993,7 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
             node: posNode,
             meta,
             nodeId: posNodeId,
-            userId: ctx.userId,
+            beingId: ctx.beingId,
             sessionId: visitorId,
             // Pass the current turn's user message so handlers that want
             // to gate their injection on vocabulary (e.g. channels' peer-
@@ -1010,7 +1010,7 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
 
     const systemPrompt = await buildPromptForMode(session.modeKey, {
       username: ctx.username,
-      userId: ctx.userId,
+      beingId: ctx.beingId,
       visitorId,
       rootId: session.rootId,
       currentNodeId: session.currentNodeId,
@@ -1335,7 +1335,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorI
     } catch {}
   }
   const llmHookData = {
-    userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+    beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
     model: MODEL, messageCount: session.messages.length, hasTools: tools.length > 0,
     messages: session.messages, nodeId: session.currentNodeId || ctx.rootId || null,
     chatId: _llmChatCtx.chatId || null,
@@ -1367,7 +1367,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorI
     const failoverResult = await callWithFailover(
       (client, model) => client.chat.completions.create({ ...requestParams, model }, requestOpts),
       clientEntry,
-      ctx.userId,
+      ctx.beingId,
       ctx.rootId || null,
     );
     response = failoverResult.response;
@@ -1380,7 +1380,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorI
     // Includes the full responseText so the AI forensics capture in
     // treeos-base gets "what the AI said" without a second hook.
     hooks.run("afterLLMCall", {
-      userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+      beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
       model: failoverResult.usedClient?.model || MODEL,
       usage: response?.usage || null,
       hasToolCalls: !!response?.choices?.[0]?.message?.tool_calls?.length,
@@ -1431,7 +1431,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorI
 
         // Fire afterLLMCall so extension metering still tracks the call
         hooks.run("afterLLMCall", {
-          userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+          beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
           model: clientEntry?.model || MODEL,
           usage: null, // No usage data available from the error
           hasToolCalls: false,
@@ -1737,7 +1737,7 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
   // Auto-inject standard tool-context args. Mirrors what mcp/server.js
   // injects for HTTP-path tool calls, so in-process and HTTP paths
   // present the same args shape to handlers.
-  //   userId       — the calling user
+  //   beingId       — the calling user
   //   visitorId    — the calling visitor's session id (per-conversation
   //                  transient registers key on this)
   //   chatId       — the calling chat's id; tools that spawn child
@@ -1747,7 +1747,7 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
   //   sessionId    — for chatTracker context
   //   rootId       — tree root the call originates from
   //   nodeId       — current node position
-  args.userId = ctx.userId;
+  args.beingId = ctx.beingId;
   if (visitorId) args.visitorId = visitorId;
   const _chatCtx = getChatContext(visitorId) || {};
   if (_chatCtx.chatId && !args.chatId) args.chatId = _chatCtx.chatId;
@@ -1786,7 +1786,7 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
   const _toolChatCtx = getChatContext(visitorId) || {};
   const hookData = {
     toolName, args,
-    userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+    beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
     chatId: _toolChatCtx.chatId || null,
     sessionId: _toolChatCtx.sessionId || null,
     nodeId: session.currentNodeId || ctx.rootId || null,
@@ -1875,7 +1875,7 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
     // afterToolCall (success): fire-and-forget
     hooks.run("afterToolCall", {
       toolName: resolvedToolName, args, result: resultText, success: true,
-      userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+      beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
       chatId: _toolChatCtx.chatId || null,
       sessionId: _toolChatCtx.sessionId || null,
       nodeId: session.currentNodeId || ctx.rootId || null,
@@ -1908,7 +1908,7 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
     // afterToolCall (failure): fire-and-forget
     hooks.run("afterToolCall", {
       toolName: resolvedToolName, args, error: err.message, success: false,
-      userId: ctx.userId, rootId: ctx.rootId, mode: session.modeKey,
+      beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
       chatId: _toolChatCtx.chatId || null,
       sessionId: _toolChatCtx.sessionId || null,
       nodeId: session.currentNodeId || ctx.rootId || null,
@@ -2312,7 +2312,7 @@ export async function resetConversation(visitorId, ctx) {
 
   const systemPrompt = await buildPromptForMode(session.modeKey, {
     username: ctx.username,
-    userId: ctx.userId,
+    beingId: ctx.beingId,
     visitorId,
     rootId: session.rootId,
     currentNodeId: session.currentNodeId,
@@ -2342,7 +2342,7 @@ export function sessionCount() {
  *      user's session, or an extension joining a named internal lane).
  *   2. `scope` + `purpose`: declare a named internal lane. Kernel assembles
  *      `tree-internal:${rootId}:${purpose}[:${extra}]` /
- *      `home-internal:${userId}:${purpose}[:${extra}]` /
+ *      `home-internal:${beingId}:${purpose}[:${extra}]` /
  *      `land-internal:${purpose}[:${extra}]`. Persists across runs.
  *   3. Neither: ephemeral. Fresh `ephemeral:${uuid}` per call, one-shot.
  *
@@ -2352,10 +2352,10 @@ export function sessionCount() {
  *
  * Usage:
  *   // Fire-and-forget (default)
- *   await runChat({ userId, message, mode });
+ *   await runChat({ beingId, message, mode });
  *
  *   // Named internal lane with cross-run memory
- *   await runChat({ userId, message, mode, scope: "tree", purpose: "reflect", rootId });
+ *   await runChat({ beingId, message, mode, scope: "tree", purpose: "reflect", rootId });
  *
  *   // Parallel chains within a lane
  *   await runChat({ ..., scope: "tree", purpose: "analyze", extra: "security", rootId });
@@ -2364,7 +2364,13 @@ export function sessionCount() {
  *   await runChat({ ..., aiSessionKey: userKeyFromCaller });
  */
 export async function runChat({
-  userId, username, message, mode,
+  // Identity: the canonical name is `beingIn` (the asker). `beingId` is
+  // accepted as a legacy alias for callers that haven't migrated. The
+  // `beingOut` field names the responding being (an AI being summoned
+  // through this chat); it stamps the Chat row so chainstep-by-being
+  // lookups work.
+  beingIn, beingId, beingOut = null,
+  username, message, mode,
   rootId = null, nodeId = null,
   signal = null, res = null, llmPriority = null,
   onToolResults = null, onToolCalled = null, onThinking = null,
@@ -2400,8 +2406,12 @@ export async function runChat({
   // is purely the chat-record-level sessionId for UI grouping.
   parentSessionId = null,
 }) {
-  if (!userId || !message || !mode) {
-    throw new Error("runChat requires userId, message, and mode");
+  // Accept either beingIn (canonical) or beingId (legacy alias) as
+  // the asker. Internal code below uses beingId for cache/session keys
+  // (most names predate the rename).
+  beingId = beingIn || beingId;
+  if (!beingId || !message || !mode) {
+    throw new Error("runChat requires beingId/beingIn, message, and mode");
   }
 
   // Auto-abort on client disconnect if Express res object is provided
@@ -2423,7 +2433,7 @@ export async function runChat({
 
   // Resolve the ai-chat session key (shared with OrchestratorRuntime).
   const { key: resolvedKey, persist: persistSession } = resolveInternalAiSessionKey({
-    aiSessionKey, scope, purpose, extra, userId, rootId,
+    aiSessionKey, scope, purpose, extra, beingId, rootId,
   });
 
   // Internal alias — the rest of this function keeps the historical name
@@ -2462,7 +2472,7 @@ export async function runChat({
   // Skip if caller provided an aiSessionKey (they already connected MCP for this session)
   if (!aiSessionKey && !getMCPClient(visitorId)) {
     const internalJwt = jwt.sign(
-      { userId: userId.toString(), username: username || "unknown", visitorId },
+      { beingId: beingId.toString(), username: username || "unknown", visitorId },
       JWT_SECRET,
       { expiresIn: "24h" }
     );
@@ -2481,7 +2491,7 @@ export async function runChat({
   const currentMode = getCurrentMode(visitorId);
   if (currentMode !== mode) {
     try {
-      await switchMode(visitorId, mode, { username, userId, currentNodeId: getCurrentNodeId(visitorId) });
+      await switchMode(visitorId, mode, { username, beingId, currentNodeId: getCurrentNodeId(visitorId) });
     } catch (err) {
       log.warn("RunChat", `Mode switch to ${mode} failed: ${err.message}`);
     }
@@ -2490,14 +2500,15 @@ export async function runChat({
   // 4. Create Chat record
   let chat;
   try {
-    const clientInfo = await getClientForUser(userId, visitorId) || {};
+    const clientInfo = await getClientForUser(beingId, visitorId) || {};
     // runChat callers can provide a `treeContext` (room-agent delivery
     // passes { targetNodeId, roomNodeId, roomSubId } so the chat shows
     // up on the tree's chats page AND carries the room link). Default
     // falls back to rootId-only when caller didn't specify.
     const mergedTreeContext = treeContext || (rootId ? { targetNodeId: rootId } : undefined);
     chat = await startChat({
-      userId,
+      beingIn: beingId,                 // asker
+      beingOut,                          // responder (passes through from runChat caller)
       sessionId,
       message,
       modeKey: mode,
@@ -2523,7 +2534,7 @@ export async function runChat({
   try {
     result = await processMessage(visitorId, message, {
       username,
-      userId,
+      beingId,
       rootId,
       currentNodeId: getCurrentNodeId(visitorId),
       signal: abortSignal,
@@ -2549,7 +2560,7 @@ export async function runChat({
   // gets the same treatment without each route having to remember to fire it.
   if (answer && !stopped) {
     try {
-      const hookData = { content: answer, userId, rootId, mode };
+      const hookData = { content: answer, beingId, rootId, mode };
       await hooks.run("beforeResponse", hookData);
       answer = hookData.content;
     } catch {}
@@ -2581,7 +2592,7 @@ export async function runChat({
 // This is the canonical orchestration primitive. Every user-facing entry
 // point (HTTP routes, websocket, gateway extensions) calls this. It handles:
 //   - Transport session lifecycle (sessionRegistry create/end)
-//   - Conversation visitorId building (zone+rootId+userId pattern)
+//   - Conversation visitorId building (zone+rootId+beingId pattern)
 //   - MCP connection
 //   - Chat record create/finalize
 //   - Request enqueue serialization
@@ -2595,7 +2606,7 @@ export async function runChat({
 // ─────────────────────────────────────────────────────────────────────────
 export async function runOrchestration({
   zone,                                  // "tree" | "home" | "land" - required
-  userId,                                // required
+  beingId,                                // required
   username = null,
   message,                               // required
   rootId = null,                         // required for tree zone
@@ -2619,8 +2630,8 @@ export async function runOrchestration({
   onThinking = null,                     // Mid-turn assistant prose (reasoning)
   onToolLoopCheckpoint = null,
 }) {
-  if (!userId || !message || !zone) {
-    throw new Error("runOrchestration requires zone, userId, and message");
+  if (!beingId || !message || !zone) {
+    throw new Error("runOrchestration requires zone, beingId, and message");
   }
   if (zone === "tree" && !rootId) {
     throw new Error("runOrchestration tree zone requires rootId");
@@ -2674,7 +2685,7 @@ export async function runOrchestration({
   if (!SESSION_TYPES.API_LAND_CHAT) registerSessionType("API_LAND_CHAT", "api-land-chat");
 
   // ── Build ai-chat session key for conversation continuity ─────────────
-  // Canonical shape: user:${userId}:${anchor}:${suffix}
+  // Canonical shape: user:${beingId}:${anchor}:${suffix}
   // where anchor is rootId (tree) or "home"/"land", and suffix is
   // `handle` (explicit override) or `device` (default, per-reach split).
   //
@@ -2686,7 +2697,7 @@ export async function runOrchestration({
   // Priority: providedAiSessionKey (pass-through) > minted from pieces.
   let visitorId = providedAiSessionKey || null;
   if (!visitorId) {
-    visitorId = buildUserAiSessionKey({ userId, zone, rootId, device, handle });
+    visitorId = buildUserAiSessionKey({ beingId, zone, rootId, device, handle });
   }
 
   // ── Build sessionRegistry session for transport tracking ──────────────
@@ -2718,7 +2729,7 @@ export async function runOrchestration({
       : `${zone} chat${tag ? ` [${tag}]` : ""}`;
 
     const created = createSession({
-      userId,
+      beingId,
       type: sessionType,
       scopeKey,
       description,
@@ -2755,7 +2766,7 @@ export async function runOrchestration({
   // where the Chat is tagged with the actual current mode), otherwise fall
   // back to a zone+flags default.
   try {
-    const clientInfo = clientOverride || (await getClientForUser(userId, visitorId)) || {};
+    const clientInfo = clientOverride || (await getClientForUser(beingId, visitorId)) || {};
     const existingMode = getCurrentMode(visitorId);
     const defaultModeKey = zone === "tree"
       ? `tree:${orchestrateFlags.skipRespond ? "place" : orchestrateFlags.forceQueryOnly ? "query" : "chat"}`
@@ -2763,7 +2774,7 @@ export async function runOrchestration({
     const modeKeyForChat = existingMode || defaultModeKey;
     const resolvedSource = isPublicQuery ? "public-query" : (chatSource || "api");
     chat = await startChat({
-      userId,
+      beingIn: beingId,
       sessionId,
       message: message.slice(0, 5000),
       source: resolvedSource,
@@ -2808,7 +2819,7 @@ export async function runOrchestration({
         // Connect MCP for this visitor (skip if already connected)
         if (!getMCPClient(visitorId)) {
           const internalJwt = jwtMod.sign(
-            { userId: userId.toString(), username: username || "unknown", visitorId },
+            { beingId: beingId.toString(), username: username || "unknown", visitorId },
             JWT_SECRET,
             { expiresIn: "1h" },
           );
@@ -2843,7 +2854,7 @@ export async function runOrchestration({
             message: message.trim(),
             socket: socket || nullSocket,
             username,
-            userId,
+            beingId,
             signal: abort.signal,
             sessionId,
             rootId,
@@ -2862,7 +2873,7 @@ export async function runOrchestration({
           if (currentMode !== defaultMode) {
             try {
               await switchMode(visitorId, defaultMode, {
-                username, userId, currentNodeId: getCurrentNodeId(visitorId),
+                username, beingId, currentNodeId: getCurrentNodeId(visitorId),
               });
             } catch (err) {
               log.warn("Orchestration", `Mode switch to ${defaultMode} failed: ${err.message}`);
@@ -2870,7 +2881,7 @@ export async function runOrchestration({
           }
           result = await processMessage(visitorId, message, {
             username,
-            userId,
+            beingId,
             rootId,
             currentNodeId: getCurrentNodeId(visitorId),
             signal: abort.signal,
@@ -2952,7 +2963,7 @@ export async function runOrchestration({
     try {
       const hookData = {
         content: answer,
-        userId,
+        beingId,
         rootId,
         mode: modeKey || `${zone}:default`,
       };

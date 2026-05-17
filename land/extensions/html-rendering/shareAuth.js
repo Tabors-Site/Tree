@@ -2,18 +2,18 @@
 // Moved from core/authenticate.js into the html-rendering extension.
 
 import log from "../../seed/log.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import { resolveRootNode } from "../../seed/tree/treeFetch.js";
 
-export async function resolveHtmlShareAccess({ userId, nodeId, shareToken }) {
+export async function resolveHtmlShareAccess({ beingId, nodeId, shareToken }) {
   if (!shareToken) {
     return { allowed: false, reason: "Missing share token" };
   }
 
-  // CASE 1: userId-based access
-  if (userId && !nodeId) {
-    const user = await User.findOne({
-      _id: userId,
+  // CASE 1: beingId-based access
+  if (beingId && !nodeId) {
+    const user = await Being.findOne({
+      _id: beingId,
       "metadata.html.shareToken": shareToken,
     })
       .select("_id username")
@@ -45,7 +45,7 @@ export async function resolveHtmlShareAccess({ userId, nodeId, shareToken }) {
       return { allowed: false, reason: "No users associated with root" };
     }
 
-    const matchedUser = await User.findOne({
+    const matchedUser = await Being.findOne({
       _id: { $in: userIds },
       "metadata.html.shareToken": shareToken,
     })
@@ -69,6 +69,6 @@ export async function resolveHtmlShareAccess({ userId, nodeId, shareToken }) {
 
   return {
     allowed: false,
-    reason: "userId or nodeId is required",
+    reason: "beingId or nodeId is required",
   };
 }

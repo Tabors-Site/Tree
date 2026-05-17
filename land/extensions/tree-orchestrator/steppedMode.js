@@ -20,7 +20,7 @@ import { setChatContext, startChainStep, finalizeChat } from "../../seed/llm/cha
 // sub-step's chat as we go, restore the root chat context at the end so
 // the upstream orchestrator can still write the final answer to it.
 export async function runSteppedMode(visitorId, mode, message, {
-  username, userId, rootId, signal, slot,
+  username, beingId, rootId, signal, slot,
   readOnly, onToolLoopCheckpoint, socket,
   parentChatId = null, dispatchOrigin = null,
   sessionId, rootChatId, rt,
@@ -66,11 +66,11 @@ export async function runSteppedMode(visitorId, mode, message, {
     // Create the chat record directly so treeContext is stamped.
     try {
       const { startChainStep } = await import("../../seed/llm/chatTracker.js");
-      if (!sessionId || !userId) {
-        log.warn("Tree Orchestrator", `beginStep fallback: missing sessionId=${!!sessionId} userId=${!!userId}`);
+      if (!sessionId || !beingId) {
+        log.warn("Tree Orchestrator", `beginStep fallback: missing sessionId=${!!sessionId} beingId=${!!beingId}`);
       }
       const chat = await startChainStep({
-        userId,
+        beingId,
         sessionId,
         chainIndex: fallbackChainIndex++,
         rootChatId: rootChatId || null,
@@ -217,7 +217,7 @@ export async function runSteppedMode(visitorId, mode, message, {
       ? String(ctx.currentNodeId)
       : (getCurrentNodeId(visitorId) || rootId || null);
   const pmCtx = {
-    username, userId, rootId, signal, slot,
+    username, beingId, rootId, signal, slot,
     currentNodeId: pmCurrentNodeId,
     readOnly,
     skipRespond,

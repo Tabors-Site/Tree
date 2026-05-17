@@ -9,7 +9,7 @@ export default {
     "The tree notices patterns in its own thinking.",
 
   needs: {
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
     services: ["hooks", "llm"],
   },
 

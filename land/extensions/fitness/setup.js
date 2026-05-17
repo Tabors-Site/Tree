@@ -21,12 +21,12 @@ export function setDeps({ metadata, Node }) {
 
 // ── Base scaffold (Log, Program, History) ──
 
-export async function scaffoldFitnessBase(rootId, userId) {
+export async function scaffoldFitnessBase(rootId, beingId) {
   const { createNode } = await import("../../seed/tree/treeManagement.js");
 
-  const logNode = await createNode({ name: "Log", parentId: rootId, userId });
-  const programNode = await createNode({ name: "Program", parentId: rootId, userId });
-  const historyNode = await createNode({ name: "History", parentId: rootId, userId });
+  const logNode = await createNode({ name: "Log", parentId: rootId, beingId });
+  const programNode = await createNode({ name: "Program", parentId: rootId, beingId });
+  const historyNode = await createNode({ name: "History", parentId: rootId, beingId });
 
   await _metadata.setExtMeta(logNode, "fitness", { role: "log" });
   await _metadata.setExtMeta(programNode, "fitness", { role: "program" });
@@ -46,7 +46,7 @@ export async function scaffoldFitnessBase(rootId, userId) {
   }
 
   // Wire food channel if food tree is a sibling
-  await wireFoodChannel(rootId, logNode._id, userId);
+  await wireFoodChannel(rootId, logNode._id, beingId);
 
   log.info("Fitness", `Base scaffold complete: Log, Program, History`);
 
@@ -59,23 +59,23 @@ export async function scaffoldFitnessBase(rootId, userId) {
 
 // ── Modality scaffolders ──
 
-export async function scaffoldGym(rootId, userId) {
+export async function scaffoldGym(rootId, beingId) {
   const { createNode } = await import("../../seed/tree/treeManagement.js");
-  const gymNode = await createNode({ name: "Gym", parentId: rootId, userId });
+  const gymNode = await createNode({ name: "Gym", parentId: rootId, beingId });
   await _metadata.setExtMeta(gymNode, "fitness", { role: "modality", modality: "gym" });
   log.info("Fitness", "Gym modality scaffolded");
   return { id: String(gymNode._id), name: "Gym" };
 }
 
-export async function scaffoldRunning(rootId, userId) {
+export async function scaffoldRunning(rootId, beingId) {
   const { createNode } = await import("../../seed/tree/treeManagement.js");
-  const runningNode = await createNode({ name: "Running", parentId: rootId, userId });
+  const runningNode = await createNode({ name: "Running", parentId: rootId, beingId });
   await _metadata.setExtMeta(runningNode, "fitness", { role: "modality", modality: "running" });
 
   // Running has fixed structure: Runs, PRs, Plan
-  const runsNode = await createNode({ name: "Runs", parentId: runningNode._id, userId });
-  const prsNode = await createNode({ name: "PRs", parentId: runningNode._id, userId });
-  const planNode = await createNode({ name: "Plan", parentId: runningNode._id, userId });
+  const runsNode = await createNode({ name: "Runs", parentId: runningNode._id, beingId });
+  const prsNode = await createNode({ name: "PRs", parentId: runningNode._id, beingId });
+  const planNode = await createNode({ name: "Plan", parentId: runningNode._id, beingId });
 
   await _metadata.setExtMeta(runsNode, "fitness", {
     role: "exercise",
@@ -88,18 +88,18 @@ export async function scaffoldRunning(rootId, userId) {
   await _metadata.setExtMeta(planNode, "fitness", { role: "plan" });
 
   // Create Log -> Runs channel
-  await createLogChannel(rootId, runsNode._id, "runs-log", userId);
+  await createLogChannel(rootId, runsNode._id, "runs-log", beingId);
 
   log.info("Fitness", "Running modality scaffolded: Runs, PRs, Plan");
   return { id: String(runningNode._id), name: "Running" };
 }
 
-export async function scaffoldHome(rootId, userId) {
+export async function scaffoldHome(rootId, beingId) {
   const { createNode } = await import("../../seed/tree/treeManagement.js");
-  const homeNode = await createNode({ name: "Home", parentId: rootId, userId });
+  const homeNode = await createNode({ name: "Home", parentId: rootId, beingId });
   await _metadata.setExtMeta(homeNode, "fitness", { role: "modality", modality: "home" });
 
-  const routineNode = await createNode({ name: "Routine", parentId: homeNode._id, userId });
+  const routineNode = await createNode({ name: "Routine", parentId: homeNode._id, beingId });
   await _metadata.setExtMeta(routineNode, "fitness", { role: "plan" });
 
   log.info("Fitness", "Home/bodyweight modality scaffolded");
@@ -108,9 +108,9 @@ export async function scaffoldHome(rootId, userId) {
 
 // ── Node creators (called by AI tools during setup/modification) ──
 
-export async function addGroupNode({ parentId, name, userId }) {
+export async function addGroupNode({ parentId, name, beingId }) {
   const { createNode } = await import("../../seed/tree/treeManagement.js");
-  const groupNode = await createNode({ name, parentId, userId });
+  const groupNode = await createNode({ name, parentId, beingId });
   await _metadata.setExtMeta(groupNode, "fitness", { role: "group" });
   return { id: String(groupNode._id), name };
 }
@@ -118,10 +118,10 @@ export async function addGroupNode({ parentId, name, userId }) {
 export async function addExerciseNode({
   groupId, name, exerciseType, unit, sets,
   startingValues, goals, progressionIncrement, progressionPath,
-  rootId, userId,
+  rootId, beingId,
 }) {
   const { createNode } = await import("../../seed/tree/treeManagement.js");
-  const exNode = await createNode({ name, parentId: groupId, userId });
+  const exNode = await createNode({ name, parentId: groupId, beingId });
 
   // Build value schema
   const valueSchema = { type: exerciseType || "weight-reps" };
@@ -150,16 +150,16 @@ export async function addExerciseNode({
 
   // Create Log -> exercise channel
   if (rootId) {
-    await createLogChannel(rootId, exNode._id, name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-log", userId);
+    await createLogChannel(rootId, exNode._id, name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-log", beingId);
   }
 
   return { id: String(exNode._id), name };
 }
 
-export async function removeExerciseNode(exerciseNodeId, userId) {
+export async function removeExerciseNode(exerciseNodeId, beingId) {
   try {
     const { deleteNodeBranch } = await import("../../seed/tree/treeManagement.js");
-    await deleteNodeBranch(exerciseNodeId, userId, true);
+    await deleteNodeBranch(exerciseNodeId, beingId, true);
     return true;
   } catch (err) {
     log.warn("Fitness", `Remove exercise failed: ${err.message}`);
@@ -186,7 +186,7 @@ export async function saveProfile(rootId, profile) {
 
 // ── Helpers ──
 
-async function createLogChannel(rootId, targetNodeId, channelName, userId) {
+async function createLogChannel(rootId, targetNodeId, channelName, beingId) {
   try {
     // Find the Log node
     const children = await _Node.find({ parent: rootId }).select("_id metadata").lean();
@@ -205,7 +205,7 @@ async function createLogChannel(rootId, targetNodeId, channelName, userId) {
         targetNodeId: String(targetNodeId),
         channelName,
         direction: "outbound",
-        userId,
+        beingId,
       });
     }
   } catch (err) {
@@ -213,7 +213,7 @@ async function createLogChannel(rootId, targetNodeId, channelName, userId) {
   }
 }
 
-async function wireFoodChannel(rootId, logNodeId, userId) {
+async function wireFoodChannel(rootId, logNodeId, beingId) {
   try {
     const parent = await _Node.findById(rootId).select("parent").lean();
     if (!parent?.parent) return;
@@ -236,7 +236,7 @@ async function wireFoodChannel(rootId, logNodeId, userId) {
               channelName: "fitness-food",
               direction: "bidirectional",
               filter: { tags: ["nutrition", "workout"] },
-              userId,
+              beingId,
             });
             log.info("Fitness", "Channel created: fitness-food (bidirectional with Food/Daily)");
           }

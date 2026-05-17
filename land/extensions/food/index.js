@@ -35,8 +35,8 @@ export async function init(core) {
     Node: core.models.Node,
     runChat: runChat
       ? async (opts) => {
-          if (opts.userId && opts.userId !== "SYSTEM") {
-            const hasLlm = await core.llm.userHasLlm(opts.userId);
+          if (opts.beingId && opts.beingId !== "SYSTEM") {
+            const hasLlm = await core.llm.userHasLlm(opts.beingId);
             if (!hasLlm) return { answer: null };
           }
           return core.llm.runChat({
@@ -45,7 +45,7 @@ export async function init(core) {
           });
         }
       : null,
-    Note: core.models.Note,
+    Artifact: core.models.Artifact,
     metadata: core.metadata,
   });
 
@@ -105,19 +105,20 @@ export async function init(core) {
     hookData._resultPayload = { role: meta.role, handled: true };
   }, "food");
 
-  // ── afterNote: decrement values when a food log note is deleted externally ──
-  core.hooks.register("afterNote", async ({ nodeId, action, note }) => {
+  // ── afterArtifact: decrement values when a food log artifact is deleted externally ──
+  core.hooks.register("afterArtifact", async ({ nodeId, action, artifact }) => {
     if (action !== "delete" || !nodeId) return;
-    // Check if this note belongs to a food Log node
+    // Check if this artifact belongs to a food Log node
     try {
       const node = await core.models.Node.findById(nodeId).select("metadata parent").lean();
       if (!node) return;
       const foodMeta = node.metadata instanceof Map ? node.metadata.get("food") : node.metadata?.food;
       if (foodMeta?.role !== "log") return;
-      // Try to parse totals from the deleted note
+      // Try to parse totals from the deleted artifact
       let totals = null;
       try {
-        const data = JSON.parse(note?.content || "");
+        const raw = typeof artifact?.content === "string" ? artifact.content : "";
+        const data = JSON.parse(raw);
         totals = data.totals || null;
       } catch {}
       if (!totals) return;
@@ -208,13 +209,13 @@ export async function init(core) {
       const foodNodes = await findFoodNodes(foodRootId);
       if (!foodNodes?.log?.id) return;
 
-      const Note = core.models.Node.db.model("Note");
+      const Artifact = core.models.Node.db.model("Artifact");
       const Node = core.models.Node;
       const today = new Date().toISOString().slice(0, 10);
       const todayStart = new Date(today + "T00:00:00.000Z");
 
       // Sum today's log notes
-      const logNotes = await Note.find({
+      const logNotes = await Artifact.find({
         nodeId: foodNodes.log.id,
         createdAt: { $gte: todayStart },
       }).select("content").lean();
@@ -253,24 +254,24 @@ export async function init(core) {
       }
 
       // Cap old log notes (keep last 500)
-      const logCount = await Note.countDocuments({ nodeId: foodNodes.log.id });
+      const logCount = await Artifact.countDocuments({ nodeId: foodNodes.log.id });
       if (logCount > 500) {
-        const oldest = await Note.find({ nodeId: foodNodes.log.id })
+        const oldest = await Artifact.find({ nodeId: foodNodes.log.id })
           .sort({ createdAt: 1 }).limit(logCount - 500).select("_id").lean();
         if (oldest.length > 0) {
-          await Note.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
+          await Artifact.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
           log.verbose("Food", `  Capped log notes: deleted ${oldest.length} old entries`);
         }
       }
 
       // Cap history notes (keep last 365)
       if (foodNodes.history?.id) {
-        const histCount = await Note.countDocuments({ nodeId: foodNodes.history.id });
+        const histCount = await Artifact.countDocuments({ nodeId: foodNodes.history.id });
         if (histCount > 365) {
-          const oldHist = await Note.find({ nodeId: foodNodes.history.id })
+          const oldHist = await Artifact.find({ nodeId: foodNodes.history.id })
             .sort({ createdAt: 1 }).limit(histCount - 365).select("_id").lean();
           if (oldHist.length > 0) {
-            await Note.deleteMany({ _id: { $in: oldHist.map(n => n._id) } });
+            await Artifact.deleteMany({ _id: { $in: oldHist.map(n => n._id) } });
             log.verbose("Food", `  Capped history notes: deleted ${oldHist.length} old entries`);
           }
         }
@@ -444,7 +445,7 @@ export async function init(core) {
     return current?.rootOwner ? { foodRootId: null, ownerId: String(current.rootOwner) } : null;
   }
 
-  core.hooks.register("afterNote", async ({ nodeId }) => {
+  core.hooks.register("afterArtifact", async ({ nodeId }) => {
     if (!nodeId) return;
     try {
       const node = await core.models.Node.findById(nodeId).select("metadata").lean();
@@ -471,7 +472,7 @@ export async function init(core) {
   try {
     const { getExtension } = await import("../loader.js");
     const base = getExtension("treeos-base");
-    base?.exports?.registerSlot?.("apps-grid", "food", ({ userId, rootMap, tokenParam, tokenField, esc: e }) => {
+    base?.exports?.registerSlot?.("apps-grid", "food", ({ beingId, rootMap, tokenParam, tokenField, esc: e }) => {
       const entries = rootMap.get("Food") || [];
       const existing = entries.map(entry =>
         entry.ready
@@ -483,7 +484,7 @@ export async function init(core) {
         <div class="app-desc">Say what you ate. One LLM call parses macros. Daily totals tracked. History archives daily summaries.</div>
         ${entries.length > 0
           ? `<div style="display:flex;flex-wrap:wrap;">${existing}</div>`
-          : `<form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+          : `<form class="app-form" method="POST" action="/api/v1/user/${beingId}/apps/create">
               ${tokenField}<input type="hidden" name="app" value="food" />
               <input class="app-input" name="message" placeholder="What did you eat? (or just say hi to set up your goals)" required />
               <button class="app-start" type="submit">Start Food</button>

@@ -109,7 +109,7 @@ function _upgradeModeForCompoundImperative(message, currentMode, extName) {
 //      reality; the AI at this position has the tools it needs.
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function localClassify(message, currentNodeId, rootId, userId = null) {
+export async function localClassify(message, currentNodeId, rootId, beingId = null) {
   const base = { summary: message.slice(0, 100), responseHint: "" };
 
   // ── Personal vocabulary (Layer 3) ──
@@ -117,12 +117,12 @@ export async function localClassify(message, currentNodeId, rootId, userId = nul
   // Cached in-process per user with a 5-minute TTL. Falls back to {} if the
   // misroute extension isn't loaded or the user has no personal vocab.
   let personalVocabAll = null;
-  if (userId) {
+  if (beingId) {
     try {
       const { getExtension } = await import("../loader.js");
       const misroute = getExtension("misroute");
       if (misroute?.exports?.getPersonalVocabularyForUser) {
-        personalVocabAll = await misroute.exports.getPersonalVocabularyForUser(userId);
+        personalVocabAll = await misroute.exports.getPersonalVocabularyForUser(beingId);
       }
     } catch {}
   }

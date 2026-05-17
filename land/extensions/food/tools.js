@@ -28,17 +28,17 @@ export default function getTools() {
         sodiumGoal: z.number().optional().describe("Daily sodium goal in mg."),
         goal: z.string().optional().describe("Goal type: bulk, cut, maintain, general."),
         restrictions: z.string().nullable().optional().describe("Dietary restrictions or preferences."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       handler: async (args) => {
         try {
-          const { rootId, userId, chatId, sessionId, ...profile } = args;
+          const { rootId, beingId, chatId, sessionId, ...profile } = args;
           const foodNodes = await findFoodNodes(rootId);
           if (!foodNodes) return { content: [{ type: "text", text: "Food tree not found." }] };
-          await saveProfile(rootId, profile, foodNodes, userId);
+          await saveProfile(rootId, profile, foodNodes, beingId);
           const goalSummary = Object.entries(profile)
             .filter(([k, v]) => k.endsWith("Goal") && v)
             .map(([k, v]) => `${k.replace("Goal", "")}: ${v}`)
@@ -59,7 +59,7 @@ export default function getTools() {
         nodeId: z.string().describe("The node ID to adopt."),
         role: z.string().describe("The role name (lowercase, no spaces). e.g. 'sugar', 'fiber', 'sodium'."),
         goal: z.number().optional().describe("Optional daily goal in grams."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
@@ -91,14 +91,14 @@ export default function getTools() {
         totals: z.record(z.number()).describe("Sum of all items. Keys match metric roles: protein, carbs, fats, etc."),
         meal: z.string().optional().describe("Meal slot: breakfast, lunch, dinner, snack. Auto-detected from time if omitted."),
         summary: z.string().describe("Readable food description for the log note. e.g. '2 eggs and a cup of rice'"),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       handler: async (args) => {
         try {
-          const { rootId, items, totals, meal, summary, userId, chatId, sessionId } = args;
+          const { rootId, items, totals, meal, summary, beingId, chatId, sessionId } = args;
           const foodNodes = await findFoodNodes(rootId);
           if (!foodNodes) return { content: [{ type: "text", text: "Food tree not found." }] };
 
@@ -106,13 +106,13 @@ export default function getTools() {
           if (!logNodeId) return { content: [{ type: "text", text: "Log node not found in food tree." }] };
 
           // Write structured note to Log node
-          const { createNote } = await import("../../seed/tree/notes.js");
+          const { createArtifact } = await import("../../seed/tree/artifacts.js");
           const logContent = JSON.stringify({ items, totals, meal: meal || null, summary });
-          const logNote = await createNote({
+          const logNote = await createArtifact({
             nodeId: logNodeId,
             content: logContent,
-            contentType: "text",
-            userId: userId || "SYSTEM",
+            origin: "ibp",
+            beingId: beingId || "SYSTEM",
             wasAi: true,
             chatId: chatId ?? null,
             sessionId: sessionId ?? null,
@@ -125,7 +125,7 @@ export default function getTools() {
           // Write to meal slot
           const slot = detectMealSlot(summary, meal);
           const mealNoteContent = JSON.stringify({ text: summary, totals, logNoteId });
-          await writeMealNote(foodNodes, slot, mealNoteContent, userId || "SYSTEM", { chatId, sessionId });
+          await writeMealNote(foodNodes, slot, mealNoteContent, beingId || "SYSTEM", { chatId, sessionId });
 
           // Build running totals for confirmation
           const picture = await getDailyPicture(rootId);

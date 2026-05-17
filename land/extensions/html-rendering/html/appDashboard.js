@@ -9,7 +9,7 @@
  *   import { renderAppDashboard } from "../../html-rendering/html/appDashboard.js";
  *
  *   res.send(renderAppDashboard({
- *     rootId, rootName, token, userId, dateStr,
+ *     rootId, rootName, token, beingId, dateStr,
  *     subtitle: "180g protein, 2400 cal target",
  *     hero: { value: "1,847", label: "of 2,400 calories (77%)", color: "#48bb78" },
  *     stats: [
@@ -43,7 +43,7 @@ function pctColor(pct) {
 
 export function renderAppDashboard(opts) {
   const {
-    rootId, rootName, token, userId, dateStr, inApp,
+    rootId, rootName, token, beingId, dateStr, inApp,
     subtitle, hero, stats, bars, cards, tags,
     commands, chatBar, emptyState, afterBars, extraCss, extraJs,
   } = opts;
@@ -108,12 +108,12 @@ export function renderAppDashboard(opts) {
   `;
 
   // Nav
-  const navHtml = userId
+  const navHtml = beingId
     ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <a href="/api/v1/user/${esc(userId)}/apps?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">\u2190 Apps</a>
+        <a href="/api/v1/user/${esc(beingId)}/apps?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">\u2190 Apps</a>
         <div style="display:flex;gap:16px;">
           <a href="/api/v1/root/${esc(rootId)}?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">Tree</a>
-          <a href="/api/v1/user/${esc(userId)}/llm?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM</a>
+          <a href="/api/v1/user/${esc(beingId)}/llm?html${token ? "&token=" + esc(token) : ""}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM</a>
         </div>
       </div>`
     : "";

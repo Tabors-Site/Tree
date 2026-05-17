@@ -21,14 +21,14 @@ export default function getTools() {
         substanceName: z.string().describe("Name of the substance (e.g. 'vape', 'caffeine', 'alcohol')."),
         startingTarget: z.number().optional().describe("Current daily usage amount."),
         finalTarget: z.number().optional().describe("Target daily usage (0 for quit)."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-      handler: async ({ rootId, substanceName, startingTarget, finalTarget, userId }) => {
+      handler: async ({ rootId, substanceName, startingTarget, finalTarget, beingId }) => {
         try {
-          const result = await addSubstance(rootId, substanceName, userId, {
+          const result = await addSubstance(rootId, substanceName, beingId, {
             startingTarget: startingTarget || 0,
             finalTarget: finalTarget || 0,
           });
@@ -43,7 +43,7 @@ export default function getTools() {
       description: "Mark recovery tree setup as complete. Call after adding all substances.",
       schema: {
         rootId: z.string().describe("Root node ID of the recovery tree."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },

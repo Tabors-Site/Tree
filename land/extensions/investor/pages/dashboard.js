@@ -16,7 +16,7 @@ const TYPE_COLORS = {
   other: "#718096",
 };
 
-export function renderInvestorDashboard({ rootId, rootName, summary, watchlist, token, userId, inApp }) {
+export function renderInvestorDashboard({ rootId, rootName, summary, watchlist, token, beingId, inApp }) {
   const s = summary || {};
   const holdings = s.holdings || [];
   const allocation = s.allocation || [];
@@ -99,7 +99,7 @@ export function renderInvestorDashboard({ rootId, rootName, summary, watchlist, 
     rootId,
     rootName: rootName || "Investor",
     token,
-    userId,
+    beingId,
     inApp: !!inApp,
     subtitle: new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
     hero,

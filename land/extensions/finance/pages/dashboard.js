@@ -19,7 +19,7 @@ const CATEGORY_COLORS = {
   Other: "#718096",
 };
 
-export function renderFinanceDashboard({ rootId, rootName, summary, recentTransactions, token, userId, inApp }) {
+export function renderFinanceDashboard({ rootId, rootName, summary, recentTransactions, token, beingId, inApp }) {
   const s = summary || {};
   const accounts = s.accounts || [];
   const categories = s.categories || [];
@@ -86,7 +86,7 @@ export function renderFinanceDashboard({ rootId, rootName, summary, recentTransa
     rootId,
     rootName: rootName || "Finance",
     token,
-    userId,
+    beingId,
     inApp: !!inApp,
     subtitle: new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
     hero,

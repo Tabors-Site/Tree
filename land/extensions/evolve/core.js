@@ -13,8 +13,8 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { SYSTEM_ROLE, CONTENT_TYPE } from "../../seed/protocol.js";
+import Artifact from "../../seed/models/artifact.js";
+import { SYSTEM_ROLE, ARTIFACT_ORIGIN } from "../../seed/protocol.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 import { v4 as uuidv4 } from "uuid";
 
@@ -276,7 +276,7 @@ export async function generateProposals() {
           `{\n` +
           `  "name": "extension-name",\n` +
           `  "description": "one sentence",\n` +
-          `  "hooks": { "listens": ["afterNote"], "fires": [] },\n` +
+          `  "hooks": { "listens": ["afterArtifact"], "fires": [] },\n` +
           `  "tools": [{ "name": "tool-name", "description": "what it does" }],\n` +
           `  "cli": [{ "command": "cmd-name", "description": "what it does" }],\n` +
           `  "enrichContext": "what it injects into AI context",\n` +
@@ -285,7 +285,7 @@ export async function generateProposals() {
           `}`;
 
         const { answer } = await _runChat({
-          userId: "SYSTEM",
+          beingId: "SYSTEM",
           username: "evolve",
           message: prompt,
           mode: "tree:respond",

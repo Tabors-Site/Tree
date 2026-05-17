@@ -70,7 +70,7 @@ function detectAnswer(response) {
 /**
  * Record a query result on a node.
  */
-export async function recordQuery(nodeId, query, hadAnswer, confidence, userId) {
+export async function recordQuery(nodeId, query, hadAnswer, confidence, beingId) {
   try {
     const node = await Node.findById(nodeId);
     if (!node) return;
@@ -83,7 +83,7 @@ export async function recordQuery(nodeId, query, hadAnswer, confidence, userId) 
       hadAnswer,
       confidence,
       timestamp: Date.now(),
-      userId,
+      beingId,
     });
 
     // Cap rolling array
@@ -107,14 +107,14 @@ export async function recordQuery(nodeId, query, hadAnswer, confidence, userId) 
 /**
  * Process an afterLLMCall event to detect competence.
  */
-export function processLLMCall({ nodeId, userId, message, answer }) {
+export function processLLMCall({ nodeId, beingId, message, answer }) {
   if (!nodeId || !message) return;
 
   // Only process user queries (not system prompts, not tool responses)
-  if (!userId || userId === "SYSTEM") return;
+  if (!beingId || beingId === "SYSTEM") return;
 
   const { hadAnswer, confidence } = detectAnswer(answer);
-  recordQuery(nodeId, message, hadAnswer, confidence, userId);
+  recordQuery(nodeId, message, hadAnswer, confidence, beingId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────

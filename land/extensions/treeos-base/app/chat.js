@@ -4,7 +4,7 @@
 
 import express from "express";
 import { sendOk, sendError, ERR, DELETED } from "../../../seed/protocol.js";
-import User from "../../../seed/models/user.js";
+import Being from "../../../seed/models/being.js";
 import Node from "../../../seed/models/node.js";
 import LlmConnection from "../../../seed/models/llmConnection.js";
 import authenticateLite from "../../html-rendering/authenticateLite.js";
@@ -29,19 +29,19 @@ router.get("/chat", authenticateLite, async (req, res) => {
     if (!isHtmlEnabled()) {
       return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled. Use the SPA frontend.");
     }
-    if (!req.userId) {
+    if (!req.beingId) {
       return res.redirect("/login");
     }
 
-    const user = await User.findById(req.userId).select(
+    const user = await Being.findById(req.beingId).select(
       "username metadata llmDefault isAdmin",
     );
     if (!user) {
       return notFoundPage(req, res, "This user doesn't exist.");
     }
 
-    const { getUserMeta } = await import("../../../seed/tree/userMetadata.js");
-    const nav = getUserMeta(user, "nav");
+    const { getBeingMeta } = await import("../../../seed/tree/beingMetadata.js");
+    const nav = getBeingMeta(user, "nav");
     const userRoots = Array.isArray(nav.roots) ? nav.roots : [];
 
     // Redirect to setup if user needs LLM (unless they skipped recently).
@@ -50,7 +50,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     if (!setupSkipped) {
       const hasMainLlm = !!user.llmDefault;
       if (!hasMainLlm) {
-        const connCount = await LlmConnection.countDocuments({ userId: req.userId });
+        const connCount = await LlmConnection.countDocuments({ beingId: req.beingId });
         if (connCount === 0) {
           return res.redirect("/setup");
         }
@@ -81,7 +81,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
     try {
       const life = getExtension("life");
       if (life?.exports?.findLifeRoot && life?.exports?.getDomainNodes) {
-        const lifeRootId = await life.exports.findLifeRoot(req.userId);
+        const lifeRootId = await life.exports.findLifeRoot(req.beingId);
         if (lifeRootId) {
           const domains = await life.exports.getDomainNodes(lifeRootId);
           const APP_META = {
@@ -1197,7 +1197,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
   <script>
     const CONFIG = {
       username: "${escapeHtml(username)}",
-      userId: "${req.userId}",
+      beingId: "${req.beingId}",
       trees: ${treesJSON},
       apps: ${appsJSON},
       landName: "${landName.replace(/"/g, '\\"')}",
@@ -2191,7 +2191,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       btn.disabled = true;
 
       try {
-        const res = await fetch("/api/v1/user/" + CONFIG.userId + "/createRoot", {
+        const res = await fetch("/api/v1/user/" + CONFIG.beingId + "/createRoot", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -2331,7 +2331,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       updateSendBtn();
 
       // Tell server we're going home so it properly exits tree mode
-      socket.emit("urlChanged", { url: "/api/v1/user/" + CONFIG.userId });
+      socket.emit("urlChanged", { url: "/api/v1/user/" + CONFIG.beingId });
       socket.emit("clearConversation");
       dreamsLoaded = false;
       invitesLoaded = false;
@@ -2831,7 +2831,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
           // Contributors
           (members.contributors || []).forEach(function(c) {
-            var isSelf = c._id === CONFIG.userId;
+            var isSelf = c._id === CONFIG.beingId;
             var isOwner = members.isOwner;
             var actions = '';
             if (isOwner || isSelf) {
@@ -2851,7 +2851,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
           });
 
           // Invite form (owner or contributor)
-          if (members.isOwner || members.contributors.some(function(c) { return c._id === userId; })) {
+          if (members.isOwner || members.contributors.some(function(c) { return c._id === beingId; })) {
             html += '<form class="invite-form" onsubmit="sendInvite(event)">' +
               '<input type="text" id="inviteUsername" placeholder="username or user@other.land.com" />' +
               '<button type="submit">Invite</button>' +
@@ -2926,7 +2926,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       }
     }
 
-    async function removeMember(userId, label, btn) {
+    async function removeMember(beingId, label, btn) {
       if (!confirm("Are you sure you want to " + label.toLowerCase() + "?")) return;
       btn.disabled = true;
       try {
@@ -2934,11 +2934,11 @@ router.get("/chat", authenticateLite, async (req, res) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ userReceiving: userId }),
+          body: JSON.stringify({ userReceiving: beingId }),
         });
         var data = await res.json();
         if (!res.ok) throw new Error((data.error && data.error.message) || data.error || "Failed");
-        if (userId === CONFIG.userId) {
+        if (beingId === CONFIG.beingId) {
           location.reload();
         } else {
           invitesLoaded = false;
@@ -2950,7 +2950,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
       }
     }
 
-    async function transferOwner(userId, btn) {
+    async function transferOwner(beingId, btn) {
       if (!confirm("Transfer ownership? This cannot be undone.")) return;
       btn.disabled = true;
       try {
@@ -2958,7 +2958,7 @@ router.get("/chat", authenticateLite, async (req, res) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ userReceiving: userId }),
+          body: JSON.stringify({ userReceiving: beingId }),
         });
         var data = await res.json();
         if (!res.ok) throw new Error((data.error && data.error.message) || data.error || "Failed");
@@ -3002,13 +3002,13 @@ router.get("/chat", authenticateLite, async (req, res) => {
 
 router.get("/chat/notifications", authenticateLite, async (req, res) => {
   try {
-    if (!req.userId)
+    if (!req.beingId)
       return sendError(res, 401, ERR.UNAUTHORIZED, "Not authenticated");
     const rootId = req.query.rootId;
     const notifExt = getExtension("notifications");
     const getNotifications = notifExt?.exports?.getNotifications;
     const { notifications, total } = getNotifications
-      ? await getNotifications({ userId: req.userId, rootId, limit: 50, sinceDays: 7 })
+      ? await getNotifications({ beingId: req.beingId, rootId, limit: 50, sinceDays: 7 })
       : { notifications: [], total: 0 };
 
     // Include dream config when viewing a specific tree
@@ -3020,7 +3020,7 @@ router.get("/chat/notifications", authenticateLite, async (req, res) => {
         .lean();
       if (rootNode) {
         dreamTime = rootNode.metadata?.dreams?.dreamTime || null;
-        isOwner = rootNode.rootOwner?.toString() === req.userId.toString();
+        isOwner = rootNode.rootOwner?.toString() === req.beingId.toString();
       }
     }
 
@@ -3034,13 +3034,13 @@ router.get("/chat/notifications", authenticateLite, async (req, res) => {
 // ── Invites + Members API for chat panel ──────────────────────────────
 router.get("/chat/invites", authenticateLite, async (req, res) => {
   try {
-    if (!req.userId)
+    if (!req.beingId)
       return sendError(res, 401, ERR.UNAUTHORIZED, "Not authenticated");
 
     // Pending invites for this user (from team extension)
     const teamExt = getExtension("team")?.exports || {};
     const invites = teamExt.getPendingInvitesForUser
-      ? await teamExt.getPendingInvitesForUser(req.userId)
+      ? await teamExt.getPendingInvitesForUser(req.beingId)
       : [];
     const inviteList = invites.map((inv) => ({
       id: inv._id,
@@ -3069,7 +3069,7 @@ router.get("/chat/invites", authenticateLite, async (req, res) => {
           owner: rootNode.rootOwner || null,
           contributors: rootNode.contributors || [],
           isOwner:
-            rootNode.rootOwner?._id?.toString() === req.userId.toString(),
+            rootNode.rootOwner?._id?.toString() === req.beingId.toString(),
         };
       }
     }
@@ -3083,7 +3083,7 @@ router.get("/chat/invites", authenticateLite, async (req, res) => {
 
 router.post("/chat/invites/:inviteId", authenticateLite, async (req, res) => {
   try {
-    if (!req.userId)
+    if (!req.beingId)
       return sendError(res, 401, ERR.UNAUTHORIZED, "Not authenticated");
     const { accept } = req.body;
     const teamExt = getExtension("team")?.exports || {};
@@ -3092,7 +3092,7 @@ router.post("/chat/invites/:inviteId", authenticateLite, async (req, res) => {
     }
     await teamExt.respondToInvite({
       inviteId: req.params.inviteId,
-      userId: req.userId,
+      beingId: req.beingId,
       acceptInvite: accept === true || accept === "true",
     });
     return sendOk(res);

@@ -95,14 +95,14 @@ function flagContentHash(payload) {
  * @param {object} args
  * @param {string} args.rulerNodeId   the scope receiving the flag
  * @param {object} args.payload       the flag content (kind, artifactContext, localChoice, blocking, proposedResolution?)
- * @param {string} [args.userId]      Worker's user id (for audit)
+ * @param {string} [args.beingId]      Worker's user id (for audit)
  * @param {string} [args.sourceWorkerScopeId] the node id where the Worker ran
  * @param {string} [args.sourceWorkerType]    "build" | "refine" | "review" | "integrate"
  */
 export async function appendFlag({
   rulerNodeId,
   payload,
-  userId = null,
+  beingId = null,
   sourceWorkerScopeId = null,
   sourceWorkerType = null,
 }) {
@@ -146,7 +146,7 @@ export async function appendFlag({
     sourceWorker: {
       scopeId: sourceWorkerScopeId ? String(sourceWorkerScopeId) : null,
       workerType: sourceWorkerType || null,
-      userId: userId || null,
+      beingId: beingId || null,
     },
     status: "unresolved",
   };

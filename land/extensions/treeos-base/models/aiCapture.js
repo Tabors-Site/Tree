@@ -5,7 +5,7 @@
  * forensic detail.
  *
  * Fields:
- *   - chatId / sessionId / userId / rootId / nodeId / mode — correlation
+ *   - chatId / sessionId / beingId / rootId / nodeId / mode — correlation
  *   - promptMessages[] — exactly what the AI was handed as its system
  *     prompt + conversation history, truncated per-message at 16KB and
  *     total at 128KB
@@ -138,7 +138,7 @@ const AiCaptureSchema = new mongoose.Schema({
   // Correlation to the Chat doc this capture augments
   chatId: { type: String, index: true, default: null },
   sessionId: { type: String, default: null },
-  userId: { type: String, default: null },
+  beingId: { type: String, default: null },
   rootId: { type: String, default: null },
   nodeId: { type: String, default: null },
   mode: { type: String, default: null },
@@ -189,6 +189,6 @@ AiCaptureSchema.index({ nodeId: 1, startedAt: -1 });
 // Index for session-scoped chronological queries
 AiCaptureSchema.index({ sessionId: 1, startedAt: -1 });
 // Index for user-scoped queries
-AiCaptureSchema.index({ userId: 1, startedAt: -1 });
+AiCaptureSchema.index({ beingId: 1, startedAt: -1 });
 
 export default mongoose.model("AiCapture", AiCaptureSchema);

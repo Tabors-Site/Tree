@@ -1,9 +1,9 @@
 import router from "./routes.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import Node from "../../seed/models/node.js";
 
 export async function init(core) {
-  core.llm.registerFailoverResolver(async (userId, rootId) => {
+  core.llm.registerFailoverResolver(async (beingId, rootId) => {
     // Tree-level stack first (tree owner's backups apply to everyone)
     let treeStack = [];
     if (rootId) {
@@ -13,7 +13,7 @@ export async function init(core) {
     }
 
     // User-level stack (personal fallbacks)
-    const user = await User.findById(userId).select("metadata").lean();
+    const user = await Being.findById(beingId).select("metadata").lean();
     const userMeta = user?.metadata instanceof Map ? Object.fromEntries(user.metadata) : (user?.metadata || {});
     const userStack = userMeta.llm?.failoverStack || [];
 

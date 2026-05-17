@@ -57,7 +57,7 @@ router.post("/node/:nodeId/approve/resolve", authenticate, async (req, res) => {
     if (!["approved", "rejected"].includes(decision)) {
       return sendError(res, 400, ERR.INVALID_INPUT, "decision must be 'approved' or 'rejected'");
     }
-    const result = resolveRequest(id, decision, req.userId);
+    const result = resolveRequest(id, decision, req.beingId);
     if (!result) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Request not found or already resolved");
     sendOk(res, result);
   } catch (err) {

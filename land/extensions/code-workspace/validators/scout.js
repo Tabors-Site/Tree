@@ -101,7 +101,7 @@ export async function runScout({
   try {
     const { runChat } = await import("../../../seed/llm/conversation.js");
     const chatPromise = runChat({
-      userId: null,
+      beingId: null,
       username: "scout",
       message: prompt,
       mode: "tree:code-ask",

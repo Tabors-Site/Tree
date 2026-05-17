@@ -18,7 +18,7 @@ export default [
       maxRounds: z.number().optional().describe("Max consensus loop rounds. Default 5."),
       autoApply: z.boolean().optional().describe("Automatically revise based on feedback. Default false."),
       reviewPrompt: z.string().nullable().optional().describe("Custom review instructions. Null for default."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     handler: async ({ nodeId, partnerId, maxRounds, autoApply, reviewPrompt }) => {
@@ -35,7 +35,7 @@ export default [
       const config = {
         ...existing,
         partner: partnerId,
-        trigger: "afterNote",
+        trigger: "afterArtifact",
         status: existing.status === "paused" ? "paused" : "idle",
       };
       if (maxRounds !== undefined) config.maxRounds = Math.max(1, Math.min(maxRounds, 20));
@@ -59,7 +59,7 @@ export default [
     description: "Show the current peer review configuration and status at a node.",
     schema: {
       nodeId: z.string().describe("The node to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     handler: async ({ nodeId }) => {
@@ -100,7 +100,7 @@ export default [
     schema: {
       nodeId: z.string().describe("The node to check."),
       limit: z.number().optional().describe("Number of recent sessions. Default 5."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     handler: async ({ nodeId, limit }) => {
@@ -123,7 +123,7 @@ export default [
     description: "Remove review configuration from a node. Stops all future reviews.",
     schema: {
       nodeId: z.string().describe("The node to clear review from."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     handler: async ({ nodeId }) => {
@@ -140,7 +140,7 @@ export default [
     description: "Pause automatic reviews at a node. Keeps configuration. Resume later.",
     schema: {
       nodeId: z.string().describe("The node to pause reviews on."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     handler: async ({ nodeId }) => {
@@ -160,7 +160,7 @@ export default [
     description: "Resume automatic reviews at a node after pausing.",
     schema: {
       nodeId: z.string().describe("The node to resume reviews on."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     handler: async ({ nodeId }) => {

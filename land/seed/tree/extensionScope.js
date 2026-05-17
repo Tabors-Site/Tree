@@ -165,9 +165,9 @@ export function clearScopeCache() {
 /**
  * Clear cache and fire afterScopeChange hook.
  */
-export function notifyScopeChange({ nodeId, blocked, restricted, allowed, userId } = {}) {
+export function notifyScopeChange({ nodeId, blocked, restricted, allowed, beingId } = {}) {
   clearAncestorCache();
-  hooks.run("afterScopeChange", { nodeId, blocked, restricted, allowed, userId })
+  hooks.run("afterScopeChange", { nodeId, blocked, restricted, allowed, beingId })
     .catch(err => log.debug("Scope", `afterScopeChange hook error: ${err.message}`));
 }
 

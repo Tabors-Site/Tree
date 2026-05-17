@@ -129,7 +129,7 @@ function surfaceToneColor(tone) {
 
 // ── Dashboard renderer ──
 
-export function renderFoodDashboard({ rootId, rootName, picture, weeklySummaries, token, userId, inApp }) {
+export function renderFoodDashboard({ rootId, rootName, picture, weeklySummaries, token, beingId, inApp }) {
   const p = picture || {};
   const calories = p.calories || {};
   const profile = p.profile || {};
@@ -334,7 +334,7 @@ export function renderFoodDashboard({ rootId, rootName, picture, weeklySummaries
   // The surface IS the hero's subtext. The number is the anchor. The words give it meaning.
 
   return renderAppDashboard({
-    rootId, rootName, token, userId, inApp,
+    rootId, rootName, token, beingId, inApp,
     subtitle: profileParts.join(" . ") || null,
     hero: {
       value: String(Math.round(calories.today || 0)),

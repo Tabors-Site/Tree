@@ -192,7 +192,7 @@ export async function synthesize(rootId) {
       const prompt = buildSynthesisPrompt(node.name, signals, childPrefs);
       try {
         const { answer } = await _runChat({
-          userId: "SYSTEM",
+          beingId: "SYSTEM",
           username: "taste",
           message: prompt,
           mode: "home:default",

@@ -17,8 +17,8 @@ export default function authenticateMCP(req, res, next) {
 
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    req.userId =
-      decoded.userId || decoded.id || decoded._id;
+    req.beingId =
+      decoded.beingId || decoded.id || decoded._id;
 
     req.username = decoded.username;
     req.visitorId = decoded.visitorId || null;

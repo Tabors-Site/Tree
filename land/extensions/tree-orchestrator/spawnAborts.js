@@ -10,7 +10,7 @@
 // server.
 //
 // This module is the cancellation surface for that gap. Every spawn
-// registers an AbortController under its userId; settle paths
+// registers an AbortController under its beingId; settle paths
 // unregister; the kernel's cancelRequest handler iterates and
 // aborts every controller currently registered for the user.
 //
@@ -26,16 +26,16 @@
 
 import log from "../../seed/log.js";
 
-const _registry = new Map(); // userId → Set<AbortController>
+const _registry = new Map(); // beingId → Set<AbortController>
 
 /**
  * Register a controller against a user. Returns an unregister
  * function the caller binds to its settle path. Idempotent against
  * double-register of the same controller.
  */
-export function registerSpawnAbort(userId, controller, label = "spawn") {
-  if (!userId || !controller) return () => {};
-  const key = String(userId);
+export function registerSpawnAbort(beingId, controller, label = "spawn") {
+  if (!beingId || !controller) return () => {};
+  const key = String(beingId);
   if (!_registry.has(key)) _registry.set(key, new Set());
   const slot = _registry.get(key);
   slot.add(controller);
@@ -56,9 +56,9 @@ export function registerSpawnAbort(userId, controller, label = "spawn") {
  * Abort every spawn registered to a user. Returns the count of
  * controllers that were active so the caller can log accurately.
  */
-export function abortAllForUser(userId) {
-  if (!userId) return 0;
-  const key = String(userId);
+export function abortAllForUser(beingId) {
+  if (!beingId) return 0;
+  const key = String(beingId);
   const slot = _registry.get(key);
   if (!slot || slot.size === 0) return 0;
   let aborted = 0;
@@ -81,9 +81,9 @@ export function abortAllForUser(userId) {
 /**
  * Diagnostic: count active spawns for a user (or globally).
  */
-export function activeSpawnCount(userId = null) {
-  if (userId) {
-    const slot = _registry.get(String(userId));
+export function activeSpawnCount(beingId = null) {
+  if (beingId) {
+    const slot = _registry.get(String(beingId));
     return slot ? slot.size : 0;
   }
   let n = 0;

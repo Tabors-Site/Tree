@@ -3,7 +3,7 @@
 // and fires the raw-idea orchestrator as if they had clicked the Auto-place button.
 
 import log from "../../seed/log.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import RawIdea from "./model.js";
 import Chat from "../../seed/models/chat.js";
 import { orchestrateRawIdeaPlacement } from "./pipeline.js";
@@ -27,24 +27,24 @@ let jobTimer = null;
 // ─────────────────────────────────────────────────────────────────────────
 
 async function processUser(user) {
-  const userId = user._id.toString();
+  const beingId = user._id.toString();
 
   // Skip if user is currently online — they can trigger it themselves
-  if (isUserOnline(userId)) return;
+  if (isUserOnline(beingId)) return;
 
   // Skip if user has no LLM connection
-  if (!await userHasLlm(userId)) return;
+  if (!await userHasLlm(beingId)) return;
 
   // Mirror the button: skip if another idea is already being orchestrated
   const alreadyProcessing = await RawIdea.findOne({
-    userId,
+    beingId,
     status: "processing",
   }).lean();
   if (alreadyProcessing) return;
 
   // Find the latest pending text raw idea (same legacy-compat $or as getRawIdeas)
   const rawIdea = await RawIdea.findOne({
-    userId,
+    beingId,
     contentType: "text",
     $or: [
       { status: "pending" },
@@ -64,12 +64,12 @@ async function processUser(user) {
   // Fire-and-forget — same pattern as the HTTP route
   orchestrateRawIdeaPlacement({
     rawIdeaId: rawIdea._id.toString(),
-    userId,
+    beingId,
     username: user.username,
     source: "background",
   }).catch((err) =>
  log.error("Raw Ideas", 
-      `❌ Auto-place orchestration failed for user ${userId}:`,
+      `❌ Auto-place orchestration failed for user ${beingId}:`,
       err.message,
     ),
   );
@@ -82,7 +82,7 @@ async function processUser(user) {
 export async function runRawIdeaAutoPlace() {
  log.verbose("Raw Ideas", "⏰ Raw idea auto-place job running…");
   try {
-    const users = await User.find({
+    const users = await Being.find({
       $or: [
         { "metadata.tiers.plan": { $in: ELIGIBLE_PLANS } },
         { isAdmin: true },

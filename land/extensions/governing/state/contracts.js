@@ -84,7 +84,7 @@ async function nextEmissionOrdinal(contractsNodeId) {
  * Create a contracts-emission-N child node under the contracts trio
  * member. Stamps role + the structured emission payload.
  */
-async function createContractsEmission({ contractsNodeId, ordinal, payload, userId, core }) {
+async function createContractsEmission({ contractsNodeId, ordinal, payload, beingId, core }) {
   // Slug derived from the Contractor's reasoning headline. Same
   // approach as plan-emission naming: descriptive at-a-glance, with
   // the numeric ordinal preserved in metadata for ordering.
@@ -98,7 +98,7 @@ async function createContractsEmission({ contractsNodeId, ordinal, payload, user
         parentId: String(contractsNodeId),
         name,
         type: "contracts-emission",
-        userId,
+        beingId,
         wasAi: true,
       });
     }
@@ -283,7 +283,7 @@ export async function readActiveContractsEmission(rulerNodeId) {
 export async function setContracts({
   scopeNodeId,
   contracts,
-  userId,
+  beingId,
   systemSpec = null,
   core,
   reasoning = null,
@@ -307,7 +307,7 @@ export async function setContracts({
   // Find or create the contracts trio member.
   let contractsNode = null;
   try {
-    contractsNode = await ensureContractsNode({ scopeNodeId, userId, core });
+    contractsNode = await ensureContractsNode({ scopeNodeId, beingId, core });
   } catch (err) {
     log.warn("Governing", `setContracts: ensureContractsNode failed at scope ${String(scopeNodeId).slice(0, 8)}: ${err.message}`);
     return null;
@@ -393,7 +393,7 @@ export async function setContracts({
     contractsNodeId: contractsNode._id,
     ordinal,
     payload,
-    userId,
+    beingId,
     core,
   });
 

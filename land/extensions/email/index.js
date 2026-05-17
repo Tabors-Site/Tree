@@ -4,7 +4,7 @@ import TempUser from "./model.js";
 import { sendVerificationEmail } from "./core.js";
 import { getLandUrl } from "../../canopy/identity.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
 
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -39,7 +39,7 @@ export async function init(core) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    const existingEmail = await User.findOne({ "metadata.email.address": normalizedEmail });
+    const existingEmail = await Being.findOne({ "metadata.email.address": normalizedEmail });
     if (existingEmail) {
       sendError(res, 400, ERR.INVALID_INPUT, "Email already registered");
       data.handled = true;
@@ -75,16 +75,16 @@ export async function init(core) {
 
   core.hooks.register("afterRegister", async ({ user, email }) => {
     if (!email) return;
-    const freshUser = await User.findById(user._id);
+    const freshUser = await Being.findById(user._id);
     if (!freshUser) return;
 
     // Don't overwrite if email metadata already exists (verify route sets verified: true first)
-    const existing = getUserMeta(freshUser, "email");
+    const existing = getBeingMeta(freshUser, "email");
     if (existing?.address) return;
 
     const normalizedEmail = email.trim().toLowerCase();
-    const { batchSetUserMeta } = await import("../../seed/tree/userMetadata.js");
-    await batchSetUserMeta(String(freshUser._id), "email", { address: normalizedEmail, verified: false });
+    const { batchSetBeingMeta } = await import("../../seed/tree/beingMetadata.js");
+    await batchSetBeingMeta(String(freshUser._id), "email", { address: normalizedEmail, verified: false });
   }, "email");
 
   try {

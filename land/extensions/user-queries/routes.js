@@ -2,13 +2,13 @@ import log from "../../seed/log.js";
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import { getChats } from "../../seed/llm/chatHistory.js";
 import { getExtension } from "../loader.js";
 import {
-  getAllNotesByUser,
-  searchNotesByUser,
-} from "../../seed/tree/notes.js";
+  getAllArtifactsByUser,
+  searchArtifactsByUser,
+} from "../../seed/tree/artifacts.js";
 import { getContributionsByUser } from "../../seed/tree/contributions.js";
 import getNodeName from "../../routes/api/helpers/getNameById.js";
 import { renderUserNotes } from "./pages/userNotes.js";
@@ -29,9 +29,9 @@ export default function createRouter(core) {
 
   const router = express.Router();
 
-  router.get("/user/:userId/notes", htmlAuth, async (req, res) => {
+  router.get("/user/:beingId/notes", htmlAuth, async (req, res) => {
     try {
-      const userId = req.params.userId;
+      const beingId = req.params.beingId;
       const startDate = req.query.startDate;
       const endDate = req.query.endDate;
       const query = req.query.q || "";
@@ -52,28 +52,28 @@ export default function createRouter(core) {
 
       let result;
       if (query.trim() !== "") {
-        result = await searchNotesByUser({ userId, query, limit, startDate, endDate });
+        result = await searchArtifactsByUser({ beingId, query, limit, startDate, endDate });
       } else {
-        result = await getAllNotesByUser(userId, limit, startDate, endDate);
+        result = await getAllArtifactsByUser(beingId, limit, startDate, endDate);
       }
 
-      const notes = result.notes.map((n) => ({
+      const notes = (result.artifacts || []).map((n) => ({
         ...n,
         _id: n._id || n.id,
-        content: n.contentType === "file" ? `/api/v1/uploads/${n.content}` : n.content,
+        content: n.origin === "filesystem" ? `/api/v1/uploads/${n.content}` : n.content,
       }));
 
       if (!wantHtml || !getExtension("html-rendering")) {
         return sendOk(res, { notes, query });
       }
 
-      const user = await User.findById(userId).lean();
+      const user = await Being.findById(beingId).lean();
 
       const processedNotes = await Promise.all(
         notes.map(async (n) => {
           const noteId = n._id || n.id;
           const preview =
-            n.contentType === "text"
+            n.origin === "ibp"
               ? n.content.length > 120
                 ? n.content.substring(0, 120) + "..."
                 : n.content
@@ -84,7 +84,7 @@ export default function createRouter(core) {
           return `
     <li class="note-card" data-note-id="${noteId}" data-node-id="${n.nodeId}" data-version="${n.version}">
       <div class="card-actions">
-        ${n.contentType === "text"
+        ${n.origin === "ibp"
             ? `<a href="/api/v1/node/${n.nodeId}/${n.version}/notes/${noteId}/editor${tokenQS}" class="edit-button" title="Edit note">✎</a>`
             : ""}
         <button class="delete-button" title="Delete note">✕</button>
@@ -92,7 +92,7 @@ export default function createRouter(core) {
       <div class="note-content">
         <div class="note-author">${escapeHtml(user.username)}</div>
         <a href="/api/v1/node/${n.nodeId}/${n.version}/notes/${noteId}${tokenQS}" class="note-link">
-          ${n.contentType === "file" ? `<span class="file-badge">FILE</span>` : ""}${escapeHtml(preview)}
+          ${n.origin === "filesystem" ? `<span class="file-badge">FILE</span>` : ""}${escapeHtml(preview)}
         </a>
       </div>
       <div class="note-meta">
@@ -106,18 +106,18 @@ export default function createRouter(core) {
         }),
       );
 
-      return res.send(renderUserNotes({ userId, user, notes, processedNotes, query, token }));
+      return res.send(renderUserNotes({ beingId, user, notes, processedNotes, query, token }));
     } catch (err) {
- log.error("User Queries", "Error in /user/:userId/notes:", err);
+ log.error("User Queries", "Error in /user/:beingId/notes:", err);
       sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   });
 
   // Tags route moved to extensions/team
 
-  router.get("/user/:userId/contributions", htmlAuth, async (req, res) => {
+  router.get("/user/:beingId/contributions", htmlAuth, async (req, res) => {
     try {
-      const { userId } = req.params;
+      const { beingId } = req.params;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
       const limit = req.query.limit !== undefined ? Number(req.query.limit) : undefined;
@@ -128,23 +128,23 @@ export default function createRouter(core) {
       const token = req.query.token ?? "";
       const tokenQS = token ? `?token=${token}&html` : `?html`;
 
-      const { contributions = [] } = await getContributionsByUser(userId, limit, req.query.startDate, req.query.endDate);
+      const { contributions = [] } = await getContributionsByUser(beingId, limit, req.query.startDate, req.query.endDate);
 
       if (!wantHtml || !getExtension("html-rendering")) {
-        return sendOk(res, { userId, contributions });
+        return sendOk(res, { beingId, contributions });
       }
 
-      const user = await User.findById(userId).lean();
-      return res.send(await renderUserContributions({ userId, user, contributions, username: user?.username, getNodeName, token }));
+      const user = await Being.findById(beingId).lean();
+      return res.send(await renderUserContributions({ beingId, user, contributions, username: user?.username, getNodeName, token }));
     } catch (err) {
- log.error("User Queries", "Error in /user/:userId/contributions:", err);
+ log.error("User Queries", "Error in /user/:beingId/contributions:", err);
       sendError(res, 400, ERR.INVALID_INPUT, err.message);
     }
   });
 
-  router.get("/user/:userId/chats", htmlAuth, async (req, res) => {
+  router.get("/user/:beingId/chats", htmlAuth, async (req, res) => {
     try {
-      const { userId } = req.params;
+      const { beingId } = req.params;
       const wantHtml = Object.prototype.hasOwnProperty.call(req.query, "html");
 
       const rawLimit = req.query.limit;
@@ -161,7 +161,7 @@ export default function createRouter(core) {
       }
 
       const { sessions } = await getChats({
-        userId,
+        beingId,
         sessionLimit: limit || 10,
         sessionId,
         startDate: req.query.startDate,
@@ -171,13 +171,13 @@ export default function createRouter(core) {
       const allChats = sessions.flatMap((s) => s.chats);
 
       if (!wantHtml || !getExtension("html-rendering")) {
-        return sendOk(res, { userId, count: allChats.length, sessions });
+        return sendOk(res, { beingId, count: allChats.length, sessions });
       }
 
-      const user = await User.findById(userId).lean();
+      const user = await Being.findById(beingId).lean();
       const username = user?.username || "Unknown user";
 
-      return res.send(renderChats({ userId, chats: allChats, sessions, username, token, sessionId }));
+      return res.send(renderChats({ beingId, chats: allChats, sessions, username, token, sessionId }));
     } catch (err) {
  log.error("User Queries", err);
       sendError(res, 500, ERR.INTERNAL, err.message);

@@ -15,7 +15,7 @@ export default function buildGatewayHtmlRoutes() {
       const { rootId } = req.params;
       const root = await Node.findById(rootId).select("name rootOwner contributors").lean();
       if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
-      if (String(root.rootOwner) !== String(req.userId)) {
+      if (String(root.rootOwner) !== String(req.beingId)) {
         return sendError(res, 403, ERR.FORBIDDEN, "Owner only");
       }
 

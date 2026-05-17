@@ -17,7 +17,7 @@ import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 import { getExtension } from "../loader.js";
 
 let Node = null;
-let Note = null;
+let _Artifact = null;
 let logContribution = null;
 let runChat = null;
 let useEnergy = async () => ({ energyUsed: 0 });
@@ -25,7 +25,7 @@ let _metadata = null;
 
 export function setServices({ models, contributions, llm, energy, metadata }) {
   Node = models.Node;
-  Note = models.Note;
+  _Artifact = models.Artifact;
   logContribution = contributions.logContribution;
   runChat = llm.runChat;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
@@ -85,7 +85,7 @@ What is this branch about? Respond with JSON only:
  * For each direct child of the analysis root, collect node names and note
  * content, then ask the LLM to produce a topic summary and keywords.
  */
-async function buildBranchProfiles(rootId, userId, username) {
+async function buildBranchProfiles(rootId, beingId, username) {
   // Get all non-system, non-trimmed nodes in this tree
   const allNodes = await Node.find({
     rootOwner: rootId,
@@ -128,9 +128,9 @@ async function buildBranchProfiles(rootId, userId, username) {
     const nodeIds = descendants;
 
     // Get recent note content
-    const notes = await Note.find({
+    const notes = await _Artifact.find({
       nodeId: { $in: nodeIds },
-      contentType: "text",
+      origin: "ibp",
     })
       .sort({ dateCreated: -1 })
       .select("content nodeId")
@@ -172,7 +172,7 @@ async function buildBranchProfiles(rootId, userId, username) {
 
     try {
       const result = await runChat({
-        userId,
+        beingId,
         username,
         message: prompt,
         mode: "tree:respond",
@@ -269,7 +269,7 @@ Return a JSON array of objects, one per pair:
 
 Only include pairs. Do not include self-comparisons.`;
 
-async function buildSimilarityMatrix(profiles, userId, username, rootId) {
+async function buildSimilarityMatrix(profiles, beingId, username, rootId) {
   const branchIds = [...profiles.keys()];
   const n = branchIds.length;
 
@@ -304,7 +304,7 @@ async function buildSimilarityMatrix(profiles, userId, username, rootId) {
     for (const [brId, profile] of profiles) {
       const text = `${profile.topic}. Keywords: ${profile.keywords.join(", ")}`;
       try {
-        const vector = await embedExt.exports.generateEmbedding(text, userId);
+        const vector = await embedExt.exports.generateEmbedding(text, beingId);
         if (vector) embeddings.set(brId, vector);
       } catch (err) {
         log.debug("Boundary", `Embedding failed for branch ${profile.branchName}: ${err.message}`);
@@ -334,7 +334,7 @@ async function buildSimilarityMatrix(profiles, userId, username, rootId) {
 
     try {
       const result = await runChat({
-        userId,
+        beingId,
         username,
         message: prompt,
         mode: "tree:respond",
@@ -383,7 +383,7 @@ Return a JSON array of objects for nodes that don't belong:
 
 If all nodes belong, return: []`;
 
-async function detectPatterns(profiles, matrix, branchIds, allNodes, userId, username, rootId, embeddings) {
+async function detectPatterns(profiles, matrix, branchIds, allNodes, beingId, username, rootId, embeddings) {
   const findings = [];
   const degraded = [];
   const branchSummaries = {};
@@ -471,9 +471,9 @@ async function detectPatterns(profiles, matrix, branchIds, allNodes, userId, use
       for (const nodeId of cappedIds) {
         // Get the node's most recent note embedding
         try {
-          const note = await Note.findOne({
+          const note = await _Artifact.findOne({
             nodeId,
-            contentType: "text",
+            origin: "ibp",
             "metadata.embed.vector": { $exists: true },
           })
             .sort({ dateCreated: -1 })
@@ -522,7 +522,7 @@ async function detectPatterns(profiles, matrix, branchIds, allNodes, userId, use
       const nodeList = [];
       for (const nodeId of childNodeIds) {
         const nodeName = nodeMap.get(nodeId)?.name || nodeId;
-        const note = await Note.findOne({ nodeId, contentType: "text" })
+        const note = await _Artifact.findOne({ nodeId, origin: "ibp" })
           .sort({ dateCreated: -1 })
           .select("content")
           .lean();
@@ -536,7 +536,7 @@ async function detectPatterns(profiles, matrix, branchIds, allNodes, userId, use
 
       try {
         const result = await runChat({
-          userId,
+          beingId,
           username,
           message: prompt,
           mode: "tree:respond",
@@ -632,8 +632,8 @@ async function detectPatterns(profiles, matrix, branchIds, allNodes, userId, use
  * Run structural cohesion analysis on an entire tree.
  * Writes the report to metadata.boundary on the root node.
  */
-export async function analyze(rootId, userId, username) {
-  await useEnergy({ userId, action: "boundaryAnalyze" });
+export async function analyze(rootId, beingId, username) {
+  await useEnergy({ beingId, action: "boundaryAnalyze" });
 
   const root = await Node.findById(rootId).select("_id name rootOwner").lean();
   if (!root) throw new Error("Tree root not found");
@@ -641,7 +641,7 @@ export async function analyze(rootId, userId, username) {
 
   // Stage 1: build branch profiles
   log.verbose("Boundary", `Analyzing tree ${root.name} (${rootId})`);
-  const { profiles, allNodes } = await buildBranchProfiles(rootId, userId, username);
+  const { profiles, allNodes } = await buildBranchProfiles(rootId, beingId, username);
 
   if (profiles.size === 0) {
     throw new Error("Tree has no branches to analyze");
@@ -649,12 +649,12 @@ export async function analyze(rootId, userId, username) {
 
   // Stage 2: build similarity matrix
   const { matrix, branchIds, embeddings } = await buildSimilarityMatrix(
-    profiles, userId, username, rootId
+    profiles, beingId, username, rootId
   );
 
   // Stage 3: detect patterns
   const { findings, branches, overallCoherence, degraded } = await detectPatterns(
-    profiles, matrix, branchIds, allNodes, userId, username, rootId, embeddings
+    profiles, matrix, branchIds, allNodes, beingId, username, rootId, embeddings
   );
 
   // Build the report
@@ -664,7 +664,7 @@ export async function analyze(rootId, userId, username) {
     branches,
     findings,
     overallCoherence,
-    analyzedBy: userId,
+    analyzedBy: beingId,
     branchCount: profiles.size,
     nodeCount: allNodes.length,
     usedEmbeddings: !!embeddings,
@@ -679,7 +679,7 @@ export async function analyze(rootId, userId, username) {
 
   // Log contribution
   await logContribution({
-    userId,
+    beingId,
     nodeId: rootId,
     wasAi: true,
     action: "boundary:analyzed",
@@ -710,8 +710,8 @@ export async function analyze(rootId, userId, username) {
  * Treats the given node as the analysis root, its children as branches.
  * Writes the report to metadata.boundary on the given node.
  */
-export async function analyzeBranch(nodeId, userId, username) {
-  await useEnergy({ userId, action: "boundaryBranchScan" });
+export async function analyzeBranch(nodeId, beingId, username) {
+  await useEnergy({ beingId, action: "boundaryBranchScan" });
 
   const node = await Node.findById(nodeId).select("_id name rootOwner children").lean();
   if (!node) throw new Error("Node not found");
@@ -751,18 +751,18 @@ export async function analyzeBranch(nodeId, userId, username) {
   }
 
   // Use the analysis node as root, its children as branches
-  const { profiles } = await buildBranchProfiles(nodeId, userId, username);
+  const { profiles } = await buildBranchProfiles(nodeId, beingId, username);
 
   if (profiles.size === 0) {
     throw new Error("Subtree has no branches to analyze");
   }
 
   const { matrix, branchIds, embeddings } = await buildSimilarityMatrix(
-    profiles, userId, username, rootId
+    profiles, beingId, username, rootId
   );
 
   const { findings, branches, overallCoherence, degraded } = await detectPatterns(
-    profiles, matrix, branchIds, subtreeNodes, userId, username, rootId, embeddings
+    profiles, matrix, branchIds, subtreeNodes, beingId, username, rootId, embeddings
   );
 
   const report = {
@@ -771,7 +771,7 @@ export async function analyzeBranch(nodeId, userId, username) {
     branches,
     findings,
     overallCoherence,
-    analyzedBy: userId,
+    analyzedBy: beingId,
     branchCount: profiles.size,
     nodeCount: subtreeNodes.length,
     usedEmbeddings: !!embeddings,
@@ -786,7 +786,7 @@ export async function analyzeBranch(nodeId, userId, username) {
   }
 
   await logContribution({
-    userId,
+    beingId,
     nodeId,
     wasAi: true,
     action: "boundary:branch-analyzed",

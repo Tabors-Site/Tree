@@ -17,13 +17,13 @@ const MAX_DELETES = 3;
 
 export async function orchestrateReorganize({
   rootId,
-  userId,
+  beingId,
   username,
   source = "orchestrator",
 }) {
   const rt = new OrchestratorRuntime({
     rootId,
-    userId,
+    beingId,
     username,
     // Tree-scoped reorg lane — chains across reorganization passes.
     scope: "tree",

@@ -6,7 +6,7 @@
  * Returns null for everything else (AI handles it).
  */
 
-import { createNote } from "../../seed/tree/notes.js";
+import { createArtifact } from "../../seed/tree/artifacts.js";
 import {
   findStudyNodes,
   getActiveTopics,
@@ -17,7 +17,7 @@ import {
   removeFromQueue,
 } from "./core.js";
 
-export async function handleMessage(message, { userId, username, rootId, targetNodeId }) {
+export async function handleMessage(message, { beingId, username, rootId, targetNodeId }) {
   const studyRoot = targetNodeId || rootId;
   const lower = message.trim().toLowerCase();
 
@@ -30,7 +30,7 @@ export async function handleMessage(message, { userId, username, rootId, targetN
       return { answer: list.length > 0 ? `Switch to what?\n${list.join("\n")}` : "Nothing to switch to. Add a topic first." };
     }
     try {
-      const result = await switchToTopic(studyRoot, topic, userId);
+      const result = await switchToTopic(studyRoot, topic, beingId);
       return { answer: result.alreadyActive ? `"${result.name}" is already active.` : `Switched to "${result.name}".` };
     } catch (err) {
       return { answer: err.message };
@@ -41,7 +41,7 @@ export async function handleMessage(message, { userId, username, rootId, targetN
   if (/^(remove|delete|drop)\s+/i.test(lower)) {
     const topic = message.replace(/^(remove|delete|drop)\s+/i, "").trim();
     try {
-      const result = await removeFromQueue(studyRoot, topic, userId);
+      const result = await removeFromQueue(studyRoot, topic, beingId);
       return { answer: `Removed "${result.name}".` };
     } catch (err) {
       return { answer: err.message };
@@ -52,7 +52,7 @@ export async function handleMessage(message, { userId, username, rootId, targetN
   if (/^(stop|pause|deactivate)\s+/i.test(lower)) {
     const topic = message.replace(/^(stop|pause|deactivate)\s+/i, "").trim();
     try {
-      const result = await deactivateTopic(studyRoot, topic, userId);
+      const result = await deactivateTopic(studyRoot, topic, beingId);
       return { answer: `Deactivated "${result.name}". Back in queue.` };
     } catch (err) {
       return { answer: err.message };
@@ -64,10 +64,10 @@ export async function handleMessage(message, { userId, username, rootId, targetN
     const topic = message.replace(/^(needlearn|need to learn|want to learn|add to queue|queue|add)\s*/i, "").trim();
     if (topic) {
       const isUrl = /^https?:\/\//.test(topic);
-      const result = await addToQueue(studyRoot, topic, userId, { url: isUrl ? topic : null });
+      const result = await addToQueue(studyRoot, topic, beingId, { url: isUrl ? topic : null });
       const nodes = await findStudyNodes(studyRoot);
       if (nodes?.log) {
-        try { await createNote({ nodeId: nodes.log.id, content: `Queued: ${topic}`, contentType: "text", userId }); } catch {}
+        try { await createArtifact({ nodeId: nodes.log.id, content: `Queued: ${topic}`, origin: "ibp", beingId }); } catch {}
       }
       return { answer: `Queued: "${result.name}".` };
     }

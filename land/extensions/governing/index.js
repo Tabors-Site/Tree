@@ -339,7 +339,7 @@ export async function init(core) {
   if (core?.hooks?.register) {
     // One-time backfill on boot: every node that has been promoted to
     // Ruler in a prior session may be missing the explicit
-    // `metadata.embodiments.ruler` home declaration that the descriptor
+    // `metadata.beings.ruler` home declaration that the descriptor
     // now reads. Promotion happens in promoteToRuler going forward, but
     // existing rulers wouldn't have it. Walk the rulers and merge the
     // home record where it's missing.
@@ -353,36 +353,99 @@ export async function init(core) {
         // execution node (Foreman). For each kind we query by governing
         // role marker and add the matching embodiments entry where it
         // does not already exist.
+        // Each backfill entry carries a `permissions(scopeNodeId)`
+        // function that produces the TALK rule for the node. Trio
+        // rules use the scopeRulerId (read from the existing
+        // governing metadata) as the homeInDomain bound, so beings
+        // from other rulerships can't address this trio's inner being.
+        // Ruler nodes get an open rule (anyone can address the Ruler).
+        // Each backfill entry distinguishes the node's structural
+        // marker (`nodeType`, queried against metadata.governing.role)
+        // from the role assigned to the being that lives there
+        // (`beingRole`). They happen to match here because governing
+        // has a 1:1 mapping between node kinds and being roles, but
+        // the field names stay explicit so other extensions with
+        // different mappings can reuse the pattern.
         const BACKFILLS = [
-          { role: "ruler",     embodiment: "ruler"      },
-          { role: "plan",      embodiment: "planner"    },
-          { role: "contracts", embodiment: "contractor" },
-          { role: "execution", embodiment: "foreman"    },
+          {
+            nodeType: "ruler", beingRole: "ruler",
+            permissions: () => ({ talk: { "@ruler*": { requires: {} } } }),
+          },
+          {
+            nodeType: "plan", beingRole: "planner",
+            permissions: (scopeId) => ({ talk: { "@planner*": {
+              requires: {
+                role:         ["ruler", "planner", "contractor", "foreman"],
+                homeInDomain: scopeId,
+              },
+            } } }),
+          },
+          {
+            nodeType: "contracts", beingRole: "contractor",
+            permissions: (scopeId) => ({ talk: { "@contractor*": {
+              requires: {
+                role:         ["ruler", "planner", "contractor", "foreman"],
+                homeInDomain: scopeId,
+              },
+            } } }),
+          },
+          {
+            nodeType: "execution", beingRole: "foreman",
+            permissions: (scopeId) => ({ talk: { "@foreman*": {
+              requires: {
+                role:         ["ruler", "planner", "contractor", "foreman"],
+                homeInDomain: scopeId,
+              },
+            } } }),
+          },
         ];
+        const { createBeingWithHome } = await import("../../seed/auth.js");
         const counts = {};
-        for (const { role, embodiment } of BACKFILLS) {
-          const nodes = await Node.find({ "metadata.governing.role": role })
+        for (const { nodeType, beingRole, permissions } of BACKFILLS) {
+          const nodes = await Node.find({ "metadata.governing.role": nodeType })
             .select("_id metadata")
             .lean();
           let written = 0;
           for (const n of nodes) {
             const meta = n.metadata;
-            const emb = meta instanceof Map ? meta.get("embodiments") : meta?.embodiments;
-            if (emb?.[embodiment]) continue;
+            const emb = meta instanceof Map ? meta.get("beings") : meta?.embodiments;
+            const existingPerms = meta instanceof Map ? meta.get("permissions") : meta?.permissions;
+            const beingPresent = !!emb?.[beingRole]?.beingId;
+            const permsPresent = !!existingPerms?.talk?.[`@${beingRole}*`];
+            if (beingPresent && permsPresent) continue;     // fully migrated
             const gov = meta instanceof Map ? meta.get("governing") : meta?.governing;
             const fresh = await Node.findById(n._id);
             if (!fresh) continue;
-            await mergeExtMeta(fresh, "embodiments", {
-              [embodiment]: {
-                installedAt: gov?.acceptedAt || gov?.createdAt || new Date().toISOString(),
-                installedBy: "governing-backfill",
-                from:        gov?.promotedFrom || null,
-                scopeRulerId: gov?.scopeRulerId || null,
-              },
-            });
+            // The node already exists (this is a backfill). Place the
+            // being via the unified primitive if missing, then stamp
+            // permission rules if missing. Each merge is independent
+            // so partial-migrated nodes get topped up.
+            if (!beingPresent) {
+              await createBeingWithHome({
+                operatingMode: "ai",
+                role:          beingRole,
+                homeNodeId:    String(fresh._id),
+              });
+              await mergeExtMeta(fresh, "beings", {
+                [beingRole]: {
+                  installedBy:  "governing-backfill",
+                  from:         gov?.promotedFrom || null,
+                  scopeRulerId: gov?.scopeRulerId || null,
+                },
+              });
+            }
+            if (!permsPresent && typeof permissions === "function") {
+              // The trio backfills want scopeRulerId; ruler backfills
+              // ignore it. For trio nodes the scopeRulerId is on the
+              // node's governing metadata. For ruler nodes the scope
+              // IS the node itself — passing the node id as scopeId
+              // produces the open ruler rule (which doesn't consult it).
+              const scopeId = gov?.scopeRulerId || String(fresh._id);
+              await mergeExtMeta(fresh, "permissions", permissions(scopeId));
+            }
             written++;
           }
-          if (written > 0) counts[embodiment] = written;
+          if (written > 0) counts[beingRole] = written;
         }
         const summary = Object.entries(counts)
           .map(([k, v]) => `${k}:${v}`)
@@ -646,7 +709,7 @@ export async function init(core) {
     for (const [eventName, wakeReason] of Object.entries(SPAWN_COMPLETION_EVENTS)) {
       core.hooks.register(eventName, async (payload) => {
         try {
-          if (!payload?.rulerNodeId || !payload?.userId) return;
+          if (!payload?.rulerNodeId || !payload?.beingId) return;
           // Don't synchronously block the hook fanout chain. Wake the
           // Ruler in a microtask so failures inside runRulerTurn don't
           // back-propagate into the hook caller's settle path.
@@ -730,8 +793,8 @@ export async function init(core) {
 
               const { runRulerTurn } = await import("../tree-orchestrator/ruling.js");
               await runRulerTurn({
-                visitorId: payload.userId,  // visitorId reuses userId for hook-driven wakeups
-                userId: payload.userId,
+                visitorId: payload.beingId,  // visitorId reuses beingId for hook-driven wakeups
+                beingId: payload.beingId,
                 username: payload.username || null,
                 rootId: payload.rootId || null,
                 currentNodeId: payload.rulerNodeId,

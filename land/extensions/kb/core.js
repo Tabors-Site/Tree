@@ -10,13 +10,13 @@ import Contribution from "../../seed/models/contribution.js";
 import { setNodeMode } from "../../seed/modes/registry.js";
 
 let _Node = null;
-let _Note = null;
+let _Artifact = null;
 let _runChat = null;
 let _metadata = null;
 
-export function configure({ Node, Note, runChat, metadata }) {
+export function configure({ Node, Artifact, runChat, metadata }) {
   _Node = Node;
-  _Note = Note;
+  _Artifact = Note;
   _runChat = runChat;
   _metadata = metadata;
 }
@@ -33,15 +33,15 @@ const STALE_DAYS = 90;
 
 // ── Scaffold ──
 
-export async function scaffold(rootId, userId) {
+export async function scaffold(rootId, beingId) {
   if (!_Node) throw new Error("KB core not configured");
   const { createNode } = await import("../../seed/tree/treeManagement.js");
 
-  const logNode = await createNode({ name: "Log", parentId: rootId, userId });
-  const topicsNode = await createNode({ name: "Topics", parentId: rootId, userId });
-  const unplacedNode = await createNode({ name: "Unplaced", parentId: rootId, userId });
-  const profileNode = await createNode({ name: "Profile", parentId: rootId, userId });
-  const historyNode = await createNode({ name: "History", parentId: rootId, userId });
+  const logNode = await createNode({ name: "Log", parentId: rootId, beingId });
+  const topicsNode = await createNode({ name: "Topics", parentId: rootId, beingId });
+  const unplacedNode = await createNode({ name: "Unplaced", parentId: rootId, beingId });
+  const profileNode = await createNode({ name: "Profile", parentId: rootId, beingId });
+  const historyNode = await createNode({ name: "History", parentId: rootId, beingId });
 
   const tags = [
     [logNode, ROLES.LOG],
@@ -65,7 +65,7 @@ export async function scaffold(rootId, userId) {
       setupPhase: "complete",
       profile: {
         name: root.name || "Knowledge Base",
-        maintainers: [userId],
+        maintainers: [beingId],
         readers: ["*"],
       },
     });
@@ -140,7 +140,7 @@ async function getRecentlyEditedNoteIds(noteIds, sinceDate) {
 // ── Status ──
 
 export async function getStatus(rootId) {
-  if (!_Node || !_Note) return null;
+  if (!_Node || !_Artifact) return null;
   const nodes = await findKbNodes(rootId);
   if (!nodes) return null;
 
@@ -160,7 +160,7 @@ export async function getStatus(rootId) {
     for (const t of topics) {
       const children = await _Node.find({ parent: t._id }).select("_id").lean();
       const nodeIds = [String(t._id), ...children.map(c => String(c._id))];
-      const count = await _Note.countDocuments({ nodeId: { $in: nodeIds } });
+      const count = await _Artifact.countDocuments({ nodeId: { $in: nodeIds } });
       noteCount += count;
       coverage.push(t.name);
       topicNoteCounts[t.name] = count;
@@ -171,7 +171,7 @@ export async function getStatus(rootId) {
   const staleDate = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000);
   const topicNodeIds = await getTopicNodeIds(nodes);
 
-  const candidateStale = await _Note.find({
+  const candidateStale = await _Artifact.find({
     nodeId: { $in: topicNodeIds },
     createdAt: { $lt: staleDate },
   }).select("_id nodeId createdAt").lean();
@@ -203,11 +203,11 @@ export async function getStatus(rootId) {
   // Unplaced count
   let unplacedCount = 0;
   if (nodes.unplaced) {
-    unplacedCount = await _Note.countDocuments({ nodeId: nodes.unplaced.id });
+    unplacedCount = await _Artifact.countDocuments({ nodeId: nodes.unplaced.id });
   }
 
   // Recent updates: merge recent creates and recent edits
-  const recentCreated = await _Note.find({ nodeId: { $in: topicNodeIds } })
+  const recentCreated = await _Artifact.find({ nodeId: { $in: topicNodeIds } })
     .sort({ createdAt: -1 })
     .limit(5)
     .select("_id nodeId createdAt")
@@ -263,14 +263,14 @@ async function getTopicNodeIds(nodes) {
 }
 
 export async function getStaleNotes(rootId) {
-  if (!_Node || !_Note) return [];
+  if (!_Node || !_Artifact) return [];
   const nodes = await findKbNodes(rootId);
   if (!nodes) return [];
 
   const staleDate = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000);
   const nodeIds = await getTopicNodeIds(nodes);
 
-  const candidates = await _Note.find({
+  const candidates = await _Artifact.find({
     nodeId: { $in: nodeIds },
     createdAt: { $lt: staleDate },
   })
@@ -300,11 +300,11 @@ export async function getStaleNotes(rootId) {
 }
 
 export async function getUnplaced(rootId) {
-  if (!_Node || !_Note) return [];
+  if (!_Node || !_Artifact) return [];
   const nodes = await findKbNodes(rootId);
   if (!nodes?.unplaced) return [];
 
-  const notes = await _Note.find({ nodeId: nodes.unplaced.id })
+  const notes = await _Artifact.find({ nodeId: nodes.unplaced.id })
     .sort({ createdAt: -1 })
     .limit(50)
     .select("content createdAt")
@@ -318,11 +318,11 @@ export async function getUnplaced(rootId) {
 
 // ── Maintainer check ──
 
-export async function isMaintainer(rootId, userId) {
+export async function isMaintainer(rootId, beingId) {
   if (!_Node) return false;
   const root = await _Node.findById(rootId).select("metadata rootOwner").lean();
   if (!root) return false;
-  if (root.rootOwner?.toString() === userId) return true;
+  if (root.rootOwner?.toString() === beingId) return true;
   const kbMeta = root.metadata instanceof Map ? root.metadata.get("kb") : root.metadata?.kb;
-  return (kbMeta?.profile?.maintainers || []).includes(userId);
+  return (kbMeta?.profile?.maintainers || []).includes(beingId);
 }

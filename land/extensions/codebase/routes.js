@@ -11,7 +11,7 @@ router.post("/code/ingest", authenticate, async (req, res) => {
     const { rootId, path: dirPath, ignore } = req.body;
     if (!rootId || !dirPath) return sendError(res, 400, ERR.INVALID_INPUT, "rootId and path required");
 
-    const stats = await ingest(rootId, dirPath, req.userId, { ignore });
+    const stats = await ingest(rootId, dirPath, req.beingId, { ignore });
 
     const Node = (await import("../../seed/models/node.js")).default;
     await Node.updateOne({ _id: rootId }, {

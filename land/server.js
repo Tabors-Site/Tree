@@ -6,7 +6,7 @@ import mongoose from "mongoose";
 
 import registerURLRoutes from "./routes/handler.js";
 import { initWebSocketServer } from "./seed/ws/websocket.js";
-import { initPortalHttp, initPortalWs } from "./portal/index.js";
+import { initPortalHttp, initPortalWs } from "./ibp/index.js";
 import { sendOk, sendError, ERR } from "./seed/protocol.js";
 import { getExtension } from "./extensions/loader.js";
 import securityHeaders from "./seed/middleware/securityHeaders.js";
@@ -120,7 +120,7 @@ await registerURLRoutes(app, { registerRawWebhook });
 // Portal Protocol — core peer to the legacy URL-based API. Registers the
 // single HTTP bootstrap route (/.well-known/treeos-portal) BEFORE the
 // catch-all so it isn't shadowed. Everything else in the Portal Protocol
-// travels over WebSocket; see land/portal/.
+// travels over WebSocket; see land/ibp/.
 initPortalHttp(app);
 
 app.use((req, res) => notFoundPage(req, res));
@@ -129,7 +129,7 @@ const server = http.createServer(app);
 // IBP is cross-origin by design. The WS gate accepts any origin; per-handler
 // auth (JWT in the Socket.IO handshake) is what enforces access. Legacy
 // cookie-authed chat handlers stay safe because browsers don't auto-send
-// cookies cross-origin — those handlers see no userId and reject.
+// cookies cross-origin — those handlers see no beingId and reject.
 export const wsServer = initWebSocketServer(server, wsOriginCheck);
 
 // Attach Portal Protocol WS handlers to the same Socket.IO instance the

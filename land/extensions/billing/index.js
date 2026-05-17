@@ -7,7 +7,7 @@ export async function init(core) {
   if (core.energy) setEnergyService(core.energy);
   const router = express.Router();
 
-  router.post("/user/:userId/purchase", authenticate, createPurchaseSession);
+  router.post("/user/:beingId/purchase", authenticate, createPurchaseSession);
 
   // Stripe webhook handler. Lazy-load webhook.js (and the Stripe SDK)
   // on first request to avoid blocking boot if the SDK init is slow.
@@ -21,7 +21,7 @@ export async function init(core) {
   try {
     const { getExtension } = await import("../loader.js");
     const treeos = getExtension("treeos-base");
-    treeos?.exports?.registerSlot?.("energy-payment", "billing", ({ userId, plan, planExpiresAt }) => {
+    treeos?.exports?.registerSlot?.("energy-payment", "billing", ({ beingId, plan, planExpiresAt }) => {
       return `
   <!-- Plans -->
   <div class="glass-card" style="animation-delay: 0.15s;">

@@ -10,7 +10,7 @@ export async function init(core) {
   core.llm.registerRootLlmSlot("digest");
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setRunChat(async (opts) => {
-    if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+    if (opts.beingId && opts.beingId !== "SYSTEM" && !await core.llm.userHasLlm(opts.beingId)) return { answer: null };
     return core.llm.runChat({ ...opts, llmPriority: BG });
   });
 

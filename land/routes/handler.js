@@ -1,5 +1,5 @@
 import me from "./api/me.js";
-import note from "./api/notes.js";
+import artifact from "./api/artifacts.js";
 import node from "./api/node.js";
 import root from "./api/root.js";
 import { authApiRouter, authPageRouter } from "./auth.js";
@@ -47,7 +47,7 @@ const apiLimiter = rateLimit({
 });
 
 export default async function registerURLRoutes(app, opts = {}) {
-  app.param("userId", (req, res, next, val) => {
+  app.param("beingId", (req, res, next, val) => {
     if (BLOCKED_IDS.has(val)) return notFoundPage(req, res);
     next();
   });
@@ -150,7 +150,7 @@ export default async function registerURLRoutes(app, opts = {}) {
   app.get("/mcp", authenticateMCP, handleMcpRequest);
   app.delete("/mcp", authenticateMCP, handleMcpRequest);
 
-  // Serve uploaded files (path matches seed/tree/notes.js and uploadCleanup.js)
+  // Serve uploaded files (path matches seed/tree/artifacts.js and uploadCleanup.js)
   const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, "../uploads");
   app.use("/api/v1/uploads", express.static(uploadsDir));
 
@@ -160,7 +160,7 @@ export default async function registerURLRoutes(app, opts = {}) {
 
   app.use("/api/v1", root);
   // understanding routes loaded via extension system
-  app.use("/api/v1", note);
+  app.use("/api/v1", artifact);
   app.use("/api/v1", contributions);
   app.use("/api/v1", cascade);
   // values routes loaded via extension system

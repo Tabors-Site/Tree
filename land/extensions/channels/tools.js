@@ -20,7 +20,7 @@ export default [
     description: "Show active channels and pending invitations at this node.",
     schema: {
       nodeId: z.string().describe("Node to list channels for."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -48,19 +48,19 @@ export default [
       channelName: z.string().describe("Name for the channel (alphanumeric, hyphens, underscores, max 50)."),
       direction: z.enum(["inbound", "outbound", "bidirectional"]).optional().default("bidirectional")
         .describe("Signal direction. Bidirectional means both ends send and receive."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-    handler: async ({ nodeId, targetNodeId, channelName, direction, userId }) => {
+    handler: async ({ nodeId, targetNodeId, channelName, direction, beingId }) => {
       try {
         const result = await createChannel({
           sourceNodeId: nodeId,
           targetNodeId,
           channelName,
           direction,
-          userId,
+          beingId,
         });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
@@ -74,14 +74,14 @@ export default [
     schema: {
       nodeId: z.string().describe("Node to remove the channel from."),
       channelName: z.string().describe("Name of the channel to remove."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-    handler: async ({ nodeId, channelName, userId }) => {
+    handler: async ({ nodeId, channelName, beingId }) => {
       try {
-        const result = await removeChannel(nodeId, channelName, userId);
+        const result = await removeChannel(nodeId, channelName, beingId);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Failed: ${err.message}` }] };
@@ -94,7 +94,7 @@ export default [
     schema: {
       nodeId: z.string().describe("Node to check."),
       channelName: z.string().describe("Channel name to inspect."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -132,14 +132,14 @@ export default [
       name: z.string().describe("Room name, used for display and channel naming."),
       parentNodeId: z.string().describe("Node under which the room node is created."),
       maxMessages: z.number().int().min(1).max(500).optional().describe("Hard cap on total posts. Default 60."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-    handler: async ({ name, parentNodeId, maxMessages, userId }) => {
+    handler: async ({ name, parentNodeId, maxMessages, beingId }) => {
       try {
-        const result = await createRoom({ name, parentNodeId, userId, maxMessages });
+        const result = await createRoom({ name, parentNodeId, beingId, maxMessages });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `room-create failed: ${err.message}` }] };
@@ -160,14 +160,14 @@ export default [
       nodeId: z.string().describe("Node inside that tree where orchestration runs."),
       modeHint: z.string().optional().describe("Starting mode key (e.g. 'tree:code-ask'). Optional — intent routing can override."),
       label: z.string().optional().describe("Human-friendly name for this agent in transcripts."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-    handler: async ({ roomNodeId, rootId, nodeId, modeHint, label, userId }) => {
+    handler: async ({ roomNodeId, rootId, nodeId, modeHint, label, beingId }) => {
       try {
-        const result = await addAgentParticipant({ roomNodeId, rootId, nodeId, modeHint, label, userId });
+        const result = await addAgentParticipant({ roomNodeId, rootId, nodeId, modeHint, label, beingId });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `room-join-agent failed: ${err.message}` }] };
@@ -185,14 +185,14 @@ export default [
       roomNodeId: z.string().describe("The room's node id."),
       userHomeNodeId: z.string().describe("The user's home node id (where notifications land)."),
       label: z.string().optional().describe("Display name for the user in transcripts."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-    handler: async ({ roomNodeId, userHomeNodeId, label, userId }) => {
+    handler: async ({ roomNodeId, userHomeNodeId, label, beingId }) => {
       try {
-        const result = await addUserParticipant({ roomNodeId, userHomeNodeId, label, userId });
+        const result = await addUserParticipant({ roomNodeId, userHomeNodeId, label, beingId });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `room-join-user failed: ${err.message}` }] };
@@ -209,14 +209,14 @@ export default [
       roomNodeId: z.string().describe("The room's node id."),
       label: z.string().describe("Display name for the observer."),
       partnerId: z.string().optional().describe("Optional node id this observer maps to."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    handler: async ({ roomNodeId, label, partnerId, userId }) => {
+    handler: async ({ roomNodeId, label, partnerId, beingId }) => {
       try {
-        const result = await addObserverParticipant({ roomNodeId, label, partnerId, userId });
+        const result = await addObserverParticipant({ roomNodeId, label, partnerId, beingId });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `room-join-observer failed: ${err.message}` }] };
@@ -230,7 +230,7 @@ export default [
     schema: {
       roomNodeId: z.string().describe("The room's node id."),
       subId: z.string().describe("The subscription id returned when joining."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -256,14 +256,14 @@ export default [
       roomNodeId: z.string().describe("The room's node id."),
       content: z.string().describe("Message content."),
       authorLabel: z.string().optional().describe("Display name for this post (defaults to user:<id>)."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-    handler: async ({ roomNodeId, content, authorLabel, userId }) => {
+    handler: async ({ roomNodeId, content, authorLabel, beingId }) => {
       try {
-        const result = await postToRoom({ roomNodeId, content, userId, authorLabel });
+        const result = await postToRoom({ roomNodeId, content, beingId, authorLabel });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `room-post failed: ${err.message}` }] };
@@ -275,14 +275,14 @@ export default [
     name: "room-list",
     description: "List all rooms with status, participant breakdown, and recent activity.",
     schema: {
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    handler: async ({ userId }) => {
+    handler: async ({ beingId }) => {
       try {
-        const rooms = await listRooms({ userId });
+        const rooms = await listRooms({ beingId });
         return { content: [{ type: "text", text: JSON.stringify(rooms, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `room-list failed: ${err.message}` }] };
@@ -296,7 +296,7 @@ export default [
     schema: {
       roomNodeId: z.string().describe("The room's node id."),
       limit: z.number().int().min(1).max(500).optional().describe("Max entries to return. Default 100."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

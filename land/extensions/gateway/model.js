@@ -8,7 +8,7 @@ const GatewayChannelSchema = new mongoose.Schema(
       default: uuidv4,
     },
 
-    userId: {
+    beingId: {
       type: String,
       ref: "User",
       required: true,

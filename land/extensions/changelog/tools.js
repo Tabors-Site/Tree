@@ -12,13 +12,13 @@ export default [
       nodeId: z.string().describe("The node to get changelog for (scoped to subtree)."),
       since: z.string().optional().default("24h").describe("Time window: 24h, 7d, 2w, 30d, or ISO date."),
       land: z.boolean().optional().default(false).describe("Scope to entire land instead of subtree."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       username: z.string().optional().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    handler: async ({ nodeId, since, land, userId, username }) => {
+    handler: async ({ nodeId, since, land, beingId, username }) => {
       try {
         const { contributions } = await getChangelog(nodeId, { since, land });
 
@@ -26,7 +26,7 @@ export default [
           return { content: [{ type: "text", text: `No changes since ${since}.` }] };
         }
 
-        const narrative = await summarizeChangelog(nodeId, contributions, userId, username || "system", { since });
+        const narrative = await summarizeChangelog(nodeId, contributions, beingId, username || "system", { since });
 
         return {
           content: [{

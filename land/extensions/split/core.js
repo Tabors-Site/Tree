@@ -12,7 +12,7 @@ import { getExtension } from "../loader.js";
 import { v4 as uuidv4 } from "uuid";
 
 let Node = null;
-let Note = null;
+let _Artifact = null;
 let logContribution = async () => {};
 let runChat = null;
 let useEnergy = async () => ({ energyUsed: 0 });
@@ -20,7 +20,7 @@ let _metadata = null;
 
 export function setServices({ models, contributions, llm, energy, metadata }) {
   Node = models.Node;
-  Note = models.Note;
+  _Artifact = models.Artifact;
   logContribution = contributions.logContribution;
   runChat = llm.runChat;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
@@ -201,8 +201,8 @@ async function scoreCascade(branchId, branchNodeIds) {
 // ANALYZE
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function analyze(rootId, userId) {
-  await useEnergy({ userId, action: "splitAnalyze" });
+export async function analyze(rootId, beingId) {
+  await useEnergy({ beingId, action: "splitAnalyze" });
 
   const root = await Node.findById(rootId).select("_id name children rootOwner").lean();
   if (!root) throw new Error("Tree root not found");
@@ -260,7 +260,7 @@ export async function analyze(rootId, userId) {
 // PREVIEW
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function preview(branchId, userId) {
+export async function preview(branchId, beingId) {
   const branch = await Node.findById(branchId).select("_id name parent rootOwner").lean();
   if (!branch) throw new Error("Branch not found");
   if (branch.rootOwner) throw new Error("This node is already a tree root");
@@ -296,8 +296,8 @@ export async function preview(branchId, userId) {
 // EXECUTE
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function execute(branchId, userId, username) {
-  await useEnergy({ userId, action: "splitExecute" });
+export async function execute(branchId, beingId, username) {
+  await useEnergy({ beingId, action: "splitExecute" });
 
   const branch = await Node.findById(branchId).select("_id name parent rootOwner").lean();
   if (!branch) throw new Error("Branch not found");
@@ -319,9 +319,9 @@ export async function execute(branchId, userId, username) {
   // 1. Remove from parent's children
   await Node.updateOne({ _id: parentId }, { $pull: { children: branchId } });
 
-  // 2. Set branch as root (rootOwner = userId, parent = null)
+  // 2. Set branch as root (rootOwner = beingId, parent = null)
   await Node.updateOne({ _id: branchId }, {
-    $set: { rootOwner: userId, parent: null },
+    $set: { rootOwner: beingId, parent: null },
   });
 
   // 3. Update all descendants: rootOwner stays as-is for delegated branches,
@@ -342,12 +342,12 @@ export async function execute(branchId, userId, username) {
 
   // 4. Leave a note on the old parent
   try {
-    const { createNote } = await import("../../seed/tree/notes.js");
-    await createNote({
-      contentType: "text",
+    const { createArtifact } = await import("../../seed/tree/artifacts.js");
+    await createArtifact({
+      origin: "ibp",
       content: `${branch.name} split into its own tree on ${new Date().toISOString().slice(0, 10)}. ` +
         `${descendantIds.length} nodes moved.`,
-      userId,
+      beingId,
       nodeId: parentId,
     });
   } catch (err) {
@@ -364,7 +364,7 @@ export async function execute(branchId, userId, username) {
         targetNodeId: branchId,
         channelName: `split-${branch.name.toLowerCase().replace(/[^a-z0-9]/g, "-").slice(0, 30)}`,
         direction: "bidirectional",
-        userId,
+        beingId,
       });
       channelCreated = true;
     } catch (err) {
@@ -384,7 +384,7 @@ export async function execute(branchId, userId, username) {
           branchName: branch.name,
           nodeCount: descendantIds.length,
           splitAt: new Date().toISOString(),
-          splitBy: userId,
+          splitBy: beingId,
           newRootId: branchId,
         });
         await _metadata.setExtMeta(oldRoot, "split", splitMeta);
@@ -398,7 +398,7 @@ export async function execute(branchId, userId, username) {
   const navExt = getExtension("navigation");
   if (navExt?.exports?.addRoot) {
     try {
-      await navExt.exports.addRoot(userId, branchId);
+      await navExt.exports.addRoot(beingId, branchId);
     } catch (err) {
       log.debug("Split", `Failed to add new root to navigation: ${err.message}`);
     }
@@ -406,7 +406,7 @@ export async function execute(branchId, userId, username) {
 
   // Log contribution
   await logContribution({
-    userId,
+    beingId,
     nodeId: branchId,
     wasAi: false,
     action: "split:executed",

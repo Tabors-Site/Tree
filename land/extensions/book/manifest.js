@@ -32,7 +32,7 @@ export default {
     "Without html-rendering, the API returns raw JSON with the full nested structure.",
 
   needs: {
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
   },
 
   optional: {

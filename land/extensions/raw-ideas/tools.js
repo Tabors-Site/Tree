@@ -17,7 +17,7 @@ export default [
     name: "raw-idea-filter-orchestrator",
     description: "Guides filtering and placing raw ideas into the tree. READ-ONLY.",
     schema: {
-      userId: z
+      beingId: z
         .string()
         .describe("The user whose raw ideas will be processed."),
     },
@@ -38,13 +38,13 @@ You must NEVER convert a raw idea automatically. Always wait for confirmation.
 STEP-BY-STEP PROCESS
 
 1️⃣ **Load Raw Ideas**
-- Call get-raw-ideas-by-user(userId)
+- Call get-raw-ideas-by-user(beingId)
 - Present a short list (titles or summaries).
 - Ask the user which raw idea they want to process.
 - If only one exists, you may auto-select it.
 
 2️⃣ **Load User Roots**
-- Call get-root-nodes-by-user(userId)
+- Call get-root-nodes-by-user(beingId)
 - If multiple roots exist:
   - Choose the most relevant root based on the raw idea
   - Ask the user to confirm or override
@@ -73,7 +73,7 @@ STEP-BY-STEP PROCESS
 - DO NOT call transfer-raw-idea-to-note yet.
 - Only proceed if the user explicitly agrees.
 - If confirmed:
-  → call transfer-raw-idea-to-note(rawIdeaId, userId, nodeId)
+  → call transfer-raw-idea-to-note(rawIdeaId, beingId, nodeId)
 
 RULES
 - Never guess silently.
@@ -91,7 +91,7 @@ RULES
     name: "get-raw-ideas-by-user",
     description: "Fetches raw ideas (inbox) for a user. Read-only.",
     schema: {
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z
         .string()
         .nullable()
@@ -114,14 +114,14 @@ RULES
       idempotentHint: true,
       openWorldHint: false,
     },
-    handler: async ({ userId, limit, startDate, endDate }) => {
+    handler: async ({ beingId, limit, startDate, endDate }) => {
       try {
         if (typeof limit === "number" && limit > 30) {
           limit = 30;
         }
 
         const result = await getRawIdeas({
-          userId,
+          beingId,
           limit,
           startDate,
           endDate,
@@ -153,7 +153,7 @@ RULES
     description: "Converts a raw idea into a note on a specific node/version.",
     schema: {
       rawIdeaId: z.string().describe("ID of the raw idea to place."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z
         .string()
         .nullable()
@@ -172,11 +172,11 @@ RULES
       idempotentHint: false,
       openWorldHint: false,
     },
-    handler: async ({ rawIdeaId, userId, nodeId, chatId, sessionId }) => {
+    handler: async ({ rawIdeaId, beingId, nodeId, chatId, sessionId }) => {
       try {
         const result = await convertRawIdeaToNote({
           rawIdeaId,
-          userId,
+          beingId,
           nodeId,
           wasAi: true,
           chatId,

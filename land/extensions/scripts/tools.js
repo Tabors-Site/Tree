@@ -8,7 +8,7 @@ export default [
       "Entry point for javascript node workflows. Establishes intent before any script actions.",
     schema: {
       nodeId: z.string().describe("Node ID where scripts are stored."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z
         .string()
         .nullable()
@@ -185,7 +185,7 @@ export default [
         .describe(
           "The Id of the script to execute. Found inside of get-node. None if new script",
         ),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z
         .string()
         .nullable()
@@ -208,13 +208,13 @@ export default [
       idempotentHint: true,
       openWorldHint: false,
     },
-    handler: async ({ nodeId, scriptId, name, script, userId, chatId, sessionId }) => {
+    handler: async ({ nodeId, scriptId, name, script, beingId, chatId, sessionId }) => {
       const result = await updateScript({
         nodeId,
         scriptId,
         name,
         script,
-        userId,
+        beingId,
         wasAi: true,
         chatId,
         sessionId,
@@ -234,7 +234,7 @@ export default [
       scriptId: z
         .string()
         .describe("The Id of the script to execute. Found inside of get-node"),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z
         .string()
         .nullable()
@@ -252,11 +252,11 @@ export default [
       idempotentHint: false,
       openWorldHint: true,
     },
-    handler: async ({ nodeId, scriptId, userId, chatId, sessionId }) => {
+    handler: async ({ nodeId, scriptId, beingId, chatId, sessionId }) => {
       const result = await executeScript({
         nodeId,
         scriptId,
-        userId,
+        beingId,
         wasAi: true,
         chatId,
         sessionId,

@@ -9,12 +9,12 @@ export default {
 
   toolNames: ["get-root-nodes", "get-tree", "create-tree"],
 
-  buildSystemPrompt({ username, userId }) {
+  buildSystemPrompt({ username, beingId }) {
     return `You are TreeOS Helper, operating in HOME mode.
 
 [Context]
 - User: ${username}
-- User ID: ${userId}
+- User ID: ${beingId}
 - Mode: Home (Default)
 
 [Conversation First Contract]

@@ -175,8 +175,8 @@ Rules:
 // EXPORT (extract lessons from a tree)
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function extractLessons(rootId, userId, username) {
-  await useEnergy({ userId, action: "teachExtract" });
+export async function extractLessons(rootId, beingId, username) {
+  await useEnergy({ beingId, action: "teachExtract" });
 
   const root = await Node.findById(rootId).select("_id name rootOwner").lean();
   if (!root) throw new Error("Tree root not found");
@@ -202,7 +202,7 @@ export async function extractLessons(rootId, userId, username) {
   const prompt = EXTRACT_PROMPT.replace("{sources}", sourcesText);
 
   const result = await runChat({
-    userId,
+    beingId,
     username,
     message: prompt,
     mode: "tree:respond",
@@ -255,7 +255,7 @@ export async function extractLessons(rootId, userId, username) {
 
   // Log contribution
   await logContribution({
-    userId,
+    beingId,
     nodeId: rootId,
     wasAi: true,
     action: "teach:exported",
@@ -276,7 +276,7 @@ export async function extractLessons(rootId, userId, username) {
 // IMPORT (absorb lessons into a tree)
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function importLessons(rootId, lessonSet, userId) {
+export async function importLessons(rootId, lessonSet, beingId) {
   if (!lessonSet?.lessons?.length) throw new Error("No lessons in the provided set");
 
   const root = await Node.findById(rootId);
@@ -307,7 +307,7 @@ export async function importLessons(rootId, lessonSet, userId) {
   await _metadata.setExtMeta(root, "teach", meta);
 
   await logContribution({
-    userId,
+    beingId,
     nodeId: rootId,
     wasAi: false,
     action: "teach:imported",
@@ -329,8 +329,8 @@ export async function importLessons(rootId, lessonSet, userId) {
 // SHARE (send lessons to a peered land via cascade)
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function shareLessons(rootId, peerDomain, userId, username) {
-  const lessonSet = await extractLessons(rootId, userId, username);
+export async function shareLessons(rootId, peerDomain, beingId, username) {
+  const lessonSet = await extractLessons(rootId, beingId, username);
 
   // Send via deliverCascade with a teach-specific tag
   const { deliverCascade } = await import("../../seed/tree/cascade.js");
@@ -360,7 +360,7 @@ export async function shareLessons(rootId, peerDomain, userId, username) {
 // DISMISS (mark a lesson as not applicable)
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function dismissLesson(rootId, lessonId, userId) {
+export async function dismissLesson(rootId, lessonId, beingId) {
   const root = await Node.findById(rootId);
   if (!root) throw new Error("Tree root not found");
 
@@ -373,7 +373,7 @@ export async function dismissLesson(rootId, lessonId, userId) {
 
   const lesson = meta.lessons.splice(idx, 1)[0];
   lesson.dismissedAt = new Date().toISOString();
-  lesson.dismissedBy = userId;
+  lesson.dismissedBy = beingId;
   meta.dismissed.push(lesson);
 
   await _metadata.setExtMeta(root, "teach", meta);

@@ -7,8 +7,8 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { SYSTEM_ROLE, CONTENT_TYPE } from "../../seed/protocol.js";
+import Artifact from "../../seed/models/artifact.js";
+import { SYSTEM_ROLE, ARTIFACT_ORIGIN } from "../../seed/protocol.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _runChat = null;
@@ -46,15 +46,15 @@ export async function getPurposeConfig() {
  * Derive the thesis for a tree from its root node and early notes.
  * The thesis is one sentence. The core purpose everything should serve.
  */
-export async function deriveThesis(rootId, userId) {
+export async function deriveThesis(rootId, beingId) {
   if (!_runChat) return null;
 
   const root = await Node.findById(rootId).select("name type metadata").lean();
   if (!root) return null;
 
-  const rootNotes = await Note.find({
+  const rootNotes = await Artifact.find({
     nodeId: rootId,
-    contentType: CONTENT_TYPE.TEXT,
+    origin: ARTIFACT_ORIGIN.IBP,
   })
     .sort({ createdAt: 1 })
     .limit(10)
@@ -95,14 +95,14 @@ export async function deriveThesis(rootId, userId) {
 
   try {
     const { answer } = await _runChat({
-      userId,
+      beingId,
       username: "system",
       message: prompt,
       mode: "tree:respond",
       rootId,
       slot: "purpose",
       // Ephemeral: this background call must not share the user's active
-      // chat session at {rootId}:{userId}, or its scoring/thesis prompts
+      // chat session at {rootId}:{beingId}, or its scoring/thesis prompts
       // bleed into the user's next turn.
     });
 
@@ -138,7 +138,7 @@ export async function deriveThesis(rootId, userId) {
  * Check how well a note serves the tree's thesis.
  * Lightweight AI call. Returns a score 0 to 1.
  */
-export async function checkCoherence(noteContent, rootId, userId) {
+export async function checkCoherence(noteContent, rootId, beingId) {
   if (!_runChat || !noteContent) return null;
 
   const root = await Node.findById(rootId).select("name metadata").lean();
@@ -162,14 +162,14 @@ export async function checkCoherence(noteContent, rootId, userId) {
 
   try {
     const { answer } = await _runChat({
-      userId,
+      beingId,
       username: "system",
       message: prompt,
       mode: "tree:respond",
       rootId,
       slot: "purpose",
       // Ephemeral: this background call must not share the user's active
-      // chat session at {rootId}:{userId}, or its scoring/thesis prompts
+      // chat session at {rootId}:{beingId}, or its scoring/thesis prompts
       // bleed into the user's next turn.
     });
 
@@ -192,7 +192,7 @@ export async function checkCoherence(noteContent, rootId, userId) {
  * Batch coherence check. Scores multiple notes in one LLM call.
  * Returns array of { noteId, score, reason }.
  */
-export async function checkCoherenceBatch(notes, rootId, userId) {
+export async function checkCoherenceBatch(notes, rootId, beingId) {
   if (!_runChat || notes.length === 0) return [];
 
   const root = await Node.findById(rootId).select("name metadata").lean();
@@ -217,14 +217,14 @@ export async function checkCoherenceBatch(notes, rootId, userId) {
 
   try {
     const { answer } = await _runChat({
-      userId,
+      beingId,
       username: "system",
       message: prompt,
       mode: "tree:respond",
       rootId,
       slot: "purpose",
       // Ephemeral: this background call must not share the user's active
-      // chat session at {rootId}:{userId}, or its scoring/thesis prompts
+      // chat session at {rootId}:{beingId}, or its scoring/thesis prompts
       // bleed into the user's next turn.
     });
 

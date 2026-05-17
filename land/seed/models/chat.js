@@ -9,12 +9,34 @@ const ChatSchema = new mongoose.Schema({
   },
 
   // -----------------------------------
-  // Who owns the AI session
+  // The "asker" being — who initiated this chainstep. For top-level
+  // user turns this is the human's beingId. For sub-chainsteps spawned
+  // by another being (Ruler hires Planner) this is the parent's
+  // beingOut. Together with beingOut every chat record carries both
+  // ends of the conversation as real beings.
   // -----------------------------------
-  userId: {
+  beingIn: {
     type: String,
-    ref: "User",
+    ref: "Being",
     required: true,
+    index: true,
+  },
+
+  // -----------------------------------
+  // The "responder" being — who answers this chainstep. For user-turn
+  // chats this is the being the user TALK'd to (e.g., the Ruler at a
+  // tree). For sub-chainsteps it's the being the parent spawned. When
+  // beingOut is null the chat has no specific responder being (legacy
+  // chats from before the unification, or background system tasks).
+  //
+  // The combined (beingIn, beingOut) index lets us query "every chat
+  // between A and B" — the conversation history between two beings
+  // becomes first-class data.
+  // -----------------------------------
+  beingOut: {
+    type: String,
+    ref: "Being",
+    default: null,
     index: true,
   },
 
@@ -273,7 +295,9 @@ const ChatSchema = new mongoose.Schema({
 
 // Query all steps in a chain
 ChatSchema.index({ sessionId: 1, chainIndex: 1 });
-ChatSchema.index({ userId: 1, "startMessage.time": -1 }); // user chat history queries
+ChatSchema.index({ beingIn: 1, "startMessage.time": -1 }); // being chat history queries
+ChatSchema.index({ beingOut: 1, "startMessage.time": -1 }); // active-chainstep-by-being queries
+ChatSchema.index({ beingIn: 1, beingOut: 1, "startMessage.time": -1 }, { sparse: true }); // who-talks-to-whom
 
 // Query by target node (sparse — most home-mode chats lack this field)
 ChatSchema.index({ "treeContext.targetNodeId": 1 }, { sparse: true });

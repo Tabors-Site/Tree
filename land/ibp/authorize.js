@@ -1,44 +1,50 @@
-// TreeOS IBP — Stance Authorization.
+// TreeOS IBP — Stance Authorization (Layer 4).
 //
-// The kernel system that determines what one stance can do toward another
-// stance or position through a portal connection. Every IBP verb call
-// flows through this function.
+// One function gates every IBP verb call. The flow:
 //
-// Inputs:
-//   - identity: { userId, username } | null
-//   - verb:     "see" | "do" | "talk" | "be"
-//   - target:   { kind: "position"|"stance"|"land", value, nodeId?, ... }
-//   - action?:  string (for DO)
-//   - namespace?: string (for set-meta / clear-meta)
-//   - intent?:  string (for TALK)
-//   - operation?: string (for BE)
+//   1. Derive the acting stance's properties (Layer 2 — stanceProperties.js).
+//      Owner / contributor relations, role, home position relations,
+//      operating mode, federation status — all computed from Layer 1
+//      data (Being + Node fields).
 //
-// Output:
-//   { ok: boolean, stance: "arrival"|"owner"|"member", reason?: string }
+//   2. Look up the applicable permission rule for this verb at the target
+//      position (Layer 3 — metadata.permissions on the position, walking
+//      up the parent chain to the land root). When no rule matches, fall
+//      through to the extension defaults registry, then default deny.
 //
-// Phase 5 ships TWO real stances: arrival (unauthenticated) and owner
-// (authenticated with write access at the scope). Authenticated requesters
-// without write access fall through as "member" with the existing
-// resolveTreeAccess semantics (visibility filter on SEE, contributor
-// rules on DO). Additional named stances (guest, moderator, custom) are
-// Phase 7+ work.
+//   3. Compare each `requires` entry in the rule against the stance's
+//      derived properties. All must be satisfied. Returns allow or
+//      deny with a reason.
 //
-// Permission shape at metadata.embodiments.<stance>.permissions:
-//   {
-//     see:  { allowed_visibility: ["public"] | [] },
-//     do:   { allowed_actions: [] | ["action-name", ...] | "*" },
-//     talk: { allowed_targets: [] | ["@embodiment", ...] | "*" },
-//     be:   { allowed_operations: ["register", "claim", "release", "switch"] }
-//   }
+// Lookup key shape per verb:
+//   see:  "*"                                          (universal for now)
+//   do:   "<action>:<param>" or "<action>"             (e.g. "set-meta:position")
+//   talk: "@<qualifier>:<intent>" or "@<qualifier>"    (qualifier supports prefix wildcard)
+//   be:   "<operation>"                                (register|claim|release|switch)
+//
+// Specificity precedence: exact > prefix-wildcard > "*"  per key part.
+// Position precedence: closer position beats farther via parent walk.
+//
+// Backward compat: during the rules-migration window, when no new-shape
+// rule matches, the function falls back to the older
+// metadata.beings.<stance>.permissions shape (arrival / owner /
+// member). That fallback gets removed once governing's lifecycle has
+// stamped the new-shape rules everywhere.
 
 import Node from "../seed/models/node.js";
 import { getLandRootId } from "../seed/landRoot.js";
-import { resolveTreeAccess } from "../seed/tree/treeAccess.js";
+import { getAncestorChain } from "../seed/tree/ancestorCache.js";
+import { deriveStanceProperties } from "./stanceProperties.js";
+import { lookupDefault } from "./defaultPermissions.js";
 import { PORTAL_ERR } from "./errors.js";
 
-// Default permissions. These are applied if the land has not configured
-// stance permissions in metadata. They are also seeded into metadata on
-// land boot so the configuration is explicit.
+// ─────────────────────────────────────────────────────────────────────
+// Legacy defaults (kept for startup's seedDefaultStancePermissions).
+// The new authorize flow does NOT read these directly; it reads the
+// metadata.permissions shape. These constants stay exported so the
+// transition migration can populate the old-shape rows as fallback
+// while new lifecycle code writes the new shape.
+// ─────────────────────────────────────────────────────────────────────
 
 export const DEFAULT_ARRIVAL_PERMISSIONS = Object.freeze({
   see:  Object.freeze({ allowed_visibility: ["public"] }),
@@ -54,13 +60,17 @@ export const DEFAULT_OWNER_PERMISSIONS = Object.freeze({
   be:   Object.freeze({ allowed_operations: ["register", "claim", "release", "switch"] }),
 });
 
+// ─────────────────────────────────────────────────────────────────────
+// Entry point
+// ─────────────────────────────────────────────────────────────────────
+
 /**
  * Authorize a verb request.
  *
  * @param {object} args
- * @param {object|null} args.identity { userId, username } if authenticated
+ * @param {object|null} args.identity { beingId, username } if authenticated
  * @param {"see"|"do"|"talk"|"be"} args.verb
- * @param {object} args.target     { kind, value, nodeId?, visibility? }
+ * @param {object} args.target     { kind, value, nodeId?, visibility?, embodiment?, isDiscovery? }
  * @param {string} [args.action]   DO action name
  * @param {string} [args.namespace] set-meta namespace
  * @param {string} [args.intent]   TALK intent
@@ -68,65 +78,256 @@ export const DEFAULT_OWNER_PERMISSIONS = Object.freeze({
  * @returns {Promise<{ ok: boolean, stance: string, reason?: string }>}
  */
 export async function authorize(args) {
-  const { identity, verb } = args;
+  const { identity, verb, target } = args;
+  const beingId = identity?.beingId || null;
+  const nodeId  = target?.nodeId || null;
 
-  // Resolve which stance the requester occupies at this scope.
-  const stance = await resolveStance(args);
+  // ── Layer 2: derive stance properties ──
+  const props = await deriveStanceProperties({ beingId, targetNodeId: nodeId });
+  const stanceLabel = stanceLabelFromProps(props);
 
-  // Load the stance's permission profile from land metadata, falling
-  // back to defaults when not explicitly configured.
-  const permissions = await loadStancePermissions(stance);
+  // BE bootstrap exception: register/claim from arrival are always
+  // permitted, gated by land-level register_enabled/claim_enabled
+  // flags (enforced by the auth-being itself). Without this no one
+  // could ever sign up on a fresh land.
+  if (verb === "be" && props.arrival
+      && (args.operation === "register" || args.operation === "claim")) {
+    return { ok: true, stance: "arrival" };
+  }
 
-  // Dispatch by verb. Each branch returns the allow/deny decision.
-  switch (verb) {
-    case "see":  return decideSee(stance, permissions, args);
-    case "do":   return decideDo(stance, permissions, args);
-    case "talk": return decideTalk(stance, permissions, args);
-    case "be":   return decideBe(stance, permissions, args);
+  // SEE discovery exception: <land>/.discovery is the land's
+  // capability surface — always visible.
+  if (verb === "see" && target?.isDiscovery) {
+    return { ok: true, stance: stanceLabel };
+  }
+
+  // ── Build the lookup key parts for this request ──
+  const keyParts = buildKeyParts(args);
+  if (!keyParts) {
+    return { ok: false, stance: stanceLabel, reason: `Unknown or unsupported verb shape: ${verb}` };
+  }
+
+  // ── Layer 3: walk the parent chain looking for a matching rule ──
+  const matched = await findMatchingRule({ nodeId, verb, keyParts });
+  if (matched) {
+    return evaluateRequires(matched.rule, props, stanceLabel, matched.source);
+  }
+
+  // ── Tier 5: extension-default registry ──
+  const fullKey = `${verb}:${keyParts.join(":")}`;
+  let defaultRule = lookupDefault(fullKey);
+  if (!defaultRule) {
+    for (let i = keyParts.length - 1; i > 0; i--) {
+      const shorter = `${verb}:${keyParts.slice(0, i).join(":")}`;
+      defaultRule = lookupDefault(shorter);
+      if (defaultRule) break;
+    }
+  }
+  if (defaultRule) {
+    return evaluateRequires(defaultRule, props, stanceLabel, "extension-default");
+  }
+
+  // ── Legacy fallback (transitional) ──
+  const legacy = await legacyAuthorize(args, props);
+  if (legacy) return legacy;
+
+  // ── Tier 6: default deny ──
+  return {
+    ok: false,
+    stance: stanceLabel,
+    reason: `No permission rule matched ${verb}:${keyParts.join(":")} and no default applies`,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Key construction per verb
+// ─────────────────────────────────────────────────────────────────────
+
+function buildKeyParts(args) {
+  switch (args.verb) {
+    case "see":
+      return ["*"];
+    case "do": {
+      if (!args.action) return null;
+      if ((args.action === "set-meta" || args.action === "clear-meta") && args.namespace) {
+        return [args.action, args.namespace];
+      }
+      return [args.action];
+    }
+    case "talk": {
+      const qualifier = args.target?.embodiment || args.target?.username;
+      if (!qualifier) return null;
+      const qPart = qualifier.startsWith("@") ? qualifier : `@${qualifier}`;
+      return args.intent ? [qPart, args.intent] : [qPart];
+    }
+    case "be":
+      return args.operation ? [args.operation] : null;
     default:
-      return { ok: false, stance, reason: `Unknown verb: ${verb}` };
+      return null;
   }
 }
 
-// ────────────────────────────────────────────────────────────────
-// Stance resolution
-// ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+// Layer 3: rule lookup
+// ─────────────────────────────────────────────────────────────────────
 
-async function resolveStance({ identity, target }) {
-  if (!identity?.userId) return "arrival";
+async function findMatchingRule({ nodeId, verb, keyParts }) {
+  if (!nodeId) {
+    const landRootId = getLandRootId();
+    if (!landRootId) return null;
+    return matchOnNode(landRootId, verb, keyParts);
+  }
 
-  // Owner = authenticated with write access at the addressed node.
-  if (target?.nodeId) {
-    try {
-      const access = await resolveTreeAccess(target.nodeId, identity.userId);
-      if (access?.ok && access.write === true) return "owner";
-    } catch {
-      // Fall through. We don't fail closed on a transient lookup error.
+  let chain;
+  try {
+    chain = await getAncestorChain(nodeId);
+  } catch {
+    chain = null;
+  }
+  const path = Array.isArray(chain) && chain.length
+    ? chain.map((n) => String(n._id))
+    : [String(nodeId)];
+
+  for (const id of path) {
+    const match = await matchOnNode(id, verb, keyParts);
+    if (match) return match;
+  }
+  return null;
+}
+
+async function matchOnNode(nodeId, verb, keyParts) {
+  const node = await Node.findById(nodeId).select("metadata").lean();
+  const meta = node?.metadata;
+  if (!meta) return null;
+  const perms = meta instanceof Map ? meta.get("permissions") : meta.permissions;
+  if (!perms) return null;
+  const bucket = perms[verb];
+  if (!bucket || typeof bucket !== "object") return null;
+
+  let bestRule = null;
+  let bestKey = null;
+  let bestScore = -1;
+  for (const [key, rule] of Object.entries(bucket)) {
+    if (!rule || typeof rule !== "object") continue;
+    const score = scoreKey(key, keyParts);
+    if (score < 0) continue;
+    if (score > bestScore) {
+      bestRule = rule;
+      bestKey = key;
+      bestScore = score;
+    }
+  }
+  if (!bestRule) return null;
+  return { rule: bestRule, source: `${nodeId}:${bestKey}` };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Key matching with specificity scoring
+// ─────────────────────────────────────────────────────────────────────
+
+function scoreKey(ruleKey, targetParts) {
+  if (!ruleKey || typeof ruleKey !== "string") return -1;
+  const ruleParts = ruleKey.split(":");
+  if (ruleParts.length > targetParts.length) return -1;
+
+  let score = 0;
+  for (let i = 0; i < ruleParts.length; i++) {
+    const r = ruleParts[i];
+    const t = targetParts[i];
+    if (r === "*") {
+      score += 1;
+    } else if (r.endsWith("*")) {
+      const prefix = r.slice(0, -1);
+      if (!t.startsWith(prefix)) return -1;
+      score += 2;
+    } else if (r === t) {
+      score += 3;
+    } else {
+      return -1;
     }
   }
 
-  // Authenticated but not the owner of this scope. Phase 5 names this
-  // "member" but doesn't load a per-stance permission profile — the
-  // existing access checks (visibility, contributor) handle it. Phase 7
-  // adds member as a configurable stance.
+  // Full-length keys (same number of parts as the target) beat shorter
+  // "applies to any param" keys.
+  if (ruleParts.length === targetParts.length) score += 10;
+
+  return score;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Requires comparator
+// ─────────────────────────────────────────────────────────────────────
+
+function evaluateRequires(rule, props, stanceLabel, source) {
+  const requires = rule?.requires;
+  if (!requires || typeof requires !== "object") {
+    return { ok: true, stance: stanceLabel, matched: source };
+  }
+  for (const [prop, expected] of Object.entries(requires)) {
+    if (!compareRequirement(prop, expected, props)) {
+      return {
+        ok: false,
+        stance: stanceLabel,
+        reason: `stance does not satisfy requires.${prop} (have ${JSON.stringify(props[prop])}, need ${JSON.stringify(expected)})`,
+        matched: source,
+      };
+    }
+  }
+  return { ok: true, stance: stanceLabel, matched: source };
+}
+
+function compareRequirement(propName, expected, props) {
+  const actual = props[propName];
+
+  // Home-relation properties accept a string nodeId as the expected
+  // value, in which case the comparator interprets it as "this
+  // specific node must be in the home's ancestor chain" (or, for
+  // positionInHomeDomain, in the target's ancestor chain). Without
+  // this, scoped rules like `homeInDomain: "<rulership-id>"` would
+  // do a useless string-equality check against a boolean.
+  if (typeof expected === "string" && (propName === "homeInDomain" || propName === "positionInHomeDomain")) {
+    return Array.isArray(props.homeAncestors) && props.homeAncestors.includes(expected);
+  }
+
+  if (expected === true)  return actual === true;
+  if (expected === false) return actual === false;
+  if (Array.isArray(expected)) return expected.includes(actual);
+  return actual === expected;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Stance label (response field — back-compat with old consumers
+// that displayed "arrival" / "owner" / "member" / etc.)
+// ─────────────────────────────────────────────────────────────────────
+
+function stanceLabelFromProps(props) {
+  if (props.arrival) return "arrival";
+  if (props.owner)   return "owner";
+  if (props.contributor) return "contributor";
+  if (props.role)    return props.role;
   return "member";
 }
 
-// ────────────────────────────────────────────────────────────────
-// Permission loading
-// ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+// Legacy fallback (old-shape metadata.beings.<stance>.permissions)
+// ─────────────────────────────────────────────────────────────────────
 
-async function loadStancePermissions(stance) {
-  if (stance === "arrival") {
-    const fromMeta = await readLandStanceMeta("arrival");
-    return fromMeta || DEFAULT_ARRIVAL_PERMISSIONS;
+async function legacyAuthorize(args, props) {
+  const stance = props.arrival ? "arrival" : (props.owner ? "owner" : "member");
+  const permissions = await loadLegacyStancePermissions(stance);
+  if (!permissions) return null;
+  switch (args.verb) {
+    case "see":  return legacyDecideSee(stance, permissions, args);
+    case "do":   return legacyDecideDo(stance, permissions, args);
+    case "talk": return legacyDecideTalk(stance, permissions, args);
+    case "be":   return legacyDecideBe(stance, permissions, args);
+    default:     return null;
   }
-  if (stance === "owner") {
-    const fromMeta = await readLandStanceMeta("owner");
-    return fromMeta || DEFAULT_OWNER_PERMISSIONS;
-  }
-  // member: no explicit profile yet (Phase 7 work). Return null;
-  // per-verb deciders fall through to existing access logic.
+}
+
+async function loadLegacyStancePermissions(stance) {
+  if (stance === "arrival") return (await readLandStanceMeta("arrival")) || DEFAULT_ARRIVAL_PERMISSIONS;
+  if (stance === "owner")   return (await readLandStanceMeta("owner"))   || DEFAULT_OWNER_PERMISSIONS;
   return null;
 }
 
@@ -134,40 +335,23 @@ async function readLandStanceMeta(stanceName) {
   const landRootId = getLandRootId();
   if (!landRootId) return null;
   const root = await Node.findById(landRootId)
-    .select(`metadata.embodiments.${stanceName}.permissions`)
+    .select(`metadata.beings.${stanceName}.permissions`)
     .lean();
   const path = root?.metadata?.embodiments;
   if (!path) return null;
-  // metadata is a Map under the hood; lean() coerces but nested Maps
-  // may surface as plain objects depending on driver version.
   const stance = path instanceof Map ? path.get(stanceName) : path[stanceName];
   if (!stance) return null;
   return stance.permissions || null;
 }
 
-// ────────────────────────────────────────────────────────────────
-// Per-verb decisions
-// ────────────────────────────────────────────────────────────────
-
-function decideSee(stance, permissions, { target }) {
-  if (stance === "member") {
-    // Fall through to existing visibility/access checks done by the
-    // SEE handler. Permit at the authorize layer; the handler enforces.
-    return { ok: true, stance };
-  }
-  if (!permissions) return { ok: false, stance, reason: "no permissions" };
+function legacyDecideSee(stance, permissions, { target }) {
+  if (stance === "member") return { ok: true, stance };
   const rule = permissions.see?.allowed_visibility;
   if (rule === "*") return { ok: true, stance };
   if (!Array.isArray(rule) || rule.length === 0) {
     return { ok: false, stance, reason: "stance not permitted to SEE" };
   }
-  // Discovery and bootstrap-style positions are implicitly visible.
   if (target?.isDiscovery) return { ok: true, stance };
-  // The handler resolves the target node and tells us its visibility.
-  // If we don't know yet, optimistically permit; the handler enforces
-  // visibility downstream. This is a no-regression policy: a known
-  // non-public node is denied at this layer; an unknown one is allowed
-  // and the handler is the second gate.
   const v = target?.visibility;
   if (!v) return { ok: true, stance };
   return rule.includes(v)
@@ -175,10 +359,9 @@ function decideSee(stance, permissions, { target }) {
     : { ok: false, stance, reason: `visibility "${v}" not in allowed list` };
 }
 
-function decideDo(stance, permissions, { action }) {
+function legacyDecideDo(stance, permissions, { action }) {
   if (stance === "owner") return { ok: true, stance };
   if (stance === "member") return { ok: true, stance };
-  if (!permissions) return { ok: false, stance, reason: "no permissions" };
   const rule = permissions.do?.allowed_actions;
   if (rule === "*") return { ok: true, stance };
   if (!Array.isArray(rule) || rule.length === 0) {
@@ -190,10 +373,9 @@ function decideDo(stance, permissions, { action }) {
     : { ok: false, stance, reason: `action "${action}" not in allowed list` };
 }
 
-function decideTalk(stance, permissions, { target }) {
+function legacyDecideTalk(stance, permissions, { target }) {
   if (stance === "owner") return { ok: true, stance };
   if (stance === "member") return { ok: true, stance };
-  if (!permissions) return { ok: false, stance, reason: "no permissions" };
   const rule = permissions.talk?.allowed_targets;
   if (rule === "*") return { ok: true, stance };
   if (!Array.isArray(rule) || rule.length === 0) {
@@ -207,16 +389,12 @@ function decideTalk(stance, permissions, { target }) {
     : { ok: false, stance, reason: `embodiment "${targetTag}" not in allowed list` };
 }
 
-function decideBe(stance, permissions, { operation }) {
-  // BE bootstrap exception: register/claim are always permitted from
-  // arrival regardless of permission config, subject to the land-level
-  // register_enabled/claim_enabled flags (enforced by the auth-being).
+function legacyDecideBe(stance, permissions, { operation }) {
   if (stance === "arrival" && (operation === "register" || operation === "claim")) {
     return { ok: true, stance };
   }
   if (stance === "owner") return { ok: true, stance };
   if (stance === "member") return { ok: true, stance };
-  if (!permissions) return { ok: false, stance, reason: "no permissions" };
   const rule = permissions.be?.allowed_operations;
   if (!Array.isArray(rule) || rule.length === 0) {
     return { ok: false, stance, reason: "stance not permitted to BE" };
@@ -227,14 +405,16 @@ function decideBe(stance, permissions, { operation }) {
     : { ok: false, stance, reason: `operation "${operation}" not in allowed list` };
 }
 
-// ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
 // Seed defaults on land boot
-// ────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
 
 /**
  * Ensure the land root has explicit default stance permissions written
- * to its metadata. Called once on land boot. Does nothing if defaults
- * are already present (does not overwrite operator configuration).
+ * to its metadata. Idempotent. Writes the legacy shape during the
+ * transition so the legacy fallback in authorize() has data; a future
+ * pass writes the new metadata.permissions shape at the land root with
+ * equivalent rules.
  */
 export async function seedDefaultStancePermissions() {
   const landRootId = getLandRootId();
@@ -252,13 +432,12 @@ export async function seedDefaultStancePermissions() {
     : !!existing?.owner;
 
   if (!hasArrival) {
-    updates["metadata.embodiments.arrival"] = { permissions: DEFAULT_ARRIVAL_PERMISSIONS };
+    updates["metadata.beings.arrival"] = { permissions: DEFAULT_ARRIVAL_PERMISSIONS };
   }
   if (!hasOwner) {
-    updates["metadata.embodiments.owner"] = { permissions: DEFAULT_OWNER_PERMISSIONS };
+    updates["metadata.beings.owner"] = { permissions: DEFAULT_OWNER_PERMISSIONS };
   }
 
-  // Also seed the land-level BE flags if absent.
   const auth = root?.metadata?.auth;
   const hasAuth = auth instanceof Map ? auth.size > 0 : !!auth;
   if (!hasAuth) {
@@ -273,8 +452,8 @@ export async function seedDefaultStancePermissions() {
 }
 
 /**
- * Read the land-level BE configuration flags. Defaults to register_enabled
- * and claim_enabled both true.
+ * Read the land-level BE configuration flags. Defaults to
+ * register_enabled and claim_enabled both true.
  */
 export async function getAuthConfig() {
   const landRootId = getLandRootId();

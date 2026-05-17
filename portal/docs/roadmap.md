@@ -22,37 +22,21 @@ What's locked:
 
 Done means anyone joining can read these docs before writing the first new line of code. The format contracts (PA + Position Description + four-verb envelope + TALK message + inbox shape) are the load-bearing pieces.
 
-## Phase 1: Demolish Phase 1 scaffolding
-
-The earlier portal layer in `land/portal/` built `portal:fetch`, `portal:resolve`, `portal:discover` as stepping stones. Those ops do not survive into the four-verb model. They are removed in one commit alongside the build of the new ops.
-
-**Work:**
-
-1. Remove the old op handlers from [land/portal/protocol.js](land/portal/protocol.js):
-   - `portal:fetch`, `portal:resolve`, `portal:discover`
-   - Stubbed `portal:speak`, `portal:subscribe`, `portal:unsubscribe`
-2. Rewrite [portal/app/src/portal-client.js](portal/app/src/portal-client.js) so it no longer references those ops. Stub the new methods that the next phases will fill in.
-3. Trim [land/portal/bootstrap-route.js](land/portal/bootstrap-route.js) to return only the WS URL and protocol version. Move capability discovery into a SEE on `<land>/.discovery`.
-
-The system is temporarily non-functional after this commit. That is intentional: there is no transition window. The next phases bring it back up under the new model.
-
-**Verification:** the demolition commit is the only commit between Phase 0 and Phase 2 working states. After it, no Phase 1 ops are reachable.
-
 ## Phase 2: SEE
 
 The first verb. Read-only path. Smallest risk.
 
 **Work:**
 
-1. Build [land/portal/verbs/see.js](land/portal/verbs/see.js):
+1. Build [land/ibp/verbs/see.js](land/ibp/verbs/see.js):
    - One-shot SEE returns a Position Description for the address.
    - Live SEE returns initial descriptor plus an open patch stream.
-2. Extend [land/portal/descriptor.js](land/portal/descriptor.js):
+2. Extend [land/ibp/descriptor.js](land/ibp/descriptor.js):
    - Home zone descriptor (was scaffolded empty).
    - Tree zone descriptor (was scaffolded empty).
    - Inbox preview field per being.
    - `honoredIntents`, `respondMode`, `triggerOn` per being.
-3. Wire `portal:see` in [land/portal/protocol.js](land/portal/protocol.js).
+3. Wire `ibp:see` in [land/ibp/protocol.js](land/ibp/protocol.js).
 4. Build the SEE method on [portal/app/src/portal-client.js](portal/app/src/portal-client.js).
 5. Wire live SEE patching on the client: receive frames, apply RFC 6902 patches to local descriptor copy, re-render affected sections.
 
@@ -72,13 +56,13 @@ Mutation path. Three or four named actions prove the dispatcher pattern; `set-me
 
 **Work:**
 
-1. Build [land/portal/verbs/do.js](land/portal/verbs/do.js): action dispatcher reading `action` field and routing.
-2. Build first four actions in [land/portal/actions/](land/portal/actions/):
+1. Build [land/ibp/verbs/do.js](land/ibp/verbs/do.js): action dispatcher reading `action` field and routing.
+2. Build first four actions in [land/ibp/actions/](land/ibp/actions/):
    - `create-child.js`
    - `rename.js`
    - `change-status.js`
    - `set-meta.js` (the generic extension action)
-3. Wire `portal:do` in [land/portal/protocol.js](land/portal/protocol.js).
+3. Wire `ibp:do` in [land/ibp/protocol.js](land/ibp/protocol.js).
 4. Build the DO method on the client.
 
 **Verification:**
@@ -97,19 +81,19 @@ The hardest piece. Inbox kernel helpers, summoning triggers, sync respond-mode f
 
 **Work:**
 
-1. Build [land/portal/inbox.js](land/portal/inbox.js):
+1. Build [land/ibp/inbox.js](land/ibp/inbox.js):
    - `appendToInbox(nodeId, embodiment, message)`
    - `readInbox(nodeId, embodiment, options)`
    - `markInboxConsumed(nodeId, embodiment, correlationIds, responseId)`
-2. Build [land/portal/verbs/talk.js](land/portal/verbs/talk.js):
+2. Build [land/ibp/verbs/talk.js](land/ibp/verbs/talk.js):
    - Envelope validation.
    - Address + embodiment resolution.
    - Intent validation against embodiment's `honoredIntents`.
    - Atomic append + summon.
    - Sync respond-mode handling: hold ack open, await summoning result, return inline.
 3. Pick one sync embodiment to demonstrate. Candidate: a minimal "worker" or "oracle" embodiment that takes a `chat`-intent message, runs a single LLM call, returns text.
-4. Update [land/portal/descriptor.js](land/portal/descriptor.js) to surface inbox previews.
-5. Wire `portal:talk` in [land/portal/protocol.js](land/portal/protocol.js).
+4. Update [land/ibp/descriptor.js](land/ibp/descriptor.js) to surface inbox previews.
+5. Wire `ibp:talk` in [land/ibp/protocol.js](land/ibp/protocol.js).
 6. Build the TALK method on the client.
 
 **Verification:**
@@ -127,12 +111,12 @@ Identity bootstrap. Establishes the protocol's full surface.
 **Work:**
 
 1. Define the auth-being embodiment for treeos.ai.
-2. Build [land/portal/verbs/be.js](land/portal/verbs/be.js):
+2. Build [land/ibp/verbs/be.js](land/ibp/verbs/be.js):
    - `register` operation: payload validation, user creation, token issuance.
    - `claim` operation: credential check, token issuance.
    - `release` operation: token invalidation.
    - `switch` operation: client-coordination check.
-3. Wire `portal:be` in [land/portal/protocol.js](land/portal/protocol.js).
+3. Wire `ibp:be` in [land/ibp/protocol.js](land/ibp/protocol.js).
 4. Build the BE method on the client.
 5. Rebuild the sign-in surface ([portal/app/src/components/SignIn.jsx](portal/app/src/components/SignIn.jsx)) to use BE.
 
@@ -155,7 +139,7 @@ Phase 5 wired BE but left per-verb auth checks ad-hoc. Phase 5.5 builds the infr
 
 **Work:**
 
-1. Build `land/portal/authorize.js`:
+1. Build `land/ibp/authorize.js`:
    - `authorize({ identity, verb, target, action?, namespace? })` → `{ ok, stance, reason? }`.
    - Resolves the requester's stance: `arrival` if no identity; `owner` if identity has write access at the scope (via existing `resolveTreeAccess.write`); falls through to existing access logic otherwise.
    - Reads `metadata.embodiments.<stance>.permissions` at the land root.
@@ -166,7 +150,7 @@ Phase 5 wired BE but left per-verb auth checks ad-hoc. Phase 5.5 builds the infr
    - `talk: { allowed_targets: ["@embodiment", ...] | "*" }` — list of embodiment names or wildcard.
    - `be: { allowed_operations: [...] }` — which BE ops the stance can call.
 3. Apply land-level BE flags: `metadata.auth.register_enabled` and `metadata.auth.claim_enabled` (both default `true`). Auth-being rejects with `FORBIDDEN` when the requested operation is disabled.
-4. Replace per-verb ad-hoc auth checks in [land/portal/verbs/*.js](land/portal/verbs/) with calls to `authorize()`. SEE, DO, TALK route through it. BE bootstrap stays (the auth-being is the only escape hatch for unestablished requesters), but consults the land-level BE flags.
+4. Replace per-verb ad-hoc auth checks in [land/ibp/verbs/*.js](land/ibp/verbs/) with calls to `authorize()`. SEE, DO, TALK route through it. BE bootstrap stays (the auth-being is the only escape hatch for unestablished requesters), but consults the land-level BE flags.
 5. Seed default `arrival` and `owner` stance permissions on land boot, so a freshly installed land has the conservative defaults set explicitly in metadata.
 
 **Deferred (Phase 7+):**
@@ -194,7 +178,7 @@ The second TALK respond-mode. Required for any embodiment that fires-and-forgets
 
 **Work:**
 
-1. Extend [land/portal/verbs/talk.js](land/portal/verbs/talk.js):
+1. Extend [land/ibp/verbs/talk.js](land/ibp/verbs/talk.js):
    - Async respond-mode: ack immediately with `{ status: "accepted" }`.
    - When the summoning produces a response (now or later), construct a TALK from the being back at the original sender and append it to the sender's inbox.
 2. Pick one async embodiment to demonstrate. Candidate: a minimal Ruler-style embodiment that returns "thinking..." sync then later TALKs back with a result via an `inReplyTo` chain.
@@ -270,7 +254,6 @@ Open-ended.
 
 ```
 Phase 0   [DONE]               foundations: format contracts + docs
-Phase 1   [1 commit]           demolish Phase 1 scaffolding
 Phase 2   [2-3 days]           build SEE fresh
 Phase 3   [3-4 days]           build DO with 4 actions
 Phase 4   [1 week]             build TALK + inbox + sync respond-mode
@@ -289,7 +272,7 @@ Total to "TreeOS Portal is the daily driver for the system": about 6 to 8 weeks 
 
 Resist these temptations:
 
-- **Generic web browsing.** The TreeOS Portal does not render arbitrary websites. It renders Position Descriptions. The legacy HTML fallback was a Phase 1 idea that has been dropped under the four-verb model.
+- **Generic web browsing.** The TreeOS Portal does not render arbitrary websites. It renders Position Descriptions.
 - **HTTP versions of the four verbs.** No `/api/v1/see/...` or `/api/v1/do/...` routes. The protocol is WS-only.
 - **Bridge HTTP routes for backwards compatibility.** The legacy `land/routes/api/*` routes stay live during migration but are not extended; they retire per extension.
 - **Heavy UI frameworks.** Stick with React + Vite. No Material-UI / heavy component libraries. Visual style is TreeOS-shaped.

@@ -35,13 +35,13 @@ const ApprovalGroupSchema = new mongoose.Schema(
 
     approvals: [
       {
-        userId: { type: String, ref: "User", required: true },
+        beingId: { type: String, ref: "User", required: true },
         approvedAt: { type: Date, default: Date.now },
       },
     ],
     denials: [
       {
-        userId: { type: String, ref: "User", required: true },
+        beingId: { type: String, ref: "User", required: true },
         deniedAt: { type: Date, default: Date.now },
       },
     ],

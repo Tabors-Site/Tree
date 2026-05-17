@@ -42,7 +42,7 @@ router.get("/root/:nodeId", authenticate, async (req, res) => {
 
     const isPublicAccess = !!req.isPublicAccess;
     const isOwner =
-      rootMeta?.rootOwner?._id?.toString() === req.userId?.toString();
+      rootMeta?.rootOwner?._id?.toString() === req.beingId?.toString();
     const queryAvailable = isPublicAccess
       ? !!((rootMeta?.llmDefault && rootMeta.llmDefault !== "none") || req.canopyVisitor)
       : false;
@@ -120,7 +120,7 @@ router.post("/root/:rootId/visibility", authenticate, async (req, res) => {
     if (!root) {
       return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
     }
-    if (String(root.rootOwner) !== String(req.userId)) {
+    if (String(root.rootOwner) !== String(req.beingId)) {
       return sendError(res, 403, ERR.FORBIDDEN, "Only the tree owner can change visibility");
     }
 
@@ -153,7 +153,7 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
     if (!root.rootOwner)
       return sendError(res, 400, ERR.INVALID_INPUT, "Node is not a root");
-    if (root.rootOwner.toString() !== req.userId.toString()) {
+    if (root.rootOwner.toString() !== req.beingId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Only the root owner can assign LLM connections");
     }
 
@@ -163,7 +163,7 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
         await import("../../seed/models/llmConnection.js");
       const conn = await LlmConnection.findOne({
         _id: connectionId,
-        userId: req.userId,
+        beingId: req.beingId,
       }).lean();
       if (!conn) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Connection not found");
     }
@@ -179,7 +179,7 @@ router.post("/root/:rootId/llm-assign", authenticate, async (req, res) => {
     }
 
     const { clearUserClientCache } = await import("../../seed/llm/conversation.js");
-    clearUserClientCache(req.userId);
+    clearUserClientCache(req.beingId);
 
     return sendOk(res, {
       slot,
@@ -201,7 +201,7 @@ router.get("/root/:rootId/gateway", authenticate, async (req, res) => {
     if (!root.rootOwner)
       return sendError(res, 400, ERR.INVALID_INPUT, "Node is not a root");
 
-    const isOwner = root.rootOwner.toString() === req.userId.toString();
+    const isOwner = root.rootOwner.toString() === req.beingId.toString();
     if (!isOwner)
       return sendError(res, 403, ERR.FORBIDDEN, "Only the root owner can manage the gateway");
 
@@ -237,9 +237,9 @@ router.get("/root/:rootId/gateway/channels", authenticate, async (req, res) => {
     if (!root.rootOwner)
       return sendError(res, 400, ERR.INVALID_INPUT, "Node is not a root");
 
-    const isOwner = root.rootOwner.toString() === req.userId.toString();
+    const isOwner = root.rootOwner.toString() === req.beingId.toString();
     const isContributor = (root.contributors || []).some(
-      (c) => c.toString() === req.userId.toString(),
+      (c) => c.toString() === req.beingId.toString(),
     );
     if (!isOwner && !isContributor) {
       return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
@@ -276,7 +276,7 @@ router.post(
       const gw = getExtension("gateway");
       if (!gw?.exports?.addGatewayChannel) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Gateway extension not installed");
       const { addGatewayChannel } = gw.exports;
-      const channel = await addGatewayChannel(req.userId, rootId, {
+      const channel = await addGatewayChannel(req.beingId, rootId, {
         name,
         type,
         direction,
@@ -312,7 +312,7 @@ router.put(
       const gw = getExtension("gateway");
       if (!gw?.exports?.updateGatewayChannel) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Gateway extension not installed");
       const { updateGatewayChannel } = gw.exports;
-      const channel = await updateGatewayChannel(req.userId, channelId, {
+      const channel = await updateGatewayChannel(req.beingId, channelId, {
         name,
         enabled,
         config,
@@ -339,7 +339,7 @@ router.delete(
       const gw = getExtension("gateway");
       if (!gw?.exports?.deleteGatewayChannel) return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Gateway extension not installed");
       const { deleteGatewayChannel } = gw.exports;
-      await deleteGatewayChannel(req.userId, channelId);
+      await deleteGatewayChannel(req.beingId, channelId);
 
       return sendOk(res, { removed: true });
     } catch (err) {
@@ -364,9 +364,9 @@ router.post(
       if (!root.rootOwner)
         return sendError(res, 400, ERR.INVALID_INPUT, "Node is not a root");
 
-      const isOwner = root.rootOwner.toString() === req.userId.toString();
+      const isOwner = root.rootOwner.toString() === req.beingId.toString();
       const isContributor = (root.contributors || []).some(
-        (c) => c.toString() === req.userId.toString(),
+        (c) => c.toString() === req.beingId.toString(),
       );
       if (!isOwner && !isContributor) {
         return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
@@ -477,7 +477,7 @@ router.post("/root/:rootId/dream-time", authenticate, async (req, res) => {
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
     if (!root.rootOwner)
       return sendError(res, 400, ERR.INVALID_INPUT, "Node is not a root");
-    if (root.rootOwner.toString() !== req.userId.toString()) {
+    if (root.rootOwner.toString() !== req.beingId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Only the root owner can set dream time");
     }
 

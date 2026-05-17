@@ -12,15 +12,15 @@ export default [
       nodeId: z.string().describe("The tree root or starting node."),
       query: z.string().describe("The concept to trace."),
       since: z.string().optional().describe("Time filter: ISO date or relative (7d, 30d)."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       username: z.string().optional().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    handler: async ({ nodeId, query, since, userId, username }) => {
+    handler: async ({ nodeId, query, since, beingId, username }) => {
       try {
-        const result = await runTrace(nodeId, query, userId, username || "system", { since });
+        const result = await runTrace(nodeId, query, beingId, username || "system", { since });
         if (result.error) {
           return { content: [{ type: "text", text: result.error }] };
         }
@@ -54,7 +54,7 @@ export default [
     description: "Show the last trace run at this position. The thread map without re-tracing.",
     schema: {
       nodeId: z.string().describe("The node to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

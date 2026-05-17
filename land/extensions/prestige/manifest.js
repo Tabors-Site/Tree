@@ -50,7 +50,7 @@ export default {
     ],
     hooks: {
       fires: [],
-      listens: ["beforeNote", "beforeContribution", "enrichContext"],
+      listens: ["beforeArtifact", "beforeContribution", "enrichContext"],
     },
   },
 };

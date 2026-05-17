@@ -2,13 +2,13 @@
 // afterToolCall hook handler: navigates the frontend when the AI calls a tool.
 // Extensions register their own tool-to-URL mappings via registerToolNavigation().
 
-import { getUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { getLandUrl } from "../../canopy/identity.js";
 import { getActiveNavigator } from "../../seed/ws/sessionRegistry.js";
 
 // ── Navigation Registry ────────────────────────────────────────────────
 // Extensions call registerToolNavigation(toolName, urlBuilder) during init().
-// urlBuilder receives ({ args, userId, shareToken, withToken }) and returns a URL path or null.
+// urlBuilder receives ({ args, beingId, shareToken, withToken }) and returns a URL path or null.
 
 const _navRegistry = new Map();
 
@@ -61,18 +61,18 @@ registerToolNavigations({
 
   // Contributions
   "get-node-contributions": ({ args, withToken: t }) => t(`/api/v1/node/${args.nodeId}/${args.version || 0}/contributions?html`),
-  "get-contributions-by-user": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}/contributions?html`),
+  "get-contributions-by-user": ({ args, beingId, withToken: t }) => t(`/api/v1/user/${args.beingId || beingId}/contributions?html`),
 
   // User
-  "get-root-nodes-by-user": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}?html`),
-  "get-unsearched-notes-by-user": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}/notes?html`),
-  "get-searched-notes-by-user": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}/notes?html`),
-  "get-all-tags-for-user": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}/tags?html`),
+  "get-root-nodes-by-user": ({ args, beingId, withToken: t }) => t(`/api/v1/user/${args.beingId || beingId}?html`),
+  "get-unsearched-notes-by-user": ({ args, beingId, withToken: t }) => t(`/api/v1/user/${args.beingId || beingId}/notes?html`),
+  "get-searched-notes-by-user": ({ args, beingId, withToken: t }) => t(`/api/v1/user/${args.beingId || beingId}/notes?html`),
+  "get-all-tags-for-user": ({ args, beingId, withToken: t }) => t(`/api/v1/user/${args.beingId || beingId}/tags?html`),
 
   // Branch lifecycle
-  "delete-node-branch": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}?html`),
+  "delete-node-branch": ({ args, beingId, withToken: t }) => t(`/api/v1/user/${args.beingId || beingId}?html`),
   "update-node-branch-parent-relationship": ({ args, withToken: t }) => nodeUrl(args, t),
-  "batch-operations": ({ args, userId, withToken: t }) => t(`/api/v1/user/${args.userId || userId}/contributions?html`),
+  "batch-operations": ({ args, beingId, withToken: t }) => t(`/api/v1/user/${args.beingId || beingId}/contributions?html`),
 });
 
 // ── Read-only tools that should NOT trigger iframe navigation ──────────
@@ -99,11 +99,11 @@ export function buildNavigationHandler(core) {
   const tokenCache = new Map();
   setInterval(() => tokenCache.clear(), 60000);
 
-  async function getShareToken(userId) {
-    if (tokenCache.has(userId)) return tokenCache.get(userId);
-    const user = await User.findById(userId).select("metadata").lean();
-    const token = getUserMeta(user, "html")?.shareToken || null;
-    tokenCache.set(userId, token);
+  async function getShareToken(beingId) {
+    if (tokenCache.has(beingId)) return tokenCache.get(beingId);
+    const user = await Being.findById(beingId).select("metadata").lean();
+    const token = getBeingMeta(user, "html")?.shareToken || null;
+    tokenCache.set(beingId, token);
     return token;
   }
 
@@ -114,8 +114,8 @@ export function buildNavigationHandler(core) {
     return `${path}${sep}token=${shareToken}`;
   }
 
-  return async function onAfterToolCall({ toolName, args, userId, success }) {
-    if (!success || !userId) return;
+  return async function onAfterToolCall({ toolName, args, beingId, success }) {
+    if (!success || !beingId) return;
 
     // Only navigate for write operations. Read-only tool calls (navigate-tree,
     // get-node, get-tree-context, etc.) should not redirect the iframe.
@@ -126,17 +126,17 @@ export function buildNavigationHandler(core) {
     const urlBuilder = _navRegistry.get(toolName);
     if (!urlBuilder) return;
 
-    const shareToken = await getShareToken(userId);
+    const shareToken = await getShareToken(beingId);
     const t = (path) => withToken(path, shareToken);
 
     try {
-      const url = urlBuilder({ args: args || {}, userId, shareToken, withToken: t });
+      const url = urlBuilder({ args: args || {}, beingId, shareToken, withToken: t });
       if (url) {
         // Only navigate if there's an active navigator session.
         // No navigator = user detached or viewing a dashboard with its own chat.
-        const sessionId = getActiveNavigator(userId);
+        const sessionId = getActiveNavigator(beingId);
         if (!sessionId) return;
-        core.websocket.emitNavigate({ userId, url: `${getLandUrl()}${url}`, sessionId });
+        core.websocket.emitNavigate({ beingId, url: `${getLandUrl()}${url}`, sessionId });
       }
     } catch {
       // Extension-registered builder failed. Silent. Navigation is non-critical.

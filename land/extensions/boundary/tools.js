@@ -10,16 +10,16 @@ export default [
       "and orphaned nodes that don't belong where they are. Results stored on root metadata.",
     schema: {
       rootId: z.string().describe("Tree root to analyze."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-    handler: async ({ rootId, userId }) => {
+    handler: async ({ rootId, beingId }) => {
       try {
-        const User = (await import("../../seed/models/user.js")).default;
-        const user = await User.findById(userId).select("username").lean();
-        const result = await analyze(rootId, userId, user?.username || "system");
+        const User = (await import("../../seed/models/being.js")).default;
+        const user = await Being.findById(beingId).select("username").lean();
+        const result = await analyze(rootId, beingId, user?.username || "system");
         return {
           content: [{
             type: "text",
@@ -46,16 +46,16 @@ export default [
       "Lighter than full tree analysis. Good for checking a reorganized branch.",
     schema: {
       nodeId: z.string().describe("Node to analyze from (subtree root)."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-    handler: async ({ nodeId, userId }) => {
+    handler: async ({ nodeId, beingId }) => {
       try {
-        const User = (await import("../../seed/models/user.js")).default;
-        const user = await User.findById(userId).select("username").lean();
-        const result = await analyzeBranch(nodeId, userId, user?.username || "system");
+        const User = (await import("../../seed/models/being.js")).default;
+        const user = await Being.findById(beingId).select("username").lean();
+        const result = await analyzeBranch(nodeId, beingId, user?.username || "system");
         return {
           content: [{
             type: "text",
@@ -79,7 +79,7 @@ export default [
     description: "Show the last boundary analysis results. No LLM calls. Read-only.",
     schema: {
       rootId: z.string().describe("Tree root to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

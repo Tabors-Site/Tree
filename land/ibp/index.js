@@ -51,7 +51,7 @@ function wireLiveHooks() {
   hooks.register("afterStatusChange", async ({ nodeId }) => {
     if (nodeId) emitPositionInvalidate(nodeId, "status-changed");
   }, "portal-live");
-  hooks.register("afterNote", async ({ nodeId }) => {
+  hooks.register("afterArtifact", async ({ nodeId }) => {
     if (nodeId) emitPositionInvalidate(nodeId, "note-changed");
   }, "portal-live");
 

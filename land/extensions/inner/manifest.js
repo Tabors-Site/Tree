@@ -10,7 +10,7 @@ export default {
     "through targeted search. The serendipity engine.",
 
   needs: {
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
     services: ["hooks", "llm"],
   },
 

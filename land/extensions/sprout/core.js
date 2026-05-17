@@ -11,7 +11,7 @@ import { getExtension } from "../loader.js";
 // ─────────────────────────────────────────────────────────────────────────
 // PENDING OFFERS
 // ─────────────────────────────────────────────────────────────────────────
-// Map<userId, { domain, rootId, offeredAt }>
+// Map<beingId, { domain, rootId, offeredAt }>
 // Tracks the last domain offer per user so the confirmation flow survives
 // clearHistory between converse calls.
 
@@ -19,36 +19,36 @@ const PENDING_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 const _pending = new Map();
 
-export function getPending(userId) {
-  const entry = _pending.get(userId);
+export function getPending(beingId) {
+  const entry = _pending.get(beingId);
   if (!entry) return null;
   if (Date.now() - entry.offeredAt > PENDING_TTL_MS) {
-    _pending.delete(userId);
+    _pending.delete(beingId);
     return null;
   }
   return entry;
 }
 
-export function setPending(userId, { domain, rootId }) {
-  _pending.set(userId, { domain, rootId, offeredAt: Date.now() });
+export function setPending(beingId, { domain, rootId }) {
+  _pending.set(beingId, { domain, rootId, offeredAt: Date.now() });
 }
 
-export function clearPending(userId) {
-  _pending.delete(userId);
+export function clearPending(beingId) {
+  _pending.delete(beingId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
 // DOMAIN AVAILABILITY CACHE
 // ─────────────────────────────────────────────────────────────────────────
 // Brief cache so we don't query the DB on every single message.
-// Map<userId, { domains, cachedAt }>
+// Map<beingId, { domains, cachedAt }>
 
 const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
 const _domainCache = new Map();
 
-export async function getUnscaffoldedDomains(userId) {
-  const cached = _domainCache.get(userId);
+export async function getUnscaffoldedDomains(beingId) {
+  const cached = _domainCache.get(beingId);
   if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
     return cached.domains;
   }
@@ -59,7 +59,7 @@ export async function getUnscaffoldedDomains(userId) {
   const available = life.exports.getAvailableDomains();
   if (available.length === 0) return [];
 
-  const rootId = await life.exports.findLifeRoot(userId);
+  const rootId = await life.exports.findLifeRoot(beingId);
   let scaffolded = [];
   if (rootId) {
     const domainNodes = await life.exports.getDomainNodes(rootId);
@@ -67,7 +67,7 @@ export async function getUnscaffoldedDomains(userId) {
   }
 
   const unscaffolded = available.filter(d => !scaffolded.includes(d));
-  _domainCache.set(userId, { domains: unscaffolded, cachedAt: Date.now() });
+  _domainCache.set(beingId, { domains: unscaffolded, cachedAt: Date.now() });
   return unscaffolded;
 }
 
@@ -75,11 +75,11 @@ export async function getUnscaffoldedDomains(userId) {
  * Get domains the user HAS scaffolded (the inverse of getUnscaffoldedDomains).
  * Uses the same cache window so both calls in the same message are free.
  */
-export async function getScaffoldedDomains(userId) {
+export async function getScaffoldedDomains(beingId) {
   const life = getExtension("life");
   if (!life?.exports) return [];
 
-  const rootId = await life.exports.findLifeRoot(userId);
+  const rootId = await life.exports.findLifeRoot(beingId);
   if (!rootId) return [];
 
   const domainNodes = await life.exports.getDomainNodes(rootId);
@@ -87,8 +87,8 @@ export async function getScaffoldedDomains(userId) {
 }
 
 /** Invalidate cache for a user after scaffolding changes. */
-export function invalidateCache(userId) {
-  _domainCache.delete(userId);
+export function invalidateCache(beingId) {
+  _domainCache.delete(beingId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -99,7 +99,7 @@ export function invalidateCache(userId) {
  * Scaffold a domain into the user's Life tree.
  * Creates the Life root if it doesn't exist, adds the domain, rebuilds routing.
  */
-export async function sproutDomain({ domain, userId }) {
+export async function sproutDomain({ domain, beingId }) {
   const life = getExtension("life");
   if (!life?.exports) throw new Error("Life extension not loaded");
 
@@ -112,18 +112,18 @@ export async function sproutDomain({ domain, userId }) {
   }
 
   // Find or create Life root
-  let rootId = await life.exports.findLifeRoot(userId);
+  let rootId = await life.exports.findLifeRoot(beingId);
   if (!rootId) {
-    const result = await life.exports.scaffoldRoot(userId);
+    const result = await life.exports.scaffoldRoot(beingId);
     rootId = result.rootId;
-    log.info("Sprout", `Created Life root ${rootId} for user ${userId}`);
+    log.info("Sprout", `Created Life root ${rootId} for user ${beingId}`);
   }
 
   // Check if already scaffolded
   const existing = await life.exports.getDomainNodes(rootId);
   if (existing[domain]) {
-    clearPending(userId);
-    invalidateCache(userId);
+    clearPending(beingId);
+    invalidateCache(beingId);
     return {
       success: true,
       alreadyExists: true,
@@ -135,7 +135,7 @@ export async function sproutDomain({ domain, userId }) {
   }
 
   // Scaffold the domain
-  const result = await life.exports.addDomain({ rootId, domain, userId });
+  const result = await life.exports.addDomain({ rootId, domain, beingId });
   log.info("Sprout", `Scaffolded ${domain} under Life root ${rootId}`);
 
   // Rebuild routing index so the new domain is immediately routable
@@ -157,11 +157,11 @@ export async function sproutDomain({ domain, userId }) {
   // Add to navigation
   try {
     const nav = getExtension("navigation");
-    if (nav?.exports?.addRoot) await nav.exports.addRoot(userId, rootId);
+    if (nav?.exports?.addRoot) await nav.exports.addRoot(beingId, rootId);
   } catch {}
 
-  clearPending(userId);
-  invalidateCache(userId);
+  clearPending(beingId);
+  invalidateCache(beingId);
 
   return {
     success: true,

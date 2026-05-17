@@ -58,20 +58,20 @@ async function runPruneCycle() {
         const pruneMeta = _metadata.getExtMeta(root, "prune");
         if (pruneMeta.paused) continue;
 
-        const userId = root.rootOwner?.toString();
-        if (!userId) continue;
+        const beingId = root.rootOwner?.toString();
+        if (!beingId) continue;
 
-        const user = await User.findById(userId).select("username").lean();
+        const user = await Being.findById(beingId).select("username").lean();
         if (!user) continue;
 
         // Scan
-        const candidates = await scanForCandidates(root._id.toString(), userId);
+        const candidates = await scanForCandidates(root._id.toString(), beingId);
         if (candidates.length === 0) continue;
 
         log.verbose("Prune", `Auto-pruning ${candidates.length} node(s) from ${root.name}`);
 
         // Confirm (absorb + trim)
-        await confirmPrune(root._id.toString(), userId, user.username);
+        await confirmPrune(root._id.toString(), beingId, user.username);
       } catch (err) {
         log.warn("Prune", `Auto-prune failed for tree ${root.name}: ${err.message}`);
       }

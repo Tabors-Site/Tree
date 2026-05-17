@@ -10,14 +10,14 @@ export default [
       "codebook isolation, and cascade containment.",
     schema: {
       rootId: z.string().describe("Tree root to analyze."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-    handler: async ({ rootId, userId }) => {
+    handler: async ({ rootId, beingId }) => {
       try {
-        const result = await analyze(rootId, userId);
+        const result = await analyze(rootId, beingId);
         const summary = {
           rootName: result.rootName,
           branchesAnalyzed: result.branches.length,
@@ -47,14 +47,14 @@ export default [
       "Shows node count, metadata carried, and connections created.",
     schema: {
       nodeId: z.string().describe("Branch node to preview splitting."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    handler: async ({ nodeId, userId }) => {
+    handler: async ({ nodeId, beingId }) => {
       try {
-        const result = await preview(nodeId, userId);
+        const result = await preview(nodeId, beingId);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Preview failed: ${err.message}` }] };
@@ -68,16 +68,16 @@ export default [
       "metadata move with it. A channel is created back to the parent.",
     schema: {
       nodeId: z.string().describe("Branch node to split into a new tree."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-    handler: async ({ nodeId, userId }) => {
+    handler: async ({ nodeId, beingId }) => {
       try {
-        const User = (await import("../../seed/models/user.js")).default;
-        const user = await User.findById(userId).select("username").lean();
-        const result = await execute(nodeId, userId, user?.username || "system");
+        const User = (await import("../../seed/models/being.js")).default;
+        const user = await Being.findById(beingId).select("username").lean();
+        const result = await execute(nodeId, beingId, user?.username || "system");
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (err) {
         return { content: [{ type: "text", text: `Split failed: ${err.message}` }] };
@@ -89,7 +89,7 @@ export default [
     description: "Show past splits from this tree.",
     schema: {
       rootId: z.string().describe("Tree root to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

@@ -113,7 +113,7 @@ export async function unwatchTool(nodeId, toolName) {
  * Create a pending approval request. Returns a Promise that resolves
  * when the operator decides.
  */
-export function createRequest({ toolName, args, nodeId, userId, rootId }) {
+export function createRequest({ toolName, args, nodeId, beingId, rootId }) {
   if (pending.size >= MAX_PENDING) {
     throw new Error("Too many pending approval requests. Approve or reject existing ones first.");
   }
@@ -124,7 +124,7 @@ export function createRequest({ toolName, args, nodeId, userId, rootId }) {
     toolName,
     args: sanitizeArgs(args),
     nodeId,
-    userId,
+    beingId,
     rootId,
     createdAt: new Date().toISOString(),
     status: "pending",
@@ -158,12 +158,12 @@ export function createRequest({ toolName, args, nodeId, userId, rootId }) {
 /**
  * Resolve a pending request (approve or reject).
  */
-export function resolveRequest(requestId, decision, userId) {
+export function resolveRequest(requestId, decision, beingId) {
   const entry = pending.get(requestId);
   if (!entry) return null;
 
   entry.request.status = decision;
-  entry.request.resolvedBy = userId;
+  entry.request.resolvedBy = beingId;
   entry.request.resolvedAt = new Date().toISOString();
 
   if (decision === "approved") {
@@ -192,9 +192,9 @@ function notifyOperator(request) {
     `Args: ${JSON.stringify(request.args).slice(0, 200)}`;
 
   // WebSocket: real-time if operator is connected
-  if (_emitToUser && request.userId) {
+  if (_emitToUser && request.beingId) {
     try {
-      _emitToUser(request.userId, "approvalRequired", {
+      _emitToUser(request.beingId, "approvalRequired", {
         id: request.id,
         toolName: request.toolName,
         args: request.args,
@@ -209,7 +209,7 @@ function notifyOperator(request) {
     try {
       const Notification = _notify;
       Notification.create({
-        userId: request.userId,
+        beingId: request.beingId,
         rootId: request.rootId,
         type: "approve",
         title: `Approval needed: ${request.toolName}`,
@@ -242,7 +242,7 @@ function sanitizeArgs(args) {
   if (!args || typeof args !== "object") return {};
   const safe = {};
   for (const [key, val] of Object.entries(args)) {
-    if (key === "userId" || key === "chatId" || key === "sessionId") continue;
+    if (key === "beingId" || key === "chatId" || key === "sessionId") continue;
     if (typeof val === "string" && val.length > 500) {
       safe[key] = val.slice(0, 497) + "...";
     } else {

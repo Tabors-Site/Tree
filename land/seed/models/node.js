@@ -17,8 +17,8 @@ const NodeSchema = new mongoose.Schema({
   children: [{ type: String, ref: "Node" }],
   parent: { type: String, ref: "Node", default: null },
 
-  rootOwner: { type: String, ref: "User", default: null }, // set = this is a tree root. null = not a root.
-  contributors: [{ type: String, ref: "User" }], // write access. Capped at 500 per node in ownership.js.
+  rootOwner: { type: String, ref: "Being", default: null }, // set = this is a tree root. null = not a root.
+  contributors: [{ type: String, ref: "Being" }], // write access. Capped at 500 per node in ownership.js.
 
   // Tree visibility (core protocol, used by Canopy federation)
   visibility: {

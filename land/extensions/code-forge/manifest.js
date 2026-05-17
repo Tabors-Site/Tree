@@ -48,7 +48,7 @@ export default {
 
   needs: {
     services: ["hooks", "metadata", "tree"],
-    models: ["Node", "Note"],
+    models: ["Node", "Artifact"],
     extensions: ["code-workspace"],
   },
 

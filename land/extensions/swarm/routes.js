@@ -41,7 +41,7 @@ router.post("/root/:rootId/swarm-plans/branches/:branchName/generate", authentic
     const spec = swarm?.spec || `Build out the "${branchName}" branch of this project.`;
 
     const { runChat } = await import("../../seed/llm/conversation.js");
-    const userId = req.userId;
+    const beingId = req.beingId;
     const username = req.username || "user";
     const architectMsg =
       `Generate a [[BRANCHES]] plan for this branch's scope:\n\n` +
@@ -50,7 +50,7 @@ router.post("/root/:rootId/swarm-plans/branches/:branchName/generate", authentic
       `Emit the complete [[BRANCHES]] block. If the branch needs an integration file at this scope, write it as this Ruler's own file (do not create a separate branch for it). Close with [[DONE]].`;
 
     runChat({
-      userId,
+      beingId,
       username,
       message: architectMsg,
       // Sub-plan generation runs through governance's Planner. The
@@ -65,7 +65,7 @@ router.post("/root/:rootId/swarm-plans/branches/:branchName/generate", authentic
     );
 
     log.info("Swarm",
-      `⎇ sub-plan generation requested: ${branchName} @ ${String(branchNodeId).slice(0, 8)} (user=${userId || "?"})`,
+      `⎇ sub-plan generation requested: ${branchName} @ ${String(branchNodeId).slice(0, 8)} (user=${beingId || "?"})`,
     );
     return sendOk(res, { proposed: true, branchName, branchNodeId });
   } catch (err) {

@@ -63,7 +63,7 @@ export async function getChangelog(nodeId, opts = {}) {
 
   const query = { date: { $gte: since } };
   if (scopeIds) query.nodeId = { $in: scopeIds };
-  if (opts.userId) query.userId = opts.userId;
+  if (opts.beingId) query.beingId = opts.beingId;
 
   const contributions = await Contribution.find(query)
     .sort({ date: -1 })
@@ -94,7 +94,7 @@ function groupContributions(contributions) {
     const group = byNode.get(nid);
     group.actions[c.action] = (group.actions[c.action] || 0) + 1;
     group.count++;
-    if (c.userId) group.users.add(c.userId);
+    if (c.beingId) group.users.add(c.beingId);
     if (!group.lastDate || c.date > group.lastDate) group.lastDate = c.date;
 
     // Track autonomous activity (intent, dreams)
@@ -151,7 +151,7 @@ export async function getStalled(nodeId, since, previousWindowMs) {
 /**
  * Summarize contributions into a narrative via AI.
  */
-export async function summarizeChangelog(nodeId, contributions, userId, username, opts = {}) {
+export async function summarizeChangelog(nodeId, contributions, beingId, username, opts = {}) {
   if (!_runChat || contributions.length === 0) {
     return buildRawSummary(contributions, nodeId);
   }
@@ -221,7 +221,7 @@ Return ONLY JSON:
 
   try {
     const { answer } = await _runChat({
-      userId,
+      beingId,
       username: username || "system",
       message: prompt,
       mode: "tree:respond",
@@ -258,7 +258,7 @@ function buildRawSummary(contributions, nodeId) {
     completed: [],
     stalled: [],
     autonomous: allAutonomous.map(a => ({ action: a.action, by: a.by, summary: a.action })),
-    contributors: [...allUsers].map(u => ({ username: u, actions: contributions.filter(c => c.userId === u).length })),
+    contributors: [...allUsers].map(u => ({ username: u, actions: contributions.filter(c => c.beingId === u).length })),
     summary: `${contributions.length} contributions across ${grouped.size} nodes by ${allUsers.size} user(s).`,
   };
 }

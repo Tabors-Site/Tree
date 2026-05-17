@@ -29,11 +29,11 @@ export async function init(core) {
   const runChat = core.llm?.runChat || null;
   configure({
     Node: core.models.Node,
-    Note: core.models.Note,
+    Artifact: core.models.Artifact,
     runChat: runChat
       ? async (opts) => {
-          if (opts.userId && opts.userId !== "SYSTEM") {
-            const hasLlm = await core.llm.userHasLlm(opts.userId);
+          if (opts.beingId && opts.beingId !== "SYSTEM") {
+            const hasLlm = await core.llm.userHasLlm(opts.beingId);
             if (!hasLlm) return { answer: null };
           }
           return core.llm.runChat({
@@ -127,7 +127,7 @@ export async function init(core) {
   }, "kb");
 
   // ── Live dashboard updates ──
-  core.hooks.register("afterNote", async ({ nodeId }) => {
+  core.hooks.register("afterArtifact", async ({ nodeId }) => {
     if (!nodeId) return;
     try {
       const node = await core.models.Node.findById(nodeId).select("rootOwner metadata").lean();
@@ -151,7 +151,7 @@ export async function init(core) {
   try {
     const { getExtension } = await import("../loader.js");
     const base = getExtension("treeos-base");
-    base?.exports?.registerSlot?.("apps-grid", "kb", ({ userId, rootMap, tokenParam, tokenField, esc: e }) => {
+    base?.exports?.registerSlot?.("apps-grid", "kb", ({ beingId, rootMap, tokenParam, tokenField, esc: e }) => {
       const entries = rootMap.get("KB") || rootMap.get("Knowledge Base") || [];
       const existing = entries.map(entry =>
         entry.ready
@@ -162,7 +162,7 @@ export async function init(core) {
         <div class="app-header"><span class="app-emoji">📖</span><span class="app-name">Knowledge Base</span></div>
         <div class="app-desc">Tell it things. Ask it things. The tree organizes knowledge into topics with citations.</div>
         ${existing ? `<div style="display:flex;flex-wrap:wrap;margin-bottom:10px;">${existing}</div>` : ""}
-        <form class="app-form" method="POST" action="/api/v1/user/${userId}/apps/create">
+        <form class="app-form" method="POST" action="/api/v1/user/${beingId}/apps/create">
           ${tokenField}<input type="hidden" name="app" value="kb" />
           <input class="app-input" name="message" placeholder="What's this knowledge base about? (e.g. team wiki, personal notes)" required />
           <button class="app-start" type="submit">${entries.length > 0 ? "New" : "Start"} KB</button>

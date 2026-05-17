@@ -1,6 +1,6 @@
 import { z } from "zod";
 import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import log from "../../seed/log.js";
 import { SYSTEM_ROLE, DELETED } from "../../seed/protocol.js";
 import { setLandConfigValue } from "../../seed/landConfig.js";
@@ -8,8 +8,8 @@ import { setLandConfigValue } from "../../seed/landConfig.js";
 let _metadata = null;
 export function setMetadata(metadata) { _metadata = metadata; }
 
-async function requireAdmin(userId) {
-  const user = await User.findById(userId).select("isAdmin").lean();
+async function requireAdmin(beingId) {
+  const user = await Being.findById(beingId).select("isAdmin").lean();
   return user?.isAdmin === true;
 }
 
@@ -19,10 +19,10 @@ export default function getTools() {
       name: "land-status",
       description: "Get land status: loaded extensions, system nodes, config, connected peers, user count, tree count.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true },
-      async handler({ userId }) {
+      async handler({ beingId }) {
         try {
           const { getLoadedManifests, getLoadedExtensionNames } = await import("../../extensions/loader.js");
           const { getLandIdentity, getLandUrl } = await import("../../canopy/identity.js");
@@ -30,7 +30,7 @@ export default function getTools() {
           const land = getLandIdentity();
           const loaded = getLoadedExtensionNames();
           const manifests = getLoadedManifests();
-          const userCount = await User.countDocuments({ isRemote: { $ne: true } });
+          const userCount = await Being.countDocuments({ isRemote: { $ne: true } });
           const treeCount = await Node.countDocuments({ rootOwner: { $ne: null }, parent: { $ne: DELETED } });
 
           let peerCount = 0;
@@ -59,10 +59,10 @@ export default function getTools() {
         "and whether it has been customized. Omit key for the full system overview.",
       schema: {
         key: z.string().optional().describe("Config key to read. Omit for full system config."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true },
-      async handler({ key, userId }) {
+      async handler({ key, beingId }) {
         try {
           const { getConfigWithDefaults, getLandConfigValue, CONFIG_DEFAULTS } = await import("../../seed/landConfig.js");
 
@@ -95,16 +95,16 @@ export default function getTools() {
       schema: {
         key: z.string().describe("Config key"),
         value: z.string().describe("Value to set"),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: true },
-      async handler({ key, value, userId }) {
-        if (!await requireAdmin(userId)) {
+      async handler({ key, value, beingId }) {
+        if (!await requireAdmin(beingId)) {
           return { content: [{ type: "text", text: "Permission denied. Requires god-tier." }] };
         }
         try {
           await setLandConfigValue(key, value);
-          log.info("LandManager", `Config set: ${key} = ${value} (by ${userId})`);
+          log.info("LandManager", `Config set: ${key} = ${value} (by ${beingId})`);
           return { content: [{ type: "text", text: `Set ${key} = ${value}` }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Error: ${err.message}` }] };
@@ -116,18 +116,18 @@ export default function getTools() {
       name: "land-users",
       description: "List users on this land with their profile type and tree count.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true },
-      async handler({ userId }) {
-        if (!await requireAdmin(userId)) {
+      async handler({ beingId }) {
+        if (!await requireAdmin(beingId)) {
           return { content: [{ type: "text", text: "Permission denied." }] };
         }
         try {
-          const users = await User.find({ isRemote: { $ne: true } }).select("username isAdmin metadata").lean();
-          const { getUserMeta } = await import("../../seed/tree/userMetadata.js");
+          const users = await Being.find({ isRemote: { $ne: true } }).select("username isAdmin metadata").lean();
+          const { getBeingMeta } = await import("../../seed/tree/beingMetadata.js");
           const lines = users.map(u => {
-            const nav = getUserMeta(u, "nav");
+            const nav = getBeingMeta(u, "nav");
             const treeCount = Array.isArray(nav.roots) ? nav.roots.length : 0;
             return `${u.username} (${u.isAdmin ? "admin" : "user"}) . ${treeCount} trees`;
           });
@@ -142,10 +142,10 @@ export default function getTools() {
       name: "land-peers",
       description: "List federated peers connected to this land.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true },
-      async handler({ userId }) {
+      async handler({ beingId }) {
         try {
           const LandPeer = (await import("../../canopy/models/landPeer.js")).default;
           const peers = await LandPeer.find().lean();
@@ -162,10 +162,10 @@ export default function getTools() {
       name: "land-system-nodes",
       description: "Read the system node tree (.identity, .config, .peers, .extensions).",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true },
-      async handler({ userId }) {
+      async handler({ beingId }) {
         try {
           const systemNodes = await Node.find({ systemRole: { $ne: null } }).select("name systemRole children metadata").lean();
           const result = systemNodes.map(n => ({
@@ -186,10 +186,10 @@ export default function getTools() {
       name: "land-ext-list",
       description: "List ALL loaded extensions with version and what they provide. Always show the complete list. Never truncate.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true },
-      async handler({ userId }) {
+      async handler({ beingId }) {
         try {
           const { getLoadedManifests, getDisabledExtensions } = await import("../../extensions/loader.js");
           const manifests = getLoadedManifests();
@@ -217,11 +217,11 @@ export default function getTools() {
       description: "Install an extension from the registry. Downloads files to extensions/ directory. God-tier only. Requires restart.",
       schema: {
         name: z.string().describe("Extension name to install"),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: true },
-      async handler({ name: extName, userId }) {
-        if (!await requireAdmin(userId)) {
+      async handler({ name: extName, beingId }) {
+        if (!await requireAdmin(beingId)) {
           return { content: [{ type: "text", text: "Permission denied. Requires god-tier." }] };
         }
         try {
@@ -239,11 +239,11 @@ export default function getTools() {
       description: "Upgrade an installed extension to the latest version from the registry. Compares installed version to registry, downloads if newer. God-tier only. Requires restart.",
       schema: {
         name: z.string().describe("Extension name to upgrade"),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: true },
-      async handler({ name: extName, userId }) {
-        if (!await requireAdmin(userId)) {
+      async handler({ name: extName, beingId }) {
+        if (!await requireAdmin(beingId)) {
           return { content: [{ type: "text", text: "Permission denied. Requires god-tier." }] };
         }
         try {
@@ -292,10 +292,10 @@ export default function getTools() {
       name: "land-ext-check",
       description: "Check all installed extensions against the registry for available updates. Read-only. No changes made.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true },
-      async handler({ userId }) {
+      async handler({ beingId }) {
         try {
           const { getLoadedManifests } = await import("../../extensions/loader.js");
           const { getLandConfigValue } = await import("../../seed/landConfig.js");
@@ -366,11 +366,11 @@ export default function getTools() {
       description: "Disable an extension. It won't load on next restart. Data stays. God-tier only.",
       schema: {
         name: z.string().describe("Extension name to disable"),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
-      async handler({ name: extName, userId }) {
-        if (!await requireAdmin(userId)) {
+      async handler({ name: extName, beingId }) {
+        if (!await requireAdmin(beingId)) {
           return { content: [{ type: "text", text: "Permission denied. Requires god-tier." }] };
         }
         try {
@@ -388,11 +388,11 @@ export default function getTools() {
       description: "Re-enable a disabled extension. God-tier only. Requires restart.",
       schema: {
         name: z.string().describe("Extension name to enable"),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
-      async handler({ name: extName, userId }) {
-        if (!await requireAdmin(userId)) {
+      async handler({ name: extName, beingId }) {
+        if (!await requireAdmin(beingId)) {
           return { content: [{ type: "text", text: "Permission denied. Requires god-tier." }] };
         }
         try {
@@ -410,10 +410,10 @@ export default function getTools() {
       description: "Search the extension registry for available extensions to install.",
       schema: {
         query: z.string().optional().describe("Search query. Omit for all."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true },
-      async handler({ query, userId }) {
+      async handler({ query, beingId }) {
         try {
           const { getLandConfigValue } = await import("../../seed/landConfig.js");
           const horizonUrl = getLandConfigValue("HORIZON_URL") || "https://horizon.treeos.ai";
@@ -436,10 +436,10 @@ export default function getTools() {
       description: "Show which extensions are blocked or restricted at a node. Returns active, blocked, restricted, and inheritance chain.",
       schema: {
         nodeId: z.string().describe("Node ID to check extension scope at"),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true },
-      async handler({ nodeId, userId }) {
+      async handler({ nodeId, beingId }) {
         try {
           const { getBlockedExtensionsAtNode } = await import("../../seed/tree/extensionScope.js");
           const { getLoadedExtensionNames } = await import("../../extensions/loader.js");
@@ -461,10 +461,10 @@ export default function getTools() {
         nodeId: z.string().describe("Node ID to set extension scope on"),
         blocked: z.array(z.string()).optional().describe("Extensions to fully block (no tools, hooks, modes, metadata)"),
         restricted: z.record(z.string(), z.string()).optional().describe("Extensions to restrict. e.g. { \"food\": \"read\" } for read-only tools"),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
-      async handler({ nodeId, blocked, restricted, userId }) {
+      async handler({ nodeId, blocked, restricted, beingId }) {
         try {
           const node = await Node.findById(nodeId);
           if (!node) return { content: [{ type: "text", text: "Node not found" }] };

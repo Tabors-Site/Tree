@@ -32,7 +32,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
+import Artifact from "../../seed/models/artifact.js";
 import log from "../../seed/log.js";
 import { getLandRootId } from "../../seed/landRoot.js";
 import { SYSTEM_ROLE } from "../../seed/protocol.js";
@@ -358,12 +358,12 @@ async function createFileNode(parentNodeId, name, relPath, content, ext, mtimeMs
       name,
     }).select("_id").lean();
     if (existing) {
-      await Note.deleteMany({ nodeId: existing._id });
-      await Note.create({
+      await Artifact.deleteMany({ nodeId: existing._id });
+      await Artifact.create({
         _id: uuidv4(),
-        contentType: "text",
+        origin: "ibp",
         content,
-        userId: "00000000-0000-0000-0000-code-workspace",
+        beingId: "00000000-0000-0000-0000-code-workspace",
         nodeId: existing._id,
       });
       await Node.updateOne(
@@ -386,11 +386,11 @@ async function createFileNode(parentNodeId, name, relPath, content, ext, mtimeMs
   await fileNode.save();
   await Node.updateOne({ _id: parentNodeId }, { $addToSet: { children: fileNode._id } });
 
-  await Note.create({
+  await Artifact.create({
     _id: uuidv4(),
-    contentType: "text",
+    origin: "ibp",
     content,
-    userId: "00000000-0000-0000-0000-code-workspace",
+    beingId: "00000000-0000-0000-0000-code-workspace",
     nodeId: fileNode._id,
   });
 
@@ -599,7 +599,7 @@ async function pruneSubtree(nodeId) {
       await pruneSubtree(childId);
     }
   }
-  await Note.deleteMany({ nodeId });
+  await Artifact.deleteMany({ nodeId });
   await Node.deleteOne({ _id: nodeId });
 }
 

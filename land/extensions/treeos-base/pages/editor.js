@@ -1002,7 +1002,7 @@ async function doSave() {
     var res = await fetch(url, {
       method: method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: content, contentType: "text" }),
+      body: JSON.stringify({ content: content, origin: "ibp" }),
       credentials: "include"
     });
 

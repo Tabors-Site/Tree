@@ -1,9 +1,9 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { esc, escapeHtml } from "../../html-rendering/html/utils.js";
-import { getUserMeta } from "../../../seed/tree/userMetadata.js";
+import { getBeingMeta } from "../../../seed/tree/beingMetadata.js";
 import { resolveSlots } from "../slots.js";
 
-export function renderUserProfile({ userId, user, roots, queryString, storageUsedKB }) {
+export function renderUserProfile({ beingId, user, roots, queryString, storageUsedKB }) {
   const safeUsername = escapeHtml(user.username);
 
   const css = `
@@ -637,10 +637,10 @@ text-decoration: none;
         <h1>@${safeUsername}</h1>
 
         <div class="user-meta">
-          ${resolveSlots("user-profile-badge", { userId, queryString, user }) ||
+          ${resolveSlots("user-profile-badge", { beingId, queryString, user }) ||
             `<span class="plan-badge plan-basic">${user.isAdmin ? "Admin" : "User"}</span>`}
 
-          ${resolveSlots("user-profile-energy", { userId, queryString, user })}
+          ${resolveSlots("user-profile-energy", { beingId, queryString, user })}
 
           <span class="meta-item">
             \uD83D\uDCBE <span id="storageValue"></span>
@@ -667,15 +667,15 @@ text-decoration: none;
     </div>
 
     <!-- Extension sections (raw ideas capture, etc.) -->
-    ${resolveSlots("user-profile-sections", { userId, queryString, user })}
+    ${resolveSlots("user-profile-sections", { beingId, queryString, user })}
 
     <!-- Navigation Links -->
     <div class="glass-card nav-section">
       <h2>Quick Links</h2>
       <ul class="nav-links">
-        <li><a href="/api/v1/user/${userId}/apps${queryString}">Apps</a></li>
-        <li><a href="/api/v1/user/${userId}/llm${queryString}">LLM</a></li>
-        ${resolveSlots("user-quick-links", { userId, queryString }, { raw: true })}
+        <li><a href="/api/v1/user/${beingId}/apps${queryString}">Apps</a></li>
+        <li><a href="/api/v1/user/${beingId}/llm${queryString}">LLM</a></li>
+        ${resolveSlots("user-quick-links", { beingId, queryString }, { raw: true })}
       </ul>
     </div>
 
@@ -704,7 +704,7 @@ text-decoration: none;
 
       <form
         method="POST"
-        action="/api/v1/user/${userId}/createRoot${queryString}"
+        action="/api/v1/user/${beingId}/createRoot${queryString}"
         class="create-root-form"
       >
         <input

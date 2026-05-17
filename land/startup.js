@@ -42,12 +42,20 @@ export function onListen() {
     // Seed default stance permissions (arrival, owner) and BE config flags
     // on the land root if not already present. Idempotent; does not
     // overwrite operator configuration.
-    const { seedDefaultStancePermissions } = await import("./portal/authorize.js");
+    const { seedDefaultStancePermissions } = await import("./ibp/authorize.js");
     await seedDefaultStancePermissions();
 
     // Run seed migrations (after config is loaded, before extensions)
     const { runSeedMigrations } = await import("./seed/migrations/runner.js");
     await runSeedMigrations();
+
+    // Ensure the land's system beings (auth, land-manager, citizen)
+    // exist as real Being rows at the land root. Idempotent — runs
+    // every boot, creates only what's missing. Must come after the
+    // 0.3.0 migration so the Being model is populated before we add to it.
+    const { ensureSystemBeings } = await import("./seed/systemBeings.js");
+    const { getLandRootId } = await import("./seed/landRoot.js");
+    await ensureSystemBeings(getLandRootId());
 
     // Tree integrity check (before extensions load, after migrations)
     const { checkIntegrity } = await import("./seed/tree/integrityCheck.js");

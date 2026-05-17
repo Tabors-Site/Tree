@@ -6,9 +6,9 @@
  * caller of buildUserAiSessionKey. Extensions never import this file.
  *
  * Key shapes:
- *   user:${userId}:${rootId}:${device}       (tree; handle replaces device)
- *   user:${userId}:home:${device}
- *   user:${userId}:land:${device}
+ *   user:${beingId}:${rootId}:${device}       (tree; handle replaces device)
+ *   user:${beingId}:home:${device}
+ *   user:${beingId}:land:${device}
  *
  * `device` (from socket.clientKind, "http", or a gateway-composed
  * "${channel}:${external_id}") is the default last segment so CLI,
@@ -31,7 +31,7 @@
  *   1. `aiSessionKey` — explicit pass-through (extension joining an upstream caller's session).
  *   2. `scope` + `purpose` — extension declares a named internal lane.
  *      Produces `tree-internal:${rootId}:${purpose}[:${extra}]`,
- *      `home-internal:${userId}:${purpose}[:${extra}]`, or
+ *      `home-internal:${beingId}:${purpose}[:${extra}]`, or
  *      `land-internal:${purpose}[:${extra}]`.
  *   3. Neither — fresh `ephemeral:${uuid}`. One-shot, no cross-call memory.
  *
@@ -43,7 +43,7 @@ export function resolveInternalAiSessionKey({
   scope = null,
   purpose = null,
   extra = null,
-  userId = null,
+  beingId = null,
   rootId = null,
   makeEphemeral,
 }) {
@@ -57,8 +57,8 @@ export function resolveInternalAiSessionKey({
       return { key: `tree-internal:${rootId}:${purpose}${suffix}`, persist: true };
     }
     if (scope === "home") {
-      if (!userId || !purpose) throw new Error("resolveInternalAiSessionKey: scope='home' requires userId and purpose");
-      return { key: `home-internal:${userId}:${purpose}${suffix}`, persist: true };
+      if (!beingId || !purpose) throw new Error("resolveInternalAiSessionKey: scope='home' requires beingId and purpose");
+      return { key: `home-internal:${beingId}:${purpose}${suffix}`, persist: true };
     }
     if (scope === "land") {
       if (!purpose) throw new Error("resolveInternalAiSessionKey: scope='land' requires purpose");
@@ -78,8 +78,8 @@ function cryptoRandomUUID() {
   return require("node:crypto").randomUUID();
 }
 
-export function buildUserAiSessionKey({ userId, zone, rootId = null, device = null, handle = null }) {
-  if (!userId) throw new Error("buildUserAiSessionKey: userId required");
+export function buildUserAiSessionKey({ beingId, zone, rootId = null, device = null, handle = null }) {
+  if (!beingId) throw new Error("buildUserAiSessionKey: beingId required");
   if (!zone) throw new Error("buildUserAiSessionKey: zone required");
   // At least one of `device` or `handle` must be present. Without this
   // guard, a caller that forgets to pass device silently collapses every
@@ -101,7 +101,7 @@ export function buildUserAiSessionKey({ userId, zone, rootId = null, device = nu
   }
 
   const suffix = handle || device;
-  const u = String(userId).slice(0, 64);
+  const u = String(beingId).slice(0, 64);
   const s = String(suffix).slice(0, 64).replace(/[^a-z0-9:._-]/gi, "");
   if (!s) throw new Error("buildUserAiSessionKey: device/handle reduced to empty after sanitization");
   return `user:${u}:${anchor}:${s}`;

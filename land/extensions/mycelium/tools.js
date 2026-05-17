@@ -6,7 +6,7 @@ export default [
     name: "mycelium-status",
     description: "Mycelium routing status. Connected peers, signals routed, routing mode, buffer size.",
     schema: {
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -25,7 +25,7 @@ export default [
     description: "Recent routing decisions. Which signals went where and why.",
     schema: {
       limit: z.number().optional().default(20).describe("Max decisions to show."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

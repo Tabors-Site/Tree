@@ -14,7 +14,7 @@ import { resolveSlots } from "../slots.js";
 const APPS = [];
 export { APPS };
 
-export function renderAppsPage({ userId, username, rootMap, lifeRootId, qs }) {
+export function renderAppsPage({ beingId, username, rootMap, lifeRootId, qs }) {
   const tokenParam = qs?.token ? `&token=${esc(qs.token)}` : "";
   const tokenField = qs?.token ? `<input type="hidden" name="token" value="${esc(qs.token)}" />` : "";
 
@@ -115,7 +115,7 @@ export function renderAppsPage({ userId, username, rootMap, lifeRootId, qs }) {
     .chat-cta:hover { background: rgba(102, 126, 234, 0.25); border-color: rgba(102, 126, 234, 0.4); }
   `;
 
-  const cards = resolveSlots("apps-grid", { userId, rootMap, tokenParam, tokenField, esc });
+  const cards = resolveSlots("apps-grid", { beingId, rootMap, tokenParam, tokenField, esc });
 
   const body = `
     <div style="max-width: 960px; margin: 0 auto; padding: 12px 20px 0; display: flex; justify-content: space-between; align-items: center;">
@@ -123,7 +123,7 @@ export function renderAppsPage({ userId, username, rootMap, lifeRootId, qs }) {
         <a href="/dashboard" target="_top" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">Home</a>
         <a href="/chat" target="_top" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">Chat</a>
       </div>
-      <a href="/api/v1/user/${userId}/llm?html${tokenParam}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM</a>
+      <a href="/api/v1/user/${beingId}/llm?html${tokenParam}" style="font-size:0.85rem;color:rgba(255,255,255,0.4);text-decoration:none;">LLM</a>
     </div>
     <div class="page-header">
       <div class="page-title">Apps</div>

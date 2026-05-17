@@ -143,7 +143,7 @@ This determines what the TALK handler does after appending the message and trigg
 The TALK handler holds the WebSocket ack open. When the summoning completes, the protocol writes the response inline as the ack content.
 
 ```
-client -> portal:talk { stance: ..., message: { intent: "chat", ... } }
+client -> ibp:talk { stance: ..., message: { intent: "chat", ... } }
   land appends to inbox, triggers summoning (synchronously)
     summoning runs, produces response
   land returns response inline as the ack
@@ -157,7 +157,7 @@ Use sync for beings that respond fast: Workers producing direct artifacts, Oracl
 The TALK handler acks immediately with `{ status: "accepted" }`. The summoning runs (now or later). When it produces a response, the protocol writes a new TALK back at the sender's inbox with `inReplyTo` set.
 
 ```
-client -> portal:talk { stance: ..., message: { intent: "chat", ... } }
+client -> ibp:talk { stance: ..., message: { intent: "chat", ... } }
   land appends to inbox, triggers summoning, immediately acks
 client <- ack { status: "accepted" }
 ... time passes ...
@@ -177,7 +177,7 @@ The TALK handler acks immediately with `{ status: "accepted" }`. No response is 
 Place-intent beings often use `none`. So do logger-style embodiments and event-sink positions.
 
 ```
-client -> portal:talk { address: ..., message: { intent: "place", ... } }
+client -> ibp:talk { address: ..., message: { intent: "place", ... } }
   land appends to inbox, triggers summoning, acks
 client <- ack { status: "accepted" }
 ... summoning runs, does its work, ends ...

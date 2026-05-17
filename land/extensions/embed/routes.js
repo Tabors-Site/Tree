@@ -9,7 +9,7 @@ const router = express.Router();
 router.get("/node/:nodeId/related", authenticate, async (req, res) => {
   try {
     const searchAll = req.query.all === "true" || req.query.all === "1";
-    const results = await findRelatedAtNode(req.params.nodeId, req.userId, req.query.rootId || null, searchAll);
+    const results = await findRelatedAtNode(req.params.nodeId, req.beingId, req.query.rootId || null, searchAll);
     sendOk(res, { count: results.length, results });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);

@@ -1,4 +1,4 @@
-import { getUserMeta, addToUserMetaSet, batchSetUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta, addToBeingMetaSet, batchSetBeingMeta } from "../../seed/tree/beingMetadata.js";
 import log from "../../seed/log.js";
 
 let User, Node;
@@ -16,11 +16,11 @@ const MAX_RECENT = 5;
  * Get all root IDs for a user from metadata.nav.roots.
  * Returns array of root ID strings.
  */
-export async function getUserRoots(userId) {
-  if (!userId) return [];
-  const user = await User.findById(userId).select("metadata").lean();
+export async function getUserRoots(beingId) {
+  if (!beingId) return [];
+  const user = await Being.findById(beingId).select("metadata").lean();
   if (!user) return [];
-  const nav = getUserMeta(user, "nav");
+  const nav = getBeingMeta(user, "nav");
   return Array.isArray(nav.roots) ? nav.roots : [];
 }
 
@@ -28,8 +28,8 @@ export async function getUserRoots(userId) {
  * Get roots with resolved names for API/rendering.
  * Returns array of { _id, name, visibility }.
  */
-export async function getUserRootsWithNames(userId) {
-  const rootIds = await getUserRoots(userId);
+export async function getUserRootsWithNames(beingId) {
+  const rootIds = await getUserRoots(beingId);
   if (rootIds.length === 0) return [];
 
   const nodes = await Node.find({ _id: { $in: rootIds }, parent: { $ne: "deleted" } })
@@ -48,11 +48,11 @@ export async function getUserRootsWithNames(userId) {
 /**
  * Add a root to a user's navigation list.
  */
-export async function addRoot(userId, rootId) {
-  if (!userId || !rootId) return;
+export async function addRoot(beingId, rootId) {
+  if (!beingId || !rootId) return;
   try {
-    await addToUserMetaSet(userId, "nav", "roots", String(rootId));
-    log.info("Navigation", `addRoot: saved root ${rootId} for user ${userId}`);
+    await addToBeingMetaSet(beingId, "nav", "roots", String(rootId));
+    log.info("Navigation", `addRoot: saved root ${rootId} for user ${beingId}`);
   } catch (err) {
     log.warn("Navigation", `addRoot failed: ${err.message}`);
   }
@@ -61,10 +61,10 @@ export async function addRoot(userId, rootId) {
 /**
  * Remove a root from a user's navigation list.
  */
-export async function removeRoot(userId, rootId) {
-  if (!userId || !rootId) return;
-  await User.updateOne(
-    { _id: String(userId) },
+export async function removeRoot(beingId, rootId) {
+  if (!beingId || !rootId) return;
+  await Being.updateOne(
+    { _id: String(beingId) },
     { $pull: { "metadata.nav.roots": String(rootId) } },
   );
 }
@@ -75,14 +75,14 @@ export async function removeRoot(userId, rootId) {
  * Update recent roots in metadata.nav.recentRoots.
  * Pushes to front, deduplicates, keeps MAX_RECENT entries.
  */
-export async function updateRecentRoots(userId, rootId) {
-  if (!userId || !rootId) return;
+export async function updateRecentRoots(beingId, rootId) {
+  if (!beingId || !rootId) return;
 
   const node = await Node.findById(rootId).select("name").lean();
   if (!node) return;
 
   // Read current recents with lean (read-only, no save conflict)
-  const user = await User.findById(userId).select("metadata").lean();
+  const user = await Being.findById(beingId).select("metadata").lean();
   if (!user) return;
 
   const nav = (user.metadata instanceof Map ? user.metadata.get("nav") : user.metadata?.nav) || {};
@@ -93,25 +93,25 @@ export async function updateRecentRoots(userId, rootId) {
   if (recents.length > MAX_RECENT) recents = recents.slice(0, MAX_RECENT);
 
   // Atomic write to just the recentRoots field
-  await batchSetUserMeta(userId, "nav", { recentRoots: recents });
+  await batchSetBeingMeta(beingId, "nav", { recentRoots: recents });
 }
 
 /**
  * Get recent roots for a user. Returns array of { rootId, rootName, lastVisitedAt }.
  */
-export async function getRecentRootsByUserId(userId) {
-  if (!userId) return [];
-  const user = await User.findById(userId).select("metadata").lean();
+export async function getRecentRootsByUserId(beingId) {
+  if (!beingId) return [];
+  const user = await Being.findById(beingId).select("metadata").lean();
   if (!user) return [];
-  const nav = getUserMeta(user, "nav");
+  const nav = getBeingMeta(user, "nav");
   return nav.recentRoots || [];
 }
 
 /**
  * Get recent roots with resolved names (names may have changed since stored).
  */
-export async function getRecentRootsWithNames(userId) {
-  const recents = await getRecentRootsByUserId(userId);
+export async function getRecentRootsWithNames(beingId) {
+  const recents = await getRecentRootsByUserId(beingId);
   return Promise.all(
     recents.map(async (r) => {
       let name = r.rootName;

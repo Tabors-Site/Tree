@@ -14,13 +14,13 @@ import log from "../../seed/log.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _Node = null;
-let _Note = null;
+let _Artifact = null;
 let _runChat = null;
 let _metadata = null;
 
-export function configure({ Node, Note, runChat, metadata }) {
+export function configure({ Node, Artifact, runChat, metadata }) {
   _Node = Node;
-  _Note = Note;
+  _Artifact = Note;
   _runChat = runChat;
   _metadata = metadata;
 }
@@ -179,11 +179,11 @@ export function buildExerciseListForPrompt(fitnessNodes) {
 
 // ── Workout parsing (one LLM call, all modalities) ──
 
-export async function parseWorkout(message, userId, username, rootId) {
+export async function parseWorkout(message, beingId, username, rootId) {
   if (!_runChat) return null;
 
   const { answer } = await _runChat({
-    userId,
+    beingId,
     username,
     message,
     mode: "tree:fitness-log",
@@ -289,7 +289,7 @@ export async function deliverToExerciseNodes(fitnessNodes, parsed) {
         const groupChildren = await _Node.find({ parent: modalityNodeId }).select("_id name").lean();
         groupNode = groupChildren.find(c => c.name.toLowerCase() === group.toLowerCase());
         if (!groupNode) {
-          const created = await addGroupNode({ parentId: modalityNodeId, name: group, userId: parsed._userId || "SYSTEM" });
+          const created = await addGroupNode({ parentId: modalityNodeId, name: group, beingId: parsed._userId || "SYSTEM" });
           groupNode = { _id: created.id, name: created.name };
           log.info("Fitness", `Auto-created group "${group}" under ${modality}`);
         }
@@ -304,7 +304,7 @@ export async function deliverToExerciseNodes(fitnessNodes, parsed) {
           unit: modality === "home" ? "bodyweight" : (parsed._weightUnit || "lb"),
           sets,
           rootId: fitnessNodes._rootId,
-          userId: parsed._userId || "SYSTEM",
+          beingId: parsed._userId || "SYSTEM",
         });
         log.info("Fitness", `Auto-created exercise "${exercise.name}" under ${group}`);
 
@@ -440,7 +440,7 @@ async function updateRunPRs(prsNode, exercise) {
 
 // ── Write session to History node ──
 
-export async function recordSessionHistory(historyNodeId, parsed, delivered, userId, ctx = {}) {
+export async function recordSessionHistory(historyNodeId, parsed, delivered, beingId, ctx = {}) {
   if (!historyNodeId) return null;
 
   const modalities = [...new Set(delivered.map(d => d.modality))];
@@ -492,12 +492,12 @@ export async function recordSessionHistory(historyNodeId, parsed, delivered, use
   }
 
   try {
-    const { createNote } = await import("../../seed/tree/notes.js");
-    await createNote({
+    const { createArtifact } = await import("../../seed/tree/artifacts.js");
+    await createArtifact({
       nodeId: historyNodeId,
       content: JSON.stringify(record),
-      contentType: "text",
-      userId,
+      origin: "ibp",
+      beingId,
       wasAi: ctx.chatId != null || ctx.wasAi === true,
       chatId: ctx.chatId ?? null,
       sessionId: ctx.sessionId ?? null,
@@ -689,8 +689,8 @@ export async function getWeeklyStats(rootId) {
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   try {
-    const { getNotes } = await import("../../seed/tree/notes.js");
-    const notes = await _Note.find({
+    const { getArtifacts } = await import("../../seed/tree/artifacts.js");
+    const notes = await _Artifact.find({
       nodeId: nodes.history.id,
       createdAt: { $gte: weekAgo },
     }).select("content").lean();
@@ -724,37 +724,37 @@ export async function getWeeklyStats(rootId) {
 //   "groups" / "muscle groups"            -> group nodes (Chest, Back, Legs)
 //   (no match, default)                   -> every tracked exercise
 
-export async function resolveSet({ rootId, quantifier, temporalScope, userId, message }) {
+export async function resolveSet({ rootId, quantifier, temporalScope, beingId, message }) {
   if (!_Node) return [];
 
   const msg = (message || "").toLowerCase();
 
   // Workouts / sessions: session history notes
   if (/\b(workouts?|sessions?|trainings?)\b/.test(msg)) {
-    return resolveWorkoutSessions(rootId, temporalScope, userId);
+    return resolveWorkoutSessions(rootId, temporalScope, beingId);
   }
 
   // Groups / muscle groups: group nodes (intermediate depth)
   if (/\b(muscle\s+groups?|groups?)\b/.test(msg)) {
-    return resolveGroups(rootId, userId);
+    return resolveGroups(rootId, beingId);
   }
 
   // Modality-specific filters
   if (/\b(runs?|running|miles?|mileage|jogs?)\b/.test(msg)) {
-    return resolveExercisesByModality(rootId, "running", userId, quantifier);
+    return resolveExercisesByModality(rootId, "running", beingId, quantifier);
   }
   if (/\b(gym|lifts?|lifting|weights?)\b/.test(msg)) {
-    return resolveExercisesByModality(rootId, "gym", userId, quantifier);
+    return resolveExercisesByModality(rootId, "gym", beingId, quantifier);
   }
   if (/\bhome\b/.test(msg)) {
-    return resolveExercisesByModality(rootId, "home", userId, quantifier);
+    return resolveExercisesByModality(rootId, "home", beingId, quantifier);
   }
 
   // Default: every tracked exercise across all modalities
-  return resolveAllExercises(rootId, userId, quantifier);
+  return resolveAllExercises(rootId, beingId, quantifier);
 }
 
-async function resolveAllExercises(rootId, userId, quantifier) {
+async function resolveAllExercises(rootId, beingId, quantifier) {
   const nodes = await findFitnessNodes(rootId);
   if (!nodes) return [];
 
@@ -768,10 +768,10 @@ async function resolveAllExercises(rootId, userId, quantifier) {
       }
     }
   }
-  return enrichItems(exerciseIds, userId, quantifier);
+  return enrichItems(exerciseIds, beingId, quantifier);
 }
 
-async function resolveExercisesByModality(rootId, modality, userId, quantifier) {
+async function resolveExercisesByModality(rootId, modality, beingId, quantifier) {
   const nodes = await findFitnessNodes(rootId);
   if (!nodes) return [];
 
@@ -785,17 +785,17 @@ async function resolveExercisesByModality(rootId, modality, userId, quantifier) 
       }
     }
   }
-  return enrichItems(exerciseIds, userId, quantifier);
+  return enrichItems(exerciseIds, beingId, quantifier);
 }
 
-async function resolveGroups(rootId, userId) {
+async function resolveGroups(rootId, beingId) {
   const nodes = await findFitnessNodes(rootId);
   if (!nodes?.groups?.length) return [];
   const items = nodes.groups.map(g => ({ id: g.id, name: g.name, modality: g.modality }));
-  return enrichItems(items, userId, null);
+  return enrichItems(items, beingId, null);
 }
 
-async function resolveWorkoutSessions(rootId, temporalScope, userId) {
+async function resolveWorkoutSessions(rootId, temporalScope, beingId) {
   const nodes = await findFitnessNodes(rootId);
   if (!nodes?.history) return [];
 
@@ -816,7 +816,7 @@ async function resolveWorkoutSessions(rootId, temporalScope, userId) {
   }
 
   try {
-    const notes = await _Note.find({
+    const notes = await _Artifact.find({
       nodeId: historyId,
       createdAt: { $gte: startDate },
     }).sort({ createdAt: -1 }).select("_id content createdAt").lean();
@@ -839,14 +839,14 @@ async function resolveWorkoutSessions(rootId, temporalScope, userId) {
   }
 }
 
-async function enrichItems(items, userId, quantifier) {
+async function enrichItems(items, beingId, quantifier) {
   if (items.length === 0) return [];
 
   const { getContextForAi } = await import("../../seed/tree/treeFetch.js");
   const enriched = [];
   for (const item of items) {
     try {
-      const ctx = await getContextForAi(item.id, { userId });
+      const ctx = await getContextForAi(item.id, { beingId });
       enriched.push({ nodeId: item.id, name: item.name, context: ctx });
     } catch {
       enriched.push({ nodeId: item.id, name: item.name, context: { name: item.name, modality: item.modality } });

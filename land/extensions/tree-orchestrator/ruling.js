@@ -58,7 +58,7 @@ async function governingExports() {
  *   modeKey         "tree:governing-planner", "tree:governing-foreman", etc.
  *   message         The briefing / wakeup the spawned role reads as
  *                   its first user message.
- *   userId, username
+ *   beingId, username
  *   rootId, nodeId  Position context for the spawned session.
  *   parentChatId    The calling chat's chatId (from tool args.chatId).
  *                   When set, the spawned chat is linked as a child
@@ -126,7 +126,7 @@ function hasSubstantiveProse(text) {
 export async function spawnRoleAsChainstep({
   modeKey,
   message,
-  userId,
+  beingId,
   username,
   rootId,
   nodeId,
@@ -142,8 +142,8 @@ export async function spawnRoleAsChainstep({
   // post-spawn synthesis from the parent is visible.
   socket,
 }) {
-  if (!modeKey || !userId) {
-    log.warn("Ruling", "spawnRoleAsChainstep: modeKey and userId required");
+  if (!modeKey || !beingId) {
+    log.warn("Ruling", "spawnRoleAsChainstep: modeKey and beingId required");
     return null;
   }
   const startedAt = Date.now();
@@ -171,7 +171,7 @@ export async function spawnRoleAsChainstep({
   if (socket?.emit) {
     try {
       const { buildSocketBridge } = await import("./dispatch.js");
-      bridgeCallbacks = buildSocketBridge(socket, signal, userId);
+      bridgeCallbacks = buildSocketBridge(socket, signal, beingId);
     } catch (err) {
       log.debug("Ruling", `socket bridge build skipped: ${err.message}`);
     }
@@ -180,7 +180,7 @@ export async function spawnRoleAsChainstep({
   try {
     const { runChat } = await import("../../seed/llm/conversation.js");
     const result = await runChat({
-      userId,
+      beingId,
       username,
       message: message || "(no briefing)",
       mode: modeKey,
@@ -229,7 +229,7 @@ export async function spawnRoleAsChainstep({
     // chainstep's outcome — the answer is what flows back regardless.
     const exitText = result?.answer || result?.content || result?._allContent || null;
     if (
-      userId &&
+      beingId &&
       exitText &&
       isGovernanceSubRole(modeKey) &&
       hasSubstantiveProse(exitText)
@@ -237,7 +237,7 @@ export async function spawnRoleAsChainstep({
       try {
         const { WS } = await import("../../seed/protocol.js");
         const { emitToUser } = await import("../../seed/ws/websocket.js");
-        emitToUser(String(userId), WS.CHAINSTEP_COMPLETED, {
+        emitToUser(String(beingId), WS.CHAINSTEP_COMPLETED, {
           role: roleLabelFromModeKey(modeKey),
           modeKey,
           exitText: stripMarkerTokens(String(exitText)).slice(0, 4000),
@@ -286,7 +286,7 @@ export async function spawnRoleAsChainstep({
 export function spawnRoleAsChainstepAsync({
   modeKey,
   message,
-  userId,
+  beingId,
   username,
   rootId,
   nodeId,
@@ -309,8 +309,8 @@ export function spawnRoleAsChainstepAsync({
   // and decide whether to re-spawn if needed.
   releaseClaimKey = null,
 }) {
-  if (!modeKey || !userId) {
-    log.warn("Ruling", "spawnRoleAsChainstepAsync: modeKey and userId required");
+  if (!modeKey || !beingId) {
+    log.warn("Ruling", "spawnRoleAsChainstepAsync: modeKey and beingId required");
     return null;
   }
   if (!completionHookName) {
@@ -332,7 +332,7 @@ export function spawnRoleAsChainstepAsync({
   // from any parent signal too.
   let spawnAbortController = null;
   let unregisterAbort = null;
-  if (userId) {
+  if (beingId) {
     spawnAbortController = new AbortController();
     if (signal) {
       // If the caller's signal aborts later, propagate to our spawn.
@@ -340,7 +340,7 @@ export function spawnRoleAsChainstepAsync({
       else signal.addEventListener("abort", () => spawnAbortController.abort(), { once: true });
     }
     import("./spawnAborts.js").then((m) => {
-      unregisterAbort = m.registerSpawnAbort(String(userId), spawnAbortController, `${kind || modeKey}:${spawnId.slice(0, 8)}`);
+      unregisterAbort = m.registerSpawnAbort(String(beingId), spawnAbortController, `${kind || modeKey}:${spawnId.slice(0, 8)}`);
     }).catch(() => {});
   }
   const effectiveSignal = spawnAbortController ? spawnAbortController.signal : signal;
@@ -361,7 +361,7 @@ export function spawnRoleAsChainstepAsync({
   // so events reach whichever socket(s) the user has open RIGHT
   // NOW — including the dashboard chat panel viewing the rulership
   // scope, the CLI, multiple browser tabs, etc.
-  if (userId && nodeId) {
+  if (beingId && nodeId) {
     // spawnRoleAsChainstepAsync is sync (returns spawnId immediately),
     // so the start-side emit can't await imports. Use the dynamic
     // import's then() chain to fire-and-forget the LIFECYCLE_ACTIVE
@@ -371,7 +371,7 @@ export function spawnRoleAsChainstepAsync({
       import("../../seed/protocol.js"),
     ]).then(([wsMod, protoMod]) => {
       try {
-        wsMod.emitToUser(String(userId), protoMod.WS.LIFECYCLE_ACTIVE, {
+        wsMod.emitToUser(String(beingId), protoMod.WS.LIFECYCLE_ACTIVE, {
           active: true,
           rulerNodeId: String(nodeId),
           rootId: rootId ? String(rootId) : null,
@@ -387,16 +387,16 @@ export function spawnRoleAsChainstepAsync({
   }
 
   // Build socket bridge so the spawned role's events flow to the
-  // user — same shape as spawnRoleAsChainstep. Pass userId so the
+  // user — same shape as spawnRoleAsChainstep. Pass beingId so the
   // bridge can use emitToUser fan-out (reaches every live socket
   // the user has, including ones connected after the spawn started).
-  // Without userId the bridge falls back to direct socket emit
+  // Without beingId the bridge falls back to direct socket emit
   // (legacy single-socket behavior).
   const bridgeReady = (async () => {
-    if (!userId && !socket?.emit) return {};
+    if (!beingId && !socket?.emit) return {};
     try {
       const { buildSocketBridge } = await import("./dispatch.js");
-      return buildSocketBridge(socket, effectiveSignal, userId) || {};
+      return buildSocketBridge(socket, effectiveSignal, beingId) || {};
     } catch (err) {
       log.debug("Ruling", `socket bridge build skipped: ${err.message}`);
       return {};
@@ -414,7 +414,7 @@ export function spawnRoleAsChainstepAsync({
     try {
       const { runChat } = await import("../../seed/llm/conversation.js");
       const result = await runChat({
-        userId,
+        beingId,
         username,
         message: message || "(no briefing)",
         mode: modeKey,
@@ -455,7 +455,7 @@ export function spawnRoleAsChainstepAsync({
     //       "10 contracts ratified — 1 global, 5 shared, 4 local").
     //       Without (b), the user only sees a tool-call line and
     //       no readable account of what was produced.
-    if (userId && isGovernanceSubRole(modeKey) && !error) {
+    if (beingId && isGovernanceSubRole(modeKey) && !error) {
       try {
         const { WS } = await import("../../seed/protocol.js");
         const { emitToUser } = await import("../../seed/ws/websocket.js");
@@ -521,7 +521,7 @@ export function spawnRoleAsChainstepAsync({
           }
         }
         if (bubbleText) {
-          emitToUser(String(userId), WS.CHAINSTEP_COMPLETED, {
+          emitToUser(String(beingId), WS.CHAINSTEP_COMPLETED, {
             role,
             modeKey,
             exitText: bubbleText,
@@ -563,11 +563,11 @@ export function spawnRoleAsChainstepAsync({
     // start-side emit above) so the clear reaches whatever sockets
     // the user has open right now — not just the one captured at
     // spawn time.
-    if (userId && nodeId) {
+    if (beingId && nodeId) {
       try {
         const { emitToUser } = await import("../../seed/ws/websocket.js");
         const { WS } = await import("../../seed/protocol.js");
-        emitToUser(String(userId), WS.LIFECYCLE_ACTIVE, {
+        emitToUser(String(beingId), WS.LIFECYCLE_ACTIVE, {
           active: false,
           rulerNodeId: String(nodeId),
           rootId: rootId ? String(rootId) : null,
@@ -592,7 +592,7 @@ export function spawnRoleAsChainstepAsync({
         spawnId,
         rulerNodeId: nodeId ? String(nodeId) : null,
         rootId: rootId ? String(rootId) : null,
-        userId: userId ? String(userId) : null,
+        beingId: beingId ? String(beingId) : null,
         username: username || null,
         kind: kind || null,
         parentChatId: parentChatId || null,
@@ -651,7 +651,7 @@ async function swarmExports() {
  * is cheap. Called at the top of every runRulerTurn so the Ruler
  * always has a coherent substrate to read.
  */
-async function ensureRulerScope({ scopeNodeId, userId, message, dispatchOrigin }) {
+async function ensureRulerScope({ scopeNodeId, beingId, message, dispatchOrigin }) {
   const governing = await governingExports();
   if (!governing || !scopeNodeId) return null;
 
@@ -799,7 +799,7 @@ export async function runRulerTurn({
   visitorId,
   message,
   username,
-  userId,
+  beingId,
   rootId,
   currentNodeId,
   signal,
@@ -841,7 +841,7 @@ export async function runRulerTurn({
   }
 
   const governing = await ensureRulerScope({
-    scopeNodeId, userId, message, dispatchOrigin,
+    scopeNodeId, beingId, message, dispatchOrigin,
   });
   if (!governing) {
     log.warn("Ruling", "governing extension unavailable; cannot run Ruler turn");
@@ -868,7 +868,7 @@ export async function runRulerTurn({
   // own snapshot via state/rulerSnapshot; we don't need to assemble
   // anything special here.
   await switchMode(visitorId, "tree:governing-ruler", {
-    username, userId, rootId,
+    username, beingId, rootId,
     currentNodeId: scopeNodeId,
     clearHistory: false,
   });
@@ -883,7 +883,7 @@ export async function runRulerTurn({
   const rulerResult = await runSteppedMode(
     visitorId, "tree:governing-ruler", message,
     {
-      username, userId, rootId, signal, slot,
+      username, beingId, rootId, signal, slot,
       readOnly: false, onToolLoopCheckpoint, socket,
       sessionId, rootChatId, rt,
       currentNodeId: scopeNodeId,
@@ -985,7 +985,7 @@ export async function runForemanTurn({
   visitorId,
   message,
   username,
-  userId,
+  beingId,
   rootId,
   currentNodeId,
   signal,
@@ -1020,7 +1020,7 @@ export async function runForemanTurn({
   setForemanWakeup(visitorId, wakeup);
 
   await switchMode(visitorId, "tree:governing-foreman", {
-    username, userId, rootId,
+    username, beingId, rootId,
     currentNodeId: scopeNodeId,
     clearHistory: false,
   });
@@ -1033,7 +1033,7 @@ export async function runForemanTurn({
   const foremanResult = await runSteppedMode(
     visitorId, "tree:governing-foreman", message || "(no user message)",
     {
-      username, userId, rootId, signal, slot,
+      username, beingId, rootId, signal, slot,
       readOnly: false, onToolLoopCheckpoint, socket,
       sessionId, rootChatId, rt,
       currentNodeId: scopeNodeId,
@@ -1140,7 +1140,7 @@ export async function runForemanTurn({
 
   const dispatched = await dispatchForemanDecision({
     decision, scopeNodeId,
-    visitorId, username, userId, rootId,
+    visitorId, username, beingId, rootId,
     signal, slot, socket, sessionId, rootChatId, rt,
     readOnly, onToolLoopCheckpoint,
   });
@@ -1156,7 +1156,7 @@ export async function runForemanTurn({
 
 async function dispatchForemanDecision({
   decision, scopeNodeId,
-  visitorId, username, userId, rootId,
+  visitorId, username, beingId, rootId,
   signal, slot, socket, sessionId, rootChatId, rt,
   readOnly, onToolLoopCheckpoint,
 }) {
@@ -1231,7 +1231,7 @@ async function dispatchForemanDecision({
             rulerNodeId: scopeNodeId,
             branchName: decision.branchName,
             reason: decision.reason,
-            visitorId, username, userId, rootId,
+            visitorId, username, beingId, rootId,
             signal, slot, socket, sessionId, rootChatId, rt,
             onToolLoopCheckpoint,
           });
@@ -1256,7 +1256,7 @@ async function dispatchForemanDecision({
       return await runRulerTurn({
         visitorId,
         message: escalationMessage,
-        username, userId, rootId, currentNodeId: scopeNodeId,
+        username, beingId, rootId, currentNodeId: scopeNodeId,
         signal, slot, socket, sessionId, rootChatId, rt,
         readOnly, onToolLoopCheckpoint,
         dispatchOrigin: "foreman-escalation",
@@ -1384,7 +1384,7 @@ async function dispatchForemanDecision({
       try {
         const { dispatchResumePlan } = await import("./dispatch.js");
         const summary = await dispatchResumePlan(scopeNodeId, {
-          visitorId, userId, username, rootId,
+          visitorId, beingId, username, rootId,
           sessionId, signal, slot, socket, onToolLoopCheckpoint, rt,
           rootChatId,
           // No domain hint — sub-Rulers' own modes are stamped on
@@ -1397,7 +1397,7 @@ async function dispatchForemanDecision({
           return await runForemanTurn({
             visitorId,
             message: "Resume found no pending work; decide whether to freeze (completed) or escalate.",
-            username, userId, rootId, currentNodeId: scopeNodeId,
+            username, beingId, rootId, currentNodeId: scopeNodeId,
             signal, slot, socket, sessionId, rootChatId, rt,
             readOnly, onToolLoopCheckpoint,
             wakeup: { reason: "resume-found-no-work", payload: decision.reason || null },

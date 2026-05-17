@@ -20,7 +20,7 @@ export default {
     "(defaults to ./backups). All operations are admin-only.",
 
   needs: {
-    models: ["Node", "User", "Note", "Contribution"],
+    models: ["Node", "User", "Artifact", "Contribution"],
   },
   optional: {
     models: ["Chat"],

@@ -12,11 +12,11 @@ export async function init(core) {
 
   // ── Hook: afterNodeCreate ──
   // When a user creates a tree root, add it to their navigation list.
-  core.hooks.register("afterNodeCreate", async ({ node, userId }) => {
-    if (!node || !userId) return;
-    if (node.rootOwner && String(node.rootOwner) === String(userId)) {
-      log.info("Navigation", `Adding root "${node.name || node._id}" to user ${userId}`);
-      await addRoot(String(userId), String(node._id));
+  core.hooks.register("afterNodeCreate", async ({ node, beingId }) => {
+    if (!node || !beingId) return;
+    if (node.rootOwner && String(node.rootOwner) === String(beingId)) {
+      log.info("Navigation", `Adding root "${node.name || node._id}" to user ${beingId}`);
+      await addRoot(String(beingId), String(node._id));
     }
   }, "navigation");
 
@@ -73,21 +73,21 @@ export async function init(core) {
 
   // ── Hook: afterNavigate ──
   // Track recently visited trees.
-  core.hooks.register("afterNavigate", async ({ userId, rootId }) => {
-    if (!userId || !rootId) return;
-    await updateRecentRoots(userId, rootId);
-    const roots = await getRecentRootsWithNames(userId);
-    core.websocket.emitToUser(userId, RECENT_ROOTS_EVENT, { roots });
+  core.hooks.register("afterNavigate", async ({ beingId, rootId }) => {
+    if (!beingId || !rootId) return;
+    await updateRecentRoots(beingId, rootId);
+    const roots = await getRecentRootsWithNames(beingId);
+    core.websocket.emitToUser(beingId, RECENT_ROOTS_EVENT, { roots });
   }, "navigation");
 
   // ── Socket handler: getRecentRoots ──
-  core.websocket.registerSocketHandler("getRecentRoots", async ({ socket, userId }) => {
-    if (!userId) {
+  core.websocket.registerSocketHandler("getRecentRoots", async ({ socket, beingId }) => {
+    if (!beingId) {
       socket.emit(RECENT_ROOTS_EVENT, { roots: [] });
       return;
     }
     try {
-      const roots = await getRecentRootsWithNames(userId);
+      const roots = await getRecentRootsWithNames(beingId);
       socket.emit(RECENT_ROOTS_EVENT, { roots });
     } catch (err) {
       log.error("Navigation", "Failed to get recent roots:", err.message);

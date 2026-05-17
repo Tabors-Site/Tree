@@ -8,7 +8,7 @@
  */
 
 import log from "../../seed/log.js";
-import { getUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 import {
   configure,
   scanTree,
@@ -103,7 +103,7 @@ export async function init(core) {
   // ── enrichContext ──
   // Inject timeline and reliability data so the AI knows what's due.
 
-  core.hooks.register("enrichContext", async ({ context, node, meta, userId }) => {
+  core.hooks.register("enrichContext", async ({ context, node, meta, beingId }) => {
     if (!node?._id) return;
 
     // Find the root for this node
@@ -149,13 +149,13 @@ export async function init(core) {
 
     // Phase suppression: during attention, skip upcoming (only show due/overdue)
     let suppressUpcoming = false;
-    if (userId) {
+    if (beingId) {
       try {
         const User = core.models.User;
         if (User) {
-          const user = await User.findById(userId).select("metadata").lean();
+          const user = await Being.findById(beingId).select("metadata").lean();
           if (user) {
-            const phaseMeta = getUserMeta(user, "phase");
+            const phaseMeta = getBeingMeta(user, "phase");
             if (phaseMeta?.currentPhase === "attention") {
               // Check config
               const configNode = await core.models.Node.findOne({

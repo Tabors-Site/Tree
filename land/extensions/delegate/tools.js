@@ -8,12 +8,12 @@ export default [
       "Show pending delegate suggestions for this tree. Who should look at what.",
     schema: {
       nodeId: z.string().describe("The tree root ID."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    handler: async ({ nodeId, userId }) => {
+    handler: async ({ nodeId, beingId }) => {
       try {
         const suggestions = await getSuggestions(nodeId, null);
         if (suggestions.length === 0) {
@@ -43,14 +43,14 @@ export default [
     schema: {
       nodeId: z.string().describe("The tree root ID."),
       suggestionId: z.string().describe("The suggestion ID to dismiss."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    handler: async ({ nodeId, suggestionId, userId }) => {
+    handler: async ({ nodeId, suggestionId, beingId }) => {
       try {
-        const result = await dismissSuggestion(nodeId, suggestionId, userId);
+        const result = await dismissSuggestion(nodeId, suggestionId, beingId);
         if (!result) return { content: [{ type: "text", text: "Suggestion not found." }] };
         return { content: [{ type: "text", text: `Dismissed: ${result.nodeName}` }] };
       } catch (err) {
@@ -64,14 +64,14 @@ export default [
     schema: {
       nodeId: z.string().describe("The tree root ID."),
       suggestionId: z.string().describe("The suggestion ID to accept."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    handler: async ({ nodeId, suggestionId, userId }) => {
+    handler: async ({ nodeId, suggestionId, beingId }) => {
       try {
-        const result = await acceptSuggestion(nodeId, suggestionId, userId);
+        const result = await acceptSuggestion(nodeId, suggestionId, beingId);
         if (!result) return { content: [{ type: "text", text: "Suggestion not found." }] };
         return { content: [{ type: "text", text: `Accepted: ${result.nodeName}. Navigate there to start.` }] };
       } catch (err) {

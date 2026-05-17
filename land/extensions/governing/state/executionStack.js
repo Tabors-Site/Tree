@@ -725,8 +725,8 @@ export async function buildArtifactEvidence(rulerNodeId) {
   // Probe the Ruler scope's own notes. getNotes returns { notes: [...] }.
   let scopeNotes = [];
   try {
-    const { getNotes } = await import("../../../seed/tree/notes.js");
-    const got = await getNotes({ nodeId: String(node._id), limit: 50 });
+    const { getArtifacts } = await import("../../../seed/tree/artifacts.js");
+    const got = await getArtifacts({ nodeId: String(node._id), limit: 50 });
     scopeNotes = Array.isArray(got?.notes) ? got.notes : [];
   } catch (err) {
     log.debug("Governing/Evidence", `scope notes fetch failed: ${err.message}`);
@@ -744,14 +744,14 @@ export async function buildArtifactEvidence(rulerNodeId) {
         .select("_id name type")
         .lean();
       const byId = new Map(childNodes.map((c) => [String(c._id), c]));
-      const { getNotes } = await import("../../../seed/tree/notes.js");
+      const { getArtifacts } = await import("../../../seed/tree/artifacts.js");
       for (const cid of probeIds) {
         const c = byId.get(cid);
         if (!c) continue;
         let noteCount = 0;
         let firstNotePreview = null;
         try {
-          const got = await getNotes({ nodeId: cid, limit: 5 });
+          const got = await getArtifacts({ nodeId: cid, limit: 5 });
           const notes = Array.isArray(got?.notes) ? got.notes : [];
           noteCount = notes.length;
           // getNotes orders DESC by createdAt — most recent first.

@@ -7,7 +7,7 @@
 
 import { renderAppDashboard } from "../../html-rendering/html/appDashboard.js";
 
-export function renderRelationshipsDashboard({ rootId, rootName, people, recentInteractions, ideas, token, userId, inApp }) {
+export function renderRelationshipsDashboard({ rootId, rootName, people, recentInteractions, ideas, token, beingId, inApp }) {
   const allPeople = people || [];
   const recent = recentInteractions || [];
   const allIdeas = ideas || [];
@@ -110,7 +110,7 @@ export function renderRelationshipsDashboard({ rootId, rootName, people, recentI
     rootId,
     rootName: rootName || "Relationships",
     token,
-    userId,
+    beingId,
     inApp: !!inApp,
     subtitle: new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
     hero,

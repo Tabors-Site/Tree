@@ -35,7 +35,7 @@ export async function sendRemoteInvite({ userInvitingId, canopyId, rootId, Node,
     throw new Error("You must be an owner or contributor to invite users");
   }
 
-  const invitingUser = await User.findById(userInvitingId).select("username").lean();
+  const invitingUser = await Being.findById(userInvitingId).select("username").lean();
   if (!invitingUser) throw new Error("Inviting user not found");
 
   // Find the peer land, or auto-peer via Horizon
@@ -76,7 +76,7 @@ export async function sendRemoteInvite({ userInvitingId, canopyId, rootId, Node,
       throw new Error(`User "${username}" not found on ${domain}`);
     }
     remoteUserData = await lookupRes.json();
-    if (!remoteUserData.success || !remoteUserData.userId) {
+    if (!remoteUserData.success || !remoteUserData.beingId) {
       throw new Error(`User "${username}" not found on ${domain}`);
     }
   } catch (err) {
@@ -88,7 +88,7 @@ export async function sendRemoteInvite({ userInvitingId, canopyId, rootId, Node,
 
   // Cache the remote user info locally
   await RemoteUser.findOneAndUpdate(
-    { _id: remoteUserData.userId },
+    { _id: remoteUserData.beingId },
     {
       username: remoteUserData.username,
       homeLandDomain: domain,
@@ -100,7 +100,7 @@ export async function sendRemoteInvite({ userInvitingId, canopyId, rootId, Node,
   // Create a local invite first so we can send its ID to the remote land
   const invite = await Invite.create({
     userInviting: userInvitingId,
-    userReceiving: remoteUserData.userId,
+    userReceiving: remoteUserData.beingId,
     rootId,
     status: "pending",
     isToBeOwner: false,

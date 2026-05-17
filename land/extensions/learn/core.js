@@ -17,10 +17,10 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
+import Artifact from "../../seed/models/artifact.js";
 import { createNode } from "../../seed/tree/treeManagement.js";
-import { createNote } from "../../seed/tree/notes.js";
-import { CONTENT_TYPE } from "../../seed/protocol.js";
+import { createArtifact } from "../../seed/tree/artifacts.js";
+import { ARTIFACT_ORIGIN } from "../../seed/protocol.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 // Held from init
@@ -172,7 +172,7 @@ export function structuralScan(text, targetSize) {
  * Ask AI to identify logical sections in the text.
  * Returns array of { title, content } or null on failure.
  */
-export async function aiDecompose(text, userId, username, rootId) {
+export async function aiDecompose(text, beingId, username, rootId) {
   if (!_runChat) return null;
 
   const prompt =
@@ -189,7 +189,7 @@ export async function aiDecompose(text, userId, username, rootId) {
 
   try {
     const { answer } = await _runChat({
-      userId,
+      beingId,
       username: username || "system",
       message: prompt,
       mode: "tree:respond",
@@ -222,7 +222,7 @@ export async function aiDecompose(text, userId, username, rootId) {
  * Get all text content from a node's notes, concatenated.
  */
 async function getNodeText(nodeId) {
-  const notes = await Note.find({ nodeId, contentType: CONTENT_TYPE.TEXT })
+  const notes = await Artifact.find({ nodeId, origin: ARTIFACT_ORIGIN.IBP })
     .sort({ createdAt: 1 })
     .select("content")
     .lean();
@@ -233,7 +233,7 @@ async function getNodeText(nodeId) {
  * Process a single node in the learn queue.
  * Returns { created: number, addedToQueue: string[] }.
  */
-export async function processNode(nodeId, rootId, userId, username, targetSize) {
+export async function processNode(nodeId, rootId, beingId, username, targetSize) {
   const text = await getNodeText(nodeId);
 
   // If text is under target, this node is done
@@ -259,7 +259,7 @@ export async function processNode(nodeId, rootId, userId, username, targetSize) 
       }
     }
 
-    sections = await aiDecompose(text, userId, username, aiRootId);
+    sections = await aiDecompose(text, beingId, username, aiRootId);
 
     // Fall back to structural scan if AI fails or returns single section
     if (!sections || sections.length <= 1) {
@@ -283,7 +283,7 @@ export async function processNode(nodeId, rootId, userId, username, targetSize) 
       const result = await createNode({
         name: section.title,
         parentId: nodeId,
-        userId,
+        beingId,
         note: section.content,
         wasAi: true,
       });
@@ -313,7 +313,7 @@ export async function processNode(nodeId, rootId, userId, username, targetSize) 
  * Processes up to maxSteps nodes, then pauses.
  * Returns the updated state.
  */
-export async function processQueue(rootId, userId, username, maxSteps = 10) {
+export async function processQueue(rootId, beingId, username, maxSteps = 10) {
   const state = await getLearnState(rootId);
   if (!state || state.status !== "processing") return state;
 
@@ -328,7 +328,7 @@ export async function processQueue(rootId, userId, username, maxSteps = 10) {
     steps++;
 
     try {
-      const { created, addedToQueue } = await processNode(nodeId, rootId, userId, username, targetSize);
+      const { created, addedToQueue } = await processNode(nodeId, rootId, beingId, username, targetSize);
       nodesCreated += created;
       nodesProcessed++;
 

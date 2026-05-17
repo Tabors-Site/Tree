@@ -46,7 +46,7 @@ router.get("/root/:rootId/gateway", htmlAuth, async (req, res) => {
 // Add a channel
 router.post("/root/:rootId/gateway", authenticate, async (req, res) => {
   try {
-    const channel = await addGatewayChannel(req.userId, req.params.rootId, req.body);
+    const channel = await addGatewayChannel(req.beingId, req.params.rootId, req.body);
     sendOk(res, { channel }, 201);
   } catch (err) {
     log.error("Gateway", "Add channel error:", err.message);
@@ -57,7 +57,7 @@ router.post("/root/:rootId/gateway", authenticate, async (req, res) => {
 // Update a channel
 router.put("/gateway/channel/:channelId", authenticate, async (req, res) => {
   try {
-    const channel = await updateGatewayChannel(req.userId, req.params.channelId, req.body);
+    const channel = await updateGatewayChannel(req.beingId, req.params.channelId, req.body);
     sendOk(res, { channel });
   } catch (err) {
     log.error("Gateway", "Update channel error:", err.message);
@@ -68,7 +68,7 @@ router.put("/gateway/channel/:channelId", authenticate, async (req, res) => {
 // Delete a channel
 router.delete("/gateway/channel/:channelId", authenticate, async (req, res) => {
   try {
-    const result = await deleteGatewayChannel(req.userId, req.params.channelId);
+    const result = await deleteGatewayChannel(req.beingId, req.params.channelId);
     sendOk(res, result);
   } catch (err) {
     log.error("Gateway", "Delete channel error:", err.message);

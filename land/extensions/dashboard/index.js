@@ -46,10 +46,10 @@ export async function init(core) {
   }
 
   // ── Register socket handlers ──────────────────────────────────────
-  core.websocket.registerSocketHandler("getDashboardSessions", ({ socket, userId }) => {
-    if (!userId) return;
-    const sessions = getSessionsForUser(userId);
-    const activeNav = getActiveNavigator(userId);
+  core.websocket.registerSocketHandler("getDashboardSessions", ({ socket, beingId }) => {
+    if (!beingId) return;
+    const sessions = getSessionsForUser(beingId);
+    const activeNav = getActiveNavigator(beingId);
     socket.emit("dashboardSessions", {
       sessions,
       activeNavigatorId: activeNav,
@@ -57,9 +57,9 @@ export async function init(core) {
     });
   });
 
-  core.websocket.registerSocketHandler("getDashboardTree", async ({ socket, userId, data }) => {
+  core.websocket.registerSocketHandler("getDashboardTree", async ({ socket, beingId, data }) => {
     const rootId = data?.rootId;
-    if (!userId || !rootId) return;
+    if (!beingId || !rootId) return;
     try {
       const tree = await loadTreeForDashboard(rootId);
       socket.emit("dashboardTreeData", { rootId, tree });
@@ -68,11 +68,11 @@ export async function init(core) {
     }
   });
 
-  core.websocket.registerSocketHandler("getDashboardRoots", async ({ socket, userId }) => {
-    if (!userId) return;
+  core.websocket.registerSocketHandler("getDashboardRoots", async ({ socket, beingId }) => {
+    if (!beingId) return;
     try {
       const roots = await Node.find({
-        rootOwner: userId,
+        rootOwner: beingId,
         parent: { $ne: DELETED },
       }).select("_id name children");
       const simplified = roots.map((r) => ({
@@ -86,12 +86,12 @@ export async function init(core) {
     }
   });
 
-  core.websocket.registerSocketHandler("getDashboardChats", async ({ socket, userId, data }) => {
+  core.websocket.registerSocketHandler("getDashboardChats", async ({ socket, beingId, data }) => {
     const sessionId = data?.sessionId;
-    if (!userId || !sessionId) return;
+    if (!beingId || !sessionId) return;
     try {
       const { sessions } = await getChats({
-        userId,
+        beingId,
         sessionId,
         sessionLimit: 1,
       });
@@ -103,10 +103,10 @@ export async function init(core) {
   });
 
   // ── Subscribe to session changes for real-time dashboard push ─────
-  function pushDashboard({ userId }) {
-    const sessions = getSessionsForUser(userId);
-    const activeNav = getActiveNavigator(userId);
-    core.websocket.emitToUser(userId, "dashboardSessions", {
+  function pushDashboard({ beingId }) {
+    const sessions = getSessionsForUser(beingId);
+    const activeNav = getActiveNavigator(beingId);
+    core.websocket.emitToUser(beingId, "dashboardSessions", {
       sessions,
       activeNavigatorId: activeNav,
     });
@@ -139,8 +139,8 @@ export async function init(core) {
         }
       }
       const payload = { nodeId: String(nodeId) };
-      for (const userId of recipients) {
-        core.websocket.emitToUser(userId, "dashboardTreeChanged", payload);
+      for (const beingId of recipients) {
+        core.websocket.emitToUser(beingId, "dashboardTreeChanged", payload);
       }
     } catch {}
   }

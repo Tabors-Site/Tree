@@ -45,11 +45,11 @@ const briefCache = new Map();
 const BRIEF_TTL = 60000;
 const BRIEF_CACHE_MAX = 100;
 
-export async function getIntelligenceBrief(rootId, userId) {
+export async function getIntelligenceBrief(rootId, beingId) {
   const cached = briefCache.get(rootId);
   if (cached && Date.now() - cached.timestamp < BRIEF_TTL) return cached.brief;
 
-  const brief = await buildIntelligenceBrief(rootId, userId);
+  const brief = await buildIntelligenceBrief(rootId, beingId);
 
   if (briefCache.size >= BRIEF_CACHE_MAX && !briefCache.has(rootId)) {
     const oldest = briefCache.keys().next().value;
@@ -59,7 +59,7 @@ export async function getIntelligenceBrief(rootId, userId) {
   return brief;
 }
 
-async function buildIntelligenceBrief(rootId, userId) {
+async function buildIntelligenceBrief(rootId, beingId) {
   let getExtension;
   try {
     ({ getExtension } = await import("../loader.js"));

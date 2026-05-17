@@ -1,7 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 
 // Registry of running LLM chat turns keyed by the stable per-zone
-// session key (user:userId:zone:anchor:device, the same key
+// session key (user:beingId:zone:anchor:device, the same key
 // buildUserAiSessionKey produces for tree/home/land sessions).
 //
 // Why this exists: socket.id changes on every reconnect. Without a

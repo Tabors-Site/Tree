@@ -2,7 +2,7 @@ import { page } from "../../html-rendering/html/layout.js";
 import { esc } from "../../html-rendering/html/utils.js";
 import { getLandUrl } from "../../../canopy/identity.js";
 
-export function renderShareToken({ userId, user, token, tokenQS, savedShareToken }) {
+export function renderShareToken({ beingId, user, token, tokenQS, savedShareToken }) {
   const css = `
 body {
   display: flex;
@@ -392,7 +392,7 @@ input:focus {
 
           <div class="form-section">
             <div class="form-title">Update Token</div>
-            <form method="POST" action="/api/v1/user/${userId}/shareToken${tokenQS}">
+            <form method="POST" action="/api/v1/user/${beingId}/shareToken${tokenQS}">
               <div class="form-row">
                 <input
                   name="htmlShareToken"
@@ -415,7 +415,7 @@ input:focus {
 
           <div class="form-section">
             <div class="form-title">Choose Your Token</div>
-            <form method="POST" action="/api/v1/user/${userId}/shareToken${tokenQS}">
+            <form method="POST" action="/api/v1/user/${beingId}/shareToken${tokenQS}">
               <div class="form-row">
                 <input
                   name="htmlShareToken"
@@ -430,7 +430,7 @@ input:focus {
       }
 
       <div class="back-links">
-        <a class="back-link" href="/api/v1/user/${userId}${tokenQS}">
+        <a class="back-link" href="/api/v1/user/${beingId}${tokenQS}">
           \u2190 Back to Profile
         </a>
         <a class="back-link" target="_top" href="/">

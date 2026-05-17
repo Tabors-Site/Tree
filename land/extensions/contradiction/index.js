@@ -10,7 +10,7 @@ export async function init(core) {
 
   setServices({
     runChat: async (opts) => {
-      if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+      if (opts.beingId && opts.beingId !== "SYSTEM" && !await core.llm.userHasLlm(opts.beingId)) return { answer: null };
       return core.llm.runChat({ ...opts, llmPriority: BG });
     },
     checkCascade,
@@ -23,10 +23,10 @@ export async function init(core) {
   // in a minute don't trigger ten LLM calls. They trigger two (at default 5).
   const config = await getContradictionConfig();
 
-  core.hooks.register("afterNote", async ({ note, nodeId, userId, contentType, action }) => {
-    if (contentType !== "text") return;
+  core.hooks.register("afterArtifact", async ({ artifact, nodeId, beingId, origin, action }) => {
+    if (origin !== "ibp") return;
     if (action !== "create" && action !== "edit") return;
-    if (!userId || userId === "SYSTEM") return;
+    if (!beingId || beingId === "SYSTEM") return;
 
     // Skip system nodes
     try {
@@ -48,14 +48,14 @@ export async function init(core) {
     // Look up username
     let username = null;
     try {
-      const user = await core.models.User.findById(userId).select("username").lean();
+      const user = await core.models.Being.findById(beingId).select("username").lean();
       username = user?.username;
     } catch (err) {
       log.debug("Contradiction", "username lookup failed:", err.message);
     }
 
-    // Detect in background so we don't block the note write response
-    detectContradictions(nodeId, note.content || "", userId, username)
+    // Detect in background so we don't block the artifact write response
+    detectContradictions(nodeId, typeof artifact?.content === "string" ? artifact.content : "", beingId, username)
       .then(async (contradictions) => {
         if (contradictions.length === 0) return;
 

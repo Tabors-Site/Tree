@@ -9,12 +9,12 @@ import log from "../../seed/log.js";
 import { setNodeMode } from "../../seed/modes/registry.js";
 
 let _Node = null;
-let _Note = null;
+let _Artifact = null;
 let _metadata = null;
 
-export function configure({ Node, Note, metadata }) {
+export function configure({ Node, Artifact, metadata }) {
   _Node = Node;
-  _Note = Note;
+  _Artifact = Note;
   _metadata = metadata;
 }
 
@@ -29,14 +29,14 @@ export { ROLES };
 
 // -- Scaffold --
 
-export async function scaffold(rootId, userId) {
+export async function scaffold(rootId, beingId) {
   if (!_Node) throw new Error("Investor core not configured");
   const { createNode } = await import("../../seed/tree/treeManagement.js");
 
-  const logNode = await createNode({ name: "Log", parentId: rootId, userId });
-  const portfolioNode = await createNode({ name: "Portfolio", parentId: rootId, userId });
-  const watchlistNode = await createNode({ name: "Watchlist", parentId: rootId, userId });
-  const historyNode = await createNode({ name: "History", parentId: rootId, userId });
+  const logNode = await createNode({ name: "Log", parentId: rootId, beingId });
+  const portfolioNode = await createNode({ name: "Portfolio", parentId: rootId, beingId });
+  const watchlistNode = await createNode({ name: "Watchlist", parentId: rootId, beingId });
+  const historyNode = await createNode({ name: "History", parentId: rootId, beingId });
 
   const tags = [
     [logNode, ROLES.LOG],

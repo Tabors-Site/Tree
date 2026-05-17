@@ -17,11 +17,11 @@ export async function init(core) {
   // this hook, the stop button has no way to halt them. The kernel
   // fires `request:cancelled` on cancelRequest WS events; tree-
   // orchestrator owns the registry so it does the actual aborting.
-  core.hooks.register("request:cancelled", async ({ userId }) => {
-    if (!userId) return;
+  core.hooks.register("request:cancelled", async ({ beingId }) => {
+    if (!beingId) return;
     try {
       const { abortAllForUser } = await import("./spawnAborts.js");
-      abortAllForUser(userId);
+      abortAllForUser(beingId);
     } catch (err) {
       log.debug("TreeOrchestrator", `request:cancelled abort drain skipped: ${err.message}`);
     }
@@ -169,8 +169,8 @@ export async function init(core) {
   }, "tree-orchestrator");
 
   // ── Pronoun state: track last modified node for "that"/"same" resolution ──
-  core.hooks.register("afterToolCall", async ({ toolName, args, success, userId, rootId }) => {
-    if (!success || !userId) return;
+  core.hooks.register("afterToolCall", async ({ toolName, args, success, beingId, rootId }) => {
+    if (!success || !beingId) return;
 
     const nodeId = args?.nodeId || args?.parentId || args?.parentNodeID;
     if (!nodeId) return;
@@ -181,8 +181,8 @@ export async function init(core) {
 
     try {
       const { updatePronounState } = await import("./orchestrator.js");
-      // Build visitorId from rootId + userId (same pattern as runOrchestration)
-      const visitorId = rootId ? `${rootId}:${userId}` : `user:${userId}`;
+      // Build visitorId from rootId + beingId (same pattern as runOrchestration)
+      const visitorId = rootId ? `${rootId}:${beingId}` : `user:${beingId}`;
       updatePronounState(visitorId, { lastMod: String(nodeId) });
     } catch {}
   }, "tree-orchestrator");

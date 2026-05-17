@@ -24,7 +24,7 @@ async function useLatest(req, res, next) {
 const prestigeHandler = async (req, res) => {
   try {
     const { nodeId, version } = req.params;
-    const userId = req.userId;
+    const beingId = req.beingId;
 
     const nextVersion = Number(version) + 1;
 
@@ -34,7 +34,7 @@ const prestigeHandler = async (req, res) => {
 
     const result = await addPrestige({
       nodeId,
-      userId,
+      beingId,
     });
 
     if ("html" in req.query) {

@@ -47,7 +47,7 @@ router.post("/node/:nodeId/channels", authenticate, async (req, res) => {
       channelName: name,
       direction: direction || "bidirectional",
       filter: filter || null,
-      userId: req.userId,
+      beingId: req.beingId,
     });
     sendOk(res, result, 201);
   } catch (err) {
@@ -58,7 +58,7 @@ router.post("/node/:nodeId/channels", authenticate, async (req, res) => {
 // DELETE /node/:nodeId/channels/:channelName - Remove a channel
 router.delete("/node/:nodeId/channels/:channelName", authenticate, async (req, res) => {
   try {
-    const result = await removeChannel(req.params.nodeId, req.params.channelName, req.userId);
+    const result = await removeChannel(req.params.nodeId, req.params.channelName, req.beingId);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -68,7 +68,7 @@ router.delete("/node/:nodeId/channels/:channelName", authenticate, async (req, r
 // POST /node/:nodeId/channels/:channelName/accept - Accept invitation
 router.post("/node/:nodeId/channels/:channelName/accept", authenticate, async (req, res) => {
   try {
-    const result = await acceptInvite(req.params.nodeId, req.params.channelName, req.userId);
+    const result = await acceptInvite(req.params.nodeId, req.params.channelName, req.beingId);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -83,7 +83,7 @@ router.post("/node/:nodeId/channels/:channelName/accept", authenticate, async (r
 // GET /rooms — list all rooms
 router.get("/rooms", authenticate, async (req, res) => {
   try {
-    const rooms = await listRooms({ userId: req.userId });
+    const rooms = await listRooms({ beingId: req.beingId });
     sendOk(res, { rooms });
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -93,7 +93,7 @@ router.get("/rooms", authenticate, async (req, res) => {
 // GET /rooms/:roomId — one room's participants + meta
 router.get("/rooms/:roomId", authenticate, async (req, res) => {
   try {
-    const all = await listRooms({ userId: req.userId });
+    const all = await listRooms({ beingId: req.beingId });
     const room = all.find((r) => r.id === req.params.roomId);
     if (!room) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Room not found");
     sendOk(res, room);
@@ -119,7 +119,7 @@ router.post("/rooms", authenticate, async (req, res) => {
     const { name, parentNodeId, maxMessages } = req.body || {};
     if (!name) return sendError(res, 400, ERR.INVALID_INPUT, "name is required");
     if (!parentNodeId) return sendError(res, 400, ERR.INVALID_INPUT, "parentNodeId is required");
-    const result = await createRoom({ name, parentNodeId, userId: req.userId, maxMessages });
+    const result = await createRoom({ name, parentNodeId, beingId: req.beingId, maxMessages });
     sendOk(res, result, 201);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -134,7 +134,7 @@ router.post("/rooms/:roomId/agents", authenticate, async (req, res) => {
     if (!nodeId) return sendError(res, 400, ERR.INVALID_INPUT, "nodeId is required");
     const result = await addAgentParticipant({
       roomNodeId: req.params.roomId,
-      rootId, nodeId, modeHint, label, userId: req.userId,
+      rootId, nodeId, modeHint, label, beingId: req.beingId,
     });
     sendOk(res, result, 201);
   } catch (err) {
@@ -149,7 +149,7 @@ router.post("/rooms/:roomId/users", authenticate, async (req, res) => {
     if (!userHomeNodeId) return sendError(res, 400, ERR.INVALID_INPUT, "userHomeNodeId is required");
     const result = await addUserParticipant({
       roomNodeId: req.params.roomId,
-      userHomeNodeId, label, userId: req.userId,
+      userHomeNodeId, label, beingId: req.beingId,
     });
     sendOk(res, result, 201);
   } catch (err) {
@@ -163,7 +163,7 @@ router.post("/rooms/:roomId/observers", authenticate, async (req, res) => {
     const { label, partnerId } = req.body || {};
     if (!label) return sendError(res, 400, ERR.INVALID_INPUT, "label is required");
     const result = await addObserverParticipant({
-      roomNodeId: req.params.roomId, label, partnerId, userId: req.userId,
+      roomNodeId: req.params.roomId, label, partnerId, beingId: req.beingId,
     });
     sendOk(res, result, 201);
   } catch (err) {
@@ -192,7 +192,7 @@ router.post("/rooms/:roomId/post", authenticate, async (req, res) => {
     if (!content) return sendError(res, 400, ERR.INVALID_INPUT, "content is required");
     const result = await postToRoom({
       roomNodeId: req.params.roomId,
-      content, userId: req.userId, authorLabel,
+      content, beingId: req.beingId, authorLabel,
     });
     sendOk(res, result, 201);
   } catch (err) {

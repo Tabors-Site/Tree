@@ -1,7 +1,7 @@
 import { page } from "../../html-rendering/html/layout.js";
 import { esc, escapeHtml } from "../../html-rendering/html/utils.js";
 
-export async function renderUserTags({ userId, user, notes, getNodeName, token }) {
+export async function renderUserTags({ beingId, user, notes, getNodeName, token }) {
   const tokenQS = token ? `?token=${encodeURIComponent(token)}&html` : `?html`;
 
   const css = `
@@ -73,13 +73,13 @@ export async function renderUserTags({ userId, user, notes, getNodeName, token }
                 : n.content
               : n.content.split("/").pop();
 
-          const author = n.userId.username || n.userId._id;
+          const author = n.beingId.username || n.beingId._id;
 
           return `
           <li class="note-card">
             <div class="note-content">
               <div class="note-author">
-                <a href="/api/v1/user/${n.userId._id}${tokenQS}">
+                <a href="/api/v1/user/${n.beingId._id}${tokenQS}">
                   ${escapeHtml(author)}
                 </a>
               </div>
@@ -125,7 +125,7 @@ export async function renderUserTags({ userId, user, notes, getNodeName, token }
   <div class="container">
     <!-- Back Navigation -->
     <div class="back-nav">
-      <a href="/api/v1/user/${userId}${tokenQS}" class="back-link">
+      <a href="/api/v1/user/${beingId}${tokenQS}" class="back-link">
         \u2190 Back to Profile
       </a>
     </div>
@@ -134,7 +134,7 @@ export async function renderUserTags({ userId, user, notes, getNodeName, token }
     <div class="header">
       <h1>
         Mail for
-        <a href="/api/v1/user/${userId}${tokenQS}">@${escapeHtml(user.username)}</a>
+        <a href="/api/v1/user/${beingId}${tokenQS}">@${escapeHtml(user.username)}</a>
         ${
           notes.length > 0
             ? `<span class="message-count">${notes.length}</span>`

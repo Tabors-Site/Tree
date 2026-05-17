@@ -7,11 +7,6 @@
 //
 // See ../../docs/protocol.md for the conceptual model and
 // ../../docs/server-protocol.md for the wire contract.
-//
-// Phase 1 scaffolding (fetch / resolve / discover methods, portal:fetch /
-// portal:resolve / portal:discover ops) has been removed. The four verb
-// methods below are stubbed: they throw VERB_NOT_WIRED until the
-// corresponding server-side handler lands in subsequent phases.
 
 import { io } from "socket.io-client";
 
@@ -109,7 +104,7 @@ export class PortalClient {
    */
   async see(address, options = {}) {
     const field = _toAddressField(address);
-    return this._emitWithAck("portal:see", { ...field, ...options });
+    return this._emitWithAck("ibp:see", { ...field, ...options });
   }
 
   /**
@@ -128,7 +123,7 @@ export class PortalClient {
       throw new Error("DO requires a position address (string)");
     }
     const stripped = position.replace(/@[a-z][a-z0-9-]*$/i, "");
-    return this._emitWithAck("portal:do", { position: stripped, action, payload });
+    return this._emitWithAck("ibp:do", { position: stripped, action, payload });
   }
 
   /**
@@ -140,7 +135,7 @@ export class PortalClient {
    * @param {object} message  { from, content, intent, correlation, inReplyTo?, attachments? }
    */
   async talk(stance, message) {
-    return this._emitWithAck("portal:talk", { stance, message });
+    return this._emitWithAck("ibp:talk", { stance, message });
   }
 
   /**
@@ -159,7 +154,7 @@ export class PortalClient {
    */
   async be(operation, addressOrField, extra = {}) {
     const addressField = _toBeAddressField(addressOrField);
-    return this._emitWithAck("portal:be", { operation, ...addressField, ...extra });
+    return this._emitWithAck("ibp:be", { operation, ...addressField, ...extra });
   }
 
   // ────────────────────────────────────────────────────────────────

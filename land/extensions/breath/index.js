@@ -33,7 +33,7 @@ export async function init(core) {
   // Trees with no activity slow down and eventually go dormant.
   // First event on a dormant tree wakes it.
 
-  core.hooks.register("afterNote", async ({ nodeId }) => {
+  core.hooks.register("afterArtifact", async ({ nodeId }) => {
     if (!nodeId) return;
     const rootId = await resolveRootId(String(nodeId));
     if (rootId) recordActivity(rootId);

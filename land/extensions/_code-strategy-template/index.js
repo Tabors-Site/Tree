@@ -77,7 +77,7 @@ const strategy = defineStrategy({
         name: z.string().describe("Name for the thing."),
         options: z.record(z.any()).optional().describe("Domain-specific options."),
         filePath: z.string().optional().describe("Target filename. Defaults below."),
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
@@ -98,7 +98,7 @@ const strategy = defineStrategy({
       name: "my-domain-verify",
       description: "One-line description of what this tool checks.",
       schema: {
-        userId: z.string().describe("Injected by server. Ignore."),
+        beingId: z.string().describe("Injected by server. Ignore."),
         chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },

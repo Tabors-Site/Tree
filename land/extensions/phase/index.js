@@ -1,6 +1,6 @@
 import log from "../../seed/log.js";
 import { setModels, setLandConfig, recordSignal, buildPhaseContext } from "./core.js";
-import { getUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 
 export async function init(core) {
   setModels(core.models);
@@ -15,46 +15,46 @@ export async function init(core) {
   const { default: router } = await import("./routes.js");
 
   // ── Hook: afterNote (write signal) ─────────────────────────────────
-  core.hooks.register("afterNote", async (data) => {
-    if (data.userId) {
-      await recordSignal(data.userId, "write", data.nodeId);
+  core.hooks.register("afterArtifact", async (data) => {
+    if (data.beingId) {
+      await recordSignal(data.beingId, "write", data.nodeId);
     }
   }, "phase");
 
   // ── Hook: afterNodeCreate (create signal) ──────────────────────────
   core.hooks.register("afterNodeCreate", async (data) => {
-    if (data.userId) {
-      await recordSignal(data.userId, "create", data.node?._id?.toString());
+    if (data.beingId) {
+      await recordSignal(data.beingId, "create", data.node?._id?.toString());
     }
   }, "phase");
 
   // ── Hook: afterNavigate (navigate signal) ──────────────────────────
   core.hooks.register("afterNavigate", async (data) => {
-    if (data.userId) {
-      await recordSignal(data.userId, "navigate", data.nodeId || data.rootId);
+    if (data.beingId) {
+      await recordSignal(data.beingId, "navigate", data.nodeId || data.rootId);
     }
   }, "phase");
 
   // ── Hook: afterToolCall (tool signal) ──────────────────────────────
   core.hooks.register("afterToolCall", async (data) => {
-    if (data.userId) {
-      await recordSignal(data.userId, "tool", data.rootId);
+    if (data.beingId) {
+      await recordSignal(data.beingId, "tool", data.rootId);
     }
   }, "phase");
 
   // ── Hook: enrichContext (inject phase into AI prompt) ──────────────
   core.hooks.register("enrichContext", async ({ context, node, meta }) => {
     // meta doesn't have user phase (it's node metadata). We need to read
-    // from user metadata via the userId in context.
-    const userId = context._userId;
-    if (!userId) return;
+    // from user metadata via the beingId in context.
+    const beingId = context._userId;
+    if (!beingId) return;
 
     try {
       const User = core.models.User;
-      const user = await User.findById(userId).select("metadata").lean();
+      const user = await Being.findById(beingId).select("metadata").lean();
       if (!user) return;
 
-      const phaseMeta = getUserMeta(user, "phase");
+      const phaseMeta = getBeingMeta(user, "phase");
       const phaseContext = buildPhaseContext(phaseMeta);
       if (phaseContext) {
         context.userPhase = phaseContext;

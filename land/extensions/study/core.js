@@ -10,13 +10,13 @@ import log from "../../seed/log.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _Node = null;
-let _Note = null;
+let _Artifact = null;
 let _runChat = null;
 let _metadata = null;
 
-export function configure({ Node, Note, runChat, metadata }) {
+export function configure({ Node, Artifact, runChat, metadata }) {
   _Node = Node;
-  _Note = Note;
+  _Artifact = Note;
   _runChat = runChat;
   _metadata = metadata;
 }
@@ -131,12 +131,12 @@ export async function getQueue(rootId) {
   }).sort((a, b) => (b.priority || 0) - (a.priority || 0));
 }
 
-export async function addToQueue(rootId, topicName, userId, opts = {}) {
+export async function addToQueue(rootId, topicName, beingId, opts = {}) {
   const nodes = await findStudyNodes(rootId);
   if (!nodes?.queue) throw new Error("Study tree not scaffolded");
 
   const { createNode } = await import("../../seed/tree/treeManagement.js");
-  const node = await createNode({ name: topicName, parentId: nodes.queue.id, userId });
+  const node = await createNode({ name: topicName, parentId: nodes.queue.id, beingId });
 
   const studyMeta = { role: ROLES.QUEUE_ITEM, status: "queued" };
   if (opts.url) studyMeta.url = opts.url;
@@ -166,15 +166,15 @@ export async function addToQueue(rootId, topicName, userId, opts = {}) {
 
         if (content.length > 100) {
           // Store fetched content as a note on the queue item
-          const { createNote } = await import("../../seed/tree/notes.js");
-          await createNote({ nodeId: String(node._id), content, contentType: "text", userId });
+          const { createArtifact } = await import("../../seed/tree/artifacts.js");
+          await createArtifact({ nodeId: String(node._id), content, origin: "ibp", beingId });
 
           // If learn extension available, decompose into tree structure
           const { getExtension } = await import("../loader.js");
           const learnExt = getExtension("learn");
           if (learnExt?.exports?.initLearnState && learnExt?.exports?.processQueue) {
             await learnExt.exports.initLearnState(String(node._id), 3000);
-            await learnExt.exports.processQueue(String(node._id), userId, "system", 5);
+            await learnExt.exports.processQueue(String(node._id), beingId, "system", 5);
             log.info("Study", `URL fetched and learn decomposition started: ${opts.url}`);
           } else {
             log.info("Study", `URL fetched (${content.length} chars), learn extension not available for decomposition`);
@@ -240,7 +240,7 @@ export async function getActiveTopics(rootId) {
   return result;
 }
 
-export async function moveToActive(rootId, queueItemId, userId) {
+export async function moveToActive(rootId, queueItemId, beingId) {
   const nodes = await findStudyNodes(rootId);
   if (!nodes?.active) throw new Error("Study tree not scaffolded");
 
@@ -249,11 +249,11 @@ export async function moveToActive(rootId, queueItemId, userId) {
 
   // Create topic under Active
   const { createNode } = await import("../../seed/tree/treeManagement.js");
-  const topicNode = await createNode({ name: item.name, parentId: nodes.active.id, userId });
+  const topicNode = await createNode({ name: item.name, parentId: nodes.active.id, beingId });
   await _metadata.setExtMeta(topicNode, "study", { role: ROLES.TOPIC, lastStudied: new Date().toISOString() });
 
   // Create Resources child
-  const resourcesNode = await createNode({ name: "Resources", parentId: topicNode._id, userId });
+  const resourcesNode = await createNode({ name: "Resources", parentId: topicNode._id, beingId });
   await _metadata.setExtMeta(resourcesNode, "study", { role: ROLES.RESOURCES });
 
   // Update queue item status
@@ -266,7 +266,7 @@ export async function moveToActive(rootId, queueItemId, userId) {
   return { topicId: String(topicNode._id), name: item.name };
 }
 
-export async function deactivateTopic(rootId, topicName, userId) {
+export async function deactivateTopic(rootId, topicName, beingId) {
   const nodes = await findStudyNodes(rootId);
   if (!nodes?.active || !nodes?.queue) throw new Error("Study tree not scaffolded");
 
@@ -276,7 +276,7 @@ export async function deactivateTopic(rootId, topicName, userId) {
 
   // Move back to queue
   const { updateParentRelationship } = await import("../../seed/tree/treeManagement.js");
-  await updateParentRelationship(String(topic._id), nodes.queue.id, userId);
+  await updateParentRelationship(String(topic._id), nodes.queue.id, beingId);
 
   // Update status
   const node = await _Node.findById(topic._id);
@@ -289,7 +289,7 @@ export async function deactivateTopic(rootId, topicName, userId) {
   return { name: topic.name };
 }
 
-export async function removeFromQueue(rootId, topicName, userId) {
+export async function removeFromQueue(rootId, topicName, beingId) {
   const nodes = await findStudyNodes(rootId);
   if (!nodes?.queue && !nodes?.active) throw new Error("Study tree not scaffolded");
 
@@ -306,13 +306,13 @@ export async function removeFromQueue(rootId, topicName, userId) {
   if (!found) throw new Error(`No topic named "${topicName}" in queue or active`);
 
   const { deleteNodeBranch } = await import("../../seed/tree/treeManagement.js");
-  await deleteNodeBranch(String(found._id), userId);
+  await deleteNodeBranch(String(found._id), beingId);
 
   log.info("Study", `Removed "${found.name}"`);
   return { name: found.name };
 }
 
-export async function switchToTopic(rootId, topicName, userId) {
+export async function switchToTopic(rootId, topicName, beingId) {
   const nodes = await findStudyNodes(rootId);
   if (!nodes?.queue || !nodes?.active) throw new Error("Study tree not scaffolded");
 
@@ -335,12 +335,12 @@ export async function switchToTopic(rootId, topicName, userId) {
   }
 
   // Move to active
-  return await moveToActive(rootId, String(item._id), userId);
+  return await moveToActive(rootId, String(item._id), beingId);
 }
 
 // ── Mastery tracking ──
 
-export async function updateMastery(subtopicId, score, userId) {
+export async function updateMastery(subtopicId, score, beingId) {
   const node = await _Node.findById(subtopicId);
   if (!node) throw new Error("Subtopic not found");
 
@@ -360,13 +360,13 @@ export async function updateMastery(subtopicId, score, userId) {
     : parent?.metadata?.study;
 
   if (parentMeta?.role === ROLES.TOPIC) {
-    await checkTopicCompletion(String(node.parent), userId);
+    await checkTopicCompletion(String(node.parent), beingId);
   }
 
   return { mastery: newMastery, complete: newMastery >= MASTERY_COMPLETE };
 }
 
-async function checkTopicCompletion(topicId, userId) {
+async function checkTopicCompletion(topicId, beingId) {
   const subtopics = await _Node.find({ parent: topicId }).select("metadata").lean();
   let allComplete = true;
   let subtopicCount = 0;
@@ -395,7 +395,7 @@ async function checkTopicCompletion(topicId, userId) {
     // Move topic from Active to Completed
     try {
       const { updateParentRelationship } = await import("../../seed/tree/treeManagement.js");
-      await updateParentRelationship(topicId, nodes.completed.id, userId);
+      await updateParentRelationship(topicId, nodes.completed.id, beingId);
       log.info("Study", `Topic "${topic.name}" completed and moved to Completed`);
     } catch (err) {
       log.warn("Study", `Failed to move completed topic: ${err.message}`);
@@ -405,7 +405,7 @@ async function checkTopicCompletion(topicId, userId) {
 
 // ── Gap detection ──
 
-export async function addGap(rootId, gapName, detectedDuring, userId) {
+export async function addGap(rootId, gapName, detectedDuring, beingId) {
   const nodes = await findStudyNodes(rootId);
   if (!nodes?.gaps) return null;
 
@@ -414,7 +414,7 @@ export async function addGap(rootId, gapName, detectedDuring, userId) {
   if (existing.length > 0) return { id: String(existing[0]._id), name: gapName, existed: true };
 
   const { createNode } = await import("../../seed/tree/treeManagement.js");
-  const gapNode = await createNode({ name: gapName, parentId: nodes.gaps.id, userId });
+  const gapNode = await createNode({ name: gapName, parentId: nodes.gaps.id, beingId });
   await _metadata.setExtMeta(gapNode, "study", {
     role: ROLES.GAP_ITEM,
     detectedDuring,
@@ -505,9 +505,9 @@ export async function getCompletedTopics(rootId) {
 
 export async function getStudyHistory(rootId, limit = 20) {
   const nodes = await findStudyNodes(rootId);
-  if (!nodes?.log || !_Note) return [];
+  if (!nodes?.log || !_Artifact) return [];
 
-  const notes = await _Note.find({ nodeId: nodes.log.id })
+  const notes = await _Artifact.find({ nodeId: nodes.log.id })
     .sort({ createdAt: -1 })
     .limit(limit)
     .select("content createdAt")
@@ -521,11 +521,11 @@ export async function getStudyHistory(rootId, limit = 20) {
 
 // ── Parse study input ──
 
-export async function parseStudyInput(message, userId, username, rootId) {
+export async function parseStudyInput(message, beingId, username, rootId) {
   if (!_runChat) return null;
 
   const { answer } = await _runChat({
-    userId, username, message,
+    beingId, username, message,
     mode: "tree:study-log",
     rootId,
     slot: "study",
@@ -537,20 +537,20 @@ export async function parseStudyInput(message, userId, username, rootId) {
 
 // ── Record study session to History ──
 
-export async function recordStudySession(rootId, session, userId) {
+export async function recordStudySession(rootId, session, beingId) {
   const nodes = await findStudyNodes(rootId);
   if (!nodes?.history) return;
 
   try {
-    const { createNote } = await import("../../seed/tree/notes.js");
-    await createNote({
+    const { createArtifact } = await import("../../seed/tree/artifacts.js");
+    await createArtifact({
       nodeId: nodes.history.id,
       content: JSON.stringify({
         date: new Date().toISOString(),
         ...session,
       }),
-      contentType: "text",
-      userId,
+      origin: "ibp",
+      beingId,
     });
   } catch (err) {
     log.warn("Study", `History note failed: ${err.message}`);

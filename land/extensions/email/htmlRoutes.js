@@ -1,13 +1,13 @@
 import express from "express";
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import User from "../../seed/models/user.js";
+import Being from "../../seed/models/being.js";
 import { sendError, ERR } from "../../seed/protocol.js";
 import urlAuth from "../html-rendering/urlAuth.js";
 import { htmlOnly, buildQS, tokenQS } from "../html-rendering/htmlHelpers.js";
 import { getExtension } from "../loader.js";
 import { isHtmlEnabled } from "../html-rendering/config.js";
-import { getUserMeta, setUserMeta } from "../../seed/tree/userMetadata.js";
+import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
 import {
   renderResetPasswordExpired,
   renderResetPasswordForm,
@@ -24,7 +24,7 @@ export default function buildEmailHtmlRoutes() {
       return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "HTML rendering disabled");
     }
     try {
-      const user = await User.findOne({
+      const user = await Being.findOne({
         "metadata.email.resetToken": req.params.token,
         "metadata.email.resetExpiry": { $gt: Date.now() },
       });
@@ -46,18 +46,18 @@ export default function buildEmailHtmlRoutes() {
         return res.send(renderResetPasswordMismatch({ token: req.params.token }));
       }
 
-      const user = await User.findOne({
+      const user = await Being.findOne({
         "metadata.email.resetToken": req.params.token,
         "metadata.email.resetExpiry": { $gt: Date.now() },
       });
       if (!user) return res.send(renderResetPasswordInvalid());
 
       user.password = password;
-      const emailMeta = getUserMeta(user, "email");
+      const emailMeta = getBeingMeta(user, "email");
       delete emailMeta.resetToken;
       delete emailMeta.resetExpiry;
       emailMeta.tokensInvalidBefore = new Date();
-      setUserMeta(user, "email", emailMeta);
+      setBeingMeta(user, "email", emailMeta);
       await user.save();
 
       return res.send(renderResetPasswordSuccess());

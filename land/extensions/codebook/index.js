@@ -16,21 +16,21 @@ export async function init(core) {
   core.llm.registerRootLlmSlot("codebook");
 
   setRunChat(async (opts) => {
-    if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+    if (opts.beingId && opts.beingId !== "SYSTEM" && !await core.llm.userHasLlm(opts.beingId)) return { answer: null };
     return core.llm.runChat({ ...opts, llmPriority: BG });
   });
 
   const config = await getCodebookConfig();
 
-  // Listen to every note create/edit. Increment the counter for the user-node pair.
+  // Listen to every artifact create/edit. Increment the counter for the user-node pair.
   // When the counter crosses the compression threshold, fire a background compression.
-  core.hooks.register("afterNote", async ({ note, nodeId, userId, contentType, action }) => {
-    // Only track text notes, only creates and edits
-    if (contentType !== "text") return;
+  core.hooks.register("afterArtifact", async ({ artifact, nodeId, beingId, origin, action }) => {
+    // Only track ibp-origin artifacts (text content), only creates and edits
+    if (origin !== "ibp") return;
     if (action !== "create" && action !== "edit") return;
 
     // Skip system writes (pulse, etc.)
-    if (!userId || userId === "SYSTEM") return;
+    if (!beingId || beingId === "SYSTEM") return;
 
     // Skip system nodes
     try {
@@ -39,34 +39,34 @@ export async function init(core) {
       if (node?.systemRole) return;
     } catch { return; }
 
-    const count = await incrementNoteCount(nodeId, userId);
+    const count = await incrementNoteCount(nodeId, beingId);
 
     if (count >= config.compressionThreshold) {
       // Look up username for the compression prompt
       let username = null;
       try {
-        const user = await core.models.User.findById(userId).select("username").lean();
+        const user = await core.models.Being.findById(beingId).select("username").lean();
         username = user?.username;
       } catch (err) {
         log.debug("Codebook", "Username lookup failed:", err.message);
       }
 
       // Fire compression in background, don't block the note write
-      runCompression(nodeId, userId, username).catch((err) => {
+      runCompression(nodeId, beingId, username).catch((err) => {
         log.debug("Codebook", `Background compression failed: ${err.message}`);
       });
     }
   }, "codebook");
 
-  // Inject this user's codebook into AI context. userId is threaded through
+  // Inject this user's codebook into AI context. beingId is threaded through
   // getContextForAi options into enrichContext hookData by the kernel.
-  core.hooks.register("enrichContext", async ({ context, node, meta, userId }) => {
-    if (!userId) return;
+  core.hooks.register("enrichContext", async ({ context, node, meta, beingId }) => {
+    if (!beingId) return;
 
     const codebook = meta.codebook;
     if (!codebook) return;
 
-    const userEntry = codebook[userId];
+    const userEntry = codebook[beingId];
     if (userEntry?.dictionary && Object.keys(userEntry.dictionary).length > 0) {
       context.codebook = userEntry.dictionary;
     }

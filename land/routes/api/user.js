@@ -2,18 +2,18 @@ import log from "../../seed/log.js";
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import User from "../../seed/models/user.js";
-import { getUserMeta } from "../../seed/tree/userMetadata.js";
+import Being from "../../seed/models/being.js";
+import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { createNode } from "../../seed/tree/treeManagement.js";
 import { getExtension } from "../../extensions/loader.js";
 
 const router = express.Router();
 
-router.get("/user/:userId", authenticate, async (req, res) => {
+router.get("/user/:beingId", authenticate, async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { beingId } = req.params;
 
-    const user = await User.findById(userId).exec();
+    const user = await Being.findById(beingId).exec();
 
     if (!user) {
       return sendError(res, 404, ERR.USER_NOT_FOUND, "User not found");
@@ -21,16 +21,16 @@ router.get("/user/:userId", authenticate, async (req, res) => {
     (getExtension("energy")?.exports?.maybeResetEnergy || (() => false))(user);
 
     const navExt = getExtension("navigation")?.exports;
-    const roots = (await navExt?.getUserRootsWithNames(userId)) || [];
-    const recentRoots = navExt?.getRecentRootsWithNames ? (await navExt.getRecentRootsWithNames(userId)) : [];
-    const billingMeta = getUserMeta(user, "billing");
+    const roots = (await navExt?.getUserRootsWithNames(beingId)) || [];
+    const recentRoots = navExt?.getRecentRootsWithNames ? (await navExt.getRecentRootsWithNames(beingId)) : [];
+    const billingMeta = getBeingMeta(user, "billing");
     const plan = billingMeta.plan || "basic";
-    const energyData = getUserMeta(user, "energy");
+    const energyData = getBeingMeta(user, "energy");
     const energy = energyData.available;
-    const canopyMeta = getUserMeta(user, "canopy");
+    const canopyMeta = getBeingMeta(user, "canopy");
 
     sendOk(res, {
-      userId: user._id,
+      beingId: user._id,
       username: user.username,
       roots,
       recentRoots,
@@ -40,17 +40,17 @@ router.get("/user/:userId", authenticate, async (req, res) => {
       energy,
     });
   } catch (err) {
-    log.error("API", "Error in /user/:userId:", err);
+    log.error("API", "Error in /user/:beingId:", err);
     sendError(res, 500, ERR.INTERNAL, err.message);
   }
 });
 
-router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
+router.post("/user/:beingId/createRoot", authenticate, async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { beingId } = req.params;
     const { name, type } = req.body;
 
-    if (req.userId.toString() !== userId.toString()) {
+    if (req.beingId.toString() !== beingId.toString()) {
       return sendError(res, 403, ERR.FORBIDDEN, "Not authorized");
     }
 
@@ -61,7 +61,7 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
     const rootNode = await createNode({
       name,
       isRoot: true,
-      userId,
+      beingId,
       type: type || null,
       validatedUser: req.user,
     });
@@ -69,7 +69,7 @@ router.post("/user/:userId/createRoot", authenticate, async (req, res) => {
     // HTML form submission: redirect back to user page
     if ("html" in req.query) {
       const token = req.query.token ? `&token=${req.query.token}` : "";
-      return res.redirect(`/api/v1/user/${userId}?html${token}`);
+      return res.redirect(`/api/v1/user/${beingId}?html${token}`);
     }
 
     sendOk(res, {

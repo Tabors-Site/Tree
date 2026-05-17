@@ -8,8 +8,8 @@ export async function init(core) {
   // Register quick link on user profile
   try {
     const treeos = getExtension("treeos-base");
-    treeos?.exports?.registerSlot?.("user-quick-links", "api-keys", ({ userId, queryString }) =>
-      `<li><a href="/api/v1/user/${userId}/api-keys${queryString}">API Keys</a></li>`,
+    treeos?.exports?.registerSlot?.("user-quick-links", "api-keys", ({ beingId, queryString }) =>
+      `<li><a href="/api/v1/user/${beingId}/api-keys${queryString}">API Keys</a></li>`,
       { priority: 50 }
     );
   } catch {}

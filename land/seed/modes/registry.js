@@ -416,7 +416,7 @@ export async function buildPromptForMode(modeKey, ctx) {
 
 /**
  * Determine big mode from a URL path.
- *   /user/:userId  → HOME
+ *   /user/:beingId  → HOME
  *   /node/:nodeId       → TREE
  *   /root/:nodeId  → TREE
  */

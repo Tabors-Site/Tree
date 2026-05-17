@@ -17,13 +17,13 @@ export default {
     "to canonical usernames (case-insensitive lookup, single DB query for all mentions in " +
     "a note). The afterNote hook syncs NoteTag records so tagged users can query all notes " +
     "they were mentioned in, with date filtering and pagination. Tags auto-cleanup on note " +
-    "deletion. The /user/:userId/tags endpoint returns the full mention history. Every " +
+    "deletion. The /user/:beingId/tags endpoint returns the full mention history. Every " +
     "invite action (create, accept, deny, remove, transfer, retire) writes to the " +
     "contribution log for a complete audit trail.",
 
   needs: {
     services: ["contributions"],
-    models: ["User", "Node", "Note"],
+    models: ["User", "Node", "Artifact"],
     extensions: [],
   },
 
@@ -44,7 +44,7 @@ export default {
     sessionTypes: {},
     env: [],
     cli: [
-      { command: "invites", scope: ["tree"], description: "List pending invites", method: "GET", endpoint: "/user/:userId/invites", userIdParam: true },
+      { command: "invites", scope: ["tree"], description: "List pending invites", method: "GET", endpoint: "/user/:beingId/invites", userIdParam: true },
       { command: "invite", scope: ["tree"], description: "Invite a user to the current tree", method: "POST", endpoint: "/root/:rootId/invite", rootIdParam: true, bodyMap: { userReceiving: 0 } },
       { command: "transfer-owner", scope: ["tree"], description: "Transfer tree ownership to another user", method: "POST", endpoint: "/root/:rootId/transfer-owner", rootIdParam: true, bodyMap: { userReceiving: 0 } },
       { command: "remove-user", scope: ["tree"], description: "Remove a contributor from the tree", method: "POST", endpoint: "/root/:rootId/remove-user", rootIdParam: true, bodyMap: { userReceiving: 0 } },

@@ -16,9 +16,9 @@
 import { v4 as uuidv4 } from "uuid";
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { getNotes } from "../../seed/tree/notes.js";
-import { createNote } from "../../seed/tree/notes.js";
+import Artifact from "../../seed/models/artifact.js";
+import { getArtifacts } from "../../seed/tree/artifacts.js";
+import { createArtifact } from "../../seed/tree/artifacts.js";
 import { getExtMeta, mergeExtMeta } from "../../seed/tree/extensionMetadata.js";
 
 const WEEKLY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -70,8 +70,8 @@ async function _compare(rootId, runChat) {
   const ownerId = String(rootNode.rootOwner);
 
   // Read reflection notes (themes from Layer 2)
-  const result = await getNotes({ nodeId: String(reflectNode._id), limit: 30 });
-  const reflections = result?.notes || [];
+  const result = await getArtifacts({ nodeId: String(reflectNode._id), limit: 30 });
+  const reflections = result?.artifacts || [];
   if (reflections.length < MIN_REFLECTIONS) return;
 
   // Split into this week and previous weeks
@@ -101,11 +101,11 @@ async function _compare(rootId, runChat) {
   const compareNode = await getOrCreateCompareNode(String(reflectNode._id));
   if (!compareNode) return;
 
-  const prevComparisons = await getNotes({ nodeId: String(compareNode._id), limit: 4 });
-  const prevContent = (prevComparisons?.notes || []).map(n => n.content).join("\n---\n");
+  const prevComparisons = await getArtifacts({ nodeId: String(compareNode._id), limit: 4 });
+  const prevContent = (prevComparisons?.artifacts || []).map(n => n.content).join("\n---\n");
 
   const { answer } = await runChat({
-    userId: ownerId,
+    beingId: ownerId,
     username: "compare-inner",
     message:
       `You are analyzing how a tree's themes have changed over time.\n\n` +
@@ -133,10 +133,10 @@ async function _compare(rootId, runChat) {
   if (!answer || answer.length < 20) return;
 
   // Write comparison
-  await createNote({
-    contentType: "text",
+  await createArtifact({
+    origin: "ibp",
     content: answer.trim(),
-    userId: ownerId,
+    beingId: ownerId,
     nodeId: String(compareNode._id),
     wasAi: true,
   });
@@ -146,15 +146,15 @@ async function _compare(rootId, runChat) {
   if (reflectNodeFull) await mergeExtMeta(reflectNodeFull, "compare-inner", { lastComparison: Date.now() });
 
   // Cap comparisons
-  const noteCount = await Note.countDocuments({ nodeId: String(compareNode._id) });
+  const noteCount = await Artifact.countDocuments({ nodeId: String(compareNode._id) });
   if (noteCount > MAX_COMPARISONS) {
-    const oldest = await Note.find({ nodeId: String(compareNode._id) })
+    const oldest = await Artifact.find({ nodeId: String(compareNode._id) })
       .sort({ createdAt: 1 })
       .limit(noteCount - MAX_COMPARISONS)
       .select("_id")
       .lean();
     if (oldest.length > 0) {
-      await Note.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
+      await Artifact.deleteMany({ _id: { $in: oldest.map(n => n._id) } });
     }
   }
 

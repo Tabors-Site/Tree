@@ -67,7 +67,7 @@ export default {
 
     hooks: {
       fires: [],
-      listens: ["afterNote", "enrichContext"],
+      listens: ["afterArtifact", "enrichContext"],
     },
   },
 };

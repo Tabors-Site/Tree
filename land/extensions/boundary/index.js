@@ -18,7 +18,7 @@ export async function init(core) {
     models: core.models,
     contributions: core.contributions,
     llm: { ...core.llm, runChat: async (opts) => {
-      if (opts.userId && opts.userId !== "SYSTEM" && !await core.llm.userHasLlm(opts.userId)) return { answer: null };
+      if (opts.beingId && opts.beingId !== "SYSTEM" && !await core.llm.userHasLlm(opts.beingId)) return { answer: null };
       return core.llm.runChat({ ...opts, llmPriority: BG });
     } },
     energy: core.energy || null,
@@ -26,9 +26,9 @@ export async function init(core) {
   });
 
   // ── afterNote: mark boundary analysis as stale ──────────────────────
-  core.hooks.register("afterNote", async ({ nodeId, userId, action }) => {
+  core.hooks.register("afterArtifact", async ({ nodeId, beingId, action }) => {
     if (action !== "create" && action !== "edit") return;
-    if (!userId || userId === "SYSTEM") return;
+    if (!beingId || beingId === "SYSTEM") return;
 
     // Skip system nodes
     try {

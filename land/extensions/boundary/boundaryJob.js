@@ -62,14 +62,14 @@ async function runBoundaryCycle() {
         // Only re-analyze if stale or never analyzed
         if (!boundaryMeta.stale && boundaryMeta.lastAnalysis) continue;
 
-        const userId = root.rootOwner?.toString();
-        if (!userId) continue;
+        const beingId = root.rootOwner?.toString();
+        if (!beingId) continue;
 
-        const user = await User.findById(userId).select("username").lean();
+        const user = await Being.findById(beingId).select("username").lean();
         if (!user) continue;
 
         log.verbose("Boundary", `Auto-analyzing boundary for tree ${root.name}`);
-        await analyze(root._id.toString(), userId, user.username);
+        await analyze(root._id.toString(), beingId, user.username);
       } catch (err) {
         log.warn("Boundary", `Auto-boundary failed for tree ${root.name}: ${err.message}`);
       }

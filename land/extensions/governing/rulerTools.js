@@ -304,14 +304,14 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, userId, username, nodeId, rootId, chatId, sessionId } = args;
+        const { visitorId, beingId, username, nodeId, rootId, chatId, sessionId } = args;
         const briefing = typeof args.briefing === "string" ? args.briefing.trim() : "";
         if (!briefing) return text("governing-hire-planner: briefing is required.");
         if (briefing.length > BRIEFING_CAP) {
           return text(`governing-hire-planner: briefing exceeds ${BRIEFING_CAP} chars; trim or push detail into your reasoning.`);
         }
         if (!visitorId) return text("governing-hire-planner: missing visitorId; substrate bug — surface.");
-        if (!userId) return text("governing-hire-planner: missing userId; substrate bug.");
+        if (!beingId) return text("governing-hire-planner: missing beingId; substrate bug.");
 
         // Resolve the Ruler scope (the scope where the Planner anchors).
         const ruler = await resolveRulerScope(nodeId);
@@ -364,7 +364,7 @@ export default function getRulerTools(_core) {
         const spawn = spawnRoleAsChainstepAsync({
           modeKey: "tree:governing-planner",
           message: briefing,
-          userId,
+          beingId,
           username,
           rootId: rootId || null,
           nodeId: String(ruler._id),
@@ -453,9 +453,9 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, userId, username, nodeId, rootId, chatId, sessionId } = args;
+        const { visitorId, beingId, username, nodeId, rootId, chatId, sessionId } = args;
         if (!visitorId) return text("governing-hire-contractor: missing visitorId; substrate bug.");
-        if (!userId) return text("governing-hire-contractor: missing userId; substrate bug.");
+        if (!beingId) return text("governing-hire-contractor: missing beingId; substrate bug.");
 
         const briefing = typeof args.briefing === "string" ? args.briefing.trim() : "";
         if (briefing.length > BRIEFING_CAP) {
@@ -565,7 +565,7 @@ export default function getRulerTools(_core) {
         const spawn = spawnRoleAsChainstepAsync({
           modeKey: "tree:governing-contractor",
           message: contractorMessage,
-          userId,
+          beingId,
           username,
           rootId: rootId || null,
           nodeId: String(ruler._id),
@@ -642,11 +642,11 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, userId, username, nodeId, rootId, chatId, sessionId } = args;
+        const { visitorId, beingId, username, nodeId, rootId, chatId, sessionId } = args;
         const wakeupReason = typeof args.wakeupReason === "string" ? args.wakeupReason.trim() : "";
         if (!wakeupReason) return text("governing-route-to-foreman: wakeupReason is required.");
         if (!visitorId) return text("governing-route-to-foreman: missing visitorId; substrate bug.");
-        if (!userId) return text("governing-route-to-foreman: missing userId; substrate bug.");
+        if (!beingId) return text("governing-route-to-foreman: missing beingId; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
         if (!ruler) {
@@ -688,7 +688,7 @@ export default function getRulerTools(_core) {
           modeKey: "tree:governing-foreman",
           message: `Wakeup: ${wakeupReason}\n\n` +
                    "Read the execution-stack snapshot in your prompt and decide.",
-          userId,
+          beingId,
           username,
           rootId: rootId || null,
           nodeId: String(ruler._id),
@@ -804,14 +804,14 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, userId, username, nodeId, rootId, chatId, sessionId } = args;
+        const { visitorId, beingId, username, nodeId, rootId, chatId, sessionId } = args;
         const revisionReason = typeof args.revisionReason === "string" ? args.revisionReason.trim() : "";
         if (!revisionReason) return text("governing-revise-plan: revisionReason is required.");
         if (revisionReason.length > REASON_CAP) {
           return text(`governing-revise-plan: revisionReason exceeds ${REASON_CAP} chars; trim.`);
         }
         if (!visitorId) return text("governing-revise-plan: missing visitorId; substrate bug.");
-        if (!userId) return text("governing-revise-plan: missing userId; substrate bug.");
+        if (!beingId) return text("governing-revise-plan: missing beingId; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
         if (!ruler) {
@@ -882,7 +882,7 @@ export default function getRulerTools(_core) {
         const spawn = spawnRoleAsChainstepAsync({
           modeKey: "tree:governing-planner",
           message: briefing,
-          userId,
+          beingId,
           username,
           rootId: rootId || null,
           nodeId: String(ruler._id),
@@ -972,9 +972,9 @@ export default function getRulerTools(_core) {
       schema: {},
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, userId, username, nodeId, rootId, chatId, sessionId } = args;
+        const { visitorId, beingId, username, nodeId, rootId, chatId, sessionId } = args;
         if (!visitorId) return text("governing-dispatch-execution: missing visitorId; substrate bug.");
-        if (!userId) return text("governing-dispatch-execution: missing userId; substrate bug.");
+        if (!beingId) return text("governing-dispatch-execution: missing beingId; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
         if (!ruler) {
@@ -1099,7 +1099,7 @@ export default function getRulerTools(_core) {
         };
         const runtimeCtx = {
           visitorId,
-          userId,
+          beingId,
           username,
           rootId: rootId || null,
           sessionId: sessionId || null,
@@ -1118,11 +1118,11 @@ export default function getRulerTools(_core) {
         // the chip reaches every socket the user has open right now
         // (not just the one captured at request time — that one goes
         // stale during long dispatches and across page reloads).
-        if (userId) {
+        if (beingId) {
           try {
             const { emitToUser } = await import("../../seed/ws/websocket.js");
             const { WS } = await import("../../seed/protocol.js");
-            emitToUser(String(userId), WS.LIFECYCLE_ACTIVE, {
+            emitToUser(String(beingId), WS.LIFECYCLE_ACTIVE, {
               active: true,
               rulerNodeId: String(ruler._id),
               rootId: rootId || null,
@@ -1149,7 +1149,7 @@ export default function getRulerTools(_core) {
         let unregisterDispatchAbort = () => {};
         try {
           const { registerSpawnAbort } = await import("../tree-orchestrator/spawnAborts.js");
-          unregisterDispatchAbort = registerSpawnAbort(String(userId), dispatchAbort, `dispatch:${spawnId.slice(0, 8)}`);
+          unregisterDispatchAbort = registerSpawnAbort(String(beingId), dispatchAbort, `dispatch:${spawnId.slice(0, 8)}`);
         } catch {}
         runtimeCtx.signal = dispatchAbort.signal;
 
@@ -1170,11 +1170,11 @@ export default function getRulerTools(_core) {
 
           // LIFECYCLE_ACTIVE clear for dispatch via emitToUser so
           // it survives the user's request socket closing.
-          if (userId) {
+          if (beingId) {
             try {
               const { emitToUser } = await import("../../seed/ws/websocket.js");
               const { WS } = await import("../../seed/protocol.js");
-              emitToUser(String(userId), WS.LIFECYCLE_ACTIVE, {
+              emitToUser(String(beingId), WS.LIFECYCLE_ACTIVE, {
                 active: false,
                 rulerNodeId: String(ruler._id),
                 rootId: rootId || null,
@@ -1195,7 +1195,7 @@ export default function getRulerTools(_core) {
               spawnId,
               rulerNodeId: String(ruler._id),
               rootId: rootId || null,
-              userId: userId || null,
+              beingId: beingId || null,
               username: username || null,
               parentChatId: chatId || null,
               parentSessionId: sessionId || null,
@@ -1416,11 +1416,11 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, userId, username, nodeId, rootId, chatId, sessionId } = args;
+        const { visitorId, beingId, username, nodeId, rootId, chatId, sessionId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-resume-execution: reason is required.");
         if (!visitorId) return text("governing-resume-execution: missing visitorId; substrate bug.");
-        if (!userId) return text("governing-resume-execution: missing userId; substrate bug.");
+        if (!beingId) return text("governing-resume-execution: missing beingId; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
         if (!ruler) {
@@ -1493,7 +1493,7 @@ export default function getRulerTools(_core) {
           modeKey: "tree:governing-foreman",
           message: `Wakeup: resume-requested\n\nReason: ${reason}\n\n` +
                    "Read the execution-stack snapshot, decide what's next given the unpaused state.",
-          userId,
+          beingId,
           username,
           rootId: rootId || null,
           nodeId: String(ruler._id),

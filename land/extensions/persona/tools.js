@@ -12,7 +12,7 @@ export default [
       "Show the effective persona at a node. Resolves inheritance from the ancestor chain. Shows who the AI is at this position, where the persona comes from, and whether it's inherited or locally defined.",
     schema: {
       nodeId: z.string().describe("The node to check."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: {
       readOnlyHint: true,
@@ -76,7 +76,7 @@ export default [
       greeting: z.string().nullable().optional().describe("Optional first-message behavior."),
       pronoun: z.string().optional().describe("How the persona refers to itself. Default: I."),
       inherit: z.boolean().optional().describe("If true, merge with parent persona instead of replacing."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: {
       readOnlyHint: false,
@@ -131,7 +131,7 @@ export default [
       "Remove the persona at a node. The node will inherit persona from its parent. If no parent has a persona, the AI at this position has no name.",
     schema: {
       nodeId: z.string().describe("The node to clear persona from."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
     },
     annotations: {
       readOnlyHint: false,

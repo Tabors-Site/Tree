@@ -33,7 +33,7 @@ import { branchSummary } from "./fileSurface.js";
  *     branchNode,      // lean or mongoose doc; needs _id and name
  *     planStep,        // optional — the governing plan's step for
  *                      //   this branch, lets us stamp status/outcome
- *     reason,          // diagnostic label (e.g. "afterNote",
+ *     reason,          // diagnostic label (e.g. "afterArtifact",
  *                      //   "afterBranchComplete") — logged only
  *     core,            // passed through for metadata writes
  *   })

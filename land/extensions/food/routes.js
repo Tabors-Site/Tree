@@ -3,7 +3,7 @@ import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import log from "../../seed/log.js";
 import NodeModel from "../../seed/models/node.js";
-import UserModel from "../../seed/models/user.js";
+import UserModel from "../../seed/models/being.js";
 import { isInitialized, findFoodNodes, getDailyPicture, getHistory } from "./core.js";
 import { handleMessage } from "./handler.js";
 
@@ -39,7 +39,7 @@ router.get("/root/:rootId/food", async (req, res, next) => {
         weeklySummaries = await getHistory(rootId, { limit: 8, type: "weekly" });
       }
       const { renderFoodDashboard } = await import("./pages/dashboard.js");
-      res.send(renderFoodDashboard({ rootId, rootName: root.name, picture, weeklySummaries, token: req.query.token || null, userId: req.userId, inApp: !!req.query.inApp }));
+      res.send(renderFoodDashboard({ rootId, rootName: root.name, picture, weeklySummaries, token: req.query.token || null, beingId: req.beingId, inApp: !!req.query.inApp }));
     });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, "Dashboard failed");
@@ -64,9 +64,9 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
     const root = await Node.findById(rootId).select("rootOwner contributors name").lean();
     if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
 
-    const userId = req.userId;
-    const isOwner = root.rootOwner?.toString() === userId;
-    const isContributor = root.contributors?.some(c => c.toString() === userId);
+    const beingId = req.beingId;
+    const isOwner = root.rootOwner?.toString() === beingId;
+    const isContributor = root.contributors?.some(c => c.toString() === beingId);
     if (!isOwner && !isContributor) {
       return sendError(res, 403, ERR.FORBIDDEN, "No access to this tree");
     }
@@ -77,10 +77,10 @@ router.post("/root/:rootId/food", authenticate, async (req, res) => {
       return sendError(res, 403, ERR.EXTENSION_BLOCKED, "Food tracking is blocked on this branch.");
     }
 
-    const user = await UserModel.findById(userId).select("username").lean();
+    const user = await UserModel.findById(beingId).select("username").lean();
     const username = user?.username || "user";
 
-    const result = await handleMessage(message, { userId, username, rootId, res });
+    const result = await handleMessage(message, { beingId, username, rootId, res });
     if (!res.headersSent) sendOk(res, result);
   } catch (err) {
     log.error("Food", "Route error:", err.message);
@@ -128,8 +128,8 @@ router.get("/root/:rootId/food/week", authenticate, async (req, res) => {
     const foodNodes = await findFoodNodes(req.params.rootId);
     if (!foodNodes?.history) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Food tree not found");
 
-    const Note = (await import("../../seed/models/note.js")).default;
-    const notes = await Note.find({ nodeId: foodNodes.history.id })
+    const Artifact = (await import("../../seed/models/artifact.js")).default;
+    const notes = await Artifact.find({ nodeId: foodNodes.history.id })
       .sort({ createdAt: -1 })
       .limit(7)
       .select("content createdAt")
@@ -210,13 +210,13 @@ router.get("/root/:rootId/food/profile", authenticate, async (req, res) => {
 router.delete("/root/:rootId/food/entry/:noteId", htmlAuth, async (req, res) => {
   try {
     const { rootId, noteId } = req.params;
-    const userId = req.userId;
-    const Note = (await import("../../seed/models/note.js")).default;
-    const note = await Note.findById(noteId).lean();
+    const beingId = req.beingId;
+    const Artifact = (await import("../../seed/models/artifact.js")).default;
+    const note = await Artifact.findById(noteId).lean();
     if (!note) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Note not found");
 
     // Already soft-deleted. Don't decrement again.
-    if (note.nodeId === "DELETED" || note.userId === "DELETED") {
+    if (note.nodeId === "DELETED" || note.beingId === "DELETED") {
       return sendOk(res, { deleted: true, alreadyDeleted: true });
     }
 
@@ -231,7 +231,7 @@ router.delete("/root/:rootId/food/entry/:noteId", htmlAuth, async (req, res) => 
 
     if (!totals && logNoteId) {
       try {
-        const logNote = await Note.findById(logNoteId).lean();
+        const logNote = await Artifact.findById(logNoteId).lean();
         if (logNote) {
           try { totals = JSON.parse(logNote.content).totals || null; } catch {}
         }
@@ -253,25 +253,25 @@ router.delete("/root/:rootId/food/entry/:noteId", htmlAuth, async (req, res) => 
     }
 
     // Use kernel delete (soft-delete, fires afterNote hook)
-    const { deleteNoteAndFile } = await import("../../seed/tree/notes.js");
-    await deleteNoteAndFile({ noteId, userId });
+    const { deleteArtifactAndFile } = await import("../../seed/tree/artifacts.js");
+    await deleteArtifactAndFile({ noteId, beingId });
 
     // Delete the linked note too (log <-> slot)
     if (logNoteId) {
-      try { await deleteNoteAndFile({ noteId: logNoteId, userId }); } catch {}
+      try { await deleteArtifactAndFile({ noteId: logNoteId, beingId }); } catch {}
     } else {
       // This was a log note. Find and delete its linked slot note.
       const foodNodes = await findFoodNodes(rootId);
       if (foodNodes.mealSlots) {
         const slotNodeIds = Object.values(foodNodes.mealSlots).map(s => s.id);
-        const slotNotes = await Note.find({
+        const slotNotes = await Artifact.find({
           nodeId: { $in: slotNodeIds },
         }).select("_id content").lean();
         for (const sn of slotNotes) {
           try {
             const d = JSON.parse(sn.content);
             if (d.logNoteId === noteId) {
-              await deleteNoteAndFile({ noteId: String(sn._id), userId });
+              await deleteArtifactAndFile({ noteId: String(sn._id), beingId });
             }
           } catch {}
         }
@@ -305,7 +305,7 @@ router.post("/root/:rootId/food/metric", htmlAuth, async (req, res) => {
     }
 
     const { createNode } = await import("../../seed/tree/treeManagement.js");
-    const node = await createNode({ name: name.trim(), parentId: req.params.rootId, userId: req.userId });
+    const node = await createNode({ name: name.trim(), parentId: req.params.rootId, beingId: req.beingId });
     const role = name.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
     await adoptNode(String(node._id), role, goal ? Number(goal) : null);
     sendOk(res, { id: String(node._id), role }, 201);

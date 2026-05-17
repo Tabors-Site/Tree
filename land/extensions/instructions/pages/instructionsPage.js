@@ -7,7 +7,7 @@ import { page } from "../../html-rendering/html/layout.js";
 import { esc, timeAgo } from "../../html-rendering/html/utils.js";
 import { glassCardStyles, responsiveBase } from "../../html-rendering/html/baseStyles.js";
 
-export function renderInstructionsPage({ userId, username, instructions, token, inApp }) {
+export function renderInstructionsPage({ beingId, username, instructions, token, inApp }) {
   const tokenParam = token ? `&token=${esc(token)}` : "";
   const queryString = `?html${tokenParam}`;
 
@@ -107,7 +107,7 @@ export function renderInstructionsPage({ userId, username, instructions, token, 
 
   const body = `
     <div class="inst-container">
-      ${!inApp ? `<a class="back-link" href="/api/v1/user/${userId}/profile${queryString}">&larr; Profile</a>` : ""}
+      ${!inApp ? `<a class="back-link" href="/api/v1/user/${beingId}/profile${queryString}">&larr; Profile</a>` : ""}
       <div class="page-header">
         <div class="page-title">Instructions</div>
         <div class="page-subtitle">${esc(username || "")}'s personal AI customization</div>
@@ -138,7 +138,7 @@ export function renderInstructionsPage({ userId, username, instructions, token, 
     async function removeInstruction(id) {
       if (!confirm("Remove this instruction?")) return;
       try {
-        const res = await fetch("/api/v1/user/${userId}/instructions/" + id, {
+        const res = await fetch("/api/v1/user/${beingId}/instructions/" + id, {
           method: "DELETE",
           credentials: "include",
           headers: { "Content-Type": "application/json" },

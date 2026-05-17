@@ -7,8 +7,8 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Note from "../../seed/models/note.js";
-import { SYSTEM_ROLE, SYSTEM_OWNER, CASCADE, CONTENT_TYPE } from "../../seed/protocol.js";
+import Artifact from "../../seed/models/artifact.js";
+import { SYSTEM_ROLE, SYSTEM_OWNER, CASCADE, ARTIFACT_ORIGIN } from "../../seed/protocol.js";
 import { hooks } from "../../seed/hooks.js";
 import { v4 as uuidv4 } from "uuid";
 
@@ -296,9 +296,9 @@ export async function writeSnapshot(snapshot) {
   // Write summary as a note so the AI can read it through enrichContext
   const note = new Note({
     _id: uuidv4(),
-    contentType: CONTENT_TYPE.TEXT,
+    origin: ARTIFACT_ORIGIN.IBP,
     content: summary,
-    userId: SYSTEM_OWNER,
+    beingId: SYSTEM_OWNER,
     nodeId,
     metadata: new Map([
       ["source", "pulse"],
@@ -309,24 +309,24 @@ export async function writeSnapshot(snapshot) {
   await note.save();
 
   // Fire afterNote so other extensions can react
-  hooks.run("afterNote", {
+  hooks.run("afterArtifact", {
     note,
     nodeId,
-    userId: SYSTEM_OWNER,
-    contentType: CONTENT_TYPE.TEXT,
+    beingId: SYSTEM_OWNER,
+    origin: ARTIFACT_ORIGIN.IBP,
     sizeKB: Math.ceil(Buffer.byteLength(summary, "utf8") / 1024),
     action: "create",
   }).catch(() => {});
 
   // Prune old pulse notes if over retention limit
-  const noteCount = await Note.countDocuments({ nodeId });
+  const noteCount = await Artifact.countDocuments({ nodeId });
   if (noteCount > config.maxNotesRetained) {
-    const oldest = await Note.find({ nodeId })
+    const oldest = await Artifact.find({ nodeId })
       .sort({ createdAt: 1 })
       .limit(noteCount - config.maxNotesRetained)
       .select("_id");
     const ids = oldest.map((n) => n._id);
-    await Note.deleteMany({ _id: { $in: ids } });
+    await Artifact.deleteMany({ _id: { $in: ids } });
   }
 
   return { snapshot, noteId: note._id };

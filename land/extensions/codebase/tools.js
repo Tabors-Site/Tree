@@ -20,7 +20,7 @@ export default function getTools() {
         path: z.string().describe("Local path or git URL (https://github.com/user/repo) to ingest"),
       },
       annotations: { readOnlyHint: false },
-      async handler({ path: inputPath, userId, nodeId }) {
+      async handler({ path: inputPath, beingId, nodeId }) {
         if (!inputPath) return { content: [{ type: "text", text: "Path or URL required." }] };
         if (!nodeId) return { content: [{ type: "text", text: "Not in a tree position." }] };
 
@@ -44,7 +44,7 @@ export default function getTools() {
         }
 
         try {
-          const stats = await ingest(nodeId, dirPath, userId);
+          const stats = await ingest(nodeId, dirPath, beingId);
 
           // Mark root as code-initialized
           await Node.updateOne({ _id: nodeId }, {

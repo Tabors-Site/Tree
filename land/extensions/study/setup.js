@@ -19,17 +19,17 @@ export function setDeps({ metadata, Node }) {
 
 // ── Base scaffold ──
 
-export async function scaffold(rootId, userId) {
+export async function scaffold(rootId, beingId) {
   if (!_Node) throw new Error("Study core not configured");
   const { createNode } = await import("../../seed/tree/treeManagement.js");
 
-  const logNode = await createNode({ name: "Log", parentId: rootId, userId });
-  const queueNode = await createNode({ name: "Queue", parentId: rootId, userId });
-  const activeNode = await createNode({ name: "Active", parentId: rootId, userId });
-  const completedNode = await createNode({ name: "Completed", parentId: rootId, userId });
-  const gapsNode = await createNode({ name: "Gaps", parentId: rootId, userId });
-  const profileNode = await createNode({ name: "Profile", parentId: rootId, userId });
-  const historyNode = await createNode({ name: "History", parentId: rootId, userId });
+  const logNode = await createNode({ name: "Log", parentId: rootId, beingId });
+  const queueNode = await createNode({ name: "Queue", parentId: rootId, beingId });
+  const activeNode = await createNode({ name: "Active", parentId: rootId, beingId });
+  const completedNode = await createNode({ name: "Completed", parentId: rootId, beingId });
+  const gapsNode = await createNode({ name: "Gaps", parentId: rootId, beingId });
+  const profileNode = await createNode({ name: "Profile", parentId: rootId, beingId });
+  const historyNode = await createNode({ name: "History", parentId: rootId, beingId });
 
   const nodes = [
     { node: logNode, role: ROLES.LOG },
@@ -70,21 +70,21 @@ export async function scaffold(rootId, userId) {
 
 // ── Topic creators (AI calls these via tools) ──
 
-export async function addTopic(activeNodeId, topicName, userId) {
+export async function addTopic(activeNodeId, topicName, beingId) {
   const { createNode } = await import("../../seed/tree/treeManagement.js");
-  const topicNode = await createNode({ name: topicName, parentId: activeNodeId, userId });
+  const topicNode = await createNode({ name: topicName, parentId: activeNodeId, beingId });
   await _metadata.setExtMeta(topicNode, "study", { role: ROLES.TOPIC, lastStudied: new Date().toISOString() });
 
   // Create Resources child under topic
-  const resourcesNode = await createNode({ name: "Resources", parentId: topicNode._id, userId });
+  const resourcesNode = await createNode({ name: "Resources", parentId: topicNode._id, beingId });
   await _metadata.setExtMeta(resourcesNode, "study", { role: ROLES.RESOURCES });
 
   return { id: String(topicNode._id), name: topicName };
 }
 
-export async function addSubtopic(topicId, subtopicName, userId, opts = {}) {
+export async function addSubtopic(topicId, subtopicName, beingId, opts = {}) {
   const { createNode } = await import("../../seed/tree/treeManagement.js");
-  const subNode = await createNode({ name: subtopicName, parentId: topicId, userId });
+  const subNode = await createNode({ name: subtopicName, parentId: topicId, beingId });
 
   await _metadata.setExtMeta(subNode, "study", {
     role: ROLES.SUBTOPIC,

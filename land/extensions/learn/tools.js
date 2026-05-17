@@ -21,7 +21,7 @@ export default [
       text: z.string().max(1000000).optional().describe("The text to learn (max 1MB). If omitted, reads from existing notes on the node."),
       targetSize: z.number().optional().default(3000).describe("Target note size in characters for leaf nodes (default 3000)."),
       maxSteps: z.number().optional().default(10).describe("Max nodes to process in this call (default 10). Use for incremental processing."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -31,7 +31,7 @@ export default [
       idempotentHint: false,
       openWorldHint: true,
     },
-    handler: async ({ nodeId, text, targetSize, maxSteps, userId }) => {
+    handler: async ({ nodeId, text, targetSize, maxSteps, beingId }) => {
       try {
         // Check if there's already a learn operation on this node
         const existing = await getLearnState(nodeId);
@@ -41,11 +41,11 @@ export default [
 
         // If text provided, write it as a note first
         if (text && text.trim().length > 0) {
-          const { createNote } = await import("../../seed/tree/notes.js");
-          await createNote({
-            contentType: "text",
+          const { createArtifact } = await import("../../seed/tree/artifacts.js");
+          await createArtifact({
+            origin: "ibp",
             content: text,
-            userId,
+            beingId,
             nodeId,
             wasAi: false,
           });
@@ -57,14 +57,14 @@ export default [
         // Look up username
         let username = null;
         try {
-          const User = (await import("../../seed/models/user.js")).default;
-          const user = await User.findById(userId).select("username").lean();
+          const User = (await import("../../seed/models/being.js")).default;
+          const user = await Being.findById(beingId).select("username").lean();
           username = user?.username;
         } catch (err) {
           log.debug("Learn", "Username lookup failed:", err.message);
         }
 
-        const state = await processQueue(nodeId, userId, username, maxSteps || 10);
+        const state = await processQueue(nodeId, beingId, username, maxSteps || 10);
 
         const statusText = state.status === "complete"
           ? `Learning complete. Created ${state.nodesCreated} nodes from ${state.nodesProcessed} decomposition passes.`
@@ -94,7 +94,7 @@ export default [
     schema: {
       nodeId: z.string().describe("The root node of the learn operation."),
       maxSteps: z.number().optional().default(10).describe("Max nodes to process in this call (default 10)."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -104,7 +104,7 @@ export default [
       idempotentHint: false,
       openWorldHint: true,
     },
-    handler: async ({ nodeId, maxSteps, userId }) => {
+    handler: async ({ nodeId, maxSteps, beingId }) => {
       try {
         const state = await getLearnState(nodeId);
         if (!state) {
@@ -121,14 +121,14 @@ export default [
 
         let username = null;
         try {
-          const User = (await import("../../seed/models/user.js")).default;
-          const user = await User.findById(userId).select("username").lean();
+          const User = (await import("../../seed/models/being.js")).default;
+          const user = await Being.findById(beingId).select("username").lean();
           username = user?.username;
         } catch (err) {
           log.debug("Learn", "Username lookup failed:", err.message);
         }
 
-        const updated = await processQueue(nodeId, userId, username, maxSteps || 10);
+        const updated = await processQueue(nodeId, beingId, username, maxSteps || 10);
 
         const statusText = updated.status === "complete"
           ? `Learning complete. Created ${updated.nodesCreated} nodes from ${updated.nodesProcessed} passes.`
@@ -156,7 +156,7 @@ export default [
     description: "Check the progress of a learn operation on a node.",
     schema: {
       nodeId: z.string().describe("The root node of the learn operation."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
@@ -196,7 +196,7 @@ export default [
     description: "Pause a learn operation. The queue is preserved and can be resumed later.",
     schema: {
       nodeId: z.string().describe("The root node of the learn operation."),
-      userId: z.string().describe("Injected by server. Ignore."),
+      beingId: z.string().describe("Injected by server. Ignore."),
       chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },

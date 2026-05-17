@@ -18,7 +18,7 @@ router.get("/root/:rootId/teach", authenticate, async (req, res) => {
 // POST /root/:rootId/teach/export - Extract lessons from this tree
 router.post("/root/:rootId/teach/export", authenticate, async (req, res) => {
   try {
-    const lessonSet = await extractLessons(req.params.rootId, req.userId, req.username);
+    const lessonSet = await extractLessons(req.params.rootId, req.beingId, req.username);
     sendOk(res, lessonSet);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -32,7 +32,7 @@ router.post("/root/:rootId/teach/import", authenticate, async (req, res) => {
     if (!lessonSet?.lessons) {
       return sendError(res, 400, ERR.INVALID_INPUT, "Request body must contain a lesson set with a lessons array");
     }
-    const result = await importLessons(req.params.rootId, lessonSet, req.userId);
+    const result = await importLessons(req.params.rootId, lessonSet, req.beingId);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -44,7 +44,7 @@ router.post("/root/:rootId/teach/share", authenticate, async (req, res) => {
   try {
     const { peer } = req.body;
     if (!peer) return sendError(res, 400, ERR.INVALID_INPUT, "peer (domain) is required");
-    const result = await shareLessons(req.params.rootId, peer, req.userId, req.username);
+    const result = await shareLessons(req.params.rootId, peer, req.beingId, req.username);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
@@ -56,7 +56,7 @@ router.post("/root/:rootId/teach/dismiss", authenticate, async (req, res) => {
   try {
     const { id } = req.body;
     if (!id) return sendError(res, 400, ERR.INVALID_INPUT, "id (lesson ID) is required");
-    const result = await dismissLesson(req.params.rootId, id, req.userId);
+    const result = await dismissLesson(req.params.rootId, id, req.beingId);
     sendOk(res, result);
   } catch (err) {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);

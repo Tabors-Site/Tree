@@ -36,7 +36,7 @@ function calculateNextSchedule(scheduleData) {
 
 async function addPrestige({
   nodeId,
-  userId,
+  beingId,
   wasAi,
   chatId = null,
   sessionId = null,
@@ -46,7 +46,7 @@ async function addPrestige({
   if (node.systemRole) throw new Error("Cannot modify system nodes");
 
   const { energyUsed } = await useEnergy({
-    userId,
+    beingId,
     action: "prestige",
   });
 
@@ -56,7 +56,7 @@ async function addPrestige({
   await addPrestigeToNode(node);
 
   await logContribution({
-    userId,
+    beingId,
     nodeId,
     wasAi,
     chatId,
@@ -105,7 +105,7 @@ async function addPrestigeToNode(node) {
       try {
         await valuesExt.exports.setValueForNode({
           nodeId: node._id.toString(), key, value: 0,
-          userId: node.rootOwner?.toString() || "system",
+          beingId: node.rootOwner?.toString() || "system",
         });
       } catch (err) {
         log.debug("Prestige", "Value reset failed for key " + key + ":", err.message);
