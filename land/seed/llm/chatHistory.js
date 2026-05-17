@@ -1,9 +1,10 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import log from "../log.js";
 import Chat from "../models/chat.js";
-import Contribution from "../models/contribution.js";
+import Did from "../models/did.js";
 import { getDescendantIds } from "../tree/treeFetch.js";
 import { getLandConfigValue } from "../landConfig.js";
+import { canonicalPortalAddress, parsePortalAddress, portalAddressIncludes } from "./portalAddress.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // LIMITS (configurable via land config, read at use time)
@@ -77,7 +78,7 @@ async function fetchChatsForSessions(sessionIds, extraMatch = {}, populateUser =
   const q = Chat.find(query);
 
   if (populateUser) {
-    q.populate({ path: "beingId", select: "username", model: "User" });
+    q.populate({ path: "beingIn", select: "username", model: "Being" });
   }
 
   // Lean populates: only fetch the fields we need from references.
@@ -102,8 +103,8 @@ async function attachContributions(chats) {
   if (chats.length === 0) return;
   const chatIds = chats.map(c => c._id);
 
-  const contribs = await Contribution.find({ chatId: { $in: chatIds } })
-    .select("_id action nodeId wasAi date extensionData chatId")
+  const contribs = await Did.find({ chatId: { $in: chatIds } })
+    .select("_id action nodeId date extensionData chatId")
     .populate({ path: "nodeId", select: "name" })
     .limit(MAX_CONTRIBUTIONS_PER_QUERY())
     .lean();
@@ -171,8 +172,11 @@ async function getChats({ beingId, sessionLimit = 10, sessionId, startDate, endD
   const timeFilter = buildTimeFilter(startDate, endDate);
 
   try {
-    // Find recent session IDs
-    const matchQuery = { beingId };
+    // The function param is named `beingId` for caller ergonomics
+    // (callers think of "this user's chats") but the Chat schema field
+    // is `beingIn` — the asker side of the conversation. A user's chat
+    // history is "all chats this being initiated."
+    const matchQuery = { beingIn: beingId };
     if (timeFilter) matchQuery["startMessage.time"] = timeFilter;
 
     const sessionIds = sessionId
@@ -180,11 +184,11 @@ async function getChats({ beingId, sessionLimit = 10, sessionId, startDate, endD
       : await findRecentSessionIds(matchQuery, limit);
 
     if (!sessionIds.length) {
-      return { message: `No AI chats found for user ${beingId}`, sessions: [] };
+      return { message: `No AI chats found for being ${beingId}`, sessions: [] };
     }
 
     // Fetch chats + contributions
-    const extraMatch = { beingId };
+    const extraMatch = { beingIn: beingId };
     if (timeFilter) extraMatch["startMessage.time"] = timeFilter;
 
     const chats = await fetchChatsForSessions(sessionIds, extraMatch);
@@ -227,7 +231,7 @@ async function getNodeChats({ nodeId, sessionLimit = 10, sessionId, startDate, e
     // Path A: sessions via contributions that touched these nodes
     const contribQuery = { nodeId: { $in: nodeIds } };
     if (timeFilter) contribQuery.date = timeFilter;
-    const contribSessionIds = await Contribution.distinct("sessionId", contribQuery);
+    const contribSessionIds = await Did.distinct("sessionId", contribQuery);
 
     // Path B: sessions via Chat.treeContext.targetNodeId
     const treeCtxQuery = { "treeContext.targetNodeId": { $in: nodeIds } };
@@ -346,4 +350,143 @@ async function getChatChain(chatId, { maxDescendants = 200, maxDepth = 20, inclu
   }
 }
 
-export { getChats, getNodeChats, getChatChain };
+// ─────────────────────────────────────────────────────────────────────────
+// PORTAL ADDRESS QUERIES
+//
+// Every chat is one stance addressing another. The canonical Portal
+// Address — `<stance> :: <stance>` sorted lexicographically — is the
+// natural identifier for grouping chats. There is no separate "thread"
+// concept; "show me the conversation at this Portal Address" is just a
+// query on `Chat.portalAddress`.
+//
+// Portal Address queries co-exist with the position-centric and
+// asker-centric queries above:
+//   - getChats        — asker-centric ("messages I sent").
+//   - getNodeChats    — position-centric ("messages that touched
+//                       this node").
+//   - getChatsByPortalAddress / getPortalAddressesForBeing — stance-pair
+//                       ("conversations at this Portal Address" or
+//                       "every Portal Address this being is in").
+//
+// Position changes fork Portal Addresses naturally — the asker stance
+// includes their current position, so navigating to a new position
+// lands their next chat at a new Portal Address. The old Portal Address
+// remains in history with its accumulated chats; the new one starts
+// accumulating from there.
+// ─────────────────────────────────────────────────────────────────────────
+
+function MAX_CHATS_PER_PORTAL_ADDRESS() { return Math.max(20, Math.min(Number(getLandConfigValue("chatHistoryMaxChatsPerPortalAddress")) || 500, 5000)); }
+function MAX_PORTAL_ADDRESSES_PER_BEING() { return Math.max(10, Math.min(Number(getLandConfigValue("chatHistoryMaxPortalAddressesPerBeing")) || 200, 2000)); }
+
+/**
+ * Get every chat at a Portal Address, oldest-first.
+ *
+ * Pass `portalAddress` directly when you already have it, OR `stances`
+ * (an array of two stance strings) and the helper canonicalizes it for
+ * you. Time-bounded queries pass startDate / endDate. The Portal Address
+ * index `{ portalAddress: 1, "startMessage.time": -1 }` handles both
+ * shapes efficiently.
+ */
+async function getChatsByPortalAddress({ portalAddress, stances, startDate, endDate, limit } = {}) {
+  let address = portalAddress;
+  if (!address && Array.isArray(stances) && stances.length === 2) {
+    address = canonicalPortalAddress(stances[0], stances[1]);
+  }
+  if (!address) throw new Error("getChatsByPortalAddress requires portalAddress or stances[2]");
+
+  const cap = Math.max(1, Math.min(Number(limit) || MAX_CHATS_PER_PORTAL_ADDRESS(), MAX_CHATS_PER_PORTAL_ADDRESS()));
+  const query = { portalAddress: address };
+  const timeFilter = buildTimeFilter(startDate, endDate);
+  if (timeFilter) query["startMessage.time"] = timeFilter;
+
+  try {
+    const chats = await Chat.find(query)
+      .sort({ "startMessage.time": 1 })
+      .limit(cap)
+      .select("_id beingIn beingOut portalAddress sessionId chainIndex rootChatId parentChatId dispatchOrigin startMessage endMessage aiContext treeContext llmProvider toolCalls")
+      .lean();
+    return {
+      portalAddress: address,
+      chats,
+      count: chats.length,
+      truncated: chats.length >= cap,
+    };
+  } catch (err) {
+    log.error("AI", "getChatsByPortalAddress:", err.message);
+    throw new Error(err.message || "Database error while retrieving Portal Address chats.");
+  }
+}
+
+/**
+ * List the distinct Portal Addresses a being participates in,
+ * most-recent first.
+ *
+ * Inbox query. Returns one entry per Portal Address with the latest
+ * exchange surfaced for rendering:
+ *
+ *   { portalAddress, otherStances, lastChatId, lastTime, startMessage,
+ *     endMessage, chatCount }
+ *
+ * `otherStances` is every stance in the Portal Address except the
+ * being's — useful for labelling the inbox entry by who else is in
+ * the conversation. The being is identified by matching their username
+ * against the stance suffix (`@<username>`), so a being conversing
+ * from multiple positions appears in each Portal Address they used.
+ */
+async function getPortalAddressesForBeing({ beingId, username, limit, startDate, endDate } = {}) {
+  if (!beingId) throw new Error("getPortalAddressesForBeing requires beingId");
+  const cap = Math.max(1, Math.min(Number(limit) || MAX_PORTAL_ADDRESSES_PER_BEING(), MAX_PORTAL_ADDRESSES_PER_BEING()));
+
+  // Match chats where the being is either side. The indexed beingIn /
+  // beingOut paths satisfy this OR efficiently; the Portal Address is
+  // collapsed in the group stage.
+  const match = {
+    portalAddress: { $ne: null },
+    $or: [{ beingIn: String(beingId) }, { beingOut: String(beingId) }],
+  };
+  const timeFilter = buildTimeFilter(startDate, endDate);
+  if (timeFilter) match["startMessage.time"] = timeFilter;
+
+  try {
+    const agg = await Chat.aggregate([
+      { $match: match },
+      { $sort: { "startMessage.time": -1 } },
+      {
+        $group: {
+          _id: "$portalAddress",
+          lastChatId:   { $first: "$_id" },
+          lastTime:     { $first: "$startMessage.time" },
+          startMessage: { $first: "$startMessage" },
+          endMessage:   { $first: "$endMessage" },
+          beingIn:      { $first: "$beingIn" },
+          beingOut:     { $first: "$beingOut" },
+          chatCount:    { $sum: 1 },
+        },
+      },
+      { $sort: { lastTime: -1 } },
+      { $limit: cap },
+    ]);
+
+    const usernameSuffix = username ? `@${String(username)}` : null;
+    return agg.map((row) => {
+      const stances = parsePortalAddress(row._id);
+      const otherStances = usernameSuffix
+        ? stances.filter((s) => !s.endsWith(usernameSuffix))
+        : stances; // caller didn't pass username — give them all stances
+      return {
+        portalAddress: row._id,
+        otherStances,
+        chatCount:    row.chatCount,
+        lastChatId:   row.lastChatId,
+        lastTime:     row.lastTime,
+        startMessage: row.startMessage,
+        endMessage:   row.endMessage,
+      };
+    });
+  } catch (err) {
+    log.error("AI", "getPortalAddressesForBeing:", err.message);
+    throw new Error(err.message || "Database error while listing Portal Addresses.");
+  }
+}
+
+export { getChats, getNodeChats, getChatChain, getChatsByPortalAddress, getPortalAddressesForBeing };

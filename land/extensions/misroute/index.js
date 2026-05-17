@@ -75,10 +75,10 @@ export async function init(core) {
       const treeOrch = getExtension("tree-orchestrator");
       if (!treeOrch?.exports?.getLastRoutingRing) return;
 
-      // visitorId convention: tree=`${rootId}:${beingId}`, home=`home:${beingId}`,
+      // aiSessionKey convention: tree=`${rootId}:${beingId}`, home=`home:${beingId}`,
       // land=`land:${beingId}`. See seed/llm/conversation.js around line 2017.
-      const visitorId = rootId ? `${rootId}:${beingId}` : `home:${beingId}`;
-      const ring = treeOrch.exports.getLastRoutingRing(visitorId);
+      const aiSessionKey = rootId ? `${rootId}:${beingId}` : `home:${beingId}`;
+      const ring = treeOrch.exports.getLastRoutingRing(aiSessionKey);
       if (!ring || ring.length < 2) return; // need at least previous + current
 
       // ring[0] is the current message (the correction itself).
@@ -167,9 +167,9 @@ export async function init(core) {
   // The misroute event is logged in the background (fire-and-forget).
   //
   // Returns: { rerouteMessage, forceMode, correctExtension } or null.
-  async function checkForCorrectionReroute({ message, visitorId, beingId, rootId }) {
+  async function checkForCorrectionReroute({ message, aiSessionKey, beingId, rootId }) {
     try {
-      if (!message || !visitorId || !beingId) return null;
+      if (!message || !aiSessionKey || !beingId) return null;
 
       if (!knownExtensions) refreshKnown();
       const correction = detectCorrection(message, knownExtensions);
@@ -183,7 +183,7 @@ export async function init(core) {
       const treeOrch = getExtension("tree-orchestrator");
       if (!treeOrch?.exports?.getLastRoutingRing) return null;
 
-      const ring = treeOrch.exports.getLastRoutingRing(visitorId);
+      const ring = treeOrch.exports.getLastRoutingRing(aiSessionKey);
       if (!ring || ring.length === 0) return null;
       const lastRouting = ring[0];
       if (!lastRouting) return null;
@@ -247,8 +247,7 @@ export async function init(core) {
       data.suggestions.sort((a, b) => (b.count || 0) - (a.count || 0));
       data.suggestions = data.suggestions.slice(0, MAX_SUGGESTIONS);
     }
-    setBeingMeta(user, "misroute", data);
-    await user.save();
+    await setBeingMeta(user, "misroute", data);
   }
 
   async function logMisroute({ beingId, rootId, correction, lastRouting, correctionText }) {

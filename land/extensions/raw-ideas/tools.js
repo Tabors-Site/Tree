@@ -178,7 +178,6 @@ RULES
           rawIdeaId,
           beingId,
           nodeId,
-          wasAi: true,
           chatId,
           sessionId,
         });

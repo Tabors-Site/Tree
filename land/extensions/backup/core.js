@@ -2,7 +2,7 @@
  * Backup and Restore
  *
  * Reads kernel models directly (allowed for extensions). Knows Node, User, Note,
- * Contribution, AIChat. That's enough to export and import everything.
+ * Did, AIChat. That's enough to export and import everything.
  *
  * Three modes:
  *   exportLand()    - Full backup. Every node, user, note, contribution. JSON file.
@@ -16,7 +16,7 @@ import path from "path";
 import Node from "../../seed/models/node.js";
 import Being from "../../seed/models/being.js";
 import Artifact from "../../seed/models/artifact.js";
-import Contribution from "../../seed/models/contribution.js";
+import Did from "../seed/models/did.js";
 import log from "../../seed/log.js";
 
 let Chat = null;
@@ -53,7 +53,7 @@ export async function exportLand(opts = {}) {
   const cutoff = retentionDays > 0
     ? new Date(Date.now() - retentionDays * 86400000)
     : new Date(0);
-  const contributions = await Contribution.find({ date: { $gte: cutoff } }).lean();
+  const contributions = await Did.find({ date: { $gte: cutoff } }).lean();
 
   const data = {
     _backup: {
@@ -193,7 +193,7 @@ export async function importLand(input) {
   }
 
   if (data.contributions?.length > 0) {
-    await Contribution.insertMany(data.contributions, { ordered: false });
+    await Did.insertMany(data.contributions, { ordered: false });
     report.contributions = data.contributions.length;
   }
 

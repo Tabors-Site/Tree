@@ -99,7 +99,6 @@ async function createContractsEmission({ contractsNodeId, ordinal, payload, bein
         name,
         type: "contracts-emission",
         beingId,
-        wasAi: true,
       });
     }
   } catch (err) {

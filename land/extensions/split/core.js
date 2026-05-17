@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from "uuid";
 
 let Node = null;
 let _Artifact = null;
-let logContribution = async () => {};
+let logDid = async () => {};
 let runChat = null;
 let useEnergy = async () => ({ energyUsed: 0 });
 let _metadata = null;
@@ -21,7 +21,7 @@ let _metadata = null;
 export function setServices({ models, contributions, llm, energy, metadata }) {
   Node = models.Node;
   _Artifact = models.Artifact;
-  logContribution = contributions.logContribution;
+  logDid = contributions.logDid;
   runChat = llm.runChat;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
   if (metadata) _metadata = metadata;
@@ -405,10 +405,9 @@ export async function execute(branchId, beingId, username) {
   }
 
   // Log contribution
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: branchId,
-    wasAi: false,
     action: "split:executed",
     extensionData: {
       split: {

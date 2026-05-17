@@ -172,11 +172,13 @@ export async function renderRoomTranscript({ roomId, nodeModel, req }) {
   };
 
   const messages = transcript.map((t) => {
-    const label = t.authorLabel || (t.wasAi ? "agent" : "user");
+    // operatingMode-derived AI indicator. Falls back to authorLabel pattern, then "user".
+    const isAi = t.operatingMode === "ai";
+    const label = t.authorLabel || (isAi ? "agent" : "user");
     const color = colorFor(label);
     const info = t.authorSubId ? subInfo.get(t.authorSubId) : null;
-    const roleGlyph = t.wasAi ? "🤖" : (info?.type === "observer" ? "👁" : "👤");
-    const roleClass = t.wasAi ? "msg-agent" : (info?.type === "observer" ? "msg-observer" : "msg-user");
+    const roleGlyph = isAi ? "🤖" : (info?.type === "observer" ? "👁" : "👤");
+    const roleClass = isAi ? "msg-agent" : (info?.type === "observer" ? "msg-observer" : "msg-user");
 
     let nodeHref = null, rootHref = null;
     if (info?.rootId) {

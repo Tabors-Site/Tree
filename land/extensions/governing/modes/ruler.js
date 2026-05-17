@@ -91,7 +91,7 @@ export default {
     let rulerWakeup = null;
     try {
       const { getRulerWakeup } = await import("../../tree-orchestrator/ruling.js");
-      rulerWakeup = getRulerWakeup(ctx.sessionId || ctx.visitorId);
+      rulerWakeup = getRulerWakeup(ctx.sessionId || ctx.aiSessionKey);
     } catch {
       // Side-channel unavailable (Ruler invoked outside the ruling.js
       // path) — treat as user-message by default.

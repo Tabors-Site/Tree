@@ -7,7 +7,7 @@ export async function init(core) {
   const BG = core.llm.LLM_PRIORITY.BACKGROUND;
   setServices({
     models: core.models,
-    contributions: core.contributions,
+    contributions: core.dids,
     llm: { ...core.llm, runChat: async (opts) => {
       if (opts.beingId && opts.beingId !== "SYSTEM" && !await core.llm.userHasLlm(opts.beingId)) return { answer: null };
       return core.llm.runChat({ ...opts, llmPriority: BG });

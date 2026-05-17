@@ -41,7 +41,7 @@ export async function init(core) {
   const router = buildRouter(core, { escapeRegex, queueCanopyEvent });
 
   const { Node, Note } = core.models;
-  const { logContribution } = core.contributions;
+  const { logDid } = core.dids;
 
   // Pre-bound: callers just pass inviteId/beingId/acceptInvite, no deps needed
   async function boundRespondToInvite({ inviteId, beingId, acceptInvite }) {
@@ -51,7 +51,7 @@ export async function init(core) {
       acceptInvite,
       Node,
       User,
-      logContribution,
+      logDid,
       queueCanopyEvent,
     });
   }

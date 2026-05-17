@@ -1,12 +1,12 @@
 // Services wired from init() via setServices()
 let Node = null;
-let logContribution = async () => {};
+let logDid = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
 let _metadata = null;
 
 export function setServices({ models, contributions, metadata }) {
   Node = models.Node;
-  logContribution = contributions.logContribution;
+  logDid = contributions.logDid;
   if (metadata) _metadata = metadata;
 }
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
@@ -16,7 +16,6 @@ async function updateSchedule({
   newSchedule,
   reeffectTime,
   beingId,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 }) {
@@ -59,10 +58,9 @@ async function updateSchedule({
 
   const scheduleEdited = { date: formattedDate, reeffectTime };
 
-  await logContribution({
+  await logDid({
     beingId,
     nodeId,
-    wasAi,
     chatId,
     sessionId,
     action: "editSchedule",

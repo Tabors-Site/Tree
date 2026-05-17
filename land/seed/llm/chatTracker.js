@@ -8,53 +8,28 @@ import { getLandConfigValue } from "../landConfig.js";
 
 import { v4 as uuidv4 } from "uuid";
 import Chat from "../models/chat.js";
-import Contribution from "../models/contribution.js";
+import Did from "../models/did.js";
 import { createSession, SESSION_TYPES } from "../ws/sessionRegistry.js";
+import { computePortalAddressForChat, invalidateStanceCache } from "./portalAddress.js";
+
+/**
+ * Bust cached stance fields for a being. Call after rename or home
+ * change so the next chat write picks up the new values. Re-exported
+ * for callers that already import from chatTracker.
+ */
+export { invalidateStanceCache };
 
 // ─────────────────────────────────────────────────────────────────────────
-// CHAT CONTRIBUTION CONTEXT (in-memory aiSessionKey -> { sessionId, chatId })
-// Used by handleMcpRequest to inject into tool args so contributions
-// are tagged with the correct chat, not linked by time window.
+// CHAT CONTRIBUTION CONTEXT
 //
-// The key is the ai-chat session key (historically called "visitorId"
-// throughout the codebase; conversation.js still uses that name
-// internally).
+// Tool-call → chatId correlation used to flow through a global Map
+// keyed by aiSessionKey (`activeAiContext`). Slice 2 of the
+// per-being / per-Portal-Address refactor deleted that Map: callers
+// now thread `chatId` and `sessionId` through processMessage's ctx,
+// and mcp/server.js reads them directly from the inbound MCP tool
+// call envelope. No server-side state to populate, no risk of stale
+// reads between chainsteps.
 // ─────────────────────────────────────────────────────────────────────────
-
-const activeAiContext = new Map();
-function MAX_AI_CONTEXT_ENTRIES() { return Math.max(100, Math.min(Number(getLandConfigValue("maxAiContextEntries")) || 10000, 100000)); }
-
-export function setChatContext(aiSessionKey, sessionId, chatId) {
-  // Cap to prevent unbounded growth if clearChatContext is never called
-  if (activeAiContext.size >= MAX_AI_CONTEXT_ENTRIES() && !activeAiContext.has(String(aiSessionKey))) {
-    const first = activeAiContext.keys().next().value;
-    activeAiContext.delete(first);
-  }
-  activeAiContext.set(String(aiSessionKey), { sessionId, chatId: chatId ? String(chatId) : null });
-}
-
-export function getChatContext(aiSessionKey) {
-  return activeAiContext.get(String(aiSessionKey)) || { sessionId: null, chatId: null };
-}
-
-export function clearChatContext(aiSessionKey) {
-  activeAiContext.delete(String(aiSessionKey));
-}
-
-// Periodic sweep: clear entries older than 30 minutes (safety net for missed clears)
-setInterval(() => {
-  // activeAiContext doesn't track timestamps, so just cap the size.
-  // If it's over the limit, evict the oldest half.
-  const maxEntries = MAX_AI_CONTEXT_ENTRIES();
-  if (activeAiContext.size > maxEntries / 2) {
-    let toDelete = activeAiContext.size - Math.floor(maxEntries / 2);
-    for (const key of activeAiContext.keys()) {
-      if (toDelete <= 0) break;
-      activeAiContext.delete(key);
-      toDelete--;
-    }
-  }
-}, 30 * 60 * 1000).unref();
 
 // ─────────────────────────────────────────────────────────────────────────
 // SESSION MANAGEMENT
@@ -65,9 +40,9 @@ setInterval(() => {
  * Call before each chat. Reuses via scoped session if still within idle TTL.
  * Returns the current sessionId.
  *
- * The scopeKey is per-transport (`ws:${socket.visitorId}`), not per-user.
- * socket.visitorId already encodes (user, clientKind, clientInstance) so
- * CLI and browser on the same user get independent sessions. A reconnect
+ * The scopeKey is per-transport (`ws:${socket.aiSessionKey}`), not per-user.
+ * socket.aiSessionKey already encodes (being, clientKind, clientInstance) so
+ * CLI and browser on the same being get independent sessions. A reconnect
  * in the same tab / CLI pid reuses; a different device doesn't collide.
  *
  * This matters because endSession(sessionId) aborts any registered abort
@@ -76,17 +51,17 @@ setInterval(() => {
  * the other's in-flight chat.
  */
 export function ensureSession(socket) {
-  const scopeKey = `ws:${socket.visitorId || socket.beingId}`;
+  const scopeKey = `ws:${socket.aiSessionKey}`;
   const { sessionId, reused } = createSession({
     beingId: socket.beingId,
     type: SESSION_TYPES.WEBSOCKET_CHAT,
     scopeKey,
     description: `Chat session for ${socket.username || "unknown"}`,
-    meta: { visitorId: socket.visitorId },
+    meta: { aiSessionKey: socket.aiSessionKey },
   });
 
   if (!reused) {
-    log.debug("AI", `New AI session for ${socket.visitorId || socket.beingId}: ${sessionId}`);
+    log.debug("AI", `New AI session for ${socket.aiSessionKey}: ${sessionId}`);
   }
 
   socket._aiSession = { id: sessionId, lastActivity: Date.now() };
@@ -101,13 +76,13 @@ export function rotateSession(socket) {
   const { sessionId } = createSession({
     beingId: socket.beingId,
     type: SESSION_TYPES.WEBSOCKET_CHAT,
-    scopeKey: `ws:${socket.visitorId || socket.beingId}`,
+    scopeKey: `ws:${socket.aiSessionKey}`,
     idleTTL: 0, // force new session by treating any existing as expired
     description: `Chat session for ${socket.username || "unknown"}`,
-    meta: { visitorId: socket.visitorId },
+    meta: { aiSessionKey: socket.aiSessionKey },
   });
 
-  log.debug("AI", `Rotated AI session for ${socket.visitorId || socket.beingId}: ${sessionId}`);
+  log.debug("AI", `Rotated AI session for ${socket.aiSessionKey}: ${sessionId}`);
 
   socket._aiSession = { id: sessionId, lastActivity: Date.now() };
   return sessionId;
@@ -154,7 +129,7 @@ export async function finalizeOpenChat(socket) {
       content: null,
       stopped: true,
     });
-    log.debug("AI", `Finalized orphaned chat ${active.chatId} for ${socket.visitorId}`);
+    log.debug("AI", `Finalized orphaned chat ${active.chatId} for ${socket.aiSessionKey}`);
   } catch (err) {
     log.warn("AI", `Failed to finalize orphaned chat: ${err.message}`);
   }
@@ -183,6 +158,19 @@ export async function startChat({
   // may omit it. When the asker is also the responder (a being
   // talking to itself), pass the same id for both.
   beingOut = null,
+  // Stance positions used to compute this chat's Portal Address.
+  // The Portal Address is `<askerStance> :: <addresseeStance>` (sorted
+  // canonically), and each stance is anchored at a nodeId.
+  //   askerPosition:     the asker's CURRENT nodeId — wherever they are
+  //                      in the world when this chat is sent. For humans
+  //                      this is their navigated position; for AI beings
+  //                      it's typically their homePositionId.
+  //   addresseePosition: the responder's nodeId. When omitted, the
+  //                      responder's homePositionId is used.
+  // When either resolves to null the Portal Address is left null —
+  // tolerated for legacy callers and stanceless background tasks.
+  askerPosition = null,
+  addresseePosition = null,
   sessionId,
   message,
   source = "user",
@@ -235,10 +223,22 @@ export async function startChat({
     }
   }
 
+  // Compute the canonical Portal Address from the stance pair. Both
+  // stances must be resolvable — when either side is missing (system
+  // task without a responder, legacy caller without position context),
+  // the Portal Address stays null and that's by design.
+  const portalAddress = await computePortalAddressForChat({
+    askerBeingId,
+    askerPosition,
+    addresseeBeingId: beingOut,
+    addresseePosition,
+  });
+
   const chat = await Chat.create({
     _id: chatId,
     beingIn: askerBeingId,
     beingOut: beingOut || null,
+    portalAddress,
     sessionId: sessionId || uuidv4(),
     chainIndex: resolvedChainIndex,
     rootChatId: resolvedRootChatId,
@@ -294,7 +294,7 @@ export async function finalizeChat({
     : (content || null);
 
   // Collect AI contributions linked to this chat by chatId (capped)
-  const contributions = await Contribution.find({ chatId })
+  const contributions = await Did.find({ chatId })
     .select("_id")
     .limit(Number(getLandConfigValue("chatContributionQueryLimit")) || 2000)
     .lean();
@@ -411,11 +411,19 @@ export async function getLatestActiveChainstepForBeing(beingOut) {
 /**
  * Legacy lookup: find the most recently active chainstep bound to a
  * (nodeId, modeKey) pair. Kept for callers that haven't migrated to
- * being-keyed lookups yet (older descriptor paths, e.g. when a chat
- * row was inserted before beingOut was populated).
+ * being-keyed lookups (older descriptor paths, e.g. when a chat row
+ * was inserted before beingOut was populated).
+ *
+ * Instrumented 2026-05-17: every call logs a warn so we can verify the
+ * descriptor backfill of `_chainstepLookupBeingId` covers every entry.
+ * If this warn stays silent over a full session, the function is dead
+ * code and can be deleted along with its callers in ibp/descriptor.js.
  */
 export async function getLatestActiveChainstep(nodeId, modeKey) {
   if (!nodeId || !modeKey) return null;
+  log.warn("ChatTracker",
+    `getLatestActiveChainstep fallback hit (nodeId=${String(nodeId).slice(0,8)}, modeKey=${modeKey}). ` +
+    `Indicates a being entry without _chainstepLookupBeingId. If this never fires, the legacy lookup is dead.`);
   const [zone, ...rest] = modeKey.split(":");
   const mode = rest.join(":");
   if (!zone || !mode) return null;
@@ -499,7 +507,17 @@ function MAX_CHAIN_STEP_CONTENT() { return Math.max(500, Math.min(Number(getLand
  * Fire-and-forget. Never blocks the orchestrator.
  */
 export function trackChainStep({
+  // Asker being for the chain step. `beingIn` is the schema field;
+  // `beingId` is accepted as a legacy alias from older callers.
+  beingIn,
   beingId,
+  beingOut = null,
+  // Pre-computed Portal Address (canonical sorted stance::stance).
+  // Callers that already resolved the address pass it directly so
+  // trackChainStep stays sync/fire-and-forget — no Mongo round-trip
+  // here. When omitted the field is left null; downstream queries
+  // by Portal Address simply won't surface this row.
+  portalAddress = null,
   sessionId,
   chainIndex,
   rootChatId = null,
@@ -512,7 +530,8 @@ export function trackChainStep({
   llmProvider = null,
   treeContext,
 }) {
-  if (!sessionId || !beingId) return;
+  const askerBeingId = beingIn || beingId;
+  if (!sessionId || !askerBeingId) return;
 
   const safeKey = modeKey || "orchestrator:step";
   const cIdx = safeKey.indexOf(":");
@@ -540,9 +559,14 @@ export function trackChainStep({
     }
   }
 
-  // Fire and forget. Don't await, don't block the chain.
+  // Fire and forget. Don't await, don't block the chain. portalAddress
+  // is whatever the caller passed; trackChainStep does NOT resolve it
+  // here, because the function contract is "log a completed step
+  // without blocking" — adding a Mongo round-trip would violate that.
   Chat.create({
-    beingId,
+    beingIn: askerBeingId,
+    beingOut: beingOut || null,
+    portalAddress: portalAddress || null,
     sessionId,
     chainIndex,
     rootChatId,
@@ -576,7 +600,16 @@ export function trackChainStep({
  * bounded chainIndex steps so each step has its own visible phase.
  */
 export async function startChainStep({
+  // Asker being. `beingIn` is the schema field; `beingId` is the
+  // legacy alias accepted from pre-rename callers.
+  beingIn,
   beingId,
+  beingOut = null,
+  // Stance positions used to compute this chat's Portal Address.
+  // See startChat for semantics. The awaited variant auto-resolves
+  // each side via Being.homePositionId when omitted.
+  askerPosition = null,
+  addresseePosition = null,
   sessionId,
   chainIndex,
   rootChatId = null,
@@ -590,7 +623,14 @@ export async function startChainStep({
   systemPrompt = null,
   enrichedContext = null,
 }) {
-  if (!sessionId || !beingId) return null;
+  const askerBeingId = beingIn || beingId;
+  if (!sessionId || !askerBeingId) return null;
+  const portalAddress = await computePortalAddressForChat({
+    askerBeingId,
+    askerPosition,
+    addresseeBeingId: beingOut,
+    addresseePosition,
+  });
 
   const safeKey = modeKey || "orchestrator:step";
   const cIdx = safeKey.indexOf(":");
@@ -606,7 +646,9 @@ export async function startChainStep({
   try {
     const chat = await Chat.create({
       _id: uuidv4(),
-      beingId,
+      beingIn: askerBeingId,
+      beingOut: beingOut || null,
+      portalAddress,
       sessionId,
       chainIndex,
       rootChatId,

@@ -10,10 +10,10 @@ import { registerMode, setDefaultMode, setNodeMode } from "./modes/registry.js";
 import { registerOrchestrator, getOrchestrator } from "./orchestrators/registry.js";
 import Being from "./models/being.js";
 import Node from "./models/node.js";
-import Contribution from "./models/contribution.js";
+import Did from "./models/did.js";
 import Artifact from "./models/artifact.js";
 
-import { logContribution } from "./tree/contributions.js";
+import { logDid } from "./tree/dids.js";
 import { resolveTreeAccess } from "./tree/treeAccess.js";
 import { createBeing, createFirstBeing, verifyPassword, generateToken, isFirstBeing, findBeingByUsername } from "./auth.js";
 
@@ -29,7 +29,6 @@ import {
 import {
   startChat, finalizeChat, trackChainStep,
   ensureSession as ensureChatSession,
-  setChatContext, getChatContext, clearChatContext,
 } from "./llm/chatTracker.js";
 
 import {
@@ -48,8 +47,9 @@ import { emitNavigate, emitToUser, registerSocketHandler, unregisterSocketHandle
 import { OrchestratorRuntime } from "./orchestrators/runtime.js";
 import { acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks } from "./orchestrators/locks.js";
 import { ok, error, sendOk, sendError, ERR, WS, CASCADE } from "./protocol.js";
-import { getExtMeta, readNs, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, batchSetExtMeta, unsetExtMeta } from "./tree/extensionMetadata.js";
-import { getBeingMeta, setBeingMeta, incBeingMeta, pushBeingMeta, batchSetBeingMeta, unsetBeingMeta, addToBeingMetaSet } from "./tree/beingMetadata.js";
+import { getExtMeta, readNs, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, addToExtMetaSet, batchSetExtMeta, unsetExtMeta } from "./tree/extensionMetadata.js";
+import { getBeingMeta, readBeingNs, setBeingMeta, mergeBeingMeta, incBeingMeta, pushBeingMeta, addToBeingMetaSet, batchSetBeingMeta, unsetBeingMeta } from "./tree/beingMetadata.js";
+import { getArtifactMeta, readArtifactNs, setArtifactMeta, mergeArtifactMeta, incArtifactMeta, pushArtifactMeta, addToArtifactMetaSet, batchSetArtifactMeta, unsetArtifactMeta } from "./tree/artifactMetadata.js";
 import { deliverCascade } from "./tree/cascade.js";
 import { isUserRoot, getLandRootId } from "./landRoot.js";
 import { createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType } from "./tree/treeManagement.js";
@@ -111,7 +111,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
 
   const core = {
     // --- Always-available services ---
-    contributions: { logContribution },
+    dids: { logDid },
     auth: {
       resolveTreeAccess,
       createBeing, verifyPassword, generateToken, isFirstBeing, findBeingByUsername,
@@ -140,7 +140,6 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     chat: {
       startChat, finalizeChat, trackChainStep,
       ensureSession: ensureChatSession,
-      setChatContext, getChatContext, clearChatContext,
     },
 
     llm: {
@@ -162,7 +161,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     orchestrator: { OrchestratorRuntime, acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks },
 
     // --- Shared models (core protocol, always available) ---
-    models: { Being, Node, Contribution, Artifact },
+    models: { Being, Node, Did, Artifact },
 
     // --- Hook system ---
     hooks: hooksModule,
@@ -187,11 +186,14 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     // --- Node locks (structural mutation locks, tier 3 only) ---
     nodeLocks: { acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple, isNodeLocked, getStats: getNodeLockStats },
 
-    // --- Metadata (namespace-enforced read/write for extension data on nodes) ---
-    metadata: { getExtMeta, readNs, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, batchSetExtMeta, unsetExtMeta },
+    // --- Node metadata (namespace-enforced read/write for extension data on nodes) ---
+    metadata: { getExtMeta, readNs, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, addToExtMetaSet, batchSetExtMeta, unsetExtMeta },
 
-    // --- User metadata (namespace-enforced read/write for extension data on users) ---
-    userMetadata: { getBeingMeta, setBeingMeta, incBeingMeta, pushBeingMeta, batchSetBeingMeta, unsetBeingMeta, addToBeingMetaSet },
+    // --- Being metadata (namespace-enforced read/write for extension data on beings) ---
+    beingMetadata: { getBeingMeta, readBeingNs, setBeingMeta, mergeBeingMeta, incBeingMeta, pushBeingMeta, addToBeingMetaSet, batchSetBeingMeta, unsetBeingMeta },
+
+    // --- Artifact metadata (namespace-enforced read/write for extension data on artifacts) ---
+    artifactMetadata: { getArtifactMeta, readArtifactNs, setArtifactMeta, mergeArtifactMeta, incArtifactMeta, pushArtifactMeta, addToArtifactMetaSet, batchSetArtifactMeta, unsetArtifactMeta },
 
     // --- Extension scope (check blocked/allowed status at positions) ---
     //

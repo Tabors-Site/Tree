@@ -7,7 +7,7 @@ export async function init(core) {
 
   setServices({
     models: core.models,
-    contributions: core.contributions,
+    contributions: core.dids,
     llm: core.llm,
     energy: core.energy || null,
     metadata: core.metadata,

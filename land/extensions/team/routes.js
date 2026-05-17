@@ -13,7 +13,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
   const htmlAuth = htmlExt?.exports?.urlAuth || authenticate;
   const router = express.Router();
   const { User, Node, Note } = core.models;
-  const { logContribution } = core.contributions;
+  const { logDid } = core.dids;
   const ownership = core.ownership;
 
   // ── Invite routes (moved from routes/api/root.js) ─────────────────
@@ -70,7 +70,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
         isUninviting: false,
         Node,
         User,
-        logContribution,
+        logDid,
         escapeRegex,
         queueCanopyEvent,
         ownership,
@@ -106,7 +106,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
         isUninviting: false,
         Node,
         User,
-        logContribution,
+        logDid,
         escapeRegex,
         queueCanopyEvent,
         ownership,
@@ -142,7 +142,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
         isUninviting: true,
         Node,
         User,
-        logContribution,
+        logDid,
         escapeRegex,
         queueCanopyEvent,
         ownership,
@@ -173,7 +173,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
         isUninviting: true,
         Node,
         User,
-        logContribution,
+        logDid,
         escapeRegex,
         queueCanopyEvent,
         ownership,
@@ -236,7 +236,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
           acceptInvite,
           Node,
           User,
-          logContribution,
+          logDid,
           queueCanopyEvent,
           ownership,
         });

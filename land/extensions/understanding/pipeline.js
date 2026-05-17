@@ -267,7 +267,6 @@ export async function orchestrateUnderstanding({
             understandingNodeId: nodeId,
             currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
             beingId,
-            wasAi: true,
             chatId: rt.mainChatId,
             sessionId: rt.sessionId,
           });
@@ -289,7 +288,6 @@ export async function orchestrateUnderstanding({
         understandingNodeId: payload.target.understandingNodeId,
         currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
         beingId,
-        wasAi: true,
         chatId: rt.mainChatId,
         sessionId: rt.sessionId,
       });

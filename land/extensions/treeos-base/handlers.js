@@ -25,9 +25,9 @@ import {
 } from "../../seed/tree/artifacts.js";
 import { editStatus } from "../../seed/tree/statuses.js";
 import {
-  getContributions,
-  getContributionsByUser,
-} from "../../seed/tree/contributions.js";
+  getDids,
+  getDidsByBeing,
+} from "../seed/tree/dids.js";
 import {
   getActiveLeafExecutionFrontier,
   getNavigationContext,
@@ -305,7 +305,7 @@ export function buildTools() {
           limit = 30;
         }
         try {
-          const result = await getContributions({
+          const result = await getDids({
             nodeId,
             limit,
             startDate,
@@ -502,7 +502,7 @@ export function buildTools() {
           limit = 30;
         }
         try {
-          const result = await getContributionsByUser(
+          const result = await getDidsByBeing(
             beingId,
             limit,
             startDate,
@@ -785,7 +785,6 @@ export function buildTools() {
             status,
             isInherited,
             beingId,
-            wasAi: true,
             chatId,
             sessionId,
           });
@@ -840,7 +839,6 @@ export function buildTools() {
             content,
             beingId,
             nodeId,
-            wasAi: true,
             chatId,
             sessionId,
             metadata: { treeos: { isReflection: true } },
@@ -927,7 +925,6 @@ export function buildTools() {
             beingId,
             lineStart: lineStart ?? null,
             lineEnd: lineEnd ?? null,
-            wasAi: true,
             chatId,
             sessionId,
           });
@@ -989,7 +986,6 @@ export function buildTools() {
             targetNodeId,
             beingId,
             prestige: prestige ?? null,
-            wasAi: true,
             chatId,
             sessionId,
           });
@@ -1038,7 +1034,6 @@ export function buildTools() {
           const result = await deleteArtifactAndFile({
             noteId,
             beingId,
-            wasAi: true,
             chatId,
             sessionId,
           });
@@ -1105,7 +1100,6 @@ export function buildTools() {
             beingId,
             type: type ?? null,
             note: note ?? null,
-            wasAi: true,
             chatId: chatId ?? null,
             sessionId: sessionId ?? null,
           });
@@ -1174,7 +1168,6 @@ export function buildTools() {
             beingId,
             type: type ?? null,
             note: note ?? null,
-            wasAi: true,
             chatId: chatId ?? null,
             sessionId: sessionId ?? null,
           });
@@ -1231,7 +1224,6 @@ export function buildTools() {
               nodeData,
               parentId,
               beingId,
-              true, // wasAi
               chatId,
               sessionId,
             );
@@ -1280,7 +1272,6 @@ export function buildTools() {
           const deletedNode = await deleteNodeBranch(
             nodeId,
             beingId,
-            true, // wasAi
             chatId,
             sessionId,
           );
@@ -1339,7 +1330,6 @@ export function buildTools() {
               nodeId,
               newName,
               beingId,
-              wasAi: true,
               chatId,
               sessionId,
             });
@@ -1398,7 +1388,6 @@ export function buildTools() {
               nodeId,
               newType,
               beingId,
-              wasAi: true,
               chatId,
               sessionId,
             });
@@ -1459,7 +1448,6 @@ export function buildTools() {
               nodeChildId,
               nodeNewParentId,
               beingId,
-              true, // wasAi
               chatId,
               sessionId,
             );

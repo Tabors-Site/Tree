@@ -27,7 +27,6 @@ export default [
           content,
           beingId,
           nodeId,
-          wasAi: true,
           chatId,
           sessionId,
           metadata: {
@@ -72,7 +71,6 @@ export default [
         const result = await addPrestige({
           nodeId,
           beingId,
-          wasAi: true,
           chatId,
           sessionId,
         });

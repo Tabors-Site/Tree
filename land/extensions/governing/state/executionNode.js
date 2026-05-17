@@ -58,7 +58,6 @@ export async function ensureExecutionNode({ scopeNodeId, beingId, core }) {
         name: "runs",
         type: "execution",
         beingId,
-        wasAi: true,
       });
     }
   } catch (err) {

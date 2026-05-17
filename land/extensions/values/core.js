@@ -1,12 +1,12 @@
 // Services wired from init() via setServices()
 let Node = null;
-let logContribution = async () => {};
+let logDid = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
 let _metadata = null;
 
 export function setServices({ models, contributions, metadata }) {
   Node = models.Node;
-  logContribution = contributions.logContribution;
+  logDid = contributions.logDid;
   if (metadata) _metadata = metadata;
 }
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
@@ -59,7 +59,6 @@ async function setValueForNode({
   key,
   value,
   beingId,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 }) {
@@ -86,8 +85,8 @@ async function setValueForNode({
   values[finalKey] = numericValue;
   await _metadata.setExtMeta(node, "values", values);
 
-  await logContribution({
-    beingId, nodeId, wasAi, chatId, sessionId,
+  await logDid({
+    beingId, nodeId, chatId, sessionId,
     action: "editValue",
     valueEdited: { [finalKey]: numericValue },
     nodeVersion: "0",
@@ -102,7 +101,6 @@ async function setGoalForNode({
   key,
   goal,
   beingId,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 }) {
@@ -133,8 +131,8 @@ async function setGoalForNode({
   goals[finalKey] = numericGoal;
   await _metadata.setExtMeta(node, "goals", goals);
 
-  await logContribution({
-    beingId, nodeId, wasAi, chatId, sessionId,
+  await logDid({
+    beingId, nodeId, chatId, sessionId,
     action: "editGoal",
     goalEdited: { [finalKey]: numericGoal },
     nodeVersion: "0",

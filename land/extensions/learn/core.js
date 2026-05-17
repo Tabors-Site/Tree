@@ -285,7 +285,6 @@ export async function processNode(nodeId, rootId, beingId, username, targetSize)
         parentId: nodeId,
         beingId,
         note: section.content,
-        wasAi: true,
       });
 
       if (result?._id) {

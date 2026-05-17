@@ -107,8 +107,8 @@ function formatContractorSpawnSummary(emission) {
 //
 // Returns true if emit succeeded, false if skipped (sub-Ruler, no
 // socket, or no emission).
-async function emitPlanCard({ visitorId, ruler, emission, isRevision }) {
-  if (!visitorId || !emission) return false;
+async function emitPlanCard({ aiSessionKey, ruler, emission, isRevision }) {
+  if (!aiSessionKey || !emission) return false;
 
   // Entry-scope vs sub-Ruler detection. Sub-Rulers have a parentRulerId
   // in their lineage; entry-scope Rulers (the scope where the
@@ -132,7 +132,7 @@ async function emitPlanCard({ visitorId, ruler, emission, isRevision }) {
   try {
     const { getActiveRequest } = await import("../tree-orchestrator/state.js");
     const { GOVERNING_WS_EVENTS } = await import("./wsEvents.js");
-    const active = getActiveRequest(visitorId);
+    const active = getActiveRequest(aiSessionKey);
     const socket = active?.socket;
     if (!socket?.emit) return false;
 
@@ -238,11 +238,11 @@ async function resolveRulerScope(nodeId) {
 // indirection. When the user cancels their turn, that signal aborts;
 // spawn-and-await tools threading it through to runChat propagate
 // the cancel into the spawned role.
-async function getCallerAbortSignal(visitorId) {
-  if (!visitorId) return null;
+async function getCallerAbortSignal(aiSessionKey) {
+  if (!aiSessionKey) return null;
   try {
     const { getActiveRequest } = await import("../tree-orchestrator/state.js");
-    const active = getActiveRequest(visitorId);
+    const active = getActiveRequest(aiSessionKey);
     return active?.signal || null;
   } catch {
     return null;
@@ -255,11 +255,11 @@ async function getCallerAbortSignal(visitorId) {
 // events back to the user's chat so they see the inner chain unfold
 // live (Planner narration, Contractor reasoning, etc.) instead of
 // only the parent's post-synthesis.
-async function getCallerSocket(visitorId) {
-  if (!visitorId) return null;
+async function getCallerSocket(aiSessionKey) {
+  if (!aiSessionKey) return null;
   try {
     const { getActiveRequest } = await import("../tree-orchestrator/state.js");
-    const active = getActiveRequest(visitorId);
+    const active = getActiveRequest(aiSessionKey);
     return active?.socket || null;
   } catch {
     return null;
@@ -304,13 +304,13 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, beingId, username, nodeId, rootId, chatId, sessionId } = args;
+        const { aiSessionKey, beingId, username, nodeId, rootId, chatId, sessionId } = args;
         const briefing = typeof args.briefing === "string" ? args.briefing.trim() : "";
         if (!briefing) return text("governing-hire-planner: briefing is required.");
         if (briefing.length > BRIEFING_CAP) {
           return text(`governing-hire-planner: briefing exceeds ${BRIEFING_CAP} chars; trim or push detail into your reasoning.`);
         }
-        if (!visitorId) return text("governing-hire-planner: missing visitorId; substrate bug — surface.");
+        if (!aiSessionKey) return text("governing-hire-planner: missing aiSessionKey; substrate bug — surface.");
         if (!beingId) return text("governing-hire-planner: missing beingId; substrate bug.");
 
         // Resolve the Ruler scope (the scope where the Planner anchors).
@@ -323,7 +323,7 @@ export default function getRulerTools(_core) {
         }
 
         // Spawn the Planner as a chainstep. The Planner runs in its
-        // own session (separate visitorId via runChat's ephemeral
+        // own session (separate aiSessionKey via runChat's ephemeral
         // session-key), with its own modeKey, system prompt, and
         // context. Its tool calls (governing-emit-plan) write the
         // structured emission to metadata. PLAN_PROPOSED websocket
@@ -339,7 +339,7 @@ export default function getRulerTools(_core) {
         const claim = tryClaimSpawn({
           rulerNodeId: ruler._id,
           kind: "hire-planner",
-          visitorId,
+          aiSessionKey,
           briefing,
         });
         if (!claim.ok) {
@@ -358,8 +358,8 @@ export default function getRulerTools(_core) {
         // in-flight slot release, and a Ruler wake-up). The Ruler's
         // next turn reads the new plan emission from its snapshot and
         // proceeds.
-        const callerSignal = await getCallerAbortSignal(visitorId);
-        const callerSocket = await getCallerSocket(visitorId);
+        const callerSignal = await getCallerAbortSignal(aiSessionKey);
+        const callerSocket = await getCallerSocket(aiSessionKey);
         const { spawnRoleAsChainstepAsync } = await import("../tree-orchestrator/ruling.js");
         const spawn = spawnRoleAsChainstepAsync({
           modeKey: "tree:governing-planner",
@@ -388,7 +388,7 @@ export default function getRulerTools(_core) {
           }, null, 2));
         }
 
-        setRulerDecision(visitorId, {
+        setRulerDecision(args.rootChatId || args.chatId, {
           kind: "hire-planner",
           briefing,
           spawnId: spawn.spawnId,
@@ -453,8 +453,8 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, beingId, username, nodeId, rootId, chatId, sessionId } = args;
-        if (!visitorId) return text("governing-hire-contractor: missing visitorId; substrate bug.");
+        const { aiSessionKey, beingId, username, nodeId, rootId, chatId, sessionId } = args;
+        if (!aiSessionKey) return text("governing-hire-contractor: missing aiSessionKey; substrate bug.");
         if (!beingId) return text("governing-hire-contractor: missing beingId; substrate bug.");
 
         const briefing = typeof args.briefing === "string" ? args.briefing.trim() : "";
@@ -542,7 +542,7 @@ export default function getRulerTools(_core) {
         const claim = tryClaimSpawn({
           rulerNodeId: ruler._id,
           kind: "hire-contractor",
-          visitorId,
+          aiSessionKey,
           briefing,
         });
         if (!claim.ok) {
@@ -559,8 +559,8 @@ export default function getRulerTools(_core) {
         // returns immediately. governing:contractorCompleted fires when
         // the Contractor settles; the Ruler wakes on that hook in a
         // fresh turn and reads the new contracts emission.
-        const callerSignal = await getCallerAbortSignal(visitorId);
-        const callerSocket = await getCallerSocket(visitorId);
+        const callerSignal = await getCallerAbortSignal(aiSessionKey);
+        const callerSocket = await getCallerSocket(aiSessionKey);
         const { spawnRoleAsChainstepAsync } = await import("../tree-orchestrator/ruling.js");
         const spawn = spawnRoleAsChainstepAsync({
           modeKey: "tree:governing-contractor",
@@ -589,7 +589,7 @@ export default function getRulerTools(_core) {
           }, null, 2));
         }
 
-        setRulerDecision(visitorId, {
+        setRulerDecision(args.rootChatId || args.chatId, {
           kind: "hire-contractor",
           briefing: briefing || null,
           spawnId: spawn.spawnId,
@@ -642,10 +642,10 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, beingId, username, nodeId, rootId, chatId, sessionId } = args;
+        const { aiSessionKey, beingId, username, nodeId, rootId, chatId, sessionId } = args;
         const wakeupReason = typeof args.wakeupReason === "string" ? args.wakeupReason.trim() : "";
         if (!wakeupReason) return text("governing-route-to-foreman: wakeupReason is required.");
-        if (!visitorId) return text("governing-route-to-foreman: missing visitorId; substrate bug.");
+        if (!aiSessionKey) return text("governing-route-to-foreman: missing aiSessionKey; substrate bug.");
         if (!beingId) return text("governing-route-to-foreman: missing beingId; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
@@ -664,7 +664,7 @@ export default function getRulerTools(_core) {
         const claim = tryClaimSpawn({
           rulerNodeId: ruler._id,
           kind: "route-to-foreman",
-          visitorId,
+          aiSessionKey,
           briefing: wakeupReason,
         });
         if (!claim.ok) {
@@ -681,8 +681,8 @@ export default function getRulerTools(_core) {
         // foremanRouted fires when it settles. The Ruler wakes in a
         // fresh turn and reads execution state — which the Foreman
         // may have mutated (freeze, retry, mark-failed, etc.).
-        const callerSignal = await getCallerAbortSignal(visitorId);
-        const callerSocket = await getCallerSocket(visitorId);
+        const callerSignal = await getCallerAbortSignal(aiSessionKey);
+        const callerSocket = await getCallerSocket(aiSessionKey);
         const { spawnRoleAsChainstepAsync } = await import("../tree-orchestrator/ruling.js");
         const spawn = spawnRoleAsChainstepAsync({
           modeKey: "tree:governing-foreman",
@@ -711,7 +711,7 @@ export default function getRulerTools(_core) {
           }, null, 2));
         }
 
-        setRulerDecision(visitorId, {
+        setRulerDecision(args.rootChatId || args.chatId, {
           kind: "route-to-foreman",
           wakeupReason,
           spawnId: spawn.spawnId,
@@ -760,7 +760,7 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: true },
       async handler(args) {
-        const { visitorId } = args;
+        const { aiSessionKey } = args;
         const response = typeof args.response === "string" ? args.response.trim() : "";
         if (!response) {
           return text("governing-respond-directly: response is required.");
@@ -768,10 +768,10 @@ export default function getRulerTools(_core) {
         if (response.length > RESPONSE_CAP) {
           return text(`governing-respond-directly: response exceeds ${RESPONSE_CAP} chars; trim.`);
         }
-        if (!visitorId) {
-          return text("governing-respond-directly: missing visitorId; substrate bug — surface.");
+        if (!aiSessionKey) {
+          return text("governing-respond-directly: missing aiSessionKey; substrate bug — surface.");
         }
-        setRulerDecision(visitorId, { kind: "respond-directly", response });
+        setRulerDecision(args.rootChatId || args.chatId, { kind: "respond-directly", response });
         return text(JSON.stringify({
           ok: true,
           decision: "respond-directly",
@@ -804,13 +804,13 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, beingId, username, nodeId, rootId, chatId, sessionId } = args;
+        const { aiSessionKey, beingId, username, nodeId, rootId, chatId, sessionId } = args;
         const revisionReason = typeof args.revisionReason === "string" ? args.revisionReason.trim() : "";
         if (!revisionReason) return text("governing-revise-plan: revisionReason is required.");
         if (revisionReason.length > REASON_CAP) {
           return text(`governing-revise-plan: revisionReason exceeds ${REASON_CAP} chars; trim.`);
         }
-        if (!visitorId) return text("governing-revise-plan: missing visitorId; substrate bug.");
+        if (!aiSessionKey) return text("governing-revise-plan: missing aiSessionKey; substrate bug.");
         if (!beingId) return text("governing-revise-plan: missing beingId; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
@@ -859,7 +859,7 @@ export default function getRulerTools(_core) {
         const claim = tryClaimSpawn({
           rulerNodeId: ruler._id,
           kind: "hire-planner",
-          visitorId,
+          aiSessionKey,
           briefing: revisionReason,
         });
         if (!claim.ok) {
@@ -876,8 +876,8 @@ export default function getRulerTools(_core) {
         // when it settles, governing:planRevised fires and wakes the
         // Ruler in a fresh turn. The Ruler reads the new plan from
         // its snapshot and proceeds.
-        const callerSignal = await getCallerAbortSignal(visitorId);
-        const callerSocket = await getCallerSocket(visitorId);
+        const callerSignal = await getCallerAbortSignal(aiSessionKey);
+        const callerSocket = await getCallerSocket(aiSessionKey);
         const { spawnRoleAsChainstepAsync } = await import("../tree-orchestrator/ruling.js");
         const spawn = spawnRoleAsChainstepAsync({
           modeKey: "tree:governing-planner",
@@ -906,7 +906,7 @@ export default function getRulerTools(_core) {
           }, null, 2));
         }
 
-        setRulerDecision(visitorId, {
+        setRulerDecision(args.rootChatId || args.chatId, {
           kind: "revise-plan",
           revisionReason,
           spawnId: spawn.spawnId,
@@ -972,8 +972,8 @@ export default function getRulerTools(_core) {
       schema: {},
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, beingId, username, nodeId, rootId, chatId, sessionId } = args;
-        if (!visitorId) return text("governing-dispatch-execution: missing visitorId; substrate bug.");
+        const { aiSessionKey, beingId, username, nodeId, rootId, chatId, sessionId } = args;
+        if (!aiSessionKey) return text("governing-dispatch-execution: missing aiSessionKey; substrate bug.");
         if (!beingId) return text("governing-dispatch-execution: missing beingId; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
@@ -1046,7 +1046,7 @@ export default function getRulerTools(_core) {
         const claim = tryClaimSpawn({
           rulerNodeId: ruler._id,
           kind: "dispatch-execution",
-          visitorId,
+          aiSessionKey,
         });
         if (!claim.ok) {
           log.info("Governing",
@@ -1065,8 +1065,8 @@ export default function getRulerTools(_core) {
         // plan mode the user originally invoked) is no longer threaded
         // through; dispatch infers the workspace from the registry.
 
-        const callerSignal = await getCallerAbortSignal(visitorId);
-        const callerSocket = await getCallerSocket(visitorId);
+        const callerSignal = await getCallerAbortSignal(aiSessionKey);
+        const callerSocket = await getCallerSocket(aiSessionKey);
 
         // Invoke the refactored dispatch flow. dispatchSwarmPlan still
         // exists in tree-orchestrator/dispatch.js but its Contractor
@@ -1082,7 +1082,7 @@ export default function getRulerTools(_core) {
         // (success or failure) to wake the Ruler in a fresh turn.
         const { getActiveRequest } = await import("../tree-orchestrator/state.js");
         const { dispatchSwarmPlan } = await import("../tree-orchestrator/dispatch.js");
-        const activeRequest = getActiveRequest(visitorId) || {};
+        const activeRequest = getActiveRequest(aiSessionKey) || {};
         const spawnId = `spawn_${Date.now().toString(36)}_dispatch`;
         const planData = {
           branches,
@@ -1098,7 +1098,7 @@ export default function getRulerTools(_core) {
           emission: planEmission,
         };
         const runtimeCtx = {
-          visitorId,
+          aiSessionKey,
           beingId,
           username,
           rootId: rootId || null,
@@ -1216,7 +1216,7 @@ export default function getRulerTools(_core) {
           }
         })();
 
-        setRulerDecision(visitorId, {
+        setRulerDecision(args.rootChatId || args.chatId, {
           kind: "dispatch-execution",
           spawnId,
           planEmissionId: planEmission._emissionNodeId,
@@ -1279,10 +1279,10 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, nodeId } = args;
+        const { aiSessionKey, nodeId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-archive-plan: reason is required.");
-        if (!visitorId) return text("governing-archive-plan: missing visitorId; substrate bug.");
+        if (!aiSessionKey) return text("governing-archive-plan: missing aiSessionKey; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
         if (!ruler) {
@@ -1352,7 +1352,7 @@ export default function getRulerTools(_core) {
 
         // 3. Audit-trail register (kept for parity with other Ruler
         // tools; the real state writes happened above).
-        setRulerDecision(visitorId, { kind: "archive-plan", reason });
+        setRulerDecision(args.rootChatId || args.chatId, { kind: "archive-plan", reason });
 
         return text(JSON.stringify({
           ok: true,
@@ -1387,11 +1387,11 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId } = args;
+        const { aiSessionKey } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-pause-execution: reason is required.");
-        if (!visitorId) return text("governing-pause-execution: missing visitorId; substrate bug.");
-        setRulerDecision(visitorId, { kind: "pause-execution", reason });
+        if (!aiSessionKey) return text("governing-pause-execution: missing aiSessionKey; substrate bug.");
+        setRulerDecision(args.rootChatId || args.chatId, { kind: "pause-execution", reason });
         return text(JSON.stringify({ ok: true, decision: "pause-execution", reason }, null, 2));
       },
     },
@@ -1416,10 +1416,10 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, beingId, username, nodeId, rootId, chatId, sessionId } = args;
+        const { aiSessionKey, beingId, username, nodeId, rootId, chatId, sessionId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-resume-execution: reason is required.");
-        if (!visitorId) return text("governing-resume-execution: missing visitorId; substrate bug.");
+        if (!aiSessionKey) return text("governing-resume-execution: missing aiSessionKey; substrate bug.");
         if (!beingId) return text("governing-resume-execution: missing beingId; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
@@ -1468,7 +1468,7 @@ export default function getRulerTools(_core) {
         const claim = tryClaimSpawn({
           rulerNodeId: ruler._id,
           kind: "resume-execution",
-          visitorId,
+          aiSessionKey,
           briefing: reason,
         });
         if (!claim.ok) {
@@ -1486,8 +1486,8 @@ export default function getRulerTools(_core) {
         // uses the same hook as route-to-foreman — both spawn a
         // Foreman turn and the subsequent Ruler wake is the same
         // shape).
-        const callerSignal = await getCallerAbortSignal(visitorId);
-        const callerSocket = await getCallerSocket(visitorId);
+        const callerSignal = await getCallerAbortSignal(aiSessionKey);
+        const callerSocket = await getCallerSocket(aiSessionKey);
         const { spawnRoleAsChainstepAsync } = await import("../tree-orchestrator/ruling.js");
         const spawn = spawnRoleAsChainstepAsync({
           modeKey: "tree:governing-foreman",
@@ -1516,7 +1516,7 @@ export default function getRulerTools(_core) {
           }, null, 2));
         }
 
-        setRulerDecision(visitorId, {
+        setRulerDecision(args.rootChatId || args.chatId, {
           kind: "resume-execution",
           reason,
           spawnId: spawn.spawnId,
@@ -1604,10 +1604,10 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { visitorId, nodeId } = args;
+        const { aiSessionKey, nodeId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-convene-court: reason is required.");
-        if (!visitorId) return text("governing-convene-court: missing visitorId; substrate bug.");
+        if (!aiSessionKey) return text("governing-convene-court: missing aiSessionKey; substrate bug.");
 
         // Write a court-pending marker on the Ruler scope (durable —
         // courts are part of the audit trail). Doesn't replace the
@@ -1640,7 +1640,7 @@ export default function getRulerTools(_core) {
           log.warn("Governing", `convene-court marker write failed: ${err.message}`);
         }
 
-        setRulerDecision(visitorId, { kind: "convene-court", reason });
+        setRulerDecision(args.rootChatId || args.chatId, { kind: "convene-court", reason });
         return text(JSON.stringify({
           ok: true,
           decision: "convene-court",

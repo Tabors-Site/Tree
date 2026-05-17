@@ -19,7 +19,6 @@ import {
 export { LLM_PRIORITY };
 import {
   trackChainStep, startChat, startChainStep, finalizeChat,
-  setChatContext, clearChatContext,
 } from "../llm/chatTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../ws/mcp.js";
 import {
@@ -70,7 +69,7 @@ export class OrchestratorRuntime {
     this.rootId = rootId;
     this.beingId = beingId;
     this.username = username || "system";
-    this.visitorId = resolvedKey;
+    this.aiSessionKey = resolvedKey;
     this.sessionType = sessionType;
     this.description = description || "Pipeline run";
     this.modeKeyForLlm = modeKeyForLlm;
@@ -127,9 +126,9 @@ export class OrchestratorRuntime {
   // ─────────────────────────────────────────────────────────────────────
 
   async init(startMessage) {
-    // Acquire lock if configured. Pass visitorId as owner for owner-checked release.
+    // Acquire lock if configured. Pass aiSessionKey as owner for owner-checked release.
     if (this.lockNamespace) {
-      if (!acquireLock(this.lockNamespace, this.lockKey, { owner: this.visitorId, reason: this.description })) {
+      if (!acquireLock(this.lockNamespace, this.lockKey, { owner: this.aiSessionKey, reason: this.description })) {
         return false;
       }
       this._lockHeld = true;
@@ -145,7 +144,7 @@ export class OrchestratorRuntime {
         beingId: this.beingId,
         type: this.sessionType,
         description: this.description,
-        meta: { rootId: this.rootId, visitorId: this.visitorId },
+        meta: { rootId: this.rootId, aiSessionKey: this.aiSessionKey },
       });
       this.sessionId = sessionId;
       this.abort = new AbortController();
@@ -166,7 +165,7 @@ export class OrchestratorRuntime {
 
       // Chat root record
       const mainChat = await startChat({
-        beingId: this.beingId,
+        beingIn: this.beingId,
         sessionId: this.sessionId,
         message: startMessage || this.description,
         source: this.source,
@@ -174,9 +173,10 @@ export class OrchestratorRuntime {
         llmProvider: this.llmProvider,
       });
       this.mainChatId = mainChat._id;
-      setChatContext(this.visitorId, this.sessionId, this.mainChatId);
 
-      // MCP connection (with retry)
+      // MCP connection (with retry). chatId / sessionId travel through
+      // each runStep's pmCtx (this.beingId + this.sessionId + the
+      // step's chatId) rather than via a global Map.
       await this._connectMcp();
     };
 
@@ -222,10 +222,10 @@ export class OrchestratorRuntime {
 
     // Renew lock if held (prevents TTL expiry during long pipelines)
     if (this._lockHeld && this.lockNamespace) {
-      renewLock(this.lockNamespace, this.lockKey, this.visitorId);
+      renewLock(this.lockNamespace, this.lockKey, this.aiSessionKey);
     }
 
-    await switchMode(this.visitorId, modeKey, {
+    await switchMode(this.aiSessionKey, modeKey, {
       username: this.username,
       beingId: this.beingId,
       rootId: this.rootId,
@@ -234,10 +234,22 @@ export class OrchestratorRuntime {
     });
 
     const startTime = new Date();
-    const result = await processMessage(this.visitorId, prompt, {
+    const result = await processMessage(this.aiSessionKey, prompt, {
       username: this.username,
       beingId: this.beingId,
       rootId: this.rootId,
+      // chatId / sessionId let the tool loop attribute MCP calls to
+      // this pipeline's root chat record. Without them, tool-call
+      // tracking falls back to "no current chat" which loses audit
+      // attribution for background pipelines.
+      chatId: this.mainChatId || null,
+      rootChatId: this.mainChatId || null,
+      sessionId: this.sessionId || null,
+      // Background pipelines are stanceless internal cognition; their
+      // MCP client is cached under the internal session key (which
+      // resolveInternalAiSessionKey shaped as `ephemeral:<uuid>` or
+      // `tree-internal:<rootId>:<purpose>`), not a Portal Address.
+      mcpCacheKey: this.aiSessionKey,
       signal: this.signal,
       llmPriority: this.llmPriority,
       meta: { internal: true },
@@ -265,7 +277,7 @@ export class OrchestratorRuntime {
     const trackedOutput = parsed ?? result?.content ?? result?.answer ?? null;
 
     trackChainStep({
-      beingId: this.beingId,
+      beingIn: this.beingId,
       sessionId: this.sessionId,
       rootChatId: this.mainChatId,
       chainIndex: this.chainIndex++,
@@ -294,8 +306,8 @@ export class OrchestratorRuntime {
    * the chain-step circuit breaker tripped.
    *
    *   const step = await rt.beginChainStep("tree:code-plan", promptText, { treeContext });
-   *   if (step) setChatContext(visitorId, rt.sessionId, step.chatId);
-   *   await processMessage(...);                           // tool calls land on step.chatId
+   *   if (step) pmCtx.chatId = step.chatId;                 // thread through ctx, not via Map
+   *   await processMessage(...);                            // tool calls land on step.chatId
    *   await rt.finishChainStep(step.chatId, { output: result.content });
    */
   async beginChainStep(modeKey, input, {
@@ -312,7 +324,7 @@ export class OrchestratorRuntime {
     const resolvedTreeContext = typeof treeContext === "function" ? treeContext() : treeContext;
 
     const chat = await startChainStep({
-      beingId: this.beingId,
+      beingIn: this.beingId,
       sessionId: this.sessionId,
       rootChatId: this.mainChatId,
       chainIndex,
@@ -358,7 +370,7 @@ export class OrchestratorRuntime {
     if (this._cleaned || this.chainIndex > MAX_CHAIN_STEPS()) return;
     const resolvedTreeContext = typeof treeContext === "function" ? treeContext(output) : treeContext;
     trackChainStep({
-      beingId: this.beingId,
+      beingIn: this.beingId,
       sessionId: this.sessionId,
       rootChatId: this.mainChatId,
       chainIndex: this.chainIndex++,
@@ -399,8 +411,7 @@ export class OrchestratorRuntime {
     // Attached mode: only clean up what we own
     if (this._attached) {
       if (this._ownsMcp) {
-        clearChatContext(this.visitorId);
-        await closeMCPClient(this.visitorId).catch(() => {});
+        await closeMCPClient(this.aiSessionKey).catch(() => {});
       }
       if (duration > 0) {
         log.debug("Orchestrator", `Attached run completed in ${Math.round(duration / 1000)}s (${this.chainIndex - 1} steps)`);
@@ -415,19 +426,19 @@ export class OrchestratorRuntime {
         log.error("Orchestrator", `Failed to finalize pipeline chat: ${e.message}`)
       );
     }
-
-    clearChatContext(this.visitorId);
+    // No chatContext Map to clear — chatId travels through pmCtx so
+    // there's no global state lingering between pipeline runs.
 
     if (this.sessionId) {
       clearSessionAbort(this.sessionId);
       endSession(this.sessionId);
     }
 
-    await closeMCPClient(this.visitorId).catch(() => {});
-    clearSession(this.visitorId);
+    await closeMCPClient(this.aiSessionKey).catch(() => {});
+    clearSession(this.aiSessionKey);
 
     if (this._lockHeld && this.lockNamespace) {
-      releaseLock(this.lockNamespace, this.lockKey, this.visitorId);
+      releaseLock(this.lockNamespace, this.lockKey, this.aiSessionKey);
       this._lockHeld = false;
     }
 
@@ -442,15 +453,15 @@ export class OrchestratorRuntime {
 
   async _connectMcp() {
     const internalJwt = jwt.sign(
-      { beingId: this.beingId, username: this.username, visitorId: this.visitorId },
+      { beingId: this.beingId, username: this.username, aiSessionKey: this.aiSessionKey },
       JWT_SECRET,
       { expiresIn: "4h" },
     );
 
     for (let attempt = 0; attempt <= mcpConnectRetries(); attempt++) {
       try {
-        await connectToMCP(MCP_SERVER_URL, this.visitorId, internalJwt);
-        setRootId(this.visitorId, this.rootId);
+        await connectToMCP(MCP_SERVER_URL, this.aiSessionKey, internalJwt);
+        setRootId(this.beingId, this.rootId);
         return;
       } catch (err) {
         if (attempt < mcpConnectRetries()) {

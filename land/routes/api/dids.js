@@ -2,12 +2,12 @@ import log from "../../seed/log.js";
 import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import { getContributions } from "../../seed/tree/contributions.js";
+import { getDids } from "../../seed/tree/dids.js";
 
 const router = express.Router();
 
 router.get(
-  "/node/:nodeId/contributions",
+  "/node/:nodeId/dids",
   authenticate,
   async (req, res) => {
     try {
@@ -23,7 +23,7 @@ router.get(
       const rawOffset = req.query.offset;
       const offset = rawOffset !== undefined ? Math.max(0, Number(rawOffset) || 0) : 0;
 
-      const result = await getContributions({
+      const result = await getDids({
         nodeId,
         limit,
         offset,

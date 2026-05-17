@@ -24,7 +24,7 @@ import { formatMemoryContext, pushMemory } from "./state.js";
 import { emitStatus, buildSocketBridge } from "./dispatch.js";
 
 export async function runBeMode(message, {
-  visitorId, socket, username, beingId, rootId,
+  aiSessionKey, socket, username, beingId, rootId,
   signal, slot, sessionId, onToolLoopCheckpoint,
   currentNodeId, modesUsed,
 }) {
@@ -57,35 +57,35 @@ export async function runBeMode(message, {
 
             if (decision?.answer) {
               emitStatus(socket, "done", "");
-              pushMemory(visitorId, message, decision.answer);
+              pushMemory(aiSessionKey, message, decision.answer);
               return { success: true, answer: decision.answer, modeKey: resolvedMode, modesUsed, rootId, targetNodeId: String(currentNodeId) };
             }
 
-            await switchMode(visitorId, resolvedMode, {
+            await switchMode(aiSessionKey, resolvedMode, {
               username, beingId, rootId,
               currentNodeId: String(currentNodeId),
-              conversationMemory: formatMemoryContext(visitorId),
+              conversationMemory: formatMemoryContext(aiSessionKey),
               clearHistory: decision?.setup || false,
             });
-            const result = await processMessage(visitorId, decision?.message || message, {
+            const result = await processMessage(aiSessionKey, decision?.message || message, {
               username, beingId, rootId, signal, slot, onToolLoopCheckpoint,
               ...buildSocketBridge(socket, signal),
             });
             emitStatus(socket, "done", "");
             const answer = result?.content || result?.answer || null;
-            if (answer) pushMemory(visitorId, message, answer);
+            if (answer) pushMemory(aiSessionKey, message, answer);
             return { success: true, answer, modeKey: resolvedMode, modesUsed, rootId, targetNodeId: String(currentNodeId) };
           }
           const extModes = getModesOwnedBy(extName);
           const coachMode = extModes.find(m => m.endsWith("-coach")) || null;
           if (coachMode) {
             log.verbose("Tree Orchestrator", `  BE mode: switching to ${coachMode}`);
-            await switchMode(visitorId, coachMode, {
+            await switchMode(aiSessionKey, coachMode, {
               username, beingId, rootId,
-              conversationMemory: formatMemoryContext(visitorId),
+              conversationMemory: formatMemoryContext(aiSessionKey),
               clearHistory: true,
             });
-            const result = await processMessage(visitorId, message, { username, beingId, rootId, signal, socket, sessionId });
+            const result = await processMessage(aiSessionKey, message, { username, beingId, rootId, signal, socket, sessionId });
             modesUsed.push(coachMode);
             return { success: true, answer: result?.content || "", modeKey: coachMode, modesUsed, rootId };
           }
@@ -120,7 +120,7 @@ export async function runBeMode(message, {
 
           const targetId = entry.nodeId || entry.nodes?.[0]?.nodeId;
           log.verbose("Tree Orchestrator", `  BE mode: routing to closest extension ${extName} at ${targetId}`);
-          setCurrentNodeId(visitorId, targetId);
+          setCurrentNodeId(beingId, targetId);
           emitStatus(socket, "intent", "");
           try {
             const decision = await ext.exports.handleMessage("be", {
@@ -134,23 +134,23 @@ export async function runBeMode(message, {
 
             if (decision?.answer) {
               emitStatus(socket, "done", "");
-              pushMemory(visitorId, message, decision.answer);
+              pushMemory(aiSessionKey, message, decision.answer);
               return { success: true, answer: decision.answer, modeKey: resolvedMode, modesUsed, rootId, targetNodeId: targetId };
             }
 
-            await switchMode(visitorId, resolvedMode, {
+            await switchMode(aiSessionKey, resolvedMode, {
               username, beingId, rootId,
               currentNodeId: targetId,
-              conversationMemory: formatMemoryContext(visitorId),
+              conversationMemory: formatMemoryContext(aiSessionKey),
               clearHistory: decision?.setup || false,
             });
-            const result = await processMessage(visitorId, decision?.message || message, {
+            const result = await processMessage(aiSessionKey, decision?.message || message, {
               username, beingId, rootId, signal, slot, onToolLoopCheckpoint,
               ...buildSocketBridge(socket, signal),
             });
             emitStatus(socket, "done", "");
             const answer = result?.content || result?.answer || null;
-            if (answer) pushMemory(visitorId, message, answer);
+            if (answer) pushMemory(aiSessionKey, message, answer);
             return { success: true, answer, modeKey: resolvedMode, modesUsed, rootId, targetNodeId: targetId };
           } catch (err) {
             log.error("Tree Orchestrator", `BE routing failed for ${extName}: ${err.message}`);
@@ -162,12 +162,12 @@ export async function runBeMode(message, {
 
   // ── Tier 3: No extensions found. Generic tree:be. ──
   log.verbose("Tree Orchestrator", `  BE mode: switching to tree:be`);
-  await switchMode(visitorId, "tree:be", {
+  await switchMode(aiSessionKey, "tree:be", {
     username, beingId, rootId,
-    conversationMemory: formatMemoryContext(visitorId),
+    conversationMemory: formatMemoryContext(aiSessionKey),
     clearHistory: true,
   });
-  const result = await processMessage(visitorId, message, { username, beingId, rootId, signal, socket, sessionId });
+  const result = await processMessage(aiSessionKey, message, { username, beingId, rootId, signal, socket, sessionId });
   modesUsed.push("tree:be");
   return { success: true, answer: result?.content || "", modeKey: "tree:be", modesUsed, rootId };
 }

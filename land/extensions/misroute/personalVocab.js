@@ -116,8 +116,7 @@ export async function appendPersonalPattern(beingId, extName, bucket, entry) {
     if (existing) {
       existing.count = (existing.count || 1) + 1;
       existing.lastSeen = new Date().toISOString();
-      setBeingMeta(user, "personalVocab", current);
-      await user.save();
+      await setBeingMeta(user, "personalVocab", current);
       _cache.delete(String(beingId));
       return { added: false, reason: "duplicate-incremented" };
     }
@@ -129,8 +128,7 @@ export async function appendPersonalPattern(beingId, extName, bucket, entry) {
       count: 1,
     });
 
-    setBeingMeta(user, "personalVocab", current);
-    await user.save();
+    await setBeingMeta(user, "personalVocab", current);
     _cache.delete(String(beingId));
     return { added: true };
   } catch (err) {
@@ -159,8 +157,7 @@ export async function removePersonalPattern(beingId, extName, bucket, pattern) {
       return { removed: false, reason: "not-found" };
     }
 
-    setBeingMeta(user, "personalVocab", current);
-    await user.save();
+    await setBeingMeta(user, "personalVocab", current);
     _cache.delete(String(beingId));
     return { removed: true };
   } catch (err) {

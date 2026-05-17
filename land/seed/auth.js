@@ -98,7 +98,11 @@ export async function createBeing(username, password, opts = {}) {
     isAdmin: opts.isAdmin || false,
     role: opts.role || null,
     homePositionId: opts.homePositionId || null,
-    llmSlot: opts.llmSlot || null,
+    // Every being starts "at home" — current position defaults to their
+    // home unless the caller explicitly overrides. Navigation events
+    // update this field via the position accessors in conversation.js.
+    currentPositionId: opts.currentPositionId || opts.homePositionId || null,
+    llmDefault: opts.llmDefault || null,
     isRemote: opts.isRemote || false,
     homeLand: opts.homeLand || null,
   });
@@ -228,7 +232,7 @@ export async function findBeingByUsername(username) {
  * @param {string} [opts.username]            required for human; auto-generated for ai if missing
  * @param {string} [opts.password]            required for human; auto-generated for ai if missing
  * @param {string} [opts.role]                required for ai
- * @param {string} [opts.llmSlot]
+ * @param {string} [opts.llmDefault]
  * @param {string} [opts.homeNodeId]          use this existing Node as the home
  * @param {string} [opts.homeParent]          OR create a new child under this Node
  * @param {string} [opts.homeName]            name for the new home (defaults derived)
@@ -244,7 +248,7 @@ export async function createBeingWithHome(opts) {
   const {
     operatingMode,
     role         = null,
-    llmSlot      = null,
+    llmDefault   = null,
     homeNodeId   = null,
     homeParent   = null,
     homeName     = null,
@@ -323,7 +327,7 @@ export async function createBeingWithHome(opts) {
       operatingMode,
       role,
       homePositionId: String(homeNode._id),
-      llmSlot,
+      llmDefault,
       isAdmin,
       isRemote,
       homeLand,

@@ -378,9 +378,7 @@ export function renderChats({ beingId, chats, sessions, username, token, session
           const nodeRef = nId
             ? `<a href="/api/v1/node/${nId}${tokenQS}">${esc(nName)}</a>`
             : `<span style="opacity:0.5">\u2014</span>`;
-          const aiBadge = c.wasAi
-            ? `<span class="mini-badge mini-ai">AI</span>`
-            : "";
+          const aiBadge = "";
           const cEnergyBadge =
             c.energyUsed > 0
               ? `<span class="mini-badge mini-energy">\u26A1${c.energyUsed}</span>`
@@ -708,7 +706,7 @@ details[open] > .chain-substep-summary::before { transform: rotate(90deg); }
   white-space: nowrap; max-width: 300px;
 }
 
-/* ── Contribution Dropdown ──────────────────────── */
+/* ── Did Dropdown ──────────────────────── */
 .contrib-dropdown { margin-bottom: 12px; }
 .contrib-summary {
   cursor: pointer; font-size: 13px; font-weight: 600;

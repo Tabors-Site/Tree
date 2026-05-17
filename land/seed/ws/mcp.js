@@ -1,9 +1,34 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 // ws/mcp.js
 // MCP client lifecycle management.
-// Each ai-chat session key (see seed/llm/sessionKeys.js) gets one MCP
-// client. Clients are reused across messages within the same session.
-// Cleanup happens on socket disconnect, session end, or periodic sweep.
+//
+// Each conversation gets one MCP client. The cache key — `cacheKey` —
+// identifies the conversation:
+//
+//   - Being-to-being conversations key on `portalAddress` (the canonical
+//     stance::stance Portal Address). All sockets / chainsteps in the
+//     same Portal Address share one MCP client. Tabor on web and Tabor
+//     on CLI talking to the same Ruler at /MyTree use one client
+//     because they're in the same conversation under the single-context
+//     being model.
+//
+//   - Stanceless background pipelines (internal cognition without a
+//     being-to-being framing — compress, scout, intent, dreams, etc.)
+//     key on their internal-session-key (`ephemeral:<uuid>`,
+//     `tree-internal:<rootId>:<purpose>`). Same string the rest of the
+//     pipeline uses.
+//
+// The Map stores strings → MCP clients; it doesn't care which flavor.
+// Callers pick the right key for their context.
+//
+// Cleanup: periodic stale sweep + explicit closeMCPClient on pipeline
+// teardown. Socket disconnect is NOT a close trigger any more — other
+// sockets for the same being might still be in the conversation. That
+// shift comes with the being-room WS broadcast slice; until then the
+// disconnect-close path becomes a soft no-op for being-to-being keys
+// (the lookup misses because the live cache entry is under portalAddress)
+// and continues to work for stanceless background pipelines whose key
+// matches their disconnect handler.
 
 import log from "../log.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -21,13 +46,13 @@ const MCP_SERVER_URL = process.env.MCP_SERVER_URL || "http://localhost:3000/mcp"
 // CLIENT MAP
 // ─────────────────────────────────────────────────────────────────────────
 
-// aiSessionKey -> MCP Client instance
+// cacheKey -> MCP Client instance
 export const mcpClients = new Map();
 
-// aiSessionKey -> jwtToken (separate from SDK client to avoid mutating it)
+// cacheKey -> jwtToken (separate from SDK client to avoid mutating it)
 const clientTokens = new Map();
 
-// aiSessionKey -> timestamp of last use
+// cacheKey -> timestamp of last use
 const clientLastUsed = new Map();
 
 import { getLandConfigValue } from "../landConfig.js";
@@ -43,17 +68,17 @@ function mcpStaleMs() { return Number(getLandConfigValue("mcpStaleTimeout")) || 
 // CONNECT
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function connectToMCP(serverUrl, aiSessionKey, jwtToken) {
+export async function connectToMCP(serverUrl, cacheKey, jwtToken) {
   // Reuse existing client if token matches
-  const existing = mcpClients.get(aiSessionKey);
-  if (existing && clientTokens.get(aiSessionKey) === jwtToken) {
-    clientLastUsed.set(aiSessionKey, Date.now());
+  const existing = mcpClients.get(cacheKey);
+  if (existing && clientTokens.get(cacheKey) === jwtToken) {
+    clientLastUsed.set(cacheKey, Date.now());
     return existing;
   }
 
   // Close stale client if token changed
   if (existing) {
-    await closeMCPClient(aiSessionKey);
+    await closeMCPClient(cacheKey);
   }
 
   // Cap: evict oldest client if at limit
@@ -68,7 +93,7 @@ export async function connectToMCP(serverUrl, aiSessionKey, jwtToken) {
     }
   }
 
-  log.verbose("MCP", `Connecting MCP client for ${aiSessionKey}...`);
+  log.verbose("MCP", `Connecting MCP client for ${cacheKey}...`);
 
   const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {
     requestInit: {
@@ -99,11 +124,11 @@ export async function connectToMCP(serverUrl, aiSessionKey, jwtToken) {
     throw new Error(`MCP connection failed: ${err.message}`);
   }
 
-  log.verbose("MCP", `MCP client connected for ${aiSessionKey}`);
+  log.verbose("MCP", `MCP client connected for ${cacheKey}`);
 
-  mcpClients.set(aiSessionKey, client);
-  clientTokens.set(aiSessionKey, jwtToken);
-  clientLastUsed.set(aiSessionKey, Date.now());
+  mcpClients.set(cacheKey, client);
+  clientTokens.set(cacheKey, jwtToken);
+  clientLastUsed.set(cacheKey, Date.now());
   return client;
 }
 
@@ -111,11 +136,11 @@ export async function connectToMCP(serverUrl, aiSessionKey, jwtToken) {
 // CLOSE
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function closeMCPClient(aiSessionKey) {
-  const client = mcpClients.get(aiSessionKey);
-  mcpClients.delete(aiSessionKey);
-  clientTokens.delete(aiSessionKey);
-  clientLastUsed.delete(aiSessionKey);
+export async function closeMCPClient(cacheKey) {
+  const client = mcpClients.get(cacheKey);
+  mcpClients.delete(cacheKey);
+  clientTokens.delete(cacheKey);
+  clientLastUsed.delete(cacheKey);
 
   if (!client) return;
 
@@ -129,9 +154,9 @@ export async function closeMCPClient(aiSessionKey) {
       closePromise,
       new Promise((resolve) => setTimeout(resolve, MCP_CLOSE_TIMEOUT_MS)),
     ]);
-    log.debug("MCP", `Closed MCP client for ${aiSessionKey}`);
+    log.debug("MCP", `Closed MCP client for ${cacheKey}`);
   } catch (err) {
-    log.warn("MCP", `Error closing MCP client for ${aiSessionKey}: ${err.message}`);
+    log.warn("MCP", `Error closing MCP client for ${cacheKey}: ${err.message}`);
   }
 }
 
@@ -139,9 +164,9 @@ export async function closeMCPClient(aiSessionKey) {
 // QUERY
 // ─────────────────────────────────────────────────────────────────────────
 
-export function getMCPClient(aiSessionKey) {
-  const client = mcpClients.get(aiSessionKey);
-  if (client) clientLastUsed.set(aiSessionKey, Date.now());
+export function getMCPClient(cacheKey) {
+  const client = mcpClients.get(cacheKey);
+  if (client) clientLastUsed.set(cacheKey, Date.now());
   return client || null;
 }
 
@@ -153,9 +178,9 @@ export function getMCPClient(aiSessionKey) {
 setInterval(() => {
   const now = Date.now();
   let swept = 0;
-  for (const [aiSessionKey, lastUsed] of clientLastUsed) {
+  for (const [cacheKey, lastUsed] of clientLastUsed) {
     if (now - lastUsed > mcpStaleMs()) {
-      closeMCPClient(aiSessionKey).catch(() => {});
+      closeMCPClient(cacheKey).catch(() => {});
       swept++;
     }
   }

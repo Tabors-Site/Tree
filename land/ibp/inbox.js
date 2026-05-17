@@ -1,23 +1,41 @@
 // TreeOS IBP — inbox primitives.
 //
-// The inbox is per-embodiment-per-position metadata, stored under
-// `metadata.inbox.<embodiment>` on the Node document. The kernel treats
+// The inbox is per-being-per-position metadata, stored under
+// `metadata.inbox.<beingId>` on the Node document. The kernel treats
 // `inbox` as a reserved namespace: it cannot be written through DO
 // set-meta (see actions/set-meta.js), only through these primitives,
 // which TALK uses.
 //
-// Each inbox entry combines the TALK envelope shape with protocol-side
-// bookkeeping:
+// **Layering.** The inbox is *delivery infrastructure*, not conversation
+// history. Three distinct layers:
+//
+//   1. Portal Address — protocol-level addressing (sender / receiver stances).
+//   2. Chats — first-class exchange records. Conversation history. Stored
+//      with portalAddress, beingIn, beingOut, content.
+//   3. Inbox — the delivery queue at a position. Pending TALK messages
+//      before they get processed into Chats.
+//
+// An inbox entry is a *message in flight*. Once a being's summoning runs,
+// the message is processed into one or more Chat records; the inbox entry
+// is marked consumed and points at the resulting `chatId`. Trace from
+// incoming TALK → resulting chat → Portal Address using these references.
+//
+// Each inbox entry:
 //   {
 //     from, content, intent, correlation, inReplyTo?, attachments?, sentAt,
 //     consumed:    boolean,
 //     consumedAt?: ISO8601,
 //     summonedAt?: ISO8601,
 //     responseId?: <correlation id of the response, if any>,
+//     chatId?:     <id of the Chat record this message was processed into>,
 //   }
 //
 // Operations are atomic against the Node document. No read-modify-write
 // races: $push appends and $set updates individual flags by array index.
+//
+// **Keying.** Keyed by beingId (the canonical Being._id) rather than role
+// type. Multiple beings of the same role at one position legitimately
+// have separate inboxes; the role name doesn't unique-identify a being.
 
 import { randomUUID } from "crypto";
 import Node from "../seed/models/node.js";
@@ -28,13 +46,13 @@ const INBOX_NS = "inbox";
  * Append a message to a being's inbox at this position.
  *
  * @param {string} nodeId
- * @param {string} embodiment   the qualifier name (e.g. "ruler", "oracle")
- * @param {object} message      TALK envelope payload (from, content, intent, ...)
+ * @param {string} beingId   the receiver Being's _id
+ * @param {object} message   TALK envelope payload (from, content, intent, ...)
  * @returns {Promise<{ messageId, sentAt }>}
  */
-export async function appendToInbox(nodeId, embodiment, message) {
+export async function appendToInbox(nodeId, beingId, message) {
   if (!nodeId) throw new Error("appendToInbox requires nodeId");
-  if (!embodiment) throw new Error("appendToInbox requires embodiment");
+  if (!beingId) throw new Error("appendToInbox requires beingId");
   if (!message || typeof message !== "object") throw new Error("appendToInbox requires a message object");
 
   const sentAt = message.sentAt || new Date().toISOString();
@@ -52,13 +70,14 @@ export async function appendToInbox(nodeId, embodiment, message) {
     summonedAt:   null,
     consumedAt:   null,
     responseId:   null,
+    chatId:       null,
   };
 
-  // Atomic $push to the per-embodiment bucket. Mongo creates the path if
-  // it does not yet exist on the metadata Map.
+  // Atomic $push to the per-being bucket. Mongo creates the path if it
+  // does not yet exist on the metadata Map.
   await Node.updateOne(
     { _id: nodeId },
-    { $push: { [`metadata.${INBOX_NS}.${embodiment}`]: entry } },
+    { $push: { [`metadata.${INBOX_NS}.${beingId}`]: entry } },
   );
 
   return { messageId, sentAt };
@@ -68,21 +87,21 @@ export async function appendToInbox(nodeId, embodiment, message) {
  * Read a being's inbox at this position.
  *
  * @param {string} nodeId
- * @param {string} embodiment
+ * @param {string} beingId
  * @param {object} [options]
  * @param {string} [options.since]      ISO8601; only entries with sentAt >= since
  * @param {boolean} [options.unconsumed] only entries with consumed=false
  * @param {number} [options.limit]      cap on entries returned
  * @returns {Promise<Array<object>>}
  */
-export async function readInbox(nodeId, embodiment, options = {}) {
-  if (!nodeId || !embodiment) return [];
+export async function readInbox(nodeId, beingId, options = {}) {
+  if (!nodeId || !beingId) return [];
   const node = await Node.findById(nodeId)
-    .select(`metadata.${INBOX_NS}.${embodiment}`)
+    .select(`metadata.${INBOX_NS}.${beingId}`)
     .lean();
   if (!node) return [];
 
-  const bucket = readMetaPath(node, [INBOX_NS, embodiment]);
+  const bucket = readMetaPath(node, [INBOX_NS, beingId]);
   if (!Array.isArray(bucket)) return [];
 
   let entries = bucket;
@@ -95,22 +114,38 @@ export async function readInbox(nodeId, embodiment, options = {}) {
 /**
  * Mark messages as consumed after a summoning processes them.
  *
- * @param {string} nodeId
- * @param {string} embodiment
+ * @param {string}   nodeId
+ * @param {string}   beingId
  * @param {string[]} correlationIds   ids of entries being consumed
- * @param {string} [responseId]       correlation id of the response, if any
+ * @param {object}   [opts]
+ * @param {string}   [opts.responseId] correlation id of the response, if any
+ * @param {string}   [opts.chatId]     id of the Chat record this message was
+ *                                     processed into (the inbox entry now
+ *                                     points at conversation history).
+ *
+ * Back-compat: a plain string fourth arg is interpreted as `responseId`
+ * so older callers keep working during the rollout.
+ *
  * @returns {Promise<{ consumed: number }>}
  */
-export async function markInboxConsumed(nodeId, embodiment, correlationIds, responseId) {
-  if (!nodeId || !embodiment || !Array.isArray(correlationIds) || correlationIds.length === 0) {
+export async function markInboxConsumed(nodeId, beingId, correlationIds, opts = {}) {
+  if (!nodeId || !beingId || !Array.isArray(correlationIds) || correlationIds.length === 0) {
     return { consumed: 0 };
   }
+  let responseId = null;
+  let chatId = null;
+  if (typeof opts === "string") {
+    responseId = opts;
+  } else if (opts && typeof opts === "object") {
+    responseId = opts.responseId ?? null;
+    chatId     = opts.chatId ?? null;
+  }
+
   const consumedAt = new Date().toISOString();
-  // Read current bucket to find array indices for the named correlations.
   const node = await Node.findById(nodeId)
-    .select(`metadata.${INBOX_NS}.${embodiment}`)
+    .select(`metadata.${INBOX_NS}.${beingId}`)
     .lean();
-  const bucket = readMetaPath(node, [INBOX_NS, embodiment]);
+  const bucket = readMetaPath(node, [INBOX_NS, beingId]);
   if (!Array.isArray(bucket)) return { consumed: 0 };
 
   const idSet = new Set(correlationIds);
@@ -118,10 +153,11 @@ export async function markInboxConsumed(nodeId, embodiment, correlationIds, resp
   let consumed = 0;
   bucket.forEach((entry, i) => {
     if (!idSet.has(entry.correlation) || entry.consumed) return;
-    const base = `metadata.${INBOX_NS}.${embodiment}.${i}`;
+    const base = `metadata.${INBOX_NS}.${beingId}.${i}`;
     updates[`${base}.consumed`]   = true;
     updates[`${base}.consumedAt`] = consumedAt;
     if (responseId) updates[`${base}.responseId`] = responseId;
+    if (chatId)     updates[`${base}.chatId`]     = chatId;
     consumed++;
   });
 
@@ -131,15 +167,22 @@ export async function markInboxConsumed(nodeId, embodiment, correlationIds, resp
 }
 
 /**
- * Get the full per-embodiment inbox bucket. Used by descriptor builders.
+ * Get the full per-being inbox bucket. Used by descriptor builders.
  */
-export async function getInboxBucket(nodeId, embodiment) {
-  return readInbox(nodeId, embodiment, {});
+export async function getInboxBucket(nodeId, beingId) {
+  return readInbox(nodeId, beingId, {});
 }
 
 /**
- * Inbox summary across all embodiments at this position. Used for the
- * Position Description when SEE is on a position (no qualifier).
+ * Inbox summary across every being at this position. Used for the Position
+ * Description when SEE is on a position (no qualifier). Returned object is
+ * keyed by beingId; the descriptor joins this with Being lookups when it
+ * needs human-readable identifiers (username, role) for display.
+ *
+ * Each entry derives queue state from inbox state alone (waiting messages).
+ * The descriptor layer combines this with chat-active state (in-progress
+ * conversations from the Chat collection) when it builds the renderer-side
+ * "busy / talking to / queue" surface.
  */
 export async function getInboxSummary(nodeId) {
   if (!nodeId) return {};
@@ -148,16 +191,18 @@ export async function getInboxSummary(nodeId) {
   const inbox = readMetaPath(node, [INBOX_NS]);
   if (!inbox || typeof inbox !== "object") return {};
   const out = {};
-  for (const [embodiment, bucket] of Object.entries(inbox)) {
+  const entries = inbox instanceof Map ? inbox.entries() : Object.entries(inbox);
+  for (const [beingId, bucket] of entries) {
     if (!Array.isArray(bucket)) continue;
-    // Derive queue state from the existing entries. The first unconsumed
-    // message is the "active" conversation; subsequent unconsumed
+    // Derive queue state from inbox entries alone. The first unconsumed
+    // message is the "active" conversation in the queue; later unconsumed
     // messages are senders waiting in line. When all are consumed, the
-    // being is idle.
+    // being is idle from the inbox's perspective — an active chainstep
+    // may still be in progress; that's reconciled at the descriptor layer.
     const unconsumed = bucket.filter((e) => !e.consumed);
     const activeFrom  = unconsumed[0]?.from || null;
     const pendingFrom = unconsumed.slice(1).map((e) => e.from || null);
-    out[embodiment] = {
+    out[beingId] = {
       total:      bucket.length,
       unconsumed: unconsumed.length,
       recent:     bucket.slice(-3),

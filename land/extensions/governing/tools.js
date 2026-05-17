@@ -215,7 +215,6 @@ async function createPlanEmission({ planNodeId, ordinal, payload, beingId, core 
         name,
         type: "plan-emission",
         beingId,
-        wasAi: true,
       });
     }
   } catch (err) {
@@ -510,7 +509,6 @@ export default function getGoverningTools(core) {
               planNode = await governing.ensurePlanAtScope({
                 scopeNodeId: String(ruler._id),
                 beingId,
-                wasAi: true,
               });
             }
           } catch (err) {

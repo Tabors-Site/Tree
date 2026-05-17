@@ -272,7 +272,6 @@ export async function writeMealNote(foodNodes, mealSlot, summary, beingId, ctx =
       content: summary,
       origin: "ibp",
       beingId,
-      wasAi: ctx.chatId != null || ctx.wasAi === true,
       chatId: ctx.chatId ?? null,
       sessionId: ctx.sessionId ?? null,
     });

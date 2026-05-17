@@ -48,6 +48,10 @@ export function makeBridgeEmbodiment({ name, modeKey, zone, honoredIntents = ["c
       return {
         content: result?.answer || "(no response)",
         intent: "chat",
+        // runChat returns the Chat record's id. Surface it so the inbox
+        // entry can reference the conversation history this message was
+        // processed into (markInboxConsumed stores it on the entry).
+        chatId: result?.chatId || null,
       };
     },
   });

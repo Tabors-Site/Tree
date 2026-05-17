@@ -13,11 +13,11 @@ const KernelPage = () => {
           <h1 className="lp-title">The Seed</h1>
           <p className="lp-subtitle">What runs when everything else is stripped away.</p>
           <p className="lp-tagline">
-            The kernel is called the seed. You plant it. It grows trees. Two schemas with
-            metadata Maps, a conversation loop, a hook system, a cascade engine, and an extension loader.
-            Remove every extension and the seed still boots. It defines the data contract
-            that extensions build on and the resolution chains that determine what happens
-            at every position in the tree.
+            The kernel is called the seed. You plant it. It grows trees. Three foundational
+            schemas (Being, Node, Artifact) with metadata Maps, a conversation loop, a hook system,
+            a cascade engine, and an extension loader. Remove every extension and the seed still boots.
+            It defines the data contract that extensions build on and the resolution chains that
+            determine what happens at every position in the tree.
           </p>
           <div className="lp-hero-ctas lp-hero-ctas-sub">
             <a className="lp-btn lp-btn-primary" href="/treeos">TreeOS</a>
@@ -48,19 +48,19 @@ const KernelPage = () => {
                 os: "Memory Management",
                 osDesc: "Allocates RAM to programs. Keeps them isolated so one can't crash another. Handles virtual memory and swapping.",
                 seed: "Metadata Isolation",
-                seedDesc: "Each extension gets its own namespace in the metadata Map. 512KB cap per namespace. 14MB document ceiling with pressure alerts at 80%. Six atomic operations on nodes, five on users. incExtMeta for counters, pushExtMeta for capped arrays, batchSetExtMeta for multi-field writes. Same toolkit on both schemas. No extension needs direct MongoDB. Circuit breaker auto-disables crashing extensions. .flow partitions evict oldest data when full.",
+                seedDesc: "Each extension gets its own namespace in the metadata Map. 512KB cap per namespace. 14MB document ceiling with pressure alerts at 80%. Atomic operations on nodes and beings. incExtMeta for counters, pushExtMeta for capped arrays, batchSetExtMeta for multi-field writes. Same toolkit on both schemas. No extension needs direct MongoDB. Circuit breaker auto-disables crashing extensions. .flow partitions evict oldest data when full.",
               },
               {
                 os: "File System",
                 osDesc: "Reads and writes files. Organizes folders, permissions, storage structure. Finds files and hands them to apps.",
                 seed: "Tree Hierarchy",
-                seedDesc: "Nodes are folders. Notes are files. parent points up, children[] points down. Ownership chain controls who writes where. Spatial scoping controls what capabilities exist at each position. Ancestor cache makes lookups fast. Integrity check is fsck. Index verification on boot.",
+                seedDesc: "Nodes are folders. Artifacts are what lives inside them (text, file, or just structured metadata). parent points up, children[] points down. Ownership chain controls who writes where. Spatial scoping controls what capabilities exist at each position. Ancestor cache makes lookups fast. Integrity check is fsck. Index verification on boot.",
               },
               {
                 os: "Device Drivers",
                 osDesc: "Talks to hardware. Apps say 'give me input' without knowing how a keyboard works electrically.",
                 seed: "LLM Resolution",
-                seedDesc: "LLM endpoints are devices. The resolution chain is driver priority: extension slot on tree, tree default, user slot, user default. Extensions call runChat() without knowing which model, which endpoint, which provider. MCP is the device bus. Tools are system calls. The AI says 'create a node' and MCP routes it.",
+                seedDesc: "LLM endpoints are devices. The resolution chain is driver priority: extension slot on tree, tree default, extension slot on being, being default. Extensions call runChat() without knowing which model, which endpoint, which provider. MCP is the device bus. Tools are system calls. The AI says 'create a node' and MCP routes it.",
               },
               {
                 os: "Networking",
@@ -78,7 +78,7 @@ const KernelPage = () => {
                 os: "System Call Hooking",
                 osDesc: "Intercepts kernel operations. Powerful and dangerous. Used in security tools and rootkits.",
                 seed: "Hook System",
-                seedDesc: "30 lifecycle hooks. before hooks intercept and cancel. after hooks react in parallel. Any extension can hook any operation. beforeToolCall rewrites arguments. beforeNote blocks writes. Orchestrator replacement swaps the entire conversation flow. 5s timeout, circuit breaker, spatial filtering. Power with guardrails.",
+                seedDesc: "30 lifecycle hooks. before hooks intercept and cancel. after hooks react in parallel. Any extension can hook any operation. beforeToolCall rewrites arguments. beforeArtifact blocks writes. Orchestrator replacement swaps the entire conversation flow. 5s timeout, circuit breaker, spatial filtering. Power with guardrails.",
               },
               {
                 os: "Inter-Process Communication",
@@ -140,14 +140,36 @@ const KernelPage = () => {
       {/* ── SCHEMAS ── */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">Two Schemas, Two Maps</h2>
+          <h2 className="lp-section-title">Three Foundations, Three Maps</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            Two schemas carry extensible metadata Maps: Node and User. The Map is the invention.
-            Extensions store everything in it. Values, prestige, personas, cascade config, AI instructions.
-            Four supporting models exist for infrastructure (Note, Contribution, Chat, LlmConnection)
-            but they don't carry Maps. Extensions don't write to them. The schemas never change.
+            Three schemas carry extensible metadata Maps: Being, Node, Artifact.
+            Beings are the inhabitants (human and AI). Nodes are positions in the tree.
+            Artifacts are what lives inside a node (text, file, or just structured metadata).
+            The Map is the invention. Extensions store everything in it.
+            Values, prestige, personas, cascade config, AI instructions, origin-specific content.
+            Chat records bind two beings together so the conversation graph between them is
+            queryable; the schemas never change.
           </p>
-          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr 1fr"}}>
+            <div className="lp-card">
+              <h3>Being</h3>
+              <div style={{fontFamily: "monospace", fontSize: "0.85rem", color: "#999", lineHeight: 2}}>
+                _id, username<br/>
+                operatingMode (human | ai)<br/>
+                password, isAdmin<br/>
+                role, homePositionId<br/>
+                llmSlot<br/>
+                isRemote, homeLand<br/>
+                <span style={{color: "#4ade80"}}>metadata (Map)</span>
+              </div>
+              <p style={{marginTop: 12, fontSize: "0.85rem", color: "#666"}}>
+                The unified identity type. Humans are operated by credentials and input
+                devices. AI beings are operated by an LLM through chainsteps. Both register,
+                both live at a home position, both speak through the protocol uniformly.
+                Extensions store energy budgets, API keys, LLM slot assignments, storage
+                usage, and preferences in metadata.
+              </p>
+            </div>
             <div className="lp-card">
               <h3>Node</h3>
               <div style={{fontFamily: "monospace", fontSize: "0.85rem", color: "#999", lineHeight: 2}}>
@@ -159,23 +181,28 @@ const KernelPage = () => {
                 <span style={{color: "#4ade80"}}>metadata (Map)</span>
               </div>
               <p style={{marginTop: 12, fontSize: "0.85rem", color: "#666"}}>
-                12 fields. Type is free-form (custom types allowed). Status is active, completed, or trimmed.
-                Extensions store all their data in metadata under their name. Values, prestige history,
-                schedules, tool configs, extension scoping, all of it lives in the Map.
+                A position in a tree. Type is free-form. Status is active, completed, or
+                trimmed. Parent points up; children[] points down. Extensions store all their
+                data in metadata under their name. Values, prestige history, schedules, tool
+                configs, extension scoping, all of it lives in the Map.
               </p>
             </div>
             <div className="lp-card">
-              <h3>User</h3>
+              <h3>Artifact</h3>
               <div style={{fontFamily: "monospace", fontSize: "0.85rem", color: "#999", lineHeight: 2}}>
-                _id, username, password<br/>
-                llmDefault<br/>
-                isAdmin, isRemote, homeLand<br/>
+                _id, nodeId, beingId<br/>
+                origin (ibp | filesystem<br/>
+                {"      "} | web | cross-land)<br/>
+                content (shape per origin)<br/>
+                createdAt, updatedAt<br/>
                 <span style={{color: "#4ade80"}}>metadata (Map)</span>
               </div>
               <p style={{marginTop: 12, fontSize: "0.85rem", color: "#666"}}>
-                7 fields. One default LLM connection. Extensions store energy budgets, API keys,
-                LLM slot assignments, storage usage, and preferences in metadata.
-                Same atomic toolkit as nodes: incUserMeta, pushUserMeta, batchSetUserMeta.
+                A thing that lives inside a node. Origin names the system the underlying
+                content comes from. <code>ibp</code> is TreeOS native (text, or just metadata).
+                <code> filesystem</code> bridges to a file on disk. <code>web</code> bridges to a URL.
+                <code> cross-land</code> bridges to an artifact on another land. Subsumes
+                what were once called notes, files, and metadata-only objects.
               </p>
             </div>
           </div>
@@ -197,7 +224,7 @@ const KernelPage = () => {
             </div>
             <div className="lp-card">
               <h3>Home <code>~</code></h3>
-              <p>Personal space. Raw ideas, notes across trees, chat history, contributions. The kernel provides a fallback. Extensions provide the experience.</p>
+              <p>Personal space. Raw ideas, artifacts across trees, chat history with the beings who answered you. The kernel provides a fallback. Extensions provide the experience.</p>
             </div>
             <div className="lp-card">
               <h3>Tree <code>/MyTree</code></h3>
@@ -221,7 +248,7 @@ const KernelPage = () => {
               <div className="lp-step-num">1</div>
               <div className="lp-step-content">
                 <h4>Resolve LLM</h4>
-                <p>Walk the resolution chain: extension slot on tree, tree default, extension slot on user, user default. First match wins. Any OpenAI-compatible endpoint works.</p>
+                <p>Walk the resolution chain: extension slot on tree, tree default, extension slot on being, being default. First match wins. Any OpenAI-compatible endpoint works.</p>
               </div>
             </div>
             <div className="lp-step">
@@ -265,16 +292,15 @@ const KernelPage = () => {
           </p>
           <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr 1fr"}}>
             <div className="lp-card">
-              <h3>Before Hooks (9)</h3>
+              <h3>Before Hooks (8)</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
                 Sequential. Can modify data. Can cancel. 5s timeout per handler.
               </p>
               <div style={{fontFamily: "monospace", fontSize: "0.8rem", color: "#555", marginTop: 12, lineHeight: 1.8}}>
-                beforeNote<br/>
+                beforeArtifact<br/>
                 beforeNodeCreate<br/>
                 beforeStatusChange<br/>
                 beforeNodeDelete<br/>
-                beforeContribution<br/>
                 beforeRegister<br/>
                 beforeResponse<br/>
                 beforeLLMCall<br/>
@@ -287,7 +313,7 @@ const KernelPage = () => {
                 Parallel, fire-and-forget. Errors logged, never block.
               </p>
               <div style={{fontFamily: "monospace", fontSize: "0.8rem", color: "#555", marginTop: 12, lineHeight: 1.8}}>
-                afterNote<br/>
+                afterArtifact<br/>
                 afterNodeCreate<br/>
                 afterStatusChange<br/>
                 afterRegister<br/>
@@ -416,7 +442,7 @@ const KernelPage = () => {
               <h3>4. LLM Resolution</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
                 Which model runs?
-                Extension slot on tree, tree default, extension slot on user, user default.
+                Extension slot on tree, tree default, extension slot on being, being default.
                 First match wins. Failover chain tried on failure.
               </p>
             </div>
@@ -503,7 +529,7 @@ const KernelPage = () => {
           <p className="lp-section-sub lp-section-sub-wide">
             Every extension receives <code>core</code> in its <code>init()</code> function.
             The core services bundle exposes everything an extension needs without direct imports.
-            No extension should call MongoDB directly for metadata, node creation, or note management.
+            No extension should call MongoDB directly for metadata, node creation, or artifact management.
           </p>
           <div style={{maxWidth: 700, margin: "0 auto"}}>
             <div style={{marginBottom: 24}}>
@@ -537,10 +563,12 @@ const KernelPage = () => {
               </p>
             </div>
             <div style={{marginBottom: 24}}>
-              <div style={{color: "#4ade80", fontSize: "0.9rem", fontWeight: 600, marginBottom: 8}}>core.notes</div>
+              <div style={{color: "#4ade80", fontSize: "0.9rem", fontWeight: 600, marginBottom: 8}}>core.artifacts</div>
               <p style={{fontSize: "0.8rem", color: "#888"}}>
-                createNote, editNote, deleteNoteAndFile, transferNote, getNotes.
-                Programmatic note CRUD without direct seed imports.
+                createArtifact, editArtifact, deleteArtifactAndFile, transferArtifact, getArtifacts.
+                Programmatic artifact CRUD without direct seed imports. <code>createArtifact</code>
+                takes <code>{"{ origin, content, beingId, nodeId, file?, metadata? }"}</code>; origin
+                defaults to <code>"ibp"</code> for TreeOS-native content.
               </p>
             </div>
             <div style={{marginBottom: 24}}>
@@ -551,15 +579,15 @@ const KernelPage = () => {
               </p>
             </div>
             <div style={{marginBottom: 24}}>
-              <div style={{color: "#4ade80", fontSize: "0.9rem", fontWeight: 600, marginBottom: 12}}>core.userMetadata</div>
+              <div style={{color: "#4ade80", fontSize: "0.9rem", fontWeight: 600, marginBottom: 12}}>core.beingMetadata</div>
               <div style={{fontFamily: "monospace", fontSize: "0.8rem", color: "#888", lineHeight: 2}}>
                 {[
-                  ["getUserMeta(user, key)", "Read namespace"],
-                  ["setUserMeta(user, key, data)", "Full replace (sync, caller saves)"],
-                  ["incUserMeta(user, key, field, amt)", "Atomic counter"],
-                  ["pushUserMeta(user, key, field, item, cap)", "Capped array append"],
-                  ["batchSetUserMeta(user, key, fields)", "Multi-field atomic set"],
-                  ["unsetUserMeta(user, key)", "Remove namespace entirely"],
+                  ["getBeingMeta(being, key)", "Read namespace"],
+                  ["setBeingMeta(being, key, data)", "Full replace (sync, caller saves)"],
+                  ["incBeingMeta(being, key, field, amt)", "Atomic counter"],
+                  ["pushBeingMeta(being, key, field, item, cap)", "Capped array append"],
+                  ["batchSetBeingMeta(being, key, fields)", "Multi-field atomic set"],
+                  ["unsetBeingMeta(being, key)", "Remove namespace entirely"],
                 ].map(([fn, desc]) => (
                   <div key={fn} style={{display: "flex", gap: 12}}>
                     <span style={{color: "#4ade80", minWidth: 300}}>{fn}</span>
@@ -569,7 +597,8 @@ const KernelPage = () => {
               </div>
               <p style={{marginTop: 8, fontSize: "0.8rem", color: "#555"}}>
                 Same pattern as node metadata. Both schemas get the same atomic toolkit.
-                No extension needs direct MongoDB for user metadata.
+                Works for humans and AI beings uniformly. No extension needs direct MongoDB
+                for being metadata.
               </p>
             </div>
             <div style={{marginBottom: 24}}>
@@ -597,10 +626,10 @@ const KernelPage = () => {
             <div className="lp-card">
               <h3>Local Origin</h3>
               <p style={{fontSize: "0.85rem", color: "#888"}}>
-                A note is written at a node with <code>metadata.cascade.enabled = true</code>.
+                An artifact is written at a node with <code>metadata.cascade.enabled = true</code>.
                 The kernel checks two booleans: is cascade enabled on this node? Is <code>cascadeEnabled</code> true
                 in .config? If both yes, fire <code>onCascade</code>. The first event is always local.
-                Somebody wrote something at a position marked for cascade.
+                A being wrote something at a position marked for cascade.
               </p>
             </div>
             <div className="lp-card">
@@ -630,7 +659,7 @@ const KernelPage = () => {
             </div>
           </div>
           <p className="lp-section-sub" style={{marginTop: 20}}>
-            The kernel has four primitives. <strong style={{color: "#e5e5e5"}}>Structure</strong>: two schemas with metadata Maps, nodes in hierarchies. Four supporting models for infrastructure.{" "}
+            The kernel has four primitives. <strong style={{color: "#e5e5e5"}}>Structure</strong>: three foundational schemas with metadata Maps (Being, Node, Artifact). Chat records bind beings together so conversations between them are queryable.{" "}
             <strong style={{color: "#e5e5e5"}}>Intelligence</strong>: the conversation loop, resolution chains.{" "}
             <strong style={{color: "#e5e5e5"}}>Extensibility</strong>: the loader, hooks, pub-sub.{" "}
             <strong style={{color: "#e5e5e5"}}>Communication</strong>: cascade, .flow, visible results.
@@ -717,13 +746,12 @@ const KernelPage = () => {
               ["llmMaxRetries", "Retry count on 429/500", "3"],
               ["maxToolIterations", "Tool calls per message", "15"],
               ["maxConversationMessages", "Context window size", "30"],
-              ["noteMaxChars", "Max characters per note", "5000"],
+              ["artifactMaxChars", "Max characters per ibp-origin artifact", "5000"],
               ["treeSummaryMaxDepth", "How deep AI sees the tree", "4"],
               ["treeSummaryMaxNodes", "How many nodes AI sees", "60"],
               ["sessionTTL", "Session idle timeout (seconds)", "900"],
               ["maxSessions", "Max concurrent sessions", "10000"],
               ["chatRetentionDays", "Auto-delete chats after N days", "90"],
-              ["contributionRetentionDays", "Auto-delete contributions after N days", "365"],
               ["timezone", "Land timezone for AI prompts", "auto"],
               ["disabledExtensions", "Extensions to skip on boot", "[]"],
               ["cascadeEnabled", "Enable cascade signals", "false"],
@@ -751,7 +779,7 @@ const KernelPage = () => {
                   "requestQueueMaxDepth", "staleSessionTimeout", "maxConversationSessions",
                   "staleConversationTimeout", "llmMaxConcurrent", "failoverTimeout",
                   "toolCallTimeout", "toolResultMaxBytes", "toolCircuitThreshold",
-                  "maxNotesPerNode", "maxConnectionsPerUser", "maxRegisteredTools",
+                  "maxArtifactsPerNode", "maxConnectionsPerUser", "maxRegisteredTools",
                   "maxRegisteredModes", "maxOrchestrators", "maxChainSteps",
                   "maxOrchestratorLocks", "maxParseInputBytes", "maxMcpClients",
                   "maxExtensionIndexes", "maxInheritedStatusNodes",
@@ -761,10 +789,10 @@ const KernelPage = () => {
                   "allowedMimeTypes", "allowedFrameDomains", "allowedLlmDomains",
                   "maxTreeNodes", "maxTreeMetadataBytes", "maxTreeErrorRate",
                   "circuitNodeWeight", "circuitDensityWeight", "circuitErrorWeight",
-                  "circuitCheckInterval", "treeSummaryRecentNotes", "treeSummaryPreviewChars",
-                  "treeSearchResultLimit", "chatContributionQueryLimit",
+                  "circuitCheckInterval", "treeSummaryRecentArtifacts", "treeSummaryPreviewChars",
+                  "treeSearchResultLimit",
                   "chatHistoryMaxSessions", "chatHistoryMaxChatsPerSession",
-                  "chatHistoryMaxDescendantIds", "chatHistoryMaxContributions",
+                  "chatHistoryMaxDescendantIds",
                   "canopyEventRetentionDays", "npmInstallTimeout", "seedVersion",
                 ].length} keys. Most operators never touch these.)
               </summary>
@@ -788,7 +816,7 @@ const KernelPage = () => {
                 ["toolCallTimeout", "Seconds before a tool call is killed", "60"],
                 ["toolResultMaxBytes", "Max tool result size (bytes)", "50000"],
                 ["toolCircuitThreshold", "Tool failures before session disable", "5"],
-                ["maxNotesPerNode", "Max notes per node", "1000"],
+                ["maxArtifactsPerNode", "Max artifacts per node", "1000"],
                 ["maxConnectionsPerUser", "Max LLM connections per user", "15"],
                 ["maxRegisteredTools", "Max tools in registry", "500"],
                 ["maxRegisteredModes", "Max modes in registry", "200"],
@@ -819,14 +847,12 @@ const KernelPage = () => {
                 ["circuitDensityWeight", "Metadata density weight", "0.3"],
                 ["circuitErrorWeight", "Error rate weight", "0.3"],
                 ["circuitCheckInterval", "Health check interval (ms)", "3600000"],
-                ["treeSummaryRecentNotes", "Recent notes per node in summary", "3"],
-                ["treeSummaryPreviewChars", "Note preview length (chars)", "200"],
+                ["treeSummaryRecentArtifacts", "Recent artifacts per node in summary", "3"],
+                ["treeSummaryPreviewChars", "Artifact preview length (chars)", "200"],
                 ["treeSearchResultLimit", "Search results in tree context", "10"],
-                ["chatContributionQueryLimit", "Contributions linked per chat", "2000"],
                 ["chatHistoryMaxSessions", "Sessions per history query", "50"],
                 ["chatHistoryMaxChatsPerSession", "Chain steps per session", "200"],
                 ["chatHistoryMaxDescendantIds", "includeChildren expansion cap", "500"],
-                ["chatHistoryMaxContributions", "Contributions per history query", "5000"],
                 ["canopyEventRetentionDays", "Canopy event cleanup (days)", "30"],
                 ["npmInstallTimeout", "npm install timeout (ms)", "60000"],
                 ["seedVersion", "Current seed version", "0.1.0"],
@@ -870,8 +896,7 @@ const KernelPage = () => {
               ["WebSocket safety", "Payload sanitization (200 char strings, 500 char JSON). ID validation (36 char cap). Auth failure logging. Broadcast event name validation."],
               ["Metadata guard", "Blocked extensions can't write. Five core namespaces (tools, modes, extensions, cascade, llm) bypass ownership check. Key length max 50 chars. Nesting depth max 5 levels."],
               ["Document size guard", "14MB ceiling. 512KB per namespace. onDocumentPressure at 80%."],
-              ["Note count per node", "maxNotesPerNode (1000). Prevents runaway loops."],
-              ["Contribution extensionData cap", "512KB per contribution. Prevents buggy extensions writing unbounded data."],
+              ["Artifact count per node", "maxArtifactsPerNode (1000). Prevents runaway loops."],
               [".flow partitioning", "Daily partitions. Circular overwrite. Retention by date."],
               ["Ownership chain", "rootOwner/contributor mutations validate parent chain. System nodes rejected."],
               ["Ancestor cache", "One walk serves five resolution chains. Snapshot per message. Auto-invalidation on changes."],
@@ -884,14 +909,14 @@ const KernelPage = () => {
               ["Username validation", "Regex ^[a-zA-Z0-9_-]{1,32}$. Trimmed. Rejects HTML, special chars, whitespace-only."],
               ["Auth input guards", "All auth functions validate input types. Null/undefined returns clear error, not crash."],
               ["bcrypt hardening", "Cost factor 12 (NIST 2025+). Hash prefix bypass closed. Timing-safe login with dummy hash for non-existent users."],
-              ["Auth strategy sanitization", "Extension strategies cannot overwrite userId/username/authType via result.extra. Core fields stripped."],
+              ["Auth strategy sanitization", "Extension strategies cannot overwrite beingId/username/authType via result.extra. Core fields stripped."],
               ["Cookie-JWT sync", "Cookie maxAge reads jwtExpiryDays from config. Always expire together."],
               ["Auth logging", "authenticateOptional logs all failures at debug level. Zero silent catch blocks."],
               ["Config safety", "Deep copy on reads. Prototype pollution keys stripped. Write verification against DB. Delete via atomic $unset. Reload without restart. Change audit logging."],
               ["Boot recovery", "All six system nodes verified every boot. Missing recreated. Wrong parents repaired. Partial first-boot crashes recoverable."],
               ["Extension sync atomicity", "syncExtensionsToTree uses atomic $addToSet. One save failure doesn't corrupt the tree."],
               ["Orchestrator safety", "30s init timeout. Init rollback on failure. 500 max steps. Zombie guard (no ops after cleanup). Lock ownership with renewal. Abort on cleanup kills in-flight LLM calls. Idempotent cleanup. MCP retry with backoff. 4h internal JWT. Duration tracking."],
-              ["Lock safety", "Owner tracking (userId + visitorId). Release rejects wrong owner. Renewal without release. 10K hard cap. Input validation. Force release for admin. Visibility via getLockInfo/listLocks. Sweep logging."],
+              ["Lock safety", "Owner tracking (beingId + visitorId). Release rejects wrong owner. Renewal without release. 10K hard cap. Input validation. Force release for admin. Visibility via getLockInfo/listLocks. Sweep logging."],
               ["Scope ownership safety", "Tool/mode ownership validated (1-64 chars). Capped at config limits. Cleanup on extension uninstall. Static hook import for notifyScopeChange."],
               ["Node locks", "Structural mutations (create, move, delete, ownership) acquire short-lived in-memory locks. Sorted acquisition prevents deadlocks. TTL expiry (30s) prevents permanent locks on crash."],
               ["LLM priority queue", "Human > Gateway > Interactive > Background. Background jobs (dreams, understanding, compression) yield to users typing. Twenty concurrent slots default."],
@@ -1185,8 +1210,8 @@ const KernelPage = () => {
             <div style={{marginTop: 8}}>
               <p style={{color: "rgba(255,255,255,0.35)", fontSize: "0.88rem", lineHeight: 1.8, margin: 0}}>
                 Most software starts with "what should the user see" and works backward. The seed started with
-                "what does an AI need to live somewhere permanently" and worked forward. Two schemas. A hook system.
-                An extension loader. That is the seed. Everything else grew from it.
+                "what does an AI need to live somewhere permanently" and worked forward. Three schemas (beings,
+                nodes, artifacts). A hook system. An extension loader. That is the seed. Everything else grew from it.
               </p>
             </div>
 

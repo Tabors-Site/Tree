@@ -359,12 +359,12 @@ export function buildExecutionGraph({
 // import from dispatch.js.
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function executeGraph(node, message, visitorId, opts) {
+export async function executeGraph(node, message, aiSessionKey, opts) {
   if (!node) return { success: false, answer: "No execution path resolved." };
 
   if (node.type === "dispatch") {
     const { runModeAndReturn } = await import("./dispatch.js");
-    return runModeAndReturn(visitorId, node.mode, message, {
+    return runModeAndReturn(aiSessionKey, node.mode, message, {
       socket: opts.socket,
       username: opts.username,
       beingId: opts.beingId,
@@ -398,7 +398,7 @@ export async function executeGraph(node, message, visitorId, opts) {
       targetNodeId: s.targetNodeId,
       tense: s.tense || "present",
     }));
-    return runChain(chain, message, visitorId, {
+    return runChain(chain, message, aiSessionKey, {
       socket: opts.socket,
       username: opts.username,
       beingId: opts.beingId,
@@ -431,7 +431,7 @@ export async function executeGraph(node, message, visitorId, opts) {
     }
 
     log.info("Grammar", `FORK: "${node.condition.text}" -> ${evaluation.result} (conf=${evaluation.confidence.toFixed(2)}) -> ${selected.mode || selected.type} | ${evaluation.reasoning}`);
-    return executeGraph(selected, message, visitorId, opts);
+    return executeGraph(selected, message, aiSessionKey, opts);
   }
 
   if (node.type === "fanout") {
@@ -453,7 +453,7 @@ export async function executeGraph(node, message, visitorId, opts) {
     if (items.length === 0) {
       log.info("Grammar", `FANOUT: ${node.extName} -> 0 items resolved, falling back to dispatch`);
       // No items found: fall back to normal dispatch with quantifier annotation
-      return runModeAndReturn(visitorId, node.mode, message, {
+      return runModeAndReturn(aiSessionKey, node.mode, message, {
         socket: opts.socket,
         username: opts.username,
         beingId: opts.beingId,
@@ -494,7 +494,7 @@ export async function executeGraph(node, message, visitorId, opts) {
     log.info("Grammar", `FANOUT: ${node.extName} -> ${items.length} items resolved -> ${node.mode}`);
 
     // Phase 3: Single dispatch with bundled context (synthesis)
-    return runModeAndReturn(visitorId, node.mode, message, {
+    return runModeAndReturn(aiSessionKey, node.mode, message, {
       socket: opts.socket,
       username: opts.username,
       beingId: opts.beingId,

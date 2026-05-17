@@ -18,7 +18,7 @@ function emitStatus(socket, phase, text) {
 }
 
 export async function runRespond({
-  visitorId,
+  aiSessionKey,
   socket,
   signal,
   username,
@@ -35,7 +35,7 @@ export async function runRespond({
 }) {
   emitStatus(socket, "respond", "");
 
-  const memCtx = formatMemoryContext(visitorId);
+  const memCtx = formatMemoryContext(aiSessionKey);
   const summaryCtx = formatStepSummaries(stepSummaries);
 
   let strippedLibCtx = null;
@@ -47,8 +47,8 @@ export async function runRespond({
     };
   }
 
-  const respondMode = await resolveModeForNode("respond", getCurrentNodeId(visitorId) || rootId);
-  await switchMode(visitorId, respondMode, {
+  const respondMode = await resolveModeForNode("respond", getCurrentNodeId(beingId) || rootId);
+  await switchMode(aiSessionKey, respondMode, {
     username,
     beingId,
     rootId,
@@ -79,7 +79,7 @@ export async function runRespond({
       : "Respond to the user based on the provided context.";
   }
 
-  const response = await processMessage(visitorId, trigger, {
+  const response = await processMessage(aiSessionKey, trigger, {
     username,
     beingId,
     rootId,
@@ -104,7 +104,7 @@ export async function runRespond({
   emitStatus(socket, "done", "");
 
   if (originalMessage && response?.answer) {
-    pushMemory(visitorId, originalMessage, response.answer);
+    pushMemory(aiSessionKey, originalMessage, response.answer);
   }
 
   return response;

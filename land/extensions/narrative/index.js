@@ -175,7 +175,6 @@ async function _synthesizeNarrative(rootId, runChat) {
     content: answer.trim(),
     beingId: ownerId,
     nodeId: String(narrativeNode._id),
-    wasAi: true,
   });
 
   // ── Layer 5: Voice ──

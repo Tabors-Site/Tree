@@ -57,7 +57,6 @@ import {
   setActiveChat,
   clearActiveChat,
   finalizeOpenChat,
-  clearChatContext,
 } from "../llm/chatTracker.js";
 // Provided by tree-orchestrator extension if installed. No-op without it.
 let clearMemory = () => {};
@@ -104,7 +103,7 @@ let _httpServerRef = null;
 export function getHttpServer() { return _httpServerRef; }
 
 // Socket tracking
-const userSockets = new Map(); // visitorId → socket.id (1:1; each visitorId is unique per connection)
+const userSockets = new Map(); // aiSessionKey → socket.id (1:1; each aiSessionKey is unique per connection)
 const authSessions = new Map(); // beingId → Set<socket.id> (N:1; a user can hold many concurrent sockets)
 
 // Helpers for the N:1 authSessions map. Every emit-to-user function
@@ -212,7 +211,7 @@ function syncRegistrySession(socket) {
     beingId: socket.beingId,
     type: SESSION_TYPES.WEBSOCKET_CHAT,
     description: `Chat session for ${socket.username || "unknown"}`,
-    meta: { visitorId: socket.visitorId },
+    meta: { aiSessionKey: socket.aiSessionKey },
   });
   socket._registrySessionId = sessionId;
   emitNavigatorStatus(socket);
@@ -263,14 +262,14 @@ function validateChatPayload(args) {
 // get a zone-prefixed key; anything else falls back to the socket's
 // transport-level visitor id. All inputs are length-checked at the
 // boundary.
-async function resolvePerPositionVisitorId(socket, payload) {
+async function resolvePerPositionAiSessionKey(socket, payload) {
   const { buildUserAiSessionKey } = await import("../llm/sessionKeys.js");
   const handle = (typeof payload.sessionHandle === "string"
     && /^[a-z0-9_-]{1,40}$/i.test(payload.sessionHandle))
     ? payload.sessionHandle
     : null;
   const device = socket.clientKind || "web";
-  const fallback = socket.visitorId || `user:${socket.beingId}:transport:${device}`;
+  const fallback = socket.aiSessionKey || `user:${socket.beingId}:transport:${device}`;
 
   if (typeof payload.rootId === "string" && payload.rootId.length > 0 && payload.rootId.length <= 36) {
     return buildUserAiSessionKey({
@@ -297,7 +296,7 @@ async function resolvePerPositionVisitorId(socket, payload) {
 // is verified before any state is written when a rootId is supplied.
 // Errors are logged at warn level but never thrown — chat falls through
 // with whatever state was successfully applied.
-async function applyChatPositionFromPayload(visitorId, socket, payload, username) {
+async function applyChatPositionFromPayload(aiSessionKey, socket, payload, username) {
   const { rootId, nodeId, zone } = payload;
 
   if (typeof rootId === "string" && rootId.length > 0 && rootId.length <= 36) {
@@ -312,42 +311,42 @@ async function applyChatPositionFromPayload(visitorId, socket, payload, username
       log.warn("WS", `tree access denied for root ${rootId}: ok=${access?.ok}`);
       return;
     }
-    setRootId(visitorId, rootId);
+    setRootId(socket.beingId,rootId);
     const resolvedNode = (typeof nodeId === "string" && nodeId.length > 0 && nodeId.length <= 36)
       ? nodeId
       : rootId;
-    setCurrentNodeId(visitorId, resolvedNode);
+    setCurrentNodeId(socket.beingId,resolvedNode);
     try {
-      const curr = getCurrentMode(visitorId);
+      const curr = getCurrentMode(aiSessionKey);
       if ((curr?.split(":")[0] || null) !== "tree") {
-        await switchMode(visitorId, "tree:converse", {
+        await switchMode(aiSessionKey, "tree:converse", {
           username, beingId: socket.beingId, rootId, currentNodeId: resolvedNode,
         });
-        log.info("WS", `🌳 ${visitorId} → tree:converse (was ${curr || "unset"})`);
+        log.info("WS", `🌳 ${aiSessionKey} → tree:converse (was ${curr || "unset"})`);
       }
     } catch (modeErr) {
-      log.warn("WS", `tree-mode switch FAILED on ${visitorId}: ${modeErr.message}`);
+      log.warn("WS", `tree-mode switch FAILED on ${aiSessionKey}: ${modeErr.message}`);
     }
     return;
   }
 
   if (typeof nodeId === "string" && nodeId.length > 0 && nodeId.length <= 36) {
-    setCurrentNodeId(visitorId, nodeId);
+    setCurrentNodeId(socket.beingId,nodeId);
     return;
   }
 
   if (zone === "home" || zone === "land") {
-    setRootId(visitorId, null);
-    setCurrentNodeId(visitorId, null);
+    setRootId(socket.beingId,null);
+    setCurrentNodeId(socket.beingId,null);
     const zoneBaseMode = zone === "land" ? "land:manager" : "home:default";
     try {
-      const curr = getCurrentMode(visitorId);
+      const curr = getCurrentMode(aiSessionKey);
       if ((curr?.split(":")[0] || null) !== zone) {
-        await switchMode(visitorId, zoneBaseMode, { username, beingId: socket.beingId });
-        log.info("WS", `🏠 ${visitorId} → ${zoneBaseMode} (was ${curr || "unset"})`);
+        await switchMode(aiSessionKey, zoneBaseMode, { username, beingId: socket.beingId });
+        log.info("WS", `🏠 ${aiSessionKey} → ${zoneBaseMode} (was ${curr || "unset"})`);
       }
     } catch (err) {
-      log.warn("WS", `${zone}-mode switch FAILED on ${visitorId}: ${err.message}`);
+      log.warn("WS", `${zone}-mode switch FAILED on ${aiSessionKey}: ${err.message}`);
     }
   }
 }
@@ -357,19 +356,19 @@ async function applyChatPositionFromPayload(visitorId, socket, payload, username
 // in-flight registry, build the tee-emitter the orchestrator uses to
 // fan out streaming events, and stamp the socket fields urlChanged /
 // getAvailableModes consult. Symmetric tear-down lives in endChatTurn.
-function beginChatTurn(socket, visitorId, bigMode) {
+function beginChatTurn(socket, aiSessionKey, bigMode) {
   if (socket._chatAbort) socket._chatAbort.abort();
   const abort = new AbortController();
   socket._chatAbort = abort;
 
-  const inFlightRootId = bigMode === "tree" ? (getRootId(visitorId) || null) : null;
-  socket._inFlightStableKey = visitorId;
+  const inFlightRootId = bigMode === "tree" ? (getRootId(socket.beingId) || null) : null;
+  socket._inFlightStableKey = aiSessionKey;
   socket._inFlightZone = bigMode;
   socket._inFlightRootId = inFlightRootId;
 
-  const inFlightEntry = registerInFlight(visitorId, abort, socket);
+  const inFlightEntry = registerInFlight(aiSessionKey, abort, socket);
   const teeEmit = (event, data) => {
-    recordInFlightEvent(visitorId, event, data);
+    recordInFlightEvent(aiSessionKey, event, data);
     if (abort.signal.aborted) return;
     // Snapshot the socket set on each emit so a concurrent
     // attach/detach can't mutate during iteration. The set is small
@@ -392,10 +391,10 @@ function beginChatTurn(socket, visitorId, bigMode) {
 // cross-socket registry entry, clears the zone/rootId stamps, and lets
 // the stream extension drain mid-flight messages so they don't bleed
 // into the next chat.
-function endChatTurn(socket, abort, visitorId) {
+function endChatTurn(socket, abort, aiSessionKey) {
   if (socket._chatAbort === abort) socket._chatAbort = null;
-  clearInFlight(visitorId);
-  if (socket._inFlightStableKey === visitorId) {
+  clearInFlight(aiSessionKey);
+  if (socket._inFlightStableKey === aiSessionKey) {
     socket._inFlightStableKey = null;
     socket._inFlightZone = null;
     socket._inFlightRootId = null;
@@ -583,7 +582,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       // uniquely identifies this socket within the user, so separate
       // tabs / CLI shells / room-agent dispatches each get their own
       // isolated session, MCP connection, and chat memory. Dedupe at
-      // line 374 fires only on exact-match visitorId — a reload in the
+      // line 374 fires only on exact-match aiSessionKey — a reload in the
       // same tab or a re-exec of the same CLI pid.
       //
       // Shape matches `buildUserAiSessionKey` in seed/llm/sessionKeys.js:
@@ -593,14 +592,14 @@ export function initWebSocketServer(httpServer, originPolicy) {
       // that every chat builds via buildUserAiSessionKey. This fallback
       // is only reached when the client hasn't yet sent payload context
       // (urlChanged / first chat). It should eventually be deletable.
-      const visitorId = `user:${beingId}:transport:${socket.clientKind || "web"}:${socket.clientInstance || socket.id.slice(0, 8)}`;
-      const oldSocketId = userSockets.get(visitorId);
+      const aiSessionKey = `user:${beingId}:transport:${socket.clientKind || "web"}:${socket.clientInstance || socket.id.slice(0, 8)}`;
+      const oldSocketId = userSockets.get(aiSessionKey);
       if (oldSocketId && oldSocketId !== socket.id) {
         io.sockets.sockets.get(oldSocketId)?.disconnect(true);
       }
 
-      userSockets.set(visitorId, socket.id);
-      socket.visitorId = visitorId;
+      userSockets.set(aiSessionKey, socket.id);
+      socket.aiSessionKey = aiSessionKey;
       socket.username = username;
 
       // Initialize AI session for this connection
@@ -608,17 +607,17 @@ export function initWebSocketServer(httpServer, originPolicy) {
       syncRegistrySession(socket);
 
       try {
-        // Create internal JWT with visitorId so MCP can route contribution context
+        // Create internal JWT with aiSessionKey so MCP can route contribution context
         const mcpJwt = jwt.sign(
-          { beingId: String(beingId), username, visitorId },
+          { beingId: String(beingId), username, aiSessionKey },
           JWT_SECRET,
           { expiresIn: "24h" },
         );
-        await connectToMCP(MCP_SERVER_URL, visitorId, mcpJwt);
-        socket.emit(WS.REGISTERED, { success: true, visitorId });
+        await connectToMCP(MCP_SERVER_URL, aiSessionKey, mcpJwt);
+        socket.emit(WS.REGISTERED, { success: true, aiSessionKey });
       } catch (err) {
         log.error("WS",
-          `❌ MCP connection failed for ${visitorId}:`,
+          `❌ MCP connection failed for ${aiSessionKey}:`,
           err.message,
         );
         socket.emit(WS.REGISTERED, { success: false, error: err.message });
@@ -634,17 +633,17 @@ export function initWebSocketServer(httpServer, originPolicy) {
      * Payload: { modeKey: "tree:build" }
      */
     socket.on("switchMode", async ({ modeKey }) => {
-      const visitorId = socket.visitorId;
-      if (!visitorId) return;
+      const aiSessionKey = socket.aiSessionKey;
+      if (!aiSessionKey) return;
 
       // Finalize any in-flight chat before switching
       await finalizeOpenChat(socket);
 
       try {
-        const result = await switchMode(visitorId, modeKey, {
+        const result = await switchMode(aiSessionKey, modeKey, {
           username: socket.username,
           beingId: socket.beingId,
-          rootId: getRootId(visitorId),
+          rootId: getRootId(socket.beingId),
         });
         socket.emit(WS.MODE_SWITCHED, result);
       } catch (err) {
@@ -661,7 +660,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
      * Payload: { url: "/root/abc123", rootId?: "abc123" }
      */
     socket.on("urlChanged", async ({ url, rootId, nodeId } = {}) => {
-      if (!socket.visitorId) return;
+      if (!socket.aiSessionKey) return;
       // Cap URL to prevent multi-MB payloads flowing through mode detection and session meta
       if (typeof url === "string" && url.length > 2000) url = url.slice(0, 2000);
       if (rootId && (typeof rootId !== "string" || rootId.length > 36)) rootId = null;
@@ -673,26 +672,26 @@ export function initWebSocketServer(httpServer, originPolicy) {
       // This matches what the chat handler will build from payload context,
       // so state we set here (rootId, currentNodeId, mode) is the state the
       // next chat reads, and switchBigMode clears the right session.
-      // Without this, urlChanged operates on socket.visitorId (tab-level)
+      // Without this, urlChanged operates on socket.aiSessionKey (tab-level)
       // while chat operates on the per-zone key — a mode switch clears the
       // wrong session and the next chat in the new zone inherits old history.
       const { buildUserAiSessionKey } = await import("../llm/sessionKeys.js");
       const _device = socket.clientKind || "web";
-      let visitorId;
+      let aiSessionKey;
       if (newBigMode === BIG_MODES.TREE && rootId) {
-        visitorId = buildUserAiSessionKey({
+        aiSessionKey = buildUserAiSessionKey({
           beingId: socket.beingId, zone: "tree", rootId, device: _device,
         });
       } else if (newBigMode === BIG_MODES.HOME || newBigMode === BIG_MODES.LAND) {
-        visitorId = buildUserAiSessionKey({
+        aiSessionKey = buildUserAiSessionKey({
           beingId: socket.beingId, zone: newBigMode, device: _device,
         });
       } else {
         // Unknown/transitional URL — keep the old fallback.
-        visitorId = socket.visitorId;
+        aiSessionKey = socket.aiSessionKey;
       }
 
-      const currentMode = getCurrentMode(visitorId);
+      const currentMode = getCurrentMode(aiSessionKey);
       const currentBig = currentMode?.split(":")[0] || null;
 
       // Detect zone transition at the SOCKET level. Under the per-zone
@@ -725,37 +724,37 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
       // Update rootId when viewing a root URL
       if (rootId) {
-        setRootId(visitorId, rootId);
-        setCurrentNodeId(visitorId, rootId); // root is also current node
+        setRootId(socket.beingId,rootId);
+        setCurrentNodeId(socket.beingId,rootId); // root is also current node
         if (socket.beingId) {
           hooks.run("afterNavigate", { beingId: socket.beingId, rootId, nodeId: rootId, socket }).catch(() => {});
         }
       } else if (nodeId) {
         // Viewing a non-root node — update currentNodeId only
-        setCurrentNodeId(visitorId, nodeId);
+        setCurrentNodeId(socket.beingId,nodeId);
         // Only set rootId if we don't have one yet (first load via /node/ URL)
-        if (!getRootId(visitorId)) {
-          setRootId(visitorId, nodeId);
+        if (!getRootId(socket.beingId)) {
+          setRootId(socket.beingId,nodeId);
         }
         // In-tree navigation hook (distinct from afterNavigate which fires on root load)
         if (socket.beingId) {
-          hooks.run("onNodeNavigate", { beingId: socket.beingId, rootId: getRootId(visitorId), nodeId, socket }).catch(() => {});
+          hooks.run("onNodeNavigate", { beingId: socket.beingId, rootId: getRootId(socket.beingId), nodeId, socket }).catch(() => {});
         }
       }
 
       // Update session registry meta for dashboard tracking
       if (socket._registrySessionId) {
         updateSessionMeta(socket._registrySessionId, {
-          rootId: rootId || getRootId(visitorId) || null,
-          nodeId: nodeId || rootId || getCurrentNodeId(visitorId) || null,
+          rootId: rootId || getRootId(socket.beingId) || null,
+          nodeId: nodeId || rootId || getCurrentNodeId(socket.beingId) || null,
         });
       }
 
       // Clear both when going home
       if (newBigMode === BIG_MODES.HOME) {
-        setRootId(visitorId, null);
-        setCurrentNodeId(visitorId, null);
-        clearMemory(visitorId);
+        setRootId(socket.beingId,null);
+        setCurrentNodeId(socket.beingId,null);
+        clearMemory(aiSessionKey);
       }
 
       // Switch if big mode changed at the destination key OR the socket
@@ -801,10 +800,10 @@ export function initWebSocketServer(httpServer, originPolicy) {
         }
 
         try {
-          const result = await switchBigMode(visitorId, newBigMode, {
+          const result = await switchBigMode(aiSessionKey, newBigMode, {
             username: socket.username,
             beingId: socket.beingId,
-            rootId: getRootId(visitorId),
+            rootId: getRootId(socket.beingId),
           });
           socket.emit(WS.MODE_SWITCHED, { ...result, carriedMessages: [] });
         } catch (err) {
@@ -817,7 +816,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       if (newBigMode) socket._lastBigMode = newBigMode;
 
       // Look up root name for tree modes
-      const activeRootId = getRootId(visitorId);
+      const activeRootId = getRootId(socket.beingId);
       let rootName = null;
       if (newBigMode === BIG_MODES.TREE && activeRootId) {
         try {
@@ -827,11 +826,11 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
 
       // Always send available modes so frontend stays in sync
-      const activeMode = getCurrentMode(visitorId);
+      const activeMode = getCurrentMode(aiSessionKey);
       const bigMode = activeMode?.split(":")[0] || newBigMode;
       let subModes = getSubModes(bigMode);
 
-      const activeNodeId = getCurrentNodeId(visitorId) || activeRootId;
+      const activeNodeId = getCurrentNodeId(socket.beingId) || activeRootId;
       subModes = await _filterModesForPresence(subModes, {
         nodeId: activeNodeId,
         rootId: activeRootId,
@@ -851,7 +850,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
      * Request available modes for current big mode (e.g., on page load).
      */
     socket.on("getAvailableModes", async ({ url } = {}) => {
-      if (!socket.visitorId) return;
+      if (!socket.aiSessionKey) return;
 
       const urlBigMode = url ? bigModeFromUrl(url) : null;
 
@@ -869,28 +868,28 @@ export function initWebSocketServer(httpServer, originPolicy) {
       // what the chat handler reads. See urlChanged above.
       const { buildUserAiSessionKey } = await import("../llm/sessionKeys.js");
       const _device = socket.clientKind || "web";
-      let visitorId;
+      let aiSessionKey;
       if (urlBigMode === BIG_MODES.TREE && urlRootId) {
-        visitorId = buildUserAiSessionKey({
+        aiSessionKey = buildUserAiSessionKey({
           beingId: socket.beingId, zone: "tree", rootId: urlRootId, device: _device,
         });
       } else if (urlBigMode === BIG_MODES.HOME || urlBigMode === BIG_MODES.LAND) {
-        visitorId = buildUserAiSessionKey({
+        aiSessionKey = buildUserAiSessionKey({
           beingId: socket.beingId, zone: urlBigMode, device: _device,
         });
       } else {
-        visitorId = socket.visitorId;
+        aiSessionKey = socket.aiSessionKey;
       }
 
-      let currentMode = getCurrentMode(visitorId);
+      let currentMode = getCurrentMode(aiSessionKey);
       const currentBig = currentMode?.split(":")[0] || null;
 
       if (url) {
         if (urlRootId) {
-          setRootId(visitorId, urlRootId);
+          setRootId(socket.beingId,urlRootId);
         }
         if (urlBigMode === BIG_MODES.HOME) {
-          setRootId(visitorId, null);
+          setRootId(socket.beingId,null);
         }
       }
 
@@ -906,10 +905,10 @@ export function initWebSocketServer(httpServer, originPolicy) {
       // existing entry, replay the buffered tail so the user sees the
       // running log, and share the abort controller so the Stop button
       // still works through the freshly mounted page.
-      const inFlightForKey = getInFlight(visitorId);
+      const inFlightForKey = getInFlight(aiSessionKey);
       if (inFlightForKey) {
-        attachInFlight(visitorId, socket);
-        socket._inFlightStableKey = visitorId;
+        attachInFlight(aiSessionKey, socket);
+        socket._inFlightStableKey = aiSessionKey;
         socket._inFlightZone = urlBigMode || null;
         socket._inFlightRootId = (urlBigMode === BIG_MODES.TREE) ? (urlRootId || null) : null;
         socket._chatAbort = inFlightForKey.abort;
@@ -920,7 +919,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
       // Abort decoupled from mode-switch (same logic as urlChanged):
       // compare zone + rootId structurally instead of relying on
-      // visitorId-string equality. Within-tree node nav lands here
+      // aiSessionKey-string equality. Within-tree node nav lands here
       // with urlRootId=null, which under string compare would falsely
       // abort. Treating missing rootId as "stay" keeps the chat alive.
       const shouldAbort = !!urlBigMode
@@ -948,10 +947,10 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
         try {
           const targetBigMode = urlBigMode || BIG_MODES.HOME;
-          const result = await switchBigMode(visitorId, targetBigMode, {
+          const result = await switchBigMode(aiSessionKey, targetBigMode, {
             username: socket.username,
             beingId: socket.beingId,
-            rootId: getRootId(visitorId),
+            rootId: getRootId(socket.beingId),
           });
           currentMode = result.modeKey;
           socket.emit(WS.MODE_SWITCHED, { ...result, carriedMessages: [] });
@@ -966,7 +965,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       const bigMode = currentMode?.split(":")[0] || BIG_MODES.HOME;
       let subModes = getSubModes(bigMode);
 
-      const activeRootId = getRootId(visitorId);
+      const activeRootId = getRootId(socket.beingId);
       let rootName = null;
       if (bigMode === BIG_MODES.TREE && activeRootId) {
         try {
@@ -974,7 +973,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
         } catch {}
       }
 
-      const activeNodeId2 = getCurrentNodeId(visitorId) || activeRootId;
+      const activeNodeId2 = getCurrentNodeId(socket.beingId) || activeRootId;
       subModes = await _filterModesForPresence(subModes, {
         nodeId: activeNodeId2,
         rootId: activeRootId,
@@ -993,9 +992,9 @@ export function initWebSocketServer(httpServer, originPolicy) {
     // ── CHAT ──────────────────────────────────────────────────────────
 
     /** Check if user has LLM access (own connection or tree owner's). */
-    async function checkLlmAccess(beingId, visitorId) {
+    async function checkLlmAccess(beingId, aiSessionKey) {
       if (await userHasLlm(beingId)) return true;
-      const activeRootId = getRootId(visitorId);
+      const activeRootId = getRootId(socket.beingId);
       if (!activeRootId) return false;
       const rootNode = await Node.findById(activeRootId).select("rootOwner llmDefault").lean();
       return rootNode
@@ -1014,7 +1013,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
     //   1. Validate payload (boundary check; reject malformed input).
     //   2. Snapshot last chat context so the stream extension's
     //      turn-end replay can carry it forward.
-    //   3. Resolve the per-position visitor id (`visitorId` below).
+    //   3. Resolve the per-position visitor id (`aiSessionKey` below).
     //   4. Apply position state side effects (setRootId, switchMode, etc).
     //   5. Enforce length + rate limits.
     //   6. Effective-context log line.
@@ -1049,7 +1048,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       //    per-tree session key (e.g. user:<uid>:tree:<rootId>:web).
       //    Every downstream state read uses it so a @fitness chat
       //    doesn't touch @default's state.
-      const visitorId = await resolvePerPositionVisitorId(socket, {
+      const aiSessionKey = await resolvePerPositionAiSessionKey(socket, {
         rootId: payloadRootId,
         zone: payloadZone,
         sessionHandle: payloadHandle,
@@ -1057,7 +1056,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
       // 4. Apply position state writes + switchMode side effects. Tree
       //    access is verified before any writes when a rootId is given.
-      await applyChatPositionFromPayload(visitorId, socket, {
+      await applyChatPositionFromPayload(aiSessionKey, socket, {
         rootId: payloadRootId,
         nodeId: payloadNodeId,
         zone: payloadZone,
@@ -1094,9 +1093,9 @@ export function initWebSocketServer(httpServer, originPolicy) {
       // 6. Effective-context log. Shows what state the orchestrator will
       //    actually run with — a mix of payload values and socket
       //    session state pinned by prior navigate events.
-      const effRoot = payloadRootId || getRootId(visitorId) || null;
-      const effNode = payloadNodeId || getCurrentNodeId(visitorId) || null;
-      const effMode = getCurrentMode(visitorId) || null;
+      const effRoot = payloadRootId || getRootId(socket.beingId) || null;
+      const effNode = payloadNodeId || getCurrentNodeId(socket.beingId) || null;
+      const effMode = getCurrentMode(aiSessionKey) || null;
       const effZone = payloadZone || (effMode?.split(":")[0]) || null;
       const handleTag = (typeof payloadHandle === "string" && /^[a-z0-9_-]{1,40}$/i.test(payloadHandle))
         ? payloadHandle
@@ -1104,12 +1103,12 @@ export function initWebSocketServer(httpServer, originPolicy) {
       const msgSnippet = message.length > 48 ? message.slice(0, 48) + "…" : message;
       log.info(
         "WS",
-        `📨 chat: vid=${visitorId} root=${effRoot?.slice?.(0, 8) || "-"} node=${effNode?.slice?.(0, 8) || "-"} zone=${effZone || "-"} mode=${effMode || "-"} handle=${handleTag} gen=${generation ?? "-"} · ${JSON.stringify(msgSnippet)}`,
+        `📨 chat: vid=${aiSessionKey} root=${effRoot?.slice?.(0, 8) || "-"} node=${effNode?.slice?.(0, 8) || "-"} zone=${effZone || "-"} mode=${effMode || "-"} handle=${handleTag} gen=${generation ?? "-"} · ${JSON.stringify(msgSnippet)}`,
       );
 
       // 7. LLM access gate.
       try {
-        if (!(await checkLlmAccess(socket.beingId, visitorId))) {
+        if (!(await checkLlmAccess(socket.beingId, aiSessionKey))) {
           return emitChatError(
             socket,
             ERR.LLM_NOT_CONFIGURED,
@@ -1127,7 +1126,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       if (socket._onStreamMessage) {
         if (socket._chatAbort) {
           log.info("WS",
-            `↺ chat merged into running turn: vid=${visitorId} gen=${generation ?? "-"} · ${JSON.stringify(msgSnippet)}`);
+            `↺ chat merged into running turn: vid=${aiSessionKey} gen=${generation ?? "-"} · ${JSON.stringify(msgSnippet)}`);
           socket._onStreamMessage(message, safeChatMode, generation);
           return;
         }
@@ -1142,15 +1141,15 @@ export function initWebSocketServer(httpServer, originPolicy) {
         }
       }
 
-      // 9. Serialize per visitorId. Previous message must finish first.
-      await enqueue(visitorId, async () => {
+      // 9. Serialize per aiSessionKey. Previous message must finish first.
+      await enqueue(aiSessionKey, async () => {
         // Resolve bigMode once at the top of the turn. Used by both
         // beginChatTurn (in-flight registry zone stamp) and the
         // orchestrator (zone arg). getCurrentMode is a session-keyed
         // read that returns undefined for fresh sessions; "home" is
         // the safe default for the unset case.
-        const bigMode = (getCurrentMode(visitorId)?.split(":")[0]) || "home";
-        const { abort, teeEmit } = beginChatTurn(socket, visitorId, bigMode);
+        const bigMode = (getCurrentMode(aiSessionKey)?.split(":")[0]) || "home";
+        const { abort, teeEmit } = beginChatTurn(socket, aiSessionKey, bigMode);
 
         // Finalize any leftover chat from a prior interrupted message.
         await finalizeOpenChat(socket);
@@ -1167,11 +1166,11 @@ export function initWebSocketServer(httpServer, originPolicy) {
             beingId: socket.beingId,
             username,
             message,
-            rootId: getRootId(visitorId),
-            currentNodeId: getCurrentNodeId(visitorId),
+            rootId: getRootId(socket.beingId),
+            currentNodeId: getCurrentNodeId(socket.beingId),
             device: socket.clientKind || "web",
             handle: payloadHandle || null,
-            aiSessionKey: visitorId,
+            aiSessionKey: aiSessionKey,
             sessionId,
             socket,
             signal: abort.signal,
@@ -1217,12 +1216,10 @@ export function initWebSocketServer(httpServer, originPolicy) {
           // runOrchestration finalized the Chat record. Clear the
           // socket-level marker so finalizeOpenChat doesn't re-finalize.
           clearActiveChat(socket);
-          clearChatContext(socket.visitorId);
         } catch (err) {
           if (abort.signal.aborted) {
             clearActiveChat(socket);
-            clearChatContext(socket.visitorId);
-            return;
+              return;
           }
           log.error("WS", `Chat error: ${err.message}`);
           // Route through teeEmit so the error replays to any
@@ -1234,9 +1231,8 @@ export function initWebSocketServer(httpServer, originPolicy) {
             || (err && err.name === "AbortError" ? ERR.HOOK_CANCELLED : ERR.INTERNAL);
           teeEmit(WS.CHAT_ERROR, { code: errCode, error: err.message, generation });
           clearActiveChat(socket);
-          clearChatContext(socket.visitorId);
         } finally {
-          endChatTurn(socket, abort, visitorId);
+          endChatTurn(socket, abort, aiSessionKey);
         }
       });
     };
@@ -1246,7 +1242,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
     // ── CANCEL REQUEST ────────────────────────────────────────────────
     socket.on("cancelRequest", () => {
       if (socket._chatAbort) {
-        log.debug("WS", `Cancel request: ${socket.visitorId}`);
+        log.debug("WS", `Cancel request: ${socket.aiSessionKey}`);
         socket._chatAbort.abort();
         socket._chatAbort = null;
       }
@@ -1255,12 +1251,11 @@ export function initWebSocketServer(httpServer, originPolicy) {
       // dispatch, etc.) can drain their per-user abort registries.
       // The kernel can't import extension state directly (seed never
       // reaches into extensions); the hook is the contracted surface.
-      const userIdForCancel = socket.visitorId || socket.beingId;
-      if (userIdForCancel) {
+      if (socket.beingId) {
         try {
           hooks.run("request:cancelled", {
-            beingId: String(userIdForCancel),
-            visitorId: socket.visitorId || null,
+            beingId: String(socket.beingId),
+            aiSessionKey: socket.aiSessionKey || null,
             socketId: socket.id || null,
           }).catch(() => {});
         } catch (err) {
@@ -1272,12 +1267,12 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
     // ── ACTIVE ROOT ───────────────────────────────────────────────────
     socket.on("setActiveRoot", ({ rootId } = {}) => {
-      const visitorId = socket.visitorId;
-      if (!visitorId || !rootId || typeof rootId !== "string") return;
+      const aiSessionKey = socket.aiSessionKey;
+      if (!aiSessionKey || !rootId || typeof rootId !== "string") return;
       // Basic format check: must look like a UUID or ObjectId
       if (rootId.length > 36) return;
-      setRootId(visitorId, rootId);
-      log.debug("WS", `Set root: ${visitorId}: ${rootId}`);
+      setRootId(socket.beingId,rootId);
+      log.debug("WS", `Set root: ${aiSessionKey}: ${rootId}`);
     });
     // ── FRONTEND SYNC (context injection) ─────────────────────────────
     // All payloads are capped. The frontend can send arbitrary data.
@@ -1290,41 +1285,41 @@ export function initWebSocketServer(httpServer, originPolicy) {
     }
 
     socket.on("nodeUpdated", ({ nodeId, changes } = {}) => {
-      const visitorId = socket.visitorId;
-      if (!visitorId || !nodeId) return;
+      const aiSessionKey = socket.aiSessionKey;
+      if (!aiSessionKey || !nodeId) return;
       const changesStr = typeof changes === "object" ? JSON.stringify(changes).slice(0, 500) : safeStr(changes, 500);
-      injectContext(visitorId, `[Frontend Update] User modified node ${safeStr(nodeId)}. Changes: ${changesStr}`);
+      injectContext(aiSessionKey, `[Frontend Update] User modified node ${safeStr(nodeId)}. Changes: ${changesStr}`);
     });
 
     socket.on("nodeNavigated", ({ nodeId, nodeName } = {}) => {
-      const visitorId = socket.visitorId;
-      if (!visitorId || !nodeId) return;
-      injectContext(visitorId, `[Frontend Navigation] User navigated to node "${safeStr(nodeName)}" (${safeStr(nodeId)}).`);
+      const aiSessionKey = socket.aiSessionKey;
+      if (!aiSessionKey || !nodeId) return;
+      injectContext(aiSessionKey, `[Frontend Navigation] User navigated to node "${safeStr(nodeName)}" (${safeStr(nodeId)}).`);
     });
 
     socket.on("nodeSelected", ({ nodeId, nodeName } = {}) => {
-      const visitorId = socket.visitorId;
-      if (!visitorId || !nodeId) return;
-      injectContext(visitorId, `[Frontend Selection] User is now focusing on node "${safeStr(nodeName)}" (${safeStr(nodeId)}).`);
+      const aiSessionKey = socket.aiSessionKey;
+      if (!aiSessionKey || !nodeId) return;
+      injectContext(aiSessionKey, `[Frontend Selection] User is now focusing on node "${safeStr(nodeName)}" (${safeStr(nodeId)}).`);
     });
 
     socket.on("nodeCreated", ({ nodeId, nodeName, parentId } = {}) => {
-      const visitorId = socket.visitorId;
-      if (!visitorId || !nodeId) return;
-      injectContext(visitorId, `[Frontend Action] User created node "${safeStr(nodeName)}" (${safeStr(nodeId)}) under ${safeStr(parentId)}.`);
+      const aiSessionKey = socket.aiSessionKey;
+      if (!aiSessionKey || !nodeId) return;
+      injectContext(aiSessionKey, `[Frontend Action] User created node "${safeStr(nodeName)}" (${safeStr(nodeId)}) under ${safeStr(parentId)}.`);
     });
 
     socket.on("nodeDeleted", ({ nodeId, nodeName } = {}) => {
-      const visitorId = socket.visitorId;
-      if (!visitorId || !nodeId) return;
-      injectContext(visitorId, `[Frontend Action] User deleted node "${safeStr(nodeName)}" (${safeStr(nodeId)}).`);
+      const aiSessionKey = socket.aiSessionKey;
+      if (!aiSessionKey || !nodeId) return;
+      injectContext(aiSessionKey, `[Frontend Action] User deleted node "${safeStr(nodeName)}" (${safeStr(nodeId)}).`);
     });
 
     socket.on("noteCreated", ({ nodeId, noteContent } = {}) => {
-      const visitorId = socket.visitorId;
-      if (!visitorId || !nodeId) return;
+      const aiSessionKey = socket.aiSessionKey;
+      if (!aiSessionKey || !nodeId) return;
       const preview = safeStr(noteContent, 100);
-      injectContext(visitorId, `[Frontend Action] User added note to node ${safeStr(nodeId)}: "${preview}${noteContent?.length > 100 ? "..." : ""}"`);
+      injectContext(aiSessionKey, `[Frontend Action] User added note to node ${safeStr(nodeId)}: "${preview}${noteContent?.length > 100 ? "..." : ""}"`);
     });
 
     // ── NAVIGATOR CONTROL ──────────────────────────────────────────────
@@ -1366,7 +1361,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
     for (const [event, handler] of _socketHandlers) {
       socket.on(event, async (data) => {
         try {
-          await handler({ socket, beingId: socket.beingId, visitorId: socket.visitorId, data });
+          await handler({ socket, beingId: socket.beingId, aiSessionKey: socket.aiSessionKey, data });
         } catch (err) {
           log.error("WS", `Socket handler "${event}" error:`, err.message);
         }
@@ -1375,12 +1370,12 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
     // ── CLEAR / DISCONNECT ────────────────────────────────────────────
     socket.on("clearConversation", async () => {
-      const visitorId = socket.visitorId;
-      if (visitorId) {
+      const aiSessionKey = socket.aiSessionKey;
+      if (aiSessionKey) {
         // Finalize any in-flight chat
         await finalizeOpenChat(socket);
 
-        await resetConversation(visitorId, {
+        await resetConversation(aiSessionKey, {
           username: socket.username,
           beingId: socket.beingId,
         });
@@ -1390,7 +1385,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
 
         socket.emit(WS.CONVERSATION_CLEARED, { success: true });
       }
-      clearMemory(socket.visitorId);
+      clearMemory(socket.aiSessionKey);
     });
 
     socket.on("disconnect", async (reason) => {
@@ -1445,17 +1440,17 @@ export function initWebSocketServer(httpServer, originPolicy) {
         removeAuthSession(beingId, socket.id);
       }
 
-      if (socket.visitorId) {
-        const visitorId = socket.visitorId;
-        if (userSockets.get(visitorId) === socket.id) {
-          userSockets.delete(visitorId);
-          closeMCPClient(visitorId).catch((err) =>
+      if (socket.aiSessionKey) {
+        const aiSessionKey = socket.aiSessionKey;
+        if (userSockets.get(aiSessionKey) === socket.id) {
+          userSockets.delete(aiSessionKey);
+          closeMCPClient(aiSessionKey).catch((err) =>
             log.error("WS",
-              `❌ MCP cleanup failed for ${visitorId}:`,
+              `❌ MCP cleanup failed for ${aiSessionKey}:`,
               err.message,
             ),
           );
-          clearSession(visitorId);
+          clearSession(aiSessionKey);
         }
       }
 
@@ -1483,9 +1478,9 @@ export function initWebSocketServer(httpServer, originPolicy) {
 // PUBLIC EMIT FUNCTIONS
 // ============================================================================
 
-export function emitToVisitor(visitorId, event, data) {
+export function emitToVisitor(aiSessionKey, event, data) {
   if (!io) return;
-  const socketId = userSockets.get(visitorId);
+  const socketId = userSockets.get(aiSessionKey);
   if (socketId) io.to(socketId).emit(event, data);
 }
 

@@ -14,7 +14,6 @@ import crypto from "crypto";
 import log from "../seed/log.js";
 import { resolveTreeAccess } from "../seed/tree/treeAccess.js";
 import { getToolOwner, isExtensionBlockedAtNode, isToolReadOnly } from "../seed/tree/extensionScope.js";
-import { getChatContext } from "../seed/llm/chatTracker.js";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -236,25 +235,26 @@ async function handleMcpRequest(req, res) {
       // need this to key writes that runRulerTurn/runForemanTurn read
       // back after the LLM call resolves. Falls back to beingId for
       // backwards compatibility with non-WebSocket callers.
-      if (req.visitorId) requestArgs.visitorId = req.visitorId;
+      if (req.aiSessionKey) requestArgs.aiSessionKey = req.aiSessionKey;
 
-      // Inject AI chat context
-      const contextKey = req.visitorId || req.beingId;
-      const aiCtx = getChatContext(contextKey);
-      requestArgs.chatId = aiCtx.chatId;
-      requestArgs.sessionId = aiCtx.sessionId;
+      // chatId and sessionId travel with the tool call envelope from
+      // the sender (conversation.js / extension orchestrators). No
+      // server-side Map lookup — the sender already knows which chat
+      // the tool call belongs to and injects those fields when it
+      // composes args. Missing values stay missing here; the handlers
+      // tolerate null for both fields.
 
       // Inject position context from the conversation session.
       // These are primitives: where the action is coming from.
       // Tools can override nodeId for specific actions (navigate elsewhere),
       // but the default is always the current position.
-      if (req.visitorId) {
+      if (req.beingId) {
         try {
           const { getCurrentNodeId, getRootId } = await import("../seed/llm/conversation.js");
-          const sessionRootId = getRootId(req.visitorId);
-          const sessionNodeId = getCurrentNodeId(req.visitorId);
-          if (!requestArgs.rootId && sessionRootId) requestArgs.rootId = sessionRootId;
-          if (!requestArgs.nodeId && sessionNodeId) requestArgs.nodeId = sessionNodeId;
+          const beingRootId = getRootId(req.beingId);
+          const beingNodeId = getCurrentNodeId(req.beingId);
+          if (!requestArgs.rootId && beingRootId) requestArgs.rootId = beingRootId;
+          if (!requestArgs.nodeId && beingNodeId) requestArgs.nodeId = beingNodeId;
         } catch {}
       }
 

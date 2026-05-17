@@ -10,7 +10,7 @@ import {
   getCurrentNodeId,
   setCurrentNodeId as setCurrentNodeIdSafely,
 } from "../../seed/llm/conversation.js";
-import { setChatContext, startChainStep, finalizeChat } from "../../seed/llm/chatTracker.js";
+import { startChainStep, finalizeChat } from "../../seed/llm/chatTracker.js";
 // Run processMessage for a mode, but split the tool-call work across
 // chainIndex steps. The first call reuses the rootChat created upstream.
 // If processMessage signals _continue (the mode's maxToolCallsPerStep cap
@@ -19,7 +19,7 @@ import { setChatContext, startChainStep, finalizeChat } from "../../seed/llm/cha
 // and re-enter processMessage with continuation: true. Finalize each
 // sub-step's chat as we go, restore the root chat context at the end so
 // the upstream orchestrator can still write the final answer to it.
-export async function runSteppedMode(visitorId, mode, message, {
+export async function runSteppedMode(aiSessionKey, mode, message, {
   username, beingId, rootId, signal, slot,
   readOnly, onToolLoopCheckpoint, socket,
   parentChatId = null, dispatchOrigin = null,
@@ -46,31 +46,29 @@ export async function runSteppedMode(visitorId, mode, message, {
   // makes per-node drill-in work.
   let fallbackChainIndex = 0;
   const beginStep = async (stepModeKey, stepInput) => {
-    const currentNodeId = getCurrentNodeId(visitorId) || rootId;
+    const currentNodeId = getCurrentNodeId(beingId) || rootId;
     log.info("Tree Orchestrator",
       `📍 beginChainStep ${stepModeKey} targetNodeId=${currentNodeId?.slice?.(0, 8)} (rootId=${rootId?.slice?.(0, 8)}, dispatchOrigin=${dispatchOrigin || "continuation"}, parentChatId=${parentChatId ? parentChatId.slice(0, 8) : "null"}, rt=${rt && !rt._cleaned ? "live" : "fallback"})`,
     );
     if (rt && !rt._cleaned) {
-      const step = await rt.beginChainStep(stepModeKey, stepInput, {
+      // chatId for the opened step is carried back via the return value;
+      // the caller threads it into pmCtx.chatId before the next
+      // processMessage. No Map / setChatContext side-channel.
+      return await rt.beginChainStep(stepModeKey, stepInput, {
         treeContext: currentNodeId ? { targetNodeId: currentNodeId } : undefined,
         parentChatId: parentChatId || null,
         dispatchOrigin: dispatchOrigin || "continuation",
       });
-      if (step?.chatId) {
-        setChatContext(visitorId, sessionId, step.chatId);
-      }
-      return step;
     }
     // Fallback: rt is null or cleaned (common for branch dispatches
     // where the shared runtime has progressed past this branch).
     // Create the chat record directly so treeContext is stamped.
     try {
-      const { startChainStep } = await import("../../seed/llm/chatTracker.js");
       if (!sessionId || !beingId) {
         log.warn("Tree Orchestrator", `beginStep fallback: missing sessionId=${!!sessionId} beingId=${!!beingId}`);
       }
       const chat = await startChainStep({
-        beingId,
+        beingIn: beingId,
         sessionId,
         chainIndex: fallbackChainIndex++,
         rootChatId: rootChatId || null,
@@ -83,7 +81,6 @@ export async function runSteppedMode(visitorId, mode, message, {
       });
       if (chat?._id) {
         log.info("Tree Orchestrator", `📍 fallback chat created: ${chat._id.slice(0, 8)} target=${currentNodeId?.slice(0, 8)}`);
-        setChatContext(visitorId, sessionId, chat._id);
         return { chatId: chat._id, chainIndex: fallbackChainIndex - 1 };
       }
       log.warn("Tree Orchestrator", `beginStep fallback: startChainStep returned null`);
@@ -202,12 +199,12 @@ export async function runSteppedMode(visitorId, mode, message, {
   // Two sources, in priority:
   //   1. ctx.currentNodeId — caller (e.g. dispatch.js's swarm runBranch)
   //      explicitly tells us "the branch is at THIS node". Authoritative.
-  //   2. getCurrentNodeId(visitorId) — fall back to whatever the session
-  //      currently says.
+  //   2. getCurrentNodeId(beingId) — fall back to whatever the being's
+  //      position state currently says.
   //
-  // Setting it in pmCtx forces ensureSession to also stamp it on the
-  // session record, which double-protects against any upstream code
-  // path that might have reset session.currentNodeId between dispatch
+  // Setting it in pmCtx forces ensureSession to also re-stamp it onto
+  // the being's position, which double-protects against any upstream
+  // code path that might have cleared currentNodeId between dispatch
   // and processMessage. Without this thread-through, enrichContext and
   // the write-scope guards would see the project root instead of the
   // actual branch node and the AI would write "game.js" at the root
@@ -215,10 +212,16 @@ export async function runSteppedMode(visitorId, mode, message, {
   const pmCurrentNodeId =
     ctx.currentNodeId
       ? String(ctx.currentNodeId)
-      : (getCurrentNodeId(visitorId) || rootId || null);
+      : (getCurrentNodeId(beingId) || rootId || null);
   const pmCtx = {
     username, beingId, rootId, signal, slot,
     currentNodeId: pmCurrentNodeId,
+    // chatId / sessionId are populated per-step below so processMessage's
+    // tool loop attributes tool calls to the correct chain step's chat
+    // record. We start with the upstream rootChatId; beginStep replaces
+    // it with the freshly-opened step's chatId on each iteration.
+    chatId: rootChatId || null,
+    sessionId: sessionId || null,
     readOnly,
     skipRespond,
     onToolLoopCheckpoint,
@@ -231,7 +234,7 @@ export async function runSteppedMode(visitorId, mode, message, {
   // session-keyed callers (MCP server's getCurrentNodeId injection)
   // see the right value.
   if (pmCurrentNodeId) {
-    setCurrentNodeIdSafely(visitorId, pmCurrentNodeId);
+    setCurrentNodeIdSafely(beingId, pmCurrentNodeId);
   }
 
   // Markers the model can emit to signal status to the orchestrator.
@@ -269,14 +272,15 @@ export async function runSteppedMode(visitorId, mode, message, {
   // swarm wiring) can point branch workers at the step that actually
   // emitted [[BRANCHES]] instead of the whole session's root chat.
   let lastStepChatId = firstStep?.chatId || null;
+  if (firstStep?.chatId) pmCtx.chatId = firstStep.chatId;
   let result;
   const allContent = []; // accumulate content across continuation turns
   try {
-    result = await processMessage(visitorId, message, pmCtx);
+    result = await processMessage(aiSessionKey, message, pmCtx);
     if (result?.content) allContent.push(result.content);
   } catch (err) {
     await finishStep(firstStep, `Error: ${err.message}`, true);
-    if (rootChatId && sessionId) setChatContext(visitorId, sessionId, rootChatId);
+    if (rootChatId) pmCtx.chatId = rootChatId;
     throw err;
   }
 
@@ -341,12 +345,15 @@ export async function runSteppedMode(visitorId, mode, message, {
       `you actually wrote something in this turn.`;
 
     const retryStep = await beginStep(mode, nudge);
-    if (retryStep?.chatId) lastStepChatId = retryStep.chatId;
+    if (retryStep?.chatId) {
+      lastStepChatId = retryStep.chatId;
+      pmCtx.chatId = retryStep.chatId;
+    }
     try {
-      result = await processMessage(visitorId, nudge, pmCtx);
+      result = await processMessage(aiSessionKey, nudge, pmCtx);
     } catch (err) {
       await finishStep(retryStep, `Error: ${err.message}`, true);
-      if (rootChatId && sessionId) setChatContext(visitorId, sessionId, rootChatId);
+      if (rootChatId) pmCtx.chatId = rootChatId;
       throw err;
     }
     const afterRetry = stripMarkers(result);
@@ -423,7 +430,7 @@ export async function runSteppedMode(visitorId, mode, message, {
       const { getExtension: _getExt } = await import("../loader.js");
       const cwExt = _getExt("code-workspace")?.exports;
       if (cwExt?.maybeApplyCascadeNudge) {
-        await cwExt.maybeApplyCascadeNudge({ sessionId, visitorId });
+        await cwExt.maybeApplyCascadeNudge({ sessionId, aiSessionKey });
       }
       // DEBUG_ENRICH_CONTEXT=1 dumps what the AI sees before each
       // processMessage call. One operator switch for deep inspection
@@ -456,17 +463,20 @@ export async function runSteppedMode(visitorId, mode, message, {
 
     const useContinuation = result?._continue; // only true for empty-message re-entry
     const stepChat = await beginStep(mode, nudgeMessage);
-    if (stepChat?.chatId) lastStepChatId = stepChat.chatId;
+    if (stepChat?.chatId) {
+      lastStepChatId = stepChat.chatId;
+      pmCtx.chatId = stepChat.chatId;
+    }
 
     try {
-      result = await processMessage(visitorId, result?._continue ? "" : nudgeMessage, {
+      result = await processMessage(aiSessionKey, result?._continue ? "" : nudgeMessage, {
         ...pmCtx,
         continuation: useContinuation,
       });
       if (result?.content) allContent.push(result.content);
     } catch (err) {
       await finishStep(stepChat, `Error: ${err.message}`, true);
-      if (rootChatId && sessionId) setChatContext(visitorId, sessionId, rootChatId);
+      if (rootChatId) pmCtx.chatId = rootChatId;
       throw err;
     }
 
@@ -482,10 +492,12 @@ export async function runSteppedMode(visitorId, mode, message, {
     );
   }
 
-  // Restore context to the root chat so any subsequent writes (final answer,
-  // contributions, upstream finalizeChat) target chainIndex 0.
-  if (rootChatId && sessionId) {
-    setChatContext(visitorId, sessionId, rootChatId);
+  // Restore chatId to the root chat so any subsequent processMessage
+  // calls in this ctx attribute tool calls to chainIndex 0. pmCtx is
+  // mutated in-place; callers reading pmCtx after this point see the
+  // restored chatId.
+  if (rootChatId) {
+    pmCtx.chatId = rootChatId;
   }
 
   // Attach accumulated content from all continuation turns so the

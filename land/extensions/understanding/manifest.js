@@ -36,7 +36,7 @@ export default {
   // Required: won't load without these
   needs: {
     services: ["llm", "session", "chat", "orchestrator", "mcp", "contributions", "hooks"],
-    models: ["Node", "Contribution"],
+    models: ["Node", "Did"],
   },
 
   optional: {

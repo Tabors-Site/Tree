@@ -33,15 +33,21 @@ name, type, status, dateCreated, llmDefault, visibility, children[], parent, roo
 
 Type is free-form. The kernel validates format (string, max 50 chars, no HTML). Extensions define meaning. Status is active, completed, or trimmed. Extensions store their data in metadata under their name: `metadata.values`, `metadata.prestige`, `metadata.cascade`, `metadata.extensions`, `metadata.tools`, `metadata.modes`. The Map preserves unknown keys across network transit.
 
-### User (7 fields, excluding _id)
+### Being (10 fields, excluding _id)
 
-username, password, llmDefault, isAdmin, isRemote, homeLand, metadata (Map)
+username, operatingMode (human|ai), password, isAdmin, role, homePositionId, llmSlot, isRemote, homeLand, metadata (Map)
 
-One default LLM connection. `isAdmin` is a boolean the kernel checks for authorization (private IP bypass, note size bypass, admin route gates). `isRemote` and `homeLand` are identity fields the auth layer checks on every request. Tree root navigation (formerly `roots[]` on the schema) lives in `metadata.nav.roots`, managed by the navigation extension. Federation data (remote roots) lives in `metadata.canopy`. Tier/plan lives in `metadata.tiers`. Extensions store energy budgets, API keys, LLM slot assignments, storage usage, and preferences in metadata.
+The unified identity type. `operatingMode: "human"` authenticates with a password and is driven by input devices. `operatingMode: "ai"` is driven by an LLM through chainsteps; `role` names the template (ruler, planner, foreman, worker, auth, ...). Every being has a `homePositionId` pointing at the Node it lives at. `llmSlot` is the LLM that drives AI cognition or backs human AI assistance, falling through the resolution chain to position/tree/land defaults. `isAdmin` gates authorization (private IP bypass, admin route gates). `isRemote` and `homeLand` are identity fields the auth layer checks on every request. Extensions store energy budgets, API keys, per-extension LLM slot assignments, storage usage, and preferences in metadata.
+
+### Artifact (7 fields, excluding _id)
+
+nodeId, beingId, origin (ibp|filesystem|web|cross-land), content (shape varies by origin), createdAt, updatedAt, metadata (Map)
+
+A thing that lives inside a node. `origin` names the system the underlying representation comes from, which determines how the artifact is fetched, stored, kept in sync, and addressed. `ibp` is TreeOS native; `content` is a string of text (or null for a metadata-only object). `filesystem` bridges to a file on disk; `content` is `{ path, size, mimeType, originalName }`. `web` bridges to a URL; `content` is `{ url, fetchedAt?, cache? }`. `cross-land` bridges to an artifact on another land; `content` is `{ land, artifactRef }`. Future origins (git, database, stream, service) plug in as new bridging patterns. Extensions tag artifacts via metadata using their own namespace. `beforeArtifact`/`afterArtifact` hooks fire on every write.
 
 ### Supporting Models
 
-Node and User are the data contract. The seed also owns models for kernel operations:
+Node, Being, and Artifact are the data contract. The seed also owns models for kernel operations:
 
 | Model | Purpose |
 |-------|---------|
@@ -148,21 +154,23 @@ Three orthogonal axes, each evolves independently: **WHERE** (noun + preposition
 
 Extensions receive `core` in `init(core)`. The full metadata toolkit, tree/artifact CRUD, scope checking, and mode management are all available through the services bundle. Extensions should never call MongoDB directly for metadata operations.
 
-### Metadata (core.metadata)
+### Node Metadata (core.metadata)
 
-Seven functions. No extension needs direct MongoDB for node metadata.
+Nine functions. No extension needs direct MongoDB for node metadata.
 
 | Function | Operation | Use Case |
 |----------|-----------|----------|
-| `getExtMeta(node, extName)` | Read namespace | Read your extension's data from a node |
-| `setExtMeta(node, extName, data)` | Full replace | Write entire namespace (needs document) |
-| `mergeExtMeta(node, extName, partial)` | Shallow merge | Update specific keys (needs document) |
-| `incExtMeta(node, extName, key, amount)` | Atomic $inc | Counters, accumulators. By ID or document. |
-| `pushExtMeta(node, extName, key, item, maxLength)` | Atomic $push + $slice | Capped arrays, rolling history. By ID or document. |
-| `batchSetExtMeta(node, extName, fields)` | Atomic multi-field $set | Set multiple keys at once. By ID or document. |
+| `getExtMeta(node, extName)` | Read namespace | Returns `{}` when unset |
+| `readNs(node, extName)` | Read namespace, null on miss | Distinguish "never written" from "empty" |
+| `setExtMeta(node, extName, data)` | Atomic $set | Replace entire namespace |
+| `mergeExtMeta(node, extName, partial)` | Atomic per-key $set | Update specific keys without clobbering others |
+| `incExtMeta(node, extName, key, amount)` | Atomic $inc | Counters, accumulators |
+| `pushExtMeta(node, extName, key, item, maxLength)` | Atomic $push + $slice | Capped circular buffer |
+| `addToExtMetaSet(node, extName, key, item)` | Atomic $addToSet | Deduplicated set (no double-pushes) |
+| `batchSetExtMeta(node, extName, fields)` | Atomic multi-field $set | Set multiple keys at once |
 | `unsetExtMeta(node, extName)` | Atomic $unset | Remove namespace entirely. Document shrinks. |
 
-`incExtMeta`, `pushExtMeta`, `batchSetExtMeta`, and `unsetExtMeta` accept a node document OR a nodeId string. No read-modify-write. No race conditions. MongoDB atomic operators handle concurrency.
+All write functions accept a node document OR a nodeId string. No read-modify-write. No race conditions. MongoDB atomic operators handle concurrency.
 
 ```js
 // Atomic increment (food macro tracking)
@@ -188,20 +196,43 @@ await core.metadata.unsetExtMeta(nodeId, "old-extension");
 
 `core.artifacts.createArtifact`, `core.artifacts.editArtifact`, `core.artifacts.deleteArtifactAndFile`, `core.artifacts.transferArtifact`, `core.artifacts.getArtifacts`. Programmatic artifact creation without direct seed imports. createArtifact takes `{ origin, content, beingId, nodeId, file?, metadata? }`. Origin defaults to `"ibp"` (TreeOS-native text or metadata-only object); pass a multer file plus `origin: "filesystem"` for uploads.
 
-### User Metadata (core.userMetadata)
+### Being Metadata (core.beingMetadata)
 
-Same pattern as node metadata, applied to users. Six functions.
+Same pattern as node metadata, applied to beings (humans and AI beings alike). Nine functions.
 
 | Function | Operation | Use Case |
 |----------|-----------|----------|
-| `getUserMeta(user, key)` | Read namespace | Read extension data from a user |
-| `setUserMeta(user, key, data)` | Full replace (sync) | Write namespace. Caller must `await user.save()`. |
-| `incUserMeta(user, key, field, amount)` | Atomic $inc | Storage counters, energy tracking. By ID or document. |
-| `pushUserMeta(user, key, field, item, maxLength)` | Atomic $push + $slice | Phase history, activity logs. By ID or document. |
-| `batchSetUserMeta(user, key, fields)` | Atomic multi-field $set | Preference updates, config resets. By ID or document. |
-| `unsetUserMeta(user, key)` | Atomic $unset | Remove namespace entirely. Document shrinks. |
+| `getBeingMeta(being, key)` | Read namespace | Returns `{}` when unset |
+| `readBeingNs(being, key)` | Read namespace, null on miss | Distinguish "never written" from "empty" |
+| `setBeingMeta(being, key, data)` | In-memory replace (sync) | Write namespace. Caller must `await being.save()` to persist. |
+| `mergeBeingMeta(being, key, partial)` | Atomic per-key $set | Update specific keys without clobbering others |
+| `incBeingMeta(being, key, field, amount)` | Atomic $inc | Storage counters, energy tracking |
+| `pushBeingMeta(being, key, field, item, maxLength)` | Atomic $push + $slice | Phase history, activity logs |
+| `addToBeingMetaSet(being, key, field, item)` | Atomic $addToSet | Deduplicated set (nav roots, contributors) |
+| `batchSetBeingMeta(being, key, fields)` | Atomic multi-field $set | Preference updates, config resets |
+| `unsetBeingMeta(being, key)` | Atomic $unset | Remove namespace entirely. Document shrinks. |
 
-`incUserMeta`, `pushUserMeta`, `batchSetUserMeta`, and `unsetUserMeta` accept a user document OR a userId string. Atomic. No read-modify-write.
+`mergeBeingMeta` and all atomic writes accept a being document OR a beingId string. `setBeingMeta` is the historical exception: it mutates the in-memory document and relies on the caller to `await being.save()`. Prefer `mergeBeingMeta` or `batchSetBeingMeta` for new code so writes are atomic at the kernel boundary.
+
+### Artifact Metadata (core.artifactMetadata)
+
+Same pattern as node and being metadata, applied to artifacts. Nine functions.
+
+| Function | Operation | Use Case |
+|----------|-----------|----------|
+| `getArtifactMeta(artifact, extName)` | Read namespace | Returns `{}` when unset |
+| `readArtifactNs(artifact, extName)` | Read namespace, null on miss | Distinguish "never written" from "empty" |
+| `setArtifactMeta(artifact, extName, data)` | Atomic $set | Replace entire namespace |
+| `mergeArtifactMeta(artifact, extName, partial)` | Atomic per-key $set | Update specific keys without clobbering others |
+| `incArtifactMeta(artifact, extName, key, amount)` | Atomic $inc | Counters (revisions, view counts) |
+| `pushArtifactMeta(artifact, extName, key, item, maxLength)` | Atomic $push + $slice | Capped history (review rounds, edits) |
+| `addToArtifactMetaSet(artifact, extName, key, item)` | Atomic $addToSet | Tags, contributors, deduplicated lists |
+| `batchSetArtifactMeta(artifact, extName, fields)` | Atomic multi-field $set | Set multiple keys at once (embedding + model + ts) |
+| `unsetArtifactMeta(artifact, extName)` | Atomic $unset | Remove namespace entirely. Document shrinks. |
+
+All write functions accept an artifact document OR an artifactId string. Artifacts inherit spatial scope from the node they live on, so there is no per-artifact extension-blocked check; the kernel filters blocked extensions out of hooks and tool resolution upstream.
+
+The three modules are functional peers. Every operation on a node has a same-shaped operation on a being and on an artifact; pick the module that matches the document you are tagging.
 
 ### Extension Scope (core.scope)
 
@@ -348,7 +379,7 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | maxToolIterations | 15 | Tool calls per message |
 | maxConversationMessages | 30 | Context window size |
 | landLlmConnection | null | LLM connection ID. Fallback for users without their own. Admin creates a connection, sets this to its ID. All users get AI. Override by setting your own. |
-| artifactMaxChars | 5000 | Max characters per ibp-origin artifact (falls back to noteMaxChars for compat) |
+| artifactMaxChars | 5000 | Max characters per ibp-origin artifact |
 | treeSummaryMaxDepth | 4 | How deep AI sees the tree |
 | treeSummaryMaxNodes | 60 | How many nodes AI sees |
 | carryMessages | 4 | Messages carried across mode switch |
@@ -357,7 +388,7 @@ Runtime config stored in .config system node. Readable and writable via CLI (`tr
 | maxSessions | 10000 | Max concurrent sessions |
 | jwtExpiryDays | 30 | JWT token lifetime in days. Clamped 1 to 365. Shorter for higher security environments. |
 | chatRetentionDays | 90 | Auto-delete chats |
-| contributionRetentionDays | 365 | Auto-delete contributions |
+| didRetentionDays | 365 | Auto-delete Did rows older than N days. 0 = keep forever. |
 | timezone | auto | Land timezone for AI prompts |
 | disabledExtensions | [] | Extensions to skip on boot |
 | allowedLlmDomains | [] | Whitelist of allowed LLM endpoint domains for non-admin users. Empty means any external domain. Admins bypass. Example: `["api.openai.com", "openrouter.ai"]` |
@@ -437,12 +468,12 @@ These keys are configurable via `treeos config set` but most lands never need to
 |-----|---------|---------------|
 | metadataNamespaceMaxBytes | 524288 | Max bytes per metadata namespace (512KB) |
 | metadataMaxNestingDepth | 5 | Max nesting depth for extension metadata values |
-| maxArtifactsPerNode | 1000 | Max artifacts per node (falls back to maxNotesPerNode for compat) |
+| maxArtifactsPerNode | 1000 | Max artifacts per node |
 | maxContributorsPerNode | 500 | Max contributors[] entries per node |
 | maxConnectionsPerUser | 15 | Max custom LLM connections per user |
-| artifactQueryLimit | 5000 | Max artifacts returned per query (falls back to noteQueryLimit) |
-| artifactSearchLimit | 500 | Max artifacts returned per search query (falls back to noteSearchLimit) |
-| contributionQueryLimit | 5000 | Max contribution documents returned per query |
+| artifactQueryLimit | 5000 | Max artifacts returned per query |
+| artifactSearchLimit | 500 | Max artifacts returned per search query |
+| didQueryLimit | 5000 | Max Did rows returned per query |
 | subtreeNodeCap | 10000 | Max node IDs collected in subtree traversal |
 
 **Tree data queries (AI context):**
@@ -450,12 +481,12 @@ These keys are configurable via `treeos config set` but most lands never need to
 | Key | Default | What it tunes |
 |-----|---------|---------------|
 | treeAncestorDepth | 50 | Max ancestor chain depth |
-| treeContributionsPerNode | 500 | Max contributions loaded per node |
-| treeArtifactsPerNode | 100 | Max artifacts loaded per node (falls back to treeNotesPerNode) |
+| treeDidsPerNode | 500 | Max Did rows loaded per node in tree context |
+| treeArtifactsPerNode | 100 | Max artifacts loaded per node |
 | treeMaxChildrenResolve | 200 | Max children name-resolved per node |
 | treeAllDataDepth | 20 | Max recursion depth in full tree export |
 | treeSearchResultLimit | 10 | Max search results returned in tree context |
-| treeSummaryRecentArtifacts | 3 | Recent artifacts shown per node in tree summary (falls back to treeSummaryRecentNotes) |
+| treeSummaryRecentArtifacts | 3 | Recent artifacts shown per node in tree summary |
 | treeSummaryPreviewChars | 200 | Characters of artifact content shown in preview |
 | chatContributionQueryLimit | 2000 | Max contributions linked per chat finalization |
 | chatHistoryMaxSessions | 50 | Max sessions returned per chat history query |

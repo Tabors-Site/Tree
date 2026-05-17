@@ -2,7 +2,7 @@ import tools from "./tools.js";
 import { setServices, setEnergyService, addPrestige, resolveVersion } from "./core.js";
 
 export async function init(core) {
-  setServices({ models: core.models, contributions: core.contributions, metadata: core.metadata });
+  setServices({ models: core.models, contributions: core.dids, metadata: core.metadata });
   if (core.energy) setEnergyService(core.energy);
 
   const { default: router, setNodeModel } = await import("./routes.js");
@@ -18,7 +18,7 @@ export async function init(core) {
     data.metadata.version = prestige?.current || 0;
   }, "prestige");
 
-  core.hooks.register("beforeContribution", async (data) => {
+  core.hooks.register("beforeDid", async (data) => {
     const node = await Node.findById(data.nodeId).select("metadata").lean();
     if (!node) return;
     const prestige = core.metadata.getExtMeta(node, "prestige");

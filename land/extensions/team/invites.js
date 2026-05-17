@@ -33,7 +33,7 @@ export async function createInvite({
   isUninviting,
   Node,
   User,
-  logContribution,
+  logDid,
   escapeRegex,
   queueCanopyEvent,
   ownership,
@@ -104,7 +104,7 @@ export async function createInvite({
 
     inviteAction.action = "invite";
 
-    await logContribution({
+    await logDid({
       beingId: userInvitingId,
       nodeId: node.id,
       action: "invite",
@@ -139,7 +139,7 @@ export async function createInvite({
 
     inviteAction.action = "switchOwner";
 
-    await logContribution({
+    await logDid({
       beingId: userInvitingId,
       nodeId: node.id,
       action: "invite",
@@ -171,7 +171,7 @@ export async function createInvite({
 
       inviteAction.action = "removeContributor";
 
-      await logContribution({
+      await logDid({
         beingId: userInvitingId,
         nodeId: node.id,
         action: "invite",
@@ -198,14 +198,14 @@ export async function createInvite({
 
       inviteAction.action = "removeContributor";
 
-      await logContribution({
+      await logDid({
         beingId: userInvitingId,
         nodeId: node.id,
         action: "invite",
         inviteAction,
 
       });
-      await logContribution({
+      await logDid({
         beingId: userInvitingId,
         nodeId: node.id,
         action: "branchLifecycle",
@@ -239,7 +239,7 @@ export async function createInvite({
 
       inviteAction.action = "removeContributor";
 
-      await logContribution({
+      await logDid({
         beingId: userInvitingId,
         nodeId: node.id,
         action: "invite",
@@ -256,7 +256,7 @@ export async function createInvite({
   throw new Error("Invalid invite operation");
 }
 
-export async function respondToInvite({ inviteId, beingId, acceptInvite, Node, User, logContribution, queueCanopyEvent, ownership }) {
+export async function respondToInvite({ inviteId, beingId, acceptInvite, Node, User, logDid, queueCanopyEvent, ownership }) {
   // Atomic status transition prevents double-processing
   const invite = await Invite.findOneAndUpdate(
     { _id: inviteId, status: "pending" },
@@ -333,7 +333,7 @@ export async function respondToInvite({ inviteId, beingId, acceptInvite, Node, U
     inviteAction.action = "denyInvite";
   }
 
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: node.id,
     action: "invite",

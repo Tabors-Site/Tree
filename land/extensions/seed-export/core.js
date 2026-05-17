@@ -11,13 +11,13 @@ import { createNode } from "../../seed/tree/treeManagement.js";
 import { getExtension } from "../loader.js";
 
 let Node = null;
-let logContribution = async () => {};
+let logDid = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
 let _metadata = null;
 
 export function setServices({ models, contributions, energy, metadata }) {
   Node = models.Node;
-  logContribution = contributions.logContribution;
+  logDid = contributions.logDid;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
   if (metadata) _metadata = metadata;
 }
@@ -228,10 +228,9 @@ export async function exportTreeSeed(rootId, beingId, opts = {}) {
   }
 
   // Log contribution
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: rootId.toString(),
-    wasAi: false,
     action: "seed-export:exported",
     extensionData: {
       "seed-export": {
@@ -357,10 +356,9 @@ export async function plantTreeSeed(seedData, beingId, username) {
   if (!rootNode) throw new Error("Failed to create root node from seed");
 
   // Log contribution
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: rootNode._id.toString(),
-    wasAi: false,
     action: "seed-export:planted",
     extensionData: {
       "seed-export": {

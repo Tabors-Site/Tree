@@ -3,13 +3,13 @@ import { getExtension } from "../loader.js";
 
 // Services wired from init() via setServices()
 let Node = null;
-let logContribution = async () => {};
+let logDid = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
 let _metadata = null;
 
 export function setServices({ models, contributions, metadata }) {
   Node = models.Node;
-  logContribution = contributions.logContribution;
+  logDid = contributions.logDid;
   if (metadata) _metadata = metadata;
 }
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
@@ -37,7 +37,6 @@ function calculateNextSchedule(scheduleData) {
 async function addPrestige({
   nodeId,
   beingId,
-  wasAi,
   chatId = null,
   sessionId = null,
 }) {
@@ -55,10 +54,9 @@ async function addPrestige({
 
   await addPrestigeToNode(node);
 
-  await logContribution({
+  await logDid({
     beingId,
     nodeId,
-    wasAi,
     chatId,
     sessionId,
     action: "prestige",

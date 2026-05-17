@@ -147,8 +147,8 @@ async function shutdown(signal) {
   // Close all MCP clients (these hold connections open)
   try {
     const { mcpClients, closeMCPClient } = await import("./seed/ws/mcp.js");
-    for (const [visitorId] of mcpClients) {
-      try { closeMCPClient(visitorId); } catch {}
+    for (const [aiSessionKey] of mcpClients) {
+      try { closeMCPClient(aiSessionKey); } catch {}
     }
   } catch {}
 

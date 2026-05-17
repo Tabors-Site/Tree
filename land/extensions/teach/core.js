@@ -10,14 +10,14 @@ import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 import { v4 as uuidv4 } from "uuid";
 
 let Node = null;
-let logContribution = async () => {};
+let logDid = async () => {};
 let runChat = null;
 let useEnergy = async () => ({ energyUsed: 0 });
 let _metadata = null;
 
 export function setServices({ models, contributions, llm, energy, metadata }) {
   Node = models.Node;
-  logContribution = contributions.logContribution;
+  logDid = contributions.logDid;
   runChat = llm.runChat;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
   _metadata = metadata;
@@ -254,10 +254,9 @@ export async function extractLessons(rootId, beingId, username) {
   };
 
   // Log contribution
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: rootId,
-    wasAi: true,
     action: "teach:exported",
     extensionData: {
       teach: {
@@ -306,10 +305,9 @@ export async function importLessons(rootId, lessonSet, beingId) {
 
   await _metadata.setExtMeta(root, "teach", meta);
 
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: rootId,
-    wasAi: false,
     action: "teach:imported",
     extensionData: {
       teach: {

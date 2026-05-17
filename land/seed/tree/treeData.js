@@ -12,17 +12,17 @@
 import log from "../log.js";
 import Node from "../models/node.js";
 import Artifact from "../models/artifact.js";
-import Contribution from "../models/contribution.js";
+import Did from "../models/did.js";
 import { NODE_STATUS, ARTIFACT_ORIGIN } from "../protocol.js";
 import { getLandConfigValue } from "../landConfig.js";
 
 // Configurable caps. Read at call time so config changes take effect.
 function maxTreeDepth() { return Number(getLandConfigValue("treeSummaryMaxDepth")) || 4; }
 function maxTreeNodes() { return Number(getLandConfigValue("treeSummaryMaxNodes")) || 60; }
-function maxArtifactsPerQuery() { return Math.min(Number(getLandConfigValue("artifactQueryLimit")) || Number(getLandConfigValue("noteQueryLimit")) || 5000, 50000); }
+function maxArtifactsPerQuery() { return Math.min(Number(getLandConfigValue("artifactQueryLimit")) || 5000, 50000); }
 function maxAncestorDepth() { return Math.max(5, Math.min(Number(getLandConfigValue("treeAncestorDepth")) || 50, 200)); }
-function maxContributionsPerNode() { return Math.max(10, Math.min(Number(getLandConfigValue("treeContributionsPerNode")) || 500, 10000)); }
-function maxArtifactsPerNodeQuery() { return Math.max(10, Math.min(Number(getLandConfigValue("treeArtifactsPerNode")) || Number(getLandConfigValue("treeNotesPerNode")) || 100, 1000)); }
+function maxDidsPerNode() { return Math.max(10, Math.min(Number(getLandConfigValue("treeDidsPerNode")) || 500, 10000)); }
+function maxArtifactsPerNodeQuery() { return Math.max(10, Math.min(Number(getLandConfigValue("treeArtifactsPerNode")) || 100, 1000)); }
 function maxChildrenResolve() { return Math.max(10, Math.min(Number(getLandConfigValue("treeMaxChildrenResolve")) || 200, 1000)); }
 function maxAllDataDepth() { return Math.max(5, Math.min(Number(getLandConfigValue("treeAllDataDepth")) || 20, 50)); }
 const MAX_STRIP_DEPTH = 10; // not configurable, internal safety
@@ -225,9 +225,9 @@ export async function getAllNodeData(rootId, filters = {}) {
     nodeCount++;
     node = stripMetadataSecrets(node);
 
-    node.contributions = await Contribution.find({ nodeId: node._id })
+    node.contributions = await Did.find({ nodeId: node._id })
       .sort({ date: -1 })
-      .limit(maxContributionsPerNode())
+      .limit(maxDidsPerNode())
       .lean();
 
     const artifacts = await Artifact.find({ nodeId: node._id, origin: ARTIFACT_ORIGIN.IBP })

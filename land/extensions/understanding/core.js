@@ -5,14 +5,14 @@ import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 
 // Services wired from init() via setServices()
 let Node = null;
-let Contribution = null;
-let logContribution = async () => {};
+let Did = null;
+let logDid = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
 
 export function setServices({ models, contributions }) {
   Node = models.Node;
-  Contribution = models.Contribution;
-  if (contributions?.logContribution) logContribution = contributions.logContribution;
+  _Did = models.Did;
+  if (contributions?.logDid) logDid = contributions.logDid;
 }
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 function containsHtml(str) {
@@ -26,7 +26,6 @@ export async function createUnderstandingRun(
   rootNodeId,
   beingId,
   perspective = "general",
-  wasAi = false,
   chatId = null,
   sessionId = null,
 ) {
@@ -83,10 +82,9 @@ export async function createUnderstandingRun(
   run.topology = Object.fromEntries(topology);
   run.maxDepth = maxDepth;
   await run.save();
-  await logContribution({
+  await logDid({
     beingId: beingId,
     nodeId: rootNodeId,
-    wasAi,
     chatId,
     sessionId,
     energyUsed,
@@ -118,7 +116,6 @@ export async function findOrCreateUnderstandingRun(
   rootNodeId,
   beingId,
   perspective = "general",
-  wasAi = false,
   chatId = null,
   sessionId = null,
 ) {
@@ -149,7 +146,6 @@ export async function findOrCreateUnderstandingRun(
     rootNodeId,
     beingId,
     perspective,
-    wasAi,
     chatId,
     sessionId,
   );
@@ -565,7 +561,6 @@ async function autoCommitLeaf(
   perspective,
   encoding,
   beingId,
-  wasAi,
 ) {
   const node = await UnderstandingNode.findById(understandingNodeId);
   if (!node) return;
@@ -573,7 +568,7 @@ async function autoCommitLeaf(
   const existing = node.perspectiveStates?.get(understandingRunId);
   if (existing) return;
 
-  const contribCount = await Contribution.countDocuments({
+  const contribCount = await Did.countDocuments({
     nodeId: node.realNodeId,
     action: { $ne: "understanding" },
   });
@@ -587,10 +582,9 @@ async function autoCommitLeaf(
     contributionSnapshot: contribCount,
   });
   /*
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: node.realNodeId,
-    wasAi: true,
     action: "understanding",
     nodeVersion: "0",
     understandingMeta: {
@@ -615,7 +609,6 @@ export async function commitCompressionResult({
   understandingNodeId,
   currentLayer,
   beingId,
-  wasAi = true,
   chatId = null,
   sessionId = null,
 }) {
@@ -636,7 +629,7 @@ export async function commitCompressionResult({
     const existing = node.perspectiveStates?.get(understandingRunId);
     if (existing) return; // idempotent
 
-    const contribCount = await Contribution.countDocuments({
+    const contribCount = await Did.countDocuments({
       nodeId: node.realNodeId,
       action: { $ne: "understanding" },
     });
@@ -655,10 +648,9 @@ export async function commitCompressionResult({
       payload: 1,
     });
 
-    await logContribution({
+    await logDid({
       beingId,
       nodeId: node.realNodeId,
-      wasAi,
       chatId,
       sessionId,
       energyUsed,
@@ -713,7 +705,7 @@ export async function commitCompressionResult({
     if (existing && existing.currentLayer >= currentLayer) {
       // idempotent
     } else {
-      const contribCount = await Contribution.countDocuments({
+      const contribCount = await Did.countDocuments({
         nodeId: node.realNodeId,
         action: { $ne: "understanding" },
       });
@@ -732,10 +724,9 @@ export async function commitCompressionResult({
         payload: 1,
       });
 
-      await logContribution({
+      await logDid({
         beingId,
         nodeId: node.realNodeId,
-        wasAi,
         chatId,
         sessionId,
         energyUsed,
@@ -866,7 +857,7 @@ async function markDirtyNodes(run, topology, structurallyDirty = new Set()) {
   );
 
   // Batch query current contribution counts (excluding understanding contributions)
-  const contribCounts = await Contribution.aggregate([
+  const contribCounts = await Did.aggregate([
     {
       $match: {
         nodeId: { $in: realNodeIds },

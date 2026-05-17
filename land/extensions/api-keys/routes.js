@@ -56,8 +56,7 @@ router.post("/user/:beingId/api-keys", authenticate, async (req, res) => {
     const { rawKey, keyHash, keyPrefix } = await generateApiKey();
     const crypto = await import("crypto");
     keys = [...keys, { _id: crypto.randomUUID(), keyHash, keyPrefix, name: safeName, createdAt: new Date() }];
-    setBeingMeta(user, "apiKeys", keys);
-    await user.save();
+    await setBeingMeta(user, "apiKeys", keys);
 
     const token = req.query.token ?? "";
 

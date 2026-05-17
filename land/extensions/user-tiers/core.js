@@ -1,4 +1,4 @@
-import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
+import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 
 let User;
 

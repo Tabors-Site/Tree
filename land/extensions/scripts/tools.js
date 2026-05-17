@@ -215,7 +215,6 @@ export default [
         name,
         script,
         beingId,
-        wasAi: true,
         chatId,
         sessionId,
       });
@@ -257,7 +256,6 @@ export default [
         nodeId,
         scriptId,
         beingId,
-        wasAi: true,
         chatId,
         sessionId,
       });

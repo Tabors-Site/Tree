@@ -196,7 +196,6 @@ async function runFlow(flowNode, rootId, ownerId, runChat, core) {
       content: `Flow run at ${new Date().toISOString()}\n\n${summary}`,
       beingId: ownerId,
       nodeId: String(flowNode._id),
-      wasAi: true,
     });
   } catch {}
 

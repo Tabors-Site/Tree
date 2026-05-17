@@ -171,7 +171,6 @@ export async function createPlanNode({
   beingId,
   name,
   systemSpec = null,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 } = {}) {
@@ -193,7 +192,6 @@ export async function createPlanNode({
     parentId: String(parentNodeId),
     type: "plan",
     beingId,
-    wasAi,
     chatId,
     sessionId,
   });
@@ -241,7 +239,6 @@ export async function ensurePlanAtScope({
   beingId,
   name = "plans",
   systemSpec = null,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 }) {
@@ -267,7 +264,7 @@ export async function ensurePlanAtScope({
         beingId,
         name,
         systemSpec,
-        wasAi, chatId, sessionId,
+        chatId, sessionId,
       });
     } catch (err) {
       // Race protection: unique partial index on (parent, type='plan')

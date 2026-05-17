@@ -2,17 +2,17 @@
 /**
  * Kernel data retention cleanup.
  * Runs at configured interval (default daily).
- * Deletes old Chat and Contribution records based on land config.
+ * Deletes old Chat and Did records based on land config.
  * Sweeps timed-out AWAITING cascade signals.
  *
  * chatRetentionDays: default 90. 0 = keep forever.
- * contributionRetentionDays: default 365. 0 = keep forever.
+ * didRetentionDays: default 365. 0 = keep forever.
  */
 
 import log from "../log.js";
 import { getLandConfigValue } from "../landConfig.js";
 import Chat from "../models/chat.js";
-import Contribution from "../models/contribution.js";
+import Did from "../models/did.js";
 import Node from "../models/node.js";
 import { CASCADE, SYSTEM_ROLE } from "../protocol.js";
 
@@ -52,27 +52,27 @@ export async function runRetentionCleanup() {
     }
   }
 
-  // ── Contribution cleanup ──
-  const contribDays = Number(getLandConfigValue("contributionRetentionDays"));
-  if (contribDays > 0) {
+  // ── Did cleanup ──
+  const didDays = Number(getLandConfigValue("didRetentionDays"));
+  if (didDays > 0) {
     try {
-      const cutoff = new Date(now.getTime() - contribDays * 24 * 60 * 60 * 1000);
+      const cutoff = new Date(now.getTime() - didDays * 24 * 60 * 60 * 1000);
       let totalDeleted = 0;
       let batchCount;
       do {
-        const ids = await Contribution.find({ date: { $lt: cutoff } })
+        const ids = await Did.find({ date: { $lt: cutoff } })
           .select("_id").limit(DELETE_BATCH_SIZE).lean();
         batchCount = ids.length;
         if (batchCount > 0) {
-          await Contribution.deleteMany({ _id: { $in: ids.map(d => d._id) } });
+          await Did.deleteMany({ _id: { $in: ids.map(d => d._id) } });
           totalDeleted += batchCount;
         }
       } while (batchCount >= DELETE_BATCH_SIZE);
       if (totalDeleted > 0) {
-        log.info("Retention", `Deleted ${totalDeleted} contribution records older than ${contribDays} days`);
+        log.info("Retention", `Deleted ${totalDeleted} Did records older than ${didDays} days`);
       }
     } catch (err) {
-      log.error("Retention", `Contribution cleanup failed: ${err.message}`);
+      log.error("Retention", `Did cleanup failed: ${err.message}`);
     }
   }
 

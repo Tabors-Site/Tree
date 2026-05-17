@@ -3,15 +3,15 @@ import { v4 as uuidv4 } from "uuid";
 
 // Services wired from init() via setServices()
 let Node = null;
-let Contribution = null;
-let logContribution = async () => {};
+let Did = null;
+let logDid = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
 let _metadata = null;
 
 export function setServices({ models, contributions, metadata }) {
   Node = models.Node;
-  Contribution = models.Contribution;
-  logContribution = contributions.logContribution;
+  _Did = models.Did;
+  logDid = contributions.logDid;
   if (metadata) _metadata = metadata;
 }
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
@@ -39,7 +39,6 @@ export async function updateScript({
   name,
   script,
   beingId,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 }) {
@@ -148,10 +147,9 @@ export async function updateScript({
   // ---------------------------------------------------------
   // Log contribution
   // ---------------------------------------------------------
-  await logContribution({
+  await logDid({
     beingId,
     nodeId,
-    wasAi,
     chatId,
     sessionId,
     action: "editScript",
@@ -177,7 +175,6 @@ export async function executeScript({
   nodeId,
   scriptId,
   beingId,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 }) {
@@ -249,10 +246,9 @@ export async function executeScript({
       ),
     ]);
 
-    await logContribution({
+    await logDid({
       beingId,
       nodeId,
-      wasAi,
       chatId,
       sessionId,
       action: "executeScript",
@@ -266,10 +262,9 @@ export async function executeScript({
       energyUsed,
     });
   } catch (err) {
-    await logContribution({
+    await logDid({
       beingId,
       nodeId,
-      wasAi,
       chatId,
       sessionId,
       action: "executeScript",
@@ -301,7 +296,7 @@ export async function getScript({ nodeId, scriptId }) {
   const scriptObj = findScript(scripts, scriptId);
   if (!scriptObj) throw new Error("Script not found");
 
-  const contributions = await Contribution.find({
+  const contributions = await Did.find({
     nodeId,
     action: { $in: ["editScript", "executeScript"] },
     $or: [

@@ -47,7 +47,6 @@ export default [
             content: text,
             beingId,
             nodeId,
-            wasAi: false,
           });
         }
 

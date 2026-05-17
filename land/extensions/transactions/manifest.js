@@ -30,7 +30,7 @@ export default {
 
   needs: {
     services: ["contributions", "auth"],
-    models: ["Node", "Contribution"],
+    models: ["Node", "Did"],
   },
 
   optional: {

@@ -63,7 +63,6 @@ async function processTree(rootNode) {
       rootId,
       beingId,
       NAV_PERSPECTIVE,
-      true, // wasAi
     );
 
     // Run the orchestrator

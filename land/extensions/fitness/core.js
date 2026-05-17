@@ -498,7 +498,6 @@ export async function recordSessionHistory(historyNodeId, parsed, delivered, bei
       content: JSON.stringify(record),
       origin: "ibp",
       beingId,
-      wasAi: ctx.chatId != null || ctx.wasAi === true,
       chatId: ctx.chatId ?? null,
       sessionId: ctx.sessionId ?? null,
     });

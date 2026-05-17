@@ -343,6 +343,31 @@ export async function pushExtMeta(node, extName, key, item, maxLength = 100) {
 }
 
 /**
+ * Atomic add-to-set within an extension's metadata namespace.
+ * Uses MongoDB $addToSet. No duplicates. No read-modify-write.
+ *
+ *   await addToExtMetaSet(node, "nav", "trackedRoots", rootId);
+ *   // Atomically adds rootId to metadata.nav.trackedRoots if not already present.
+ */
+export async function addToExtMetaSet(node, extName, key, item) {
+  if (!node || !extName || !key) return false;
+  validateAtomicExtName(extName);
+  if (DANGEROUS_KEYS.has(key)) return false;
+  // Item must be serializable. Size-bound the item against the per-namespace cap
+  // to prevent unbounded set growth from a single oversized push.
+  let itemSize;
+  try { itemSize = Buffer.byteLength(JSON.stringify(item), "utf8"); } catch { return false; }
+  if (itemSize > MAX_METADATA_VALUE_BYTES()) return false;
+  const nodeId = String(node._id || node);
+  await Node.updateOne(
+    { _id: nodeId },
+    { $addToSet: { [`metadata.${extName}.${key}`]: item } },
+  );
+  invalidateNode(nodeId);
+  return true;
+}
+
+/**
  * Atomic multi-field set within an extension's metadata namespace.
  * Uses MongoDB $set on individual keys. No read-modify-write.
  * Accepts node document or nodeId string.

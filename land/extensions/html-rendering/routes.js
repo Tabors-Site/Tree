@@ -127,8 +127,7 @@ router.post("/user/:beingId/shareToken", authenticate, async (req, res) => {
       return sendError(res, 400, ERR.INVALID_INPUT, "htmlShareToken may only contain URL-safe characters");
     }
 
-    setBeingMeta(user, "html", { shareToken: htmlShareToken });
-    await user.save();
+    await setBeingMeta(user, "html", { shareToken: htmlShareToken });
 
     const token = req.query.token ?? "";
     if ("html" in req.query) {

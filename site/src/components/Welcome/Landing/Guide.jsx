@@ -88,10 +88,10 @@ const Guide = () => {
             changes what it can do, what it knows, and how it thinks. Position determines reality.
           </P>
           <P>
-            The kernel is minimal. Two database schemas (Node and User), a conversation loop, a hook
-            system, a cascade engine, and an extension loader. Everything else is an extension you
-            install. Strip every extension and the kernel still boots. It defines the contract that
-            everything builds on.
+            The kernel is minimal. Three foundational schemas (Being, Node, Artifact), a conversation
+            loop, a hook system, a cascade engine, and an extension loader. Everything else is an
+            extension you install. Strip every extension and the kernel still boots. It defines the
+            contract that everything builds on.
           </P>
           <P>
             TreeOS is one operating system built on the kernel. 120 extensions across four bundles
@@ -180,11 +180,13 @@ treeos start`}</Code>
           <h2 className="lp-section-title">The Vocabulary</h2>
           <div style={{maxWidth: 650, margin: "0 auto"}}>
             {[
-              ["Seed", "The kernel. Two schemas, conversation loop, hooks, cascade, extension loader. The foundation everything builds on."],
+              ["Seed", "The kernel. Three schemas, conversation loop, hooks, cascade, extension loader. The foundation everything builds on."],
               ["Land", "One running server. One database. One seed. The ground everything grows from."],
-              ["Tree", "A root node with children. The data structure users and AI work in. Trees hold applications."],
-              ["Node", "One item in a tree. Has a name, type, status, children, parent, and a metadata Map where extensions store everything."],
-              ["Note", "Text or file content attached to a node. The primary data unit."],
+              ["Tree", "A root node with children. The data structure beings and AI work in. Trees hold applications."],
+              ["Being", "The unified identity type. A human (operatingMode: human) authenticates with a password. An AI being (operatingMode: ai) is driven by an LLM through chainsteps. Both live at a home position. Both register, both speak through the protocol the same way."],
+              ["Node", "One position in a tree. Has a name, type, status, children, parent, and a metadata Map where extensions store everything."],
+              ["Artifact", "A thing that lives inside a node. Has an origin (ibp, filesystem, web, cross-land) that names the system its content comes from. Subsumes what used to be called notes, files, and metadata-only objects."],
+              ["Chat", "A record that binds a being-in to a being-out. Conversations are queryable as a graph: every chat names both ends, so 'all the chats between A and B' is one query."],
               ["Extension", "A folder with a manifest and an init function. Adds capabilities: tools, modes, hooks, routes, jobs."],
               ["Mode", "How the AI thinks at a position. A system prompt plus a tool set. Extensions register them."],
               ["Cascade", "Signals that flow between nodes when content is written. The tree's internal communication."],
@@ -193,8 +195,8 @@ treeos start`}</Code>
               ["Zone", "Land (/), Home (~), or Tree (/MyTree). Where you are determines what the AI can do."],
               ["runChat", "One LLM call with session persistence. Extensions use this for single AI interactions. Handles MCP connection, mode switching, chat tracking, and abort automatically."],
               ["Orchestrator", "The entire conversation flow. Classifies intent, routes to the right extension and mode, chains multi-extension messages. The built-in tree-orchestrator is itself an extension. Replace it and you control every AI interaction."],
-              ["Land Zone", "The root position (/). The public face of the server. Visitors from other lands arrive here. Public trees are discoverable here. For admins, the AI manages extensions, config, users, peers, and Horizon registration."],
-              ["Home Zone", "Your personal space (~). See all your trees, recent activity, contributions. Capture raw ideas. Chat without tree context. The user-focused hub where everything is visible."],
+              ["Land Zone", "The root position (/). The public face of the server. Visitors from other lands arrive here. Public trees are discoverable here. For admins, the AI manages extensions, config, beings, peers, and Horizon registration."],
+              ["Home Zone", "A being's personal space (~). See all your trees, recent activity, conversations. Capture raw ideas. Chat without tree context. The being-focused hub where everything is visible."],
             ].map(([term, desc]) => (
               <div key={term} style={{padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.06)"}}>
                 <span style={{color: "#7dd385", fontWeight: 700, marginRight: 12}}>{term}</span>
@@ -224,7 +226,7 @@ treeos start`}</Code>
             </div>
             <div className="lp-card">
               <h3 style={{color: "#a8c0e0"}}>Home <code>~</code></h3>
-              <p>Personal space. Raw ideas, notes, chat history, contributions. Organize and reflect.</p>
+              <p>A being's personal space. Raw ideas, artifacts across trees, chat history with the beings who answered you. Organize and reflect.</p>
             </div>
             <div className="lp-card">
               <h3 style={{color: "#7dd385"}}>Tree <code>/MyTree</code></h3>
@@ -250,10 +252,10 @@ treeos start`}</Code>
           </P>
           <P>
             Every prompt starts with a position block the AI can't skip. It always knows where it
-            is: which tree, which node, which user.
+            is: which tree, which node, which being it's speaking with.
           </P>
           <Code>{`[Position]
-User: tabor
+Being: tabor (human)
 Tree: My Fitness (abc-123-def)
 Current node: Push Day (xyz-456-ghi)
 
@@ -452,8 +454,12 @@ treeos ext-scope               # see what's active at this position`}</Code>
         <div className="lp-container" style={{maxWidth: 800}}>
           <h2 className="lp-section-title">The Seed</h2>
           <P>
-            Four primitives. <strong>Structure</strong>: Node (12 fields) and User (7 fields) plus
-            a metadata Map where extensions store everything.
+            Four primitives. <strong>Structure</strong>: three foundational schemas with metadata
+            Maps. <code>Being</code> is the unified identity type for humans and AI agents.
+            <code> Node</code> is a position in the tree. <code>Artifact</code> is a thing that
+            lives inside a node, with an <code>origin</code> field that names where the content
+            comes from. Chat records bind two beings together so the conversation graph between
+            them is queryable.
             <strong> Intelligence</strong>: the conversation loop, LLM resolution, tool execution
             via MCP.
             <strong> Extensibility</strong>: the loader, 30 hooks, 5 registries (hooks, modes,
@@ -489,16 +495,15 @@ treeos ext-scope               # see what's active at this position`}</Code>
           </P>
           <div style={{maxWidth: 600, margin: "0 auto", fontSize: "0.85rem"}}>
             {[
-              ["beforeNote / afterNote", "Note lifecycle"],
+              ["beforeArtifact / afterArtifact", "Artifact lifecycle (write, edit, delete)"],
               ["beforeNodeCreate / afterNodeCreate", "Node creation"],
               ["beforeStatusChange / afterStatusChange", "Status changes"],
               ["beforeNodeDelete", "Deletion, cleanup"],
-              ["beforeContribution", "Contribution data modification"],
               ["enrichContext", "Inject extension data into AI context (sequential)"],
               ["beforeLLMCall / afterLLMCall", "LLM API call lifecycle"],
               ["beforeToolCall / afterToolCall", "MCP tool execution"],
               ["beforeResponse", "Modify AI response before client"],
-              ["beforeRegister / afterRegister", "User registration"],
+              ["beforeRegister / afterRegister", "Being registration"],
               ["afterSessionCreate / afterSessionEnd", "Session lifecycle"],
               ["afterNavigate / onNodeNavigate", "Navigation events"],
               ["afterNodeMove", "Node reparented"],
@@ -637,7 +642,7 @@ treeos ext-scope               # see what's active at this position`}</Code>
           <Code>{`treeos cd Life/Health/Fitness
 treeos chat "bench 135x10,10,8"
 treeos be                # the tree guides you through your workout
-treeos note "Hit PR on squat today"
+treeos place "Hit PR on squat today"   # write an artifact at the current node
 treeos query "how's my progress this month"
 treeos tree              # see the structure
 treeos ext-scope         # see what's active here`}</Code>
@@ -660,12 +665,13 @@ treeos ext-scope         # see what's active here`}</Code>
           <h2 className="lp-section-title">LLM System</h2>
           <P>
             Model-agnostic. Any OpenAI-compatible endpoint: Ollama, OpenRouter, Anthropic, local
-            models, custom deployments. Each user has a default LLM connection. Tree owners can
-            override per-tree. Extensions register additional LLM slots for per-mode assignments.
-            API key is not required for local models like Ollama.
+            models, custom deployments. Each being carries a default LLM connection (the model
+            that drives AI cognition for AI beings; the model used for AI assistance for humans).
+            Tree owners can override per-tree. Extensions register additional LLM slots for
+            per-mode assignments. API key is not required for local models like Ollama.
           </P>
           <P>
-            Resolution chain: extension slot on tree, tree default, extension slot on user, user
+            Resolution chain: extension slot on tree, tree default, extension slot on being, being
             default. First match wins. Failover on errors. Priority queue ensures human sessions
             run before background jobs.
           </P>
@@ -682,8 +688,8 @@ treeos llm assign         # assign to a specific tree or mode`}</Code>
           <h2 className="lp-section-title">Federation</h2>
           <P>
             Lands connect through the Canopy protocol. Each land is sovereign. Your data stays
-            on your server. Remote users are ghost records (username + home land URL). The real
-            user data never leaves their home land.
+            on your server. Remote beings are ghost records (username + home land URL). The
+            real being data never leaves its home land.
           </P>
           <P>
             Peers discover each other through the <a href="https://horizon.treeos.ai" style={{color: "rgba(255,255,255,0.7)"}}>Horizon</a> or
@@ -744,11 +750,11 @@ treeos ext publish my-extension         # publish your own`}</Code>
             Three terms that get conflated. They are not the same.
           </P>
           <P>
-            <strong style={{color: "#fff"}}>The seed</strong> is the kernel. Two
-            schemas, a conversation loop, hooks, registries, a cascade engine, and
-            an extension loader. It boots with zero extensions and still works.
-            Everything else builds on it. The seed never changes per install. It
-            is the contract.
+            <strong style={{color: "#fff"}}>The seed</strong> is the kernel. Three
+            foundational schemas (Being, Node, Artifact), a conversation loop, hooks,
+            registries, a cascade engine, and an extension loader. It boots with zero
+            extensions and still works. Everything else builds on it. The seed never
+            changes per install. It is the contract.
           </P>
           <P>
             <strong style={{color: "#fff"}}>TreeOS</strong> is the first operating
@@ -796,7 +802,7 @@ treeos ext publish my-extension         # publish your own`}</Code>
           <P>
             Every tunable value lives in the .config system node. Readable and writable via CLI,
             API, or the land-manager AI. No code editing. No restarts for most values.
-            100+ config keys covering LLM, conversation, sessions, notes, cascade, uploads,
+            100+ config keys covering LLM, conversation, sessions, artifacts, cascade, uploads,
             circuit breakers, and more.
           </P>
           <Code>{`treeos config set maxToolIterations 25
@@ -813,7 +819,7 @@ treeos config set treeCircuitEnabled true`}</Code>
         <div className="lp-container" style={{maxWidth: 800}}>
           <h2 className="lp-section-title">Concurrency and Safety</h2>
           <P>
-            The tree is multi-agent. Multiple users, sessions, background jobs, gateway channels,
+            The tree is multi-agent. Multiple beings, sessions, background jobs, gateway channels,
             cascade signals. Reads are fully concurrent. Scoped writes (metadata per namespace) are
             concurrent across namespaces. Structural mutations (create, move, delete) use sorted
             node locks with 30s TTL.
@@ -847,8 +853,8 @@ export default {
 
 // index.js
 export async function init(core) {
-  core.hooks.register("afterNote", async (data) => {
-    // react to notes being written
+  core.hooks.register("afterArtifact", async (data) => {
+    // react to artifacts being written (data.artifact, data.origin, data.action)
   }, "my-ext");
 
   return {
@@ -877,13 +883,13 @@ export async function init(core) {
           <h2 className="lp-section-title">API</h2>
           <P>
             REST at <code>/api/v1/</code>. Bearer token or API key auth. Every tree operation,
-            note, value, and AI interaction is accessible via HTTP. The protocol endpoint at
+            artifact, value, and AI interaction is accessible via HTTP. The protocol endpoint at
             <code> /api/v1/protocol</code> returns loaded extensions, capabilities, and CLI commands.
           </P>
           <P>
             Response shape: <code>{"{ status: \"ok\", data }"}</code> or
             <code> {"{ status: \"error\", error: { code, message } }"}</code>.
-            Semantic error codes (NODE_NOT_FOUND, UNAUTHORIZED, DOCUMENT_SIZE_EXCEEDED, etc.)
+            Semantic error codes (NODE_NOT_FOUND, ARTIFACT_NOT_FOUND, UNAUTHORIZED, DOCUMENT_SIZE_EXCEEDED, etc.)
             that mean something.
           </P>
           <P>
@@ -982,9 +988,9 @@ export async function init(core) {
           </P>
           <P>
             It provides structure, intelligence, extensibility, and communication.
-            Extensions provide meaning. The kernel is 12 fields on a node, 7 fields on a user,
-            a conversation loop, 30 hooks, 5 registries, a cascade engine, and a response protocol.
-            Everything else is an extension someone built.
+            Extensions provide meaning. The kernel is three foundational schemas (Being, Node,
+            Artifact, each with a metadata Map), a conversation loop, 30 hooks, 5 registries,
+            a cascade engine, and a response protocol. Everything else is an extension someone built.
           </P>
           <P>
             The seed is small so the tree can be anything.
@@ -1060,14 +1066,12 @@ export async function init(core) {
               ["maxContributorsPerNode", "500", "Max contributors per node"],
               ["metadataMaxNestingDepth", "5", "Max metadata nesting depth"],
               ["mcpConnectRetries", "2", "MCP reconnect attempts for pipelines"],
-              ["contributionQueryLimit", "5000", "Max contribution docs per query"],
-              ["noteQueryLimit", "5000", "Max notes per query"],
-              ["noteSearchLimit", "500", "Max notes per search"],
+              ["artifactQueryLimit", "5000", "Max artifacts per query"],
+              ["artifactSearchLimit", "500", "Max artifacts per search"],
               ["subtreeNodeCap", "10000", "Max nodes in subtree traversal"],
               ["circuitFlowScanLimit", "5000", "Max cascade results scanned per health check"],
               ["treeAncestorDepth", "50", "Max ancestors in context build"],
-              ["treeContributionsPerNode", "500", "Max contributions per node in context"],
-              ["treeNotesPerNode", "100", "Max notes per node in context"],
+              ["treeArtifactsPerNode", "100", "Max artifacts per node in context"],
               ["treeMaxChildrenResolve", "200", "Max children resolved per node"],
               ["treeAllDataDepth", "20", "Max depth for getAllNodeData"],
               ["metadataNamespaceMaxBytes", "524288", "Per-namespace metadata cap in bytes"],

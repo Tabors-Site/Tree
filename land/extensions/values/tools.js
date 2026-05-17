@@ -16,7 +16,7 @@ export default function getTools() {
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       handler: async ({ nodeId, key, value, beingId, chatId, sessionId }) => {
-        const result = await setValueForNode({ nodeId, key, value, beingId, wasAi: true, chatId, sessionId });
+        const result = await setValueForNode({ nodeId, key, value, beingId, chatId, sessionId });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       },
     },
@@ -34,7 +34,7 @@ export default function getTools() {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       handler: async ({ nodeId, key, goal, beingId, chatId, sessionId }) => {
         try {
-          const result = await setGoalForNode({ nodeId, key, goal, beingId, wasAi: true, chatId, sessionId });
+          const result = await setGoalForNode({ nodeId, key, goal, beingId, chatId, sessionId });
           return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Failed to update goal: ${err.message}` }] };

@@ -6,7 +6,7 @@
  */
 
 import log from "../../seed/log.js";
-import Contribution from "../../seed/models/contribution.js";
+import Did from "../seed/models/did.js";
 import { setNodeMode } from "../../seed/modes/registry.js";
 
 let _Node = null;
@@ -128,12 +128,12 @@ export function routeKbIntent(message) {
 
 async function getRecentlyEditedNoteIds(noteIds, sinceDate) {
   if (noteIds.length === 0) return new Set();
-  const edits = await Contribution.find({
+  const edits = await Did.find({
     action: "note",
-    "noteAction.action": "edit",
-    "noteAction.noteId": { $in: noteIds },
+    "artifactAction.action": "edit",
+    "artifactAction.artifactId": { $in: noteIds },
     date: { $gte: sinceDate },
-  }).select("noteAction.noteId").lean();
+  }).select("artifactAction.artifactId").lean();
   return new Set(edits.map(e => e.noteAction?.noteId).filter(Boolean));
 }
 
@@ -213,9 +213,9 @@ export async function getStatus(rootId) {
     .select("_id nodeId createdAt")
     .lean();
 
-  const recentEdits = await Contribution.find({
+  const recentEdits = await Did.find({
     action: "note",
-    "noteAction.action": "edit",
+    "artifactAction.action": "edit",
     nodeId: { $in: topicNodeIds },
   }).sort({ date: -1 }).limit(5).select("nodeId date").lean();
 

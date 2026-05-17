@@ -263,7 +263,6 @@ Then IMMEDIATELY call understanding-capture with:
         currentLayer,
         encoding,
         beingId,
-        wasAi: true,
         chatId,
         sessionId,
       });
@@ -348,7 +347,6 @@ Then IMMEDIATELY call understanding-capture with:
             understandingNodeId: previousResult.understandingNodeId,
             currentLayer: previousResult.currentLayer,
             beingId,
-            wasAi: true,
             chatId,
             sessionId,
           });

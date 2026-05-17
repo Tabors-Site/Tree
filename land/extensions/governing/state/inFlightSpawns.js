@@ -37,7 +37,7 @@ function makeKey(rulerNodeId, kind) {
  *   { ok: true, key }                — claim succeeded; caller spawns
  *   { ok: false, existing, since }   — claim refused; caller returns pending
  */
-export function tryClaim({ rulerNodeId, kind, visitorId = null, briefing = null }) {
+export function tryClaim({ rulerNodeId, kind, aiSessionKey = null, briefing = null }) {
   if (!rulerNodeId || !kind) return { ok: true, key: null };
   const key = makeKey(rulerNodeId, kind);
   const existing = _inFlight.get(key);
@@ -51,7 +51,7 @@ export function tryClaim({ rulerNodeId, kind, visitorId = null, briefing = null 
   const entry = {
     rulerNodeId: String(rulerNodeId),
     kind: String(kind),
-    visitorId: visitorId ? String(visitorId) : null,
+    aiSessionKey: aiSessionKey ? String(aiSessionKey) : null,
     briefing: briefing ? String(briefing).slice(0, 200) : null,
     since: new Date().toISOString(),
     sinceMs: Date.now(),

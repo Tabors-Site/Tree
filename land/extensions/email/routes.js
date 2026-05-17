@@ -53,8 +53,7 @@ router.post("/forgot-password", emailLimiter, async (req, res) => {
   const emailMeta = getBeingMeta(user, "email");
   emailMeta.resetToken = token;
   emailMeta.resetExpiry = Date.now() + 1000 * 60 * 15;
-  setBeingMeta(user, "email", emailMeta);
-  await user.save();
+  await setBeingMeta(user, "email", emailMeta);
 
   const resetURL = `${getLandUrl()}/api/v1/user/reset-password/${token}`;
   await sendResetEmail(emailMeta.address, resetURL);
@@ -83,13 +82,14 @@ router.post("/user/reset-password", async (req, res) => {
   const emailMeta = getBeingMeta(user, "email");
   delete emailMeta.resetToken;
   delete emailMeta.resetExpiry;
-  setBeingMeta(user, "email", emailMeta);
+  await setBeingMeta(user, "email", emailMeta);
 
   // Invalidate all existing JWT tokens
   const authMeta = getBeingMeta(user, "auth");
   authMeta.tokensInvalidBefore = new Date().toISOString();
-  setBeingMeta(user, "auth", authMeta);
+  await setBeingMeta(user, "auth", authMeta);
 
+  // save() needed: password was mutated above (non-metadata field).
   await user.save();
 
   sendOk(res, { message: "Password has been reset successfully" });
@@ -128,8 +128,7 @@ router.get("/user/verify/:token", async (req, res) => {
       // Tier set via user-tiers extension if installed
     });
 
-    setBeingMeta(user, "email", { address: tempUser.email, verified: true });
-    await user.save();
+    await setBeingMeta(user, "email", { address: tempUser.email, verified: true });
 
     const { hooks } = await import("../../seed/hooks.js");
     hooks.run("afterRegister", { user, email: tempUser.email }).catch(() => {});
@@ -182,8 +181,9 @@ router.post("/user/change-password", authenticate, async (req, res) => {
     // Invalidate all existing tokens
     const authMeta = getBeingMeta(user, "auth");
     authMeta.tokensInvalidBefore = new Date().toISOString();
-    setBeingMeta(user, "auth", authMeta);
+    await setBeingMeta(user, "auth", authMeta);
 
+    // save() needed: password was mutated above (non-metadata field).
     await user.save();
 
     // Issue new token so user stays logged in

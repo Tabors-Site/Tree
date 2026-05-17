@@ -48,7 +48,6 @@ export default [
           newSchedule,
           reeffectTime: reeffectTime || 0,
           beingId,
-          wasAi: true,
           chatId,
           sessionId,
         });

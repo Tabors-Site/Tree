@@ -113,7 +113,6 @@ export default function getTools() {
             content: logContent,
             origin: "ibp",
             beingId: beingId || "SYSTEM",
-            wasAi: true,
             chatId: chatId ?? null,
             sessionId: sessionId ?? null,
           });

@@ -33,14 +33,14 @@ try {
 
 let Node = null;
 let User = null;
-let logContribution = null;
+let logDid = null;
 let useEnergy = async () => ({ energyUsed: 0 });
 let _metadata = null;
 
 export function setServices({ models, contributions, energy, metadata }) {
   Node = models.Node;
   User = models.User;
-  logContribution = contributions.logContribution;
+  logDid = contributions.logDid;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
   if (metadata) _metadata = metadata;
 }
@@ -335,10 +335,9 @@ async function executeIntent(rt, intent, rootId, beingId, username, intentNodeId
   }
 
   // Log as contribution
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: intent.targetNodeId,
-    wasAi: true,
     action: "intent:executed",
     extensionData: {
       intent: {

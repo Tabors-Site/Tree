@@ -46,7 +46,6 @@ export async function ensureContractsNode({ scopeNodeId, beingId, core }) {
         name: "contracts",
         type: "contracts",
         beingId,
-        wasAi: true,
       });
     }
   } catch (err) {

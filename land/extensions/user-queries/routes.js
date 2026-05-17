@@ -9,7 +9,7 @@ import {
   getAllArtifactsByUser,
   searchArtifactsByUser,
 } from "../../seed/tree/artifacts.js";
-import { getContributionsByUser } from "../../seed/tree/contributions.js";
+import { getDidsByBeing } from "../seed/tree/dids.js";
 import getNodeName from "../../routes/api/helpers/getNameById.js";
 import { renderUserNotes } from "./pages/userNotes.js";
 import { renderChats } from "./pages/userChats.js";
@@ -128,7 +128,7 @@ export default function createRouter(core) {
       const token = req.query.token ?? "";
       const tokenQS = token ? `?token=${token}&html` : `?html`;
 
-      const { contributions = [] } = await getContributionsByUser(beingId, limit, req.query.startDate, req.query.endDate);
+      const { contributions = [] } = await getDidsByBeing(beingId, limit, req.query.startDate, req.query.endDate);
 
       if (!wantHtml || !getExtension("html-rendering")) {
         return sendOk(res, { beingId, contributions });

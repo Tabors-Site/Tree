@@ -11,7 +11,7 @@
 // so the AI adapts its behavior.
 
 import log from "../../seed/log.js";
-import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
+import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { getExtension } from "../loader.js";
 
 let User = null;

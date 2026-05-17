@@ -7,7 +7,7 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Contribution from "../../seed/models/contribution.js";
+import Did from "../seed/models/did.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
@@ -65,7 +65,7 @@ export async function getChangelog(nodeId, opts = {}) {
   if (scopeIds) query.nodeId = { $in: scopeIds };
   if (opts.beingId) query.beingId = opts.beingId;
 
-  const contributions = await Contribution.find(query)
+  const contributions = await Did.find(query)
     .sort({ date: -1 })
     .limit(limit)
     .lean();
@@ -118,13 +118,13 @@ export async function getStalled(nodeId, since, previousWindowMs) {
   const scopeIds = [nodeId, ...descendantIds];
 
   // Nodes active in previous window
-  const prevContribs = await Contribution.distinct("nodeId", {
+  const prevContribs = await Did.distinct("nodeId", {
     nodeId: { $in: scopeIds },
     date: { $gte: prevSince, $lt: since },
   });
 
   // Nodes active in current window
-  const currentContribs = await Contribution.distinct("nodeId", {
+  const currentContribs = await Did.distinct("nodeId", {
     nodeId: { $in: scopeIds },
     date: { $gte: since },
   });

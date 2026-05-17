@@ -23,10 +23,10 @@ export function resolveHtmlAuth() {
 
 // Models wired from init via setModels
 let Node = null;
-let Contribution = null;
+let Did = null;
 export function setModels(models) {
   Node = models.Node;
-  Contribution = models.Contribution;
+  _Did = models.Did;
 }
 
 const router = express.Router();
@@ -148,7 +148,7 @@ router.get(
       }
 
       // Dirty node detection — compare contribution snapshots to current counts
-      const contribCounts = await Contribution.aggregate([
+      const contribCounts = await Did.aggregate([
         {
           $match: {
             nodeId: { $in: realNodeIds },

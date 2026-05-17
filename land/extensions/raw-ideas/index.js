@@ -13,7 +13,7 @@ import rawIdeaPlacement from "./modes/raw-idea-placement.js";
 export async function init(core) {
   resolveHtmlAuth();
   const { setServices } = await import("./core.js");
-  setServices({ models: core.models, contributions: core.contributions });
+  setServices({ models: core.models, contributions: core.dids });
   if (core.energy) setEnergyService(core.energy);
   core.modes.registerMode("home:raw-idea-choose-root", chooseRoot, "raw-ideas");
   core.modes.registerMode("home:raw-idea-placement", rawIdeaPlacement, "raw-ideas");

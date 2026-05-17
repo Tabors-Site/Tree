@@ -119,7 +119,7 @@ export async function renderUserContributions({ beingId, contributions, username
         }
 
         case "note": {
-          const na = c.noteAction || {};
+          const na = c.artifactAction || {};
 
           let verb;
           switch (na.action) {
@@ -274,7 +274,7 @@ export async function renderUserContributions({ beingId, contributions, username
         const actionHtml = renderAction(c, nodeName);
         const colorClass = actionColorClass(c.action);
 
-        const aiBadge = c.wasAi ? `<span class="badge badge-ai">AI</span>` : "";
+        const aiBadge = "";
         const energyBadge =
           c.energyUsed != null && c.energyUsed > 0
             ? `<span class="badge badge-energy">\u26A1 ${c.energyUsed}</span>`

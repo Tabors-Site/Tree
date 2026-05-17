@@ -35,7 +35,7 @@ export function resolveHtmlAuth() {
 // root or intermediate node is this one.
 const subscribers = new Map();
 
-// nodeId -> { controller, visitorId, startedAt, source }. One active
+// nodeId -> { controller, aiSessionKey, startedAt, source }. One active
 // run per project node at a time. Stop aborts the controller; the
 // architect + swarm respect signal.aborted and bail cleanly.
 // Registered from BOTH /start (studio-initiated) and handleMessage
@@ -58,7 +58,7 @@ const activeRuns = new Map();
 // invisible to the project-level studio page — user hits "Stop" on the
 // project page, state says no run, button disappears even though the
 // rewrite is still churning in the background.
-export function registerActiveRun({ nodeId, projectNodeId = null, visitorId, source }) {
+export function registerActiveRun({ nodeId, projectNodeId = null, aiSessionKey, source }) {
   const origin = String(nodeId);
   const project = projectNodeId ? String(projectNodeId) : null;
   const keys = project && project !== origin ? [origin, project] : [origin];
@@ -74,7 +74,7 @@ export function registerActiveRun({ nodeId, projectNodeId = null, visitorId, sou
   const controller = new AbortController();
   const entry = {
     controller,
-    visitorId,
+    aiSessionKey,
     startedAt: new Date().toISOString(),
     source: source || "run",
     origin,
@@ -468,11 +468,11 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
       return sendError(res, 401, ERR.UNAUTHORIZED, "beingId required to dispatch architect");
     }
 
-    const visitorId = `bookstudio:${beingId}:${nodeId}`;
+    const aiSessionKey = `bookstudio:${beingId}:${nodeId}`;
     const controller = registerActiveRun({
       nodeId,
       projectNodeId: projectId,
-      visitorId,
+      aiSessionKey,
       source: "studio",
     });
 
@@ -739,7 +739,7 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
           rootProjectNode: projectNode,
           rootChatId: null,
           sessionId: null,
-          visitorId,
+          aiSessionKey,
           beingId,
           username,
           rootId: projectId,
@@ -998,7 +998,7 @@ router.get("/:nodeId/bookstudio/chats", (req, res, next) => htmlAuth(req, res, n
     })
       .sort({ "startMessage.time": -1 })
       .limit(80)
-      .select("_id beingId sessionId chainIndex rootChatId parentChatId dispatchOrigin startMessage endMessage aiContext treeContext")
+      .select("_id beingIn beingOut portalAddress sessionId chainIndex rootChatId parentChatId dispatchOrigin startMessage endMessage aiContext treeContext")
       .lean();
 
     const shaped = chats.map(c => ({

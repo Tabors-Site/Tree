@@ -43,7 +43,7 @@ function measureDepth(value, current = 0, seen) {
 }
 
 /**
- * Read from user metadata. Works with both Mongoose docs and .lean() plain objects.
+ * Read from being metadata. Works with both Mongoose docs and .lean() plain objects.
  * Returns the stored value or an empty object.
  */
 export function getBeingMeta(user, key) {
@@ -55,13 +55,37 @@ export function getBeingMeta(user, key) {
 }
 
 /**
- * Write to user metadata. Synchronous (modifies in-memory document).
- * Caller must await user.save() to persist.
+ * Like getBeingMeta but returns `null` when the namespace is unset
+ * instead of an empty object. Use when callers distinguish "never written"
+ * from "empty state" (e.g. `if (readBeingNs(being, "billing")) { ... }`).
+ * Mirrors readNs on the Node module.
+ */
+export function readBeingNs(user, key) {
+  if (!user || !user.metadata) return null;
+  if (user.metadata instanceof Map) return user.metadata.get(key) || null;
+  return user.metadata?.[key] || null;
+}
+
+/**
+ * Set a namespace on a being's metadata (full replace).
+ * Atomic at the MongoDB layer: `$set` on `metadata.<key>` only. Two concurrent
+ * writes to different namespaces on the same being do not clobber each other.
+ * Mirrors setExtMeta semantics on the Node module.
+ *
+ * Accepts a being document OR a beingId string. When passed a document, the
+ * in-memory `metadata` Map is also updated so subsequent reads on the same
+ * document see the new value without re-fetching from MongoDB.
+ *
+ * NOTE: the legacy `setBeingMeta(user, key, data) + await user.save()` pattern
+ * was a read-modify-write race that clobbered concurrent writes to other
+ * namespaces. This function is now atomic; the trailing `save()` is no longer
+ * required and should be removed unless the caller mutated other top-level
+ * fields on the document.
  *
  * Validates: key name, data size, data serializability, nesting depth,
  * total document size. Throws on failure.
  */
-export function setBeingMeta(user, key, data) {
+export async function setBeingMeta(user, key, data) {
   if (!user) throw new Error("setBeingMeta: user is required");
 
   // Key validation
@@ -86,23 +110,85 @@ export function setBeingMeta(user, key, data) {
     }
   }
 
-  // Document size guard
-  guardMetadataWrite(user, data, { documentType: "user", documentId: user._id });
+  // Document size guard. Only meaningful when caller passed a real document
+  // (an _id string has no size context).
+  if (typeof user === "object" && user !== null && user.metadata !== undefined) {
+    guardMetadataWrite(user, data, { documentType: "being", documentId: user._id });
+  }
 
-  // Apply to in-memory document
-  if (!user.metadata) {
-    user.metadata = new Map();
+  // Update in-memory document BEFORE awaiting the DB write. Fire-and-forget
+  // callers (routes that read user.metadata immediately after this call without
+  // awaiting) need the synchronous in-memory update to see the new value;
+  // the DB persist still happens, just asynchronously.
+  if (typeof user === "object" && user !== null && user.metadata !== undefined) {
+    if (!user.metadata) {
+      user.metadata = new Map();
+    }
+    if (user.metadata instanceof Map) {
+      user.metadata.set(key, data);
+    } else {
+      user.metadata[key] = data;
+    }
+    if (user.markModified) user.markModified("metadata");
   }
-  if (user.metadata instanceof Map) {
-    user.metadata.set(key, data);
-  } else {
-    user.metadata[key] = data;
-  }
-  if (user.markModified) user.markModified("metadata");
+
+  const beingId = String(user._id || user);
+  await Being.updateOne(
+    { _id: beingId },
+    { $set: { [`metadata.${key}`]: data } },
+  );
+
+  return true;
 }
 
 /**
- * Atomic increment on a single key within a user's metadata namespace.
+ * Shallow merge into a being's metadata namespace.
+ * Uses atomic MongoDB $set on individual keys to avoid read-modify-write races.
+ * Returns true on success, false on no-op. Mirrors mergeExtMeta on the Node module.
+ *
+ *   await mergeBeingMeta(beingId, "energy", { available: 95, lastUsed: Date.now() });
+ *   // Atomically sets metadata.energy.available and metadata.energy.lastUsed without
+ *   // overwriting other keys in the energy namespace.
+ */
+export async function mergeBeingMeta(user, key, partial) {
+  if (!user || !key) return false;
+  if (typeof key !== "string" || key.length > MAX_KEY_LENGTH || DANGEROUS_KEYS.has(key)) return false;
+  if (!partial || typeof partial !== "object" || Array.isArray(partial)) return false;
+
+  // Filter dangerous keys and invalid field names from the partial. Dots and
+  // dollar signs create unintended nested MongoDB paths and must be rejected.
+  const safePartial = {};
+  for (const [field, value] of Object.entries(partial)) {
+    if (DANGEROUS_KEYS.has(field)) continue;
+    if (typeof field !== "string" || field.length === 0 || field.length > MAX_KEY_LENGTH) continue;
+    if (field.includes(".") || field.includes("$")) continue;
+    try { JSON.stringify(value); } catch { continue; }
+    safePartial[field] = value;
+  }
+  if (Object.keys(safePartial).length === 0) return false;
+
+  // Size-bound the merge result against the namespace cap.
+  const existing = getBeingMeta(user, key);
+  const merged = { ...existing, ...safePartial };
+  let mergedSize;
+  try {
+    mergedSize = Buffer.byteLength(JSON.stringify(merged), "utf8");
+  } catch {
+    return false;
+  }
+  if (mergedSize > MAX_VALUE_BYTES()) return false;
+
+  const beingId = String(user._id || user);
+  const updates = {};
+  for (const [field, value] of Object.entries(safePartial)) {
+    updates[`metadata.${key}.${field}`] = value;
+  }
+  await Being.updateOne({ _id: beingId }, { $set: updates });
+  return true;
+}
+
+/**
+ * Atomic increment on a single key within a being's metadata namespace.
  * Uses MongoDB $inc. No read-modify-write. No race conditions.
  * Accepts user document or beingId string.
  *

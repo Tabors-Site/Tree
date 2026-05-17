@@ -233,7 +233,6 @@ export async function appendExecutionRecord({
         name: recordName,
         type: "execution-record",
         beingId,
-        wasAi: true,
       });
     }
   } catch (err) {

@@ -12,7 +12,6 @@ import {
   getClientForUser,
   resolveRootLlmForMode,
 } from "../../seed/llm/conversation.js";
-import { setChatContext } from "../../seed/llm/chatTracker.js";
 async function swarmExt() {
   const { getExtension } = await import("../loader.js");
   return getExtension("swarm")?.exports || null;
@@ -156,19 +155,19 @@ export function emitModeResult(socket, modeKey, result) {
  * instead of the branch. Anyone kicking off a branch session must go
  * through this helper.
  */
-export async function pinBranchPosition(visitorId, branchNodeId, branchMode, {
+export async function pinBranchPosition(aiSessionKey, branchNodeId, branchMode, {
   username, beingId, rootId,
 }) {
   const branchIdStr = String(branchNodeId);
-  setCurrentNodeId(visitorId, branchIdStr);
-  await switchMode(visitorId, branchMode, {
+  setCurrentNodeId(beingId, branchIdStr);
+  await switchMode(aiSessionKey, branchMode, {
     username, beingId, rootId,
     currentNodeId: branchIdStr,
     clearHistory: true,
   });
-  setCurrentNodeId(visitorId, branchIdStr);
+  setCurrentNodeId(beingId, branchIdStr);
   log.info("Tree Orchestrator",
-    `📌 Branch dispatch position pinned: visitor=${visitorId.slice(0, 32)} branch=${branchIdStr.slice(0, 8)} mode=${branchMode}`,
+    `📌 Branch dispatch position pinned: visitor=${aiSessionKey.slice(0, 32)} branch=${branchIdStr.slice(0, 8)} mode=${branchMode}`,
   );
   return branchIdStr;
 }
@@ -224,7 +223,7 @@ export async function resolveLlmProvider(beingId, rootId, modeKey, slot) {
  * prepended to the Planner's [[BRANCHES]] when compound).
  */
 export async function runRulerCycle({
-  visitorId, originalMode, message,
+  aiSessionKey, originalMode, message,
   username, beingId, rootId, signal, slot,
   readOnly, onToolLoopCheckpoint, socket,
   sessionId, rootChatId, rt,
@@ -285,7 +284,6 @@ export async function runRulerCycle({
           scopeNodeId: currentNodeId,
           beingId,
           systemSpec: typeof message === "string" ? message.slice(0, 500) : null,
-          wasAi: false,
           chatId: rootChatId,
           sessionId,
         });
@@ -362,9 +360,9 @@ export async function runRulerCycle({
 
   // Phase 1: Planner
   log.info("Tree Orchestrator", `📜 Ruler cycle: Planner phase (originalMode=${originalMode})`);
-  await switchMode(visitorId, "tree:governing-planner", switchOpts);
+  await switchMode(aiSessionKey, "tree:governing-planner", switchOpts);
   const plannerResult = await runSteppedMode(
-    visitorId, "tree:governing-planner", message, baseOpts);
+    aiSessionKey, "tree:governing-planner", message, baseOpts);
   let plannerAnswer = plannerResult?._allContent || plannerResult?.answer || "";
 
   // The Planner emits via governing-emit-plan. The tool persists a
@@ -462,12 +460,12 @@ export async function runRulerCycle({
 
     log.info("Tree Orchestrator",
       `🔨 Ruler cycle: Planner found leaf work, dispatching ${originalMode} as Worker`);
-    await switchMode(visitorId, originalMode, switchOpts);
+    await switchMode(aiSessionKey, originalMode, switchOpts);
 
     // Flag-queue snapshot around the Worker turn so the classifier
     // can detect a blocking flag emitted by this Worker.
     const flagsBefore = await snapshotFlagQueue(governing, currentNodeId);
-    const workerResult = await runSteppedMode(visitorId, originalMode, message, baseOpts);
+    const workerResult = await runSteppedMode(aiSessionKey, originalMode, message, baseOpts);
     const flagsAfter = await snapshotFlagQueue(governing, currentNodeId);
 
     // Classify what the Worker actually did and write the honest
@@ -554,8 +552,8 @@ export async function runRulerCycle({
 
   let activeContracts = [];
   try {
-    await switchMode(visitorId, "tree:governing-contractor", switchOpts);
-    await runSteppedMode(visitorId, "tree:governing-contractor", contractorMessage, baseOpts);
+    await switchMode(aiSessionKey, "tree:governing-contractor", switchOpts);
+    await runSteppedMode(aiSessionKey, "tree:governing-contractor", contractorMessage, baseOpts);
     try {
       if (governing?.readContracts && currentNodeId) {
         activeContracts = await governing.readContracts(currentNodeId);
@@ -608,7 +606,7 @@ export async function runRulerCycle({
  * return the standard response shape. Every exit path that runs a mode
  * should call this instead of inlining the same 20 lines.
  */
-export async function runModeAndReturn(visitorId, mode, message, {
+export async function runModeAndReturn(aiSessionKey, mode, message, {
   socket, username, beingId, rootId, signal, slot,
   currentNodeId, readOnly = false, clearHistory = false,
   onToolLoopCheckpoint, modesUsed,
@@ -680,7 +678,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
   });
 
   // Build conversation memory + grammar modifier injections.
-  let memory = formatMemoryContext(visitorId);
+  let memory = formatMemoryContext(aiSessionKey);
 
   // Reroute prefix injection: when the orchestrator intercepted a correction
   // and substituted the message, tell the AI to open its response with a
@@ -771,7 +769,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
     }
   } catch {}
 
-  await switchMode(visitorId, mode, {
+  await switchMode(aiSessionKey, mode, {
     username, beingId, rootId,
     currentNodeId: currentNodeId || targetNodeId,
     conversationMemory: memory,
@@ -793,7 +791,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
   if (routeThroughRuler) {
     const { runRulerTurn } = await import("./ruling.js");
     result = await runRulerTurn({
-      visitorId, message,
+      aiSessionKey, message,
       username, beingId, rootId,
       currentNodeId: currentNodeId || targetNodeId || rootId,
       signal, slot, socket,
@@ -802,7 +800,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
       dispatchOrigin: "ruler-turn",
     });
   } else {
-    result = await runSteppedMode(visitorId, mode, message, {
+    result = await runSteppedMode(aiSessionKey, mode, message, {
       username, beingId, rootId, signal, slot,
       readOnly, onToolLoopCheckpoint, socket,
       sessionId, rootChatId, rt,
@@ -983,7 +981,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
           const architectChatId = result?._lastChatId || rootChatId || null;
           const { getPendingSwarmPlan, setPendingSwarmPlan } = await pendingSwarmPlanApi();
           const SWARM_WS = await swarmWsEvents();
-          const existingStash = getPendingSwarmPlan(visitorId);
+          const existingStash = getPendingSwarmPlan(aiSessionKey);
           // A prior stash carries `revisionTrigger` when the user asked
           // for a revision (set by orchestrator.js's revision branch).
           // In that case the orchestrator pre-bumped the version, so
@@ -1026,7 +1024,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
             `🎴 PLAN_PROPOSED payload: emission=${structuredEmission ? `ordinal=${structuredEmission.ordinal}, reasoning=${structuredEmission.reasoning?.length || 0}c, steps=${structuredEmission.steps?.length || 0}` : "NULL"}, ` +
             `branches=${branchParse.branches.length}, projectNode=${String(projectNode._id).slice(0, 8)}`);
 
-          setPendingSwarmPlan(visitorId, {
+          setPendingSwarmPlan(aiSessionKey, {
             branches: branchParse.branches,
             contracts: parsedContracts || [],
             projectNodeId: String(projectNode._id),
@@ -1089,7 +1087,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
             result.answer = answer;
           }
           log.info("Tree Orchestrator",
-            `📋 Swarm plan proposed: ${branchParse.branches.length} branches (project=${String(projectNode._id).slice(0, 8)}, visitor=${visitorId})`,
+            `📋 Swarm plan proposed: ${branchParse.branches.length} branches (project=${String(projectNode._id).slice(0, 8)}, visitor=${aiSessionKey})`,
           );
           // Early return — DO NOT dispatch. orchestrator.js handles
           // the next turn's affirmative/revise/pivot.
@@ -1128,7 +1126,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
   if (answer) {
     const { items, cleaned } = parsePlan(answer);
     if (items.length > 0) {
-      setPendingPlan(visitorId, items, mode);
+      setPendingPlan(aiSessionKey, items, mode);
       answer = cleaned;
       if (result) {
         result.content = cleaned;
@@ -1140,7 +1138,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
     }
   }
 
-  if (answer) pushMemory(visitorId, message, answer);
+  if (answer) pushMemory(aiSessionKey, message, answer);
 
   // Surface write-tool trace as stepSummaries. Place mode (skipRespond)
   // uses these to produce its "Placed on: ..." / "Nothing to place"
@@ -1171,7 +1169,7 @@ export async function runModeAndReturn(visitorId, mode, message, {
  * Execute a multi-extension chain. Each step runs in its own mode,
  * results pass forward as context.
  */
-export async function runChain(chain, message, visitorId, {
+export async function runChain(chain, message, aiSessionKey, {
   socket, username, beingId, rootId, signal, slot,
   onToolLoopCheckpoint, modesUsed,
 }) {
@@ -1184,15 +1182,15 @@ export async function runChain(chain, message, visitorId, {
     const step = chain[i];
     const isLast = i === chain.length - 1;
 
-    const stepNodeId = step.targetNodeId || getCurrentNodeId(visitorId) || rootId;
-    await switchMode(visitorId, step.mode, {
+    const stepNodeId = step.targetNodeId || getCurrentNodeId(beingId) || rootId;
+    await switchMode(aiSessionKey, step.mode, {
       username, beingId, rootId,
       currentNodeId: stepNodeId,
       conversationMemory: context,
       clearHistory: true,
     });
 
-    const stepResult = await processMessage(visitorId,
+    const stepResult = await processMessage(aiSessionKey,
       isLast ? context : `${context}\n\nDo this step and return what you produced.`, {
         username, beingId, rootId, signal, slot,
         onToolLoopCheckpoint,
@@ -1215,7 +1213,7 @@ export async function runChain(chain, message, visitorId, {
   }
 
   emitStatus(socket, "done", "");
-  if (context) pushMemory(visitorId, message, context);
+  if (context) pushMemory(aiSessionKey, message, context);
   return { success: true, answer: context, modeKey: chainModes[chainModes.length - 1], modesUsed: [...modesUsed, ...chainModes], rootId };
 }
 
@@ -1458,7 +1456,7 @@ async function runLeafGroupAtScope({
   leafSteps,
   workerType,
   projectNode,
-  visitorId, beingId, username, rootId,
+  aiSessionKey, beingId, username, rootId,
   signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
   stashedPlanText,
   allBranchNames,
@@ -1531,8 +1529,8 @@ async function runLeafGroupAtScope({
   }
 
   // Pin position to the Ruler scope so the Worker's writes land here.
-  setCurrentNodeId(visitorId, String(projectNode._id));
-  await switchMode(visitorId, modeKey, {
+  setCurrentNodeId(beingId, String(projectNode._id));
+  await switchMode(aiSessionKey, modeKey, {
     username, beingId, rootId,
     currentNodeId: String(projectNode._id),
     clearHistory: false,
@@ -1626,7 +1624,7 @@ async function runLeafGroupAtScope({
   } catch {}
   const flagsBefore = await snapshotFlagQueue(governing, projectNode._id);
 
-  const workerResult = await runSteppedMode(visitorId, modeKey, rulerWorkerMessage, {
+  const workerResult = await runSteppedMode(aiSessionKey, modeKey, rulerWorkerMessage, {
     username, beingId, rootId, signal, slot,
     readOnly: false, onToolLoopCheckpoint, socket,
     sessionId, rootChatId, rt,
@@ -1675,7 +1673,7 @@ async function runBranchStepAtScope({
   branchStep,
   projectNode,
   sw,
-  visitorId, beingId, username, rootId,
+  aiSessionKey, beingId, username, rootId,
   signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
   architectChatId, userRequest,
 }) {
@@ -1706,7 +1704,7 @@ async function runBranchStepAtScope({
     rootChatId,
     architectChatId,
     sessionId,
-    visitorId,
+    aiSessionKey,
     beingId,
     username,
     rootId,
@@ -1730,20 +1728,20 @@ async function runBranchStepAtScope({
     } } },
     emitStatus,
     runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot, markerChatId }) => {
-      setActiveRequest(visitorId, {
+      setActiveRequest(aiSessionKey, {
         socket, username, beingId, signal,
         sessionId,
         rootId,
         rootChatId,
         slot, onToolLoopCheckpoint,
-        rt: (getActiveRequest(visitorId) || {}).rt,
+        rt: (getActiveRequest(aiSessionKey) || {}).rt,
       });
-      const branchIdStr = await pinBranchPosition(visitorId, branchNodeId, branchMode, {
+      const branchIdStr = await pinBranchPosition(aiSessionKey, branchNodeId, branchMode, {
         username, beingId, rootId,
       });
       const { runRulerTurn } = await import("./ruling.js");
       const cycleResult = await runRulerTurn({
-        visitorId,
+        aiSessionKey,
         message: branchMessage,
         username, beingId, rootId,
         currentNodeId: branchIdStr,
@@ -1865,7 +1863,7 @@ async function markLeafBatchFailed(recordNodeId, leafSteps, error) {
 async function wakeForemanForLeafFailure({
   projectNode, recordNodeIdForRollup,
   workerType, leafSteps, error,
-  visitorId, username, beingId, rootId,
+  aiSessionKey, username, beingId, rootId,
   signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
 }) {
   if (!projectNode?._id) return;
@@ -1889,7 +1887,7 @@ async function wakeForemanForLeafFailure({
         : "(unknown shape)") +
       ` Read the snapshot's WAITING ON entries for the per-step error context.`;
     await runForemanTurn({
-      visitorId,
+      aiSessionKey,
       message: summary,
       username, beingId, rootId,
       currentNodeId: String(projectNode._id),
@@ -1919,7 +1917,7 @@ async function wakeForemanForLeafFailure({
 async function wakeForemanForBranchFailure({
   projectNode, recordNodeIdForRollup,
   branchStep, rolledUpStatus, error,
-  visitorId, username, beingId, rootId,
+  aiSessionKey, username, beingId, rootId,
   signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
 }) {
   if (!projectNode?._id) return;
@@ -1942,7 +1940,7 @@ async function wakeForemanForBranchFailure({
       `"WAITING ON" with their workerType so you can see what shape the ` +
       `failures took.`;
     await runForemanTurn({
-      visitorId,
+      aiSessionKey,
       message: summary,
       username, beingId, rootId,
       currentNodeId: String(projectNode._id),
@@ -1995,7 +1993,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
   } = planData || {};
 
   const {
-    visitorId, beingId, username, rootId: ctxRootId,
+    aiSessionKey, beingId, username, rootId: ctxRootId,
     sessionId, signal, slot, socket, onToolLoopCheckpoint, rt,
     rootChatId: ctxRootChatId,
   } = runtimeCtx || {};
@@ -2322,7 +2320,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
           leafSteps: group.steps,
           workerType: group.workerType,
           projectNode,
-          visitorId, beingId, username, rootId,
+          aiSessionKey, beingId, username, rootId,
           signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
           stashedPlanText,
           allBranchNames,
@@ -2350,7 +2348,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
           workerType: group.workerType || "build",
           leafSteps: group.steps,
           error: leafBatchError,
-          visitorId, username, beingId, rootId,
+          aiSessionKey, username, beingId, rootId,
           signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
         });
       }
@@ -2361,7 +2359,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
           branchStep: group.step,
           projectNode,
           sw,
-          visitorId, beingId, username, rootId,
+          aiSessionKey, beingId, username, rootId,
           signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
           architectChatId, userRequest,
         });
@@ -2398,7 +2396,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
           branchStep: group.step,
           rolledUpStatus,
           error: branchStepError,
-          visitorId, username, beingId, rootId,
+          aiSessionKey, username, beingId, rootId,
           signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
         });
       }
@@ -2408,7 +2406,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
   const swarmResult = lastSwarmResult;
   // Restore position to the project root so subsequent chat turns
   // land on the project, not the last-running branch.
-  if (projectNode?._id) setCurrentNodeId(visitorId, String(projectNode._id));
+  if (projectNode?._id) setCurrentNodeId(beingId, String(projectNode._id));
 
     // Foreman judges termination. Roll up branch-step parents from
     // their sub-branches first (deterministic — the sub-branches
@@ -2531,7 +2529,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
             `turn without producing the promised output.`;
           try {
             await runForemanTurn({
-              visitorId,
+              aiSessionKey,
               message: summary,
               username, beingId, rootId,
               currentNodeId: String(projectNode._id),
@@ -2594,7 +2592,7 @@ export async function dispatchResumePlan(rulerScopeNodeId, runtimeCtx) {
   }
 
   const {
-    visitorId, beingId, username, rootId,
+    aiSessionKey, beingId, username, rootId,
     sessionId, signal, slot, socket, onToolLoopCheckpoint, rt,
     rootChatId, defaultBranchMode,
   } = runtimeCtx || {};
@@ -2628,7 +2626,7 @@ export async function dispatchResumePlan(rulerScopeNodeId, runtimeCtx) {
       rootProjectNode: projectNode,
       rootChatId,
       sessionId,
-      visitorId,
+      aiSessionKey,
       beingId,
       username,
       rootId,
@@ -2646,18 +2644,18 @@ export async function dispatchResumePlan(rulerScopeNodeId, runtimeCtx) {
       } } },
       emitStatus,
       runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot, markerChatId }) => {
-        setActiveRequest(visitorId, {
+        setActiveRequest(aiSessionKey, {
           socket, username, beingId, signal,
           sessionId, rootId, rootChatId,
           slot, onToolLoopCheckpoint,
-          rt: (getActiveRequest(visitorId) || {}).rt,
+          rt: (getActiveRequest(aiSessionKey) || {}).rt,
         });
-        const branchIdStr = await pinBranchPosition(visitorId, branchNodeId, branchMode, {
+        const branchIdStr = await pinBranchPosition(aiSessionKey, branchNodeId, branchMode, {
           username, beingId, rootId,
         });
         const { runRulerTurn } = await import("./ruling.js");
         return await runRulerTurn({
-          visitorId,
+          aiSessionKey,
           message: branchMessage,
           username, beingId, rootId,
           currentNodeId: branchIdStr,

@@ -203,7 +203,6 @@ export async function logAction(nodeId, beingId, action, url, result) {
       content: `${summary}: ${detail}`,
       beingId: beingId || "SYSTEM",
       nodeId,
-      wasAi: true,
     });
   } catch (err) {
     log.debug("BrowserBridge", `Activity log failed: ${err.message}`);

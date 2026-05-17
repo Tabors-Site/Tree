@@ -9,12 +9,12 @@
 import log from "../../seed/log.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
-let _metadata, _runChat, _Contribution, _Node;
+let _metadata, _runChat, _Did, _Node;
 
-export function configure({ metadata, runChat, Contribution, Node }) {
+export function configure({ metadata, runChat, Did, Node }) {
   _metadata = metadata;
   _runChat = runChat;
-  _Contribution = Contribution;
+  _Did = Did;
   _Node = Node;
 }
 
@@ -23,15 +23,14 @@ export function configure({ metadata, runChat, Contribution, Node }) {
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Check if a note was created by AI. The Note model has no wasAi field.
- * The Contribution model does.
+ * Check if a note was created by AI. The Artifact model has no wasAi field. Derive from being.operatingMode if needed.
+ * The Did model does.
  */
 async function checkAiGenerated(noteId) {
   try {
-    const c = await _Contribution.findOne({
-      "noteAction.noteId": noteId,
-      "noteAction.action": "add",
-      wasAi: true,
+    const c = await _Did.findOne({
+      "artifactAction.artifactId": noteId,
+      "artifactAction.action": "add",
     }).select("_id").lean();
     return !!c;
   } catch {

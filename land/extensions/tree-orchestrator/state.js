@@ -150,26 +150,26 @@ async function buildIntelligenceBrief(rootId, beingId) {
 const orchestratorMemory = new Map();
 const MAX_MEMORY_TURNS = 10;
 
-export function getMemory(visitorId) {
-  return orchestratorMemory.get(visitorId) || [];
+export function getMemory(aiSessionKey) {
+  return orchestratorMemory.get(aiSessionKey) || [];
 }
 
-export function pushMemory(visitorId, userMessage, assistantResponse) {
-  const mem = getMemory(visitorId);
+export function pushMemory(aiSessionKey, userMessage, assistantResponse) {
+  const mem = getMemory(aiSessionKey);
   mem.push(
     { role: "user", content: userMessage },
     { role: "assistant", content: assistantResponse },
   );
   while (mem.length > MAX_MEMORY_TURNS) mem.shift();
-  orchestratorMemory.set(visitorId, mem);
+  orchestratorMemory.set(aiSessionKey, mem);
 }
 
-export function clearMemory(visitorId) {
-  orchestratorMemory.delete(visitorId);
+export function clearMemory(aiSessionKey) {
+  orchestratorMemory.delete(aiSessionKey);
 }
 
-export function formatMemoryContext(visitorId) {
-  const mem = getMemory(visitorId);
+export function formatMemoryContext(aiSessionKey) {
+  const mem = getMemory(aiSessionKey);
   if (mem.length === 0) return "";
   const lines = mem.map((m) =>
     m.role === "user" ? `User: ${m.content}` : `Assistant: ${m.content}`,
@@ -183,13 +183,13 @@ export function formatMemoryContext(visitorId) {
 
 const _pronounState = new Map();
 
-export function getPronounState(visitorId) {
-  return _pronounState.get(visitorId) || { active: null, lastMod: null, lastNoun: null, lastMode: null, lastMessage: null };
+export function getPronounState(aiSessionKey) {
+  return _pronounState.get(aiSessionKey) || { active: null, lastMod: null, lastNoun: null, lastMode: null, lastMessage: null };
 }
 
-export function updatePronounState(visitorId, updates) {
-  const current = getPronounState(visitorId);
-  _pronounState.set(visitorId, { ...current, ...updates });
+export function updatePronounState(aiSessionKey, updates) {
+  const current = getPronounState(aiSessionKey);
+  _pronounState.set(aiSessionKey, { ...current, ...updates });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -199,25 +199,25 @@ export function updatePronounState(visitorId, updates) {
 const _lastRouting = new Map();
 const LAST_ROUTING_RING = 3;
 
-export function recordRoutingDecision(visitorId, decision) {
-  if (!visitorId || !decision) return;
-  const existing = _lastRouting.get(visitorId) || [];
+export function recordRoutingDecision(aiSessionKey, decision) {
+  if (!aiSessionKey || !decision) return;
+  const existing = _lastRouting.get(aiSessionKey) || [];
   existing.unshift({ ...decision, ts: Date.now() });
   while (existing.length > LAST_ROUTING_RING) existing.pop();
-  _lastRouting.set(visitorId, existing);
+  _lastRouting.set(aiSessionKey, existing);
 }
 
-export function getLastRouting(visitorId) {
-  const ring = _lastRouting.get(visitorId);
+export function getLastRouting(aiSessionKey) {
+  const ring = _lastRouting.get(aiSessionKey);
   return ring?.[0] || null;
 }
 
-export function getLastRoutingRing(visitorId) {
-  return _lastRouting.get(visitorId) || [];
+export function getLastRoutingRing(aiSessionKey) {
+  return _lastRouting.get(aiSessionKey) || [];
 }
 
-export function clearLastRouting(visitorId) {
-  _lastRouting.delete(visitorId);
+export function clearLastRouting(aiSessionKey) {
+  _lastRouting.delete(aiSessionKey);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -236,17 +236,17 @@ const _activeRequests = new Map();
 // cleanup-eligible (the user disconnected or the process died mid-turn).
 const ACTIVE_REQUEST_TTL_MS = 30 * 60 * 1000;
 
-export function setActiveRequest(visitorId, ctx) {
-  if (!visitorId) return;
-  _activeRequests.set(visitorId, { ...ctx, _ts: Date.now() });
+export function setActiveRequest(aiSessionKey, ctx) {
+  if (!aiSessionKey) return;
+  _activeRequests.set(aiSessionKey, { ...ctx, _ts: Date.now() });
 }
 
-export function getActiveRequest(visitorId) {
-  if (!visitorId) return null;
-  const entry = _activeRequests.get(visitorId);
+export function getActiveRequest(aiSessionKey) {
+  if (!aiSessionKey) return null;
+  const entry = _activeRequests.get(aiSessionKey);
   if (!entry) return null;
   if (Date.now() - entry._ts > ACTIVE_REQUEST_TTL_MS) {
-    _activeRequests.delete(visitorId);
+    _activeRequests.delete(aiSessionKey);
     return null;
   }
   return entry;

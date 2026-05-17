@@ -101,7 +101,6 @@ async function _reflect(rootId, runChat) {
     content: answer.trim(),
     beingId: ownerId,
     nodeId: String(reflectNode._id),
-    wasAi: true,
   });
 
   // Update last reflection time. Re-fetch node document for mergeExtMeta (needs full doc, not ID).

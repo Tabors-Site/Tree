@@ -44,7 +44,7 @@ export default {
 
   needs: {
     services: [],
-    models: ["Node", "Contribution"],
+    models: ["Node", "Did"],
     extensions: ["understanding"],
   },
 

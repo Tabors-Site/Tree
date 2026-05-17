@@ -46,11 +46,11 @@ const REQUIRED_INDEXES = [
   // Note queries (notes loaded by nodeId on every context build and note CRUD)
   { collection: "notes", fields: { nodeId: 1, createdAt: -1 }, options: {} },
 
-  // Contribution queries (audit trail by node and by user)
+  // Did queries (audit trail by node and by user)
   { collection: "contributions", fields: { nodeId: 1, date: -1 }, options: {} },
   { collection: "contributions", fields: { beingId: 1, date: -1 }, options: {} },
   { collection: "contributions", fields: { sessionId: 1 }, options: { sparse: true } },
-  // Contribution lookup by chatId (finalizeChat collects contributions per chat)
+  // Did lookup by chatId (finalizeChat collects contributions per chat)
   { collection: "contributions", fields: { chatId: 1 }, options: { sparse: true } },
 
   // User queries (login by username, already unique in schema but verify)

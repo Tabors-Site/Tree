@@ -332,7 +332,7 @@ function getDisabledExtensions(configFn) {
 let AVAILABLE_SERVICES = new Set();
 
 const AVAILABLE_MODELS = new Set([
-  "Being", "Node", "Contribution", "Artifact",
+  "Being", "Node", "Did", "Artifact",
 ]);
 
 function validateNeeds(manifest, core) {
@@ -512,9 +512,14 @@ function buildScopedCore(manifest, fullCore) {
     scoped.metadata = fullCore.metadata;
   }
 
-  // User metadata: always available (extensions store per-user state)
-  if (fullCore.userMetadata) {
-    scoped.userMetadata = fullCore.userMetadata;
+  // Being metadata: always available (extensions store per-being state)
+  if (fullCore.beingMetadata) {
+    scoped.beingMetadata = fullCore.beingMetadata;
+  }
+
+  // Artifact metadata: always available (extensions tag artifacts in their namespace)
+  if (fullCore.artifactMetadata) {
+    scoped.artifactMetadata = fullCore.artifactMetadata;
   }
 
   // Auth strategy binding: wrap registerStrategy to auto-inject extension name.
@@ -1052,7 +1057,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 // initialize. Kept here so we don't import across the seed boundary for
 // one list.
 const CORE_HOOKS_VALID = new Set([
-  "beforeArtifact", "afterArtifact", "beforeContribution",
+  "beforeArtifact", "afterArtifact", "beforeDid",
   "beforeNodeCreate", "afterNodeCreate",
   "beforeStatusChange", "afterStatusChange", "beforeNodeDelete",
   "enrichContext", "onCascade", "onDocumentPressure",

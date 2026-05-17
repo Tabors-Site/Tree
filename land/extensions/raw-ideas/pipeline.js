@@ -12,7 +12,7 @@ import {
   buildDeepTreeSummary,
 } from "../../seed/tree/treeFetch.js";
 import { getExtension } from "../loader.js";
-import { logContribution } from "../../seed/tree/contributions.js";
+import { logDid } from "../seed/tree/dids.js";
 import RawIdea from "./model.js";
 import Node from "../../seed/models/node.js";
 
@@ -107,10 +107,9 @@ export async function orchestrateRawIdeaPlacement({
   await rawIdea.save();
 
   // Log contribution: AI started processing
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: DELETED,
-    wasAi: true,
     sessionId: rt.sessionId,
     action: "rawIdea",
     nodeVersion: "0",
@@ -129,10 +128,9 @@ export async function orchestrateRawIdeaPlacement({
       input: reason,
       output: { status: "stuck", reason },
     });
-    logContribution({
+    logDid({
       beingId,
       nodeId: DELETED,
-      wasAi: true,
       chatId: rt.mainChatId,
       sessionId: rt.sessionId,
       action: "rawIdea",
@@ -180,13 +178,13 @@ export async function orchestrateRawIdeaPlacement({
  log.debug("Raw Ideas", `Chosen root: ${parsed.rootName} (${chosenRootId}) confidence=${confidence.toFixed(2)}`);
 
     // PHASE 2: Delegate to tree orchestrator
-    setRootId(rt.visitorId, chosenRootId);
+    setRootId(rt.beingId, chosenRootId);
     updateSessionMeta(rt.sessionId, { rootId: chosenRootId });
 
     const treeOrch = getOrchestrator("tree");
     if (!treeOrch) throw new Error("No tree orchestrator installed");
     const treeResult = await treeOrch.handle({
-      visitorId: rt.visitorId,
+      aiSessionKey: rt.aiSessionKey,
       message: rawIdea.content,
       socket: nullSocket,
       username,
@@ -261,10 +259,9 @@ export async function orchestrateRawIdeaPlacement({
       cursor = await Node.findById(cursor.parent).select("_id name parent systemRole").lean();
     }
 
-    await logContribution({
+    await logDid({
       beingId,
       nodeId: targetNodeId,
-      wasAi: true,
       chatId: rt.mainChatId,
       sessionId: rt.sessionId,
       action: "rawIdea",
@@ -303,10 +300,9 @@ export async function orchestrateRawIdeaPlacement({
         input: rawIdea.content,
         output: { status: "stuck", reason: err.message },
       });
-      logContribution({
+      logDid({
         beingId,
         nodeId: DELETED,
-        wasAi: true,
         chatId: rt.mainChatId,
         sessionId: rt.sessionId,
         action: "rawIdea",

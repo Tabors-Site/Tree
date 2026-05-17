@@ -14,7 +14,7 @@ import { sendOk, sendError, ERR, DELETED } from "../../seed/protocol.js";
 import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getTreeStructure } from "../../seed/tree/treeData.js";
-import { getContributions } from "../../seed/tree/contributions.js";
+import { getDids } from "../seed/tree/dids.js";
 import { buildPathString, resolveRootNode } from "../../seed/tree/treeFetch.js";
 import { getNodeChats, getChatChain } from "../../seed/llm/chatHistory.js";
 import { getConnectionsForUser, getAllRootLlmSlots } from "../../seed/llm/connections.js";
@@ -168,7 +168,7 @@ export function buildTreeosHtmlRoutes() {
       if (isNaN(parsedVersion)) return sendError(res, 400, ERR.INVALID_INPUT, "Invalid version");
 
       const limit = req.query.limit !== undefined ? Number(req.query.limit) : undefined;
-      const result = await getContributions({
+      const result = await getDids({
         nodeId,
         version: parsedVersion,
         limit,

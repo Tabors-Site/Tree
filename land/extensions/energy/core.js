@@ -138,7 +138,7 @@ export function calculateEnergyCost(action, payload) {
   return cost;
 }
 
-export function maybeResetEnergy(user) {
+export async function maybeResetEnergy(user) {
   const energy = getBeingMeta(user, "energy");
   if (!energy.available) return false;
 
@@ -155,12 +155,12 @@ export function maybeResetEnergy(user) {
     expiresAt > 0 &&
     now > expiresAt
   ) {
-    setBeingMeta(user, "tiers", { plan: "basic" });
-    setBeingMeta(user, "billing", { ...billing, planExpiresAt: null });
+    await setBeingMeta(user, "tiers", { plan: "basic" });
+    await setBeingMeta(user, "billing", { ...billing, planExpiresAt: null });
 
     energy.available.amount = DAILY_LIMITS.basic ?? DAILY_LIMITS["basic"];
     energy.available.lastResetAt = new Date();
-    setBeingMeta(user, "energy", energy);
+    await setBeingMeta(user, "energy", energy);
     assignConnection(user._id, "main", null);
     assignConnection(user._id, "rawIdea", null);
     Node.updateMany(
@@ -189,7 +189,7 @@ export function maybeResetEnergy(user) {
 
   energy.available.amount = limit;
   energy.available.lastResetAt = new Date();
-  setBeingMeta(user, "energy", energy);
+  await setBeingMeta(user, "energy", energy);
 
   return true;
 }
@@ -222,7 +222,7 @@ export async function useEnergy({
     throw new EnergyError("User not found");
   }
 
-  maybeResetEnergy(user);
+  await maybeResetEnergy(user);
 
   if (
     (action === "note" || action === "rawIdea") &&

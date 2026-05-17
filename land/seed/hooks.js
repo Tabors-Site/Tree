@@ -10,7 +10,7 @@ import { getLandConfigValue } from "./landConfig.js";
  * Core hooks (fired by kernel):
  *   beforeArtifact     - Before artifact save. Modify { nodeId, content, beingId, origin, metadata }
  *   afterArtifact      - After artifact saved. React to { artifact, nodeId, beingId, origin, sizeKB, action }
- *   beforeContribution - Before contribution log. Modify { nodeId, action, beingId, ...extensionData }
+ *   beforeDid          - Before Did (DO audit) log. Modify { nodeId, action, beingId, ...extensionData }
  *   beforeNodeCreate   - Before node creation. Modify/cancel { name, type, parentId, parentType, isRoot, beingId, metadata }
  *   afterNodeCreate    - After node saved. React to { node, beingId }
  *   beforeStatusChange - Before status write. Modify/validate { node, status, beingId }
@@ -184,7 +184,7 @@ function register(hookName, handler, extName = "unknown") {
   if (!registry.has(hookName)) {
     // Typo detection: warn if it looks like a misspelled core hook
     const CORE_HOOKS = [
-      "beforeArtifact", "afterArtifact", "beforeContribution",
+      "beforeArtifact", "afterArtifact", "beforeDid",
       "beforeNodeCreate", "afterNodeCreate",
       "beforeStatusChange", "afterStatusChange", "beforeNodeDelete",
       "enrichContext", "onCascade", "onDocumentPressure",

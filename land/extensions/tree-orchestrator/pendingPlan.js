@@ -2,7 +2,7 @@
  * Pending-plan store.
  *
  * When a mode responds with a structured plan block, we stash it keyed by
- * visitorId. The next message is checked: if it's an affirmative and a
+ * aiSessionKey. The next message is checked: if it's an affirmative and a
  * plan is still warm, the orchestrator expands it into N sequential turns,
  * each running as its own chat. If the user says anything else, the plan
  * is cleared — they moved on.
@@ -26,7 +26,7 @@
 
 import log from "../../seed/log.js";
 
-// visitorId -> { items: string[], createdAt: number, mode: string }
+// aiSessionKey -> { items: string[], createdAt: number, mode: string }
 const _pendingPlans = new Map();
 
 // How long a plan stays warm waiting for approval. A user who types "fix it"
@@ -85,14 +85,14 @@ export function parsePlan(responseText) {
  * Stash a plan for a visitor. Overwrites any previous plan — the newest
  * one wins. Also clears stale plans as a side effect.
  */
-export function setPendingPlan(visitorId, items, mode) {
-  if (!visitorId || !Array.isArray(items) || items.length === 0) return;
-  _pendingPlans.set(visitorId, {
+export function setPendingPlan(aiSessionKey, items, mode) {
+  if (!aiSessionKey || !Array.isArray(items) || items.length === 0) return;
+  _pendingPlans.set(aiSessionKey, {
     items: items.slice(0, 20), // hard cap — nobody batches more than 20 fixes
     createdAt: Date.now(),
     mode: mode || null,
   });
-  log.debug("PendingPlan", `Stashed ${items.length} items for ${visitorId} (mode=${mode || "?"})`);
+  log.debug("PendingPlan", `Stashed ${items.length} items for ${aiSessionKey} (mode=${mode || "?"})`);
 }
 
 /**
@@ -100,20 +100,20 @@ export function setPendingPlan(visitorId, items, mode) {
  * Does not clear the plan — caller must call clearPendingPlan after
  * consuming it.
  */
-export function getPendingPlan(visitorId) {
-  if (!visitorId) return null;
-  const entry = _pendingPlans.get(visitorId);
+export function getPendingPlan(aiSessionKey) {
+  if (!aiSessionKey) return null;
+  const entry = _pendingPlans.get(aiSessionKey);
   if (!entry) return null;
   if (Date.now() - entry.createdAt > PLAN_TTL_MS) {
-    _pendingPlans.delete(visitorId);
+    _pendingPlans.delete(aiSessionKey);
     return null;
   }
   return entry;
 }
 
-export function clearPendingPlan(visitorId) {
-  if (!visitorId) return;
-  _pendingPlans.delete(visitorId);
+export function clearPendingPlan(aiSessionKey) {
+  if (!aiSessionKey) return;
+  _pendingPlans.delete(aiSessionKey);
 }
 
 /**

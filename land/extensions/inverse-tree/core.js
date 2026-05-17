@@ -7,7 +7,7 @@
 
 import log from "../../seed/log.js";
 import Being from "../../seed/models/being.js";
-import { getBeingMeta, setBeingMeta, batchSetBeingMeta } from "../../seed/tree/beingMetadata.js";
+import { getBeingMeta, batchSetBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 
 let _runChat = null;

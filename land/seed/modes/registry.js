@@ -4,7 +4,7 @@
 
 import log from "../log.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { resolveTools } from "../tools.js";
+import { resolveTools } from "./tools.js";
 import { getNodeName } from "../tree/treeData.js";
 import { treeFallback, homeFallback } from "./fallback.js";
 import Node from "../models/node.js";

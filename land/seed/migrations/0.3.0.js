@@ -6,7 +6,7 @@
  *
  * 1. Every existing User row becomes a Being row with
  *    `operatingMode = "human"`. All existing fields carry forward
- *    unchanged (password stays bcrypt-hashed, llmDefault → llmSlot,
+ *    unchanged (password stays bcrypt-hashed, llmDefault preserved,
  *    isAdmin/isRemote/homeLand/metadata preserved). AI beings are
  *    created lazily by their extensions in later slices and are NOT
  *    part of this migration.
@@ -71,7 +71,7 @@ export default async function migrate() {
           isAdmin:       !!u.isAdmin,
           role:          null,
           homePositionId: null,              // set in step 2
-          llmSlot:       u.llmDefault || null,
+          llmDefault:    u.llmDefault || null,
           isRemote:      !!u.isRemote,
           homeLand:      u.homeLand || null,
           metadata:      u.metadata || {},

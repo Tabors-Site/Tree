@@ -1,7 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import mongoose from "mongoose";
 import Node from "../models/node.js";
-import { logContribution } from "./contributions.js";
+import { logDid } from "./dids.js";
 import { containsHtml } from "../utils.js";
 import Being from "../models/being.js";
 import { createArtifact } from "./artifacts.js";
@@ -37,7 +37,6 @@ export async function createNode({
   note = null,
   metadata = null,
   validatedUser = null,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 } = {}) {
@@ -129,10 +128,9 @@ export async function createNode({
 
       await Node.findByIdAndUpdate(parentId, { $addToSet: { children: newNode._id } });
 
-      await logContribution({
+      await logDid({
         beingId: user._id,
         nodeId: parentId,
-        wasAi,
         chatId,
         sessionId,
         action: "updateChild",
@@ -146,10 +144,9 @@ export async function createNode({
     if (lockTarget) releaseNodeLock(lockTarget, sessionId);
   }
 
-  await logContribution({
+  await logDid({
     beingId: user._id,
     nodeId: newNode._id,
-    wasAi,
     chatId,
     sessionId,
     action: "create",
@@ -162,7 +159,6 @@ export async function createNode({
       content: note,
       beingId: user._id,
       nodeId: newNode._id,
-      wasAi,
       chatId,
       sessionId,
     });
@@ -218,7 +214,6 @@ export async function createNodeBranch(
   nodeData,
   parentId,
   beingId,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 ) {
@@ -228,7 +223,6 @@ export async function createNodeBranch(
     nodeData,
     parentId,
     user,
-    wasAi,
     chatId,
     sessionId,
   );
@@ -238,7 +232,6 @@ async function createNodeBranchInternal(
   nodeData,
   parentId,
   user,
-  wasAi,
   chatId = null,
   sessionId = null,
 ) {
@@ -261,7 +254,6 @@ async function createNodeBranchInternal(
     note: note || null,
     metadata: metadataMap,
     validatedUser: user,
-    wasAi,
     chatId,
     sessionId,
   });
@@ -273,7 +265,6 @@ async function createNodeBranchInternal(
       childData,
       newNode._id,
       user,
-      wasAi,
       chatId,
       sessionId,
     );
@@ -290,7 +281,6 @@ async function createNodeBranchInternal(
 export async function deleteNodeBranch(
   nodeId,
   beingId,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 ) {
@@ -328,10 +318,9 @@ export async function deleteNodeBranch(
         $pull: { children: nodeId },
       });
 
-      await logContribution({
+      await logDid({
         beingId,
         nodeId: oldParent.toString(),
-        wasAi,
         chatId,
         sessionId,
         action: "updateChild",
@@ -344,10 +333,9 @@ export async function deleteNodeBranch(
   } finally {
     releaseMultiple(lockIds, sessionId);
   }
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: nodeId,
-    wasAi,
     chatId,
     sessionId,
     action: "branchLifecycle",
@@ -365,7 +353,6 @@ export async function updateParentRelationship(
   nodeChildId,
   nodeNewParentId,
   beingId,
-  wasAi = false,
   chatId = null,
   sessionId = null,
   opts = {},
@@ -457,10 +444,9 @@ export async function updateParentRelationship(
 
   // Contributions logged outside the transaction (audit trail, not structural)
   if (oldParent) {
-    await logContribution({
+    await logDid({
       beingId,
       nodeId: oldParent._id.toString(),
-      wasAi,
       chatId,
       sessionId,
       action: "updateChild",
@@ -468,10 +454,9 @@ export async function updateParentRelationship(
     });
   }
 
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: nodeChildId,
-    wasAi,
     chatId,
     sessionId,
     action: "updateParent",
@@ -481,10 +466,9 @@ export async function updateParentRelationship(
     },
   });
 
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: nodeNewParentId.toString(),
-    wasAi,
     chatId,
     sessionId,
     action: "updateChild",
@@ -506,7 +490,6 @@ export async function editNodeName({
   nodeId,
   newName,
   beingId,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 }) {
@@ -544,11 +527,10 @@ export async function editNodeName({
   const oldName = node.name;
   await Node.findByIdAndUpdate(nodeId, { $set: { name: newName } });
 
-  await logContribution({
+  await logDid({
     beingId,
     nodeId,
     action: "editName",
-    wasAi,
     chatId,
     sessionId,
 
@@ -565,7 +547,6 @@ export async function reviveNodeBranch({
   deletedNodeId,
   targetParentId,
   beingId,
-  wasAi = false,
 }) {
   const deletedNode = await Node.findById(deletedNodeId);
   if (!deletedNode) throw new Error("Deleted node not found");
@@ -606,17 +587,15 @@ export async function reviveNodeBranch({
 
     await Node.findByIdAndUpdate(targetParentId, { $addToSet: { children: deletedNodeId } });
 
-    await logContribution({
+    await logDid({
       beingId,
       nodeId: targetParentId,
-      wasAi,
       action: "updateChild",
       updateChild: { action: "added", childId: deletedNodeId.toString() },
     });
-    await logContribution({
+    await logDid({
       beingId,
       nodeId: deletedNodeId,
-      wasAi,
       action: "branchLifecycle",
       branchLifecycle: { action: "revived", fromParentId: DELETED, toParentId: targetParentId.toString() },
     });
@@ -630,7 +609,6 @@ export async function reviveNodeBranch({
 export async function reviveNodeBranchAsRoot({
   deletedNodeId,
   beingId,
-  wasAi = false,
 }) {
   const deletedNode = await Node.findById(deletedNodeId);
   if (!deletedNode) throw new Error("Deleted node not found");
@@ -664,10 +642,9 @@ export async function reviveNodeBranchAsRoot({
       await Node.findByIdAndUpdate(landRootId, { $addToSet: { children: deletedNodeId } });
     }
 
-    await logContribution({
+    await logDid({
       beingId,
       nodeId: deletedNodeId,
-      wasAi,
       action: "branchLifecycle",
       branchLifecycle: { action: "revivedAsRoot" },
     });
@@ -683,7 +660,6 @@ export async function editNodeType({
   nodeId,
   newType,
   beingId,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 }) {
@@ -720,11 +696,10 @@ export async function editNodeType({
   const oldType = node.type;
   await Node.findByIdAndUpdate(nodeId, { $set: { type: newType } });
 
-  await logContribution({
+  await logDid({
     beingId,
     nodeId,
     action: "editType",
-    wasAi,
     chatId,
     sessionId,
     editType: { oldType, newType },
@@ -736,13 +711,12 @@ export async function editNodeType({
 /**
  * Reorder a node's children array.
  * Must contain the exact same IDs as the current children, just in a different order.
- * Atomic $set. Contribution logged.
+ * Atomic $set. Did logged.
  */
 export async function reorderChildren({
   nodeId,
   children: newOrder,
   beingId,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 }) {
@@ -760,11 +734,10 @@ export async function reorderChildren({
 
   await Node.updateOne({ _id: nodeId }, { $set: { children: newOrder } });
 
-  await logContribution({
+  await logDid({
     beingId,
     nodeId,
     action: "reorder",
-    wasAi,
     chatId,
     sessionId,
   });

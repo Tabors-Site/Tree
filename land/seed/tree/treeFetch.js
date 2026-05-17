@@ -584,7 +584,7 @@ export async function getContextForAi(nodeId, options = {}) {
         origin: ARTIFACT_ORIGIN.IBP,
       })
         .sort({ _id: -1 })
-        .limit(Number(getLandConfigValue("treeSummaryRecentArtifacts")) || Number(getLandConfigValue("treeSummaryRecentNotes")) || 3)
+        .limit(Number(getLandConfigValue("treeSummaryRecentArtifacts")) || 3)
         .populate("beingId", "username -_id")
         .lean()
         .exec();

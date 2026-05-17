@@ -217,7 +217,7 @@ export async function triggerStop({ active, socket }) {
 export async function triggerPlanPivot({
   active,
   message,
-  visitorId,
+  aiSessionKey,
   socket,
   beingId,
   username,
@@ -376,13 +376,13 @@ export async function triggerPlanPivot({
       return;
     }
 
-    const prev = getPendingSwarmPlan(visitorId);
+    const prev = getPendingSwarmPlan(aiSessionKey);
     // If a later pending stash exists, bump past it; otherwise keep the
     // version we already used when signaling running branches.
     const stashVersion = prev?.version
       ? Math.max(nextVersion, prev.version + 1)
       : nextVersion;
-    setPendingSwarmPlan(visitorId, {
+    setPendingSwarmPlan(aiSessionKey, {
       branches,
       contracts: [],
       projectNodeId: active.projectNodeId,

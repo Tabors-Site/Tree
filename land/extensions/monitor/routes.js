@@ -2,7 +2,7 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import Being from "../../seed/models/being.js";
-import Contribution from "../../seed/models/contribution.js";
+import Did from "../seed/models/did.js";
 import log from "../../seed/log.js";
 
 const router = express.Router();
@@ -61,15 +61,15 @@ router.get("/land/activity", authenticate, async (req, res) => {
       chatsWeek,
       totalUsers,
     ] = await Promise.all([
-      Contribution.countDocuments({ date: { $gte: oneDayAgo } }),
-      Contribution.countDocuments({ date: { $gte: oneWeekAgo } }),
+      Did.countDocuments({ date: { $gte: oneDayAgo } }),
+      Did.countDocuments({ date: { $gte: oneWeekAgo } }),
       Chat.countDocuments({ "startMessage.time": { $gte: oneDayAgo } }),
       Chat.countDocuments({ "startMessage.time": { $gte: oneWeekAgo } }),
       Being.countDocuments({}),
     ]);
 
     // Action breakdown today
-    const actionBreakdown = await Contribution.aggregate([
+    const actionBreakdown = await Did.aggregate([
       { $match: { date: { $gte: oneDayAgo } } },
       { $group: { _id: "$action", count: { $sum: 1 } } },
       { $sort: { count: -1 } },

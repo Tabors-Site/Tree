@@ -3,21 +3,21 @@ import fs from "fs";
 import RawIdea from "./model.js";
 import { DELETED } from "../../seed/protocol.js";
 import { createArtifact } from "../../seed/tree/artifacts.js";
-import { getBeingMeta, setBeingMeta, incBeingMeta } from "../../seed/tree/beingMetadata.js";
+import { getBeingMeta, incBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { getExtension } from "../loader.js";
 
 // Services wired from init() via setServices()
 let Node = null;
 let _Artifact = null;
 let User = null;
-let logContribution = async () => {};
+let logDid = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
 
 export function setServices({ models, contributions }) {
   Node = models.Node;
   _Artifact = models.Artifact;
   User = models.User;
-  if (contributions?.logContribution) logContribution = contributions.logContribution;
+  if (contributions?.logDid) logDid = contributions.logDid;
 }
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
 
@@ -84,7 +84,6 @@ async function createRawIdea({
   content,
   beingId,
   file,
-  wasAi = false,
 }) {
   if (!contentType || !["file", "text"].includes(contentType)) {
     throw new Error("Invalid content type");
@@ -151,10 +150,9 @@ async function createRawIdea({
   }
 
   // ── LOG ────────────────────────────────────────
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: DELETED,
-    wasAi,
     action: "rawIdea",
     nodeVersion: "0",
     rawIdeaAction: {
@@ -175,7 +173,6 @@ async function convertRawIdeaToNote({
   rawIdeaId,
   beingId,
   nodeId,
-  wasAi = false,
   chatId = null,
   sessionId = null,
 }) {
@@ -203,7 +200,6 @@ async function convertRawIdeaToNote({
     beingId,
     nodeId,
     file: rawIdea.contentType === "file" ? { filename: rawIdea.content, size: 0 } : null,
-    wasAi,
     chatId,
     sessionId,
   });
@@ -211,10 +207,9 @@ async function convertRawIdeaToNote({
   if (result.error) throw new Error(result.error);
 
   // 3️⃣ Log raw idea placement contribution
-  await logContribution({
+  await logDid({
     beingId,
     nodeId,
-    wasAi,
     chatId,
     sessionId,
     action: "rawIdea",
@@ -223,7 +218,7 @@ async function convertRawIdeaToNote({
       action: "placed",
       rawIdeaId: rawIdeaId.toString(),
       targetNodeId: nodeId,
-      noteId: result.artifact._id.toString(),
+      artifactId: result.artifact._id.toString(),
     },
   });
 
@@ -237,7 +232,7 @@ async function convertRawIdeaToNote({
   };
 }
 
-async function deleteRawIdeaAndFile({ rawIdeaId, beingId, wasAi = false }) {
+async function deleteRawIdeaAndFile({ rawIdeaId, beingId }) {
   const rawIdea = await RawIdea.findById(rawIdeaId);
   if (!rawIdea) {
     throw new Error("Raw idea not found");
@@ -297,10 +292,9 @@ async function deleteRawIdeaAndFile({ rawIdeaId, beingId, wasAi = false }) {
   }
 
   // --- LOG CONTRIBUTION ---
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: DELETED,
-    wasAi,
     action: "rawIdea",
     nodeVersion: DELETED,
     rawIdeaAction: {

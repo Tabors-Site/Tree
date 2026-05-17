@@ -1,12 +1,12 @@
 // TreeOS Seed — session identity tests
-// Run: node --test land/seed/llm/sessionKeys.test.js
+// Run: node --test land/test/sessionKeys.test.js
 
 import { test, describe } from "node:test";
 import { strict as assert } from "node:assert";
 import {
   buildUserAiSessionKey,
   resolveInternalAiSessionKey,
-} from "./sessionKeys.js";
+} from "../seed/llm/sessionKeys.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // buildUserAiSessionKey — per-reach user session key

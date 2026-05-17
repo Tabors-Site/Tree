@@ -2,7 +2,7 @@ import log from "../../seed/log.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import Stripe from "stripe";
 import { processPurchase } from "./core/processPurchase.js";
-import { logContribution } from "../../seed/tree/contributions.js";
+import { logDid } from "../seed/tree/dids.js";
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
@@ -31,7 +31,7 @@ export async function stripeWebhook(req, res) {
     const energyAmount = Number(session.metadata.energyAmount || 0);
 
     try {
-      await logContribution({
+      await logDid({
         beingId,
         nodeId: "SYSTEM",
         nodeVersion: "0",
@@ -56,8 +56,8 @@ export async function stripeWebhook(req, res) {
         return sendOk(res, { received: true });
       }
 
-      log.error("Billing", "Contribution logging failed:", err);
-      return sendError(res, 500, ERR.INTERNAL, "Contribution logging failed");
+      log.error("Billing", "Did logging failed:", err);
+      return sendError(res, 500, ERR.INTERNAL, "Did logging failed");
     }
 
     await processPurchase({

@@ -59,9 +59,9 @@ export async function init(core) {
   core.hooks.register("afterRegister", async ({ user }) => {
     const freshUser = await Being.findById(user._id).select("metadata").lean();
     if (!freshUser) return;
-    const existing = core.userMetadata.getBeingMeta(freshUser, "html");
+    const existing = core.beingMetadata.getBeingMeta(freshUser, "html");
     if (existing?.shareToken) return;
-    await core.userMetadata.batchSetBeingMeta(String(user._id), "html", { ...existing, shareToken: generateShareToken() });
+    await core.beingMetadata.batchSetBeingMeta(String(user._id), "html", { ...existing, shareToken: generateShareToken() });
   }, "html-rendering");
 
   // Detect optional extensions after boot

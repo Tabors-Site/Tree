@@ -180,8 +180,7 @@ export async function init(core) {
             current.byExtension[cleanScope].push(entry);
           }
 
-          setBeingMeta(user, "instructions", current);
-          await user.save();
+          await setBeingMeta(user, "instructions", current);
 
           log.info("Instructions", `Added [${cleanScope}] for user ${String(beingId).slice(0, 8)}: "${cleanText.slice(0, 60)}"`);
           return {
@@ -282,8 +281,7 @@ export async function init(core) {
             return { content: [{ type: "text", text: `No instruction found matching "${id}".` }] };
           }
 
-          setBeingMeta(user, "instructions", current);
-          await user.save();
+          await setBeingMeta(user, "instructions", current);
 
           log.info("Instructions", `Removed for user ${String(beingId).slice(0, 8)}: "${removed.text?.slice(0, 60)}"`);
           return { content: [{ type: "text", text: `Removed: "${removed.text}"` }] };
@@ -452,8 +450,7 @@ export async function init(core) {
         current.byExtension[cleanScope].push(entry);
       }
 
-      setBeingMeta(user, "instructions", current);
-      await user.save();
+      await setBeingMeta(user, "instructions", current);
 
       sendOk(res, { added: entry, scope: cleanScope });
     } catch (err) {
@@ -498,8 +495,7 @@ export async function init(core) {
         return sendError(res, 404, ERR.INVALID_INPUT, `No instruction found matching "${id}"`);
       }
 
-      setBeingMeta(user, "instructions", current);
-      await user.save();
+      await setBeingMeta(user, "instructions", current);
 
       sendOk(res, { removed });
     } catch (err) {

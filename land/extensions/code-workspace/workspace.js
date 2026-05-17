@@ -21,7 +21,7 @@ import Node from "../../seed/models/node.js";
 import Artifact from "../../seed/models/artifact.js";
 import { v4 as uuidv4 } from "uuid";
 import log from "../../seed/log.js";
-import { logContribution } from "../../seed/tree/contributions.js";
+import { logDid } from "../seed/tree/dids.js";
 import { readNs } from "../../seed/tree/extensionMetadata.js";
 
 // ---------------------------------------------------------------------------
@@ -557,13 +557,13 @@ export async function writeFileContent({ fileNodeId, content, beingId, partial =
   // every downstream system (recent activity, contribution queries,
   // user metrics, blame walks).
   try {
-    await logContribution({
+    await logDid({
       beingId: beingId || WORKSPACE_SYSTEM_USER,
       nodeId: fileNodeId,
-      action: "note",
-      noteAction: {
+      action: "artifact",
+      artifactAction: {
         action: isEdit ? "edit" : "add",
-        noteId: note._id.toString(),
+        artifactId: note._id.toString(),
         content: content ?? "",
       },
       via: "code-workspace.writeFileContent",

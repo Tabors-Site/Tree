@@ -575,7 +575,6 @@ async function postNoteToRoomAs({ roomNodeId, content, authorSubId, authorLabel,
     content,
     beingId,
     nodeId: roomNodeId,
-    wasAi: true,
     metadata: {
       room: {
         authorSubId: authorSubId || null,
@@ -924,7 +923,6 @@ export async function readRoomTranscript({ roomNodeId, limit = 100 }) {
     id: String(n._id),
     content: n.content,
     at: n.createdAt,
-    wasAi: !!n.wasAi,
     authorSubId: n?.metadata?.room?.authorSubId || null,
     authorLabel: n?.metadata?.room?.authorLabel || null,
     authorUserId: n.beingId || null,

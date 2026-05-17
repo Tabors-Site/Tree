@@ -15,7 +15,7 @@ export async function init(core) {
   configure({
     metadata: core.metadata,
     runChat: async (opts) => _runChatDirect({ ...opts, llmPriority: BG }),
-    Contribution: core.models.Contribution,
+    Did: core.models.Did,
     Node: core.models.Node,
   });
 

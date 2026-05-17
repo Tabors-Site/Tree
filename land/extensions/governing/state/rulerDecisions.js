@@ -1,17 +1,18 @@
-// Ruler decision register. Per-visitor transient store of "what the
-// Ruler chose this turn." The Ruler's tools write here; the
-// orchestrator's runRulerTurn reads after the Ruler exits and
-// dispatches accordingly.
+// Ruler decision register. Per-Ruler-turn transient store of "what the
+// Ruler chose this turn." The Ruler's tools write here; the orchestrator's
+// runRulerTurn reads after the Ruler exits and dispatches accordingly.
+//
+// Keying: chatId. Each Ruler turn runs inside one chat record (one
+// chainstep of the conversation). The decision belongs to that turn,
+// not to the broader conversation — multiple turns within a thread
+// each get their own decision entry, all live simultaneously until
+// each is read+cleared by its corresponding orchestrator handler.
 //
 // Why not metadata: the decision is ephemeral. It binds one user
 // turn to the next role's invocation. After the cycle completes, the
 // decision is consumed. Metadata is for durable substrate (plan
 // emissions, contracts, executions, ledgers). The decision is
 // pre-substrate — it's the impulse that produces substrate writes.
-//
-// Why not session state: keeping it separate makes the dispatch flow
-// explicit. runRulerTurn reads from this register; no implicit
-// session-coupled magic.
 
 const decisions = new Map();
 
@@ -33,20 +34,20 @@ const decisions = new Map();
  * this ("Pick exactly one tool. After the tool call, exit."), and
  * the register's overwrite semantics fail safely if the model misbehaves.
  */
-export function setRulerDecision(visitorId, decision) {
-  if (!visitorId || !decision?.kind) return;
-  decisions.set(String(visitorId), {
+export function setRulerDecision(chatId, decision) {
+  if (!chatId || !decision?.kind) return;
+  decisions.set(String(chatId), {
     ...decision,
     decidedAt: new Date().toISOString(),
   });
 }
 
-export function getRulerDecision(visitorId) {
-  if (!visitorId) return null;
-  return decisions.get(String(visitorId)) || null;
+export function getRulerDecision(chatId) {
+  if (!chatId) return null;
+  return decisions.get(String(chatId)) || null;
 }
 
-export function clearRulerDecision(visitorId) {
-  if (!visitorId) return;
-  decisions.delete(String(visitorId));
+export function clearRulerDecision(chatId) {
+  if (!chatId) return;
+  decisions.delete(String(chatId));
 }

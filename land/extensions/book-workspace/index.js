@@ -645,7 +645,7 @@ export async function handleMessage(message, { beingId, username, rootId, target
   const controller = registerActiveRun({
     nodeId: projectId,
     projectNodeId: projectId,
-    visitorId: cliVisitorId,
+    aiSessionKey: cliVisitorId,
     source: "cli",
   });
 

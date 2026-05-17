@@ -199,7 +199,6 @@ export async function ingest(parentNodeId, dirPath, beingId, opts = {}) {
           content: `// ${entry.name}\n${fileContent}`,
           beingId,
           nodeId: parentNodeId,
-          wasAi: false,
           metadata: { code: { fileName: entry.name, language, lines: lines.length, truncated } },
         });
 

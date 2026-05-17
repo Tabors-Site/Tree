@@ -28,7 +28,7 @@
 
 import log from "../../../seed/log.js";
 
-// visitorId -> entry
+// aiSessionKey -> entry
 const _pendingSwarmPlans = new Map();
 
 const SWARM_PLAN_TTL_MS = 30 * 60 * 1000;
@@ -52,14 +52,14 @@ const SWARM_PLAN_TTL_MS = 30 * 60 * 1000;
  *   targetNodeId      node the architect ran at
  *   version           plan version counter (1 for a fresh proposal)
  */
-export function setPendingSwarmPlan(visitorId, entry) {
-  if (!visitorId || !entry || !Array.isArray(entry.branches) || entry.branches.length === 0) return;
-  _pendingSwarmPlans.set(visitorId, {
+export function setPendingSwarmPlan(aiSessionKey, entry) {
+  if (!aiSessionKey || !entry || !Array.isArray(entry.branches) || entry.branches.length === 0) return;
+  _pendingSwarmPlans.set(aiSessionKey, {
     ...entry,
     createdAt: Date.now(),
   });
   log.debug("PendingSwarmPlan",
-    `Stashed ${entry.branches.length} branches for ${visitorId} (project=${String(entry.projectNodeId || "").slice(0, 8)}, v${entry.version || 1})`,
+    `Stashed ${entry.branches.length} branches for ${aiSessionKey} (project=${String(entry.projectNodeId || "").slice(0, 8)}, v${entry.version || 1})`,
   );
 }
 
@@ -67,24 +67,24 @@ export function setPendingSwarmPlan(visitorId, entry) {
  * Read the pending swarm plan for a visitor if one exists and hasn't
  * expired. Does NOT clear the plan — caller clears after consuming.
  */
-export function getPendingSwarmPlan(visitorId) {
-  if (!visitorId) return null;
-  const entry = _pendingSwarmPlans.get(visitorId);
+export function getPendingSwarmPlan(aiSessionKey) {
+  if (!aiSessionKey) return null;
+  const entry = _pendingSwarmPlans.get(aiSessionKey);
   if (!entry) return null;
   if (Date.now() - entry.createdAt > SWARM_PLAN_TTL_MS) {
-    _pendingSwarmPlans.delete(visitorId);
+    _pendingSwarmPlans.delete(aiSessionKey);
     return null;
   }
   return entry;
 }
 
-export function clearPendingSwarmPlan(visitorId) {
-  if (!visitorId) return;
-  _pendingSwarmPlans.delete(visitorId);
+export function clearPendingSwarmPlan(aiSessionKey) {
+  if (!aiSessionKey) return;
+  _pendingSwarmPlans.delete(aiSessionKey);
 }
 
-export function hasPendingSwarmPlan(visitorId) {
-  return !!getPendingSwarmPlan(visitorId);
+export function hasPendingSwarmPlan(aiSessionKey) {
+  return !!getPendingSwarmPlan(aiSessionKey);
 }
 
 // Periodic cleanup. Unref so it doesn't keep the process alive in

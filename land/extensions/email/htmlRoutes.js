@@ -57,7 +57,8 @@ export default function buildEmailHtmlRoutes() {
       delete emailMeta.resetToken;
       delete emailMeta.resetExpiry;
       emailMeta.tokensInvalidBefore = new Date();
-      setBeingMeta(user, "email", emailMeta);
+      await setBeingMeta(user, "email", emailMeta);
+      // save() needed: password was mutated above (non-metadata field).
       await user.save();
 
       return res.send(renderResetPasswordSuccess());

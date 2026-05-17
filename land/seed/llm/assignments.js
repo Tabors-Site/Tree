@@ -57,22 +57,23 @@ export function getLlmAssignments(node) {
 }
 
 /**
- * Get LLM assignments for a user.
- * Core field: user.llmDefault (the user-wide default connection).
+ * Get LLM assignments for a being.
+ * Core field: being.llmDefault (the being-wide default connection; null
+ * falls back to extension slots, then land default).
  * Extension slots: metadata.userLlm.slots (registered by extensions).
  *
  * Returns { main: connectionId|null, [slotName]: connectionId|null }
  */
-export function getUserLlmAssignments(user) {
-  if (!user) return { main: null };
+export function getUserLlmAssignments(being) {
+  if (!being) return { main: null };
 
-  const meta = user.metadata instanceof Map ? user.metadata.get("userLlm") : user.metadata?.userLlm;
+  const meta = being.metadata instanceof Map ? being.metadata.get("userLlm") : being.metadata?.userLlm;
   const assignments = sanitizeSlots(meta?.slots);
 
   // Core main is authoritative. Metadata assignments cannot override it.
   const result = { ...assignments };
-  result.main = (typeof user.llmDefault === "string" && user.llmDefault.length <= 100)
-    ? user.llmDefault
+  result.main = (typeof being.llmDefault === "string" && being.llmDefault.length <= 100)
+    ? being.llmDefault
     : null;
 
   return result;

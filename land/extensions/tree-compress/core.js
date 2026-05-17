@@ -318,7 +318,6 @@ async function compressNode(nodeId, depthMap, beingId, username, rootId, config)
           nodeId,
           status: NODE_STATUS.TRIMMED,
           beingId,
-          wasAi: true,
           isInherited: false,
         });
       } catch (err) {
@@ -451,7 +450,6 @@ export async function decompressNode(nodeId, beingId) {
       nodeId,
       status: NODE_STATUS.ACTIVE,
       beingId,
-      wasAi: false,
       isInherited: false,
     });
   }

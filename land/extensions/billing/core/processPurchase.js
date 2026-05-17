@@ -49,7 +49,7 @@ export async function processPurchase({
   if (plan && plan !== "basic") {
     const currentPlan = getBeingMeta(user, "tiers").plan || "basic";
     if (plan !== currentPlan) {
-      upgradeUserPlan(user, plan);
+      await upgradeUserPlan(user, plan);
     }
 
     const billing = getBeingMeta(user, "billing");
@@ -58,7 +58,7 @@ export async function processPurchase({
       billing.planExpiresAt?.getTime?.() || (typeof billing.planExpiresAt === "number" ? billing.planExpiresAt : 0)
     );
 
-    setBeingMeta(user, "billing", {
+    await setBeingMeta(user, "billing", {
       ...billing,
       planExpiresAt: new Date(baseTime + PLAN_DURATION_DAYS * 24 * 60 * 60 * 1000),
     });
@@ -67,10 +67,8 @@ export async function processPurchase({
   if (energyAmount > 0) {
     const energy = getEnergy(user);
     energy.additional.amount += energyAmount;
-    setBeingMeta(user, "energy", energy);
+    await setBeingMeta(user, "energy", energy);
   }
-
-  await user.save();
 
   clearUserClientCache(beingId);
 

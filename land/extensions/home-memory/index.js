@@ -53,7 +53,7 @@ export async function init(core) {
   core.hooks.register("afterSessionEnd", async ({ sessionId, beingId, type, meta }) => {
     // Only care about home-zone user sessions. runOrchestration writes
     // `zone` into session meta — that's the authoritative signal. No
-    // need to parse the visitorId shape.
+    // need to parse the aiSessionKey shape.
     if (meta?.zone !== "home") return;
     if (!beingId) return;
 
@@ -287,7 +287,7 @@ async function summarizeSession(beingId, sessionId, runChat) {
   const sinceTime = Math.max(lastTime, windowFloor);
 
   const chats = await Chat.find({
-    beingId,
+    beingIn: beingId,
     "aiContext.zone": "home",
     "startMessage.time": { $gt: new Date(sinceTime) },
   })
@@ -375,7 +375,6 @@ async function summarizeSession(beingId, sessionId, runChat) {
         content: memoryText.trim(),
         beingId,
         nodeId: String(memoriesNode._id),
-        wasAi: true,
       });
       log.verbose("HomeMemory", `  wrote memory note to ${memoriesNode._id}`);
     } catch (err) {
@@ -398,7 +397,6 @@ async function summarizeSession(beingId, sessionId, runChat) {
           content: reminderText,
           beingId,
           nodeId: String(remindersNode._id),
-          wasAi: true,
         });
       }
     }

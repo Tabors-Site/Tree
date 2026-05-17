@@ -48,7 +48,7 @@ async function getEncodingMap(rootId) {
 export async function init(core) {
   // Wire core services into core.js and routes.js
   const understanding = await import("./core.js");
-  understanding.setServices({ models: core.models, contributions: core.contributions });
+  understanding.setServices({ models: core.models, contributions: core.dids });
   if (core.energy) understanding.setEnergyService(core.energy);
 
   const { default: router, setModels, resolveHtmlAuth } = await import("./routes.js");

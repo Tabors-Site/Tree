@@ -93,8 +93,9 @@ export default {
 | `ownership` | Tree ownership | `addContributor`, `removeContributor`, `transferOwnership` |
 | `tree` | Tree infrastructure | `getAncestorChain`, `checkIntegrity`, `isTreeAlive` |
 | `cascade` | Signal propagation | `deliverCascade` |
-| `metadata` | Node metadata | `getExtMeta`, `setExtMeta`, `mergeExtMeta`, `incExtMeta`, `pushExtMeta`, `batchSetExtMeta`, `unsetExtMeta` |
-| `userMetadata` | User metadata | `getUserMeta`, `setUserMeta`, `incUserMeta`, `pushUserMeta`, `batchSetUserMeta`, `unsetUserMeta` |
+| `metadata` | Node metadata | `getExtMeta`, `readNs`, `setExtMeta`, `mergeExtMeta`, `incExtMeta`, `pushExtMeta`, `addToExtMetaSet`, `batchSetExtMeta`, `unsetExtMeta` |
+| `beingMetadata` | Being metadata (humans and AI beings) | `getBeingMeta`, `readBeingNs`, `setBeingMeta`, `mergeBeingMeta`, `incBeingMeta`, `pushBeingMeta`, `addToBeingMetaSet`, `batchSetBeingMeta`, `unsetBeingMeta` |
+| `artifactMetadata` | Artifact metadata | `getArtifactMeta`, `readArtifactNs`, `setArtifactMeta`, `mergeArtifactMeta`, `incArtifactMeta`, `pushArtifactMeta`, `addToArtifactMetaSet`, `batchSetArtifactMeta`, `unsetArtifactMeta` |
 | `protocol` | Error codes, constants | `sendOk`, `sendError`, `ERR`, `WS`, `CASCADE` |
 | `websocket` | Real-time events | `emitToUser`, `registerSocketHandler` |
 | `mcp` | MCP connections | `connectToMCP`, `closeMCPClient` |
@@ -113,7 +114,9 @@ Extensions load in topological order. If extension A depends on extension B (`ne
 
 ### hooks and modes are always available
 
-`core.hooks`, `core.modes`, `core.metadata`, and `core.userMetadata` are injected into every scoped core regardless of declaration. You never need to declare them. They are core infrastructure available to all extensions.
+`core.hooks`, `core.modes`, `core.metadata`, `core.beingMetadata`, and `core.artifactMetadata` are injected into every scoped core regardless of declaration. You never need to declare them. They are core infrastructure available to all extensions.
+
+The three metadata modules mirror each other. Every namespaced operation that works on a node also works on a being and on an artifact, with the function name carrying the target type (`setExtMeta` / `setBeingMeta` / `setArtifactMeta`, and so on). Pick the module that matches the document you are tagging. They are functionally peer modules, not a hierarchy.
 
 ### Extension-provided services
 
@@ -440,7 +443,7 @@ Return value: `{ response, navigatedTo, ... }`. The response is sent to the clie
 | Tree | `core.tree.*` | Yes |
 | Node Locks | `core.nodeLocks.*` | Yes |
 | Metadata | `core.metadata.*` (namespace-enforced, 7 functions) | Yes (always injected) |
-| User Metadata | `core.userMetadata.*` (6 functions) | Yes (always injected) |
+| User Metadata | `core.beingMetadata.*` (6 functions) | Yes (always injected) |
 | Scope | `core.scope.*` | Yes |
 | Cascade | `core.cascade.*` | Yes |
 | Protocol | `core.protocol.*` | Yes |
@@ -832,12 +835,12 @@ import { configure } from "./core.js";
 configure({ metadata: core.metadata });
 ```
 
-User metadata follows the same pattern via `core.userMetadata`:
+User metadata follows the same pattern via `core.beingMetadata`:
 
 ```js
-const prefs = core.userMetadata.getUserMeta(user, "my-extension");
-await core.userMetadata.incUserMeta(userId, "my-extension", "visits", 1);
-await core.userMetadata.batchSetUserMeta(userId, "my-extension", { theme: "dark" });
+const prefs = core.beingMetadata.getBeingMeta(user, "my-extension");
+await core.beingMetadata.incBeingMeta(userId, "my-extension", "visits", 1);
+await core.beingMetadata.batchSetBeingMeta(userId, "my-extension", { theme: "dark" });
 ```
 
 Both paths are valid. The scoped core path prevents accidental cross-namespace writes. The direct import path is for kernel code, migrations, and utilities that need to write to arbitrary namespaces.
@@ -1149,21 +1152,21 @@ No action = default GET. Unknown action shows available subcommands. Missing req
 
 ## Per-User Data Storage (metadata)
 
-Same pattern as per-node metadata. Use `core.userMetadata` (always available, no declaration needed):
+Same pattern as per-node metadata. Use `core.beingMetadata` (always available, no declaration needed):
 
 ```js
 // Read
-const energy = core.userMetadata.getUserMeta(user, "energy");  // returns {} if empty
+const energy = core.beingMetadata.getBeingMeta(user, "energy");  // returns {} if empty
 
 // Write (sync, caller must save)
-core.userMetadata.setUserMeta(user, "energy", { available: { amount: 100 } });
+core.beingMetadata.setBeingMeta(user, "energy", { available: { amount: 100 } });
 await user.save();
 
 // Atomic operations (by ID or document, no need to save)
-await core.userMetadata.incUserMeta(userId, "energy", "used", 5);
-await core.userMetadata.pushUserMeta(userId, "energy", "history", { ts: Date.now() }, 50);
-await core.userMetadata.batchSetUserMeta(userId, "energy", { available: 95, lastUsed: Date.now() });
-await core.userMetadata.unsetUserMeta(userId, "old-extension");
+await core.beingMetadata.incBeingMeta(userId, "energy", "used", 5);
+await core.beingMetadata.pushBeingMeta(userId, "energy", "history", { ts: Date.now() }, 50);
+await core.beingMetadata.batchSetBeingMeta(userId, "energy", { available: 95, lastUsed: Date.now() });
+await core.beingMetadata.unsetBeingMeta(userId, "old-extension");
 ```
 
 Convention: namespace key matches your manifest name. Same rules as node metadata.

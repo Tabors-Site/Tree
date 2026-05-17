@@ -213,7 +213,7 @@ export async function processGatewayMessage(
         const treeOrch = getOrchestrator("tree");
         if (!treeOrch) throw new Error("No tree orchestrator installed");
         const orchResult = await treeOrch.handle({
-          visitorId: rt.visitorId,
+          aiSessionKey: rt.aiSessionKey,
           message: labeledMessage,
           socket: nullSocket,
           username: user.username,

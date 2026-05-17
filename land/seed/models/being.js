@@ -78,12 +78,31 @@ const BeingSchema = new mongoose.Schema({
   // semantics layer on later.
   homePositionId: { type: String, ref: "Node", default: null, index: true },
 
-  // ── LLM slot (both modes) ──
+  // ── Current position ──
+  // The being's current position in the world — where they are right
+  // now, distinct from their home (homePositionId). Single-context
+  // model: a being is at exactly one position at any moment, shared
+  // across all their connected sockets.
+  //
+  // For human beings this updates as they navigate (`cd`, route
+  // changes, etc.). For AI beings this usually equals homePositionId
+  // (they live at home and operate from there), but it can shift
+  // during chainsteps that take an AI being to a child node.
+  //
+  // Used by the chat layer to compute the asker's stance for new
+  // chats — the canonical Portal Address `<land>/<currentPositionId>@<username>`.
+  // Position-fork: when this changes, the being's next chat lands at
+  // a new Portal Address. Old chats persist with their original
+  // address; no thread "ends," it just stops accumulating.
+  currentPositionId: { type: String, ref: "Node", default: null, index: true },
+
+  // ── LLM default (both modes) ──
   // For AI beings: the LLM that drives their cognition each summoning.
   // For human beings: the LLM used when they ask for AI assistance.
-  // Null falls back through position → tree → land defaults using the
-  // existing resolution chain.
-  llmSlot: { type: String, ref: "LlmConnection", default: null },
+  // Null falls back through extension slots → tree → land defaults using
+  // the existing resolution chain. Same field name and semantics as
+  // Node.llmDefault so the resolver treats them uniformly.
+  llmDefault: { type: String, ref: "LlmConnection", default: null },
 
   // ── Federation ──
   // Unchanged semantics from the prior User model.

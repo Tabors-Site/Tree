@@ -104,7 +104,7 @@ function renderAction(rawC, { nodeId, parsedVersion, nextVersion, queryString })
     }
 
     case "note": {
-      const na = c.noteAction || {};
+      const na = c.artifactAction || {};
 
       let verb;
       switch (na.action) {
@@ -263,7 +263,7 @@ export function renderContributions({ nodeId, version, nodeName, contributions, 
     const actionHtml = renderAction(c, { nodeId, parsedVersion, nextVersion, queryString });
     const colorClass = actionColorClass(c.action);
 
-    const aiBadge = c.wasAi ? `<span class="badge badge-ai">AI</span>` : "";
+    const aiBadge = "";
     const energyBadge =
       c.energyUsed != null && c.energyUsed > 0
         ? `<span class="badge badge-energy">\u26A1 ${c.energyUsed}</span>`

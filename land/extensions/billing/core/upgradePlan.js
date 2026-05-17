@@ -23,7 +23,7 @@ const PLAN_DAILY_VALUE = {
   premium: 2000,
 };
 
-export function upgradeUserPlan(user, newPlan) {
+export async function upgradeUserPlan(user, newPlan) {
   const now = Date.now();
 
   const oldPlan = getBeingMeta(user, "tiers").plan || "basic";
@@ -46,11 +46,11 @@ export function upgradeUserPlan(user, newPlan) {
     energy.additional.amount += compensationEnergy;
   }
 
-  setBeingMeta(user, "tiers", { plan: newPlan });
+  await setBeingMeta(user, "tiers", { plan: newPlan });
 
   energy.available.amount = DAILY_LIMITS[newPlan] ?? DAILY_LIMITS.basic;
   energy.available.lastResetAt = new Date();
-  setBeingMeta(user, "energy", energy);
+  await setBeingMeta(user, "energy", energy);
 
   return user;
 }

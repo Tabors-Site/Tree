@@ -4,7 +4,7 @@ import TempUser from "./model.js";
 import { sendVerificationEmail } from "./core.js";
 import { getLandUrl } from "../../canopy/identity.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
-import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
+import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

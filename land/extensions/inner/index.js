@@ -114,7 +114,6 @@ async function think(rootId, runChat) {
         content: answer.trim(),
         beingId: ownerId,
         nodeId: String(innerNode._id),
-        wasAi: true,
       });
 
       // Cap at MAX_THOUGHTS

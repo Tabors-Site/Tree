@@ -18,7 +18,7 @@ import { getExtension } from "../loader.js";
 
 let Node = null;
 let _Artifact = null;
-let logContribution = null;
+let logDid = null;
 let runChat = null;
 let useEnergy = async () => ({ energyUsed: 0 });
 let _metadata = null;
@@ -26,7 +26,7 @@ let _metadata = null;
 export function setServices({ models, contributions, llm, energy, metadata }) {
   Node = models.Node;
   _Artifact = models.Artifact;
-  logContribution = contributions.logContribution;
+  logDid = contributions.logDid;
   runChat = llm.runChat;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
   if (metadata) _metadata = metadata;
@@ -678,10 +678,9 @@ export async function analyze(rootId, beingId, username) {
   }
 
   // Log contribution
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: rootId,
-    wasAi: true,
     action: "boundary:analyzed",
     extensionData: {
       boundary: {
@@ -785,10 +784,9 @@ export async function analyzeBranch(nodeId, beingId, username) {
     await _metadata.setExtMeta(nodeDoc, "boundary", report);
   }
 
-  await logContribution({
+  await logDid({
     beingId,
     nodeId,
-    wasAi: true,
     action: "boundary:branch-analyzed",
     extensionData: {
       boundary: {

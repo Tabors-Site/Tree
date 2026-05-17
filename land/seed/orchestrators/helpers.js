@@ -150,5 +150,5 @@ export const nullSocket = Object.freeze({
   broadcast: Object.freeze({ emit: () => {} }),
   beingId: null,
   username: "system",
-  visitorId: "system",
+  aiSessionKey: "system",
 });

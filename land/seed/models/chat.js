@@ -41,6 +41,39 @@ const ChatSchema = new mongoose.Schema({
   },
 
   // -----------------------------------
+  // Portal Address — the canonical sorted stance::stance identifier
+  // for the conversation context this chat belongs to.
+  //
+  // A Portal Address is the protocol's stance-to-stance address grammar
+  // (see /portal/lib/portal-address.js): `<stance> :: <stance>` where
+  // each stance is `<land>/<path>@<embodiment>`. Chats are records of
+  // one stance addressing another, so the natural identifier for
+  // grouping chats — "every chat at this Portal Address" — is the
+  // Portal Address itself in canonical sorted form. Directional A→B
+  // and B→A resolve to the same stored key.
+  //
+  // Stored form uses nodeId-rooted path (`<land>/<nodeId>@<username>`)
+  // so renaming a node doesn't fork historical Portal Addresses for
+  // chats that referenced it. The human-readable path form is what
+  // protocol verbs use; both forms are the same address grammar.
+  //
+  // Position changes fork Portal Addresses naturally. A being's stance
+  // is their CURRENT position plus their embodiment qualifier; when
+  // they navigate, their stance updates, and their next chat lands at
+  // a new Portal Address. Older chats keep their original Portal
+  // Address; no thread "ends," it just stops accumulating new chats.
+  //
+  // Optional only for legacy chats inserted before the 0.6.0 migration
+  // or background tasks without a paired stance. New writes always
+  // include it when both stances can be resolved.
+  // -----------------------------------
+  portalAddress: {
+    type: String,
+    default: null,
+    index: true,
+  },
+
+  // -----------------------------------
   // Session grouping (links the full chain)
   // -----------------------------------
   sessionId: {
@@ -224,7 +257,7 @@ const ChatSchema = new mongoose.Schema({
   contributions: [
     {
       type: String,
-      ref: "Contribution",
+      ref: "Did",
     },
   ],
 
@@ -298,6 +331,7 @@ ChatSchema.index({ sessionId: 1, chainIndex: 1 });
 ChatSchema.index({ beingIn: 1, "startMessage.time": -1 }); // being chat history queries
 ChatSchema.index({ beingOut: 1, "startMessage.time": -1 }); // active-chainstep-by-being queries
 ChatSchema.index({ beingIn: 1, beingOut: 1, "startMessage.time": -1 }, { sparse: true }); // who-talks-to-whom
+ChatSchema.index({ portalAddress: 1, "startMessage.time": -1 }, { sparse: true }); // Portal Address timeline queries
 
 // Query by target node (sparse — most home-mode chats lack this field)
 ChatSchema.index({ "treeContext.targetNodeId": 1 }, { sparse: true });

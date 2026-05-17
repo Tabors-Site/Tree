@@ -160,9 +160,9 @@ export async function parseTense(baseMode, message, behavioral) {
 // "The same" . lastNoun tells us which extension to reuse.
 // ─────────────────────────────────────────────────────────────────────────
 
-export function parsePronouns(message, visitorId) {
+export function parsePronouns(message, aiSessionKey) {
   const lower = message.toLowerCase().trim();
-  const state = getPronounState(visitorId);
+  const state = getPronounState(aiSessionKey);
   const result = { resolvedNode: null, resolvedNoun: null, resolvedMode: null, pronoun: null };
   let found = false;
 

@@ -785,7 +785,10 @@ function deriveLifecycle(status) {
  *   - inbox: { total, unconsumed, recent } from getInboxSummary
  */
 async function buildBeings(nodeId, entries) {
-  const inboxByEmbodiment = await getInboxSummary(nodeId);
+  // Inbox is keyed by recipient beingId (the receiving Being's _id). Each
+  // descriptor entry's _chainstepLookupBeingId is the canonical home-record
+  // beingId, so it doubles as the inbox lookup key.
+  const inboxByBeing = await getInboxSummary(nodeId);
   // Per-being placement lives on the parent node (where the being is
   // listed): metadata.position.beings.<embodiment>, metadata.models.beings.<...>.
   let parentMetadata = null;
@@ -818,7 +821,14 @@ async function buildBeings(nodeId, entries) {
   );
   return entries.map((entry, i) => {
     const def = getEmbodiment(entry.embodiment);
-    const inb = inboxByEmbodiment[entry.embodiment] || {
+    // Inbox lookup key is the receiving being's id (not the role name).
+    // Falls back to an empty summary when the entry has no resolved being
+    // yet (e.g. an extension registered a being-home that hasn't been
+    // lazily instantiated).
+    const inboxKey = entry._chainstepLookupBeingId
+      ? String(entry._chainstepLookupBeingId)
+      : null;
+    const inb = (inboxKey && inboxByBeing[inboxKey]) || {
       total: 0, unconsumed: 0, recent: [], activeFrom: null, pendingFrom: [], queueDepth: 0,
     };
     // Strip internal lookup hints from the wire entry — they're only

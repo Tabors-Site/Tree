@@ -22,7 +22,6 @@ import {
 } from "./classify.js";
 import { runRespond } from "./respond.js";
 
-import { setChatContext } from "../../seed/llm/chatTracker.js";
 import {
   executeGraph,
   buildExecutionGraph,
@@ -102,7 +101,7 @@ export { updatePronounState, getLastRouting, getLastRoutingRing, clearLastRoutin
 // tree position. Pre-typed-worker this fired code-plan directly; that
 // mode is gone — the Ruler picks the right typed Worker (typically
 // Refine for "fix" items, Build for "add" items, etc.).
-async function runPendingPlan(pending, triggerMessage, visitorId, {
+async function runPendingPlan(pending, triggerMessage, aiSessionKey, {
   socket, username, beingId, signal, sessionId,
   rootId, rootChatId, slot, onToolLoopCheckpoint,
 }) {
@@ -136,10 +135,10 @@ async function runPendingPlan(pending, triggerMessage, visitorId, {
     try {
       const { runRulerTurn } = await import("./ruling.js");
       itemResult = await runRulerTurn({
-        visitorId,
+        aiSessionKey,
         message: itemMessage,
         username, beingId, rootId,
-        currentNodeId: getCurrentNodeId(visitorId) || rootId,
+        currentNodeId: getCurrentNodeId(beingId) || rootId,
         signal, slot, socket,
         sessionId, rootChatId, rt: null,
         readOnly: false, onToolLoopCheckpoint,
@@ -155,18 +154,16 @@ async function runPendingPlan(pending, triggerMessage, visitorId, {
     appliedLines.push(`${i + 1}. ✓ ${item}`);
   }
 
-  // Restore context to the root chat record so the upstream finalize
-  // (in runOrchestration) writes the final answer on the trigger chat.
-  if (rootChatId && sessionId) {
-    setChatContext(visitorId, sessionId, rootChatId);
-  }
+  // chatId restoration to the root chat happens via processMessage's
+  // ctx now; nothing to do here. The upstream finalize uses the chatId
+  // passed into runOrchestration directly.
 
   const summary = appliedLines.length === items.length
     ? `Applied all ${items.length} planned fixes:\n${appliedLines.join("\n")}`
     : `Applied ${appliedLines.length}/${items.length} planned fixes:\n${appliedLines.join("\n")}`;
 
   emitStatus(socket, "done", "");
-  if (summary) pushMemory(visitorId, triggerMessage, summary);
+  if (summary) pushMemory(aiSessionKey, triggerMessage, summary);
 
   return {
     success: true,
@@ -187,7 +184,7 @@ async function runPendingPlan(pending, triggerMessage, visitorId, {
 // non-extension messages. The AI has all tools at its position.
 
 export async function orchestrateTreeRequest({
-  visitorId,
+  aiSessionKey,
   message,
   socket,
   username,
@@ -206,21 +203,21 @@ export async function orchestrateTreeRequest({
 }) {
   if (signal?.aborted) return null;
 
-  const rootId = rootIdParam ?? getRootId(visitorId);
+  const rootId = rootIdParam ?? getRootId(beingId);
 
   // Create the OrchestratorRuntime EARLY — before pending-plan expand,
   // misroute intercept, or classification — so every code path that
   // writes chain-step Chat records can use the same rt.chainIndex as
   // the single source of truth. runPendingPlan, runSteppedMode,
   // runBranchSwarm, the classifier step tracker — all of them read rt
-  // from getActiveRequest(visitorId).rt.
+  // from getActiveRequest(aiSessionKey).rt.
   const rt = new OrchestratorRuntime({
     rootId,
     beingId,
     username,
     // Pass-through: we're attaching to the user's live orchestrator
     // chain, so the runtime uses the same session key as the chat.
-    aiSessionKey: visitorId,
+    aiSessionKey: aiSessionKey,
     sessionType: "tree-chat",
     description: message,
     modeKeyForLlm: "tree:librarian",
@@ -233,16 +230,15 @@ export async function orchestrateTreeRequest({
   // redispatch on the same socket if they detect a correction. Cleared in
   // a finally below so we never leak state across requests. Includes rt
   // so downstream helpers can read/increment the shared chain counter.
-  setActiveRequest(visitorId, {
+  setActiveRequest(aiSessionKey, {
     socket, username, beingId, signal, sessionId, rootId,
     rootChatId, slot, sourceType, sourceId, onToolLoopCheckpoint,
     rt,
   });
 
-  // Ensure AI contribution context is set so MCP tool calls get chatId/sessionId
-  if (rootChatId) {
-    setChatContext(visitorId, sessionId, rootChatId);
-  }
+  // chatId / sessionId travel through processMessage's ctx; nothing to
+  // stash in a side-channel here. Downstream callers receive rootChatId
+  // explicitly via the runtime / pmCtx pattern.
 
   // The legacy resumeAtRuler intercept lived here. With the Ruler
   // now alive on every turn at a Ruler scope, "continue", "keep going",
@@ -276,20 +272,20 @@ export async function orchestrateTreeRequest({
   // affirmative input clears the stashed plan — the user moved on and
   // shouldn't get their unrelated message silently expanded.
   if (!forceMode && message) {
-    const pending = getPendingPlan(visitorId);
+    const pending = getPendingPlan(aiSessionKey);
     if (pending) {
       if (isAffirmative(message)) {
         log.info("Tree Orchestrator",
           `▶️  Expanding pending plan: ${pending.items.length} items (mode=${pending.mode || "?"})`,
         );
-        clearPendingPlan(visitorId);
-        return runPendingPlan(pending, message, visitorId, {
+        clearPendingPlan(aiSessionKey);
+        return runPendingPlan(pending, message, aiSessionKey, {
           socket, username, beingId, signal, sessionId,
           rootId, rootChatId, slot, onToolLoopCheckpoint,
         });
       } else {
         // User said something else — they moved on. Drop the stash.
-        clearPendingPlan(visitorId);
+        clearPendingPlan(aiSessionKey);
       }
     }
   }
@@ -310,7 +306,7 @@ export async function orchestrateTreeRequest({
       const misroute = getExtension("misroute");
       if (misroute?.exports?.checkForCorrectionReroute) {
         const reroute = await misroute.exports.checkForCorrectionReroute({
-          message, visitorId, beingId, rootId,
+          message, aiSessionKey, beingId, rootId,
         });
         if (reroute) {
           log.info("Tree Orchestrator",
@@ -345,7 +341,7 @@ export async function orchestrateTreeRequest({
   // ────────────────────────────────────────────────────────
 
   if (forceQueryOnly) {
-    return runModeAndReturn(visitorId, "tree:converse", message, {
+    return runModeAndReturn(aiSessionKey, "tree:converse", message, {
       socket, username, beingId, rootId, signal, slot,
       readOnly: true, clearHistory: true, onToolLoopCheckpoint, modesUsed,
       // Thread the live runtime so downstream steppedMode can open chain
@@ -366,19 +362,19 @@ export async function orchestrateTreeRequest({
   const CONTINUE_WORDS = /^(ok|okay|yes|yeah|yep|y|go|do it|go ahead|sure|continue|proceed|next|keep going|and|then)\s*[.!?]?$/i;
   if (CONTINUE_WORDS.test(message.trim())) {
     const { getCurrentMode } = await import("../../seed/llm/conversation.js");
-    const currentMode = getCurrentMode(visitorId);
+    const currentMode = getCurrentMode(aiSessionKey);
     if (currentMode && currentMode !== "tree:converse" && currentMode !== "tree:fallback") {
       log.verbose("Tree Orchestrator", `  Continuation in ${currentMode}: "${message}"`);
       // Don't switchMode. Stay in current mode, just process.
       modesUsed.push(currentMode);
       emitStatus(socket, "intent", "");
-      const result = await processMessage(visitorId, message, {
+      const result = await processMessage(aiSessionKey, message, {
         username, beingId, rootId, signal, slot, onToolLoopCheckpoint,
         ...buildSocketBridge(socket, signal),
       });
       emitStatus(socket, "done", "");
       const answer = result?.content || result?.answer || null;
-      if (answer) pushMemory(visitorId, message, answer);
+      if (answer) pushMemory(aiSessionKey, message, answer);
       return { success: true, answer, modeKey: currentMode, modesUsed, rootId };
     }
   }
@@ -389,7 +385,7 @@ export async function orchestrateTreeRequest({
   // This is the common case for follow-up messages in a conversation.
   // ────────────────────────────────────────────────────────
 
-  const currentNodeId = getCurrentNodeId(visitorId) || rootId;
+  const currentNodeId = getCurrentNodeId(beingId) || rootId;
   let classification;
   let treeSummary = null;
   let classifyStart = new Date();
@@ -528,7 +524,7 @@ export async function orchestrateTreeRequest({
         classification = await classify({
           message,
           beingId,
-          conversationMemory: formatMemoryContext(visitorId),
+          conversationMemory: formatMemoryContext(aiSessionKey),
           treeSummary,
           signal,
           slot,
@@ -542,11 +538,11 @@ export async function orchestrateTreeRequest({
           );
         }
         log.error("Tree Orchestrator", " Classification failed:", err.message);
-        classification = await localClassify(message, departed ? rootId : (getCurrentNodeId(visitorId) || rootId), rootId, beingId);
+        classification = await localClassify(message, departed ? rootId : (getCurrentNodeId(beingId) || rootId), rootId, beingId);
       }
     } else {
       // Default: local classification. Zero LLM calls.
-      classification = await localClassify(message, departed ? rootId : (getCurrentNodeId(visitorId) || rootId), rootId, beingId);
+      classification = await localClassify(message, departed ? rootId : (getCurrentNodeId(beingId) || rootId), rootId, beingId);
     }
   }
   const classifyEnd = new Date();
@@ -650,7 +646,7 @@ export async function orchestrateTreeRequest({
 
     if (!skipRespond) {
       const response = await runRespond({
-        visitorId,
+        aiSessionKey,
         socket,
         signal,
         username,
@@ -698,7 +694,7 @@ export async function orchestrateTreeRequest({
 
   if (behavioral === "be") {
     return runBeMode(message, {
-      visitorId, socket, username, beingId, rootId,
+      aiSessionKey, socket, username, beingId, rootId,
       signal, slot, sessionId, onToolLoopCheckpoint,
       currentNodeId, modesUsed,
     });
@@ -793,7 +789,7 @@ export async function orchestrateTreeRequest({
               extName: causal.effect,
             });
             log.verbose("Grammar", `Graph: ${describeGraph(causalGraph)}`);
-            return executeGraph(causalGraph, message, visitorId, {
+            return executeGraph(causalGraph, message, aiSessionKey, {
               socket, username, beingId, rootId, signal, slot,
               currentNodeId: effectMatch.targetNodeId,
               onToolLoopCheckpoint, modesUsed,
@@ -810,7 +806,7 @@ export async function orchestrateTreeRequest({
           steps: allMatches.map(m => makeDispatch(m.mode, m.extName, m.targetNodeId, { tense: "present" })),
           source: "multi-extension",
         };
-        return executeGraph(chainGraph, message, visitorId, { socket, username, beingId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootChatId, rt, skipRespond });
+        return executeGraph(chainGraph, message, aiSessionKey, { socket, username, beingId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootChatId, rt, skipRespond });
       }
     } catch (err) {
       log.debug("Tree Orchestrator", `Chain check failed: ${err.message}`);
@@ -830,14 +826,14 @@ export async function orchestrateTreeRequest({
     //   null/undefined   - proceed to normal suffix routing
     let forcedMode = null;
     if (ext?.exports?.handleMessage) {
-      if (classification.targetNodeId) setCurrentNodeId(visitorId, classification.targetNodeId);
+      if (classification.targetNodeId) setCurrentNodeId(beingId,classification.targetNodeId);
       try {
         const decision = await ext.exports.handleMessage(message, {
           beingId, username, rootId, targetNodeId: classification.targetNodeId,
         });
         if (decision?.answer) {
           emitStatus(socket, "done", "");
-          pushMemory(visitorId, message, decision.answer);
+          pushMemory(aiSessionKey, message, decision.answer);
           modesUsed.push(decision.mode || classification.mode);
           return { success: true, answer: decision.answer, modeKey: decision.mode || classification.mode, modesUsed, rootId, targetNodeId: classification.targetNodeId };
         }
@@ -851,10 +847,10 @@ export async function orchestrateTreeRequest({
     }
 
     // ── Step 1a: Parse pronouns (resolve "it", "that", "same") ──
-    const pronounInfo = parsePronouns(message, visitorId);
+    const pronounInfo = parsePronouns(message, aiSessionKey);
     if (pronounInfo?.resolvedNode && !classification.targetNodeId) {
       classification.targetNodeId = pronounInfo.resolvedNode;
-      setCurrentNodeId(visitorId, pronounInfo.resolvedNode);
+      setCurrentNodeId(beingId,pronounInfo.resolvedNode);
     }
 
     // ── Step 1c: Parse quantifiers (scope from one node to a set) ──
@@ -872,7 +868,7 @@ export async function orchestrateTreeRequest({
       prepInfo = await parsePreposition(message, rootId);
       if (prepInfo?.targetOverride) {
         classification.targetNodeId = prepInfo.targetOverride;
-        setCurrentNodeId(visitorId, prepInfo.targetOverride);
+        setCurrentNodeId(beingId,prepInfo.targetOverride);
       }
     } catch {}
 
@@ -907,7 +903,7 @@ export async function orchestrateTreeRequest({
         const treeSummary = await buildDeepTreeSummary(rootId);
         const llmResult = await classify({
           message, beingId,
-          conversationMemory: formatMemoryContext(visitorId),
+          conversationMemory: formatMemoryContext(aiSessionKey),
           treeSummary, signal, slot, rootId,
         });
         if (llmResult && llmResult.mode && llmResult.confidence > compositeConf) {
@@ -956,7 +952,7 @@ export async function orchestrateTreeRequest({
     });
 
     // ── Update pronoun state for next message ──
-    updatePronounState(visitorId, {
+    updatePronounState(aiSessionKey, {
       active: classification.targetNodeId || currentNodeId,
       lastNoun: noun,
       lastMode: resolvedMode,
@@ -965,7 +961,7 @@ export async function orchestrateTreeRequest({
 
     // ── Record the routing decision so misroute extension can check
     //    whether the NEXT message from this visitor is a correction. ──
-    recordRoutingDecision(visitorId, {
+    recordRoutingDecision(aiSessionKey, {
       message: message.slice(0, 500),
       extName: noun,
       mode: resolvedMode,
@@ -981,7 +977,7 @@ export async function orchestrateTreeRequest({
     });
 
     // ── Execute ──
-    return executeGraph(graph, message, visitorId, {
+    return executeGraph(graph, message, aiSessionKey, {
       socket, username, beingId, rootId, signal, slot,
       currentNodeId: classification.targetNodeId || currentNodeId,
       onToolLoopCheckpoint, modesUsed,
@@ -1023,7 +1019,7 @@ export async function orchestrateTreeRequest({
           extName: single.extName,
         });
         log.verbose("Grammar", `Graph: ${describeGraph(converseGraph)}`);
-        return executeGraph(converseGraph, message, visitorId, {
+        return executeGraph(converseGraph, message, aiSessionKey, {
           socket, username, beingId, rootId, signal, slot,
           currentNodeId: single.targetNodeId, clearHistory: true,
           onToolLoopCheckpoint, modesUsed,
@@ -1039,7 +1035,7 @@ export async function orchestrateTreeRequest({
           steps: indexMatches.map(m => makeDispatch(m.mode, m.extName, m.targetNodeId, { tense: "present" })),
           source: "converse-multi",
         };
-        return executeGraph(converseChainGraph, message, visitorId, { socket, username, beingId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootChatId, rt, skipRespond });
+        return executeGraph(converseChainGraph, message, aiSessionKey, { socket, username, beingId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootChatId, rt, skipRespond });
       }
     } catch (err) {
       log.debug("Tree Orchestrator", `Converse check failed: ${err.message}`);
@@ -1098,7 +1094,7 @@ export async function orchestrateTreeRequest({
       fallbackGraph.unknownPath.modifiers.treeCapabilities = treeCapabilities;
     }
     log.verbose("Grammar", `Graph: ${describeGraph(fallbackGraph)}`);
-    return executeGraph(fallbackGraph, message, visitorId, {
+    return executeGraph(fallbackGraph, message, aiSessionKey, {
       socket, username, beingId, rootId, signal, slot,
       currentNodeId, clearHistory: true,
       onToolLoopCheckpoint, modesUsed,
@@ -1107,7 +1103,7 @@ export async function orchestrateTreeRequest({
     });
   }
 
-  return runModeAndReturn(visitorId, "tree:converse", message, {
+  return runModeAndReturn(aiSessionKey, "tree:converse", message, {
     socket, username, beingId, rootId, signal, slot,
     currentNodeId, clearHistory: true,
     onToolLoopCheckpoint, modesUsed,

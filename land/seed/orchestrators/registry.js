@@ -9,7 +9,7 @@ import log from "../log.js";
  *
  * Usage in extension init():
  *   core.orchestrators.register("tree", {
- *     async handle({ visitorId, message, socket, beingId, sessionId, ... }) { ... },
+ *     async handle({ aiSessionKey, message, socket, beingId, sessionId, ... }) { ... },
  *     async classify({ message, treeContext, beingId }) { return { intent, confidence }; },
  *   });
  *

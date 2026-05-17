@@ -7,7 +7,7 @@
  */
 
 import log from "../log.js";
-import { logContribution } from "./contributions.js";
+import { logDid } from "./dids.js";
 import { hooks } from "../hooks.js";
 import { checkCascade } from "./cascade.js";
 import Node from "../models/node.js";
@@ -19,7 +19,7 @@ function MAX_INHERITED_NODES() { return Math.max(100, Math.min(Number(getLandCon
 
 async function editStatus({
   nodeId, status, isInherited,
-  beingId, wasAi = false, chatId = null, sessionId = null,
+  beingId, chatId = null, sessionId = null,
 }) {
   if (!nodeId || !beingId) throw new Error("nodeId and beingId are required");
   if (!status || !VALID_STATUSES.has(status)) {
@@ -49,8 +49,8 @@ async function editStatus({
 
   checkCascade(nodeId, { action: "status:change", status, beingId }).catch(() => {});
 
-  await logContribution({
-    beingId, nodeId, wasAi, chatId, sessionId,
+  await logDid({
+    beingId, nodeId, chatId, sessionId,
     action: "editStatus",
     statusEdited: status,
   });
@@ -59,7 +59,7 @@ async function editStatus({
   if (isInherited && node.children?.length > 0) {
     const maxDepth = Number(getLandConfigValue("cascadeMaxDepth")) || 50;
     let totalAffected = 0;
-    await inheritStatus(node.children, status, beingId, wasAi, chatId, sessionId, 0, maxDepth, { count: totalAffected, max: MAX_INHERITED_NODES() });
+    await inheritStatus(node.children, status, beingId, chatId, sessionId, 0, maxDepth, { count: totalAffected, max: MAX_INHERITED_NODES() });
   }
 
   return {
@@ -72,7 +72,7 @@ async function editStatus({
  * Explicit depth parameter (no arguments[] hack).
  * Capped by both depth and total node count.
  */
-async function inheritStatus(childIds, status, beingId, wasAi, chatId, sessionId, depth, maxDepth, counter) {
+async function inheritStatus(childIds, status, beingId, chatId, sessionId, depth, maxDepth, counter) {
   if (depth >= maxDepth) return;
 
   for (const childId of childIds) {
@@ -84,15 +84,15 @@ async function inheritStatus(childIds, status, beingId, wasAi, chatId, sessionId
     await Node.findByIdAndUpdate(childId, { $set: { status } });
     counter.count++;
 
-    await logContribution({
-      beingId, nodeId: childId, wasAi, chatId, sessionId,
+    await logDid({
+      beingId, nodeId: childId, chatId, sessionId,
       action: "editStatus",
       statusEdited: status,
     });
 
     const child = await Node.findById(childId).select("children").lean();
     if (child?.children?.length > 0) {
-      await inheritStatus(child.children, status, beingId, wasAi, chatId, sessionId, depth + 1, maxDepth, counter);
+      await inheritStatus(child.children, status, beingId, chatId, sessionId, depth + 1, maxDepth, counter);
     }
   }
 }

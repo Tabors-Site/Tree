@@ -181,9 +181,9 @@ export async function init(core) {
 
     try {
       const { updatePronounState } = await import("./orchestrator.js");
-      // Build visitorId from rootId + beingId (same pattern as runOrchestration)
-      const visitorId = rootId ? `${rootId}:${beingId}` : `user:${beingId}`;
-      updatePronounState(visitorId, { lastMod: String(nodeId) });
+      // Build aiSessionKey from rootId + beingId (same pattern as runOrchestration)
+      const aiSessionKey = rootId ? `${rootId}:${beingId}` : `user:${beingId}`;
+      updatePronounState(aiSessionKey, { lastMod: String(nodeId) });
     } catch {}
   }, "tree-orchestrator");
 

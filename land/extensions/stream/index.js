@@ -15,8 +15,8 @@
  *
  * Per-SOCKET state: every piece of transient mid-flight state lives in
  * the register-handler closure so two clients (CLI + browser) sharing
- * the same visitorId don't cross-contaminate each other. The session
- * registry (mode, position, memory) is still shared by visitorId so
+ * the same aiSessionKey don't cross-contaminate each other. The session
+ * registry (mode, position, memory) is still shared by aiSessionKey so
  * a conversation continues across connections — only the accumulator /
  * debounce / abort / context snapshot are per-socket.
  */
@@ -35,8 +35,8 @@ const DEBOUNCE_MS = 500;
 
 export async function init(core) {
   core.websocket.registerSocketHandler("register", async ({ socket }) => {
-    const visitorId = socket.visitorId;
-    if (!visitorId) return;
+    const aiSessionKey = socket.aiSessionKey;
+    if (!aiSessionKey) return;
 
     // ── Per-socket state ──
     // Each registered socket gets its own accumulator / timer / ctx so
@@ -62,7 +62,7 @@ export async function init(core) {
         status: "will be incorporated",
         generation,
       });
-      log.debug("Stream", `Accumulated mid-flight for ${visitorId}: "${message.slice(0, 60)}"`);
+      log.debug("Stream", `Accumulated mid-flight for ${aiSessionKey}: "${message.slice(0, 60)}"`);
     };
 
     // ── Idle debounce ──
@@ -108,7 +108,7 @@ export async function init(core) {
         }
       }, DEBOUNCE_MS);
 
-      log.debug("Stream", `Debouncing for ${visitorId} (${DEBOUNCE_MS}ms): "${message.slice(0, 60)}"`);
+      log.debug("Stream", `Debouncing for ${aiSessionKey} (${DEBOUNCE_MS}ms): "${message.slice(0, 60)}"`);
       return true; // swallow, waiting for debounce window
     };
 
@@ -133,7 +133,7 @@ export async function init(core) {
       const combined = pending.map((m) => m.content).join("\n").trim();
       if (!combined) return;
 
-      log.info("Stream", `Turn ended with ${pending.length} undelivered mid-flight msg(s) for ${visitorId}; replaying as follow-up turn: "${combined.slice(0, 80)}"`);
+      log.info("Stream", `Turn ended with ${pending.length} undelivered mid-flight msg(s) for ${aiSessionKey}; replaying as follow-up turn: "${combined.slice(0, 80)}"`);
 
       if (!socket._chatHandler) return;
       if (_followUpBypass) { _followUpBypass = false; return; }
@@ -175,8 +175,8 @@ export async function init(core) {
 
       // Is there a live swarm at the anchor node? If not, skip the
       // classifier entirely — no plan-level route is meaningful.
-      const rootId = getRootId(visitorId) || null;
-      const currentNodeId = getCurrentNodeId(visitorId) || null;
+      const rootId = getRootId(socket.beingId) || null;
+      const currentNodeId = getCurrentNodeId(socket.beingId) || null;
       const active = await detectActiveSwarm({ rootId, currentNodeId });
 
       let scope;
@@ -188,17 +188,17 @@ export async function init(core) {
       }
 
       if (scope === "stop") {
-        log.info("Stream", `Mid-flight stop for ${visitorId}`);
+        log.info("Stream", `Mid-flight stop for ${aiSessionKey}`);
         triggerStop({ active, socket }).catch(() => {});
         return { abort: true };
       }
 
       if (scope === "plan" && active) {
-        log.info("Stream", `Mid-flight plan-pivot for ${visitorId}`);
+        log.info("Stream", `Mid-flight plan-pivot for ${aiSessionKey}`);
         triggerPlanPivot({
           active,
           message: combined,
-          visitorId,
+          aiSessionKey,
           socket,
           beingId: socket.beingId,
           username: socket.username,
@@ -207,7 +207,7 @@ export async function init(core) {
         return { abort: true };
       }
 
-      log.debug("Stream", `Injecting ${pending.length} message(s) for ${visitorId} (scope=${scope})`);
+      log.debug("Stream", `Injecting ${pending.length} message(s) for ${aiSessionKey} (scope=${scope})`);
       return {
         inject: `[User update while you were working: "${combined}". ` +
                 `Adjust your remaining work accordingly. ` +

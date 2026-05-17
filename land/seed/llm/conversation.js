@@ -21,7 +21,7 @@ import {
 import { mcpClients, connectToMCP, MCP_SERVER_URL } from "../ws/mcp.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { SYSTEM_OWNER } from "../protocol.js";
-import { appendToolCall, getChatContext } from "./chatTracker.js";
+import { appendToolCall } from "./chatTracker.js";
 
 import { resolveAndValidateHost, getEncryptionKey } from "./connections.js";
 
@@ -646,21 +646,28 @@ export async function userHasLlm(beingId) {
 // SESSION STATE (keyed by ai-chat session key)
 // ─────────────────────────────────────────────────────────────────────────
 //
-// The parameter/local variable name `visitorId` throughout this file is
+// The parameter/local variable name `aiSessionKey` throughout this file is
 // the ai-chat session key built by seed/llm/sessionKeys.js. We keep the
-// historical `visitorId` name because it's the JWT claim name (wire
+// historical `aiSessionKey` name because it's the JWT claim name (wire
 // contract with the MCP server), a field in the runChat/runOrchestration
 // return value (API contract with callers), and a field name in
 // sessionRegistry meta (consumed by hooks). Rename-in-place would break
-// all three. For new code, treat `visitorId` as synonymous with
+// all three. For new code, treat `aiSessionKey` as synonymous with
 // `aiSessionKey` — same string, same meaning.
 //
-// The `socket.visitorId` field (set in ws/websocket.js register handler)
+// The `socket.aiSessionKey` field (set in ws/websocket.js register handler)
 // is related but distinct: it's the transport-level fallback key used
 // when a chat arrives before payload context is established. It's a
 // real socket field, not a local variable.
 
-// Each session holds: { modeKey, bigMode, messages[], rootId, _lastActive }
+// Each session holds: { modeKey, bigMode, messages[], _lastActive }.
+//
+// Position state (rootId, currentNodeId) lives separately in
+// `beingPositions`, keyed by beingId, because under the single-context
+// being model a being has one position regardless of which socket/
+// aiSessionKey they reach from. Two sockets on the same being (web +
+// CLI) share that position. Background AI pipelines run AS a specific
+// being and write to THAT being's position, never to a human user's.
 const sessions = new Map();
 let MAX_CONVERSATION_SESSIONS = 50000; // hard cap to prevent OOM from leaked sessions
 
@@ -668,12 +675,107 @@ let MAX_CONVERSATION_SESSIONS = 50000; // hard cap to prevent OOM from leaked se
 // Chains Chat documents together. Capped at 10K entries.
 const _runChatSessions = new Map();
 
+// ─────────────────────────────────────────────────────────────────────────
+// PER-BEING POSITION STATE
+// ─────────────────────────────────────────────────────────────────────────
+//
+// Shape: beingId -> { rootId, currentNodeId, _lastActive }
+//
+// `rootId` and `currentNodeId` are both tracked because the conversation
+// pipeline needs them for different things:
+//   - rootId is "which tree the being is in" (used for tool injection,
+//     mode resolution, tree-level LLM resolution).
+//   - currentNodeId is "the specific node they're attending to" (used
+//     for ancestor walks, perspective, context).
+//
+// Cross-tree switch clears currentNodeId so an old in-tree node id
+// doesn't leak into the new tree's conversation.
+//
+// Write-through persistence: `currentNodeId` is mirrored to
+// `Being.currentPositionId` (see Being import at top of file) so the
+// being's position survives server restart and is visible to anything
+// else that queries the Being. The write is fire-and-forget — the
+// cache is the hot path; the DB write happens in the background.
+
+const beingPositions = new Map();
+let MAX_BEING_POSITIONS = 50000;
+
+function getBeingPositionRecord(beingId) {
+  if (!beingId) return null;
+  const key = String(beingId);
+  if (!beingPositions.has(key)) {
+    if (beingPositions.size >= MAX_BEING_POSITIONS) {
+      let oldestKey = null, oldestTime = Infinity;
+      for (const [id, s] of beingPositions) {
+        if ((s._lastActive || 0) < oldestTime) { oldestTime = s._lastActive || 0; oldestKey = id; }
+      }
+      if (oldestKey) beingPositions.delete(oldestKey);
+    }
+    beingPositions.set(key, {
+      rootId: null,
+      currentNodeId: null,
+      _lastActive: Date.now(),
+    });
+  }
+  const p = beingPositions.get(key);
+  p._lastActive = Date.now();
+  return p;
+}
+
+/**
+ * Lazy-load a being's persisted current position into the cache.
+ * Called from the WS handshake and other entry points so the in-memory
+ * accessors return the right value on first read after a server
+ * restart. Idempotent — does nothing if the cache is already populated
+ * for this being.
+ */
+export async function loadBeingPosition(beingId) {
+  if (!beingId) return;
+  const key = String(beingId);
+  // Skip if already loaded with a real value (don't clobber live state
+  // with a stale DB read).
+  const existing = beingPositions.get(key);
+  if (existing && (existing.rootId || existing.currentNodeId)) return;
+  try {
+    const being = await Being.findById(key).select("currentPositionId").lean();
+    const pos = being?.currentPositionId || null;
+    if (!pos) return;
+    const record = getBeingPositionRecord(key);
+    if (!record.currentNodeId) record.currentNodeId = String(pos);
+    // rootId isn't persisted on Being; the next setRootId from the WS
+    // handshake or tree navigation populates it.
+  } catch (err) {
+    log.debug("LLM", `loadBeingPosition(${String(beingId).slice(0, 8)}) failed: ${err.message}`);
+  }
+}
+
+/**
+ * Drop a being's in-memory position state. Used when a being is
+ * deliberately reset (rare). Doesn't touch the persisted
+ * Being.currentPositionId — that survives until explicitly changed.
+ */
+export function clearBeingPosition(beingId) {
+  if (!beingId) return;
+  beingPositions.delete(String(beingId));
+}
+
+// Fire-and-forget DB write to Being.currentPositionId. Cache is the
+// hot path; DB persistence is best-effort for restart durability.
+function persistBeingPosition(beingId, nodeId) {
+  if (!beingId) return;
+  Being.findByIdAndUpdate(
+    String(beingId),
+    { $set: { currentPositionId: nodeId || null } },
+  ).catch((err) => {
+    log.debug("LLM", `persistBeingPosition(${String(beingId).slice(0, 8)}) failed: ${err.message}`);
+  });
+}
 
 /**
  * Get or create session for a visitor.
  */
-function getSession(visitorId) {
-  if (!sessions.has(visitorId)) {
+function getSession(aiSessionKey) {
+  if (!sessions.has(aiSessionKey)) {
     // Hard cap: if sessions exceed limit, evict oldest before creating new
     if (sessions.size >= MAX_CONVERSATION_SESSIONS) {
       let oldestKey = null, oldestTime = Infinity;
@@ -682,15 +784,14 @@ function getSession(visitorId) {
       }
       if (oldestKey) sessions.delete(oldestKey);
     }
-    sessions.set(visitorId, {
+    sessions.set(aiSessionKey, {
       modeKey: null,
       bigMode: null,
       messages: [],
-      rootId: null,
       _lastActive: Date.now(),
     });
   }
-  const s = sessions.get(visitorId);
+  const s = sessions.get(aiSessionKey);
   s._lastActive = Date.now();
   return s;
 }
@@ -724,9 +825,10 @@ setInterval(
  * Switch to a new mode. Resets conversation but carries recent messages.
  * Returns { modeKey, alert } for the frontend.
  */
-export async function switchMode(visitorId, newModeKey, ctx) {
+export async function switchMode(aiSessionKey, newModeKey, ctx) {
   ctx = ctx || {};
-  const session = getSession(visitorId);
+  const beingId = ctx.beingId || null;
+  const session = getSession(aiSessionKey);
   const mode = getMode(newModeKey);
   if (!mode) throw new Error(`Unknown mode: ${newModeKey}`);
 
@@ -763,16 +865,16 @@ export async function switchMode(visitorId, newModeKey, ctx) {
         : [];
   }
 
-  // Build new system prompt. Pass visitorId in ctx so extension
+  // Build new system prompt. Pass aiSessionKey in ctx so extension
   // modes can resolve per-visitor side-channels (e.g. governing's
   // Ruler/Foreman wakeup carriers) from inside buildSystemPrompt.
   // The kernel doesn't read these side-channels; it just plumbs the
   // identifier through.
   const systemPrompt = await buildPromptForMode(newModeKey, {
     ...ctx,
-    visitorId,
-    rootId: session.rootId || ctx.rootId,
-    currentNodeId: ctx.currentNodeId || session.currentNodeId,
+    aiSessionKey,
+    rootId: getRootId(beingId) || ctx.rootId,
+    currentNodeId: ctx.currentNodeId || getCurrentNodeId(beingId),
     enrichedContext: session._lastEnrichedContext || null,
     isFirstTurn: !session._hasHadFirstTurn,
     editsByFile: session._editsByFile || {},
@@ -786,10 +888,10 @@ export async function switchMode(visitorId, newModeKey, ctx) {
   session.modeKey = newModeKey;
   session.bigMode = mode.bigMode;
   // Persist currentNodeId so position hold works on the next request
-  if (ctx.currentNodeId) session.currentNodeId = ctx.currentNodeId;
+  if (ctx.currentNodeId) setCurrentNodeId(beingId, ctx.currentNodeId);
 
   log.debug("LLM",
-    `🔄 Mode switch for ${visitorId}: ${oldModeKey || "none"} → ${newModeKey} (carried ${recentMessages.length} messages)`,
+    `🔄 Mode switch for ${aiSessionKey}: ${oldModeKey || "none"} → ${newModeKey} (carried ${recentMessages.length} messages)`,
   );
 
   return {
@@ -807,10 +909,10 @@ export async function switchMode(visitorId, newModeKey, ctx) {
 /**
  * Switch to a big mode's default sub-mode.
  */
-export async function switchBigMode(visitorId, bigMode, ctx) {
+export async function switchBigMode(aiSessionKey, bigMode, ctx) {
   const defaultModeKey = getDefaultMode(bigMode);
   if (!defaultModeKey) throw new Error(`No default mode for: ${bigMode}`);
-  return await switchMode(visitorId, defaultModeKey, { ...ctx, clearHistory: true });
+  return await switchMode(aiSessionKey, defaultModeKey, { ...ctx, clearHistory: true });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -821,41 +923,43 @@ export async function switchBigMode(visitorId, bigMode, ctx) {
  * Get session, ensure a mode exists, snapshot ancestor chain.
  * Returns { session, mode }.
  */
-async function ensureSession(visitorId, ctx) {
-  const session = getSession(visitorId);
+async function ensureSession(aiSessionKey, ctx) {
+  const beingId = ctx?.beingId || null;
+  const session = getSession(aiSessionKey);
 
   // Self-healing: detect rootId mismatch. If the caller says we're in a different
-  // tree than the session thinks, clear messages and re-init. This catches race
+  // tree than the being thinks, clear messages and re-init. This catches race
   // conditions where setRootId and switchMode happen out of order, and protects
   // against stale context when callers forget to clear on tree transitions.
   const incomingRootId = ctx.rootId || null;
-  if (session.rootId && incomingRootId && session.rootId !== incomingRootId) {
-    log.debug("LLM", `Root mismatch for ${visitorId}: session=${session.rootId}, ctx=${incomingRootId}. Clearing.`);
+  const knownRootId = getRootId(beingId);
+  if (knownRootId && incomingRootId && knownRootId !== incomingRootId) {
+    log.debug("LLM", `Root mismatch for ${aiSessionKey}: being=${knownRootId}, ctx=${incomingRootId}. Clearing.`);
     session.messages = [];
     session.modeKey = null;
-    session.rootId = incomingRootId;
+    setRootId(beingId, incomingRootId);
   }
 
-  // Sync rootId from context if session doesn't have one yet
-  if (!session.rootId && incomingRootId) {
-    session.rootId = incomingRootId;
+  // Sync rootId from context if being doesn't have one yet
+  if (!getRootId(beingId) && incomingRootId) {
+    setRootId(beingId, incomingRootId);
   }
 
   // Sync currentNodeId from context
   if (ctx.currentNodeId) {
-    session.currentNodeId = ctx.currentNodeId;
+    setCurrentNodeId(beingId, ctx.currentNodeId);
   }
 
   // Ensure we have a mode - default to home:default
   if (!session.modeKey) {
-    await switchMode(visitorId, "home:default", ctx);
+    await switchMode(aiSessionKey, "home:default", ctx);
   }
 
   const mode = getMode(session.modeKey);
 
   // Snapshot ancestor chain for consistent resolution within this message.
   // All resolution chains (scope, tools, mode, LLM, config) read from this snapshot.
-  const snapshotNodeId = session.currentNodeId || session.rootId || ctx.rootId;
+  const snapshotNodeId = getCurrentNodeId(beingId) || getRootId(beingId) || ctx.rootId;
   if (snapshotNodeId) {
     session._ancestorSnapshot = await snapshotAncestors(snapshotNodeId);
   }
@@ -887,10 +991,10 @@ function checkTreeCircuit(session) {
  * Returns { openai, MODEL, isCustom, resolvedConnectionId, client (MCP), clientEntry }
  * or returns a noLlm response object (has .noLlmResponse).
  */
-async function resolveLLMClient(ctx, session, visitorId) {
+async function resolveLLMClient(ctx, session, aiSessionKey) {
   // Resolve LLM client for this user (custom or default, with root override)
   // Auto-resolve per-mode LLM override from the tree's llmAssignments
-  const rootId = session.rootId || ctx.rootId;
+  const rootId = getRootId(ctx?.beingId) || ctx.rootId;
   const modeConnectionId =
     ctx.rootLlmConnectionId ||
     (rootId ? await resolveRootLlmForMode(rootId, session.modeKey) : null);
@@ -917,16 +1021,22 @@ async function resolveLLMClient(ctx, session, visitorId) {
     connectionId: resolvedConnectionId,
   } = clientEntry;
 
-  // Ensure MCP client
-  let client = mcpClients.get(visitorId);
+  // Ensure MCP client. Cache key is per-conversation:
+  //   - Being-to-being: ctx.mcpCacheKey is the Portal Address.
+  //   - Stanceless background: ctx.mcpCacheKey is the internal session
+  //     key (`ephemeral:<uuid>` / `tree-internal:<rootId>:<purpose>`).
+  //   - Legacy: aiSessionKey fallback for callers that haven't been
+  //     migrated to set ctx.mcpCacheKey.
+  const mcpCacheKey = ctx?.mcpCacheKey || aiSessionKey;
+  let client = mcpClients.get(mcpCacheKey);
   if (!client) {
     const jwt = (await import("jsonwebtoken")).default;
     const mcpJwt = jwt.sign(
-      { beingId: String(ctx.beingId), username: ctx.username, visitorId },
+      { beingId: String(ctx.beingId), username: ctx.username, aiSessionKey },
       process.env.JWT_SECRET,
       { expiresIn: "24h" },
     );
-    client = await connectToMCP(MCP_SERVER_URL, visitorId, mcpJwt);
+    client = await connectToMCP(MCP_SERVER_URL, mcpCacheKey, mcpJwt);
   }
 
   return { openai, MODEL, isCustom, resolvedConnectionId, client, clientEntry };
@@ -938,15 +1048,15 @@ async function resolveLLMClient(ctx, session, visitorId) {
  * @param {object} ctx - Request context (username, beingId, rootId, etc.)
  * @param {string} message - The user's message to add
  * @param {object} mode - The resolved mode object
- * @param {string} visitorId - Session visitor identifier (for logging)
+ * @param {string} aiSessionKey - Session visitor identifier (for logging)
  */
-async function prepareConversation(session, ctx, message, mode, visitorId) {
+async function prepareConversation(session, ctx, message, mode, aiSessionKey) {
   // Check for conversation length - loop if needed (BE mode)
   if (
     mode.maxMessagesBeforeLoop &&
     session.messages.length > mode.maxMessagesBeforeLoop
   ) {
-    log.debug("LLM", `🔁 Conversation loop for ${visitorId} in ${session.modeKey}`);
+    log.debug("LLM", `🔁 Conversation loop for ${aiSessionKey} in ${session.modeKey}`);
     const recentMessages = session.messages
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(-(CARRY_MESSAGES * 2)); // carry more on loop
@@ -954,9 +1064,9 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     const systemPrompt = await buildPromptForMode(session.modeKey, {
       username: ctx.username,
       beingId: ctx.beingId,
-      visitorId,
-      rootId: session.rootId,
-      currentNodeId: session.currentNodeId,
+      aiSessionKey,
+      rootId: getRootId(ctx.beingId),
+      currentNodeId: getCurrentNodeId(ctx.beingId),
       enrichedContext: session._lastEnrichedContext || null,
       isFirstTurn: !session._hasHadFirstTurn,
       editsByFile: session._editsByFile || {},
@@ -980,7 +1090,7 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     // checks and are designed to run per-turn.
     let enrichedContext = null;
     try {
-      const posNodeId = session.currentNodeId || session.rootId || ctx.rootId || null;
+      const posNodeId = getCurrentNodeId(ctx.beingId) || getRootId(ctx.beingId) || ctx.rootId || null;
       if (posNodeId) {
         const posNode = await Node.findById(posNodeId).lean();
         if (posNode) {
@@ -994,7 +1104,7 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
             meta,
             nodeId: posNodeId,
             beingId: ctx.beingId,
-            sessionId: visitorId,
+            sessionId: aiSessionKey,
             // Pass the current turn's user message so handlers that want
             // to gate their injection on vocabulary (e.g. channels' peer-
             // peek) can do so. Handlers that don't care just ignore it.
@@ -1011,9 +1121,9 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     const systemPrompt = await buildPromptForMode(session.modeKey, {
       username: ctx.username,
       beingId: ctx.beingId,
-      visitorId,
-      rootId: session.rootId,
-      currentNodeId: session.currentNodeId,
+      aiSessionKey,
+      rootId: getRootId(ctx.beingId),
+      currentNodeId: getCurrentNodeId(ctx.beingId),
       enrichedContext: enrichedContext || session._lastEnrichedContext || null,
       isFirstTurn: !session._hasHadFirstTurn,
       editsByFile: session._editsByFile || {},
@@ -1031,10 +1141,10 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
     // of the same chat keep the first capture — that's the one the user
     // cares about auditing.
     try {
-      const _chatCtx = getChatContext(visitorId);
-      if (_chatCtx?.chatId && !session._chatContextPersisted?.[_chatCtx.chatId]) {
+      const _chatId = ctx?.chatId || null;
+      if (_chatId && !session._chatContextPersisted?.[_chatId]) {
         session._chatContextPersisted ||= {};
-        session._chatContextPersisted[_chatCtx.chatId] = true;
+        session._chatContextPersisted[_chatId] = true;
         const _setFields = { $set: { systemPrompt } };
         if (enrichedContext && Object.keys(enrichedContext).length > 0) {
           _setFields.$set.enrichedContext = enrichedContext;
@@ -1042,7 +1152,7 @@ async function prepareConversation(session, ctx, message, mode, visitorId) {
         (async () => {
           try {
             const Chat = (await import("../models/chat.js")).default;
-            await Chat.updateOne({ _id: _chatCtx.chatId, systemPrompt: null }, _setFields);
+            await Chat.updateOne({ _id: _chatId, systemPrompt: null }, _setFields);
           } catch (err) {
             log.debug("LLM", `systemPrompt persist skipped: ${err.message}`);
           }
@@ -1247,11 +1357,11 @@ function resolveLlmConfig(ancestors, mode) {
  * Uses the per-message snapshot (zero DB queries). Falls back to ancestor cache on miss.
  * Returns { tools, blockedExtensions, restrictedExtensions }.
  */
-async function resolveToolsForPosition(session) {
+async function resolveToolsForPosition(session, beingId) {
   let treeToolConfig = null;
   let blockedExtensions = null;
   let restrictedExtensions = null;
-  const currentNodeId = session.currentNodeId || session.rootId;
+  const currentNodeId = getCurrentNodeId(beingId) || getRootId(beingId);
   if (currentNodeId) {
     try {
       // Use the per-message snapshot. Every resolution chain reads from this.
@@ -1301,7 +1411,7 @@ async function resolveToolsForPosition(session) {
  * The LLM API call with semaphore, failover, afterLLMCall hook, and failed_generation handling.
  * Returns the response object.
  */
-async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorId) {
+async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, aiSessionKey) {
   const requestParams = {
     model: MODEL,
     messages: session.messages,
@@ -1325,21 +1435,22 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorI
   // can point back to the dispatching call (summarizer → builder,
   // branch → architect, continuation → root). One lookup per LLM call;
   // skipped silently if the chat doc is unavailable.
-  const _llmChatCtx = getChatContext(visitorId) || {};
+  const _llmChatId = ctx?.chatId || null;
+  const _llmSessionId = ctx?.sessionId || null;
   let _llmParentChatId = null;
-  if (_llmChatCtx.chatId) {
+  if (_llmChatId) {
     try {
       const { default: _Chat } = await import("../models/chat.js");
-      const _chatDoc = await _Chat.findById(_llmChatCtx.chatId).select("parentChatId").lean();
+      const _chatDoc = await _Chat.findById(_llmChatId).select("parentChatId").lean();
       if (_chatDoc?.parentChatId) _llmParentChatId = String(_chatDoc.parentChatId);
     } catch {}
   }
   const llmHookData = {
     beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
     model: MODEL, messageCount: session.messages.length, hasTools: tools.length > 0,
-    messages: session.messages, nodeId: session.currentNodeId || ctx.rootId || null,
-    chatId: _llmChatCtx.chatId || null,
-    sessionId: _llmChatCtx.sessionId || null,
+    messages: session.messages, nodeId: getCurrentNodeId(ctx.beingId) || ctx.rootId || null,
+    chatId: _llmChatId,
+    sessionId: _llmSessionId,
     parentChatId: _llmParentChatId,
   };
   const llmHookResult = await hooks.run("beforeLLMCall", llmHookData);
@@ -1533,7 +1644,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorI
   // (_jsonRetryDone) prevents this branch from firing a second time.
   if (ctx._retryJsonEscape) {
     ctx._retryJsonEscape = false;
-    return await callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorId);
+    return await callLLM(openai, MODEL, session, tools, ctx, clientEntry, aiSessionKey);
   }
 
   // Validate response structure. Some LLM providers return malformed responses
@@ -1704,7 +1815,7 @@ function parseInternalResponse(raw, isCustom, MODEL, resolvedConnectionId) {
  * DB health check, callTool, afterToolCall hooks, error handling.
  * Returns { result: toolResultEntry } where toolResultEntry has { tool, args?, success, error? }.
  */
-async function executeTool(toolCall, session, ctx, client, visitorId) {
+async function executeTool(toolCall, session, ctx, client, aiSessionKey) {
   const toolName = toolCall.function.name;
   let args;
 
@@ -1738,7 +1849,7 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
   // injects for HTTP-path tool calls, so in-process and HTTP paths
   // present the same args shape to handlers.
   //   beingId       — the calling user
-  //   visitorId    — the calling visitor's session id (per-conversation
+  //   aiSessionKey    — the calling visitor's session id (per-conversation
   //                  transient registers key on this)
   //   chatId       — the calling chat's id; tools that spawn child
   //                  chainsteps (Ruler's hire-planner, etc.) thread
@@ -1748,21 +1859,38 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
   //   rootId       — tree root the call originates from
   //   nodeId       — current node position
   args.beingId = ctx.beingId;
-  if (visitorId) args.visitorId = visitorId;
-  const _chatCtx = getChatContext(visitorId) || {};
-  if (_chatCtx.chatId && !args.chatId) args.chatId = _chatCtx.chatId;
-  if (_chatCtx.sessionId && !args.sessionId) args.sessionId = _chatCtx.sessionId;
+  if (aiSessionKey) args.aiSessionKey = aiSessionKey;
+  // chatId / sessionId travel from the call site through ctx so mcp/server.js
+  // can stop doing Map lookups. The sender is the authority — we always know
+  // which chat the tool call belongs to before we make it.
+  if (ctx?.chatId && !args.chatId) args.chatId = ctx.chatId;
+  if (ctx?.sessionId && !args.sessionId) args.sessionId = ctx.sessionId;
+  // rootChatId is the user-message-level chat for this Ruler/Foreman turn.
+  // Per-turn state Maps (rulerDecisions, foremanDecisions) key on it so
+  // the orchestrator's reader can find what a tool wrote without having
+  // to know which chainstep within the turn did the writing. Falls back
+  // to chatId for paths that don't yet plumb rootChatId.
+  if (ctx?.rootChatId && !args.rootChatId) args.rootChatId = ctx.rootChatId;
+  else if (ctx?.chatId && !args.rootChatId) args.rootChatId = ctx.chatId;
+  // portalAddress is the conversation-level identifier (canonical
+  // stance::stance). Per-conversation state Maps (abortRegistry,
+  // pendingPlan, pendingSwarmPlan) key on it so all chainsteps of one
+  // Portal Address see the same in-flight state. mcpCacheKey already
+  // carries this value through ctx; fall back to aiSessionKey for
+  // stanceless background pipelines.
+  if (ctx?.mcpCacheKey && !args.portalAddress) args.portalAddress = ctx.mcpCacheKey;
+  else if (aiSessionKey && !args.portalAddress) args.portalAddress = aiSessionKey;
   if (ctx.rootId && !args.rootId) args.rootId = ctx.rootId;
   // Pinned position wins. When a turn is dispatched with an explicit
   // ctx.currentNodeId (Worker-at-Ruler-scope, sub-Ruler turn, branch
   // dispatch, etc.) tool calls land at THAT node — even if the user
-  // navigates somewhere else mid-turn and the visitor's session
-  // state shifts. Without this pin, a sub-Ruler's Worker writes into
-  // the project root the moment the user clicks elsewhere in the
-  // dashboard, because session.currentNodeId is per-visitor and
-  // shared between user-driven turns and dispatch-driven turns.
-  // Falls back to session state for unpinned turns (regular chat).
-  const _curNode = ctx.currentNodeId || session.currentNodeId || ctx.rootId || null;
+  // navigates somewhere else mid-turn and the being's position state
+  // shifts. Without this pin, a sub-Ruler's Worker writes into the
+  // project root the moment the user clicks elsewhere in the dashboard,
+  // because position is per-being and shared between user-driven turns
+  // and dispatch-driven turns.
+  // Falls back to being-position state for unpinned turns (regular chat).
+  const _curNode = ctx.currentNodeId || getCurrentNodeId(ctx.beingId) || ctx.rootId || null;
   if (_curNode && !args.nodeId) args.nodeId = _curNode;
 
   // Tool circuit breaker: if this tool has failed too many times in this session, skip it.
@@ -1783,13 +1911,14 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
   // sessionId + nodeId let forensics correlate the tool call to its
   // originating chat step and the tree node whose signalInbox
   // should be snapshotted for signal diffing.
-  const _toolChatCtx = getChatContext(visitorId) || {};
+  const _toolChatId = ctx?.chatId || null;
+  const _toolSessionId = ctx?.sessionId || null;
   const hookData = {
     toolName, args,
     beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
-    chatId: _toolChatCtx.chatId || null,
-    sessionId: _toolChatCtx.sessionId || null,
-    nodeId: session.currentNodeId || ctx.rootId || null,
+    chatId: _toolChatId,
+    sessionId: _toolSessionId,
+    nodeId: getCurrentNodeId(ctx.beingId) || ctx.rootId || null,
   };
   const hookResult = await hooks.run("beforeToolCall", hookData);
   if (hookResult.cancelled) {
@@ -1876,9 +2005,9 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
     hooks.run("afterToolCall", {
       toolName: resolvedToolName, args, result: resultText, success: true,
       beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
-      chatId: _toolChatCtx.chatId || null,
-      sessionId: _toolChatCtx.sessionId || null,
-      nodeId: session.currentNodeId || ctx.rootId || null,
+      chatId: _toolChatId,
+      sessionId: _toolSessionId,
+      nodeId: getCurrentNodeId(ctx.beingId) || ctx.rootId || null,
     }).catch(() => {});
 
     // Return the full result text too so the chat record can store it
@@ -1909,9 +2038,9 @@ async function executeTool(toolCall, session, ctx, client, visitorId) {
     hooks.run("afterToolCall", {
       toolName: resolvedToolName, args, error: err.message, success: false,
       beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
-      chatId: _toolChatCtx.chatId || null,
-      sessionId: _toolChatCtx.sessionId || null,
-      nodeId: session.currentNodeId || ctx.rootId || null,
+      chatId: _toolChatId,
+      sessionId: _toolSessionId,
+      nodeId: getCurrentNodeId(ctx.beingId) || ctx.rootId || null,
     }).catch(() => {});
 
     return {
@@ -1955,7 +2084,7 @@ async function finalizeResponse(session, openai, MODEL, response, isInternal, is
   // Internal tracking (for Chat finalization, never sent to client)
   const _internal = {
     modeKey: session.modeKey,
-    rootId: session.rootId,
+    rootId: getRootId(ctx.beingId),
     isCustom,
     model: MODEL,
     connectionId: resolvedConnectionId || null,
@@ -1976,26 +2105,26 @@ async function finalizeResponse(session, openai, MODEL, response, isInternal, is
 /**
  * Process a chat message within the current mode.
  */
-export async function processMessage(visitorId, message, ctx) {
+export async function processMessage(aiSessionKey, message, ctx) {
   const isInternal = ctx?.meta?.internal === true;
 
   // Phase 1: Session + ancestor snapshot
-  const { session, mode } = await ensureSession(visitorId, ctx);
+  const { session, mode } = await ensureSession(aiSessionKey, ctx);
 
   // Phase 2: Circuit breaker check
   const tripped = checkTreeCircuit(session);
   if (tripped) return tripped;
 
   // Phase 3: Resolve LLM client + MCP connection
-  const llmResult = await resolveLLMClient(ctx, session, visitorId);
+  const llmResult = await resolveLLMClient(ctx, session, aiSessionKey);
   if (llmResult.noLlmResponse) return llmResult.noLlmResponse;
   const { openai, MODEL, isCustom, resolvedConnectionId, client, clientEntry } = llmResult;
 
   // Phase 4: Prepare conversation (trim, init, add user message)
-  await prepareConversation(session, ctx, message, mode, visitorId);
+  await prepareConversation(session, ctx, message, mode, aiSessionKey);
 
   // Phase 5: Resolve tools for current position
-  let { tools } = await resolveToolsForPosition(session);
+  let { tools } = await resolveToolsForPosition(session, ctx.beingId);
 
   // Query constraint: when readOnly is set, only tools registered with readOnlyHint
   // are available. Write tools are filtered before the mode fires. The AI cannot
@@ -2036,7 +2165,7 @@ export async function processMessage(visitorId, message, ctx) {
     iterations++;
 
     // LLM call with semaphore, failover, hooks
-    response = await callLLM(openai, MODEL, session, tools, ctx, clientEntry, visitorId);
+    response = await callLLM(openai, MODEL, session, tools, ctx, clientEntry, aiSessionKey);
 
     const choice = response.choices?.[0];
     if (!choice) break;
@@ -2081,7 +2210,7 @@ export async function processMessage(visitorId, message, ctx) {
     for (const toolCall of assistantMessage.tool_calls) {
       if (ctx.signal?.aborted) throw new Error("Request cancelled");
       const _toolStart = Date.now();
-      const toolResult = await executeTool(toolCall, session, ctx, client, visitorId);
+      const toolResult = await executeTool(toolCall, session, ctx, client, aiSessionKey);
       const _toolMs = Date.now() - _toolStart;
       toolResults.push(toolResult);
       toolCallsThisStep++;
@@ -2091,9 +2220,9 @@ export async function processMessage(visitorId, message, ctx) {
       // Fire-and-forget: the user already got the tool result via the
       // tool_result message, this is just audit/history logging.
       try {
-        const chatCtx = getChatContext(visitorId);
-        if (chatCtx?.chatId) {
-          appendToolCall(chatCtx.chatId, {
+        const _appendChatId = ctx?.chatId || null;
+        if (_appendChatId) {
+          appendToolCall(_appendChatId, {
             tool: toolResult.tool,
             args: toolResult.args,
             result: toolResult.result,
@@ -2178,7 +2307,7 @@ export async function processMessage(visitorId, message, ctx) {
   if (continueReason === "tool-cap" || continueReason === "place-done") {
     const _internal = {
       modeKey: session.modeKey,
-      rootId: session.rootId,
+      rootId: getRootId(ctx.beingId),
       isCustom,
       model: MODEL,
       connectionId: resolvedConnectionId || null,
@@ -2202,8 +2331,8 @@ export async function processMessage(visitorId, message, ctx) {
 // CONTEXT INJECTION (frontend sync events)
 // ─────────────────────────────────────────────────────────────────────────
 
-export function injectContext(visitorId, content) {
-  const session = getSession(visitorId);
+export function injectContext(aiSessionKey, content) {
+  const session = getSession(aiSessionKey);
   if (session.messages.length > 0) {
     // Cap injected context to prevent an extension from consuming the entire context window
     const MAX_INJECT_SIZE = 32000;
@@ -2220,50 +2349,75 @@ export function injectContext(visitorId, content) {
 // SESSION ACCESSORS
 // ─────────────────────────────────────────────────────────────────────────
 
-export function setRootId(visitorId, rootId) {
-  const session = getSession(visitorId);
-  // Cross-tree leak protection. The session map is keyed by visitorId
-  // only, so a single visitor switching between trees would otherwise
-  // carry forward the previous tree's currentNodeId — pinBranchPosition
-  // and other dispatch paths set currentNodeId during a swarm, and
-  // those values reference nodes inside the previous tree. After a
-  // tree switch, getCurrentNodeId would return the stale node id
-  // (because it prefers currentNodeId over rootId), and enrichContext
-  // would walk from there, loading the OLD tree's plan / files /
-  // contracts into the new conversation. Symptom: a fresh project
-  // chat sees another project's data and "rebuilds" against it.
+/**
+ * Position accessors — per-being, not per-transport.
+ *
+ * Under the single-context being model, a being is at exactly one
+ * position at any moment. All sockets for the same being share that
+ * state. Background AI pipelines run AS a specific being (Ruler,
+ * Foreman, ...) and write to THAT being's position, never to the
+ * invoking human's.
+ *
+ * Signature: these take a beingId. Callers that historically passed
+ * an aiSessionKey need to pass the being whose position is being
+ * read/written (usually the same being whose conversation is in
+ * flight).
+ *
+ * Persistence: writes flow through to Being.currentPositionId in the
+ * background so position survives restart. Reads come from the
+ * in-memory cache; call loadBeingPosition(beingId) at WS handshake
+ * to warm the cache from the persisted value.
+ */
+export function setRootId(beingId, rootId) {
+  if (!beingId) return;
+  const p = getBeingPositionRecord(beingId);
+  // Cross-tree leak protection. Position is per-being, so a being
+  // switching between trees would otherwise carry forward the previous
+  // tree's currentNodeId — pinBranchPosition and other dispatch paths
+  // set currentNodeId during a swarm, and those values reference
+  // nodes inside the previous tree. After a tree switch,
+  // getCurrentNodeId would return the stale node id (because it
+  // prefers currentNodeId over rootId), and enrichContext would walk
+  // from there, loading the OLD tree's plan / files / contracts into
+  // the new conversation. Symptom: a fresh project chat sees another
+  // project's data and "rebuilds" against it.
   //
   // On a genuine rootId change, clear currentNodeId so the next
   // getCurrentNodeId falls back cleanly to the new rootId. Same-rootId
   // calls leave currentNodeId untouched (typical mid-conversation
   // re-stamp).
-  if (session.rootId && rootId && String(session.rootId) !== String(rootId)) {
-    session.currentNodeId = null;
+  if (p.rootId && rootId && String(p.rootId) !== String(rootId)) {
+    p.currentNodeId = null;
+    persistBeingPosition(beingId, null);
   }
-  session.rootId = rootId;
+  p.rootId = rootId;
 }
 
-export function getRootId(visitorId) {
-  return getSession(visitorId).rootId;
+export function getRootId(beingId) {
+  if (!beingId) return null;
+  return getBeingPositionRecord(beingId).rootId;
 }
 
-export function setCurrentNodeId(visitorId, nodeId) {
-  const session = getSession(visitorId);
-  session.currentNodeId = nodeId;
+export function setCurrentNodeId(beingId, nodeId) {
+  if (!beingId) return;
+  const p = getBeingPositionRecord(beingId);
+  p.currentNodeId = nodeId;
+  persistBeingPosition(beingId, nodeId);
 }
 
-export function getCurrentNodeId(visitorId) {
-  const session = getSession(visitorId);
-  return session.currentNodeId || session.rootId || null;
+export function getCurrentNodeId(beingId) {
+  if (!beingId) return null;
+  const p = getBeingPositionRecord(beingId);
+  return p.currentNodeId || p.rootId || null;
 }
 
-export function getCurrentMode(visitorId) {
-  return getSession(visitorId).modeKey;
+export function getCurrentMode(aiSessionKey) {
+  return getSession(aiSessionKey).modeKey;
 }
 
 
-export function clearSession(visitorId) {
-  sessions.delete(visitorId);
+export function clearSession(aiSessionKey) {
+  sessions.delete(aiSessionKey);
 }
 
 /**
@@ -2281,8 +2435,8 @@ export function clearSession(visitorId) {
  * metadata) is left alone — that's the authoritative state and persists
  * across reruns.
  */
-export function resetVisitorSession(visitorId, reason = "aborted") {
-  const session = sessions.get(visitorId);
+export function resetVisitorSession(aiSessionKey, reason = "aborted") {
+  const session = sessions.get(aiSessionKey);
   if (session) {
     // Drop the accumulated messages entirely. The system prompt gets
     // rebuilt fresh on the next prepareConversation call using the
@@ -2292,30 +2446,27 @@ export function resetVisitorSession(visitorId, reason = "aborted") {
     session._toolFailures = {};
     delete session._nodeLlmConfig;
   }
-  // Fire-and-forget: clear chat context so next message starts from a
-  // clean slate. clearChatContext is in chatTracker but we already have
-  // it imported via other call sites.
-  import("./chatTracker.js").then(({ clearChatContext }) => {
-    try { clearChatContext(visitorId); } catch {}
-  }).catch(() => {});
+  // No chat context to clear — chatId now travels through processMessage's
+  // ctx, not via a global Map. The next message constructs fresh ctx
+  // with its own chatId (or null for legacy paths).
 
-  log.info("LLM", `🧹 Reset session for ${visitorId} (reason: ${reason})`);
+  log.info("LLM", `🧹 Reset session for ${aiSessionKey} (reason: ${reason})`);
 }
 
 /**
  * Reset conversation messages but keep mode and rootId intact.
  * Rebuilds system prompt for the current mode.
  */
-export async function resetConversation(visitorId, ctx) {
-  const session = getSession(visitorId);
+export async function resetConversation(aiSessionKey, ctx) {
+  const session = getSession(aiSessionKey);
   if (!session.modeKey) return;
 
   const systemPrompt = await buildPromptForMode(session.modeKey, {
     username: ctx.username,
     beingId: ctx.beingId,
-    visitorId,
-    rootId: session.rootId,
-    currentNodeId: session.currentNodeId,
+    aiSessionKey,
+    rootId: getRootId(ctx.beingId),
+    currentNodeId: getCurrentNodeId(ctx.beingId),
     enrichedContext: session._lastEnrichedContext || null,
     isFirstTurn: !session._hasHadFirstTurn,
     editsByFile: session._editsByFile || {},
@@ -2323,7 +2474,7 @@ export async function resetConversation(visitorId, ctx) {
 
   session.messages = [{ role: "system", content: systemPrompt }];
   log.debug("LLM",
-    `🔄 Reset conversation for ${visitorId} (mode: ${session.modeKey}, root: ${session.rootId})`,
+    `🔄 Reset conversation for ${aiSessionKey} (mode: ${session.modeKey}, root: ${getRootId(ctx.beingId)})`,
   );
 }
 
@@ -2401,7 +2552,7 @@ export async function runChat({
   // renderer's nesting logic only nests children that are in the
   // same session group as their parent. Without this, ephemeral
   // spawns appear as orphan top-level chats. The in-memory
-  // `sessions` Map is keyed by visitorId (NOT sessionId), so the
+  // `sessions` Map is keyed by aiSessionKey (NOT sessionId), so the
   // spawned role still gets its own context window — what's shared
   // is purely the chat-record-level sessionId for UI grouping.
   parentSessionId = null,
@@ -2424,9 +2575,10 @@ export async function runChat({
 
   const jwt = (await import("jsonwebtoken")).default;
   const { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } = await import("../ws/mcp.js");
-  const { startChat, finalizeChat, setChatContext } = await import("./chatTracker.js");
+  const { startChat, finalizeChat } = await import("./chatTracker.js");
   const { setSessionAbort, clearSessionAbort } = await import("../ws/sessionRegistry.js");
   const { resolveInternalAiSessionKey } = await import("./sessionKeys.js");
+  const { computePortalAddressForChat } = await import("./portalAddress.js");
 
   const JWT_SECRET = process.env.JWT_SECRET;
   if (!JWT_SECRET) throw new Error("JWT_SECRET not configured");
@@ -2436,11 +2588,29 @@ export async function runChat({
     aiSessionKey, scope, purpose, extra, beingId, rootId,
   });
 
+  // Eagerly compute the Portal Address for being-to-being conversations
+  // so it can serve as the MCP client cache key. When beingOut is set
+  // and both stances resolve, the same Portal Address keys the MCP
+  // client across every chainstep in this conversation. When it can't
+  // be resolved (no beingOut, or addressee stance unknown), we fall
+  // back to aiSessionKey — same behavior as before, just transparent
+  // about which kind of key is in use.
+  const _eagerPortalAddress = beingOut
+    ? await computePortalAddressForChat({
+        askerBeingId:    beingId,
+        askerPosition:   getCurrentNodeId(beingId) || rootId || null,
+        addresseeBeingId: beingOut,
+      })
+    : null;
+  const mcpCacheKey = _eagerPortalAddress || resolvedKey;
+
   // Internal alias — the rest of this function keeps the historical name
-  // `visitorId` for the ai-chat session key, since every downstream helper
-  // (setRootId, setCurrentNodeId, MCP cache, abort registry, chatTracker)
-  // already treats it as the session identifier.
-  const visitorId = resolvedKey;
+  // `aiSessionKey` for the ai-chat session key, since every downstream helper
+  // (MCP cache, abort registry, chatTracker) already treats it as the
+  // session identifier. Reassigns the destructured param rather than
+  // re-declaring it — `const aiSessionKey` here would collide with the
+  // function's own parameter of the same name.
+  aiSessionKey = resolvedKey;
 
   let sessionId;
   if (parentSessionId) {
@@ -2448,14 +2618,14 @@ export async function runChat({
     // chat sits in the same session group for UI rendering.
     sessionId = parentSessionId;
   } else if (persistSession) {
-    if (!_runChatSessions.has(visitorId)) {
+    if (!_runChatSessions.has(aiSessionKey)) {
       if (_runChatSessions.size >= MAX_CONVERSATION_SESSIONS) {
         const first = _runChatSessions.keys().next().value;
         _runChatSessions.delete(first);
       }
-      _runChatSessions.set(visitorId, crypto.randomUUID());
+      _runChatSessions.set(aiSessionKey, crypto.randomUUID());
     }
-    sessionId = _runChatSessions.get(visitorId);
+    sessionId = _runChatSessions.get(aiSessionKey);
   } else {
     sessionId = crypto.randomUUID();
   }
@@ -2466,32 +2636,33 @@ export async function runChat({
 
   // Register abort so external callers can cancel via sessionRegistry
   // Skip if caller provided a signal (the caller already registered their own abort)
-  if (abort) setSessionAbort(visitorId, abort);
+  if (abort) setSessionAbort(aiSessionKey, abort);
 
-  // 1. Connect MCP (reuse if already connected)
-  // Skip if caller provided an aiSessionKey (they already connected MCP for this session)
-  if (!aiSessionKey && !getMCPClient(visitorId)) {
+  // 1. Connect MCP (reuse if already connected). Cache keyed by
+  // mcpCacheKey — Portal Address for being-to-being, internal session
+  // key otherwise. Skip if a client already exists under this key.
+  if (!getMCPClient(mcpCacheKey)) {
     const internalJwt = jwt.sign(
-      { beingId: beingId.toString(), username: username || "unknown", visitorId },
+      { beingId: beingId.toString(), username: username || "unknown", aiSessionKey },
       JWT_SECRET,
       { expiresIn: "24h" }
     );
     try {
-      await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
+      await connectToMCP(MCP_SERVER_URL, mcpCacheKey, internalJwt);
     } catch (err) {
       log.warn("RunChat", `MCP connect failed: ${err.message}`);
     }
   }
 
   // 2. Set root/node if provided
-  if (rootId) setRootId(visitorId, rootId);
-  if (nodeId) setCurrentNodeId(visitorId, nodeId);
+  if (rootId) setRootId(beingId, rootId);
+  if (nodeId) setCurrentNodeId(beingId, nodeId);
 
   // 3. Switch mode only if different
-  const currentMode = getCurrentMode(visitorId);
+  const currentMode = getCurrentMode(aiSessionKey);
   if (currentMode !== mode) {
     try {
-      await switchMode(visitorId, mode, { username, beingId, currentNodeId: getCurrentNodeId(visitorId) });
+      await switchMode(aiSessionKey, mode, { username, beingId, currentNodeId: getCurrentNodeId(beingId) });
     } catch (err) {
       log.warn("RunChat", `Mode switch to ${mode} failed: ${err.message}`);
     }
@@ -2500,7 +2671,7 @@ export async function runChat({
   // 4. Create Chat record
   let chat;
   try {
-    const clientInfo = await getClientForUser(beingId, visitorId) || {};
+    const clientInfo = await getClientForUser(beingId, aiSessionKey) || {};
     // runChat callers can provide a `treeContext` (room-agent delivery
     // passes { targetNodeId, roomNodeId, roomSubId } so the chat shows
     // up on the tree's chats page AND carries the room link). Default
@@ -2509,6 +2680,11 @@ export async function runChat({
     chat = await startChat({
       beingIn: beingId,                 // asker
       beingOut,                          // responder (passes through from runChat caller)
+      // Asker stance position: the asker's CURRENT navigated position
+      // (per Being.currentPositionId / beingPositions cache), with
+      // rootId as fallback. The chat's Portal Address is computed
+      // from this stance plus the addressee's stance.
+      askerPosition: getCurrentNodeId(beingId) || rootId || null,
       sessionId,
       message,
       modeKey: mode,
@@ -2524,19 +2700,26 @@ export async function runChat({
       // queries downstream.
       ...(parentChatId ? { parentChatId } : {}),
     });
-    if (chat) setChatContext(visitorId, sessionId, chat._id);
   } catch (err) {
     log.warn("RunChat", `Chat create failed: ${err.message}`);
   }
 
-  // 5. Run processMessage with abort signal
+  // 5. Run processMessage with abort signal. chatId / sessionId travel
+  // through ctx so the tool loop knows which chat the tool calls belong
+  // to without needing a per-aiSessionKey side-channel lookup.
+  // mcpCacheKey lets resolveLLMClient find the right MCP client without
+  // having to recompute Portal Address.
   let result;
   try {
-    result = await processMessage(visitorId, message, {
+    result = await processMessage(aiSessionKey, message, {
       username,
       beingId,
       rootId,
-      currentNodeId: getCurrentNodeId(visitorId),
+      currentNodeId: getCurrentNodeId(beingId),
+      chatId: chat?._id || null,
+      rootChatId: chat?._id || null,   // runChat creates one root chat; chatId === rootChatId
+      sessionId: sessionId || null,
+      mcpCacheKey,
       signal: abortSignal,
       llmPriority,
       onToolResults,
@@ -2548,7 +2731,7 @@ export async function runChat({
       const stopped = abortSignal.aborted;
       try { await finalizeChat({ chatId: chat._id, content: stopped ? null : `Error: ${err.message}`, stopped }); } catch {}
     }
-    if (abort) clearSessionAbort(visitorId);
+    if (abort) clearSessionAbort(aiSessionKey);
     throw err;
   }
 
@@ -2576,13 +2759,13 @@ export async function runChat({
 
   // 8. Clear abort (keep session + MCP alive for next message in same mode)
   // Only clear if we created our own abort controller
-  if (abort) clearSessionAbort(visitorId);
+  if (abort) clearSessionAbort(aiSessionKey);
 
   return {
     answer,
     chatId: chat?._id || null,
     modeKey: mode,
-    visitorId,
+    aiSessionKey,
   };
 }
 
@@ -2592,7 +2775,7 @@ export async function runChat({
 // This is the canonical orchestration primitive. Every user-facing entry
 // point (HTTP routes, websocket, gateway extensions) calls this. It handles:
 //   - Transport session lifecycle (sessionRegistry create/end)
-//   - Conversation visitorId building (zone+rootId+beingId pattern)
+//   - Conversation aiSessionKey building (zone+rootId+beingId pattern)
 //   - MCP connection
 //   - Chat record create/finalize
 //   - Request enqueue serialization
@@ -2640,7 +2823,7 @@ export async function runOrchestration({
   // Lazy imports (avoid circular deps and keep boot light)
   const jwtMod = (await import("jsonwebtoken")).default;
   const { closeMCPClient, getMCPClient } = await import("../ws/mcp.js");
-  const { startChat, finalizeChat, setChatContext, clearChatContext } = await import("./chatTracker.js");
+  const { startChat, finalizeChat } = await import("./chatTracker.js");
   const {
     createSession,
     endSession,
@@ -2689,15 +2872,15 @@ export async function runOrchestration({
   // where anchor is rootId (tree) or "home"/"land", and suffix is
   // `handle` (explicit override) or `device` (default, per-reach split).
   //
-  // `visitorId` is the historical variable name for the ai-chat session
+  // `aiSessionKey` is the historical variable name for the ai-chat session
   // key throughout this file and its collaborators (MCP cache, session
   // state, chatTracker, sessionRegistry). See the block comment near
   // the `sessions` Map declaration for why the name is preserved.
   //
   // Priority: providedAiSessionKey (pass-through) > minted from pieces.
-  let visitorId = providedAiSessionKey || null;
-  if (!visitorId) {
-    visitorId = buildUserAiSessionKey({ beingId, zone, rootId, device, handle });
+  let aiSessionKey = providedAiSessionKey || null;
+  if (!aiSessionKey) {
+    aiSessionKey = buildUserAiSessionKey({ beingId, zone, rootId, device, handle });
   }
 
   // ── Build sessionRegistry session for transport tracking ──────────────
@@ -2708,11 +2891,11 @@ export async function runOrchestration({
   let weCreatedSession = false;
 
   if (!sessionId) {
-    // scopeKey drives idle transport-session reuse. visitorId already
+    // scopeKey drives idle transport-session reuse. aiSessionKey already
     // encodes (user, zone, rootId, device/handle) so it's the natural
     // scope. Two different devices at the same tree get different
-    // visitorIds → different scopeKeys → no crossover.
-    const scopeKey = visitorId;
+    // aiSessionKeys → different scopeKeys → no crossover.
+    const scopeKey = aiSessionKey;
 
     const sessionType =
       zone === "tree"
@@ -2733,7 +2916,7 @@ export async function runOrchestration({
       type: sessionType,
       scopeKey,
       description,
-      meta: { rootId, visitorId, isPublicQuery, handle, device, zone },
+      meta: { rootId, aiSessionKey, isPublicQuery, handle, device, zone },
     });
     sessionId = created.sessionId;
     weCreatedSession = true;
@@ -2757,7 +2940,7 @@ export async function runOrchestration({
 
   const timer = setTimeout(() => {
     timedOut = true;
-    log.error("Orchestration", `Zone ${zone} timed out after ${TIMEOUT_MS / 1000}s: ${visitorId}`);
+    log.error("Orchestration", `Zone ${zone} timed out after ${TIMEOUT_MS / 1000}s: ${aiSessionKey}`);
     abort.abort();
   }, TIMEOUT_MS);
 
@@ -2766,8 +2949,8 @@ export async function runOrchestration({
   // where the Chat is tagged with the actual current mode), otherwise fall
   // back to a zone+flags default.
   try {
-    const clientInfo = clientOverride || (await getClientForUser(beingId, visitorId)) || {};
-    const existingMode = getCurrentMode(visitorId);
+    const clientInfo = clientOverride || (await getClientForUser(beingId, aiSessionKey)) || {};
+    const existingMode = getCurrentMode(aiSessionKey);
     const defaultModeKey = zone === "tree"
       ? `tree:${orchestrateFlags.skipRespond ? "place" : orchestrateFlags.forceQueryOnly ? "query" : "chat"}`
       : `${zone}:default`;
@@ -2775,6 +2958,7 @@ export async function runOrchestration({
     const resolvedSource = isPublicQuery ? "public-query" : (chatSource || "api");
     chat = await startChat({
       beingIn: beingId,
+      askerPosition: getCurrentNodeId(beingId) || currentNodeId || rootId || null,
       sessionId,
       message: message.slice(0, 5000),
       source: resolvedSource,
@@ -2787,7 +2971,6 @@ export async function runOrchestration({
       ...(rootId ? { treeContext: { targetNodeId: rootId } } : {}),
     });
     if (chat) {
-      setChatContext(visitorId, sessionId, chat._id);
       if (typeof onChatCreated === "function") {
         try { onChatCreated(chat); } catch (e) { log.warn("Orchestration", `onChatCreated failed: ${e.message}`); }
       }
@@ -2802,7 +2985,6 @@ export async function runOrchestration({
     if (cleanedUp) return;
     cleanedUp = true;
     clearTimeout(timer);
-    clearChatContext(visitorId);
     clearSessionAbort(sessionId);
     if (weCreatedSession) {
       try { endSession(sessionId); } catch {}
@@ -2817,32 +2999,32 @@ export async function runOrchestration({
     await enqueue(sessionId, async () => {
       try {
         // Connect MCP for this visitor (skip if already connected)
-        if (!getMCPClient(visitorId)) {
+        if (!getMCPClient(aiSessionKey)) {
           const internalJwt = jwtMod.sign(
-            { beingId: beingId.toString(), username: username || "unknown", visitorId },
+            { beingId: beingId.toString(), username: username || "unknown", aiSessionKey },
             JWT_SECRET,
             { expiresIn: "1h" },
           );
           try {
             // connectToMCP and MCP_SERVER_URL imported at top of file
-            await connectToMCP(MCP_SERVER_URL, visitorId, internalJwt);
+            await connectToMCP(MCP_SERVER_URL, aiSessionKey, internalJwt);
           } catch (err) {
             log.warn("Orchestration", `MCP connect failed: ${err.message}`);
           }
         }
 
-        // Set rootId/currentNodeId in conversation session
-        if (rootId) setRootId(visitorId, rootId);
+        // Set rootId/currentNodeId in the being's position state
+        if (rootId) setRootId(beingId, rootId);
         if (currentNodeId) {
-          const previousNodeId = getCurrentNodeId(visitorId);
+          const previousNodeId = getCurrentNodeId(beingId);
           const backToRoot = String(currentNodeId) === String(rootId)
             && previousNodeId && String(previousNodeId) !== String(rootId);
           if (backToRoot) {
             // User navigated back to tree root. Fresh conversation.
-            clearSession(visitorId);
-            if (rootId) setRootId(visitorId, rootId);
+            clearSession(aiSessionKey);
+            if (rootId) setRootId(beingId, rootId);
           }
-          setCurrentNodeId(visitorId, currentNodeId);
+          setCurrentNodeId(beingId, currentNodeId);
         }
 
         // Dispatch: orchestrator if registered for the zone, else processMessage
@@ -2850,7 +3032,7 @@ export async function runOrchestration({
 
         if (orch) {
           result = await orch.handle({
-            visitorId,
+            aiSessionKey,
             message: message.trim(),
             socket: socket || nullSocket,
             username,
@@ -2869,21 +3051,29 @@ export async function runOrchestration({
         } else {
           // No orchestrator: single-mode fallback (home, land currently)
           const defaultMode = `${zone}:default`;
-          const currentMode = getCurrentMode(visitorId);
+          const currentMode = getCurrentMode(aiSessionKey);
           if (currentMode !== defaultMode) {
             try {
-              await switchMode(visitorId, defaultMode, {
-                username, beingId, currentNodeId: getCurrentNodeId(visitorId),
+              await switchMode(aiSessionKey, defaultMode, {
+                username, beingId, currentNodeId: getCurrentNodeId(beingId),
               });
             } catch (err) {
               log.warn("Orchestration", `Mode switch to ${defaultMode} failed: ${err.message}`);
             }
           }
-          result = await processMessage(visitorId, message, {
+          result = await processMessage(aiSessionKey, message, {
             username,
             beingId,
             rootId,
-            currentNodeId: getCurrentNodeId(visitorId),
+            currentNodeId: getCurrentNodeId(beingId),
+            chatId: chat?._id || null,
+            rootChatId: chat?._id || null,
+            sessionId: sessionId || null,
+            // runOrchestration is zone-keyed (tree/home/land) — the
+            // addressee being isn't always known here, so the MCP cache
+            // key falls back to aiSessionKey. runChat's being-to-being
+            // path computes Portal Address eagerly and uses that.
+            mcpCacheKey: aiSessionKey,
             signal: abort.signal,
             llmPriority,
             onToolResults,
@@ -2904,7 +3094,7 @@ export async function runOrchestration({
 
   // ── Timeout takes precedence ──────────────────────────────────────────
   if (timedOut) {
-    closeMCPClient(visitorId);
+    closeMCPClient(aiSessionKey);
     if (chat) {
       finalizeChat({
         chatId: chat._id,
@@ -2914,7 +3104,7 @@ export async function runOrchestration({
     }
     // Reset in-memory session so the next message starts clean. Tree
     // state persists; only the LLM conversation history gets wiped.
-    resetVisitorSession(visitorId, "timeout");
+    resetVisitorSession(aiSessionKey, "timeout");
     cleanup();
     throw new ProtocolError(500, ERR.TIMEOUT, "Request timed out");
   }
@@ -2931,7 +3121,7 @@ export async function runOrchestration({
     }
     // Reset session state on any execution error (aborted or otherwise).
     // Tree state survives; conversation history does not.
-    resetVisitorSession(visitorId, abort.signal.aborted ? "aborted" : "error");
+    resetVisitorSession(aiSessionKey, abort.signal.aborted ? "aborted" : "error");
     cleanup();
     throw executionError;
   }
@@ -2991,7 +3181,7 @@ export async function runOrchestration({
   // signal), wipe the in-memory session so the next message starts
   // clean. Tree state survives; only conversation history is cleared.
   if (stopped) {
-    resetVisitorSession(visitorId, "aborted");
+    resetVisitorSession(aiSessionKey, "aborted");
   }
 
   cleanup();
@@ -3006,7 +3196,7 @@ export async function runOrchestration({
     modeKey,
     reason,
     chatId: chat?._id || null,
-    visitorId,
+    aiSessionKey,
     sessionId,
     stopped,
   };

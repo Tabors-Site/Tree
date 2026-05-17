@@ -82,7 +82,7 @@ export async function handleTalk(socket, msg, ack) {
     }
 
     // Behavior comes from the role template registered in
-    // embodiments/registry.js. Identity (homePositionId, llmSlot,
+    // embodiments/registry.js. Identity (homePositionId, llmDefault,
     // history) lives on the Being instance.
     const embodimentName = toBeing.role || qualifier;
     const embodiment = getEmbodiment(embodimentName);
@@ -132,8 +132,12 @@ export async function handleTalk(socket, msg, ack) {
       );
     }
 
-    // Append to inbox atomically; the embodiment will read it on summoning.
-    const { messageId, sentAt } = await appendToInbox(inboxNodeId, embodimentName, message);
+    // Append to inbox atomically; the receiving being's summoning will
+    // read it. Inbox is keyed by the receiver's beingId, not by role
+    // type, so multiple beings of the same role at one position get
+    // their own delivery queues.
+    const recipientBeingId = String(toBeing._id);
+    const { messageId, sentAt } = await appendToInbox(inboxNodeId, recipientBeingId, message);
 
     const summonCtx = {
       nodeId:     inboxNodeId,
@@ -152,9 +156,12 @@ export async function handleTalk(socket, msg, ack) {
       }
       await markInboxConsumed(
         inboxNodeId,
-        embodimentName,
+        recipientBeingId,
         [messageId],
-        responseEntry?.correlation || null,
+        {
+          responseId: responseEntry?.correlation || null,
+          chatId:     responseEntry?.chatId || null,
+        },
       );
       if (!responseEntry) {
         return ackOk(ack, id, { status: "accepted", messageId });
@@ -173,9 +180,12 @@ export async function handleTalk(socket, msg, ack) {
           try {
             await markInboxConsumed(
               inboxNodeId,
-              embodimentName,
+              recipientBeingId,
               [messageId],
-              responseEntry?.correlation || null,
+              {
+                responseId: responseEntry?.correlation || null,
+                chatId:     responseEntry?.chatId || null,
+              },
             );
           } catch (err) {
             log.warn("Portal", `markInboxConsumed failed: ${err.message}`);
@@ -202,7 +212,7 @@ export async function handleTalk(socket, msg, ack) {
     }
 
     // none: ACK accepted; nothing else to do.
-    await markInboxConsumed(inboxNodeId, embodimentName, [messageId], null);
+    await markInboxConsumed(inboxNodeId, recipientBeingId, [messageId]);
     return ackOk(ack, id, { status: "accepted", messageId });
   } catch (err) {
     if (isPortalError(err)) {
@@ -255,6 +265,9 @@ async function runSummoning(embodiment, ctx) {
   }
   // The embodiment returned a response. Build a response envelope, write
   // it to the sender's inbox-equivalent, and return it for sync delivery.
+  // `chatId` (when the embodiment routed through runChat) propagates so
+  // the caller's markInboxConsumed can stamp the consumed inbox entry
+  // with a pointer to the Chat record this message became.
   const responseCorrelation = randomUUID();
   return {
     from:        `${ctx.resolved.embodiment ? `${pathOfResolved(ctx.resolved)}@${ctx.embodiment}` : ctx.embodiment}`,
@@ -263,6 +276,7 @@ async function runSummoning(embodiment, ctx) {
     correlation: responseCorrelation,
     inReplyTo:   ctx.message.correlation,
     sentAt:      new Date().toISOString(),
+    chatId:      result.chatId || null,
   };
 }
 

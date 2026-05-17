@@ -1472,7 +1472,6 @@ export default function getWorkspaceTools(core) {
             beingId: artifact.beingId, // preserve original authorship so the edit is accepted
             lineStart: lineStart0,
             lineEnd: lineEnd0,
-            wasAi: true,
           });
 
           scheduleSync(project._id);

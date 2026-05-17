@@ -24,7 +24,7 @@
 import log from "../log.js";
 import Node from "../models/node.js";
 import Being from "../models/being.js";
-import Contribution from "../models/contribution.js";
+import Did from "../models/did.js";
 import { hooks } from "../hooks.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { invalidateNode } from "./ancestorCache.js";
@@ -65,7 +65,7 @@ export async function isTreeAlive(rootId) {
  * Returns a score where > 1.0 means the tree should trip.
  *
  * Error rate reads from BOTH sources:
- *   - Contribution log: extensionData.error on this tree's nodes
+ *   - Did log: extensionData.error on this tree's nodes
  *   - .flow partitions: CASCADE.FAILED and CASCADE.REJECTED with source in this tree
  *
  * @param {string} rootId
@@ -113,12 +113,12 @@ export async function checkTreeHealth(rootId) {
   const checkInterval = parseInt(getLandConfigValue("circuitCheckInterval") || "3600000", 10);
   const since = new Date(Date.now() - checkInterval);
 
-  // Source A: Contribution log failures scoped to this tree.
+  // Source A: Did log failures scoped to this tree.
   // Use aggregation with $lookup instead of loading all node IDs into memory.
   // For large trees, $in with 100K IDs is prohibitively slow.
   let contributionErrors = 0;
   try {
-    const errResult = await Contribution.aggregate([
+    const errResult = await Did.aggregate([
       { $match: { date: { $gte: since }, "extensionData.error": { $exists: true } } },
       { $lookup: { from: "nodes", localField: "nodeId", foreignField: "_id", as: "_node" } },
       { $unwind: "$_node" },

@@ -185,7 +185,6 @@ router.put(
         artifactId,
         content: content ?? "",
         beingId,
-        wasAi: false,
       });
 
       return sendOk(res, {

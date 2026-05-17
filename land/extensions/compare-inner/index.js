@@ -138,7 +138,6 @@ async function _compare(rootId, runChat) {
     content: answer.trim(),
     beingId: ownerId,
     nodeId: String(compareNode._id),
-    wasAi: true,
   });
 
   // Update last comparison time. Re-fetch for mergeExtMeta (needs full doc, not ID).

@@ -3,15 +3,15 @@ import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
 
 // Services wired from init() via setServices()
 let Node = null;
-let Contribution = null;
-let logContribution = async () => {};
+let Did = null;
+let logDid = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
 let _metadata = null;
 
 export function setServices({ models, contributions, metadata }) {
   Node = models.Node;
-  Contribution = models.Contribution;
-  logContribution = contributions.logContribution;
+  _Did = models.Did;
+  logDid = contributions.logDid;
   if (metadata) _metadata = metadata;
 }
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }
@@ -223,7 +223,7 @@ export const createTransaction = async ({
     status: allResolved ? "accepted" : "pending",
   });
   if (nodeA) {
-    await logContribution({
+    await logDid({
       beingId,
       nodeId: nodeA._id,
       action: "transaction",
@@ -243,7 +243,7 @@ export const createTransaction = async ({
   }
 
   if (nodeB) {
-    await logContribution({
+    await logDid({
       beingId,
       nodeId: nodeB._id,
       action: "transaction",
@@ -415,7 +415,7 @@ export async function executeTransaction(transaction, beingId) {
 
   // 5) execution_started contributions
   if (nodeA) {
-    await logContribution({
+    await logDid({
       beingId,
       nodeId: nodeA._id,
       action: "transaction",
@@ -434,7 +434,7 @@ export async function executeTransaction(transaction, beingId) {
   }
 
   if (nodeB) {
-    await logContribution({
+    await logDid({
       beingId,
       nodeId: nodeB._id,
       action: "transaction",
@@ -498,7 +498,7 @@ export async function executeTransaction(transaction, beingId) {
     await transaction.save();
 
     if (nodeA) {
-      await logContribution({
+      await logDid({
         beingId,
         nodeId: nodeA._id,
         action: "transaction",
@@ -520,7 +520,7 @@ export async function executeTransaction(transaction, beingId) {
     }
 
     if (nodeB) {
-      await logContribution({
+      await logDid({
         beingId,
         nodeId: nodeB._id,
         action: "transaction",
@@ -546,7 +546,7 @@ export async function executeTransaction(transaction, beingId) {
 
   // 7) SUCCESS contributions
   if (nodeA) {
-    await logContribution({
+    await logDid({
       beingId,
       nodeId: nodeA._id,
       action: "transaction",
@@ -567,7 +567,7 @@ export async function executeTransaction(transaction, beingId) {
   }
 
   if (nodeB) {
-    await logContribution({
+    await logDid({
       beingId,
       nodeId: nodeB._id,
       action: "transaction",
@@ -698,7 +698,7 @@ export async function applyApproval(transactionId, beingId) {
       approvedAt: new Date(),
     });
 
-    await logContribution({
+    await logDid({
       beingId,
       nodeId: group.side === "A" ? sideA.nodeId : sideB.nodeId,
       action: "transaction",
@@ -788,7 +788,7 @@ export async function denyTransaction(transactionId, beingId) {
 
     // ✅ Log denial for BOTH sides (if NODE)
     if (tx.sideA.kind === "NODE") {
-      await logContribution({
+      await logDid({
         beingId,
         nodeId: tx.sideA.nodeId,
         action: "transaction",
@@ -807,7 +807,7 @@ export async function denyTransaction(transactionId, beingId) {
     }
 
     if (tx.sideB.kind === "NODE") {
-      await logContribution({
+      await logDid({
         beingId,
         nodeId: tx.sideB.nodeId,
         action: "transaction",
@@ -850,7 +850,7 @@ async function logResolution(transaction, outcome, actorUserId) {
     outcome === "accepted" ? "accepted_by_policy" : "rejected_by_policy";
 
   if (sideA.kind === "NODE") {
-    await logContribution({
+    await logDid({
       beingId: actorUserId,
       nodeId: sideA.nodeId,
       action: "transaction",
@@ -869,7 +869,7 @@ async function logResolution(transaction, outcome, actorUserId) {
   }
 
   if (sideB.kind === "NODE") {
-    await logContribution({
+    await logDid({
       beingId: actorUserId,
       nodeId: sideB.nodeId,
       action: "transaction",
@@ -922,7 +922,7 @@ export async function getTransactionWithContributions(transactionId) {
     throw new Error("Transaction not found");
   }
 
-  const contributions = await Contribution.find({
+  const contributions = await Did.find({
     tradeId: transactionId, // rename later if you migrate
   })
     .sort({ date: 1 })

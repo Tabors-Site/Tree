@@ -681,9 +681,7 @@ const renderChain = (chain, tokenQS, token, capturesByChatId, childrenByParent, 
       const nodeRef = nId
         ? `<a href="/api/v1/node/${nId}${tokenQS}">${esc(nName)}</a>`
         : `<span style="opacity:0.5">--</span>`;
-      const aiBadge = c.wasAi
-        ? `<span class="mini-badge mini-ai">AI</span>`
-        : "";
+      const aiBadge = "";
       const cEnergyBadge =
         c.energyUsed > 0
           ? `<span class="mini-badge mini-energy">E${c.energyUsed}</span>`
@@ -805,7 +803,7 @@ const renderChain = (chain, tokenQS, token, capturesByChatId, childrenByParent, 
 
         <div class="note-content">
           <div class="chat-message chat-user">
-            <span class="msg-label">${chat.beingId?._id ? `<a href="/api/v1/user/${chat.beingId._id}${tokenQS}" class="msg-user-link">${esc(chat.beingId.username || "User")}</a>` : esc("User")}</span>
+            <span class="msg-label">${chat.beingIn?._id ? `<a href="/api/v1/user/${chat.beingIn._id}${tokenQS}" class="msg-user-link">${esc(chat.beingIn.username || "User")}</a>` : esc("User")}</span>
             <div class="msg-text msg-clamp">${esc(chat.startMessage?.content || "")}</div>
             ${(chat.startMessage?.content || "").length > 300 ? `<button class="expand-btn" onclick="toggleExpand(this)">Show more</button>` : ""}
           </div>

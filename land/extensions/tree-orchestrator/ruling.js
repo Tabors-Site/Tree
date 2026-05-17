@@ -34,7 +34,7 @@ async function governingExports() {
 // The chain-nested architecture: when a Ruler tool handler decides to
 // invoke another role (Planner, Foreman, etc.), it spawns that role
 // as a chainstep child of the Ruler's chat. The spawned role runs in
-// its OWN session (separate visitorId via runChat's
+// its OWN session (separate aiSessionKey via runChat's
 // resolveInternalAiSessionKey), with its OWN context window, OWN
 // modeKey, OWN system prompt. The Ruler's session is untouched.
 //
@@ -796,7 +796,7 @@ async function ensureRulerScope({ scopeNodeId, beingId, message, dispatchOrigin 
  * Rulers, hire-planner auto-dispatches the cycle.
  */
 export async function runRulerTurn({
-  visitorId,
+  aiSessionKey,
   message,
   username,
   beingId,
@@ -836,8 +836,8 @@ export async function runRulerTurn({
   // Cleared at the end of the turn so a subsequent turn (user message
   // arriving while a hook-wakeup turn is in flight) doesn't inherit
   // stale wakeup state.
-  if (wakeup && visitorId) {
-    setRulerWakeup(visitorId, wakeup);
+  if (wakeup && aiSessionKey) {
+    setRulerWakeup(aiSessionKey, wakeup);
   }
 
   const governing = await ensureRulerScope({
@@ -845,7 +845,7 @@ export async function runRulerTurn({
   });
   if (!governing) {
     log.warn("Ruling", "governing extension unavailable; cannot run Ruler turn");
-    if (visitorId) clearRulerWakeup(visitorId);
+    if (aiSessionKey) clearRulerWakeup(aiSessionKey);
     return { success: false, answer: "Internal error: governing unavailable.", modeKey: null };
   }
 
@@ -861,13 +861,15 @@ export async function runRulerTurn({
     }
   }
 
-  // Clear any stale decision for this visitor before running the turn.
-  governing.clearRulerDecision?.(visitorId);
+  // Clear any stale decision for this Ruler turn before running it.
+  // The Ruler decision register keys on rootChatId — the user-message-
+  // level chat that anchors this whole turn.
+  governing.clearRulerDecision?.(rootChatId);
 
   // Switch to the Ruler mode. The Ruler's buildSystemPrompt reads its
   // own snapshot via state/rulerSnapshot; we don't need to assemble
   // anything special here.
-  await switchMode(visitorId, "tree:governing-ruler", {
+  await switchMode(aiSessionKey, "tree:governing-ruler", {
     username, beingId, rootId,
     currentNodeId: scopeNodeId,
     clearHistory: false,
@@ -881,7 +883,7 @@ export async function runRulerTurn({
   // to the decision register, the Ruler exits.
   const rulerStartedAt = Date.now();
   const rulerResult = await runSteppedMode(
-    visitorId, "tree:governing-ruler", message,
+    aiSessionKey, "tree:governing-ruler", message,
     {
       username, beingId, rootId, signal, slot,
       readOnly: false, onToolLoopCheckpoint, socket,
@@ -919,12 +921,12 @@ export async function runRulerTurn({
   // point — tools record what was chosen for logging/debugging, but
   // dispatch doesn't read from it. We log the recorded decision (if
   // any) and return the Ruler's synthesis.
-  const decision = governing.getRulerDecision?.(visitorId) || null;
-  governing.clearRulerDecision?.(visitorId);
+  const decision = governing.getRulerDecision?.(rootChatId) || null;
+  governing.clearRulerDecision?.(rootChatId);
   // Clear the wakeup side-channel so the next turn doesn't inherit
   // stale state. The Ruler mode's buildSystemPrompt has already read
   // it by this point.
-  if (visitorId) clearRulerWakeup(visitorId);
+  if (aiSessionKey) clearRulerWakeup(aiSessionKey);
 
   if (decision) {
     log.info("Ruling",
@@ -982,7 +984,7 @@ export async function runRulerTurn({
  * decision register tells us what to apply.
  */
 export async function runForemanTurn({
-  visitorId,
+  aiSessionKey,
   message,
   username,
   beingId,
@@ -1009,17 +1011,17 @@ export async function runForemanTurn({
     return { success: false, answer: "Internal error: governing unavailable.", modeKey: null };
   }
 
-  governing.clearForemanDecision?.(visitorId);
+  governing.clearForemanDecision?.(rootChatId);
 
   // Foreman's buildSystemPrompt reads ctx.foremanWakeup. switchMode
   // doesn't let us pass arbitrary ctx fields directly, so we attach
   // the wakeup to the session via a lightweight side-channel: a
-  // module-level Map keyed by visitorId, read inside the mode's
+  // module-level Map keyed by aiSessionKey, read inside the mode's
   // buildSystemPrompt via getForemanWakeup. This keeps the wakeup
   // synchronous-with-the-turn without polluting other ctx surfaces.
-  setForemanWakeup(visitorId, wakeup);
+  setForemanWakeup(aiSessionKey, wakeup);
 
-  await switchMode(visitorId, "tree:governing-foreman", {
+  await switchMode(aiSessionKey, "tree:governing-foreman", {
     username, beingId, rootId,
     currentNodeId: scopeNodeId,
     clearHistory: false,
@@ -1031,7 +1033,7 @@ export async function runForemanTurn({
 
   const foremanStartedAt = Date.now();
   const foremanResult = await runSteppedMode(
-    visitorId, "tree:governing-foreman", message || "(no user message)",
+    aiSessionKey, "tree:governing-foreman", message || "(no user message)",
     {
       username, beingId, rootId, signal, slot,
       readOnly: false, onToolLoopCheckpoint, socket,
@@ -1051,10 +1053,10 @@ export async function runForemanTurn({
     `🔧 Foreman turn done at ${String(scopeNodeId).slice(0, 8)} ` +
     `in ${foremanDurationMs}ms (depth=${depth})`);
 
-  clearForemanWakeup(visitorId);
+  clearForemanWakeup(aiSessionKey);
 
-  const decision = governing.getForemanDecision?.(visitorId) || null;
-  governing.clearForemanDecision?.(visitorId);
+  const decision = governing.getForemanDecision?.(rootChatId) || null;
+  governing.clearForemanDecision?.(rootChatId);
 
   if (!decision) {
     const fallback = foremanResult?._allContent || foremanResult?.answer || foremanResult?.content || "";
@@ -1140,7 +1142,7 @@ export async function runForemanTurn({
 
   const dispatched = await dispatchForemanDecision({
     decision, scopeNodeId,
-    visitorId, username, beingId, rootId,
+    aiSessionKey, username, beingId, rootId,
     signal, slot, socket, sessionId, rootChatId, rt,
     readOnly, onToolLoopCheckpoint,
   });
@@ -1156,7 +1158,7 @@ export async function runForemanTurn({
 
 async function dispatchForemanDecision({
   decision, scopeNodeId,
-  visitorId, username, beingId, rootId,
+  aiSessionKey, username, beingId, rootId,
   signal, slot, socket, sessionId, rootChatId, rt,
   readOnly, onToolLoopCheckpoint,
 }) {
@@ -1231,7 +1233,7 @@ async function dispatchForemanDecision({
             rulerNodeId: scopeNodeId,
             branchName: decision.branchName,
             reason: decision.reason,
-            visitorId, username, beingId, rootId,
+            aiSessionKey, username, beingId, rootId,
             signal, slot, socket, sessionId, rootChatId, rt,
             onToolLoopCheckpoint,
           });
@@ -1254,7 +1256,7 @@ async function dispatchForemanDecision({
       const escalationMessage =
         `[Foreman escalation: ${decision.signal}]\n\n${decision.payload || ""}`;
       return await runRulerTurn({
-        visitorId,
+        aiSessionKey,
         message: escalationMessage,
         username, beingId, rootId, currentNodeId: scopeNodeId,
         signal, slot, socket, sessionId, rootChatId, rt,
@@ -1287,7 +1289,7 @@ async function dispatchForemanDecision({
         try {
           const { abortUnderScopes } = await import("./abortRegistry.js");
           const aborted = abortUnderScopes({
-            visitorId,
+            aiSessionKey,
             scopeNodeIds: cancelledScopeIds,
             reason: `cancel-subtree: ${decision.reason || ""}`.slice(0, 200),
           });
@@ -1328,7 +1330,7 @@ async function dispatchForemanDecision({
           try {
             const { abortUnderScopes } = await import("./abortRegistry.js");
             const aborted = abortUnderScopes({
-              visitorId,
+              aiSessionKey,
               scopeNodeIds: childOnlyIds,
               reason: `propagate-cancel-to-children: ${decision.reason || ""}`.slice(0, 200),
             });
@@ -1384,7 +1386,7 @@ async function dispatchForemanDecision({
       try {
         const { dispatchResumePlan } = await import("./dispatch.js");
         const summary = await dispatchResumePlan(scopeNodeId, {
-          visitorId, beingId, username, rootId,
+          aiSessionKey, beingId, username, rootId,
           sessionId, signal, slot, socket, onToolLoopCheckpoint, rt,
           rootChatId,
           // No domain hint — sub-Rulers' own modes are stamped on
@@ -1395,7 +1397,7 @@ async function dispatchForemanDecision({
           // No resumable work — wake Foreman to decide whether to
           // freeze the record (completed) or escalate.
           return await runForemanTurn({
-            visitorId,
+            aiSessionKey,
             message: "Resume found no pending work; decide whether to freeze (completed) or escalate.",
             username, beingId, rootId, currentNodeId: scopeNodeId,
             signal, slot, socket, sessionId, rootChatId, rt,
@@ -1751,19 +1753,19 @@ async function applyResumeFrame({ recordNodeId, reason }) {
 
 const foremanWakeups = new Map();
 
-export function setForemanWakeup(visitorId, wakeup) {
-  if (!visitorId || !wakeup) return;
-  foremanWakeups.set(String(visitorId), wakeup);
+export function setForemanWakeup(aiSessionKey, wakeup) {
+  if (!aiSessionKey || !wakeup) return;
+  foremanWakeups.set(String(aiSessionKey), wakeup);
 }
 
-export function getForemanWakeup(visitorId) {
-  if (!visitorId) return null;
-  return foremanWakeups.get(String(visitorId)) || null;
+export function getForemanWakeup(aiSessionKey) {
+  if (!aiSessionKey) return null;
+  return foremanWakeups.get(String(aiSessionKey)) || null;
 }
 
-export function clearForemanWakeup(visitorId) {
-  if (!visitorId) return;
-  foremanWakeups.delete(String(visitorId));
+export function clearForemanWakeup(aiSessionKey) {
+  if (!aiSessionKey) return;
+  foremanWakeups.delete(String(aiSessionKey));
 }
 
 // Ruler wakeup side-channel. Parallel to the Foreman pattern above.
@@ -1778,17 +1780,17 @@ export function clearForemanWakeup(visitorId) {
 
 const rulerWakeups = new Map();
 
-export function setRulerWakeup(visitorId, wakeup) {
-  if (!visitorId || !wakeup) return;
-  rulerWakeups.set(String(visitorId), wakeup);
+export function setRulerWakeup(aiSessionKey, wakeup) {
+  if (!aiSessionKey || !wakeup) return;
+  rulerWakeups.set(String(aiSessionKey), wakeup);
 }
 
-export function getRulerWakeup(visitorId) {
-  if (!visitorId) return null;
-  return rulerWakeups.get(String(visitorId)) || null;
+export function getRulerWakeup(aiSessionKey) {
+  if (!aiSessionKey) return null;
+  return rulerWakeups.get(String(aiSessionKey)) || null;
 }
 
-export function clearRulerWakeup(visitorId) {
-  if (!visitorId) return;
-  rulerWakeups.delete(String(visitorId));
+export function clearRulerWakeup(aiSessionKey) {
+  if (!aiSessionKey) return;
+  rulerWakeups.delete(String(aiSessionKey));
 }

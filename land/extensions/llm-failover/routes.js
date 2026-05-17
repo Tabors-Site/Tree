@@ -45,8 +45,7 @@ router.post("/user/:beingId/llm-failover", authenticate, async (req, res) => {
     stack.push(connectionId);
 
     llmMeta.failoverStack = stack;
-    setBeingMeta(user, "llm", llmMeta);
-    await user.save();
+    await setBeingMeta(user, "llm", llmMeta);
 
     sendOk(res, { stack, added: conn.name || connectionId });
   } catch (err) {
@@ -66,8 +65,7 @@ router.delete("/user/:beingId/llm-failover/:connectionId", authenticate, async (
     stack.splice(idx, 1);
 
     llmMeta.failoverStack = stack;
-    setBeingMeta(user, "llm", llmMeta);
-    await user.save();
+    await setBeingMeta(user, "llm", llmMeta);
 
     sendOk(res, { removed: req.params.connectionId, stack });
   } catch (err) {
@@ -85,8 +83,7 @@ router.delete("/user/:beingId/llm-failover", authenticate, async (req, res) => {
     const removed = stack.pop();
 
     llmMeta.failoverStack = stack;
-    setBeingMeta(user, "llm", llmMeta);
-    await user.save();
+    await setBeingMeta(user, "llm", llmMeta);
 
     sendOk(res, { removed, stack });
   } catch (err) {

@@ -1,10 +1,15 @@
-// Foreman decision register. Per-visitor transient store of "what
+// Foreman decision register. Per-Foreman-turn transient store of "what
 // the Foreman chose this turn." The Foreman's tools write here; the
 // orchestrator's runForemanTurn reads after the Foreman exits and
 // applies the chosen action.
 //
-// Mirrors rulerDecisions in shape and lifetime. Decision kinds:
+// Keying: rootChatId. A Foreman turn is one user-message-level turn —
+// the chainsteps within it share the same rootChatId. The decision
+// belongs to the turn; the orchestrator reads using the same rootChatId
+// it passed into runSteppedMode. Mirrors rulerDecisions in shape and
+// lifetime.
 //
+// Decision kinds:
 //   "retry-branch"        { recordNodeId, stepIndex, branchName, reason }
 //   "mark-failed"         { recordNodeId, stepIndex, branchName?, reason, error? }
 //   "freeze-record"       { recordNodeId, terminalStatus, summary? }
@@ -21,20 +26,20 @@
 
 const decisions = new Map();
 
-export function setForemanDecision(visitorId, decision) {
-  if (!visitorId || !decision?.kind) return;
-  decisions.set(String(visitorId), {
+export function setForemanDecision(rootChatId, decision) {
+  if (!rootChatId || !decision?.kind) return;
+  decisions.set(String(rootChatId), {
     ...decision,
     decidedAt: new Date().toISOString(),
   });
 }
 
-export function getForemanDecision(visitorId) {
-  if (!visitorId) return null;
-  return decisions.get(String(visitorId)) || null;
+export function getForemanDecision(rootChatId) {
+  if (!rootChatId) return null;
+  return decisions.get(String(rootChatId)) || null;
 }
 
-export function clearForemanDecision(visitorId) {
-  if (!visitorId) return;
-  decisions.delete(String(visitorId));
+export function clearForemanDecision(rootChatId) {
+  if (!rootChatId) return;
+  decisions.delete(String(rootChatId));
 }

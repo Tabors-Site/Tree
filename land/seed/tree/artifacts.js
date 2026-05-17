@@ -29,8 +29,8 @@ import fs from "fs";
 import Artifact from "../models/artifact.js";
 import Being from "../models/being.js";
 import Node from "../models/node.js";
-import Contribution from "../models/contribution.js";
-import { logContribution } from "./contributions.js";
+import Did from "../models/did.js";
+import { logDid } from "./dids.js";
 import { escapeRegex } from "../utils.js";
 import { hooks } from "../hooks.js";
 import { getLandConfigValue } from "../landConfig.js";
@@ -51,10 +51,10 @@ if (!fs.existsSync(uploadsFolder)) {
 // CONFIG (all readable via land .config node)
 // ─────────────────────────────────────────────────────────────────────────
 
-function artifactMaxChars()    { return Math.max(100, Number(getLandConfigValue("artifactMaxChars"))    || Number(getLandConfigValue("noteMaxChars")) || 5000); }
-function maxArtifactsPerNode() { return Math.max(1,   Number(getLandConfigValue("maxArtifactsPerNode")) || Number(getLandConfigValue("maxNotesPerNode")) || 1000); }
-function artifactQueryLimit()  { return Math.max(1,   Math.min(Number(getLandConfigValue("artifactQueryLimit"))  || Number(getLandConfigValue("noteQueryLimit"))  || 5000, 50000)); }
-function searchQueryLimit()    { return Math.max(1,   Math.min(Number(getLandConfigValue("artifactSearchLimit")) || Number(getLandConfigValue("noteSearchLimit")) || 500, 10000)); }
+function artifactMaxChars()    { return Math.max(100, Number(getLandConfigValue("artifactMaxChars"))    || 5000); }
+function maxArtifactsPerNode() { return Math.max(1,   Number(getLandConfigValue("maxArtifactsPerNode")) || 1000); }
+function artifactQueryLimit()  { return Math.max(1,   Math.min(Number(getLandConfigValue("artifactQueryLimit"))  || 5000, 50000)); }
+function searchQueryLimit()    { return Math.max(1,   Math.min(Number(getLandConfigValue("artifactSearchLimit")) || 500, 10000)); }
 function subtreeNodeCap()      { return Math.max(100, Math.min(Number(getLandConfigValue("subtreeNodeCap")) || 10000, 100000)); }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -122,7 +122,6 @@ async function createArtifact({
   beingId,
   nodeId,
   file,
-  wasAi = false,
   chatId = null,
   sessionId = null,
   metadata = {},
@@ -212,10 +211,10 @@ async function createArtifact({
     checkCascade(nodeId, { action: "artifact:create", origin, sizeKB, beingId })
   ).catch(() => {});
 
-  await logContribution({
-    beingId, nodeId, wasAi, chatId, sessionId,
-    action: "note",
-    noteAction: { action: "add", noteId: newArtifact._id.toString(), content: isIbpOrigin(origin) ? ibpText(newArtifact) : null },
+  await logDid({
+    beingId, nodeId, chatId, sessionId,
+    action: "artifact",
+    artifactAction: { action: "add", artifactId: newArtifact._id.toString(), content: isIbpOrigin(origin) ? ibpText(newArtifact) : null },
   });
 
   return { message: "Artifact created successfully", artifact: newArtifact };
@@ -228,7 +227,7 @@ async function createArtifact({
 async function editArtifact({
   artifactId, content, beingId,
   lineStart = null, lineEnd = null,
-  wasAi = false, chatId = null, sessionId = null,
+  chatId = null, sessionId = null,
 }) {
   if (!artifactId || !beingId) throw new Error("Missing required fields");
 
@@ -293,10 +292,10 @@ async function editArtifact({
     checkCascade(artifact.nodeId, { action: "artifact:edit", origin: artifact.origin, deltaKB, beingId })
   ).catch(() => {});
 
-  await logContribution({
-    beingId, nodeId: artifact.nodeId, wasAi, chatId, sessionId,
-    action: "note",
-    noteAction: { action: "edit", noteId: artifact._id.toString(), content: typeof finalContent === "string" ? finalContent : "" },
+  await logDid({
+    beingId, nodeId: artifact.nodeId, chatId, sessionId,
+    action: "artifact",
+    artifactAction: { action: "edit", artifactId: artifact._id.toString(), content: typeof finalContent === "string" ? finalContent : "" },
   });
 
   return { message: "Artifact updated successfully", artifact };
@@ -356,7 +355,7 @@ async function getAllArtifactsByUser(beingId, limit, startDate, endDate) {
 
 async function deleteArtifactAndFile({
   artifactId, beingId,
-  wasAi = false, chatId = null, sessionId = null,
+  chatId = null, sessionId = null,
 }) {
   const artifact = await Artifact.findById(artifactId);
   if (!artifact) throw new Error("Artifact not found");
@@ -413,10 +412,10 @@ async function deleteArtifactAndFile({
     ).catch(() => {});
   }
 
-  await logContribution({
-    beingId, nodeId, wasAi, chatId, sessionId,
-    action: "note",
-    noteAction: { action: "remove", noteId: artifactId.toString(), fileDeleted: fileDeleted || undefined },
+  await logDid({
+    beingId, nodeId, chatId, sessionId,
+    action: "artifact",
+    artifactAction: { action: "remove", noteId: artifactId.toString(), fileDeleted: fileDeleted || undefined },
   });
 
   return {
@@ -516,7 +515,7 @@ function nodeMatchesStatus(node, filters) {
 
 async function transferArtifact({
   artifactId, targetNodeId, beingId,
-  wasAi = false, chatId = null, sessionId = null,
+  chatId = null, sessionId = null,
 }) {
   if (!artifactId || !targetNodeId || !beingId) {
     throw new Error("Missing required fields: artifactId, targetNodeId, beingId");
@@ -545,16 +544,16 @@ async function transferArtifact({
   artifact.nodeId = targetNodeId;
   await artifact.save();
 
-  await logContribution({
-    beingId, nodeId: sourceNodeId, wasAi, chatId, sessionId,
-    action: "note",
-    noteAction: { action: "remove", noteId: artifactId.toString() },
+  await logDid({
+    beingId, nodeId: sourceNodeId, chatId, sessionId,
+    action: "artifact",
+    artifactAction: { action: "remove", noteId: artifactId.toString() },
   });
 
-  await logContribution({
-    beingId, nodeId: targetNodeId, wasAi, chatId, sessionId,
-    action: "note",
-    noteAction: { action: "add", noteId: artifactId.toString(), content: isIbpOrigin(artifact.origin) ? ibpText(artifact) : null },
+  await logDid({
+    beingId, nodeId: targetNodeId, chatId, sessionId,
+    action: "artifact",
+    artifactAction: { action: "add", artifactId: artifactId.toString(), content: isIbpOrigin(artifact.origin) ? ibpText(artifact) : null },
   });
 
   return { message: "Artifact transferred successfully", artifactId: artifactId.toString(), from: { nodeId: sourceNodeId }, to: { nodeId: targetNodeId } };
@@ -566,13 +565,13 @@ async function getArtifactEditHistory(artifactId, limit = 100, offset = 0) {
   const safeLimit = Math.min(Math.max(1, Number(limit) || 100), 1000);
   const safeOffset = Math.max(0, Number(offset) || 0);
 
-  // Reads from the Contribution audit trail. When contributions are
+  // Reads from the Did audit trail. When contributions are
   // removed from the seed (deferred work), edit history becomes an
   // extension concern and this function moves with it.
-  const contributions = await Contribution.find({
-    action: "note",
-    "noteAction.noteId": artifactId,
-    "noteAction.action": { $in: ["add", "edit"] },
+  const contributions = await Did.find({
+    action: "artifact",
+    "artifactAction.artifactId": artifactId,
+    "artifactAction.action": { $in: ["add", "edit"] },
   })
     .populate("beingId", "username")
     .sort({ date: 1 })
@@ -584,8 +583,8 @@ async function getArtifactEditHistory(artifactId, limit = 100, offset = 0) {
     _id: c._id,
     username: c.beingId?.username ?? "Unknown",
     date: c.date,
-    content: c.noteAction.content,
-    action: c.noteAction.action,
+    content: c.artifactAction.content,
+    action: c.artifactAction.action,
   }));
 }
 

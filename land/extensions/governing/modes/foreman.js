@@ -118,13 +118,13 @@ export default {
     }
 
     // Wakeup data lives on a per-visitor side-channel populated by
-    // runForemanTurn. We don't have visitorId in ctx (the kernel
+    // runForemanTurn. We don't have aiSessionKey in ctx (the kernel
     // doesn't thread it into mode prompts), but sessionId is the same
     // identifier — every Foreman turn runs inside one session.
     let foremanWakeup = null;
     try {
       const { getForemanWakeup } = await import("../../tree-orchestrator/ruling.js");
-      foremanWakeup = getForemanWakeup(ctx.sessionId || ctx.visitorId);
+      foremanWakeup = getForemanWakeup(ctx.sessionId || ctx.aiSessionKey);
     } catch {
       // Side-channel module not loaded (Foreman invoked outside the
       // ruling.js path) — proceed without wakeup context.

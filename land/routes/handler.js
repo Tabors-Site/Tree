@@ -5,7 +5,7 @@ import root from "./api/root.js";
 import { authApiRouter, authPageRouter } from "./auth.js";
 import user from "./api/user.js";
 
-import contributions from "./api/contributions.js";
+import dids from "./api/dids.js";
 import cascade from "./api/cascade.js";
 
 import orchestrate from "./api/orchestrate.js";
@@ -107,7 +107,7 @@ export default async function registerURLRoutes(app, opts = {}) {
       capabilities: [
         "chat", "place", "query",
         "canopy", "types", "llm-assignments",
-        "transactions", "contributions",
+        "transactions", "dids",
       ],
       nodeTypes: ["goal", "plan", "task", "knowledge", "resource", "identity"],
       extensions: activeExtensions,
@@ -161,7 +161,7 @@ export default async function registerURLRoutes(app, opts = {}) {
   app.use("/api/v1", root);
   // understanding routes loaded via extension system
   app.use("/api/v1", artifact);
-  app.use("/api/v1", contributions);
+  app.use("/api/v1", dids);
   app.use("/api/v1", cascade);
   // values routes loaded via extension system
   app.use("/api/v1", node);

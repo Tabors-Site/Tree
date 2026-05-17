@@ -739,7 +739,7 @@ export async function init(core) {
                     const emission = await readActivePlanEmission(payload.rulerNodeId);
                     if (ruler && emission) {
                       // Build the same payload emitPlanCard built; do
-                      // it inline here because we don't have visitorId
+                      // it inline here because we don't have aiSessionKey
                       // through getActiveRequest (the user's request
                       // chain has already returned). Use the socket
                       // attached to the hook payload directly.
@@ -793,7 +793,7 @@ export async function init(core) {
 
               const { runRulerTurn } = await import("../tree-orchestrator/ruling.js");
               await runRulerTurn({
-                visitorId: payload.beingId,  // visitorId reuses beingId for hook-driven wakeups
+                aiSessionKey: payload.beingId,  // aiSessionKey reuses beingId for hook-driven wakeups
                 beingId: payload.beingId,
                 username: payload.username || null,
                 rootId: payload.rootId || null,

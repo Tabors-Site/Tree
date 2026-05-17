@@ -19,18 +19,18 @@ import log from "../../seed/log.js";
 import { getExtension } from "../loader.js";
 
 let Node = null;
-let Contribution = null;
+let Did = null;
 let _Artifact = null;
-let logContribution = null;
+let logDid = null;
 let runChat = null;
 let useEnergy = async () => ({ energyUsed: 0 });
 let _metadata = null;
 
 export function setServices({ models, contributions, llm, energy, metadata }) {
   Node = models.Node;
-  Contribution = models.Contribution;
+  _Did = models.Did;
   _Artifact = models.Artifact;
-  logContribution = contributions.logContribution;
+  logDid = contributions.logDid;
   runChat = llm.runChat;
   if (energy?.useEnergy) useEnergy = energy.useEnergy;
   if (metadata) _metadata = metadata;
@@ -70,7 +70,7 @@ export async function scanForCandidates(rootId, beingId) {
 
   // Get recent contributions for all nodes in this tree
   const nodeIds = nodes.map(n => n._id.toString());
-  const recentContribs = await Contribution.find({
+  const recentContribs = await Did.find({
     nodeId: { $in: nodeIds },
     date: { $gte: cutoff },
   }).select("nodeId").lean();
@@ -260,10 +260,9 @@ async function pruneNode(candidate, rootId, beingId, username) {
   await trimNode(candidate.nodeId, beingId);
 
   // Log contribution
-  await logContribution({
+  await logDid({
     beingId,
     nodeId: candidate.nodeId,
-    wasAi: true,
     action: "prune:trimmed",
     extensionData: {
       prune: {
@@ -292,10 +291,9 @@ export async function undoPrune(nodeId, beingId) {
 
   await Node.updateOne({ _id: nodeId }, { $set: { status: "active" } });
 
-  await logContribution({
+  await logDid({
     beingId,
     nodeId,
-    wasAi: false,
     action: "prune:restored",
   });
 
@@ -340,7 +338,7 @@ export async function purge(rootId, beingId) {
   // Delete notes, contributions, then nodes
   const ids = trimmed.map(n => n._id);
   await _Artifact.deleteMany({ nodeId: { $in: ids } });
-  await Contribution.deleteMany({ nodeId: { $in: ids } });
+  await Did.deleteMany({ nodeId: { $in: ids } });
   await Node.deleteMany({ _id: { $in: ids } });
 
   // Remove from parent children arrays

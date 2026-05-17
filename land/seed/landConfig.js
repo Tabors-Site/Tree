@@ -214,7 +214,7 @@ export const CONFIG_DEFAULTS = {
   requestQueueMaxDepth: 100,
 
   // Data limits
-  noteMaxChars: 5000,
+  artifactMaxChars: 5000,
   maxDocumentSizeBytes: 14680064,
   maxUploadBytes: 104857600,
   uploadEnabled: true,
@@ -267,7 +267,7 @@ export const CONFIG_DEFAULTS = {
 
   // Retention
   chatRetentionDays: 90,
-  contributionRetentionDays: 365,
+  didRetentionDays: 365,
 
   // Orchestration — 45 min default. Compound code-workspace swarms (full
   // multi-branch projects) can legitimately run 20-30 min on a 27B local
