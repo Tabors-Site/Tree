@@ -283,10 +283,124 @@ export function hideAuthActions() {
   _authActionsEl = null;
 }
 
+// Talk panel: shown when in proximity+gaze of a non-auth being. Lets the
+// user type a message and send a portal:talk. Typed state is preserved
+// across re-opens (per being) so a brief look-away doesn't lose typing,
+// and is cleared on submit or when the user navigates to a new position.
+let _talkPanelEl = null;
+let _talkState = new Map(); // embodiment -> { text, busy, error }
+
+export function showTalkPanel({ being, onSubmit }) {
+  if (_talkPanelEl) return;
+  document.exitPointerLock?.();
+  const key = being.embodiment;
+  if (!_talkState.has(key)) _talkState.set(key, { text: "", busy: false, error: "" });
+  const s = _talkState.get(key);
+
+  const el = document.createElement("div");
+  el.className = "talk-panel";
+  el.style.cssText = `
+    position: fixed; left: 50%; bottom: 80px;
+    transform: translateX(-50%);
+    background: rgba(10, 13, 12, 0.94);
+    border: 1px solid #2c3a32; border-radius: 6px;
+    padding: 12px 14px; min-width: 420px; max-width: 560px;
+    pointer-events: auto; z-index: 12;
+    font-family: ui-monospace, monospace; color: #c8d3cb;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+  `;
+  el.innerHTML = `
+    <div style="font-size: 11px; color: #6b7d72; margin-bottom: 6px;">
+      ${escapeHtml(being.icon || "")} talking to ${escapeHtml(being.label || being.embodiment)}
+    </div>
+    <form>
+      <textarea name="message" rows="2" placeholder="say something..."
+        style="width:100%; box-sizing:border-box; padding:6px 8px;
+        background:#0a0d0c; color:#c8d3cb; border:1px solid #2c3a32;
+        border-radius:3px; font-family:inherit; font-size:12px;
+        resize:vertical;"></textarea>
+      <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
+        <button type="submit" class="btn-send" style="flex:1;
+          padding:6px 10px; background:#1a3424; color:#c8d3cb;
+          border:1px solid #2f6b48; border-radius:3px;
+          font-family:inherit; font-size:12px; cursor:pointer;">
+          send
+        </button>
+        <span class="hint" style="font-size:10px; color:#6b7d72;">
+          enter to send, shift+enter for newline
+        </span>
+      </div>
+      <div class="error" style="color:#d97a7a; font-size:11px;
+        margin-top:6px; display:none;"></div>
+    </form>
+  `;
+  document.body.appendChild(el);
+  _talkPanelEl = el;
+
+  const form = el.querySelector("form");
+  const textarea = form.querySelector("textarea");
+  const sendBtn = form.querySelector(".btn-send");
+  const errBox = form.querySelector(".error");
+
+  textarea.value = s.text;
+  if (s.error) {
+    errBox.style.display = "block";
+    errBox.textContent = s.error;
+  }
+  setTimeout(() => textarea.focus(), 30);
+
+  textarea.addEventListener("input", () => {
+    s.text = textarea.value;
+  });
+  textarea.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (s.busy) return;
+    const text = textarea.value.trim();
+    if (!text) return;
+    s.busy = true;
+    sendBtn.disabled = true;
+    sendBtn.textContent = "sending...";
+    errBox.style.display = "none";
+    s.error = "";
+    try {
+      await onSubmit(text);
+      // Success: clear text for the next message.
+      s.text = "";
+      textarea.value = "";
+    } catch (err) {
+      const msg = `${err.code || "error"}: ${err.message || "talk failed"}`;
+      s.error = msg;
+      errBox.style.display = "block";
+      errBox.textContent = msg;
+    } finally {
+      s.busy = false;
+      sendBtn.disabled = false;
+      sendBtn.textContent = "send";
+      textarea.focus();
+    }
+  });
+}
+
+export function hideTalkPanel() {
+  _talkPanelEl?.remove();
+  _talkPanelEl = null;
+}
+
+export function resetTalkState() {
+  _talkState = new Map();
+}
+
 // Any modal panel currently open. Used to gate gameplay input (WASD/B/N)
 // so the user can interact with panels without the camera moving.
 export function isAnyPanelOpen() {
-  return !!(_signInPanelEl || _authActionsEl);
+  return !!(_signInPanelEl || _authActionsEl || _talkPanelEl);
 }
 
 // Bottom-right sky clock. Shows the land's local time (HH:MM in 24h),

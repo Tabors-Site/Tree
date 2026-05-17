@@ -23,7 +23,16 @@ import { getLandConfigValue } from "../landConfig.js";
  * maxDocumentSizeBytes (default 14MB). Writes exceeding the limit rejected.
  */
 
-const CORE_NAMESPACES = new Set(["tools", "modes", "extensions", "cascade", "llm"]);
+// Kernel-aware namespaces. Any extension can write to these because they
+// hold protocol-level data referenced by the kernel itself:
+//   - tools, modes, extensions: per-node capability scope
+//   - cascade, llm: per-node behavior configuration
+//   - embodiments: being-home registrations and stance permissions
+//     (TALK targets, SEE descriptor entries, authorize permission profiles).
+//     Multiple extensions legitimately need to declare beings here
+//     (governing registers Ruler/Planner/Contractor/Foreman/Worker;
+//     future extensions add their own beings alongside).
+const CORE_NAMESPACES = new Set(["tools", "modes", "extensions", "cascade", "llm", "embodiments"]);
 function MAX_METADATA_VALUE_BYTES() { return Math.max(1024, Math.min(Number(getLandConfigValue("metadataNamespaceMaxBytes")) || 524288, 2 * 1024 * 1024)); }
 const MAX_NAMESPACE_KEY_LENGTH = 50;
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);

@@ -959,7 +959,8 @@
       "Bash(grep -n \"land root\\\\|`treeos.ai/`, the land root\" /home/tabor/github/Tree/portal/docs/position-description.md)",
       "Bash(grep -n \"## Three address concepts\\\\|land$\\\\|treeos.ai$\\\\|land identifier\" /home/tabor/github/Tree/portal/docs/protocol.md)",
       "Bash(JWT_SECRET=smoketest-only-not-real node -e ' *)",
-      "Bash(JWT_SECRET=smoketest node -e ' *)"
+      "Bash(JWT_SECRET=smoketest node -e ' *)",
+      "Bash(grep -E \"^\\(position|scenes|models\\)$\")"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

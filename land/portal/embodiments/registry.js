@@ -28,9 +28,22 @@
 // memory.
 
 import { echoEmbodiment } from "./echo.js";
+import { makeBridgeEmbodiment } from "./bridge.js";
+
+// Bridge embodiments: thin shims that route TALK through runChat() with
+// the existing modeKey. Replaced one-by-one as each embodiment grows a
+// first-class IBP implementation.
+const BRIDGED = [
+  { name: "land-manager", modeKey: "land:manager",          zone: "land" },
+  { name: "citizen",      modeKey: "land:citizen",          zone: "land" },
+  { name: "ruler",        modeKey: "tree:governing-ruler",  zone: "tree" },
+  { name: "worker",       modeKey: "tree:governing-worker", zone: "tree" },
+  { name: "archivist",    modeKey: "tree:archivist",        zone: "tree" },
+];
 
 const REGISTRY = new Map([
   ["echo", echoEmbodiment],
+  ...BRIDGED.map((b) => [b.name, makeBridgeEmbodiment(b)]),
 ]);
 
 export function getEmbodiment(name) {

@@ -81,6 +81,29 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, core }) {
     await setExtMeta(node, NS, data);
   }
 
+  // Declare the Ruler's home at this position. embodiments is a
+  // kernel-aware namespace (CORE_NAMESPACES) — multiple extensions
+  // register being homes there. The descriptor reads this directly to
+  // surface the Ruler at home for SEE; activity field on the descriptor
+  // shows the chainstep state when the Ruler is summoned. Merging so
+  // existing stance permission profiles (arrival/owner) on the same
+  // namespace are preserved.
+  try {
+    const home = {
+      installedAt: data.acceptedAt,
+      installedBy: "governing",
+      from:        data.promotedFrom,
+    };
+    if (core?.metadata?.mergeExtMeta) {
+      await core.metadata.mergeExtMeta(node, "embodiments", { ruler: home });
+    } else {
+      const { mergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
+      await mergeExtMeta(node, "embodiments", { ruler: home });
+    }
+  } catch (err) {
+    log.warn("Governing", `embodiments.ruler home write failed for ${String(nodeId).slice(0, 8)}: ${err.message}`);
+  }
+
   // Promotion is a load-bearing lifecycle event — surface it in logs
   // so operators can see the moment a scope took authority for its
   // domain. Fires only on actual transition; the idempotent re-call

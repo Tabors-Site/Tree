@@ -50,14 +50,30 @@ const VISUAL_DEFAULT = {
   sunI:        1.0,
 };
 
+// Pyramid interior: warm sandstone ground, low ceiling-fog, golden ambient.
+// Selected when the position's resolved sceneType is "pyramid-interior".
+const VISUAL_PYRAMID = {
+  bgColor:    0x1a1208,
+  fogNear:    10,
+  fogFar:     55,
+  groundColor: 0x4a3a1f,
+  gridColor:   0x6e5530,
+  ambientI:    0.45,
+  sunI:        0.6,
+};
+
 export class Scene {
-  constructor({ onGaze, onEnter, onAuthProximity, isInputBlocked } = {}) {
+  constructor({ onGaze, onEnter, onBeingProximity, onBeingActivate, isInputBlocked } = {}) {
     this.onGaze = onGaze || (() => {});
     this.onEnter = onEnter || (() => {});
-    this.onAuthProximity = onAuthProximity || (() => {});
+    this.onBeingProximity = onBeingProximity || (() => {});
+    this.onBeingActivate = onBeingActivate || (() => {});
     this.isInputBlocked = isInputBlocked || isTypingInUI;
-    this._authBeingMesh = null;
-    this._lastAuthInRange = null;
+    // Every being mesh by embodiment. Proximity fires per-being; speech
+    // bubbles anchor to the mesh for that embodiment.
+    this._beingMeshes = new Map();
+    this._lastBeingInRange = new Map();
+    this._bubble = null;
 
     this.canvas = document.getElementById("scene");
     this.renderer = new THREE.WebGLRenderer({
@@ -125,7 +141,16 @@ export class Scene {
     const isLandZone = desc?.zone === "land";
     const arrival = isLandZone && !isAuthenticated;
 
-    this._applyVisualMode(arrival ? VISUAL_ARRIVAL : VISUAL_DEFAULT);
+    // Pick the visual mode. Arrival overrides everything. Otherwise the
+    // descriptor's resolved scene.sceneType picks a preset; unknown or
+    // missing sceneTypes fall back to the default outdoor scene.
+    let visualMode = VISUAL_DEFAULT;
+    if (arrival) {
+      visualMode = VISUAL_ARRIVAL;
+    } else if (desc?.scene?.sceneType === "pyramid-interior") {
+      visualMode = VISUAL_PYRAMID;
+    }
+    this._applyVisualMode(visualMode);
 
     const beings = desc?.beings || [];
     const children = desc?.children || [];
@@ -139,8 +164,9 @@ export class Scene {
 
     // Place beings: in arrival mode, the auth-being stands directly
     // ahead. In default mode, beings spread in an arc.
-    this._authBeingMesh = null;
-    this._lastAuthInRange = null;
+    this._beingMeshes.clear();
+    this._lastBeingInRange.clear();
+    this._clearBubble();
     if (arrival) {
       const authBeing = beingsToRender[0];
       if (authBeing) {
@@ -148,19 +174,33 @@ export class Scene {
         mesh.position.set(0, 0.7, -4);
         mesh.userData = beingUserData(authBeing);
         this.world.add(mesh);
-        if (authBeing.embodiment === "auth") this._authBeingMesh = mesh;
+        this._beingMeshes.set(authBeing.embodiment, mesh);
       }
     } else {
       const beingRadius = 6;
       beingsToRender.forEach((being, i) => {
-        const angle = (i / Math.max(1, beingsToRender.length)) * Math.PI - Math.PI / 2;
-        const x = Math.cos(angle) * beingRadius;
-        const z = -Math.sin(angle) * beingRadius;
+        // Prefer server-provided coords. Fall back to a deterministic
+        // arc spread when the position extension hasn't placed this
+        // being at the parent yet.
+        let x, z;
+        const serverCoords = being.position?.coords;
+        if (serverCoords && typeof serverCoords.x === "number") {
+          x = serverCoords.x;
+          z = serverCoords.y;
+        } else {
+          const angle = (i / Math.max(1, beingsToRender.length)) * Math.PI - Math.PI / 2;
+          x = Math.cos(angle) * beingRadius;
+          z = -Math.sin(angle) * beingRadius;
+        }
         const mesh = this._makeBeingMesh(being);
         mesh.position.set(x, 0.7, z);
-        mesh.userData = beingUserData(being);
+        // Stash the default coord. Activity-driven movement (Phase D in
+        // the plan) will animate the mesh between this default and a
+        // target coord while a chainstep is active; on release it
+        // returns to default.
+        mesh.userData = { ...beingUserData(being), defaultCoord: { x, z } };
         this.world.add(mesh);
-        if (being.embodiment === "auth") this._authBeingMesh = mesh;
+        this._beingMeshes.set(being.embodiment, mesh);
       });
     }
 
@@ -179,21 +219,24 @@ export class Scene {
       this.world.add(home);
     }
 
-    // Place children scattered around the player (default mode only).
-    // Position from a deterministic hash of the child's id/path so the
-    // layout is stable across re-renders. Trunk thickness scales with
-    // how many descendants the child has (proxied from noteCount or
-    // hash until the server returns real descendant counts).
+    // Place children. Prefer server-provided coords from the position
+    // extension. Fall back to a deterministic hash-derived position so
+    // children placed before the position extension was installed still
+    // show up in a stable layout.
     childrenToRender.forEach((child) => {
       const key = child.id || child.path || child.name;
       const h = hashKey(key);
-      // Spread in a roughly annular ring with a hash-driven angle and
-      // radius. Keeps trees far enough from spawn that the player can
-      // see the lot of them.
-      const angle = (h % 360) * (Math.PI / 180);
-      const radius = 22 + ((h >> 9) % 120) * 0.45; // 22..76
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
+      let x, z;
+      const serverCoords = child.position?.coords;
+      if (serverCoords && typeof serverCoords.x === "number") {
+        x = serverCoords.x;
+        z = serverCoords.y;
+      } else {
+        const angle = (h % 360) * (Math.PI / 180);
+        const radius = 22 + ((h >> 9) % 120) * 0.45; // 22..76
+        x = Math.cos(angle) * radius;
+        z = Math.sin(angle) * radius;
+      }
       const sizeHint = estimateSizeHint(child, h);
       const mesh = this._makeChildMesh(child, sizeHint);
       mesh.position.set(x, 0, z);
@@ -207,12 +250,131 @@ export class Scene {
       this.world.add(mesh);
     });
 
+    // Place artifacts (notes, plan emissions, etc.) at their server
+    // coords, falling back to a tight ring around the player when no
+    // placement is set. Each artifact is a small glowing cube whose
+    // userData carries a preview the gaze label can show on hover.
+    this._artifactMeshes = new Map();
+    const artifacts = desc?.artifacts || [];
+    if (!arrival) {
+      artifacts.forEach((art, i) => {
+        const id = art.noteId || `art-${i}`;
+        let x, z;
+        const serverCoords = art.position?.coords;
+        if (serverCoords && typeof serverCoords.x === "number") {
+          x = serverCoords.x;
+          z = serverCoords.y;
+        } else {
+          const h = hashKey(id);
+          const angle = (h % 360) * (Math.PI / 180);
+          const radius = 5 + ((h >> 9) % 80) * 0.08; // 5..11.4 (close to player)
+          x = Math.cos(angle) * radius;
+          z = Math.sin(angle) * radius;
+        }
+        const mesh = this._makeArtifactMesh(art);
+        mesh.position.set(x, mesh.position.y, z);
+        mesh.userData = {
+          kind: "artifact",
+          artifactKind: art.kind || "note",
+          ref: id,
+          label: artifactLabel(art),
+          preview: art.preview || "",
+          fullContentRef: art.fullContentRef || null,
+        };
+        this.world.add(mesh);
+        this._artifactMeshes.set(id, mesh);
+      });
+    }
+
+    // Wire per-being activity: bubbles for current thoughts/tool calls,
+    // and movement targets so beings walk to whoever/whatever they're
+    // acting on while their chainstep is active.
+    this._applyBeingActivity(beingsToRender);
+
     // Drop the player at origin. In arrival, face the auth-being (z negative).
     this.camera.position.set(0, 1.7, arrival ? 2 : 8);
     this.yaw = 0;
     this.pitch = 0;
     this.velocityY = 0; // reset any in-flight jump on navigation
     this._applyLook();
+  }
+
+  // Apply activity state across all currently-rendered beings. For each
+  // being entry: stash an `activeTargetCoord` on its mesh when activity
+  // has a being-target with a known mesh, so per-frame movement can
+  // interpolate; ensure an HTML activity bubble exists for any being
+  // that's currently doing something; remove bubbles for idle beings.
+  _applyBeingActivity(beings) {
+    if (!this._activityBubbles) this._activityBubbles = new Map();
+    const seen = new Set();
+
+    for (const being of beings || []) {
+      const mesh = this._beingMeshes.get(being.embodiment);
+      if (!mesh) continue;
+      const activity = being.activity || null;
+
+      // Movement target: look up the target being's mesh by modeKey and
+      // use its default coord. Falls back to no movement when target
+      // isn't a being or isn't rendered here.
+      let targetCoord = null;
+      const t = activity?.target;
+      if (t && t.kind === "being" && t.modeKey) {
+        for (const [, otherMesh] of this._beingMeshes) {
+          const otherMode = otherMesh.userData?.modeKey;
+          if (otherMode && otherMode === t.modeKey) {
+            const d = otherMesh.userData?.defaultCoord;
+            if (d) {
+              // Stand a short offset from the target so beings don't overlap.
+              const dx = d.x - (mesh.userData.defaultCoord?.x || 0);
+              const dz = d.z - (mesh.userData.defaultCoord?.z || 0);
+              const len = Math.hypot(dx, dz) || 1;
+              const back = 1.2;
+              targetCoord = { x: d.x - (dx / len) * back, z: d.z - (dz / len) * back };
+            }
+            break;
+          }
+        }
+      }
+      mesh.userData.activeTargetCoord = targetCoord;
+
+      // Activity bubble: a small HTML label that follows the being. We
+      // keep it separate from the TALK-reply bubble (_bubble) so they
+      // can coexist.
+      if (activity?.content) {
+        seen.add(being.embodiment);
+        let entry = this._activityBubbles.get(being.embodiment);
+        if (!entry) {
+          const el = document.createElement("div");
+          el.className = "being-activity";
+          el.style.cssText = `
+            position: fixed; pointer-events: none; z-index: 7;
+            transform: translate(-50%, -100%);
+            background: rgba(13, 30, 22, 0.88);
+            color: #c8d3cb;
+            padding: 3px 8px;
+            border: 1px solid #2c4a3a; border-radius: 4px;
+            font-family: ui-monospace, monospace; font-size: 10px;
+            max-width: 260px; white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+          `;
+          document.body.appendChild(el);
+          entry = { mesh, el };
+          this._activityBubbles.set(being.embodiment, entry);
+        } else {
+          entry.mesh = mesh;
+        }
+        entry.el.textContent = activity.content;
+      }
+    }
+
+    // Remove bubbles for beings no longer doing anything.
+    for (const [emb, entry] of this._activityBubbles) {
+      if (!seen.has(emb)) {
+        entry.el.remove();
+        this._activityBubbles.delete(emb);
+      }
+    }
   }
 
   _applyVisualMode(mode) {
@@ -545,7 +707,52 @@ export class Scene {
     return group;
   }
 
+  // Pyramid mesh used for rulership nodes (and any other node marked
+  // with metadata.models.model === "pyramid"). 4-sided cone, sandstone
+  // color, base + height grow with sizeHint so larger trees still feel
+  // bigger. Rotated so an edge faces the player, not a face.
+  _makePyramidMesh(sizeHint = 1) {
+    const scale = 1 + Math.log2(Math.max(1, sizeHint)) * 0.55;
+    const base = 2.0 * scale;
+    const height = 3.2 * scale;
+    const group = new THREE.Group();
+    const cone = new THREE.Mesh(
+      new THREE.ConeGeometry(base, height, 4),
+      new THREE.MeshStandardMaterial({
+        color: 0xc9a87a, emissive: 0x7a5a30, emissiveIntensity: 0.08,
+        roughness: 0.85, flatShading: true,
+      }),
+    );
+    // Lift the cone so its base sits on the ground when the group is
+    // positioned at (x, 0, z) by the renderer.
+    cone.position.y = height / 2;
+    cone.rotation.y = Math.PI / 4;
+    group.add(cone);
+    return group;
+  }
+
+  // Small glowing cube floating above the ground. Acts as a placeholder
+  // for any artifact attached to this position (notes today; podiums /
+  // scrolls later when the models extension layers in visuals). Gaze
+  // hover shows the artifact's preview content.
+  _makeArtifactMesh(_artifact) {
+    const color = 0xb0e0c0;
+    const cube = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.5, 0.5),
+      new THREE.MeshStandardMaterial({
+        color, emissive: color, emissiveIntensity: 0.35, roughness: 0.55,
+      }),
+    );
+    cube.position.y = 0.9; // float a bit above the ground
+    return cube;
+  }
+
   _makeChildMesh(child, sizeHint = 1) {
+    // Dispatch by the models extension hint. Unknown / missing models
+    // fall through to the default tree mesh below.
+    const modelName = child.model?.model || null;
+    if (modelName === "pyramid") return this._makePyramidMesh(sizeHint);
+
     // Tree shape grows from "sapling" (sizeHint <= 1) up to a thick
     // multi-branch tree. Trunk radius and tree height scale with
     // sizeHint; leaves cluster at the tips of branches.
@@ -672,7 +879,7 @@ export class Scene {
 
     this.canvas.addEventListener("click", () => {
       if (!this.pointerLocked) this.canvas.requestPointerLock?.();
-      else this._tryEnter();
+      else this._tryActivate();
     });
 
     document.addEventListener("pointerlockchange", () => {
@@ -696,10 +903,54 @@ export class Scene {
   _tick(dt) {
     this._move(dt);
     this._checkGaze();
-    this._checkAuthProximity();
+    this._checkBeingProximity();
+    this._updateBeingMovement(dt);
+    this._updateActivityBubbles();
+    this._updateBubble();
     if (this._skyMode === "default") {
       this._updateTimeOfDay();
       this._driftClouds(dt);
+    }
+  }
+
+  // Animate each being between its default coord and any active target.
+  // Lerp at a fixed rate so the motion reads as "walking up" / "walking
+  // back". The server's `activity.target` decides which way; absence of
+  // a target means return-to-default.
+  _updateBeingMovement(dt) {
+    if (!this._beingMeshes) return;
+    const speed = 3.5;          // units per second toward target
+    const eps = 0.05;            // snap threshold
+    for (const [, mesh] of this._beingMeshes) {
+      const data = mesh.userData;
+      if (!data?.defaultCoord) continue;
+      const goal = data.activeTargetCoord || data.defaultCoord;
+      const dx = goal.x - mesh.position.x;
+      const dz = goal.z - mesh.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist <= eps) {
+        mesh.position.x = goal.x;
+        mesh.position.z = goal.z;
+        continue;
+      }
+      const step = Math.min(dist, speed * dt);
+      mesh.position.x += (dx / dist) * step;
+      mesh.position.z += (dz / dist) * step;
+    }
+  }
+
+  _updateActivityBubbles() {
+    if (!this._activityBubbles || this._activityBubbles.size === 0) return;
+    for (const [, entry] of this._activityBubbles) {
+      const pos = entry.mesh.position.clone();
+      pos.y += 2.2;
+      const v = pos.project(this.camera);
+      const x = (v.x * 0.5 + 0.5) * this.renderer.domElement.clientWidth;
+      const y = (-v.y * 0.5 + 0.5) * this.renderer.domElement.clientHeight;
+      const behind = v.z > 1;
+      entry.el.style.left = `${x}px`;
+      entry.el.style.top  = `${y}px`;
+      entry.el.style.display = behind ? "none" : "block";
     }
   }
 
@@ -722,31 +973,117 @@ export class Scene {
     }
   }
 
-  // Pure proximity check for the auth-being. Fires onAuthProximity when
-  // the in-range boolean changes. Fires when BOTH conditions hold:
-  // (1) the player is within INTERACT_RANGE of the auth-being, AND
-  // (2) the gaze raycaster is currently on the auth-being. Either
-  // condition leaving makes the panel close, so looking away frees
-  // movement again.
-  _checkAuthProximity() {
-    if (!this._authBeingMesh) {
-      if (this._lastAuthInRange) {
-        this._lastAuthInRange = false;
-        this.onAuthProximity(false, Infinity);
+  // Proximity check per being. Fires onBeingProximity when the in-range
+  // boolean flips for any being. "In range" means BOTH conditions hold:
+  // (1) player is within INTERACT_RANGE of that being's mesh, AND
+  // (2) the gaze raycaster is currently on that being. Either condition
+  // leaving makes the consumer panel close, so looking away or stepping
+  // back frees movement again.
+  _checkBeingProximity() {
+    const gaze = this.currentGazeTarget;
+    const gazingEmbodiment =
+      gaze?.userData?.kind === "being" ? gaze.userData.embodiment : null;
+
+    for (const [embodiment, mesh] of this._beingMeshes) {
+      const d = this.camera.position.distanceTo(mesh.position);
+      const close = d <= INTERACT_RANGE;
+      const inRange = close && gazingEmbodiment === embodiment;
+      const last = this._lastBeingInRange.get(embodiment) ?? false;
+      if (inRange !== last) {
+        this._lastBeingInRange.set(embodiment, inRange);
+        if (embodiment === "auth") this._setGlare(mesh, inRange);
+        this.onBeingProximity(
+          { embodiment, ...(mesh.userData || {}) },
+          inRange,
+          d,
+        );
       }
+    }
+  }
+
+  // Floating HTML speech bubble anchored above a being's head. One bubble
+  // at a time. The bubble auto-clears after BUBBLE_TTL_MS, and tracks the
+  // mesh's screen position every frame via _updateBubble().
+  showBeingMessage(embodiment, text, { ttlMs = 30000 } = {}) {
+    const mesh = this._beingMeshes.get(embodiment);
+    if (!mesh) return;
+    this._clearBubble();
+    const el = document.createElement("div");
+    el.className = "being-bubble";
+    el.textContent = text;
+    el.style.cssText = `
+      position: fixed; pointer-events: none; z-index: 8;
+      transform: translate(-50%, -100%);
+      background: rgba(10,13,12,0.92);
+      color: #c8d3cb; padding: 6px 12px;
+      border: 1px solid #2c3a32; border-radius: 6px;
+      font-family: ui-monospace, monospace; font-size: 12px;
+      max-width: 360px; white-space: pre-wrap; line-height: 1.4;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    `;
+    document.body.appendChild(el);
+    this._bubble = { embodiment, mesh, el, expiresAt: performance.now() + ttlMs };
+  }
+
+  // Animated "thinking" bubble: three dots that pulse in sequence. Shown
+  // while we wait for an async TALK reply. Persists until replaced by
+  // showBeingMessage or cleared on look-away / navigation.
+  showBeingThinking(embodiment) {
+    const mesh = this._beingMeshes.get(embodiment);
+    if (!mesh) return;
+    this._clearBubble();
+    _ensureThinkingStyles();
+    const el = document.createElement("div");
+    el.className = "being-bubble being-bubble--thinking";
+    el.innerHTML = `
+      <span class="dot"></span>
+      <span class="dot"></span>
+      <span class="dot"></span>
+    `;
+    el.style.cssText = `
+      position: fixed; pointer-events: none; z-index: 8;
+      transform: translate(-50%, -100%);
+      background: rgba(10,13,12,0.92);
+      padding: 12px 20px;
+      border: 1px solid #2c3a32; border-radius: 20px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      display: inline-flex; gap: 12px; align-items: center;
+    `;
+    document.body.appendChild(el);
+    // Thinking lives a long time (up to 30 minutes); the reply event or
+    // user action clears it. Auto-expire just in case the server never
+    // emits a reply.
+    this._bubble = {
+      embodiment, mesh, el,
+      expiresAt: performance.now() + 30 * 60 * 1000,
+      thinking: true,
+    };
+  }
+
+  hideBeingMessage(embodiment) {
+    if (this._bubble?.embodiment === embodiment) this._clearBubble();
+  }
+
+  _clearBubble() {
+    this._bubble?.el?.remove();
+    this._bubble = null;
+  }
+
+  _updateBubble() {
+    if (!this._bubble) return;
+    if (performance.now() > this._bubble.expiresAt) {
+      this._clearBubble();
       return;
     }
-    const d = this.camera.position.distanceTo(this._authBeingMesh.position);
-    const close = d <= INTERACT_RANGE;
-    const gazingAtAuth =
-      this.currentGazeTarget?.userData?.kind === "being" &&
-      this.currentGazeTarget?.userData?.embodiment === "auth";
-    const inRange = close && gazingAtAuth;
-    if (inRange !== this._lastAuthInRange) {
-      this._lastAuthInRange = inRange;
-      this._setGlare(this._authBeingMesh, inRange);
-      this.onAuthProximity(inRange, d);
-    }
+    const pos = this._bubble.mesh.position.clone();
+    pos.y += 2.4;
+    const v = pos.project(this.camera);
+    const x = (v.x * 0.5 + 0.5) * this.renderer.domElement.clientWidth;
+    const y = (-v.y * 0.5 + 0.5) * this.renderer.domElement.clientHeight;
+    const behind = v.z > 1;
+    this._bubble.el.style.left = `${x}px`;
+    this._bubble.el.style.top  = `${y}px`;
+    this._bubble.el.style.display = behind ? "none" : "block";
   }
 
   _move(dt) {
@@ -828,10 +1165,16 @@ export class Scene {
     // Update glare every frame based on current proximity.
     this._setGlare(target, withinInteract);
 
-    // Update label every frame so it follows the target.
+    // Update label every frame so it follows the target. When the target
+    // is a being inside INTERACT_RANGE, append a "· click" hint so the
+    // user knows the panel needs an explicit click to open.
     if (target?.userData?.label) {
+      let text = target.userData.label;
+      if (target.userData.kind === "being" && withinInteract) {
+        text += "  ·  click";
+      }
       const screen = worldToScreen(target.position, this.camera, this.renderer);
-      showLabel(target.userData.label, screen.x, screen.y);
+      showLabel(text, screen.x, screen.y);
     } else {
       hideLabel();
     }
@@ -868,13 +1211,22 @@ export class Scene {
     _setEmissive(this._glare.target, intensity);
   }
 
-  _tryEnter() {
-    if (!this.currentGazeTarget) return;
-    const data = this.currentGazeTarget.userData;
-    if (data?.kind !== "child" || !data.isDoorway || !data.address) return;
-    const d = this.camera.position.distanceTo(this.currentGazeTarget.position);
-    if (d > ENTER_RANGE * 6) return; // need to be at least somewhat close
-    this.onEnter({ address: data.address, label: data.label });
+  _tryActivate() {
+    const target = this.currentGazeTarget;
+    if (!target) return;
+    const data = target.userData;
+    if (!data) return;
+    const d = this.camera.position.distanceTo(target.position);
+    // Beings: a click while gazing within INTERACT_RANGE opens their
+    // panel (sign-in/logout for auth, talk panel for everyone else).
+    if (data.kind === "being" && d <= INTERACT_RANGE) {
+      this.onBeingActivate({ embodiment: data.embodiment, ...data });
+      return;
+    }
+    // Doorways (trees, home, etc): enter on click.
+    if (data.kind === "child" && data.isDoorway && data.address && d <= ENTER_RANGE * 6) {
+      this.onEnter({ address: data.address, label: data.label });
+    }
   }
 }
 
@@ -918,10 +1270,22 @@ function beingUserData(being) {
   return {
     kind: "being",
     embodiment: being.embodiment,
+    modeKey: being.modeKey || null,
     label: being.label || being.embodiment,
     description: being.description || "",
     icon: being.icon || "",
   };
+}
+
+// Short, single-line label for an artifact's hover tag. We truncate so a
+// long note's preview doesn't fill the screen.
+function artifactLabel(art) {
+  const kind = (art.kind || "note").toLowerCase();
+  const preview = (art.preview || "").replace(/\s+/g, " ").trim();
+  if (!preview) return kind;
+  const max = 80;
+  const text = preview.length > max ? preview.slice(0, max) + "..." : preview;
+  return text;
 }
 
 // Walk the group and apply an emissive intensity to all child materials.
@@ -965,6 +1329,29 @@ function _showGlareVignette(on) {
     _glareVignette?.remove();
     _glareVignette = null;
   }
+}
+
+let _thinkingStylesInjected = false;
+function _ensureThinkingStyles() {
+  if (_thinkingStylesInjected) return;
+  _thinkingStylesInjected = true;
+  const style = document.createElement("style");
+  style.id = "thinking-bubble-style";
+  style.textContent = `
+    .being-bubble--thinking .dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: #8fbf9f;
+      box-shadow: 0 0 6px rgba(143, 191, 159, 0.6);
+      animation: thinking-pulse 1.2s ease-in-out infinite;
+    }
+    .being-bubble--thinking .dot:nth-child(2) { animation-delay: 0.2s; }
+    .being-bubble--thinking .dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes thinking-pulse {
+      0%, 80%, 100% { opacity: 0.3; transform: scale(0.85); }
+      40%           { opacity: 1.0; transform: scale(1.0); }
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 function worldToScreen(pos, camera, renderer) {

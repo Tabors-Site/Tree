@@ -186,12 +186,12 @@ async function resolveNodePath({ startUnderParent, segments, ownerFilter, stance
     let node = null;
     if (isUuidLike) {
       node = await Node.findOne({ ...baseQuery, _id: seg })
-        .select("_id name type status parent rootOwner contributors visibility")
+        .select("_id name type status parent rootOwner contributors visibility metadata")
         .lean();
     }
     if (!node) {
       node = await Node.findOne({ ...baseQuery, name: seg })
-        .select("_id name type status parent rootOwner contributors visibility")
+        .select("_id name type status parent rootOwner contributors visibility metadata")
         .lean();
     }
     if (!node) {

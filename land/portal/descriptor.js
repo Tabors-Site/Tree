@@ -18,6 +18,290 @@ import { getNotes } from "../seed/tree/notes.js";
 import { resolveTreeAccess } from "../seed/tree/treeAccess.js";
 import { getInboxSummary } from "./inbox.js";
 import { getEmbodiment, listEmbodiments } from "./embodiments/registry.js";
+import { getExtension } from "../extensions/loader.js";
+import { getLatestActiveChainstep } from "../seed/llm/chatTracker.js";
+
+// ─────────────────────────────────────────────────────────────────────
+// Place-bundle readers
+//
+// The position/scenes/models extensions hold all spatial data. The
+// descriptor reads them through getExtension(). When an extension is
+// not installed, the corresponding field is simply omitted — clients
+// fall back to client-side defaults (hash placement, default models).
+// ─────────────────────────────────────────────────────────────────────
+
+function readPositionNs(metadata) {
+  if (!metadata) return null;
+  if (metadata instanceof Map) return metadata.get("position") || null;
+  return metadata.position || null;
+}
+
+function readModelsNs(metadata) {
+  if (!metadata) return null;
+  if (metadata instanceof Map) return metadata.get("models") || null;
+  return metadata.models || null;
+}
+
+// Use the models extension's derivation if available (it knows how to
+// fall back to governing.role and other extension namespaces). Without
+// the extension installed, return the raw models namespace.
+function effectiveModel(meta) {
+  const ext = getExtension("models");
+  const fn = ext?.exports?.deriveModel;
+  if (typeof fn === "function") return fn(meta);
+  const raw = readModelsNs(meta);
+  return raw?.model ? { model: raw.model, scale: raw.scale ?? 1 } : null;
+}
+
+// Same idea for scenes — derive the per-node doorway/sceneType from
+// explicit metadata.scenes plus fallbacks (e.g. governing.role).
+function effectiveScene(meta) {
+  const ext = getExtension("scenes");
+  const fn = ext?.exports?.deriveScene;
+  if (typeof fn === "function") return fn(meta);
+  const raw = (meta instanceof Map ? meta.get("scenes") : meta?.scenes) || {};
+  return {
+    doorway:   raw.doorway === true,
+    sceneType: typeof raw.sceneType === "string" ? raw.sceneType : null,
+    ambient:   raw.ambient || null,
+  };
+}
+
+function childPlacement(meta) {
+  const pos = readPositionNs(meta);
+  const mod = effectiveModel(meta);
+  const scn = effectiveScene(meta);
+  const out = {};
+  if (pos?.coords) out.position = { coords: pos.coords };
+  if (mod?.model)  out.model    = mod;
+  // Surface per-child doorway info so renderers can decide whether this
+  // child is its own scene boundary.
+  if (scn?.doorway || scn?.sceneType) {
+    out.scene = { doorway: !!scn.doorway, sceneType: scn.sceneType || null };
+  }
+  return out;
+}
+
+function beingPlacement(parentMeta, embodiment) {
+  const pos = readPositionNs(parentMeta);
+  const mod = readModelsNs(parentMeta);
+  const out = {};
+  const coords = pos?.beings?.[embodiment];
+  if (coords) out.position = { coords };
+  const m = mod?.beings?.[embodiment];
+  if (m?.model) out.model = { model: m.model, scale: m.scale ?? 1 };
+  return out;
+}
+
+function artifactPlacement(parentMeta, ref) {
+  const pos = readPositionNs(parentMeta);
+  const mod = readModelsNs(parentMeta);
+  const out = {};
+  const coords = pos?.artifacts?.[ref];
+  if (coords) out.position = { coords };
+  const m = mod?.artifacts?.[ref];
+  if (m?.model) out.model = { model: m.model, scale: m.scale ?? 1 };
+  return out;
+}
+
+async function resolveSceneBlock(nodeId) {
+  if (!nodeId) return null;
+  try {
+    const scenes = getExtension("scenes");
+    const fn = scenes?.exports?.getScene;
+    if (typeof fn !== "function") return null;
+    return await fn(nodeId);
+  } catch {
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Beings list for a tree node
+//
+// A position's beings are the beings whose HOME is this position — not
+// "embodiments invocable here." Each being has a durable home (a place
+// in the world); the descriptor for a position lists the beings living
+// there. Beings at child positions (inline, non-doorway) are composed
+// into the parent's scene by the renderer, so the parent's descriptor
+// stays focused on its own residents.
+//
+// Two paths surface beings here:
+//   1. metadata.embodiments.<name> on this node — the canonical home
+//      record. When an extension's lifecycle places a being at a
+//      position (Planner at a plan node, Foreman at a foreman node,
+//      etc.), it writes the namespace and the descriptor surfaces it.
+//   2. Derived signals for legacy / shorthand cases. Today only one:
+//      metadata.governing.role === "ruler" implies the Ruler is at
+//      home, even if metadata.embodiments.ruler hasn't been written
+//      explicitly. As governing's lifecycle migrates to creating real
+//      sub-positions (plan/contract/foreman child nodes with their own
+//      beings), it can drop the derived signal in favor of explicit
+//      embodiment-home writes.
+//
+// Workers, Planners, Contractors, Foremen are NOT listed here for a
+// rulership — they live at their own positions (plan child node,
+// contract child node, leaf artifact positions) and surface through
+// those positions' descriptors. The renderer composes them visually
+// because they're inline children of the rulership.
+// ─────────────────────────────────────────────────────────────────────
+
+function readNsFrom(metadata, name) {
+  if (!metadata) return null;
+  if (metadata instanceof Map) return metadata.get(name) || null;
+  return metadata[name] || null;
+}
+
+// Known embodiment presentation metadata. The kernel embodiment registry
+// (embodiments/registry.js) tracks behavior (honoredIntents, respondMode,
+// summon). This map carries label/description/icon/modeKey for known
+// names so the descriptor can render whatever is found in
+// metadata.embodiments without each writer having to ship them.
+const EMBODIMENT_PRESENTATION = {
+  ruler:      { label: "Ruler",      description: "Coordinates work at this scope.",            modeKey: "tree:governing-ruler",  icon: "\u{1F451}", invocableBy: "owner"  },
+  planner:    { label: "Planner",    description: "Drafts plans for this scope.",                modeKey: "tree:governing-planner", icon: "\u{1F4DD}", invocableBy: "owner"  },
+  contractor: { label: "Contractor", description: "Issues contracts for this scope.",            modeKey: "tree:governing-contractor", icon: "\u{1F4DC}", invocableBy: "owner" },
+  foreman:    { label: "Foreman",    description: "Dispatches execution for this scope.",        modeKey: "tree:governing-foreman", icon: "\u{1F4CB}", invocableBy: "owner" },
+  worker:     { label: "Worker",     description: "Produces artifacts.",                         modeKey: "tree:governing-worker", icon: "\u{1F528}", invocableBy: "owner" },
+  archivist:  { label: "Archivist",  description: "Read-only inspection of artifacts.",          modeKey: "tree:archivist",        icon: "\u{1F4DA}", invocableBy: "anyone" },
+};
+
+function beingsForTreeNode(node, { writeAllowed, authorizedHere }) {
+  const beings = [];
+
+  // Read explicit being-home registrations on this node. Each entry
+  // under metadata.embodiments is either a being-home (Ruler/Planner/
+  // Contractor/etc.) or a stance-permission profile (arrival/owner/
+  // member). We treat any entry NOT in the well-known stance set as a
+  // being-home — letting future extensions register their own beings
+  // without changing this filter.
+  const embodiments = readNsFrom(node?.metadata, "embodiments");
+  if (!embodiments) return beings;
+  const STANCE_NAMES = new Set(["arrival", "owner", "member"]);
+  const names = embodiments instanceof Map
+    ? Array.from(embodiments.keys())
+    : Object.keys(embodiments);
+  for (const name of names) {
+    if (STANCE_NAMES.has(name)) continue;
+    const pres = EMBODIMENT_PRESENTATION[name] || {
+      label: name, description: "", modeKey: `tree:${name}`, icon: "\u{1F464}", invocableBy: "owner",
+    };
+    // The home record may carry a `scopeRulerId` (governing's lifecycle
+    // writes it). The Planner chainstep is bound to the Ruler's nodeId
+    // even though the Planner's home is at the plan trio. Carrying the
+    // scopeRulerId lets activity derivation look up the chainstep in
+    // the right place. Renderer-only field, ignored by clients that
+    // don't need it.
+    const home = embodiments instanceof Map ? embodiments.get(name) : embodiments[name];
+    beings.push({
+      embodiment:  name,
+      label:       pres.label,
+      description: pres.description,
+      invocableBy: pres.invocableBy,
+      available:   pres.invocableBy === "anyone" ? authorizedHere : writeAllowed,
+      modeKey:     pres.modeKey,
+      kind:        "ai",
+      icon:        pres.icon,
+      _chainstepLookupNodeId: home?.scopeRulerId || null,
+    });
+  }
+
+  return beings;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Activity derivation
+//
+// For each being at a position, derive an `activity` object from the
+// latest active chainstep (Chat doc) bound to (nodeId, modeKey). When
+// no chainstep is active the being is idle and activity is null.
+//
+// Today the Chat document persists: startMessage, toolCalls[]. Thinking
+// text is socket-only and not persisted, so the field's `content` is
+// the latest tool call summary (or the start message until tools run).
+// ─────────────────────────────────────────────────────────────────────
+
+const ACTIVITY_CONTENT_CAP = 240;
+
+function summarizeArgs(args) {
+  if (args == null) return "";
+  if (typeof args === "string") return args;
+  try { return JSON.stringify(args); } catch { return String(args); }
+}
+
+function truncate(s, n) {
+  if (typeof s !== "string") return "";
+  return s.length > n ? s.slice(0, n) + "..." : s;
+}
+
+async function deriveActivity(nodeId, modeKey) {
+  if (!nodeId || !modeKey) return null;
+  let chat;
+  try {
+    chat = await getLatestActiveChainstep(nodeId, modeKey);
+  } catch {
+    return null;
+  }
+  if (!chat) return null;
+
+  const toolCalls = Array.isArray(chat.toolCalls) ? chat.toolCalls : [];
+  const lastCall = toolCalls.length ? toolCalls[toolCalls.length - 1] : null;
+  const target = await inferActivityTarget(chat);
+
+  // Tool-call-bearing activity wins over the bare summoned state.
+  if (lastCall) {
+    return {
+      kind:        lastCall.success === false ? "tool-result" : "tool-called",
+      content:     truncate(`${lastCall.tool}(${summarizeArgs(lastCall.args)})`, ACTIVITY_CONTENT_CAP),
+      chainstepId: String(chat._id),
+      target,
+      ts:          lastCall.at,
+    };
+  }
+
+  // No tools yet → being is freshly summoned, processing the start message.
+  return {
+    kind:        "summoned",
+    content:     truncate(chat.startMessage?.content || "", ACTIVITY_CONTENT_CAP),
+    chainstepId: String(chat._id),
+    target,
+    ts:          chat.startMessage?.time || new Date(),
+  };
+}
+
+// Infer what a chainstep is acting on. The Chat schema does not (yet)
+// carry an explicit `target` field, but the chainstep linkage tells us:
+//   - When parentChatId is set, the chainstep was spawned by another
+//     being. Treat the parent's stance as the target — sub-beings walk
+//     up to their spawner.
+//   - When parentChatId is null, the chainstep was initiated by a TALK
+//     directly from a sender. No animation target.
+async function inferActivityTarget(chat) {
+  if (!chat?.parentChatId) return null;
+  let parent;
+  try {
+    const Chat = (await import("../seed/models/chat.js")).default;
+    parent = await Chat.findById(chat.parentChatId)
+      .select("aiContext treeContext")
+      .lean();
+  } catch {
+    return null;
+  }
+  if (!parent) return null;
+  const zone = parent.aiContext?.zone;
+  const mode = parent.aiContext?.mode;
+  const nodeId = parent.treeContext?.targetNodeId;
+  if (!zone || !mode || !nodeId) return null;
+  // Map the parent's mode key back to a likely embodiment. We can't get
+  // a perfect mapping without a registry, so we fall through with the
+  // mode key — the renderer can resolve "which mesh corresponds to this
+  // mode" via the being entries it already has in the descriptor.
+  return {
+    kind:    "being",
+    nodeId:  String(nodeId),
+    modeKey: `${zone}:${mode}`,
+  };
+}
 
 /**
  * Build a Position Description for a resolved stance.
@@ -244,6 +528,10 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
     }
   }
 
+  // Scene block: nearest doorway ancestor + resolved sceneType + ambient.
+  // Null if the scenes extension is not installed.
+  const scene = await resolveSceneBlock(node._id);
+
   return {
     address: {
       land: landDomain,
@@ -258,19 +546,20 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
       leafId: resolved.leafId,
     },
     zone: "tree",
-    // Beings invocable at this node. Pass 1 Slice 4 returns a small
-    // default set; Slice 4b will pull from the mode registry filtered
-    // by the node's actual scope + governance state.
-    beings: await buildBeings(node._id, [
-      { embodiment: "ruler",     label: "Ruler",     description: "Coordinates work at this scope.",                    invocableBy: "owner",  available: writeAllowed,  modeKey: "tree:governing-ruler",  kind: "ai", icon: "\u{1F451}" },
-      { embodiment: "worker",    label: "Worker",    description: "Produces artifacts.",                                 invocableBy: "owner",  available: writeAllowed,  modeKey: "tree:governing-worker", kind: "ai", icon: "\u{1F528}" },
-      { embodiment: "archivist", label: "Archivist", description: "Read-only inspection of artifacts and history.",       invocableBy: "anyone", available: authorizedHere, modeKey: "tree:archivist",        kind: "ai", icon: "\u{1F4DA}" },
-      { embodiment: "echo",      label: "Echo",      description: "Demo: returns whatever you send. Phase 4 round-trip.", invocableBy: "anyone", available: true,           modeKey: "tree:echo",             kind: "ai", icon: "\u{1F501}" },
-    ]),
+    // Beings invocable at this node. Only beings that are actually
+    // configured here appear — placeholder defaults (worker/archivist/
+    // echo on every node) were causing phantom figures in fresh trees.
+    // Each entry below is gated by a real signal:
+    //   - ruler: governing extension has promoted this node
+    // Other beings (workers, planners, etc.) are transient chainstep
+    // roles, not standing beings; they surface through the activity
+    // field on the ruler's entry rather than as their own beings.
+    beings: await buildBeings(node._id, beingsForTreeNode(node, { writeAllowed, authorizedHere })),
     children,
     artifacts,
     lineage,
     siblings,
+    scene,
     // Governance block: populated in Slice 4b when we wire to the
     // governing extension's buildDashboardData. For now, declare the
     // shape with empty/null placeholders so portal clients can render
@@ -306,7 +595,7 @@ async function listChildren(parentId, { exclude } = {}) {
   };
   if (exclude) query._id = { $ne: exclude };
   const nodes = await Node.find(query)
-    .select("_id name type status dateCreated")
+    .select("_id name type status dateCreated metadata")
     .sort({ dateCreated: 1 })
     .limit(500)
     .lean();
@@ -317,6 +606,7 @@ async function listChildren(parentId, { exclude } = {}) {
     summary: null,
     noteCount: 0,
     lifecycle: deriveLifecycle(n.status),
+    ...childPlacement(n.metadata),
   }));
 }
 
@@ -325,6 +615,10 @@ async function listArtifacts(nodeId) {
   try {
     const result = await getNotes({ nodeId, limit: 50 });
     const notes = Array.isArray(result?.notes) ? result.notes : [];
+    // Artifact placement lives on the parent node's position/models
+    // namespaces, keyed by note id.
+    const parent = await Node.findById(nodeId).select("metadata").lean();
+    const parentMetadata = parent?.metadata || null;
     return notes.map((n) => ({
       kind: "note",
       noteId: n._id,
@@ -335,6 +629,7 @@ async function listArtifacts(nodeId) {
       createdAt: n.createdAt,
       byUsername: n.username || null,
       fullContentRef: `/api/v1/node/${nodeId}/notes/${n._id}`, // legacy URL; will move to a portal:see artifact path
+      ...artifactPlacement(parentMetadata, String(n._id)),
     }));
   } catch {
     return [];
@@ -390,7 +685,7 @@ async function listPublicTrees() {
     visibility: "public",
     status: { $ne: NODE_STATUS.DELETED || "deleted" },
   })
-    .select("_id name type status dateCreated")
+    .select("_id name type status dateCreated metadata")
     .sort({ dateCreated: -1 })
     .limit(200)
     .lean();
@@ -403,6 +698,7 @@ async function listPublicTrees() {
     summary: null, // future: pull from notes/metadata
     noteCount: 0,  // future: count via notes index
     lifecycle: deriveLifecycle(t.status),
+    ...childPlacement(t.metadata),
   }));
 }
 
@@ -427,7 +723,7 @@ async function listUserTrees(userId, username) {
     systemRole: null,
     status: { $ne: NODE_STATUS.DELETED || "deleted" },
   })
-    .select("_id name type status dateCreated visibility")
+    .select("_id name type status dateCreated visibility metadata")
     .sort({ dateCreated: -1 })
     .limit(500)
     .lean();
@@ -445,6 +741,7 @@ async function listUserTrees(userId, username) {
     summary: null,
     noteCount: 0,
     lifecycle: deriveLifecycle(t.status),
+    ...childPlacement(t.metadata),
   }));
 }
 
@@ -476,14 +773,51 @@ function deriveLifecycle(status) {
  */
 async function buildBeings(nodeId, entries) {
   const inboxByEmbodiment = await getInboxSummary(nodeId);
-  return entries.map((entry) => {
+  // Per-being placement lives on the parent node (where the being is
+  // listed): metadata.position.beings.<embodiment>, metadata.models.beings.<...>.
+  let parentMetadata = null;
+  if (nodeId) {
+    const parent = await Node.findById(nodeId).select("metadata").lean();
+    parentMetadata = parent?.metadata || null;
+  }
+  // Look up the live chainstep for each being in parallel. Some homes
+  // carry a `_chainstepLookupNodeId` (e.g. governing's planner lives at
+  // the plan trio but its chainstep is bound to the parent Ruler's
+  // node) — try the home's own nodeId first, then fall back to the
+  // lookup override. Missing chainsteps return null.
+  const activities = await Promise.all(
+    entries.map(async (e) => {
+      const direct = await deriveActivity(nodeId, e.modeKey);
+      if (direct) return direct;
+      if (e._chainstepLookupNodeId) {
+        return deriveActivity(e._chainstepLookupNodeId, e.modeKey);
+      }
+      return null;
+    }),
+  );
+  return entries.map((entry, i) => {
     const def = getEmbodiment(entry.embodiment);
+    const inb = inboxByEmbodiment[entry.embodiment] || {
+      total: 0, unconsumed: 0, recent: [], activeFrom: null, pendingFrom: [], queueDepth: 0,
+    };
+    // Strip internal _chainstepLookupNodeId from the wire entry — it's
+    // only used inside this builder.
+    const { _chainstepLookupNodeId, ...wireEntry } = entry;
     return {
-      ...entry,
+      ...wireEntry,
       honoredIntents: def ? def.honoredIntents : null,
       respondMode:    def ? def.respondMode : null,
       triggerOn:      def ? def.triggerOn : null,
-      inbox:          inboxByEmbodiment[entry.embodiment] || { total: 0, unconsumed: 0, recent: [] },
+      inbox:          inb,
+      activity:       activities[i],
+      // Queue state: derived from inbox. Renderer uses these to draw a
+      // line of waiting beings behind whoever is currently being
+      // responded to.
+      busy:           inb.activeFrom !== null,
+      talkingTo:      inb.activeFrom,
+      queueDepth:     inb.queueDepth,
+      pendingFrom:    inb.pendingFrom,
+      ...beingPlacement(parentMetadata, entry.embodiment),
     };
   });
 }

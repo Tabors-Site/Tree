@@ -16,7 +16,7 @@
 import { io } from "socket.io-client";
 
 export class PortalClient {
-  constructor({ landUrl, token, useProxy, onConnectionChange }) {
+  constructor({ landUrl, token, useProxy, onConnectionChange, onTalkReply, onDescriptorEvent }) {
     this.landUrl = landUrl;
     this.token = token;
     this.useProxy = !!useProxy; // dev: use Vite proxy (relative URLs, same-origin)
@@ -24,6 +24,22 @@ export class PortalClient {
     this.connected = false;
     this._reqCounter = 0;
     this._onConnectionChange = onConnectionChange || (() => {});
+    this._onTalkReply = onTalkReply || (() => {});
+    this._onDescriptorEvent = onDescriptorEvent || (() => {});
+  }
+
+  // Listener for async TALK responses. The server emits `portal:talk-reply`
+  // with a response envelope when an async embodiment completes summoning.
+  setTalkReplyHandler(handler) {
+    this._onTalkReply = handler || (() => {});
+  }
+
+  // Listener for live SEE updates. The server emits `descriptor:patch`,
+  // `descriptor:replace`, or `descriptor:invalidate` for any position
+  // the socket has subscribed to via `see(address, { live: true })`.
+  // The handler receives { kind: "patch"|"replace"|"invalidate", payload }.
+  setDescriptorEventHandler(handler) {
+    this._onDescriptorEvent = handler || (() => {});
   }
 
   // ────────────────────────────────────────────────────────────────
@@ -79,6 +95,27 @@ export class PortalClient {
     this.socket.on("connect_error", (err) => {
       this.connected = false;
       this._onConnectionChange("error", err?.message);
+    });
+
+    this.socket.on("portal:talk-reply", (entry) => {
+      try { this._onTalkReply(entry); } catch (err) {
+        console.warn("[3D] talk-reply handler threw:", err);
+      }
+    });
+
+    // Live SEE events. The server emits these for any position the
+    // socket has subscribed to via see(addr, { live: true }).
+    this.socket.on("descriptor:patch", (payload) => {
+      try { this._onDescriptorEvent({ kind: "patch", payload }); }
+      catch (err) { console.warn("[3D] descriptor:patch handler threw:", err); }
+    });
+    this.socket.on("descriptor:replace", (payload) => {
+      try { this._onDescriptorEvent({ kind: "replace", payload }); }
+      catch (err) { console.warn("[3D] descriptor:replace handler threw:", err); }
+    });
+    this.socket.on("descriptor:invalidate", (payload) => {
+      try { this._onDescriptorEvent({ kind: "invalidate", payload }); }
+      catch (err) { console.warn("[3D] descriptor:invalidate handler threw:", err); }
     });
   }
 
@@ -140,7 +177,10 @@ export class PortalClient {
    * @param {object} message  { from, content, intent, correlation, inReplyTo?, attachments? }
    */
   async talk(stance, message) {
-    return this._emitWithAck("portal:talk", { stance, message });
+    // TALK can route through runChat() on the server (the bridge for
+    // non-native embodiments), which means a full LLM round-trip. Give
+    // it room — 90s — instead of the default 15s used by SEE/DO/BE.
+    return this._emitWithAck("portal:talk", { stance, message }, { timeoutMs: 90000 });
   }
 
   /**
@@ -170,7 +210,7 @@ export class PortalClient {
     return `r-${++this._reqCounter}`;
   }
 
-  _emitWithAck(op, payload) {
+  _emitWithAck(op, payload, { timeoutMs = 15000 } = {}) {
     return new Promise((resolve, reject) => {
       if (!this.socket || !this.connected) {
         reject(new Error("Portal socket not connected"));
@@ -181,7 +221,7 @@ export class PortalClient {
         const err = new Error(`${op} timed out (or not wired on this land)`);
         err.code = "VERB_NOT_WIRED";
         reject(err);
-      }, 15000);
+      }, timeoutMs);
       this.socket.emit(op, { id, ...payload }, (response) => {
         clearTimeout(timeout);
         if (!response) {

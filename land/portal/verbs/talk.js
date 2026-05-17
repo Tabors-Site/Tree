@@ -28,6 +28,7 @@ import { extractStance, ackOk, ackError } from "../envelope.js";
 import { appendToInbox, markInboxConsumed } from "../inbox.js";
 import { getEmbodiment } from "../embodiments/registry.js";
 import { authorize } from "../authorize.js";
+import { getLandRootId } from "../../seed/landRoot.js";
 
 const VALID_INTENTS = new Set(["chat", "place", "query", "be"]);
 
@@ -87,9 +88,14 @@ export async function handleTalk(socket, msg, ack) {
       );
     }
 
-    // Inbox writes only make sense on a real node. The home- and land-zone
-    // cases are out of scope for Phase 4 (no nodeId to attach to).
-    const inboxNodeId = resolved.nodeId || resolved.userId;
+    // Inbox writes only make sense on a real node. Tree zone uses the
+    // node id; home zone uses the user id; land zone falls back to the
+    // land root node so land-level embodiments (land-manager, citizen)
+    // accumulate a record at the land root.
+    const inboxNodeId =
+      resolved.nodeId
+      || resolved.userId
+      || (resolved.zone === "land" ? getLandRootId() : null);
     if (!inboxNodeId) {
       throw new PortalError(
         PORTAL_ERR.VERB_NOT_SUPPORTED,
@@ -100,35 +106,73 @@ export async function handleTalk(socket, msg, ack) {
     // Append to inbox atomically; the embodiment will read it on summoning.
     const { messageId, sentAt } = await appendToInbox(inboxNodeId, embodimentName, message);
 
-    // Summon the embodiment. Phase 4: only triggerOn "message" is honored.
-    let responseEntry = null;
-    if (embodiment.triggerOn.includes("message")) {
-      responseEntry = await runSummoning(embodiment, {
-        nodeId:    inboxNodeId,
-        embodiment: embodimentName,
-        message:    { ...message, correlation: messageId, sentAt },
-        resolved,
-        identity:   { userId: socket.userId, username: socket.username },
-      });
-    }
+    const summonCtx = {
+      nodeId:    inboxNodeId,
+      embodiment: embodimentName,
+      message:    { ...message, correlation: messageId, sentAt },
+      resolved,
+      identity:   { userId: socket.userId, username: socket.username },
+    };
 
-    // Mark the message consumed (whether or not the summoning produced
-    // a response). The response correlation, if any, is linked.
-    await markInboxConsumed(
-      inboxNodeId,
-      embodimentName,
-      [messageId],
-      responseEntry?.correlation || null,
-    );
-
-    // Per respondMode:
+    // Sync respond-mode: run summoning inline, ACK with the response.
     if (embodiment.respondMode === "sync") {
+      let responseEntry = null;
+      if (embodiment.triggerOn.includes("message")) {
+        responseEntry = await runSummoning(embodiment, summonCtx);
+      }
+      await markInboxConsumed(
+        inboxNodeId,
+        embodimentName,
+        [messageId],
+        responseEntry?.correlation || null,
+      );
       if (!responseEntry) {
         return ackOk(ack, id, { status: "accepted", messageId });
       }
       return ackOk(ack, id, responseEntry);
     }
-    // async / none: ACK accepted; the response, if any, lands later (Phase 6).
+
+    // Async respond-mode: ACK accepted immediately, run summoning in
+    // the background, and push the response to the sender's socket via
+    // `portal:talk-reply` when it lands. Errors are surfaced through the
+    // same channel so the client can render an inline error bubble.
+    if (embodiment.respondMode === "async") {
+      ackOk(ack, id, { status: "accepted", messageId });
+      runSummoning(embodiment, summonCtx)
+        .then(async (responseEntry) => {
+          try {
+            await markInboxConsumed(
+              inboxNodeId,
+              embodimentName,
+              [messageId],
+              responseEntry?.correlation || null,
+            );
+          } catch (err) {
+            log.warn("Portal", `markInboxConsumed failed: ${err.message}`);
+          }
+          if (responseEntry && socket.connected) {
+            socket.emit("portal:talk-reply", responseEntry);
+          }
+        })
+        .catch((err) => {
+          log.error("Portal", `async summoning failed: ${err.message}`);
+          if (socket.connected) {
+            socket.emit("portal:talk-reply", {
+              from:        `${pathOfResolved(resolved)}@${embodimentName}`,
+              content:     `[${err.code || "error"}] ${err.message || "summoning failed"}`,
+              intent:      "chat",
+              correlation: randomUUID(),
+              inReplyTo:   messageId,
+              sentAt:      new Date().toISOString(),
+              error:       true,
+            });
+          }
+        });
+      return;
+    }
+
+    // none: ACK accepted; nothing else to do.
+    await markInboxConsumed(inboxNodeId, embodimentName, [messageId], null);
     return ackOk(ack, id, { status: "accepted", messageId });
   } catch (err) {
     if (isPortalError(err)) {

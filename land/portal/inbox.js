@@ -150,10 +150,20 @@ export async function getInboxSummary(nodeId) {
   const out = {};
   for (const [embodiment, bucket] of Object.entries(inbox)) {
     if (!Array.isArray(bucket)) continue;
+    // Derive queue state from the existing entries. The first unconsumed
+    // message is the "active" conversation; subsequent unconsumed
+    // messages are senders waiting in line. When all are consumed, the
+    // being is idle.
+    const unconsumed = bucket.filter((e) => !e.consumed);
+    const activeFrom  = unconsumed[0]?.from || null;
+    const pendingFrom = unconsumed.slice(1).map((e) => e.from || null);
     out[embodiment] = {
       total:      bucket.length,
-      unconsumed: bucket.filter((e) => !e.consumed).length,
+      unconsumed: unconsumed.length,
       recent:     bucket.slice(-3),
+      activeFrom,
+      pendingFrom,
+      queueDepth: pendingFrom.length,
     };
   }
   return out;

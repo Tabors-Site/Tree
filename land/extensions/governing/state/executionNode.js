@@ -105,9 +105,26 @@ export async function ensureExecutionNode({ scopeNodeId, userId, core }) {
           plan: "tree:governing-foreman",
         });
       }
+
+      // Declare the Foreman's home at this position so the descriptor
+      // surfaces the Foreman being inside the execution node with live
+      // chainstep activity.
+      const existingEmbodiments = node.metadata instanceof Map
+        ? node.metadata.get("embodiments")
+        : node.metadata?.embodiments;
+      if (!existingEmbodiments?.foreman) {
+        const { mergeExtMeta: kernelMergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
+        await kernelMergeExtMeta(node, "embodiments", {
+          foreman: {
+            installedAt: new Date().toISOString(),
+            installedBy: "governing",
+            scopeRulerId: String(scopeNodeId),
+          },
+        });
+      }
     }
   } catch (err) {
-    log.warn("Governing", `failed to stamp execution-node role marker: ${err.message}`);
+    log.warn("Governing", `failed to stamp execution-node role/mode/embodiments: ${err.message}`);
   }
 
   return created;

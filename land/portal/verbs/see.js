@@ -21,6 +21,7 @@ import { buildDiscovery } from "../discovery.js";
 import { PortalError, PORTAL_ERR, isPortalError } from "../errors.js";
 import { extractPositionOrStance, ackOk, ackError } from "../envelope.js";
 import { authorize } from "../authorize.js";
+import { subscribePosition } from "../live.js";
 
 export async function handleSee(socket, msg, ack) {
   const id = msg?.id || null;
@@ -32,13 +33,6 @@ export async function handleSee(socket, msg, ack) {
     // visible to arrivals (the bootstrap exception).
     if (isDiscoveryAddress(addressString)) {
       return ackOk(ack, id, buildDiscovery());
-    }
-
-    if (msg.live === true) {
-      throw new PortalError(
-        PORTAL_ERR.VERB_NOT_SUPPORTED,
-        "live SEE is not wired on this land yet",
-      );
     }
 
     const parsed = parseFromSocket(socket, addressString);
@@ -72,6 +66,12 @@ export async function handleSee(socket, msg, ack) {
     const descriptor = await buildDescriptor(resolved, {
       identity,
     });
+
+    // Live mode: subscribe the socket to subsequent descriptor changes
+    // for this position. Cleanup happens automatically on disconnect.
+    if (msg.live === true && resolved.nodeId) {
+      subscribePosition(socket, resolved.nodeId);
+    }
 
     return ackOk(ack, id, descriptor);
   } catch (err) {

@@ -101,9 +101,27 @@ export async function ensureContractsNode({ scopeNodeId, userId, core }) {
           plan: "tree:governing-contractor",
         });
       }
+
+      // Declare the Contractor's home at this position. The descriptor
+      // reads metadata.embodiments to surface beings at home, so this
+      // makes the Contractor visible inside the contracts trio node
+      // with live activity from its chainsteps.
+      const existingEmbodiments = node.metadata instanceof Map
+        ? node.metadata.get("embodiments")
+        : node.metadata?.embodiments;
+      if (!existingEmbodiments?.contractor) {
+        const { mergeExtMeta: kernelMergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
+        await kernelMergeExtMeta(node, "embodiments", {
+          contractor: {
+            installedAt: new Date().toISOString(),
+            installedBy: "governing",
+            scopeRulerId: String(scopeNodeId),
+          },
+        });
+      }
     }
   } catch (err) {
-    log.warn("Governing", `failed to stamp contracts-node role marker: ${err.message}`);
+    log.warn("Governing", `failed to stamp contracts-node role/mode/embodiments: ${err.message}`);
   }
 
   return created;

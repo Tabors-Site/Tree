@@ -15,6 +15,55 @@
 import log from "../seed/log.js";
 import { registerPortalBootstrap } from "./bootstrap-route.js";
 import { attachPortalHandlers } from "./protocol.js";
+import { hooks } from "../seed/hooks.js";
+import Node from "../seed/models/node.js";
+import { emitPositionInvalidate } from "./live.js";
+
+// Kernel-signal-to-live-emit bridge. When kernel events touch data that
+// the Position Description reads, invalidate subscribers so they refetch.
+// First cut: invalidate. Patch-based diffs come later as an optimization.
+const PLACEMENT_NAMESPACES = new Set(["position", "scenes", "models", "inbox"]);
+
+let _hooksWired = false;
+function wireLiveHooks() {
+  if (_hooksWired) return;
+  _hooksWired = true;
+
+  // Placement metadata changed on a node: invalidate the node's own
+  // descriptor and its parent's (which lists this node as a child).
+  hooks.register("afterMetadataWrite", async ({ nodeId, extName }) => {
+    if (!nodeId || !PLACEMENT_NAMESPACES.has(extName)) return;
+    emitPositionInvalidate(nodeId, `metadata:${extName}`);
+    try {
+      const n = await Node.findById(nodeId).select("parent").lean();
+      if (n?.parent) emitPositionInvalidate(n.parent, `child-metadata:${extName}`);
+    } catch { /* defensive */ }
+  }, "portal-live");
+
+  // Structural changes: new/removed/moved children change the parent's
+  // descriptor. Status changes change the child's own descriptor.
+  hooks.register("afterNodeCreate", async ({ node }) => {
+    if (node?.parent) emitPositionInvalidate(node.parent, "child-created");
+  }, "portal-live");
+  hooks.register("afterNodeDelete", async ({ node }) => {
+    if (node?.parent) emitPositionInvalidate(node.parent, "child-deleted");
+  }, "portal-live");
+  hooks.register("afterStatusChange", async ({ nodeId }) => {
+    if (nodeId) emitPositionInvalidate(nodeId, "status-changed");
+  }, "portal-live");
+  hooks.register("afterNote", async ({ nodeId }) => {
+    if (nodeId) emitPositionInvalidate(nodeId, "note-changed");
+  }, "portal-live");
+
+  // Chainstep state changes: every tool call shifts the "activity" field
+  // for the being whose chainstep just ran. Invalidate the bound nodeId
+  // so subscribers re-fetch and see the new activity entry.
+  hooks.register("afterToolCall", async ({ nodeId, toolName }) => {
+    if (nodeId) emitPositionInvalidate(nodeId, `tool:${toolName || "unknown"}`);
+  }, "portal-live");
+
+  log.info("Portal", "live SEE hooks wired (afterMetadataWrite, afterNode*, afterStatusChange, afterNote, afterToolCall)");
+}
 
 /**
  * Register the single HTTP bootstrap route.
@@ -34,6 +83,7 @@ export function initPortalWs(io) {
     log.error("Portal", "initPortalWs called without io instance");
     return;
   }
+  wireLiveHooks();
   attachPortalHandlers(io);
 }
 

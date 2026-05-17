@@ -337,6 +337,64 @@ export async function init(core) {
   // readContracts already walks the ancestor chain via ruler-role
   // markers; we just format and inject.
   if (core?.hooks?.register) {
+    // One-time backfill on boot: every node that has been promoted to
+    // Ruler in a prior session may be missing the explicit
+    // `metadata.embodiments.ruler` home declaration that the descriptor
+    // now reads. Promotion happens in promoteToRuler going forward, but
+    // existing rulers wouldn't have it. Walk the rulers and merge the
+    // home record where it's missing.
+    core.hooks.register("afterBoot", async () => {
+      try {
+        const Node = (await import("../../seed/models/node.js")).default;
+        const { mergeExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+
+        // Backfill being homes on the four kinds of governing structural
+        // nodes: Ruler, plan trio (Planner), contracts trio (Contractor),
+        // execution node (Foreman). For each kind we query by governing
+        // role marker and add the matching embodiments entry where it
+        // does not already exist.
+        const BACKFILLS = [
+          { role: "ruler",     embodiment: "ruler"      },
+          { role: "plan",      embodiment: "planner"    },
+          { role: "contracts", embodiment: "contractor" },
+          { role: "execution", embodiment: "foreman"    },
+        ];
+        const counts = {};
+        for (const { role, embodiment } of BACKFILLS) {
+          const nodes = await Node.find({ "metadata.governing.role": role })
+            .select("_id metadata")
+            .lean();
+          let written = 0;
+          for (const n of nodes) {
+            const meta = n.metadata;
+            const emb = meta instanceof Map ? meta.get("embodiments") : meta?.embodiments;
+            if (emb?.[embodiment]) continue;
+            const gov = meta instanceof Map ? meta.get("governing") : meta?.governing;
+            const fresh = await Node.findById(n._id);
+            if (!fresh) continue;
+            await mergeExtMeta(fresh, "embodiments", {
+              [embodiment]: {
+                installedAt: gov?.acceptedAt || gov?.createdAt || new Date().toISOString(),
+                installedBy: "governing-backfill",
+                from:        gov?.promotedFrom || null,
+                scopeRulerId: gov?.scopeRulerId || null,
+              },
+            });
+            written++;
+          }
+          if (written > 0) counts[embodiment] = written;
+        }
+        const summary = Object.entries(counts)
+          .map(([k, v]) => `${k}:${v}`)
+          .join(", ");
+        if (summary) {
+          log.info("Governing", `backfilled being homes: ${summary}`);
+        }
+      } catch (err) {
+        log.warn("Governing", `being-home backfill failed: ${err.message}`);
+      }
+    }, "governing");
+
     core.hooks.register(
       "enrichContext",
       async ({ context, nodeId }) => {

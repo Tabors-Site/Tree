@@ -368,6 +368,40 @@ function capFullBytes(value, isString = false) {
   return { value: sliced, truncated: true };
 }
 
+/**
+ * Find the most recently active chainstep (Chat doc) bound to a given
+ * (nodeId, modeKey) pair. "Active" means `endMessage.time` is still null
+ * (the chainstep has not been finalized).
+ *
+ * Used by the Position Description's per-being `activity` field. When a
+ * being is summoned at a position, its chainstep is bound to that node
+ * via `treeContext.targetNodeId` and to its mode via `aiContext.mode`.
+ *
+ * @param {string} nodeId   the tree node where the being is invocable
+ * @param {string} modeKey  the mode the being runs in (e.g. "tree:governing-ruler")
+ * @returns {Promise<object|null>}  a lean Chat document, or null if none active
+ */
+export async function getLatestActiveChainstep(nodeId, modeKey) {
+  if (!nodeId || !modeKey) return null;
+  // Mode key format is "zone:mode". Split for the indexed lookup.
+  const [zone, ...rest] = modeKey.split(":");
+  const mode = rest.join(":");
+  if (!zone || !mode) return null;
+  try {
+    return await Chat.findOne({
+      "treeContext.targetNodeId": String(nodeId),
+      "aiContext.zone":           zone,
+      "aiContext.mode":           mode,
+      "endMessage.time":          null,
+    })
+      .select("_id startMessage toolCalls aiContext treeContext parentChatId rootChatId chainIndex")
+      .sort({ "startMessage.time": -1 })
+      .lean();
+  } catch {
+    return null;
+  }
+}
+
 export async function appendToolCall(chatId, { tool, args, result, success, error, ms }) {
   if (!chatId || !tool) return;
   try {

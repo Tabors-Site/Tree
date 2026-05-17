@@ -14,6 +14,9 @@ import {
   hideAuthActions,
   showAuthSignInPanel,
   hideAuthSignInPanel,
+  showTalkPanel,
+  hideTalkPanel,
+  resetTalkState,
   setHistoryButtonsEnabled,
   isAnyPanelOpen,
 } from "./ui.js";
@@ -26,11 +29,11 @@ const state = {
   discovery: null,
   scene: null,
   descriptor: null,
-  // When the user dismisses an auth-being panel with Escape, the panel
-  // stays closed even while the gaze remains on the auth-being. The
-  // flag clears the moment the gaze leaves the auth-being, so looking
-  // away and back re-opens the panel.
-  authDismissedWhileGazing: false,
+  // Whichever non-auth being currently has the talk panel open.
+  currentTalkBeing: null,
+  // Correlation id -> embodiment, for routing async portal:talk-reply
+  // events back to the being whose bubble should be updated.
+  pendingTalks: new Map(),
   // Navigation history. Linear; back/forward step through it without
   // re-visiting via see() until the user actually clicks back/forward.
   history: [],
@@ -56,7 +59,8 @@ async function main() {
   state.scene = new Scene({
     onGaze:  (target) => onGaze(target),
     onEnter: (target) => onEnter(target),
-    onAuthProximity: (inRange, distance) => onAuthProximity(inRange, distance),
+    onBeingProximity: (being, inRange, distance) => onBeingProximity(being, inRange, distance),
+    onBeingActivate: (being) => onBeingActivate(being),
     isInputBlocked: isGameplayInputBlocked,
   });
   state.scene.setLandTimezone(state.discovery.timezone || null);
@@ -90,6 +94,8 @@ async function connectAnonymous(landUrl, useProxy) {
     token: null,
     useProxy,
     onConnectionChange: (status) => setHud(`socket: ${status}`),
+    onTalkReply: handleTalkReply,
+    onDescriptorEvent: handleDescriptorEvent,
   });
   state.client.connect();
   await waitForConnect(state.client);
@@ -102,22 +108,66 @@ async function connectAndLand(session) {
     token: session.token,
     useProxy: session.landIsProxied,
     onConnectionChange: (status) => setHud(`${session.username} | ${status}`),
+    onTalkReply: handleTalkReply,
+    onDescriptorEvent: handleDescriptorEvent,
   });
   state.client.connect();
   await waitForConnect(state.client);
   await navigate("/");
 }
 
+// Live SEE events. For now we use a coarse path: any descriptor change
+// triggers a debounced refetch and re-render. Patch-based diffing comes
+// later as an optimization.
+let _refetchTimer = null;
+function handleDescriptorEvent(_event) {
+  if (!state.currentAddress) return;
+  if (_refetchTimer) return; // already scheduled
+  _refetchTimer = setTimeout(async () => {
+    _refetchTimer = null;
+    try {
+      const desc = await state.client.see(state.currentAddress);
+      state.descriptor = desc;
+      state.scene.renderDescriptor(desc, {
+        isAuthenticated: !!state.session?.token,
+      });
+      refreshAddressBar();
+    } catch (err) {
+      console.warn("[3D] live refetch failed:", err);
+    }
+  }, 100); // debounce a touch so a flurry of patches collapses into one render
+}
+
+// Async TALK reply arrives via `portal:talk-reply`. Look up which being
+// the reply belongs to (by correlation id) and swap the thinking bubble
+// for the real content.
+function handleTalkReply(entry) {
+  const correlation = entry?.inReplyTo;
+  if (!correlation) return;
+  const embodiment = state.pendingTalks.get(correlation);
+  if (!embodiment) return;
+  state.pendingTalks.delete(correlation);
+  const text = entry.content || "(no reply)";
+  state.scene.showBeingMessage(embodiment, text);
+}
+
 async function navigate(address, { fromHistory = false } = {}) {
   if (!state.client) return;
   try {
-    const desc = await state.client.see(address);
+    // Subscribe live: every change to this position (placements, beings
+    // appearing/disappearing, queue state, activity) lands as a
+    // descriptor event we can refetch on.
+    const desc = await state.client.see(address, { live: true });
     state.descriptor = desc;
+    state.currentAddress = address;
     state.scene.renderDescriptor(desc, {
       isAuthenticated: !!state.session?.token,
     });
     hideAuthActions();
     hideAuthSignInPanel();
+    hideTalkPanel();
+    resetTalkState();
+    state.currentTalkBeing = null;
     refreshAddressBar();
     setHud(formatLocation(desc, state.session));
 
@@ -170,24 +220,52 @@ function refreshAddressBar() {
 }
 
 // Gaze handler: tree-zone labels and child entry happen inside scene.js.
-// Auth-being is NO LONGER driven by gaze; see onAuthProximity below.
+// All being interaction (auth + talk) is driven by proximity+gaze in
+// onBeingProximity below.
 function onGaze(_target, _info) {
   // no-op for now
 }
 
-// Pure-proximity handler for the auth-being. Fires when the player
-// crosses INTERACT_RANGE in either direction. The panel that opens
-// depends on session state: logout panel if signed in, sign-in panel
-// if arrival.
-function onAuthProximity(inRange, _distance) {
+// Proximity dispatcher: fires from scene.js whenever any being's
+// proximity+gaze state flips. Auth-being opens sign-in/logout; every
+// other being opens the TALK panel.
+function onBeingProximity(being, inRange, _distance) {
+  if (being.embodiment === "auth") {
+    return onAuthProximity(inRange);
+  }
+  return onChatBeingProximity(being, inRange);
+}
+
+// Proximity only CLOSES panels now (when the player walks away or looks
+// away). Opening requires an explicit click on the being so the user
+// doesn't trigger panels by brushing past.
+function onAuthProximity(inRange) {
   if (!inRange) {
     hideAuthActions();
     hideAuthSignInPanel();
-    state.authDismissedWhileGazing = false;
-    return;
   }
-  if (state.authDismissedWhileGazing) return;
+}
 
+function onChatBeingProximity(being, inRange) {
+  if (!inRange) {
+    if (state.currentTalkBeing === being.embodiment) {
+      hideTalkPanel();
+      state.currentTalkBeing = null;
+    }
+  }
+}
+
+// Click-to-activate dispatcher. Fires from scene.js when the player
+// clicks while gazing at a being within INTERACT_RANGE.
+function onBeingActivate(being) {
+  if (being.embodiment === "auth") {
+    openAuthPanel();
+  } else {
+    openTalkPanel(being);
+  }
+}
+
+function openAuthPanel() {
   if (state.session?.token) {
     hideAuthSignInPanel();
     showAuthActions({
@@ -218,6 +296,62 @@ function onAuthProximity(inRange, _distance) {
   }
 }
 
+function openTalkPanel(being) {
+  state.currentTalkBeing = being.embodiment;
+  showTalkPanel({
+    being,
+    onSubmit: (text) => sendTalk(being, text),
+  });
+}
+
+// Build the TALK envelope and dispatch via portal:talk. Sync embodiments
+// return their response on the ack; async embodiments ACK accepted and
+// later push a `portal:talk-reply` event handled by handleTalkReply().
+// While we wait for an async reply, we show an animated thinking bubble
+// above the being's head.
+async function sendTalk(being, text) {
+  if (!state.descriptor || !state.client) return;
+  // Drop the chat panel as soon as the user hits send. The thinking
+  // bubble (or final reply) lives in the world above the being's head;
+  // the panel stays out of the way until the user activates again.
+  hideTalkPanel();
+  state.currentTalkBeing = null;
+  const land = state.discovery.land;
+  const path = state.descriptor.address?.pathByNames || "/";
+  // Stance form: `<land>/<path>@<embodiment>`. When path is "/" the slash
+  // is already present, so `${land}${path}@...` collapses to `<land>/@...`
+  // (the canonical form for land/home-root embodiments).
+  const stance = `${land}${path}@${being.embodiment}`.replace(/\/+@/, "/@");
+  const fromStance = state.session?.username
+    ? `${land}/@${state.session.username}`
+    : `${land}/@arrival`;
+  const correlation = `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const message = {
+    from: fromStance,
+    content: text,
+    intent: "chat",
+    correlation,
+  };
+  try {
+    const reply = await state.client.talk(stance, message);
+    if (reply?.status === "accepted") {
+      // Async path: server kicked off summoning; show thinking dots and
+      // wait for `portal:talk-reply` to swap them for real content.
+      state.pendingTalks.set(correlation, being.embodiment);
+      state.scene.showBeingThinking(being.embodiment);
+      return;
+    }
+    const replyText = reply?.content || "(no reply)";
+    state.scene.showBeingMessage(being.embodiment, replyText);
+  } catch (err) {
+    state.scene.showBeingMessage(
+      being.embodiment,
+      `[${err.code || "error"}] ${err.message || "talk failed"}`,
+    );
+    throw err;
+  }
+}
+
 // Gameplay key bundle. Escape, B (back), N (next) all live here so the
 // app has one place to gate them on/off. Escape always works (it closes
 // open panels). B/N navigate history and are suppressed while panels
@@ -228,7 +362,10 @@ addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     hideAuthActions();
     hideAuthSignInPanel();
-    state.authDismissedWhileGazing = true;
+    if (state.currentTalkBeing) {
+      hideTalkPanel();
+      state.currentTalkBeing = null;
+    }
     return;
   }
   if (isGameplayInputBlocked()) return;

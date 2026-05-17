@@ -313,8 +313,27 @@ export async function ensurePlanAtScope({
         plan: "tree:governing-planner",
       });
     }
+
+    // Declare the Planner's home at this position. embodiments is a
+    // kernel-aware namespace so writing it is permitted even though
+    // governing isn't its owner. The descriptor reads this to surface
+    // the Planner being at the plan trio node and route activity
+    // (chainstep state) to that being.
+    const existingEmbodiments = node.metadata instanceof Map
+      ? node.metadata.get("embodiments")
+      : node.metadata?.embodiments;
+    if (!existingEmbodiments?.planner) {
+      const { mergeExtMeta: kernelMergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
+      await kernelMergeExtMeta(node, "embodiments", {
+        planner: {
+          installedAt: new Date().toISOString(),
+          installedBy: "governing",
+          scopeRulerId: String(scopeNodeId),
+        },
+      });
+    }
   } catch (err) {
-    log.warn("Governing", `failed to stamp plan-node role/mode: ${err.message}`);
+    log.warn("Governing", `failed to stamp plan-node role/mode/embodiments: ${err.message}`);
   }
 
   return planNode;
