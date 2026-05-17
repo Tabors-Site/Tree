@@ -1024,7 +1024,7 @@ export function buildTreeosHtmlRoutes() {
       const Artifact = (await import("../../seed/models/artifact.js")).default;
       const note = await Artifact.findById(noteId).lean();
       if (!note) return notFoundPage?.(req, res, "This note doesn't exist or may have been removed.") || sendError(res, 404, ERR.ARTIFACT_NOT_FOUND, "Note not found");
-      if (note.contentType !== "text") return res.redirect(`/api/v1/node/${nodeId}/${version}/notes/${noteId}${tqs}`);
+      if (note.origin !== "ibp") return res.redirect(`/api/v1/node/${nodeId}/${version}/notes/${noteId}${tqs}`);
       return res.send(renderEditorPage({
         nodeId, version, noteId, noteContent: note.content || "", qs, tokenQS: tqs, originalLength: (note.content || "").length,
       }));
@@ -1092,7 +1092,7 @@ export function buildTreeosHtmlRoutes() {
         ? `<a href="/api/v1/user/${note.beingId?._id || ""}${qs}">${safeUsername}</a>`
         : `<span>${safeUsername}</span>`;
 
-      if (note.contentType === "text") {
+      if (note.origin === "ibp") {
         return res.send(renderTextNote({ back, backText, userLink, editorButton: hasToken || !!req.beingId, note, hasToken }));
       }
 

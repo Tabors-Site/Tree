@@ -48,7 +48,7 @@ export async function createInvite({
   const invitingUser = await Being.findById(userInvitingId);
   if (!invitingUser) throw new Error("Inviting user not found");
 
-  const receivingUser = await resolveReceivingUser(User, userReceiving, escapeRegex);
+  const receivingUser = await resolveReceivingUser(Being, userReceiving, escapeRegex);
   if (!receivingUser) throw new Error("Receiving user not found");
   const existingInvite = await Invite.findOne({
     rootId,
@@ -255,7 +255,7 @@ export async function createInvite({
   throw new Error("Invalid invite operation");
 }
 
-export async function respondToInvite({ inviteId, beingId, acceptInvite, Node, User, logDid, queueCanopyEvent, ownership }) {
+export async function respondToInvite({ inviteId, beingId, acceptInvite, Node, Being, logDid, queueCanopyEvent, ownership }) {
   // Atomic status transition prevents double-processing
   const invite = await Invite.findOneAndUpdate(
     { _id: inviteId, status: "pending" },

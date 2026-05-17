@@ -4,8 +4,8 @@ import { v4 as uuidv4 } from "uuid";
 // ── Invite ─────────────────────────────────────────────────────────────
 const InviteSchema = new mongoose.Schema({
   _id: { type: String, required: true, default: uuidv4 },
-  userInviting: { type: String, ref: "User", required: true },
-  userReceiving: { type: String, ref: "User", required: true },
+  userInviting: { type: String, ref: "Being", required: true },
+  userReceiving: { type: String, ref: "Being", required: true },
   isToBeOwner: { type: Boolean, default: false },
   isUninviting: { type: Boolean, default: false },
   status: {
@@ -29,9 +29,9 @@ export const Invite = mongoose.model("Invite", InviteSchema);
 const NoteTagSchema = new mongoose.Schema({
   _id: { type: String, required: true, default: uuidv4 },
   noteId: { type: String, ref: "Artifact", required: true, index: true },
-  beingId: { type: String, ref: "User", required: true, index: true },
+  beingId: { type: String, ref: "Being", required: true, index: true },
   nodeId: { type: String, ref: "Node", required: true },
-  taggedBy: { type: String, ref: "User", required: true },
+  taggedBy: { type: String, ref: "Being", required: true },
   createdAt: { type: Date, default: Date.now },
 });
 

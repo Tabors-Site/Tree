@@ -34,7 +34,7 @@ export async function init(core) {
         content: artifact.content,
         nodeId,
         taggedBy: beingId,
-        User: Being,
+        Being,
       });
     }
   }, "team");
@@ -53,7 +53,7 @@ export async function init(core) {
       beingId,
       acceptInvite,
       Node,
-      User,
+      Being,
       logDid,
       queueCanopyEvent,
     });

@@ -17,7 +17,7 @@ export default [
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async ({ rootId, beingId }) => {
       try {
-        const User = (await import("../../seed/models/being.js")).default;
+        const Being = (await import("../../seed/models/being.js")).default;
         const user = await Being.findById(beingId).select("username").lean();
         const result = await analyze(rootId, beingId, user?.username || "system");
         return {
@@ -53,7 +53,7 @@ export default [
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     handler: async ({ nodeId, beingId }) => {
       try {
-        const User = (await import("../../seed/models/being.js")).default;
+        const Being = (await import("../../seed/models/being.js")).default;
         const user = await Being.findById(beingId).select("username").lean();
         const result = await analyzeBranch(nodeId, beingId, user?.username || "system");
         return {

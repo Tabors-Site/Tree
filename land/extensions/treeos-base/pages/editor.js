@@ -1156,7 +1156,7 @@ async function loadNotes() {
     for (var i = 0; i < notes.length; i++) {
       var n      = notes[i];
       var nId    = n._id || n.id;
-      var isFile = n.contentType === "file";
+      var isFile = n.origin === "filesystem";
       var icon   = isFile ? "\\ud83d\\udcce" : "\\ud83d\\udcdd";
       var preview;
       var username = n.username || n.user || n.author || "Unknown";
@@ -1169,7 +1169,7 @@ async function loadNotes() {
 
       html +=
         '<div class="note-item' + (active ? " active" : "") +
-        '" data-id="' + nId + '" data-type="' + (n.contentType || "text") + '">' +
+        '" data-id="' + nId + '" data-type="' + (n.origin || "ibp") + '">' +
           '<div class="note-item-icon">' + icon + '</div>' +
           '<div class="note-item-info">' +
             '<div class="note-item-username">' + esc(username) + '</div>' +

@@ -745,7 +745,7 @@ input[type="file"].hidden-input {
           const isSelf =
             currentUserId && noteUserId && noteUserId === currentUserId;
           const rawPreview =
-            n.contentType === "text"
+            n.origin === "ibp"
               ? n.content.length > 169
                 ? n.content.substring(0, 500) + "..."
                 : n.content
@@ -766,7 +766,7 @@ input[type="file"].hidden-input {
           >
             <div class="note-bubble">
               ${
-                n.contentType === "file"
+                n.origin === "filesystem"
                   ? '<div class="file-badge">\ud83d\udcce File</div>'
                   : ""
               }

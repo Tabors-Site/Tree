@@ -17,13 +17,13 @@ const RawIdeaSchema = new mongoose.Schema({
   },
   beingId: {
     type: String,
-    ref: "User",
+    ref: "Being",
     required: true,
   },
   tagged: [
     {
       type: String,
-      ref: "User",
+      ref: "Being",
     },
   ],
   createdAt: {

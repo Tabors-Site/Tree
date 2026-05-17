@@ -59,7 +59,7 @@ export default [
       try {
         let username = null;
         try {
-          const User = (await import("../../seed/models/being.js")).default;
+          const Being = (await import("../../seed/models/being.js")).default;
           const user = await Being.findById(beingId).select("username").lean();
           username = user?.username;
         } catch (err) {

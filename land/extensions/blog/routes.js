@@ -5,7 +5,7 @@ import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import BlogPost from "./model.js";
 
 export default function createRouter(core) {
-  const { User } = core.models;
+  const { Being } = core.models;
   const router = express.Router();
 
   router.get("/blog/posts", async (req, res) => {

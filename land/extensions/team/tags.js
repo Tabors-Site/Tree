@@ -45,7 +45,7 @@ export async function extractTaggedUsersAndRewrite(content, Being) {
  * Sync NoteTag records for a note. Called from the afterNote hook.
  * Replaces any existing tags for this note with the current set.
  */
-export async function syncTagsForNote({ noteId, content, nodeId, taggedBy, User: Being }) {
+export async function syncTagsForNote({ noteId, content, nodeId, taggedBy, Being }) {
   if (!content) {
     await NoteTag.deleteMany({ noteId });
     return;
@@ -90,7 +90,7 @@ export async function clearTagsForNote(noteId) {
 /**
  * Get all notes where a user was tagged (mentioned).
  */
-export async function getAllTagsForUser(beingId, limit, startDate, endDate, Note) {
+export async function getAllTagsForUser(beingId, limit, startDate, endDate, Artifact) {
   if (!beingId) {
     throw new Error("Missing required parameter: beingId");
   }

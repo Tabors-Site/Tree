@@ -75,7 +75,7 @@ export default [
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     handler: async ({ nodeId, beingId }) => {
       try {
-        const User = (await import("../../seed/models/being.js")).default;
+        const Being = (await import("../../seed/models/being.js")).default;
         const user = await Being.findById(beingId).select("username").lean();
         const result = await execute(nodeId, beingId, user?.username || "system");
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };

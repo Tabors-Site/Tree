@@ -51,7 +51,7 @@ const BookSchema = new mongoose.Schema({
 
   createdBy: {
     type: String,
-    ref: "User",
+    ref: "Being",
     default: null,
   },
 

@@ -78,7 +78,7 @@ export default [
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     handler: async ({ seedJson, beingId }) => {
       try {
-        const User = (await import("../../seed/models/being.js")).default;
+        const Being = (await import("../../seed/models/being.js")).default;
         const user = await Being.findById(beingId).select("username").lean();
         const seedData = JSON.parse(seedJson);
         const result = await plantTreeSeed(seedData, beingId, user?.username || "system");

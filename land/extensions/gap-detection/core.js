@@ -22,7 +22,7 @@ const KERNEL_NAMESPACES = new Set([
  * Extract extension namespace keys from a cascade payload.
  *
  * Only inspects explicit extension data carriers, not arbitrary top-level
- * payload keys. Local cascade payloads are writeContext (action, contentType,
+ * payload keys. Local cascade payloads are writeContext (action, origin,
  * etc.) which are not extension namespaces. Cross-land signals carry node
  * metadata in payload.metadata or payload.extensionData.
  */

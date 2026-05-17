@@ -10,7 +10,7 @@ const GatewayChannelSchema = new mongoose.Schema(
 
     beingId: {
       type: String,
-      ref: "User",
+      ref: "Being",
       required: true,
       index: true,
     },

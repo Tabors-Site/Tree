@@ -10,7 +10,7 @@ import { Invite } from "./model.js";
  * POST /canopy/invite/offer
  * A remote land notifies us that one of our users has been invited.
  */
-export async function handleInviteOffer(req, res, { User, RemoteUser, validateCanopyRequest }) {
+export async function handleInviteOffer(req, res, { Being, RemoteUser, validateCanopyRequest }) {
   const validation = validateCanopyRequest("invite_offer", req.body);
   if (!validation.valid) {
     return sendError(res, 400, ERR.INVALID_INPUT, "Validation failed", { errors: validation.errors });
@@ -80,7 +80,7 @@ export async function handleInviteOffer(req, res, { User, RemoteUser, validateCa
  * POST /canopy/invite/accept
  * A remote land confirms that their user accepted an invite.
  */
-export async function handleInviteAccept(req, res, { User, Node, RemoteUser, validateCanopyRequest, addContributor }) {
+export async function handleInviteAccept(req, res, { Being, Node, RemoteUser, validateCanopyRequest, addContributor }) {
   const validation = validateCanopyRequest("invite_accept", req.body);
   if (!validation.valid) {
     return sendError(res, 400, ERR.INVALID_INPUT, "Validation failed", { errors: validation.errors });
@@ -193,7 +193,7 @@ export async function handleInviteDecline(req, res, { validateCanopyRequest }) {
  * A local tree owner invites a user from a remote land.
  */
 export async function handleInviteRemote(req, res, {
-  User, Node, RemoteUser,
+  Being, Node, RemoteUser,
   getLandIdentity, signCanopyToken,
   getPeerByDomain, getPeerBaseUrl, registerPeer,
   lookupLandByDomain, queueCanopyEvent,
@@ -297,7 +297,7 @@ export async function handleInviteRemote(req, res, {
  * GET /canopy/admin/invites
  * Server-rendered invites page for cross-land collaboration.
  */
-export async function handleAdminInvites(req, res, { User, Node, RemoteUser, getExtension }) {
+export async function handleAdminInvites(req, res, { Being, Node, RemoteUser, getExtension }) {
   if (!getExtension("html-rendering")) {
     return sendError(res, 404, ERR.EXTENSION_NOT_FOUND, "Server-rendered HTML is disabled.");
   }

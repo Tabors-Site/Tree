@@ -11,7 +11,7 @@ import { DELETED } from "../../seed/protocol.js";
  * 4. Send invite offer to remote land via POST /canopy/invite/offer
  * 5. Create a local pending invite with the remote user info
  */
-export async function sendRemoteInvite({ userInvitingId, canopyId, rootId, Node, User, RemoteUser, canopy }) {
+export async function sendRemoteInvite({ userInvitingId, canopyId, rootId, Node, Being, RemoteUser, canopy }) {
   const [username, domain] = canopyId.split("@");
   if (!username || !domain) {
     throw new Error("Invalid canopy ID. Use username@domain format.");

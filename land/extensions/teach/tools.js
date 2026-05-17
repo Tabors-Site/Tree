@@ -17,7 +17,7 @@ export default [
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     handler: async ({ rootId, beingId }) => {
       try {
-        const User = (await import("../../seed/models/being.js")).default;
+        const Being = (await import("../../seed/models/being.js")).default;
         const user = await Being.findById(beingId).select("username").lean();
         const lessonSet = await extractLessons(rootId, beingId, user?.username || "system");
         return {

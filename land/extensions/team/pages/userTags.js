@@ -67,7 +67,7 @@ export async function renderUserTags({ beingId, user, notes, getNodeName, token 
         notes.map(async (n) => {
           const nodeName = await getNodeName(n.nodeId);
           const preview =
-            n.contentType === "text"
+            n.origin === "ibp"
               ? n.content.length > 120
                 ? n.content.substring(0, 120) + "\u2026"
                 : n.content
@@ -87,7 +87,7 @@ export async function renderUserTags({ beingId, user, notes, getNodeName, token 
                 n._id
               }${tokenQS}" class="note-link">
                 ${
-                  n.contentType === "file"
+                  n.origin === "filesystem"
                     ? `<span class="file-badge">FILE</span>`
                     : ""
                 }${escapeHtml(preview)}
