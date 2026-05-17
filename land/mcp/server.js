@@ -235,8 +235,6 @@ async function handleMcpRequest(req, res) {
       // need this to key writes that runRulerTurn/runForemanTurn read
       // back after the LLM call resolves. Falls back to beingId for
       // backwards compatibility with non-WebSocket callers.
-      if (req.aiSessionKey) requestArgs.aiSessionKey = req.aiSessionKey;
-
       // chatId and sessionId travel with the tool call envelope from
       // the sender (conversation.js / extension orchestrators). No
       // server-side Map lookup — the sender already knows which chat

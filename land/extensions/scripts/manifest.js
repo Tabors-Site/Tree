@@ -30,7 +30,7 @@ export default {
   npm: ["axios@^1.12.2"],
 
   needs: {
-    services: ["contributions", "hooks"],
+    services: ["dids", "hooks"],
     models: ["Node", "Did"],
   },
 

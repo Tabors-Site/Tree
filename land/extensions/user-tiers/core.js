@@ -1,9 +1,9 @@
 import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 
-let User;
+let Being;
 
 export function setModels(models) {
-  User = models.User;
+  Being = models.Being;
 }
 
 // Feature access map. Extensions can register their own features via registerFeature().

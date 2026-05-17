@@ -3,8 +3,8 @@ import express from "express";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 // User model wired from init via setModels
-let User = null;
-export function setModels(models) { User = models.User; }
+let Being = null;
+export function setModels(models) { Being = models.Being; }
 import TempUser from "./model.js";
 import { sendResetEmail } from "./core.js";
 import { getLandUrl } from "../../canopy/identity.js";

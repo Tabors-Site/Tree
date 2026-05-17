@@ -15,7 +15,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function init(core) {
   const { default: router, setModels } = await import("./routes.js");
   setModels(core.models);
-  const User = core.models.User;
+  const Being = core.models.Being;
 
   core.hooks.register("beforeRegister", async (data) => {
     const { username, password, req, res } = data;

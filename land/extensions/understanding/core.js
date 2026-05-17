@@ -5,7 +5,7 @@ import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 
 // Services wired from init() via setServices()
 let Node = null;
-let Did = null;
+let _Did = null;
 let logDid = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
 
@@ -568,7 +568,7 @@ async function autoCommitLeaf(
   const existing = node.perspectiveStates?.get(understandingRunId);
   if (existing) return;
 
-  const contribCount = await Did.countDocuments({
+  const contribCount = await _Did.countDocuments({
     nodeId: node.realNodeId,
     action: { $ne: "understanding" },
   });
@@ -629,7 +629,7 @@ export async function commitCompressionResult({
     const existing = node.perspectiveStates?.get(understandingRunId);
     if (existing) return; // idempotent
 
-    const contribCount = await Did.countDocuments({
+    const contribCount = await _Did.countDocuments({
       nodeId: node.realNodeId,
       action: { $ne: "understanding" },
     });
@@ -705,7 +705,7 @@ export async function commitCompressionResult({
     if (existing && existing.currentLayer >= currentLayer) {
       // idempotent
     } else {
-      const contribCount = await Did.countDocuments({
+      const contribCount = await _Did.countDocuments({
         nodeId: node.realNodeId,
         action: { $ne: "understanding" },
       });
@@ -857,7 +857,7 @@ async function markDirtyNodes(run, topology, structurallyDirty = new Set()) {
   );
 
   // Batch query current contribution counts (excluding understanding contributions)
-  const contribCounts = await Did.aggregate([
+  const contribCounts = await _Did.aggregate([
     {
       $match: {
         nodeId: { $in: realNodeIds },

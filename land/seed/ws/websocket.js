@@ -366,13 +366,23 @@ function beginChatTurn(socket, aiSessionKey, bigMode) {
   socket._inFlightZone = bigMode;
   socket._inFlightRootId = inFlightRootId;
 
+  // Being-room broadcast: every socket the being has connected (web
+  // tab + CLI + …) receives the streaming events. Single-context
+  // being model — all of the being's open windows see the same
+  // conversation as it unfolds. Falls back to the legacy in-flight
+  // socket set when beingId is missing (anonymous flows, edge cases).
+  const beingRoom = socket.beingId ? `being:${String(socket.beingId)}` : null;
+
   const inFlightEntry = registerInFlight(aiSessionKey, abort, socket);
   const teeEmit = (event, data) => {
     recordInFlightEvent(aiSessionKey, event, data);
     if (abort.signal.aborted) return;
-    // Snapshot the socket set on each emit so a concurrent
-    // attach/detach can't mutate during iteration. The set is small
-    // (typically 1 socket) so the copy cost is negligible.
+    if (beingRoom && io) {
+      try { io.to(beingRoom).emit(event, data); } catch {}
+      return;
+    }
+    // Fallback (no beingId): emit to the legacy per-aiSessionKey socket
+    // set. Snapshot to avoid concurrent attach/detach mutation.
     const sockets = inFlightEntry?.sockets;
     if (sockets && sockets.size) {
       for (const s of sockets) {
@@ -415,6 +425,13 @@ function endChatTurn(socket, abort, aiSessionKey) {
 function emitChatError(socket, code, message, generation, detail) {
   const payload = { code, error: message, generation };
   if (detail !== undefined) payload.detail = detail;
+  // Broadcast chat errors to every socket the being has connected so
+  // all of their open windows see the failure (Tabor's CLI sees a chat
+  // error from his web tab and vice versa). Fall back to per-socket
+  // emit for anonymous or pre-register sockets.
+  if (socket?.beingId && io) {
+    try { io.to(`being:${String(socket.beingId)}`).emit(WS.CHAT_ERROR, payload); return; } catch {}
+  }
   socket.emit(WS.CHAT_ERROR, payload);
 }
 
@@ -602,14 +619,25 @@ export function initWebSocketServer(httpServer, originPolicy) {
       socket.aiSessionKey = aiSessionKey;
       socket.username = username;
 
+      // Join the being-room so async chat events (chat-response,
+      // tool-result, thinking, descriptor patches, TALK replies) reach
+      // every socket the being has connected. Single-context being
+      // model: Tabor on web and Tabor on CLI share the same room and
+      // see the same conversation state. Per-socket emits (registered,
+      // navigator-session, command responses) stay direct.
+      if (beingId) {
+        socket.join(`being:${String(beingId)}`);
+      }
+
       // Initialize AI session for this connection
       ensureSession(socket);
       syncRegistrySession(socket);
 
       try {
-        // Create internal JWT with aiSessionKey so MCP can route contribution context
+        // Internal JWT for MCP auth. beingId + username is enough —
+        // chatId / portalAddress travel through tool args, not JWT.
         const mcpJwt = jwt.sign(
-          { beingId: String(beingId), username, aiSessionKey },
+          { beingId: String(beingId), username },
           JWT_SECRET,
           { expiresIn: "24h" },
         );
@@ -1352,8 +1380,15 @@ export function initWebSocketServer(httpServer, originPolicy) {
           socket._chatAbort = null;
         }
         socket._registrySessionId = null;
-        // Tell the client UI to reset sending state
-        socket.emit(WS.CHAT_CANCELLED);
+        // Tell every connected window for this being to reset its
+        // sending state — the cancel applies to the conversation,
+        // not just the socket that issued it.
+        if (socket.beingId && io) {
+          try { io.to(`being:${String(socket.beingId)}`).emit(WS.CHAT_CANCELLED); }
+          catch { socket.emit(WS.CHAT_CANCELLED); }
+        } else {
+          socket.emit(WS.CHAT_CANCELLED);
+        }
       }
     });
 

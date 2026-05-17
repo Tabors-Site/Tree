@@ -26,7 +26,11 @@
 
 import log from "../../seed/log.js";
 
-// aiSessionKey -> { items: string[], createdAt: number, mode: string }
+// conversationKey -> { items: string[], createdAt: number, mode: string }.
+// Keyed per-conversation: Portal Address for being-to-being chats,
+// internal session key for stanceless background pipelines. The Map
+// is string-keyed; callers pass whichever flavor identifies their
+// conversation context.
 const _pendingPlans = new Map();
 
 // How long a plan stays warm waiting for approval. A user who types "fix it"
@@ -82,38 +86,43 @@ export function parsePlan(responseText) {
 }
 
 /**
- * Stash a plan for a visitor. Overwrites any previous plan — the newest
- * one wins. Also clears stale plans as a side effect.
+ * Stash a plan for this conversation. Overwrites any previous plan —
+ * the newest one wins. Also clears stale plans as a side effect.
+ *
+ * `conversationKey` is the canonical name (Portal Address for being-
+ * to-being conversations, internal session key for stanceless
+ * background pipelines). `aiSessionKey` is accepted as a legacy alias
+ * during the per-conversation rekey migration.
  */
-export function setPendingPlan(aiSessionKey, items, mode) {
-  if (!aiSessionKey || !Array.isArray(items) || items.length === 0) return;
-  _pendingPlans.set(aiSessionKey, {
+export function setPendingPlan(conversationKey, items, mode) {
+  if (!conversationKey || !Array.isArray(items) || items.length === 0) return;
+  _pendingPlans.set(String(conversationKey), {
     items: items.slice(0, 20), // hard cap — nobody batches more than 20 fixes
     createdAt: Date.now(),
     mode: mode || null,
   });
-  log.debug("PendingPlan", `Stashed ${items.length} items for ${aiSessionKey} (mode=${mode || "?"})`);
+  log.debug("PendingPlan", `Stashed ${items.length} items for ${conversationKey} (mode=${mode || "?"})`);
 }
 
 /**
- * Read the pending plan for a visitor if one exists and hasn't expired.
- * Does not clear the plan — caller must call clearPendingPlan after
- * consuming it.
+ * Read the pending plan for this conversation if one exists and hasn't
+ * expired. Does not clear the plan — caller must call clearPendingPlan
+ * after consuming it.
  */
-export function getPendingPlan(aiSessionKey) {
-  if (!aiSessionKey) return null;
-  const entry = _pendingPlans.get(aiSessionKey);
+export function getPendingPlan(conversationKey) {
+  if (!conversationKey) return null;
+  const entry = _pendingPlans.get(String(conversationKey));
   if (!entry) return null;
   if (Date.now() - entry.createdAt > PLAN_TTL_MS) {
-    _pendingPlans.delete(aiSessionKey);
+    _pendingPlans.delete(String(conversationKey));
     return null;
   }
   return entry;
 }
 
-export function clearPendingPlan(aiSessionKey) {
-  if (!aiSessionKey) return;
-  _pendingPlans.delete(aiSessionKey);
+export function clearPendingPlan(conversationKey) {
+  if (!conversationKey) return;
+  _pendingPlans.delete(String(conversationKey));
 }
 
 /**

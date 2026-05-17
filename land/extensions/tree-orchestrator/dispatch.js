@@ -1172,6 +1172,7 @@ export async function runModeAndReturn(aiSessionKey, mode, message, {
 export async function runChain(chain, message, aiSessionKey, {
   socket, username, beingId, rootId, signal, slot,
   onToolLoopCheckpoint, modesUsed,
+  sessionId = null, rootChatId = null,
 }) {
   emitStatus(socket, "intent", "Chaining extensions...");
 
@@ -1193,6 +1194,9 @@ export async function runChain(chain, message, aiSessionKey, {
     const stepResult = await processMessage(aiSessionKey,
       isLast ? context : `${context}\n\nDo this step and return what you produced.`, {
         username, beingId, rootId, signal, slot,
+        chatId: rootChatId || null,
+        rootChatId: rootChatId || null,
+        sessionId: sessionId || null,
         onToolLoopCheckpoint,
         onToolResults(results) {
           if (signal?.aborted) return;

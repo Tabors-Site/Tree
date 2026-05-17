@@ -16,7 +16,7 @@ let _metadata = null;
 
 export function configure({ Node, Artifact, runChat, metadata }) {
   _Node = Node;
-  _Artifact = Note;
+  _Artifact = Artifact;
   _runChat = runChat;
   _metadata = metadata;
 }

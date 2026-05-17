@@ -370,6 +370,9 @@ export async function orchestrateTreeRequest({
       emitStatus(socket, "intent", "");
       const result = await processMessage(aiSessionKey, message, {
         username, beingId, rootId, signal, slot, onToolLoopCheckpoint,
+        chatId: rootChatId || null,
+        rootChatId: rootChatId || null,
+        sessionId: sessionId || null,
         ...buildSocketBridge(socket, signal),
       });
       emitStatus(socket, "done", "");
@@ -652,6 +655,8 @@ export async function orchestrateTreeRequest({
         username,
         beingId,
         rootId,
+        rootChatId,
+        sessionId,
         originalMessage: message,
         responseHint:
           classification.responseHint ||
@@ -696,7 +701,7 @@ export async function orchestrateTreeRequest({
     return runBeMode(message, {
       aiSessionKey, socket, username, beingId, rootId,
       signal, slot, sessionId, onToolLoopCheckpoint,
-      currentNodeId, modesUsed,
+      currentNodeId, modesUsed, rootChatId,
     });
   }
 

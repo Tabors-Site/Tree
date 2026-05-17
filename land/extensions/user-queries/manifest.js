@@ -19,7 +19,7 @@ export default {
     "'what have I done' across the entire land.",
 
   needs: {
-    models: ["User", "Node"],
+    models: ["Being", "Node"],
   },
 
   optional: {
@@ -35,7 +35,7 @@ export default {
     energyActions: {},
     sessionTypes: {},
     cli: [
-      { command: "contributions", scope: ["tree", "home"], description: "List your contributions across all trees", method: "GET", endpoint: "/user/:beingId/contributions" },
+      { command: "dids", scope: ["tree", "home"], description: "List your contributions across all trees", method: "GET", endpoint: "/user/:beingId/contributions" },
     ],
   },
 };

@@ -14,7 +14,7 @@ import { sendOk, sendError, ERR, DELETED } from "../../seed/protocol.js";
 import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getTreeStructure } from "../../seed/tree/treeData.js";
-import { getDids } from "../seed/tree/dids.js";
+import { getDids } from "../../seed/tree/dids.js";
 import { buildPathString, resolveRootNode } from "../../seed/tree/treeFetch.js";
 import { getNodeChats, getChatChain } from "../../seed/llm/chatHistory.js";
 import { getConnectionsForUser, getAllRootLlmSlots } from "../../seed/llm/connections.js";
@@ -563,7 +563,7 @@ export function buildTreeosHtmlRoutes() {
       const isLandRoot = node.systemRole === "land-root";
 
       const { getAllToolNamesForBigMode, getSubModes } = await import("../../seed/modes/registry.js");
-      const { resolveTools } = await import("../../seed/tools.js");
+      const { resolveTools } = await import("../../seed/modes/tools.js");
       const { filterToolNamesByScope } = await import("../../seed/tree/extensionScope.js");
 
       const toolZones = isLandRoot ? ["tree", "home", "land"] : [node.rootOwner ? "tree" : "home"];

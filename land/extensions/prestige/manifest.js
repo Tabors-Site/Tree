@@ -26,7 +26,7 @@ export default {
     "version count so the AI always knows what generation it is working in.",
 
   needs: {
-    services: ["contributions", "hooks"],
+    services: ["dids", "hooks"],
     models: ["Node"],
   },
 

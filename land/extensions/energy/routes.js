@@ -15,8 +15,8 @@ import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { getConnectionsForUser } from "../../seed/llm/connections.js";
 
 // Models wired from init via setModels
-let _User = null;
-export function setModels(models) { _User = models.User; }
+let _Being = null;
+export function setModels(models) { _Being = models.Being; }
 
 const router = express.Router();
 

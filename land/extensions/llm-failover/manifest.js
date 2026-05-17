@@ -12,7 +12,7 @@ export default {
 
   needs: {
     services: ["llm"],
-    models: ["User", "Node"],
+    models: ["Being", "Node"],
   },
 
   optional: {

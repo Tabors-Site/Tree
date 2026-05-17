@@ -21,6 +21,9 @@ export default function authenticateMCP(req, res, next) {
       decoded.beingId || decoded.id || decoded._id;
 
     req.username = decoded.username;
+    // Legacy JWTs may still carry aiSessionKey from the pre-Slice-6
+    // signing convention. Honored if present so an in-flight token
+    // from before the upgrade keeps working; not required.
     req.aiSessionKey = decoded.aiSessionKey || null;
 
     next();

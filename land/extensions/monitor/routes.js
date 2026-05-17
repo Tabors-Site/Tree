@@ -2,7 +2,7 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import Being from "../../seed/models/being.js";
-import Did from "../seed/models/did.js";
+import Did from "../../seed/models/did.js";
 import log from "../../seed/log.js";
 
 const router = express.Router();

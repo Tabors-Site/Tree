@@ -9,7 +9,7 @@ const isValidUUID = (id) =>
     id,
   );
 
-async function resolveReceivingUser(User, userReceiving, escapeRegex) {
+async function resolveReceivingUser(Being, userReceiving, escapeRegex) {
   let receivingUser = null;
 
   if (isValidUUID(userReceiving)) {
@@ -32,8 +32,7 @@ export async function createInvite({
   isToBeOwner,
   isUninviting,
   Node,
-  User,
-  logDid,
+  Being,  logDid,
   escapeRegex,
   queueCanopyEvent,
   ownership,

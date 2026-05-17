@@ -19,7 +19,7 @@ import log from "../../seed/log.js";
 import { getExtension } from "../loader.js";
 
 let Node = null;
-let Did = null;
+let _Did = null;
 let _Artifact = null;
 let logDid = null;
 let runChat = null;
@@ -70,7 +70,7 @@ export async function scanForCandidates(rootId, beingId) {
 
   // Get recent contributions for all nodes in this tree
   const nodeIds = nodes.map(n => n._id.toString());
-  const recentContribs = await Did.find({
+  const recentContribs = await _Did.find({
     nodeId: { $in: nodeIds },
     date: { $gte: cutoff },
   }).select("nodeId").lean();
@@ -338,7 +338,7 @@ export async function purge(rootId, beingId) {
   // Delete notes, contributions, then nodes
   const ids = trimmed.map(n => n._id);
   await _Artifact.deleteMany({ nodeId: { $in: ids } });
-  await Did.deleteMany({ nodeId: { $in: ids } });
+  await _Did.deleteMany({ nodeId: { $in: ids } });
   await Node.deleteMany({ _id: { $in: ids } });
 
   // Remove from parent children arrays

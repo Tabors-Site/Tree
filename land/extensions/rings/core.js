@@ -25,7 +25,7 @@ let _getExtension = null;
 
 export function configure({ Node, Artifact, runChat, metadata, getExtension }) {
   _Node = Node;
-  _Artifact = Note;
+  _Artifact = Artifact;
   _runChat = runChat;
   _metadata = metadata;
   _getExtension = getExtension;

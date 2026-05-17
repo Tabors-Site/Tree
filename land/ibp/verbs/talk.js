@@ -29,8 +29,30 @@ import { appendToInbox, markInboxConsumed } from "../inbox.js";
 import { getEmbodiment } from "../embodiments/registry.js";
 import { authorize } from "../authorize.js";
 import { getLandRootId } from "../../seed/landRoot.js";
+import { getIO } from "../../seed/ws/websocket.js";
 
 const VALID_INTENTS = new Set(["chat", "place", "query", "be"]);
+
+/**
+ * Broadcast a TALK reply to every socket the asker being has
+ * connected. The originating socket may have disconnected during async
+ * summoning — other sockets for the same being still see the reply.
+ * Falls back to the originating socket when beingId or the io server
+ * isn't reachable.
+ */
+function emitTalkReply(socket, entry) {
+  const beingId = socket?.beingId;
+  const io = getIO();
+  if (beingId && io) {
+    try {
+      io.to(`being:${String(beingId)}`).emit("ibp:talk-reply", entry);
+      return;
+    } catch {}
+  }
+  try {
+    if (socket?.connected) socket.emit("ibp:talk-reply", entry);
+  } catch {}
+}
 
 export async function handleTalk(socket, msg, ack) {
   const id = msg?.id || null;
@@ -190,23 +212,26 @@ export async function handleTalk(socket, msg, ack) {
           } catch (err) {
             log.warn("Portal", `markInboxConsumed failed: ${err.message}`);
           }
-          if (responseEntry && socket.connected) {
-            socket.emit("ibp:talk-reply", responseEntry);
+          // Broadcast the talk-reply to every socket the asker being
+          // has connected — same single-context being model the chat
+          // pipeline uses. The original socket may have disconnected
+          // during the async summoning; other sockets for the same
+          // being still receive the reply.
+          if (responseEntry) {
+            emitTalkReply(socket, responseEntry);
           }
         })
         .catch((err) => {
           log.error("Portal", `async summoning failed: ${err.message}`);
-          if (socket.connected) {
-            socket.emit("ibp:talk-reply", {
-              from:        `${pathOfResolved(resolved)}@${embodimentName}`,
-              content:     `[${err.code || "error"}] ${err.message || "summoning failed"}`,
-              intent:      "chat",
-              correlation: randomUUID(),
-              inReplyTo:   messageId,
-              sentAt:      new Date().toISOString(),
-              error:       true,
-            });
-          }
+          emitTalkReply(socket, {
+            from:        `${pathOfResolved(resolved)}@${embodimentName}`,
+            content:     `[${err.code || "error"}] ${err.message || "summoning failed"}`,
+            intent:      "chat",
+            correlation: randomUUID(),
+            inReplyTo:   messageId,
+            sentAt:      new Date().toISOString(),
+            error:       true,
+          });
         });
       return;
     }

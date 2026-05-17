@@ -27,7 +27,7 @@ export default {
     "The new version starts counting from scratch.",
 
   needs: {
-    services: ["contributions", "hooks"],
+    services: ["dids", "hooks"],
     models: ["Node"],
   },
 

@@ -27,7 +27,7 @@ export default {
 
   needs: {
     services: ["websocket"],
-    models: ["User", "Node"],
+    models: ["Being", "Node"],
   },
 
   optional: {},

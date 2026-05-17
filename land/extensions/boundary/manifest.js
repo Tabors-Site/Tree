@@ -48,7 +48,7 @@ export default {
     "every time the land restarts.",
 
   needs: {
-    services: ["llm", "hooks", "contributions"],
+    services: ["llm", "hooks", "dids"],
     models: ["Node", "Artifact"],
   },
 

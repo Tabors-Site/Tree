@@ -14,8 +14,8 @@ import log from "../../seed/log.js";
 import { getBeingMeta } from "../../seed/tree/beingMetadata.js";
 import { getExtension } from "../loader.js";
 
-let User = null;
-export function setModels(models) { User = models.User; }
+let Being = null;
+export function setModels(models) { Being = models.Being; }
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG (land-configurable)
@@ -52,7 +52,7 @@ function transitionSummaryEnabled() {
  * @param {string} [nodeId] - which node the interaction happened at
  */
 export async function recordSignal(beingId, type, nodeId) {
-  if (!beingId || !User) return;
+  if (!beingId || !Being) return;
 
   const user = await Being.findById(beingId);
   if (!user) return;
@@ -234,7 +234,7 @@ export function buildPhaseContext(phaseMeta) {
 // ─────────────────────────────────────────────────────────────────────────
 
 export async function getPhaseState(beingId) {
-  if (!User) return null;
+  if (!Being) return null;
   const user = await Being.findById(beingId).lean();
   if (!user) return null;
   return getBeingMeta(user, "phase");

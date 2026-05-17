@@ -31,7 +31,7 @@ export default {
   npm: ["discord.js@^14.25.1"],
 
   needs: {
-    models: ["Node", "User"],
+    models: ["Node", "Being"],
     extensions: ["gateway"],
   },
 

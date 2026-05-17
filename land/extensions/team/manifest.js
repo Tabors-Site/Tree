@@ -22,8 +22,8 @@ export default {
     "contribution log for a complete audit trail.",
 
   needs: {
-    services: ["contributions"],
-    models: ["User", "Node", "Artifact"],
+    services: ["dids"],
+    models: ["Being", "Node", "Artifact"],
     extensions: [],
   },
 

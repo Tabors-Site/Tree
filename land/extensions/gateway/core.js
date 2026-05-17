@@ -6,8 +6,8 @@ import { getChannelType, getRegisteredTypes, hasChannelType } from "./registry.j
 
 // Models wired from init() via setModels(). Fallback to direct import for standalone use.
 let Node = null;
-let User = null;
-export function setModels(models) { Node = models.Node; User = models.User; }
+let Being = null;
+export function setModels(models) { Node = models.Node; Being = models.Being; }
 
 // Lazy model access for gateway core (may be called before init in some paths)
 async function ensureModels() {

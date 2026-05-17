@@ -151,7 +151,7 @@ export async function init(core) {
     let suppressUpcoming = false;
     if (beingId) {
       try {
-        const User = core.models.User;
+        const Being = core.models.Being;
         if (User) {
           const user = await Being.findById(beingId).select("metadata").lean();
           if (user) {

@@ -37,7 +37,7 @@ export default {
     "extensions whose metadata is preserved but inactive until installed.",
 
   needs: {
-    services: ["hooks", "contributions"],
+    services: ["hooks", "dids"],
     models: ["Node"],
   },
 

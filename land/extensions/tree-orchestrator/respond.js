@@ -24,6 +24,8 @@ export async function runRespond({
   username,
   beingId,
   rootId,
+  rootChatId = null,
+  sessionId = null,
   nodeContext,
   operationContext,
   confirmNeeded = false,
@@ -83,6 +85,9 @@ export async function runRespond({
     username,
     beingId,
     rootId,
+    chatId: rootChatId || null,
+    rootChatId: rootChatId || null,
+    sessionId: sessionId || null,
     slot,
     signal,
     onToolResults(results) {

@@ -26,7 +26,7 @@ export default {
     "return a clear error rather than overwriting.",
 
   needs: {
-    models: ["User"],
+    models: ["Being"],
   },
 
   optional: {},

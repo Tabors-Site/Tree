@@ -37,7 +37,7 @@ export default {
     "tree start with both the shape and the wisdom of the tree that came before it.",
 
   needs: {
-    services: ["hooks", "llm", "contributions"],
+    services: ["hooks", "llm", "dids"],
     models: ["Node"],
   },
 

@@ -33,7 +33,7 @@ export default {
 
   needs: {
     services: ["session"],
-    models: ["Node", "User"],
+    models: ["Node", "Being"],
   },
 
   optional: {

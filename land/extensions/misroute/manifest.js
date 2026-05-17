@@ -55,8 +55,8 @@ export default {
   territory: "misroute, routing feedback, correction",
 
   needs: {
-    models: ["User"],
-    services: ["hooks", "userMetadata"],
+    models: ["Being"],
+    services: ["hooks", "beingMetadata"],
   },
 
   optional: {

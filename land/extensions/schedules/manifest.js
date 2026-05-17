@@ -24,7 +24,7 @@ export default {
     "Without prestige installed, schedules are still fully functional as standalone dates.",
 
   needs: {
-    services: ["contributions", "hooks"],
+    services: ["dids", "hooks"],
     models: ["Node"],
   },
 

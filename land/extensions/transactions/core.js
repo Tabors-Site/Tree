@@ -3,7 +3,7 @@ import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
 
 // Services wired from init() via setServices()
 let Node = null;
-let Did = null;
+let _Did = null;
 let logDid = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
 let _metadata = null;
@@ -922,7 +922,7 @@ export async function getTransactionWithContributions(transactionId) {
     throw new Error("Transaction not found");
   }
 
-  const contributions = await Did.find({
+  const contributions = await _Did.find({
     tradeId: transactionId, // rename later if you migrate
   })
     .sort({ date: 1 })

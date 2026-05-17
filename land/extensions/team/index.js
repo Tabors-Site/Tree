@@ -6,41 +6,44 @@ import { getPendingInvitesForUser, respondToInvite } from "./invites.js";
 import { buildRouter } from "./routes.js";
 
 export async function init(core) {
-  const { User } = core.models;
+  const { Being } = core.models;
 
-  // ── Hook: beforeNote (rewrite @mentions to canonical usernames) ────
+  // ── Hook: beforeArtifact (rewrite @mentions to canonical usernames) ────
+  // Origin "ibp" with string content is the editable text path; other
+  // origins (filesystem, web, cross-land) hold structured content where
+  // @mention rewriting doesn't apply.
   core.hooks.register("beforeArtifact", async (hookData) => {
-    if (hookData.contentType === "text" && hookData.content) {
-      const { rewrittenContent } = await extractTaggedUsersAndRewrite(hookData.content, User);
+    if (hookData.origin === "ibp" && typeof hookData.content === "string" && hookData.content) {
+      const { rewrittenContent } = await extractTaggedUsersAndRewrite(hookData.content, Being);
       hookData.content = rewrittenContent;
     }
   }, "team");
 
-  // ── Hook: afterNote (sync NoteTag records) ────────────────────────
+  // ── Hook: afterArtifact (sync NoteTag records) ────────────────────────
   core.hooks.register("afterArtifact", async (data) => {
-    const { note, action, nodeId, beingId } = data;
+    const { artifact, action, nodeId, beingId, origin } = data;
 
     if (action === "delete") {
-      await clearTagsForNote(note._id);
+      if (artifact?._id) await clearTagsForNote(artifact._id);
       return;
     }
 
-    if ((action === "create" || action === "edit") && note.contentType === "text") {
+    if ((action === "create" || action === "edit") && origin === "ibp" && typeof artifact?.content === "string") {
       await syncTagsForNote({
-        noteId: note._id,
-        content: note.content,
+        noteId: artifact._id,
+        content: artifact.content,
         nodeId,
         taggedBy: beingId,
-        User,
+        User: Being,
       });
     }
   }, "team");
 
-  log.verbose("Team", "Hooks registered (beforeNote, afterNote)");
+  log.verbose("Team", "Hooks registered (beforeArtifact, afterArtifact)");
 
   const router = buildRouter(core, { escapeRegex, queueCanopyEvent });
 
-  const { Node, Note } = core.models;
+  const { Node, Artifact } = core.models;
   const { logDid } = core.dids;
 
   // Pre-bound: callers just pass inviteId/beingId/acceptInvite, no deps needed

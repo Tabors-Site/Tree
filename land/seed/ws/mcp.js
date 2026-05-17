@@ -14,8 +14,8 @@
 //
 //   - Stanceless background pipelines (internal cognition without a
 //     being-to-being framing — compress, scout, intent, dreams, etc.)
-//     key on their internal-session-key (`ephemeral:<uuid>`,
-//     `tree-internal:<rootId>:<purpose>`). Same string the rest of the
+//     key on their internal-session-key (`pipeline:ephemeral:<uuid>`,
+//     `pipeline:tree:<rootId>:<purpose>`). Same string the rest of the
 //     pipeline uses.
 //
 // The Map stores strings → MCP clients; it doesn't care which flavor.

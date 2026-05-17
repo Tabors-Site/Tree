@@ -16,7 +16,7 @@ import path from "path";
 import Node from "../../seed/models/node.js";
 import Being from "../../seed/models/being.js";
 import Artifact from "../../seed/models/artifact.js";
-import Did from "../seed/models/did.js";
+import Did from "../../seed/models/did.js";
 import log from "../../seed/log.js";
 
 let Chat = null;

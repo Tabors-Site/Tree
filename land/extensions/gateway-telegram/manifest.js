@@ -24,7 +24,7 @@ export default {
     "Telegram-side registration.",
 
   needs: {
-    models: ["Node", "User"],
+    models: ["Node", "Being"],
     extensions: ["gateway"],
   },
 

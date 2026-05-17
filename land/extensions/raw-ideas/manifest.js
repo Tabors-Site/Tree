@@ -32,8 +32,8 @@ export default {
     "matching, and hyphenated term matching across the inbox.",
 
   needs: {
-    services: ["llm", "session", "chat", "orchestrator", "contributions", "hooks"],
-    models: ["Node", "User", "Artifact"],
+    services: ["llm", "session", "chat", "orchestrator", "dids", "hooks"],
+    models: ["Node", "Being", "Artifact"],
   },
 
   optional: {

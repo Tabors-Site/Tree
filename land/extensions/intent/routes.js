@@ -5,7 +5,7 @@ import authenticate from "../../seed/middleware/authenticate.js";
 
 let Node = null;
 let _Artifact = null;
-let Did = null;
+let _Did = null;
 let _metadata = null;
 export function setModels(models) {
   Node = models.Node;
@@ -105,7 +105,7 @@ router.get("/root/:rootId/intent/history", authenticate, async (req, res) => {
     const rootId = req.params.rootId;
 
     // Get contributions logged by intent
-    const contributions = await Did.find({
+    const contributions = await _Did.find({
       action: "intent:executed",
     })
       .sort({ date: -1 })

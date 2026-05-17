@@ -33,7 +33,7 @@ export default {
     "it has so the structure matches the meaning.",
 
   needs: {
-    services: ["llm", "hooks", "contributions"],
+    services: ["llm", "hooks", "dids"],
     models: ["Node", "Artifact"],
   },
 

@@ -9,14 +9,14 @@ import { getExtension } from "../loader.js";
 // Services wired from init() via setServices()
 let Node = null;
 let _Artifact = null;
-let User = null;
+let Being = null;
 let logDid = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
 
 export function setServices({ models, contributions }) {
   Node = models.Node;
   _Artifact = models.Artifact;
-  User = models.User;
+  Being = models.Being;
   if (contributions?.logDid) logDid = contributions.logDid;
 }
 export function setEnergyService(energy) { useEnergy = energy.useEnergy; }

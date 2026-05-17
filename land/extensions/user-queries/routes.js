@@ -9,7 +9,7 @@ import {
   getAllArtifactsByUser,
   searchArtifactsByUser,
 } from "../../seed/tree/artifacts.js";
-import { getDidsByBeing } from "../seed/tree/dids.js";
+import { getDidsByBeing } from "../../seed/tree/dids.js";
 import getNodeName from "../../routes/api/helpers/getNameById.js";
 import { renderUserNotes } from "./pages/userNotes.js";
 import { renderChats } from "./pages/userChats.js";

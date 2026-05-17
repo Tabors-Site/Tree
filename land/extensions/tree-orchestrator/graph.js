@@ -407,6 +407,8 @@ export async function executeGraph(node, message, aiSessionKey, opts) {
       slot: opts.slot,
       onToolLoopCheckpoint: opts.onToolLoopCheckpoint,
       modesUsed: opts.modesUsed,
+      sessionId: opts.sessionId,
+      rootChatId: opts.rootChatId,
     });
   }
 

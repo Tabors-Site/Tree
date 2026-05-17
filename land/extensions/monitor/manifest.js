@@ -23,7 +23,7 @@ export default {
 
   needs: {
     services: ["hooks"],
-    models: ["Node", "User", "Did"],
+    models: ["Node", "Being", "Did"],
   },
 
   optional: {

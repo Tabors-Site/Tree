@@ -44,14 +44,14 @@ const REQUIRED_INDEXES = [
   { collection: "nodes", fields: { parent: 1, systemRole: 1 }, options: { sparse: true } },
 
   // Note queries (notes loaded by nodeId on every context build and note CRUD)
-  { collection: "notes", fields: { nodeId: 1, createdAt: -1 }, options: {} },
+  { collection: "artifacts", fields: { nodeId: 1, createdAt: -1 }, options: {} },
 
   // Did queries (audit trail by node and by user)
-  { collection: "contributions", fields: { nodeId: 1, date: -1 }, options: {} },
-  { collection: "contributions", fields: { beingId: 1, date: -1 }, options: {} },
-  { collection: "contributions", fields: { sessionId: 1 }, options: { sparse: true } },
+  { collection: "dids", fields: { nodeId: 1, date: -1 }, options: {} },
+  { collection: "dids", fields: { beingId: 1, date: -1 }, options: {} },
+  { collection: "dids", fields: { sessionId: 1 }, options: { sparse: true } },
   // Did lookup by chatId (finalizeChat collects contributions per chat)
-  { collection: "contributions", fields: { chatId: 1 }, options: { sparse: true } },
+  { collection: "dids", fields: { chatId: 1 }, options: { sparse: true } },
 
   // User queries (login by username, already unique in schema but verify)
   { collection: "users", fields: { username: 1 }, options: { unique: true } },
@@ -71,7 +71,7 @@ const REQUIRED_INDEXES = [
 
 // Kernel collection names. Extension indexes cannot target these.
 const KERNEL_COLLECTIONS = new Set([
-  "nodes", "users", "notes", "contributions", "aichats", "llmconnections",
+  "nodes", "beings", "artifacts", "dids", "aichats", "llmconnections",
 ]);
 
 /**

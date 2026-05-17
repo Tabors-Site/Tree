@@ -53,8 +53,8 @@ export default {
     "learned to want.",
 
   needs: {
-    services: ["llm", "hooks", "contributions", "session", "chat", "orchestrator"],
-    models: ["Node", "User"],
+    services: ["llm", "hooks", "dids", "session", "chat", "orchestrator"],
+    models: ["Node", "Being"],
   },
 
   optional: {

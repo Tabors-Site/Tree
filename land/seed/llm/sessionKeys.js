@@ -1,6 +1,38 @@
 /**
  * AI-chat session key builders.
  *
+ * What `aiSessionKey` IS, after the per-being / per-Portal-Address refactor:
+ *
+ *   - A transport-session identifier. Each tab / CLI / mobile reach gets
+ *     its own key so the in-memory `sessions` Map in conversation.js can
+ *     hold per-tab LLM-conversation buffers (messages[], modeKey) without
+ *     two tabs clobbering each other's working state.
+ *   - The cache key for stanceless background pipelines (compress, scout,
+ *     intent, dreams, …). Those use `pipeline:ephemeral:<uuid>` or
+ *     `pipeline:tree:<rootId>:<purpose>` keys — see
+ *     `resolveInternalAiSessionKey` below.
+ *   - A tracing/logging label. JWTs carry it so MCP tool calls and server
+ *     logs can be correlated to the reach that initiated them.
+ *
+ * What `aiSessionKey` IS NOT used for anymore:
+ *
+ *   - Position state. Lives on `Being.currentPositionId` keyed by beingId
+ *     (Slice 1). Two tabs for the same being share position automatically.
+ *   - Thread identity. The canonical identifier for a conversation between
+ *     two beings is `Chat.portalAddress` (Slice 0).
+ *   - Tool-call → chatId correlation. The conversation loop injects
+ *     `chatId` / `rootChatId` / `portalAddress` into MCP tool args
+ *     directly; mcp/server.js reads them without a Map lookup (Slice 2).
+ *   - MCP client cache key for being-to-being conversations. Keyed by
+ *     `portalAddress` so all the being's sockets share one MCP client
+ *     (Slice 3). Internal-cognition pipelines still key on aiSessionKey.
+ *   - Per-conversation extension state (ruler/foreman decisions, abort
+ *     registry, pending plans, swarm plans). Keyed on `rootChatId` or
+ *     `portalAddress` per each Map's semantics (Slice 4).
+ *   - Per-socket broadcast for async chat events. The conversation loop
+ *     emits via `io.to('being:' + beingId)` so every tab the being has
+ *     connected receives the stream (Slice 5).
+ *
  * Entry points (websocket.js, routes/api/orchestrate.js, gateway extensions)
  * pass raw ingredients to runOrchestration; runOrchestration is the sole
  * caller of buildUserAiSessionKey. Extensions never import this file.
@@ -13,33 +45,40 @@
  * `device` (from socket.clientKind, "http", or a gateway-composed
  * "${channel}:${external_id}") is the default last segment so CLI,
  * dashboard, mobile, and every gateway auto-decouple. Two simultaneous
- * reaches on the same tree produce two sessions, not one merged thread.
+ * reaches on the same tree get separate aiSessionKeys (which means
+ * separate per-tab LLM buffers) but share their being-level state.
  *
  * `handle`, when provided, REPLACES device:
- *   - handle="shared" from two devices → one merged session (explicit)
+ *   - handle="shared" from two devices → one merged tab-level buffer
  *   - handle="draft-xyz" from one device → a named side-thread
  *
- * nodeId intentionally omitted — position is tracked as session state
- * via setCurrentNodeId, not as part of the key. This preserves cross-
- * branch conversational continuity within a tree.
+ * nodeId intentionally omitted from the key — position is per-being now,
+ * not per-aiSessionKey.
  */
 
 /**
- * Resolve the ai-chat session key for a runChat / OrchestratorRuntime call.
+ * Resolve the pipeline key for a runChat / OrchestratorRuntime call.
+ *
+ * A pipeline key identifies a stanceless internal-cognition lane — the
+ * conversation-equivalent cache key for work that has no addressee
+ * being. Distinct namespace from `aiSessionKey` (transport identity)
+ * and `portalAddress` (being-to-being conversation identity).
  *
  * Three paths, in priority order:
- *   1. `aiSessionKey` — explicit pass-through (extension joining an upstream caller's session).
+ *   1. `pipelineKey` — explicit pass-through (extension joining an upstream caller's pipeline).
  *   2. `scope` + `purpose` — extension declares a named internal lane.
- *      Produces `tree-internal:${rootId}:${purpose}[:${extra}]`,
- *      `home-internal:${beingId}:${purpose}[:${extra}]`, or
- *      `land-internal:${purpose}[:${extra}]`.
- *   3. Neither — fresh `ephemeral:${uuid}`. One-shot, no cross-call memory.
+ *      Produces `pipeline:tree:${rootId}:${purpose}[:${extra}]`,
+ *      `pipeline:home:${beingId}:${purpose}[:${extra}]`, or
+ *      `pipeline:land:${purpose}[:${extra}]`.
+ *   3. Neither — fresh `pipeline:ephemeral:${uuid}`. One-shot, no
+ *      cross-call memory.
  *
- * Returns `{ key, persist }`. `persist === false` iff the key is ephemeral —
- * callers skip the session-chain cache so the key dies with the call.
+ * Returns `{ key, persist }`. `persist === false` iff the key is
+ * ephemeral — callers skip the session-chain cache so the key dies
+ * with the call.
  */
-export function resolveInternalAiSessionKey({
-  aiSessionKey = null,
+export function resolvePipelineKey({
+  pipelineKey = null,
   scope = null,
   purpose = null,
   extra = null,
@@ -47,29 +86,33 @@ export function resolveInternalAiSessionKey({
   rootId = null,
   makeEphemeral,
 }) {
-  if (aiSessionKey) {
-    return { key: aiSessionKey, persist: !aiSessionKey.startsWith("ephemeral:") };
+  if (pipelineKey) {
+    return { key: pipelineKey, persist: !pipelineKey.startsWith("pipeline:ephemeral:") };
   }
   if (scope) {
     const suffix = extra ? `:${String(extra).slice(0, 64).replace(/[^a-z0-9:._-]/gi, "")}` : "";
     if (scope === "tree") {
-      if (!rootId || !purpose) throw new Error("resolveInternalAiSessionKey: scope='tree' requires rootId and purpose");
-      return { key: `tree-internal:${rootId}:${purpose}${suffix}`, persist: true };
+      if (!rootId || !purpose) throw new Error("resolvePipelineKey: scope='tree' requires rootId and purpose");
+      return { key: `pipeline:tree:${rootId}:${purpose}${suffix}`, persist: true };
     }
     if (scope === "home") {
-      if (!beingId || !purpose) throw new Error("resolveInternalAiSessionKey: scope='home' requires beingId and purpose");
-      return { key: `home-internal:${beingId}:${purpose}${suffix}`, persist: true };
+      if (!beingId || !purpose) throw new Error("resolvePipelineKey: scope='home' requires beingId and purpose");
+      return { key: `pipeline:home:${beingId}:${purpose}${suffix}`, persist: true };
     }
     if (scope === "land") {
-      if (!purpose) throw new Error("resolveInternalAiSessionKey: scope='land' requires purpose");
-      return { key: `land-internal:${purpose}${suffix}`, persist: true };
+      if (!purpose) throw new Error("resolvePipelineKey: scope='land' requires purpose");
+      return { key: `pipeline:land:${purpose}${suffix}`, persist: true };
     }
-    throw new Error(`resolveInternalAiSessionKey: unknown scope "${scope}"`);
+    throw new Error(`resolvePipelineKey: unknown scope "${scope}"`);
   }
   // Ephemeral. Caller supplies the uuid factory so tests can stub it.
   const uuid = typeof makeEphemeral === "function" ? makeEphemeral() : cryptoRandomUUID();
-  return { key: `ephemeral:${uuid}`, persist: false };
+  return { key: `pipeline:ephemeral:${uuid}`, persist: false };
 }
+
+// Back-compat alias for any callers still importing the old name.
+// Slated for deletion once all imports have migrated.
+export const resolveInternalAiSessionKey = resolvePipelineKey;
 
 function cryptoRandomUUID() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();

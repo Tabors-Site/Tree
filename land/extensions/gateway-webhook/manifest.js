@@ -21,7 +21,7 @@ export default {
     "channels self-heal when a user clears their browser data or revokes notification permissions.",
 
   needs: {
-    models: ["Node", "User"],
+    models: ["Node", "Being"],
     extensions: ["gateway"],
   },
 

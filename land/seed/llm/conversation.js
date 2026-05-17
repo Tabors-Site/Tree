@@ -646,19 +646,18 @@ export async function userHasLlm(beingId) {
 // SESSION STATE (keyed by ai-chat session key)
 // ─────────────────────────────────────────────────────────────────────────
 //
-// The parameter/local variable name `aiSessionKey` throughout this file is
-// the ai-chat session key built by seed/llm/sessionKeys.js. We keep the
-// historical `aiSessionKey` name because it's the JWT claim name (wire
-// contract with the MCP server), a field in the runChat/runOrchestration
-// return value (API contract with callers), and a field name in
-// sessionRegistry meta (consumed by hooks). Rename-in-place would break
-// all three. For new code, treat `aiSessionKey` as synonymous with
-// `aiSessionKey` — same string, same meaning.
+// `aiSessionKey` is the transport-session identifier built by
+// seed/llm/sessionKeys.js. It identifies a reach — which being, from
+// which device — so the per-tab `sessions` Map below can hold a
+// distinct LLM-conversation buffer for each open window.
 //
-// The `socket.aiSessionKey` field (set in ws/websocket.js register handler)
-// is related but distinct: it's the transport-level fallback key used
-// when a chat arrives before payload context is established. It's a
-// real socket field, not a local variable.
+// What `aiSessionKey` does for THIS Map: keys the per-tab LLM buffer
+// (messages[], modeKey, bigMode). Two tabs on the same being get two
+// entries so their working state doesn't clobber. Position, threading,
+// MCP cache, and async event broadcast all live elsewhere now under
+// first-class identifiers (Being.currentPositionId, portalAddress,
+// rootChatId, being-room) — see sessionKeys.js header for the full
+// after-refactor map.
 
 // Each session holds: { modeKey, bigMode, messages[], _lastActive }.
 //
@@ -772,10 +771,24 @@ function persistBeingPosition(beingId, nodeId) {
 }
 
 /**
- * Get or create session for a visitor.
+ * Get or create the conversation session.
+ *
+ * Keyed by `conversationKey` — the canonical conversation identifier.
+ * For being-to-being chats this is the Portal Address; for stanceless
+ * background pipelines it's the pipeline key. Two tabs of the same
+ * being at the same Portal Address see the same entry, so the LLM
+ * conversation buffer (messages[], modeKey) is genuinely shared
+ * across the being's open windows. Switching tabs no longer produces
+ * divergent conversation state.
+ *
+ * Callers in pre-conversation code paths (mode probes from the
+ * websocket layer, etc.) may pass the per-tab transport identifier as
+ * a fallback. Those lookups return a fresh entry on miss; the
+ * authoritative state still belongs to whoever opens the session
+ * under the real conversationKey first.
  */
-function getSession(aiSessionKey) {
-  if (!sessions.has(aiSessionKey)) {
+function getSession(conversationKey) {
+  if (!sessions.has(conversationKey)) {
     // Hard cap: if sessions exceed limit, evict oldest before creating new
     if (sessions.size >= MAX_CONVERSATION_SESSIONS) {
       let oldestKey = null, oldestTime = Infinity;
@@ -784,16 +797,23 @@ function getSession(aiSessionKey) {
       }
       if (oldestKey) sessions.delete(oldestKey);
     }
-    sessions.set(aiSessionKey, {
+    sessions.set(conversationKey, {
       modeKey: null,
       bigMode: null,
       messages: [],
       _lastActive: Date.now(),
     });
   }
-  const s = sessions.get(aiSessionKey);
+  const s = sessions.get(conversationKey);
   s._lastActive = Date.now();
   return s;
+}
+
+// Helper: derive the conversation key from ctx + fallback. Used at
+// every internal getSession call site so the per-Portal-Address /
+// per-pipelineKey shared buffer model holds end-to-end.
+function _convKey(ctx, aiSessionKey) {
+  return ctx?.mcpCacheKey || aiSessionKey;
 }
 
 // Sweep stale conversation sessions every 10 minutes (safety net)
@@ -828,7 +848,7 @@ setInterval(
 export async function switchMode(aiSessionKey, newModeKey, ctx) {
   ctx = ctx || {};
   const beingId = ctx.beingId || null;
-  const session = getSession(aiSessionKey);
+  const session = getSession(_convKey(ctx, aiSessionKey));
   const mode = getMode(newModeKey);
   if (!mode) throw new Error(`Unknown mode: ${newModeKey}`);
 
@@ -925,7 +945,7 @@ export async function switchBigMode(aiSessionKey, bigMode, ctx) {
  */
 async function ensureSession(aiSessionKey, ctx) {
   const beingId = ctx?.beingId || null;
-  const session = getSession(aiSessionKey);
+  const session = getSession(_convKey(ctx, aiSessionKey));
 
   // Self-healing: detect rootId mismatch. If the caller says we're in a different
   // tree than the being thinks, clear messages and re-init. This catches race
@@ -1024,7 +1044,7 @@ async function resolveLLMClient(ctx, session, aiSessionKey) {
   // Ensure MCP client. Cache key is per-conversation:
   //   - Being-to-being: ctx.mcpCacheKey is the Portal Address.
   //   - Stanceless background: ctx.mcpCacheKey is the internal session
-  //     key (`ephemeral:<uuid>` / `tree-internal:<rootId>:<purpose>`).
+  //     key (`pipeline:ephemeral:<uuid>` / `pipeline:tree:<rootId>:<purpose>`).
   //   - Legacy: aiSessionKey fallback for callers that haven't been
   //     migrated to set ctx.mcpCacheKey.
   const mcpCacheKey = ctx?.mcpCacheKey || aiSessionKey;
@@ -1032,7 +1052,7 @@ async function resolveLLMClient(ctx, session, aiSessionKey) {
   if (!client) {
     const jwt = (await import("jsonwebtoken")).default;
     const mcpJwt = jwt.sign(
-      { beingId: String(ctx.beingId), username: ctx.username, aiSessionKey },
+      { beingId: String(ctx.beingId), username: ctx.username },
       process.env.JWT_SECRET,
       { expiresIn: "24h" },
     );
@@ -1495,8 +1515,8 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, aiSessio
       model: failoverResult.usedClient?.model || MODEL,
       usage: response?.usage || null,
       hasToolCalls: !!response?.choices?.[0]?.message?.tool_calls?.length,
-      chatId: _llmChatCtx.chatId || null,
-      sessionId: _llmChatCtx.sessionId || null,
+      chatId: _llmChatId,
+      sessionId: _llmSessionId,
       responseText: response?.choices?.[0]?.message?.content || null,
     }).catch(() => {});
   } catch (apiErr) {
@@ -1547,8 +1567,8 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, aiSessio
           usage: null, // No usage data available from the error
           hasToolCalls: false,
           _failedGeneration: true,
-          chatId: _llmChatCtx.chatId || null,
-          sessionId: _llmChatCtx.sessionId || null,
+          chatId: _llmChatId,
+          sessionId: _llmSessionId,
           responseText: extracted || null,
         }).catch(() => {});
       } else {
@@ -1846,20 +1866,21 @@ async function executeTool(toolCall, session, ctx, client, aiSessionKey) {
   }
 
   // Auto-inject standard tool-context args. Mirrors what mcp/server.js
-  // injects for HTTP-path tool calls, so in-process and HTTP paths
+  // sees from HTTP-path tool calls, so in-process and HTTP paths
   // present the same args shape to handlers.
-  //   beingId       — the calling user
-  //   aiSessionKey    — the calling visitor's session id (per-conversation
-  //                  transient registers key on this)
-  //   chatId       — the calling chat's id; tools that spawn child
-  //                  chainsteps (Ruler's hire-planner, etc.) thread
-  //                  this through as parentChatId so the chain
-  //                  hierarchy is preserved for audit walks
-  //   sessionId    — for chatTracker context
-  //   rootId       — tree root the call originates from
-  //   nodeId       — current node position
+  //   beingId        — the calling being (asker)
+  //   aiSessionKey   — transport-session trace label (per-tab key)
+  //   chatId         — the current chainstep's chat record id
+  //   rootChatId     — the user-message-level chat for this turn;
+  //                    per-turn state Maps (rulerDecisions,
+  //                    foremanDecisions) key on this
+  //   portalAddress  — canonical conversation identifier (stance::stance);
+  //                    per-conversation state Maps (abortRegistry,
+  //                    pendingPlan, pendingSwarmPlan) key on this
+  //   sessionId      — chat-record-level session group for UI nesting
+  //   rootId         — tree root the call originates from
+  //   nodeId         — current node position (per-being)
   args.beingId = ctx.beingId;
-  if (aiSessionKey) args.aiSessionKey = aiSessionKey;
   // chatId / sessionId travel from the call site through ctx so mcp/server.js
   // can stop doing Map lookups. The sender is the authority — we always know
   // which chat the tool call belongs to before we make it.
@@ -2458,7 +2479,7 @@ export function resetVisitorSession(aiSessionKey, reason = "aborted") {
  * Rebuilds system prompt for the current mode.
  */
 export async function resetConversation(aiSessionKey, ctx) {
-  const session = getSession(aiSessionKey);
+  const session = getSession(_convKey(ctx, aiSessionKey));
   if (!session.modeKey) return;
 
   const systemPrompt = await buildPromptForMode(session.modeKey, {
@@ -2492,10 +2513,10 @@ export function sessionCount() {
  *      an upstream runOrchestration that wants this sub-call to join the
  *      user's session, or an extension joining a named internal lane).
  *   2. `scope` + `purpose`: declare a named internal lane. Kernel assembles
- *      `tree-internal:${rootId}:${purpose}[:${extra}]` /
- *      `home-internal:${beingId}:${purpose}[:${extra}]` /
- *      `land-internal:${purpose}[:${extra}]`. Persists across runs.
- *   3. Neither: ephemeral. Fresh `ephemeral:${uuid}` per call, one-shot.
+ *      `pipeline:tree:${rootId}:${purpose}[:${extra}]` /
+ *      `pipeline:home:${beingId}:${purpose}[:${extra}]` /
+ *      `pipeline:land:${purpose}[:${extra}]`. Persists across runs.
+ *   3. Neither: ephemeral. Fresh `pipeline:ephemeral:${uuid}` per call, one-shot.
  *
  * Default is ephemeral. Extensions that want cross-run memory declare it
  * explicitly via scope/purpose. User keys are built by runOrchestration
@@ -2577,15 +2598,17 @@ export async function runChat({
   const { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } = await import("../ws/mcp.js");
   const { startChat, finalizeChat } = await import("./chatTracker.js");
   const { setSessionAbort, clearSessionAbort } = await import("../ws/sessionRegistry.js");
-  const { resolveInternalAiSessionKey } = await import("./sessionKeys.js");
+  const { resolvePipelineKey } = await import("./sessionKeys.js");
   const { computePortalAddressForChat } = await import("./portalAddress.js");
 
   const JWT_SECRET = process.env.JWT_SECRET;
   if (!JWT_SECRET) throw new Error("JWT_SECRET not configured");
 
-  // Resolve the ai-chat session key (shared with OrchestratorRuntime).
-  const { key: resolvedKey, persist: persistSession } = resolveInternalAiSessionKey({
-    aiSessionKey, scope, purpose, extra, beingId, rootId,
+  // Resolve the transport / pipeline key (shared with OrchestratorRuntime).
+  // The `aiSessionKey` param is accepted as the legacy name for an
+  // explicit pass-through pipeline key.
+  const { key: resolvedKey, persist: persistSession } = resolvePipelineKey({
+    pipelineKey: aiSessionKey, scope, purpose, extra, beingId, rootId,
   });
 
   // Eagerly compute the Portal Address for being-to-being conversations
@@ -2643,7 +2666,7 @@ export async function runChat({
   // key otherwise. Skip if a client already exists under this key.
   if (!getMCPClient(mcpCacheKey)) {
     const internalJwt = jwt.sign(
-      { beingId: beingId.toString(), username: username || "unknown", aiSessionKey },
+      { beingId: beingId.toString(), username: username || "unknown" },
       JWT_SECRET,
       { expiresIn: "24h" }
     );
@@ -2658,11 +2681,14 @@ export async function runChat({
   if (rootId) setRootId(beingId, rootId);
   if (nodeId) setCurrentNodeId(beingId, nodeId);
 
-  // 3. Switch mode only if different
-  const currentMode = getCurrentMode(aiSessionKey);
+  // 3. Switch mode only if different. Mode state lives on the
+  // conversation entry (keyed by mcpCacheKey: Portal Address or
+  // pipelineKey), so two tabs at the same conversation see the same
+  // current mode and don't re-switch redundantly.
+  const currentMode = getCurrentMode(mcpCacheKey);
   if (currentMode !== mode) {
     try {
-      await switchMode(aiSessionKey, mode, { username, beingId, currentNodeId: getCurrentNodeId(beingId) });
+      await switchMode(aiSessionKey, mode, { username, beingId, mcpCacheKey, currentNodeId: getCurrentNodeId(beingId) });
     } catch (err) {
       log.warn("RunChat", `Mode switch to ${mode} failed: ${err.message}`);
     }
@@ -2867,15 +2893,17 @@ export async function runOrchestration({
   if (!SESSION_TYPES.API_HOME_CHAT) registerSessionType("API_HOME_CHAT", "api-home-chat");
   if (!SESSION_TYPES.API_LAND_CHAT) registerSessionType("API_LAND_CHAT", "api-land-chat");
 
-  // ── Build ai-chat session key for conversation continuity ─────────────
+  // ── Build ai-chat session key for transport-session continuity ────────
   // Canonical shape: user:${beingId}:${anchor}:${suffix}
   // where anchor is rootId (tree) or "home"/"land", and suffix is
   // `handle` (explicit override) or `device` (default, per-reach split).
   //
-  // `aiSessionKey` is the historical variable name for the ai-chat session
-  // key throughout this file and its collaborators (MCP cache, session
-  // state, chatTracker, sessionRegistry). See the block comment near
-  // the `sessions` Map declaration for why the name is preserved.
+  // aiSessionKey is now strictly transport-session identity — it keys
+  // the per-tab LLM-conversation buffer and serves as a JWT/log trace
+  // label. Position, threading, and async-event broadcast all live
+  // under first-class identifiers (Being.currentPositionId,
+  // portalAddress, being-room). See sessionKeys.js header for the
+  // after-refactor map.
   //
   // Priority: providedAiSessionKey (pass-through) > minted from pieces.
   let aiSessionKey = providedAiSessionKey || null;

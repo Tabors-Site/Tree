@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 
 // Services wired from init() via setServices()
 let Node = null;
-let Did = null;
+let _Did = null;
 let logDid = async () => {};
 let useEnergy = async () => ({ energyUsed: 0 });
 let _metadata = null;
@@ -296,7 +296,7 @@ export async function getScript({ nodeId, scriptId }) {
   const scriptObj = findScript(scripts, scriptId);
   if (!scriptObj) throw new Error("Script not found");
 
-  const contributions = await Did.find({
+  const contributions = await _Did.find({
     nodeId,
     action: { $in: ["editScript", "executeScript"] },
     $or: [

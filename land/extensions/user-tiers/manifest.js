@@ -19,7 +19,7 @@ export default {
     "writes the tier on payment. Everything else checks access through hasAccess.",
 
   needs: {
-    models: ["User"],
+    models: ["Being"],
     services: ["protocol"],
   },
 

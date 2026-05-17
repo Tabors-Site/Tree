@@ -25,7 +25,7 @@ export default {
     "expose land-status, land-users, and a chat endpoint for CLI and HTTP access.",
 
   needs: {
-    models: ["Node", "User"],
+    models: ["Node", "Being"],
   },
 
   optional: {

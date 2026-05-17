@@ -13,7 +13,7 @@ let _metadata = null;
 
 export function configure({ Node, Artifact, metadata }) {
   _Node = Node;
-  _Artifact = Note;
+  _Artifact = Artifact;
   _metadata = metadata;
 }
 

@@ -61,7 +61,7 @@ export async function init(core) {
       const root = await Node.findById(rootId).select("rootOwner metadata").lean();
       if (!root?.rootOwner) return;
 
-      const User = core.models.User;
+      const Being = core.models.Being;
       const user = await Being.findById(root.rootOwner).select("username").lean();
       if (!user) return;
 
@@ -115,7 +115,7 @@ export async function init(core) {
       if (!root?._id) return;
 
       const Node = core.models.Node;
-      const User = core.models.User;
+      const Being = core.models.Being;
       const user = await Being.findById(root.rootOwner).select("username").lean();
       if (!user) return;
 

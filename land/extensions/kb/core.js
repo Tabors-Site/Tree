@@ -6,7 +6,7 @@
  */
 
 import log from "../../seed/log.js";
-import Did from "../seed/models/did.js";
+import Did from "../../seed/models/did.js";
 import { setNodeMode } from "../../seed/modes/registry.js";
 
 let _Node = null;
@@ -16,7 +16,7 @@ let _metadata = null;
 
 export function configure({ Node, Artifact, runChat, metadata }) {
   _Node = Node;
-  _Artifact = Note;
+  _Artifact = Artifact;
   _runChat = runChat;
   _metadata = metadata;
 }

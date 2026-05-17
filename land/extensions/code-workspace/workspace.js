@@ -21,7 +21,7 @@ import Node from "../../seed/models/node.js";
 import Artifact from "../../seed/models/artifact.js";
 import { v4 as uuidv4 } from "uuid";
 import log from "../../seed/log.js";
-import { logDid } from "../seed/tree/dids.js";
+import { logDid } from "../../seed/tree/dids.js";
 import { readNs } from "../../seed/tree/extensionMetadata.js";
 
 // ---------------------------------------------------------------------------

@@ -13,7 +13,7 @@ export default {
 
   needs: {
     services: ["hooks", "metadata"],
-    models: ["Node", "User"],
+    models: ["Node", "Being"],
   },
 
   optional: {

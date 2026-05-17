@@ -23,7 +23,7 @@ export function resolveHtmlAuth() {
 
 // Models wired from init via setModels
 let Node = null;
-let Did = null;
+let _Did = null;
 export function setModels(models) {
   Node = models.Node;
   _Did = models.Did;

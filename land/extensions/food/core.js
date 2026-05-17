@@ -18,7 +18,7 @@ let _Artifact = null;
 
 export function configure({ Node, Artifact, runChat, metadata }) {
   _Node = Node;
-  _Artifact = Note;
+  _Artifact = Artifact;
   _runChat = runChat;
   _metadata = metadata;
 }
@@ -620,7 +620,7 @@ export async function getDailyPicture(foodRootId, { historyDays = 7 } = {}) {
   // Get history from History node notes
   if (foodNodes.history) {
     try {
-      const Note = _Artifact || (await import("../../seed/models/note.js")).default;
+      if (!_Artifact) _Artifact = (await import("../../seed/models/artifact.js")).default;
       const historyNotes = await _Artifact.find({ nodeId: foodNodes.history.id })
         .sort({ createdAt: -1 })
         .limit(historyDays)
@@ -635,7 +635,7 @@ export async function getDailyPicture(foodRootId, { historyDays = 7 } = {}) {
   // Get recent meals from Log node
   if (foodNodes.log) {
     try {
-      const Note = _Artifact || (await import("../../seed/models/note.js")).default;
+      if (!_Artifact) _Artifact = (await import("../../seed/models/artifact.js")).default;
       const recentNotes = await _Artifact.find({ nodeId: foodNodes.log.id })
         .sort({ createdAt: -1 })
         .limit(10)
@@ -666,7 +666,7 @@ export async function getDailyPicture(foodRootId, { historyDays = 7 } = {}) {
   // Get meals by slot (Breakfast, Lunch, Dinner, Snacks)
   if (foodNodes.mealSlots) {
     picture.mealsBySlot = {};
-    const Note = _Artifact || (await import("../../seed/models/note.js")).default;
+    if (!_Artifact) _Artifact = (await import("../../seed/models/artifact.js")).default;
     for (const [slot, node] of Object.entries(foodNodes.mealSlots)) {
       try {
         const notes = await _Artifact.find({ nodeId: node.id })
@@ -750,7 +750,7 @@ export async function getHistory(foodRootId, { limit = 90, type = null } = {}) {
   const foodNodes = await findFoodNodes(foodRootId);
   if (!foodNodes?.history) return [];
 
-  const Note = _Artifact || (await import("../../seed/models/note.js")).default;
+  if (!_Artifact) _Artifact = (await import("../../seed/models/artifact.js")).default;
   const notes = await _Artifact.find({ nodeId: foodNodes.history.id })
     .sort({ createdAt: -1 })
     .limit(limit * 2) // over-fetch to account for type filtering
@@ -815,7 +815,7 @@ async function resolveMealSlots(foodNodes, beingId, quantifier) {
   if (slots.length === 0) return [];
 
   const { getContextForAi } = await import("../../seed/tree/treeFetch.js");
-  const Note = _Artifact || (await import("../../seed/models/note.js")).default;
+  if (!_Artifact) _Artifact = (await import("../../seed/models/artifact.js")).default;
   const items = [];
   for (const slot of slots) {
     try {
@@ -875,7 +875,7 @@ async function resolveMacros(foodNodes, beingId, quantifier) {
 
 async function resolveDailySummaries(foodNodes, temporalScope, beingId, quantifier) {
   if (!foodNodes.history) return [];
-  const Note = _Artifact || (await import("../../seed/models/note.js")).default;
+  if (!_Artifact) _Artifact = (await import("../../seed/models/artifact.js")).default;
 
   // Determine date range from temporalScope
   const now = new Date();
@@ -911,7 +911,7 @@ async function resolveDailySummaries(foodNodes, temporalScope, beingId, quantifi
 
 async function resolveLogEntries(foodNodes, temporalScope, beingId, quantifier) {
   if (!foodNodes.log) return [];
-  const Note = _Artifact || (await import("../../seed/models/note.js")).default;
+  if (!_Artifact) _Artifact = (await import("../../seed/models/artifact.js")).default;
 
   const now = new Date();
   let startDate = new Date(now.getTime() - 86400000); // default: today

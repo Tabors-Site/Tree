@@ -17,7 +17,7 @@ export default {
 
   needs: {
     services: ["hooks", "tree", "metadata"],
-    models: ["Node", "User"],
+    models: ["Node", "Being"],
   },
 
   provides: {

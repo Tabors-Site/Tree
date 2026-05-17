@@ -18,7 +18,7 @@ export default {
     "acceptable. Every command is logged with the user ID.",
 
   needs: {
-    models: ["User"],
+    models: ["Being"],
   },
 
   optional: {

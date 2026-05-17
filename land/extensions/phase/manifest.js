@@ -45,7 +45,7 @@ export default {
 
   needs: {
     services: ["hooks"],
-    models: ["User"],
+    models: ["Being"],
   },
 
   optional: {

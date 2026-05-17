@@ -343,7 +343,20 @@ export async function init(core) {
     // now reads. Promotion happens in promoteToRuler going forward, but
     // existing rulers wouldn't have it. Walk the rulers and merge the
     // home record where it's missing.
+    // afterBoot kicks off the backfill as a detached job. The walk can take
+    // 30-60 seconds on lands with hundreds of governing nodes; the 5s hook
+    // timeout would mark the handler as "failed" and eventually trip the
+    // circuit breaker, even though the work itself proceeds correctly. By
+    // returning immediately and running the backfill in the background, the
+    // hook stays under its timeout and the work logs its own completion
+    // ("backfilled being homes: ...") when done.
     core.hooks.register("afterBoot", async () => {
+      runGoverningBackfill().catch((err) => {
+        log.warn("Governing", `being-home backfill error: ${err.message}`);
+      });
+    }, "governing");
+
+    async function runGoverningBackfill() {
       try {
         const Node = (await import("../../seed/models/node.js")).default;
         const { mergeExtMeta } = await import("../../seed/tree/extensionMetadata.js");
@@ -456,7 +469,7 @@ export async function init(core) {
       } catch (err) {
         log.warn("Governing", `being-home backfill failed: ${err.message}`);
       }
-    }, "governing");
+    }
 
     core.hooks.register(
       "enrichContext",

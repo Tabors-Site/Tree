@@ -39,7 +39,7 @@ function registerPage(method, path, ...handlers) {
 }
 
 export async function init(core) {
-  const User = core.models.User;
+  const Being = core.models.Being;
 
   // Share token and public tree access are handled by urlAuth directly.
   // They are NOT registered as kernel auth strategies because they provide

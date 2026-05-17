@@ -28,7 +28,10 @@
 
 import log from "../../../seed/log.js";
 
-// aiSessionKey -> entry
+// conversationKey -> entry. Per-conversation stash: Portal Address for
+// being-to-being chats, internal session key for stanceless pipelines.
+// The Map stays string-keyed; callers pass whichever flavor identifies
+// the conversation context the swarm plan belongs to.
 const _pendingSwarmPlans = new Map();
 
 const SWARM_PLAN_TTL_MS = 30 * 60 * 1000;
@@ -52,39 +55,42 @@ const SWARM_PLAN_TTL_MS = 30 * 60 * 1000;
  *   targetNodeId      node the architect ran at
  *   version           plan version counter (1 for a fresh proposal)
  */
-export function setPendingSwarmPlan(aiSessionKey, entry) {
-  if (!aiSessionKey || !entry || !Array.isArray(entry.branches) || entry.branches.length === 0) return;
-  _pendingSwarmPlans.set(aiSessionKey, {
+export function setPendingSwarmPlan(conversationKey, entry) {
+  if (!conversationKey || !entry || !Array.isArray(entry.branches) || entry.branches.length === 0) return;
+  const k = String(conversationKey);
+  _pendingSwarmPlans.set(k, {
     ...entry,
     createdAt: Date.now(),
   });
   log.debug("PendingSwarmPlan",
-    `Stashed ${entry.branches.length} branches for ${aiSessionKey} (project=${String(entry.projectNodeId || "").slice(0, 8)}, v${entry.version || 1})`,
+    `Stashed ${entry.branches.length} branches for ${k} (project=${String(entry.projectNodeId || "").slice(0, 8)}, v${entry.version || 1})`,
   );
 }
 
 /**
- * Read the pending swarm plan for a visitor if one exists and hasn't
- * expired. Does NOT clear the plan — caller clears after consuming.
+ * Read the pending swarm plan for this conversation if one exists and
+ * hasn't expired. Does NOT clear the plan — caller clears after
+ * consuming.
  */
-export function getPendingSwarmPlan(aiSessionKey) {
-  if (!aiSessionKey) return null;
-  const entry = _pendingSwarmPlans.get(aiSessionKey);
+export function getPendingSwarmPlan(conversationKey) {
+  if (!conversationKey) return null;
+  const k = String(conversationKey);
+  const entry = _pendingSwarmPlans.get(k);
   if (!entry) return null;
   if (Date.now() - entry.createdAt > SWARM_PLAN_TTL_MS) {
-    _pendingSwarmPlans.delete(aiSessionKey);
+    _pendingSwarmPlans.delete(k);
     return null;
   }
   return entry;
 }
 
-export function clearPendingSwarmPlan(aiSessionKey) {
-  if (!aiSessionKey) return;
-  _pendingSwarmPlans.delete(aiSessionKey);
+export function clearPendingSwarmPlan(conversationKey) {
+  if (!conversationKey) return;
+  _pendingSwarmPlans.delete(String(conversationKey));
 }
 
-export function hasPendingSwarmPlan(aiSessionKey) {
-  return !!getPendingSwarmPlan(aiSessionKey);
+export function hasPendingSwarmPlan(conversationKey) {
+  return !!getPendingSwarmPlan(conversationKey);
 }
 
 // Periodic cleanup. Unref so it doesn't keep the process alive in

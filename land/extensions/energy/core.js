@@ -3,12 +3,12 @@ import fs from "fs";
 import { getBeingMeta, setBeingMeta } from "../../seed/tree/beingMetadata.js";
 
 // Services wired from init() via setServices()
-let User = null;
+let Being = null;
 let Node = null;
 let assignConnection = async () => {};
 
 export function setServices({ models, llmConnections }) {
-  User = models.User;
+  Being = models.Being;
   Node = models.Node;
   if (llmConnections) assignConnection = llmConnections;
 }

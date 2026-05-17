@@ -10,9 +10,9 @@ import log from "../../seed/log.js";
 import { scanForCandidates, confirmPrune } from "./core.js";
 
 let Node = null;
-let User = null;
+let Being = null;
 let _metadata = null;
-export function setModels(models) { Node = models.Node; User = models.User; }
+export function setModels(models) { Node = models.Node; Being = models.Being; }
 export function setMetadata(metadata) { _metadata = metadata; }
 
 let _timer = null;

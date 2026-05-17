@@ -94,7 +94,7 @@ const READ_ONLY_TOOLS = new Set([
 // ── Hook Handler ───────────────────────────────────────────────────────
 
 export function buildNavigationHandler(core) {
-  const User = core.models.User;
+  const Being = core.models.Being;
 
   const tokenCache = new Map();
   setInterval(() => tokenCache.clear(), 60000);

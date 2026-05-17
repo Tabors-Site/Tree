@@ -7,7 +7,7 @@
 
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import Did from "../seed/models/did.js";
+import Did from "../../seed/models/did.js";
 import { getDescendantIds } from "../../seed/tree/treeFetch.js";
 import { parseJsonSafe } from "../../seed/orchestrators/helpers.js";
 

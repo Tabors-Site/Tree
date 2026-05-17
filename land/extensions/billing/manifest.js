@@ -32,7 +32,7 @@ export default {
   npm: ["stripe@^20.3.1"],
 
   needs: {
-    models: ["User"],
+    models: ["Being"],
   },
 
   optional: {

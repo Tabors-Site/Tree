@@ -12,7 +12,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
   const htmlExt = getExtension("html-rendering");
   const htmlAuth = htmlExt?.exports?.urlAuth || authenticate;
   const router = express.Router();
-  const { User, Node, Note } = core.models;
+  const { Being, Node, Artifact } = core.models;
   const { logDid } = core.dids;
   const ownership = core.ownership;
 
@@ -42,7 +42,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
           canopyId: userReceiving,
           rootId,
           Node,
-          User,
+          Being,
           RemoteUser,
           canopy: {
             getLandIdentity: canopy.getLandIdentity,
@@ -69,7 +69,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
         isToBeOwner: false,
         isUninviting: false,
         Node,
-        User,
+          Being,
         logDid,
         escapeRegex,
         queueCanopyEvent,
@@ -105,7 +105,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
         isToBeOwner: true,
         isUninviting: false,
         Node,
-        User,
+          Being,
         logDid,
         escapeRegex,
         queueCanopyEvent,
@@ -141,7 +141,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
         isToBeOwner: false,
         isUninviting: true,
         Node,
-        User,
+          Being,
         logDid,
         escapeRegex,
         queueCanopyEvent,
@@ -172,7 +172,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
         isToBeOwner: false,
         isUninviting: true,
         Node,
-        User,
+          Being,
         logDid,
         escapeRegex,
         queueCanopyEvent,
@@ -235,7 +235,7 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
           beingId: req.beingId,
           acceptInvite,
           Node,
-          User,
+          Being,
           logDid,
           queueCanopyEvent,
           ownership,
@@ -271,11 +271,11 @@ export function buildRouter(core, { escapeRegex, queueCanopyEvent }) {
         return sendError(res, 400, ERR.INVALID_INPUT, "Invalid limit: must be a positive number");
       }
 
-      const result = await getAllTagsForUser(beingId, limit, startDate, endDate, Note);
+      const result = await getAllTagsForUser(beingId, limit, startDate, endDate, Artifact);
 
       const notes = result.artifacts.map((n) => ({
         ...n,
-        content: n.contentType === "file" ? `/api/v1/uploads/${n.content}` : n.content,
+        content: n.origin === "filesystem" ? `/api/v1/uploads/${n.content?.path || ""}` : n.content,
       }));
 
       if (!wantHtml || !getExtension("html-rendering")) {

@@ -84,7 +84,7 @@ async function _reflect(rootId, runChat) {
     slot: "reflectInner",
     // Named tree-scoped lane. Chats chain across nightly runs so later
     // reflections see prior-reflection history; stays isolated from the
-    // user's active chat under the `tree-internal:${rootId}:reflect` key.
+    // user's active chat under the `pipeline:tree:${rootId}:reflect` key.
     scope: "tree",
     purpose: "reflect",
   });

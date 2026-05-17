@@ -4,7 +4,7 @@ import { NoteTag } from "./model.js";
  * Extract @mentions from text and rewrite to canonical usernames.
  * Returns { tagged: [beingId, ...], rewrittenContent }.
  */
-export async function extractTaggedUsersAndRewrite(content, User) {
+export async function extractTaggedUsersAndRewrite(content, Being) {
   const mentionRegex = /@([\w-]+)/g;
   const matches = [...content.matchAll(mentionRegex)];
 
@@ -45,7 +45,7 @@ export async function extractTaggedUsersAndRewrite(content, User) {
  * Sync NoteTag records for a note. Called from the afterNote hook.
  * Replaces any existing tags for this note with the current set.
  */
-export async function syncTagsForNote({ noteId, content, nodeId, taggedBy, User }) {
+export async function syncTagsForNote({ noteId, content, nodeId, taggedBy, User: Being }) {
   if (!content) {
     await NoteTag.deleteMany({ noteId });
     return;

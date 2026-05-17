@@ -29,7 +29,7 @@ export default {
     "returns the full contribution timeline for audit.",
 
   needs: {
-    services: ["contributions", "auth"],
+    services: ["dids", "auth"],
     models: ["Node", "Did"],
   },
 

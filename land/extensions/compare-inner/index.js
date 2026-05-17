@@ -125,7 +125,7 @@ async function _compare(rootId, runChat) {
     rootId,
     slot: "compareInner",
     // Named tree-scoped lane. Persists across weekly runs under
-    // `tree-internal:${rootId}:compare` so each comparison sees prior ones.
+    // `pipeline:tree:${rootId}:compare` so each comparison sees prior ones.
     scope: "tree",
     purpose: "compare",
   });

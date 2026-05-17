@@ -27,7 +27,7 @@ import { editStatus } from "../../seed/tree/statuses.js";
 import {
   getDids,
   getDidsByBeing,
-} from "../seed/tree/dids.js";
+} from "../../seed/tree/dids.js";
 import {
   getActiveLeafExecutionFrontier,
   getNavigationContext,
@@ -37,9 +37,9 @@ import { DELETED } from "../../seed/protocol.js";
 
 // Models wired from init via setModels
 let Node = null;
-let User = null;
+let Being = null;
 let _getAvailableCommands = null;
-export function setModels(models) { Node = models.Node; User = models.User; }
+export function setModels(models) { Node = models.Node; Being = models.Being; }
 export function setCommandResolver(fn) { _getAvailableCommands = fn; }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

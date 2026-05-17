@@ -40,7 +40,7 @@ export default {
     "another land. Birth, growth, mitosis, reproduction, teaching. The biology is complete.",
 
   needs: {
-    services: ["hooks", "llm", "contributions"],
+    services: ["hooks", "llm", "dids"],
     models: ["Node", "Artifact"],
   },
 

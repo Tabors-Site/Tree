@@ -14,7 +14,7 @@ export default {
     "  import { isHtmlEnabled } from '../html-rendering/config.js'",
 
   needs: {
-    models: ["User", "Node"],
+    models: ["Being", "Node"],
     services: ["auth"],
   },
 

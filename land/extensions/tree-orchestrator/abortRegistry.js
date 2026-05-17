@@ -18,7 +18,7 @@
 //     Address (so multiple sockets / chainsteps under the same
 //     conversation see the same abort fleet).
 //   - For stanceless background pipelines it's the internal session
-//     key (`ephemeral:<uuid>` / `tree-internal:<rootId>:<purpose>`).
+//     key (`pipeline:ephemeral:<uuid>` / `pipeline:tree:<rootId>:<purpose>`).
 // The Map is string-keyed; callers pick the right flavor for their
 // context.
 //

@@ -26,7 +26,7 @@ import {
 } from "../ws/sessionRegistry.js";
 import { acquireLock, releaseLock, renewLock } from "./locks.js";
 import { parseJsonSafe } from "./helpers.js";
-import { resolveInternalAiSessionKey } from "../llm/sessionKeys.js";
+import { resolvePipelineKey } from "../llm/sessionKeys.js";
 
 export { parseJsonSafe };
 
@@ -49,7 +49,7 @@ export class OrchestratorRuntime {
     //      session, typically the user's live orchestrator chain).
     //   2. `scope` + `purpose` (+ optional `extra`) — declare a named
     //      internal lane. Mirrors runChat's resolver.
-    //   3. Neither — generate `ephemeral:${uuid}` for one-shot pipelines
+    //   3. Neither — generate `pipeline:ephemeral:${uuid}` for one-shot pipelines
     //      that don't need cross-run chat memory.
     aiSessionKey = null,
     scope = null,
@@ -58,11 +58,16 @@ export class OrchestratorRuntime {
   }) {
     if (!beingId) throw new Error("OrchestratorRuntime requires beingId");
 
-    // ── Build the ai-chat session key ─────────────────────────────────
+    // ── Build the pipeline key ────────────────────────────────────────
     // Shares the resolver with runChat so pipelines and one-shot LLM
     // calls produce identically-shaped keys for the same intent.
-    const { key: resolvedKey } = resolveInternalAiSessionKey({
-      aiSessionKey, scope, purpose, extra, beingId, rootId,
+    // `aiSessionKey` constructor opt is accepted as a legacy alias for
+    // `pipelineKey` so existing callers keep working through the
+    // rename. The resolved key is stored on this.aiSessionKey for
+    // backward compatibility with downstream readers that still use
+    // that field name.
+    const { key: resolvedKey } = resolvePipelineKey({
+      pipelineKey: aiSessionKey, scope, purpose, extra, beingId, rootId,
       makeEphemeral: randomUUID,
     });
 
@@ -247,8 +252,8 @@ export class OrchestratorRuntime {
       sessionId: this.sessionId || null,
       // Background pipelines are stanceless internal cognition; their
       // MCP client is cached under the internal session key (which
-      // resolveInternalAiSessionKey shaped as `ephemeral:<uuid>` or
-      // `tree-internal:<rootId>:<purpose>`), not a Portal Address.
+      // resolveInternalAiSessionKey shaped as `pipeline:ephemeral:<uuid>` or
+      // `pipeline:tree:<rootId>:<purpose>`), not a Portal Address.
       mcpCacheKey: this.aiSessionKey,
       signal: this.signal,
       llmPriority: this.llmPriority,
@@ -453,7 +458,7 @@ export class OrchestratorRuntime {
 
   async _connectMcp() {
     const internalJwt = jwt.sign(
-      { beingId: this.beingId, username: this.username, aiSessionKey: this.aiSessionKey },
+      { beingId: this.beingId, username: this.username },
       JWT_SECRET,
       { expiresIn: "4h" },
     );

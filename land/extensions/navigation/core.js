@@ -1,10 +1,10 @@
 import { getBeingMeta, addToBeingMetaSet, batchSetBeingMeta } from "../../seed/tree/beingMetadata.js";
 import log from "../../seed/log.js";
 
-let User, Node;
+let Being, Node;
 
 export function setModels(models) {
-  User = models.User;
+  Being = models.Being;
   Node = models.Node;
 }
 

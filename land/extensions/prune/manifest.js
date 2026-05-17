@@ -42,7 +42,7 @@ export default {
     "Some quarterly. Some manually after a big project ends.",
 
   needs: {
-    services: ["llm", "hooks", "contributions"],
+    services: ["llm", "hooks", "dids"],
     models: ["Node", "Did", "Artifact"],
   },
 

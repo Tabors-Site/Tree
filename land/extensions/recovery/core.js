@@ -20,7 +20,7 @@ let _hooks = null;
 
 export function configure({ Node, Artifact, runChat, metadata, hooks }) {
   _Node = Node;
-  _Artifact = Note;
+  _Artifact = Artifact;
   _runChat = runChat;
   _metadata = metadata;
   _hooks = hooks;

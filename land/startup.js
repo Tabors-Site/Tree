@@ -82,7 +82,7 @@ export function onListen() {
         treeSummaryMaxNodes:     { load: () => import("./seed/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(null, v)) },
         carryMessages:           { load: () => import("./seed/modes/registry.js").then(m => m.setCarryMessages) },
         maxRegisteredModes:      { load: () => import("./seed/modes/registry.js").then(m => m.setMaxModes) },
-        maxRegisteredTools:      { load: () => import("./seed/tools.js").then(m => m.setMaxTools) },
+        maxRegisteredTools:      { load: () => import("./seed/modes/tools.js").then(m => m.setMaxTools) },
         sessionTTL:              { load: () => import("./seed/ws/sessionRegistry.js").then(m => (v) => m.setSessionTTL(v * 1000)) },
         staleSessionTimeout:     { load: () => import("./seed/ws/sessionRegistry.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
         maxSessions:             { load: () => import("./seed/ws/sessionRegistry.js").then(m => m.setMaxSessions) },

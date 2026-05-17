@@ -31,7 +31,7 @@ export default {
 
   needs: {
     services: ["auth"],
-    models: ["User"],
+    models: ["Being"],
   },
 
   optional: {

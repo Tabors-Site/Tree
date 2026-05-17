@@ -851,7 +851,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Wire MCP tools and register in tool resolver
       if (instance.tools && mcpServer) {
-        const { registerToolDef } = await import("../seed/tools.js");
+        const { registerToolDef } = await import("../seed/modes/tools.js");
         const { zodToJsonSchema } = await import("zod-to-json-schema");
         const { z } = await import("zod");
 
@@ -1614,7 +1614,7 @@ export async function uninstallExtension(name) {
         mcpServerInstance.removeToolsByOwner(name, getToolOwner);
       }
       // Remove from tool definition registry
-      const { unregisterToolsForExtension } = await import("../seed/tools.js");
+      const { unregisterToolsForExtension } = await import("../seed/modes/tools.js");
       unregisterToolsForExtension(name, getToolOwner);
     } catch {}
     try {

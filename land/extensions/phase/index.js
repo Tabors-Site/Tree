@@ -50,7 +50,7 @@ export async function init(core) {
     if (!beingId) return;
 
     try {
-      const User = core.models.User;
+      const Being = core.models.Being;
       const user = await Being.findById(beingId).select("metadata").lean();
       if (!user) return;
 

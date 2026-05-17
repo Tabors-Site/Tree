@@ -5,7 +5,7 @@ import { getUserTier, setUserTier } from "./core.js";
 export default function (core) {
   const router = express.Router();
   const { sendOk, sendError, ERR } = core.protocol;
-  const User = core.models.User;
+  const Being = core.models.Being;
 
   // GET /user/:beingId/tier
   router.get("/user/:beingId/tier", authenticate, async (req, res) => {

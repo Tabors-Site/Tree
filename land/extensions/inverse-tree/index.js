@@ -153,7 +153,7 @@ export async function init(core) {
     if (!profileZones.includes(zone)) return;
 
     try {
-      const User = core.models.User;
+      const Being = core.models.Being;
       const user = await Being.findById(beingId).select("metadata").lean();
       if (!user) return;
 
