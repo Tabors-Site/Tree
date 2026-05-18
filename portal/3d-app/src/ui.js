@@ -290,10 +290,10 @@ export function hideAuthActions() {
 let _talkPanelEl = null;
 let _talkState = new Map(); // embodiment -> { text, busy, error }
 
-export function showTalkPanel({ being, onSubmit }) {
+export function showTalkPanel({ being: b, onSubmit }) {
   if (_talkPanelEl) return;
   document.exitPointerLock?.();
-  const key = being.embodiment;
+  const key = b.being;
   if (!_talkState.has(key)) _talkState.set(key, { text: "", busy: false, error: "" });
   const s = _talkState.get(key);
 
@@ -311,7 +311,7 @@ export function showTalkPanel({ being, onSubmit }) {
   `;
   el.innerHTML = `
     <div style="font-size: 11px; color: #6b7d72; margin-bottom: 6px;">
-      ${escapeHtml(being.icon || "")} talking to ${escapeHtml(being.label || being.embodiment)}
+      ${escapeHtml(b.icon || "")} talking to ${escapeHtml(b.label || b.being)}
     </div>
     <form>
       <textarea name="message" rows="2" placeholder="say something..."

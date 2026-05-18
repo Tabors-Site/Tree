@@ -118,6 +118,18 @@ const SummonSchema = new mongoose.Schema({
     _id: false,
   },
 
+  // The role the responder was acting in for this Summon. Sourced
+  // from `envelope.activeRole` when the sender specified one, else
+  // from `beingOut.defaultRole`. Captures (beingOut, activeRole) per
+  // summon so audit answers "what was Tabor doing here" — which
+  // capacity, not just which identity. See project-identity-durable-
+  // role-composable.
+  activeRole: {
+    type: String,
+    default: null,
+    index: true,
+  },
+
   // Tree orchestrator context (only in tree mode).
   treeContext: {
     targetNodeId:   { type: String, ref: "Node" },
@@ -185,6 +197,9 @@ SummonSchema.index({ sessionId: 1, chainIndex: 1 });
 SummonSchema.index({ beingIn: 1, "startMessage.time": -1 });
 SummonSchema.index({ beingOut: 1, "startMessage.time": -1 });
 SummonSchema.index({ beingIn: 1, beingOut: 1, "startMessage.time": -1 }, { sparse: true });
+// Audit query: "every time beingOut acted in activeRole, newest first."
+// Indexes the same-being-different-role chains that the architecture admits.
+SummonSchema.index({ beingOut: 1, activeRole: 1, "startMessage.time": -1 }, { sparse: true });
 SummonSchema.index({ ibpAddress: 1, "startMessage.time": -1 }, { sparse: true });
 SummonSchema.index({ "treeContext.targetNodeId": 1 }, { sparse: true });
 

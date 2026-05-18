@@ -25,6 +25,10 @@
 //     from, content, intent, correlation, inReplyTo?, attachments?, sentAt,
 //     priority:    number   (LLM_PRIORITY-compatible: lower = higher precedence)
 //     rootCorrelation: string  (originating user message correlation, propagated through reply chains)
+//     activeRole: string | null  (the role the receiver should act in for this
+//                                 summon; resolves to beingOut.defaultRole when null.
+//                                 Lets one being act in different roles per summon —
+//                                 see project-identity-durable-role-composable.)
 //     consumed:    boolean,
 //     cancelledAt: ISO8601 | null  (set by cancelByRootCorrelation; scheduler skips cancelled entries)
 //     consumedAt?: ISO8601,
@@ -83,6 +87,7 @@ export async function appendToInbox(nodeId, beingId, message) {
     correlation:     messageId,
     rootCorrelation,
     priority,
+    activeRole:      message.activeRole || null,
     inReplyTo:       message.inReplyTo || null,
     attachments:     Array.isArray(message.attachments) ? message.attachments : [],
     sentAt,

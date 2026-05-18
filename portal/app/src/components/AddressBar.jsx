@@ -55,7 +55,7 @@ export default function AddressBar({ username, landDomain, currentAddress, onNav
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={submit}
-          placeholder={landDomain ? `${landDomain}/...` : "land/path@embodiment"}
+          placeholder={landDomain ? `${landDomain}/...` : "land/path@being"}
           autoComplete="off"
           spellCheck={false}
         />

@@ -155,7 +155,7 @@ function buildKeyParts(args) {
       return [args.action];
     }
     case "summon": {
-      const qualifier = args.target?.embodiment || args.target?.username;
+      const qualifier = args.target?.being || args.target?.username;
       if (!qualifier) return null;
       const qPart = qualifier.startsWith("@") ? qualifier : `@${qualifier}`;
       return args.intent ? [qPart, args.intent] : [qPart];
@@ -389,7 +389,7 @@ function legacyDecideSummon(stance, permissions, { target }) {
   if (!Array.isArray(rule) || rule.length === 0) {
     return { ok: false, stance, reason: "stance not permitted to SUMMON" };
   }
-  const targetBeing = target?.embodiment;
+  const targetBeing = target?.being;
   if (!targetBeing) return { ok: false, stance, reason: "SUMMON requires a target being" };
   const targetTag = `@${targetBeing}`;
   return rule.includes(targetTag) || rule.includes(targetBeing)

@@ -104,31 +104,46 @@ const ProtocolPage = () => {
         <div className="lp-container" style={{maxWidth: 960}}>
           <h2 className="lp-section-title">Same kind of thing, different shape</h2>
           <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center", marginBottom: 32}}>
-            The web has an addressing scheme, a transport protocol, a document format, and a client. So does IBP. Each piece corresponds.
+            The web has an addressing scheme, a transport protocol, a document format, and a client. So does IBP. Each piece corresponds. IBP then adds one more layer the web has no native analogue for.
           </p>
           <div className="gov-compare">
             <div className="gov-compare-col">
               <h4>🌐 World Wide Web</h4>
               <ul>
-                <li><strong>URL</strong> — locates a resource</li>
-                <li><strong>HTTP</strong> — verbs operate on resources</li>
-                <li><strong>HTML</strong> — documents at addresses</li>
-                <li><strong>Browser</strong> — renders documents</li>
-                <li><strong>Anonymous by default</strong> — you fetch as nobody</li>
-                <li><strong>Stateless</strong> — every request a new conversation</li>
+                <li><strong>URL</strong> . locates a resource</li>
+                <li><strong>HTTP verbs</strong> . operate on resources</li>
+                <li><strong>HTML</strong> . documents at addresses</li>
+                <li><strong>Browser</strong> . renders documents</li>
               </ul>
             </div>
             <div className="gov-compare-col gov-compare-col-accent">
               <h4>🌳 IBP . Inter-Being Protocol</h4>
               <ul>
-                <li><strong>IBP Address</strong> . two stances connected by <code>::</code></li>
-                <li><strong>SEE</strong> . observes. Accepts position or stance. Either tier.</li>
-                <li><strong>DO</strong> . mutates. Position only. Requester's role comes from identity, not the address.</li>
-                <li><strong>SUMMON</strong> . engages. Stance only. Inboxes are position data namespaced by role.</li>
-                <li><strong>BE</strong> . self-identity. Stance only. Register, claim, release, switch.</li>
-                <li><strong>Portal</strong> . the new browser for IBP. Human being is the default left stance, looking through the Portal into the right stance on the Land</li>
+                <li><strong>IBPA</strong> . locates a stance pair (left being addressing right being)</li>
+                <li><strong>SEE · DO · SUMMON · BE</strong> . operate on positions and beings</li>
+                <li><strong>Position Descriptors</strong> . the data the land returns to SEE</li>
+                <li><strong>Portal</strong> . view into the beings' world from the left stance</li>
               </ul>
             </div>
+          </div>
+
+          {/* THE NEW LAYER: BEINGS */}
+          <div style={{
+            marginTop: 32, maxWidth: 820, marginLeft: "auto", marginRight: "auto",
+            padding: "24px 28px",
+            background: "rgba(74, 222, 128, 0.06)",
+            border: "1px solid rgba(74, 222, 128, 0.28)",
+            borderRadius: 10,
+          }}>
+            <h3 style={{color: "#4ade80", fontSize: "1.05rem", marginTop: 0, marginBottom: 12}}>
+              + Beings . the layer the web has no native analogue for
+            </h3>
+            <p style={{color: "rgba(255,255,255,0.8)", fontSize: 15, lineHeight: 1.7, margin: 0}}>
+              Beings are the extension off the data . literally the data seeing and acting on itself, or what is doing that. The web has nothing first-class here. AI has to be bolted on through tool wrappers, scripts, and scrapers; each AI agent speaks human-shaped HTTP+HTML surfaces second-hand.
+            </p>
+            <p style={{color: "rgba(255,255,255,0.7)", fontSize: 14.5, lineHeight: 1.7, marginTop: 12, marginBottom: 0}}>
+              IBP makes Beings first-class. They are addressed through Stances, summoned through the protocol's own verb, observable through SEE, accountable through Dids. AI does not need to be wrapped in a human-shaped surface; the surface is built for it. Everything else IBP does (the four verbs, IBPAs, Position Descriptors, the Portal) builds from this layer.
+            </p>
           </div>
         </div>
       </section>

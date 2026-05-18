@@ -42,8 +42,8 @@ export function deriveScene(metadata) {
   // Derivations key off the protocol-level beings namespace so any
   // extension that places a Ruler home at a node gets the rulership
   // visual treatment, not just the governing extension specifically.
-  const embodiments = readNs(metadata, "embodiments");
-  if (embodiments?.ruler) {
+  const beings = readNs(metadata, "beings");
+  if (beings?.ruler) {
     if (!explicit.doorway)   doorway = true;
     if (!sceneType)          sceneType = "pyramid-interior";
   }

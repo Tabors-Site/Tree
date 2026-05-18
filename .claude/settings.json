@@ -980,7 +980,9 @@
       "Bash(perl -i -pe 's/\\\\@embodiment/\\\\@being/g' land/ibp/envelope.js)",
       "Bash(embodiment)",
       "Bash(grep -v \"0\\\\.5\\\\.0\\\\.js\\\\|^.*//\\\\|^.*\\\\*\\\\| \\\\* \\\\|\\\\\\\\.embodiment\\\\\\\\b\\\\\\\\|stance\\\\\\\\.embodiment\\\\\\\\|resolved\\\\\\\\.embodiment\\\\\\\\|right\\\\\\\\.embodiment\\\\\\\\|target\\\\\\\\.embodiment\\\\\\\\|ctx\\\\\\\\.embodiment\\\\\\\\|expanded\\\\\\\\.right\\\\\\\\.embodiment\\\\\\\\|`embodiment` qualifier\\\\\\\\|embodiment: beingName\\\\\\\\|embodiment: stance\")",
-      "Bash(perl -i -pe 's/\\\\bEMBODIMENT_PRESENTATION\\\\b/BEING_PRESENTATION/g' land/ibp/descriptor.js)"
+      "Bash(perl -i -pe 's/\\\\bEMBODIMENT_PRESENTATION\\\\b/BEING_PRESENTATION/g' land/ibp/descriptor.js)",
+      "Bash(perl -i -pe 's/\\\\.embodiment\\\\b/.being/g; s/\\\\bembodiment:\\\\s*/being: /g' portal/3d-app/src/main.js portal/3d-app/src/scene.js portal/3d-app/src/ui.js portal/app/src/components/zones/TreeZone.jsx portal/app/src/components/zones/LandZone.jsx portal/app/src/components/zones/HomeZone.jsx portal/app/src/components/AddressBar.jsx portal/app/src/portal-client.js portal/3d-app/src/portal-client.js)",
+      "Bash(perl -i -pe 's/\\\\bembodiment\\\\b/being/g' land/extensions/models/index.js land/extensions/position/index.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

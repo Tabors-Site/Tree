@@ -9,7 +9,7 @@
 // What this proves about Slice 2 + 3:
 //   - Echo's async path delivers a response through the scheduler.
 //   - "place" intent produces no response but still gets consumed.
-//   - Priority ordering applies with the real embodiment.
+//   - Priority ordering applies with the real being.
 //   - Multiple async sends from the same sender serialize correctly.
 //
 // Run: node --test --experimental-test-module-mocks land/test/echoSubstrate.test.js
@@ -59,7 +59,12 @@ mock.module("../ibp/inbox.js", {
 
 mock.module("../seed/models/being.js", {
   defaultExport: {
-    findById: async (id) => ({ _id: id, role: "echo", username: `user-${id}` }),
+    findById: async (id) => ({
+      _id:         id,
+      username:    `user-${id}`,
+      roles:       ["echo"],
+      defaultRole: "echo",
+    }),
   },
 });
 
@@ -171,7 +176,7 @@ describe("echo through substrate — place intent", () => {
 });
 
 describe("echo through substrate — queue ordering", () => {
-  test("priority ordering applies with the real embodiment", async () => {
+  test("priority ordering applies with the real being", async () => {
     fakeBucket.set("echo-1", [
       makeEntry({ correlation: "low",  content: "L", priority: 4 }),
       makeEntry({ correlation: "high", content: "H", priority: 1 }),

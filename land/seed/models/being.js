@@ -59,11 +59,31 @@ const BeingSchema = new mongoose.Schema({
   password: { type: String, select: false, required: true },
   isAdmin:  { type: Boolean, default: false },
 
-  // role: present only for AI beings (operatingMode === "ai"). Names
-  // the template in roles/registry.js (ruler, planner, contractor,
-  // foreman, worker, auth, ...). Behavior comes from the template;
-  // identity, history, and current state live here on the being itself.
-  role: { type: String, default: null },
+  // ── Roles ──
+  //
+  // A being carries one or more roles. Each role names a template in
+  // roles/registry.js (ruler, planner, contractor, foreman, worker,
+  // auth, intent, food-coach, food-log, ...). Identity is the being;
+  // role is what they're acting in at any given summon.
+  //
+  // - `roles`: the set of roles this being is capable of acting in.
+  //   Humans typically carry a small set (creator + whatever they take
+  //   on); AI beings often carry one (their installed role) but can
+  //   acquire more as the architecture admits composite beings.
+  // - `defaultRole`: which role runs when a summon doesn't specify an
+  //   `activeRole` on the envelope. Must be in `roles` if non-null.
+  //
+  // Each SUMMON resolves an active role for the summon: the envelope's
+  // `activeRole` if present and present in `roles`, else `defaultRole`.
+  // The role template runs accordingly; the Summon record stamps the
+  // resolved `activeRole` so audit captures (beingOut, activeRole) per
+  // summon.
+  //
+  // The architecture: identity is durable (this Being record), role is
+  // composable per summon. A being acting in multiple roles is one
+  // being using different capacities, not many beings.
+  roles:       { type: [String], default: [] },
+  defaultRole: { type: String, default: null },
 
   // homePositionId: the Node where this being lives. Required for every
   // being once created. Humans get a home territory Node granted at
@@ -121,7 +141,12 @@ const BeingSchema = new mongoose.Schema({
 // Compound index: query "every chat ending with this being" and
 // "every being at a given home position" cheaply.
 BeingSchema.index({ homePositionId: 1, operatingMode: 1 });
-BeingSchema.index({ role: 1 });
+// Role indexes: `roles` is multikey (Mongo indexes each array element)
+// so `Being.find({ roles: "ruler" })` covers any being carrying ruler.
+// `defaultRole` is single-value, indexed for the common "find beings
+// whose default role is X" query (descriptor, dashboard, governing).
+BeingSchema.index({ roles: 1 });
+BeingSchema.index({ defaultRole: 1 });
 BeingSchema.index({ homeLand: 1, isRemote: 1 });
 
 // Hash passwords on save. Both human and AI beings carry a password;

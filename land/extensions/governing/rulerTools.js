@@ -480,7 +480,7 @@ export default function getRulerTools(_core) {
 
         attachHandoff(plannerBeingId, correlation, {
           identity:           { beingId, username },
-          resolved:           { embodiment: "planner", nodeId: String(ruler._id), zone: "tree" },
+          resolved:           { being: "planner", nodeId: String(ruler._id), zone: "tree" },
           responseFromStance: plannerStance,
           onResponse: async (responseEntry) => {
             try { releaseSpawn(claim.key); } catch {}
@@ -803,7 +803,7 @@ export default function getRulerTools(_core) {
 
         attachHandoff(contractorBeingId, correlation, {
           identity:           { beingId, username },
-          resolved:           { embodiment: "contractor", nodeId: String(ruler._id), zone: "tree" },
+          resolved:           { being: "contractor", nodeId: String(ruler._id), zone: "tree" },
           responseFromStance: contractorStance,
           onResponse: async (responseEntry) => {
             try { releaseSpawn(claim.key); } catch {}
@@ -1048,7 +1048,7 @@ export default function getRulerTools(_core) {
 
         attachHandoff(foremanBeingId, correlation, {
           identity:           { beingId, username },
-          resolved:           { embodiment: "foreman", nodeId: String(ruler._id), zone: "tree" },
+          resolved:           { being: "foreman", nodeId: String(ruler._id), zone: "tree" },
           responseFromStance: foremanStance,
           onResponse: async (responseEntry) => {
             try { releaseSpawn(claim.key); } catch {}

@@ -27,11 +27,11 @@ export default function HomeZone({ descriptor, onNavigate }) {
         <div className="beings-row">
           {beings.map((b) => (
             <div
-              key={b.embodiment}
+              key={b.being}
               className={`being-pill ${b.available ? "available" : ""}`}
               title={b.description || ""}
             >
-              <span>@{b.embodiment}</span>
+              <span>@{b.being}</span>
               {b.kind && <span className="dim" style={{ color: "var(--fg-faint)", fontSize: 10 }}>{b.kind}</span>}
             </div>
           ))}

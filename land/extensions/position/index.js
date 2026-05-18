@@ -99,10 +99,10 @@ export async function getCoords(nodeOrId) {
 /**
  * Read a being's coords at the given node. Returns null if unplaced.
  */
-export async function getBeingCoords(nodeOrId, embodiment) {
-  if (!embodiment) return null;
+export async function getBeingCoords(nodeOrId, being) {
+  if (!being) return null;
   const ns = await readPositionNs(nodeOrId);
-  return ns?.beings?.[embodiment] || null;
+  return ns?.beings?.[being] || null;
 }
 
 /**

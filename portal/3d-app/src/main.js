@@ -31,7 +31,7 @@ const state = {
   descriptor: null,
   // Whichever non-auth being currently has the talk panel open.
   currentTalkBeing: null,
-  // Correlation id -> embodiment, for routing async ibp:summon-reply
+  // Correlation id -> being, for routing async ibp:summon-reply
   // events back to the being whose bubble should be updated.
   pendingSummons: new Map(),
   // Navigation history. Linear; back/forward step through it without
@@ -144,11 +144,11 @@ function handleDescriptorEvent(_event) {
 function handleSummonReply(entry) {
   const correlation = entry?.inReplyTo;
   if (!correlation) return;
-  const embodiment = state.pendingSummons.get(correlation);
-  if (!embodiment) return;
+  const being = state.pendingSummons.get(correlation);
+  if (!being) return;
   state.pendingSummons.delete(correlation);
   const text = entry.content || "(no reply)";
-  state.scene.showBeingMessage(embodiment, text);
+  state.scene.showBeingMessage(being, text);
 }
 
 async function navigate(address, { fromHistory = false } = {}) {
@@ -229,11 +229,11 @@ function onGaze(_target, _info) {
 // Proximity dispatcher: fires from scene.js whenever any being's
 // proximity+gaze state flips. Auth-being opens sign-in/logout; every
 // other being opens the talk panel.
-function onBeingProximity(being, inRange, _distance) {
-  if (being.embodiment === "auth") {
+function onBeingProximity(b, inRange, _distance) {
+  if (b.being === "auth") {
     return onAuthProximity(inRange);
   }
-  return onChatBeingProximity(being, inRange);
+  return onChatBeingProximity(b, inRange);
 }
 
 // Proximity only CLOSES panels now (when the player walks away or looks
@@ -246,9 +246,9 @@ function onAuthProximity(inRange) {
   }
 }
 
-function onChatBeingProximity(being, inRange) {
+function onChatBeingProximity(b, inRange) {
   if (!inRange) {
-    if (state.currentTalkBeing === being.embodiment) {
+    if (state.currentTalkBeing === b.being) {
       hideTalkPanel();
       state.currentTalkBeing = null;
     }
@@ -257,11 +257,11 @@ function onChatBeingProximity(being, inRange) {
 
 // Click-to-activate dispatcher. Fires from scene.js when the player
 // clicks while gazing at a being within INTERACT_RANGE.
-function onBeingActivate(being) {
-  if (being.embodiment === "auth") {
+function onBeingActivate(b) {
+  if (b.being === "auth") {
     openAuthPanel();
   } else {
-    openTalkPanel(being);
+    openTalkPanel(b);
   }
 }
 
@@ -296,20 +296,20 @@ function openAuthPanel() {
   }
 }
 
-function openTalkPanel(being) {
-  state.currentTalkBeing = being.embodiment;
+function openTalkPanel(b) {
+  state.currentTalkBeing = b.being;
   showTalkPanel({
-    being,
-    onSubmit: (text) => sendSummon(being, text),
+    being: b,
+    onSubmit: (text) => sendSummon(b, text),
   });
 }
 
-// Build the SUMMON envelope and dispatch via ibp:summon. Sync embodiments
-// return their response on the ack; async embodiments ACK accepted and
+// Build the SUMMON envelope and dispatch via ibp:summon. Sync beings
+// return their response on the ack; async beings ACK accepted and
 // later push a `ibp:summon-reply` event handled by handleSummonReply().
 // While we wait for an async reply, we show an animated thinking bubble
 // above the being's head.
-async function sendSummon(being, text) {
+async function sendSummon(b, text) {
   if (!state.descriptor || !state.client) return;
   // Drop the chat panel as soon as the user hits send. The thinking
   // bubble (or final reply) lives in the world above the being's head;
@@ -318,10 +318,10 @@ async function sendSummon(being, text) {
   state.currentTalkBeing = null;
   const land = state.discovery.land;
   const path = state.descriptor.address?.pathByNames || "/";
-  // Stance form: `<land>/<path>@<embodiment>`. When path is "/" the slash
+  // Stance form: `<land>/<path>@<being>`. When path is "/" the slash
   // is already present, so `${land}${path}@...` collapses to `<land>/@...`
-  // (the canonical form for land/home-root embodiments).
-  const stance = `${land}${path}@${being.embodiment}`.replace(/\/+@/, "/@");
+  // (the canonical form for land/home-root beings).
+  const stance = `${land}${path}@${b.being}`.replace(/\/+@/, "/@");
   const fromStance = state.session?.username
     ? `${land}/@${state.session.username}`
     : `${land}/@arrival`;
@@ -337,15 +337,15 @@ async function sendSummon(being, text) {
     if (reply?.status === "accepted") {
       // Async path: server kicked off summoning; show thinking dots and
       // wait for `ibp:summon-reply` to swap them for real content.
-      state.pendingSummons.set(correlation, being.embodiment);
-      state.scene.showBeingThinking(being.embodiment);
+      state.pendingSummons.set(correlation, b.being);
+      state.scene.showBeingThinking(b.being);
       return;
     }
     const replyText = reply?.content || "(no reply)";
-    state.scene.showBeingMessage(being.embodiment, replyText);
+    state.scene.showBeingMessage(b.being, replyText);
   } catch (err) {
     state.scene.showBeingMessage(
-      being.embodiment,
+      b.being,
       `[${err.code || "error"}] ${err.message || "summon failed"}`,
     );
     throw err;

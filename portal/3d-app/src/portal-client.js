@@ -24,7 +24,7 @@ export class PortalClient {
   }
 
   // Listener for async SUMMON responses. The server emits `ibp:summon-reply`
-  // with a response envelope when an async embodiment completes summoning.
+  // with a response envelope when an async being completes summoning.
   setSummonReplyHandler(handler) {
     this._onSummonReply = handler || (() => {});
   }
@@ -132,7 +132,7 @@ export class PortalClient {
    * SEE: observe a place. Returns a Position Description.
    *
    * Pass `address` as a string and the client decides whether to send it as
-   * `position` or `stance` based on whether it contains an embodiment
+   * `position` or `stance` based on whether it contains an being
    * qualifier (`@<name>`). Use the explicit form to force one or the other.
    *
    * @param {string|object} address  position string, stance string, or { position }/{ stance }
@@ -147,7 +147,7 @@ export class PortalClient {
   /**
    * DO: mutate the world at a position.
    *
-   * Accepts a position string. If a string with a trailing @embodiment
+   * Accepts a position string. If a string with a trailing @being
    * qualifier is passed, the qualifier is stripped before sending; DO
    * always targets a position.
    *
@@ -166,14 +166,14 @@ export class PortalClient {
   /**
    * SUMMON: deliver a message to a being's inbox and wake them.
    *
-   * Requires a stance (embodiment qualifier mandatory).
+   * Requires a stance (being qualifier mandatory).
    *
-   * @param {string} stance   position@embodiment
+   * @param {string} stance   position@being
    * @param {object} message  { from, content, intent, correlation, inReplyTo?, attachments? }
    */
   async summon(stance, message) {
     // SUMMON can route through runChat() on the server (the bridge for
-    // non-native embodiments), which means a full LLM round-trip. Give
+    // non-native beings), which means a full LLM round-trip. Give
     // it room — 90s — instead of the default 15s used by SEE/DO/BE.
     return this._emitWithAck("ibp:summon", { stance, message }, { timeoutMs: 90000 });
   }
@@ -244,7 +244,7 @@ export class PortalClient {
 
 /**
  * Route a string address to its protocol field name. A string ending in
- * `@<embodiment>` becomes `{ stance }`; without it becomes `{ position }`.
+ * `@<being>` becomes `{ stance }`; without it becomes `{ position }`.
  * Callers may pass an explicit object to force one or the other.
  */
 function _toAddressField(address) {
@@ -271,7 +271,7 @@ function _toBeAddressField(address) {
     if (hasEmbodiment) return { stance: address };
     if (looksLikeBareDomain) return { land: address };
     throw new Error(
-      `BE requires either a bare land domain ("treeos.ai") or a stance with @embodiment ("treeos.ai/@auth"). Got: ${address}`,
+      `BE requires either a bare land domain ("treeos.ai") or a stance with @being ("treeos.ai/@auth"). Got: ${address}`,
     );
   }
   if (address && typeof address === "object") {

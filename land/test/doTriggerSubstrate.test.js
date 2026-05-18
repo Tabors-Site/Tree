@@ -99,7 +99,12 @@ mock.module("../ibp/inbox.js", {
 
 mock.module("../seed/models/being.js", {
   defaultExport: {
-    findById: async (id) => ({ _id: id, role: "echo", username: `user-${id}` }),
+    findById: async (id) => ({
+      _id:         id,
+      username:    `user-${id}`,
+      roles:       ["echo"],
+      defaultRole: "echo",
+    }),
   },
 });
 

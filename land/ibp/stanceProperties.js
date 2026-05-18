@@ -68,14 +68,19 @@ export async function deriveStanceProperties({ beingId, targetNodeId }) {
   if (!beingId) return { ...ARRIVAL_PROPS };
 
   const being = await Being.findById(beingId)
-    .select("username role operatingMode homePositionId isRemote homeLand")
+    .select("username roles defaultRole operatingMode homePositionId isRemote homeLand")
     .lean();
   if (!being) return { ...ARRIVAL_PROPS, beingId };
 
   const props = {
     beingId:              String(being._id),
     username:             being.username,
-    role:                 being.role || null,
+    // `role` here is the derived default capacity for authorization
+    // gating when the summon hasn't named an active role. The verb
+    // handler passes `activeRole` separately into authorize so
+    // per-role gates can use the more specific value when present.
+    role:                 being.defaultRole || null,
+    roles:                Array.isArray(being.roles) ? being.roles : [],
     operatingMode:        being.operatingMode || "human",
     arrival:              false,
     owner:                false,

@@ -69,8 +69,8 @@ export function deriveModel(metadata) {
   // the protocol-level beings namespace, not on extension-private
   // state. A Ruler at home → render as a pyramid. Future rules layer
   // alongside (Planner home → podium, Worker home → workshop, etc.).
-  const embodiments = readNs(metadata, "embodiments");
-  if (embodiments?.ruler) return { model: "pyramid", scale: 1 };
+  const beings = readNs(metadata, "beings");
+  if (beings?.ruler) return { model: "pyramid", scale: 1 };
   return null;
 }
 
@@ -105,13 +105,13 @@ export async function setModel(nodeOrId, partial) {
   return true;
 }
 
-export async function setBeingModel(nodeOrId, embodiment, partial) {
-  if (!embodiment || typeof partial !== "object") return false;
+export async function setBeingModel(nodeOrId, being, partial) {
+  if (!being || typeof partial !== "object") return false;
   const node = await _resolveNode(nodeOrId);
   if (!node) return false;
   const current = getExtMeta(node, "models");
   const beings  = { ...(current.beings || {}) };
-  beings[embodiment] = { ...(beings[embodiment] || {}), ...partial };
+  beings[being] = { ...(beings[being] || {}), ...partial };
   await mergeExtMeta(node, "models", { beings });
   return true;
 }
@@ -143,10 +143,10 @@ export async function getModel(nodeOrId) {
 /**
  * Read a being's model + scale at the given node.
  */
-export async function getBeingModel(nodeOrId, embodiment) {
-  if (!embodiment) return null;
+export async function getBeingModel(nodeOrId, being) {
+  if (!being) return null;
   const ns = await readModelsNs(nodeOrId);
-  const m = ns?.beings?.[embodiment];
+  const m = ns?.beings?.[being];
   if (!m?.model) return null;
   return { model: m.model, scale: m.scale ?? 1 };
 }

@@ -64,7 +64,7 @@ export async function resolveStance(stance, opts = {}) {
       chain: [],
       leafName: null,
       leafId: null,
-      embodiment: stance.embodiment || null,
+      being: stance.being || null,
     };
   }
 
@@ -106,7 +106,7 @@ export async function resolveStance(stance, opts = {}) {
         chain: [{ name: `~${user.username}`, id: user._id }],
         leafName: `~${user.username}`,
         leafId: user._id,
-        embodiment: stance.embodiment || null,
+        being: stance.being || null,
       };
     }
 
@@ -227,7 +227,7 @@ async function resolveNodePath({ startUnderParent, segments, ownerFilter, stance
     chain,
     leafName: leafNode.name,
     leafId: leafNode._id,
-    embodiment: stance.embodiment || null,
+    being: stance.being || null,
     leafNode, // pass-through for the descriptor builder to avoid re-fetching
   };
 }

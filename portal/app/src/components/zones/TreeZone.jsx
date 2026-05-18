@@ -46,12 +46,12 @@ export default function TreeZone({ descriptor, onNavigate }) {
         <div className="beings-row">
           {beings.map((b) => (
             <div
-              key={b.embodiment}
+              key={b.being}
               className={`being-pill ${b.available ? "available" : ""}`}
               title={b.description || ""}
             >
               <span>{b.icon || ""}</span>
-              <span>@{b.embodiment}</span>
+              <span>@{b.being}</span>
             </div>
           ))}
         </div>

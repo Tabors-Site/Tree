@@ -3,18 +3,18 @@
 // TreeOS replaces URLs with a three-tier addressing hierarchy:
 //
 //   Position           = land/path           (where)
-//   Stance             = land/path@embodiment (where + as what being) — one side of a bridge
+//   Stance             = land/path@being (where + as what being) — one side of a bridge
 //   IBP Address = stance :: stance   (full bridged form — one being addressing another)
 //
 // Each level answers a different question. "What's the position?" → just
-// the land/path. "What's the stance?" → land/path/embodiment (one side).
+// the land/path. "What's the stance?" → land/path/being (one side).
 // "What's the IBP address?" → the full bridged form.
 //
 // Full grammar (see ../docs/ibp-address.md):
 //
 //   IbpAddress := Bridge | Stance
 //   Bridge             := Stance "::" Stance
-//   Stance             := Position "@" Embodiment | Position | Embodiment
+//   Stance             := Position "@" Being | Position | Being
 //   Position           := Land? Path?
 //   Land               := Domain (":" Port)?
 //   Path               := "/"                        (land zone)
@@ -22,7 +22,7 @@
 //                       | "/~" UserSlug ("/" Segment)*  (home zone)
 //                       | "~" ...                    (home shorthand; expands to /~<user>)
 //   Segment            := node-name | node-id (uuid)
-//   Embodiment         := "@" Identifier
+//   Being         := "@" Identifier
 //
 // Path representations (portal switches between freely):
 //   Each node has a stable id (uuid) AND a display name. A path can be
@@ -38,14 +38,14 @@
 //
 // Both sides of a bridge are stances. They use the SAME grammar. A
 // human user is represented as `<land>/@<username>` — i.e. an
-// embodiment at the land root. A bare identifier on the left side
+// being at the land root. A bare identifier on the left side
 // (e.g. `tabor`) is the display shorthand for that. In future, the
 // left side of a bridge may carry a deeper path so the request
 // reflects WHERE in the user's land they're sending from (more
 // location context for federated requests).
 //
 // The parser accepts shorthands and expands them against an optional
-// context (currentLand / currentPath / currentUser / defaultEmbodiment).
+// context (currentLand / currentPath / currentUser / defaultBeing).
 // The formatter round-trips: format(parse(s, ctx), ctx) yields the
 // canonical form.
 //
@@ -64,7 +64,7 @@
  * @param {string} [ctx.currentLand]       — e.g. "treeos.ai"
  * @param {string} [ctx.currentPath]       — e.g. "/~tabor/flappybird"
  * @param {string} [ctx.currentUser]       — e.g. "tabor"
- * @param {string} [ctx.defaultEmbodiment] — embodiment to assume when omitted
+ * @param {string} [ctx.defaultBeing] — being to assume when omitted
  * @returns {{ left: Stance|null, right: Stance }}
  */
 export function parse(input, ctx = {}) {
@@ -117,8 +117,8 @@ export function parse(input, ctx = {}) {
  *
  * @param {{ left?: Stance|null, right: Stance }} pa
  * @param {object} [opts]
- * @param {boolean} [opts.omitDefaultEmbodiment] — drop @embodiment if it matches defaultEmbodiment
- * @param {string}  [opts.defaultEmbodiment]
+ * @param {boolean} [opts.omitDefaultBeing] — drop @being if it matches defaultBeing
+ * @param {string}  [opts.defaultBeing]
  * @returns {string}
  */
 export function format(pa, opts = {}) {
@@ -134,7 +134,7 @@ export function format(pa, opts = {}) {
 
 /**
  * Expand a IBPA's shorthands against a context. Returns a new IBPA with
- * fully-resolved land / path / embodiment fields on each stance.
+ * fully-resolved land / path / being fields on each stance.
  * Useful at request time, where the server expects a fully-qualified
  * address.
  *
@@ -190,15 +190,15 @@ export function validate(pa, ctx = {}) {
       });
     }
     if (
-      stance.embodiment !== null &&
-      stance.embodiment !== undefined &&
-      !isValidEmbodiment(stance.embodiment)
+      stance.being !== null &&
+      stance.being !== undefined &&
+      !isValidBeing(stance.being)
     ) {
       errors.push({
         side: label,
-        field: "embodiment",
-        value: stance.embodiment,
-        reason: "invalid-embodiment",
+        field: "being",
+        value: stance.being,
+        reason: "invalid-being",
       });
     }
   };
@@ -217,7 +217,7 @@ function parseStance(input, ctx, opts = {}) {
   if (!s) {
     throw paError("empty-stance", input, "Stance cannot be empty");
   }
-  // Bare embodiment? "@ruler"
+  // Bare being? "@ruler"
   if (s.startsWith("@")) {
     // On the left side of a bridge, `@tabor` is the explicit-@ form of
     // the human-user shorthand: it means the user `tabor` at the land
@@ -226,29 +226,29 @@ function parseStance(input, ctx, opts = {}) {
       return {
         land: ctx.currentLand || null,
         path: "/",
-        embodiment: parseEmbodiment(s),
+        being: parseBeing(s),
       };
     }
     return {
       land: ctx.currentLand || null,
       path: ctx.currentPath || null,
-      embodiment: parseEmbodiment(s),
+      being: parseBeing(s),
     };
   }
-  // Split embodiment off the tail.
-  let embodiment = null;
+  // Split being off the tail.
+  let being = null;
   let rest = s;
   const atIdx = findStandaloneAt(s);
   if (atIdx >= 0) {
-    embodiment = parseEmbodiment(s.slice(atIdx));
+    being = parseBeing(s.slice(atIdx));
     rest = s.slice(0, atIdx);
   }
-  // After stripping embodiment, `rest` is a position (land+path).
+  // After stripping being, `rest` is a position (land+path).
   if (!rest) {
     return {
       land: ctx.currentLand || null,
       path: ctx.currentPath || null,
-      embodiment,
+      being,
     };
   }
   // Determine if `rest` includes a land identifier or is just a zone marker.
@@ -262,7 +262,7 @@ function parseStance(input, ctx, opts = {}) {
     return {
       land: ctx.currentLand || null,
       path: parsePath(rest, ctx),
-      embodiment,
+      being,
     };
   }
   // Otherwise `rest` starts with a land identifier.
@@ -278,18 +278,18 @@ function parseStance(input, ctx, opts = {}) {
     // is the human-user shorthand: `tabor` → land root, embodied as
     // `tabor`. On either side without a path, this can also be a
     // land-only reference (rare).
-    if (isLeftSide && !embodiment) {
+    if (isLeftSide && !being) {
       // Bare identifier on left → human user at land root.
       return {
         land: ctx.currentLand || null,
         path: "/",
-        embodiment: rest,
+        being: rest,
       };
     }
     return {
       land: parseLand(rest),
       path: null,
-      embodiment,
+      being,
     };
   }
   const landPart = rest.slice(0, boundary);
@@ -297,34 +297,34 @@ function parseStance(input, ctx, opts = {}) {
   return {
     land: parseLand(landPart),
     path: parsePath(pathPart, ctx),
-    embodiment,
+    being,
   };
 }
 
 // Find an "@" that's NOT inside a path segment. The grammar puts the
-// embodiment AT THE END after land and path, so we find the LAST "@"
+// being AT THE END after land and path, so we find the LAST "@"
 // in the string.
 function findStandaloneAt(s) {
   return s.lastIndexOf("@");
 }
 
-function parseEmbodiment(s) {
+function parseBeing(s) {
   if (!s.startsWith("@")) {
     throw paError(
-      "invalid-embodiment-prefix",
+      "invalid-being-prefix",
       s,
-      "Embodiment must start with @",
+      "Being must start with @",
     );
   }
   const id = s.slice(1).trim();
   if (!id) {
-    throw paError("empty-embodiment", s, "Embodiment identifier is empty");
+    throw paError("empty-being", s, "Being identifier is empty");
   }
   if (!/^[a-z][a-z0-9-]*$/.test(id)) {
     throw paError(
-      "invalid-embodiment-chars",
+      "invalid-being-chars",
       s,
-      `Embodiment "${id}" must be lowercase kebab-case starting with a letter`,
+      `Being "${id}" must be lowercase kebab-case starting with a letter`,
     );
   }
   return id;
@@ -386,21 +386,21 @@ function formatStance(stance, opts = {}) {
   let out = "";
   if (stance.land) out += stance.land;
   if (stance.path) {
-    // "/" at land root with an embodiment renders as "/" + "@xxx".
-    // The grammar shows the canonical form as `<land>/@<embodiment>`,
+    // "/" at land root with an being renders as "/" + "@xxx".
+    // The grammar shows the canonical form as `<land>/@<being>`,
     // i.e. the slash separates land from path. "/" + "@tabor" already
     // does that.
     out += stance.path;
   }
-  if (stance.embodiment) {
+  if (stance.being) {
     if (
-      opts.omitDefaultEmbodiment &&
-      opts.defaultEmbodiment &&
-      stance.embodiment === opts.defaultEmbodiment
+      opts.omitDefaultBeing &&
+      opts.defaultBeing &&
+      stance.being === opts.defaultBeing
     ) {
       // skip
     } else {
-      out += `@${stance.embodiment}`;
+      out += `@${stance.being}`;
     }
   }
   return out;
@@ -412,7 +412,7 @@ function expandStance(stance, ctx) {
     ...stance,
     land: stance.land || ctx.currentLand || null,
     path: stance.path || ctx.currentPath || null,
-    embodiment: stance.embodiment || ctx.defaultEmbodiment || null,
+    being: stance.being || ctx.defaultBeing || null,
   };
 }
 
@@ -450,10 +450,10 @@ export function isValidPath(path) {
   return true;
 }
 
-const EMBODIMENT_RE = /^[a-z][a-z0-9-]*$/;
+const BEING_RE = /^[a-z][a-z0-9-]*$/;
 
-export function isValidEmbodiment(embodiment) {
-  return typeof embodiment === "string" && EMBODIMENT_RE.test(embodiment);
+export function isValidBeing(being) {
+  return typeof being === "string" && BEING_RE.test(being);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -476,7 +476,7 @@ function paError(code, input, message, extra = {}) {
  * Map a Stance (typically the right side of a IBPA) to the HTTP route
  * the land server uses. See ../docs/server-protocol.md for the contract.
  *
- * Returns: { url, method: "GET", embodiment }
+ * Returns: { url, method: "GET", being }
  */
 export function toHttpRoute(stance) {
   if (!stance || !stance.path) {
@@ -504,18 +504,18 @@ export function toHttpRoute(stance) {
     encodedTail = segs.map(encodeURIComponent).join("/");
   }
   const base = `/api/v1/position/${zone}${encodedTail ? `/${encodedTail}` : "/"}`;
-  const url = stance.embodiment
-    ? `${base}?embodiment=${encodeURIComponent(stance.embodiment)}`
+  const url = stance.being
+    ? `${base}?being=${encodeURIComponent(stance.being)}`
     : base;
-  return { url, method: "GET", embodiment: stance.embodiment || null };
+  return { url, method: "GET", being: stance.being || null };
 }
 
 /**
  * @typedef {object} Stance
  * @property {string|null} land       — e.g. "treeos.ai" (or null when implicit)
  * @property {string|null} path       — e.g. "/~tabor/flappybird" (or null)
- * @property {string|null} embodiment — e.g. "ruler" (or null)
+ * @property {string|null} being — e.g. "ruler" (or null)
  *
- * A Stance carries both a Position (land + path) and an Embodiment.
- * When `embodiment` is null, the Stance reduces to a bare Position.
+ * A Stance carries both a Position (land + path) and an Being.
+ * When `being` is null, the Stance reduces to a bare Position.
  */

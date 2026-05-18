@@ -208,12 +208,18 @@ async function processEntry(beingId, nodeId, picked) {
 
   await markSummoned(nodeId, beingId, index);
 
-  // Resolve the receiver Being + its being template. The being's
-  // current role determines which role template runs. A being whose
-  // role was changed between append and process picks up the new role's
-  // behavior — same record, different interpretation. That is the
-  // hierarchical-role rule from the design doc.
-  let beingName = null;
+  // Resolve the receiver Being + the active role for THIS summon.
+  //
+  // Active role resolution (mirrors verbs/summon.js):
+  //   1. The inbox entry's `activeRole` field (set when the SUMMON
+  //      envelope specified one).
+  //   2. `toBeing.defaultRole` (the being's default capacity).
+  //   3. Fallback to nothing — consume the entry and skip with a warn.
+  //
+  // Strict membership check on entry.activeRole: if specified, must be
+  // in the being's `roles[]`. Skip otherwise (the verb handler should
+  // have rejected; defensive double-check.)
+  let activeRole = null;
   let role = null;
   let toBeing = null;
   try {
@@ -223,8 +229,20 @@ async function processEntry(beingId, nodeId, picked) {
       await markInboxConsumed(nodeId, beingId, [entry.correlation]);
       return;
     }
-    beingName = toBeing.role || null;
-    role = beingName ? getRole(beingName) : null;
+    if (entry.activeRole) {
+      const carried = Array.isArray(toBeing.roles) ? toBeing.roles : [];
+      if (!carried.includes(entry.activeRole)) {
+        log.warn("Scheduler",
+          `entry's activeRole "${entry.activeRole}" not carried by being ${beingId.slice(0, 8)} ` +
+          `(roles: ${carried.join(", ") || "none"}); consuming without summon`);
+        await markInboxConsumed(nodeId, beingId, [entry.correlation]);
+        return;
+      }
+      activeRole = entry.activeRole;
+    } else {
+      activeRole = toBeing.defaultRole || null;
+    }
+    role = activeRole ? getRole(activeRole) : null;
   } catch (err) {
     log.error("Scheduler", `resolution failed for being ${beingId.slice(0, 8)}: ${err.message}`);
     await markInboxConsumed(nodeId, beingId, [entry.correlation]);
@@ -232,7 +250,7 @@ async function processEntry(beingId, nodeId, picked) {
   }
 
   if (!role) {
-    log.warn("Scheduler", `no role registered for "${beingName}" of being ${beingId.slice(0, 8)}; consuming without summon`);
+    log.warn("Scheduler", `no role registered for "${activeRole}" of being ${beingId.slice(0, 8)}; consuming without summon`);
     await markInboxConsumed(nodeId, beingId, [entry.correlation]);
     return;
   }
@@ -246,7 +264,8 @@ async function processEntry(beingId, nodeId, picked) {
   // data).
   const summonCtx = {
     nodeId,
-    embodiment: beingName,
+    being:      activeRole,                      // legacy field name; carries the active role
+    activeRole,                                  // canonical
     toBeing,
     message: {
       from:           entry.from,
@@ -254,13 +273,15 @@ async function processEntry(beingId, nodeId, picked) {
       intent:         entry.intent,
       correlation:    entry.correlation,
       rootCorrelation: entry.rootCorrelation || entry.correlation,
+      activeRole,
       inReplyTo:      entry.inReplyTo,
       attachments:    entry.attachments,
       sentAt:         entry.sentAt,
       priority:       entry.priority,
     },
     resolved: {
-      embodiment: beingName,
+      being:      activeRole,
+      activeRole,
       nodeId,
     },
     identity: null, // populated by the caller-side enqueue path (set below if attached)

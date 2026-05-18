@@ -65,7 +65,7 @@ export async function handleSummon(socket, msg, ack) {
     });
     const resolved = await resolveStance(expanded.right);
 
-    const qualifier = resolved.embodiment;
+    const qualifier = resolved.being;
     if (!qualifier) {
       throw new PortalError(
         PORTAL_ERR.ROLE_UNAVAILABLE,
@@ -101,24 +101,48 @@ export async function handleSummon(socket, msg, ack) {
       );
     }
 
-    // Behavior comes from the role template registered in
-    // roles/registry.js. Identity (homePositionId, llmDefault,
-    // history) lives on the Being instance.
-    const beingName = toBeing.role || qualifier;
-    const role = getRole(beingName);
+    // Resolve the active role for this summon. Three sources, in order:
+    //   1. `message.activeRole` from the envelope (caller specifies the
+    //      role they want this summon processed in).
+    //   2. `toBeing.defaultRole` (the being's default capacity).
+    //   3. `qualifier` as a last-resort fallback (useful for role-named
+    //      addressing when the being instance hasn't yet had its
+    //      defaultRole stamped — e.g. very-early-boot system beings).
+    //
+    // Strict membership check: if the envelope specifies an activeRole,
+    // it MUST be in the being's `roles[]`. Otherwise reject — the
+    // sender either knows what they're addressing or they don't; silent
+    // fallback hides bugs.
+    let activeRole;
+    if (message.activeRole) {
+      const carriedRoles = Array.isArray(toBeing.roles) ? toBeing.roles : [];
+      if (!carriedRoles.includes(message.activeRole)) {
+        throw new PortalError(
+          PORTAL_ERR.ROLE_UNAVAILABLE,
+          `Being @${toBeing.username} does not carry role "${message.activeRole}" ` +
+          `(roles: ${carriedRoles.length ? carriedRoles.join(", ") : "none"})`,
+        );
+      }
+      activeRole = message.activeRole;
+    } else {
+      activeRole = toBeing.defaultRole || qualifier;
+    }
+
+    const role = getRole(activeRole);
     if (!role) {
       throw new PortalError(
         PORTAL_ERR.ROLE_UNAVAILABLE,
-        `Role template "${beingName}" for being @${toBeing.username} is not registered`,
+        `Role template "${activeRole}" for being @${toBeing.username} is not registered`,
       );
     }
 
-    // Stance Authorization gate.
+    // Stance Authorization gate. Passes `activeRole` so permission
+    // rules can vary per role even on the same being.
     const identity = socket.beingId ? { beingId: socket.beingId, username: socket.username } : null;
     const decision = await authorize({
       identity,
       verb: "summon",
-      target: { kind: "stance", nodeId: resolved.nodeId, embodiment: beingName },
+      target: { kind: "stance", nodeId: resolved.nodeId, being: activeRole, activeRole },
       intent: message.intent,
     });
     if (!decision.ok) {
@@ -132,7 +156,7 @@ export async function handleSummon(socket, msg, ack) {
     if (!role.honoredIntents.includes(message.intent)) {
       throw new PortalError(
         PORTAL_ERR.INVALID_INTENT,
-        `Role "${beingName}" does not honor intent "${message.intent}"`,
+        `Role "${activeRole}" does not honor intent "${message.intent}"`,
         { honoredIntents: role.honoredIntents },
       );
     }
@@ -161,9 +185,10 @@ export async function handleSummon(socket, msg, ack) {
 
     const summonCtx = {
       nodeId:     inboxNodeId,
-      embodiment: beingName,
-      toBeing,                                  // the resolved being instance (receiver)
-      message:    { ...message, correlation: messageId, sentAt },
+      being:      activeRole,                    // legacy field name; carries the active role
+      activeRole,                                // canonical: which role is acting in this summon
+      toBeing,                                   // the resolved being instance (receiver)
+      message:    { ...message, correlation: messageId, sentAt, activeRole },
       resolved,
       identity:   { beingId: socket.beingId, username: socket.username },
     };
@@ -268,7 +293,7 @@ async function runSummoning(role, ctx) {
   try {
     result = await role.summon(ctx.message, ctx);
   } catch (err) {
-    log.error("IBP", `being "${ctx.embodiment}" summoning errored: ${err.message}`);
+    log.error("IBP", `being "${ctx.being}" summoning errored: ${err.message}`);
     throw new PortalError(PORTAL_ERR.LLM_FAILED, `Summoning failed: ${err.message}`);
   }
   if (!result || typeof result !== "object") {
@@ -281,7 +306,7 @@ async function runSummoning(role, ctx) {
   // with a pointer to the Chat record this message became.
   const responseCorrelation = randomUUID();
   return {
-    from:        `${ctx.resolved.embodiment ? `${pathOfResolved(ctx.resolved)}@${ctx.embodiment}` : ctx.embodiment}`,
+    from:        `${ctx.resolved.being ? `${pathOfResolved(ctx.resolved)}@${ctx.being}` : ctx.being}`,
     content:     result.content,
     intent:      result.intent || ctx.message.intent,
     correlation: responseCorrelation,

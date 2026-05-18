@@ -64,12 +64,24 @@ export async function ensureSystemBeings(landRootId) {
   for (const spec of SYSTEM_BEINGS) {
     try {
       // Look up by username (the canonical identifier per land).
-      const existingBeing = await Being.findOne({ username: spec.username }).select("_id role homePositionId operatingMode");
+      const existingBeing = await Being.findOne({ username: spec.username })
+        .select("_id roles defaultRole homePositionId operatingMode");
       if (existingBeing) {
         // Idempotent drift correction: keep mode/role/home in sync.
         let dirty = false;
         if (existingBeing.operatingMode !== "ai") { existingBeing.operatingMode = "ai"; dirty = true; }
-        if (existingBeing.role !== spec.role)     { existingBeing.role = spec.role; dirty = true; }
+        // Sync roles[] + defaultRole to the spec's single role. System
+        // beings carry exactly the role the spec names; if the spec
+        // changes, the being is updated.
+        const carried = Array.isArray(existingBeing.roles) ? existingBeing.roles : [];
+        if (!carried.includes(spec.role) || carried.length !== 1) {
+          existingBeing.roles = [spec.role];
+          dirty = true;
+        }
+        if (existingBeing.defaultRole !== spec.role) {
+          existingBeing.defaultRole = spec.role;
+          dirty = true;
+        }
         if (existingBeing.homePositionId !== String(landRootId)) {
           existingBeing.homePositionId = String(landRootId);
           dirty = true;

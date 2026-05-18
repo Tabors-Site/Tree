@@ -91,12 +91,30 @@ export async function createBeing(username, password, opts = {}) {
   });
   if (existing) throw new ProtocolError(409, ERR.RESOURCE_CONFLICT, "Username already taken");
 
+  // Roles + defaultRole replace the legacy static `role` field.
+  // - `opts.role` (singular) is the canonical input today: AI beings
+  //   declare one role at creation; that becomes the default and the
+  //   only entry in roles[]. Future composite beings may pass
+  //   `opts.roles` and `opts.defaultRole` directly.
+  // - Humans have empty roles[] at registration; they acquire roles
+  //   later as they're granted (creator, ruler, etc.).
+  let rolesList = [];
+  let defaultRole = null;
+  if (Array.isArray(opts.roles) && opts.roles.length > 0) {
+    rolesList = opts.roles.slice();
+    defaultRole = opts.defaultRole || rolesList[0];
+  } else if (opts.role) {
+    rolesList = [opts.role];
+    defaultRole = opts.role;
+  }
+
   const being = new Being({
     username,
     password,
     operatingMode: opts.operatingMode || "human",
     isAdmin: opts.isAdmin || false,
-    role: opts.role || null,
+    roles:       rolesList,
+    defaultRole,
     homePositionId: opts.homePositionId || null,
     // Every being starts "at home" — current position defaults to their
     // home unless the caller explicitly overrides. Navigation events

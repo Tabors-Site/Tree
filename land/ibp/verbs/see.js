@@ -49,7 +49,7 @@ export async function handleSee(socket, msg, ack) {
       identity,
       verb: "see",
       target: {
-        kind: expanded.right.embodiment ? "stance" : "position",
+        kind: expanded.right.being ? "stance" : "position",
         nodeId: resolved.nodeId,
         visibility: resolved.leafNode?.visibility,
         isDiscovery: false,

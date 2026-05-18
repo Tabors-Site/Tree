@@ -194,7 +194,7 @@ function beingsForTreeNode(node, { writeAllowed, authorizedHere }) {
     // don't need it.
     const home = beingHomes instanceof Map ? beingHomes.get(name) : beingHomes[name];
     beings.push({
-      embodiment:  name,
+      being: name,
       label:       pres.label,
       description: pres.description,
       invocableBy: pres.invocableBy,
@@ -341,7 +341,7 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
     address: {
       land: landDomain,
       path: "/",
-      embodiment: resolved.embodiment || null,
+      being: resolved.being || null,
       nodeId: null,
       beingId: null,
       chain: [],
@@ -356,7 +356,7 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
     // contextually invocable per the land's permissions.
     beings: [
       {
-        embodiment: "auth",
+        being: "auth",
         label: "Auth",
         description: "The land's welcome character. Processes register, claim, release, switch.",
         invocableBy: "anyone",
@@ -366,7 +366,7 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
         icon: "\u{1F511}",
       },
       {
-        embodiment: "land-manager",
+        being: "land-manager",
         label: "Land Manager",
         description: "Land-level governance: extensions, config, peers. God-tier only.",
         invocableBy: "owner",
@@ -376,7 +376,7 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
         icon: "\u{1F3DB}\u{FE0F}",
       },
       {
-        embodiment: "citizen",
+        being: "citizen",
         label: "Citizen",
         description: "Read-only browsing of the land's public surface.",
         invocableBy: "anyone",
@@ -427,7 +427,7 @@ async function buildHomeDescriptor(resolved, { identity } = {}) {
     address: {
       land: landDomain,
       path: homePath,
-      embodiment: resolved.embodiment || null,
+      being: resolved.being || null,
       nodeId: null,
       beingId: resolved.beingId,
       chain: resolved.chain,
@@ -439,7 +439,7 @@ async function buildHomeDescriptor(resolved, { identity } = {}) {
     zone: "home",
     beings: [
       {
-        embodiment: resolved.username, // human-being label = the user's username
+        being: resolved.username, // human-being label = the user's username
         label: resolved.username,
         description: `${resolved.username} at their home zone.`,
         invocableBy: "owner",
@@ -448,7 +448,7 @@ async function buildHomeDescriptor(resolved, { identity } = {}) {
         kind: "human",
       },
       {
-        embodiment: "dreamer",
+        being: "dreamer",
         label: "Dreamer",
         description: "Creative / generative cognition at the home zone.",
         invocableBy: "owner",
@@ -457,7 +457,7 @@ async function buildHomeDescriptor(resolved, { identity } = {}) {
         kind: "ai",
       },
       {
-        embodiment: "archivist",
+        being: "archivist",
         label: "Archivist",
         description: "Read-only browsing of the user's tree history.",
         invocableBy: "owner",
@@ -546,7 +546,7 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
     address: {
       land: landDomain,
       path: pathByNames,
-      embodiment: resolved.embodiment || null,
+      being: resolved.being || null,
       nodeId: node._id,
       beingId: resolved.beingId || null,
       chain: resolved.chain,
@@ -820,7 +820,7 @@ async function buildBeings(nodeId, entries) {
     }),
   );
   return entries.map((entry, i) => {
-    const def = getRole(entry.embodiment);
+    const def = getRole(entry.being);
     // Inbox lookup key is the receiving being's id (not the role name).
     // Falls back to an empty summary when the entry has no resolved being
     // yet (e.g. an extension registered a being-home that hasn't been
@@ -848,7 +848,7 @@ async function buildBeings(nodeId, entries) {
       talkingTo:      inb.activeFrom,
       queueDepth:     inb.queueDepth,
       pendingFrom:    inb.pendingFrom,
-      ...beingPlacement(parentMetadata, entry.embodiment),
+      ...beingPlacement(parentMetadata, entry.being),
     };
   });
 }
