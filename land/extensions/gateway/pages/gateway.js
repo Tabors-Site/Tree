@@ -340,9 +340,9 @@ async function addChannel() {
     if (type === "telegram") {
       // Telegram always needs bot token + chat ID
       var botToken = document.getElementById("tgBotToken").value.trim();
-      var chatId = document.getElementById("tgChatId").value.trim();
-      if (!botToken || !chatId) { showStatus("Bot token and chat ID are required", true); return; }
-      config = { botToken: botToken, chatId: chatId };
+      var summonId = document.getElementById("tgChatId").value.trim();
+      if (!botToken || !summonId) { showStatus("Bot token and chat ID are required", true); return; }
+      config = { botToken: botToken, summonId: summonId };
     } else if (type === "discord") {
       if (hasInput) {
         // Discord input: bot token + channel ID

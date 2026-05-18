@@ -50,8 +50,8 @@ const REQUIRED_INDEXES = [
   { collection: "dids", fields: { nodeId: 1, date: -1 }, options: {} },
   { collection: "dids", fields: { beingId: 1, date: -1 }, options: {} },
   { collection: "dids", fields: { sessionId: 1 }, options: { sparse: true } },
-  // Did lookup by chatId (finalizeChat collects contributions per chat)
-  { collection: "dids", fields: { chatId: 1 }, options: { sparse: true } },
+  // Did lookup by summonId (finalizeSummon collects dids per summon)
+  { collection: "dids", fields: { summonId: 1 }, options: { sparse: true } },
 
   // User queries (login by username, already unique in schema but verify)
   { collection: "users", fields: { username: 1 }, options: { unique: true } },

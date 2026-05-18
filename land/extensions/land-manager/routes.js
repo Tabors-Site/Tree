@@ -83,15 +83,36 @@ router.post("/land/chat", authenticate, async (req, res) => {
 
     const { runChat } = await import("../../seed/llm/conversation.js");
 
-    const { answer, chatId } = await runChat({
+    // Resolve the land-manager being so runChat's eager IBP Address
+    // computation can canonicalize the conversation key. Without
+    // beingOut, runChat falls through to a fresh pipeline:ephemeral
+    // every call — a new MCP client per request, no thread continuity.
+    let lmBeingOut = null;
+    try {
+      const Node = (await import("../../seed/models/node.js")).default;
+      const { getLandRootId } = await import("../../seed/landRoot.js");
+      const landRootId = getLandRootId();
+      if (landRootId) {
+        const landRoot = await Node.findById(landRootId).select("metadata").lean();
+        const beings = landRoot?.metadata instanceof Map
+          ? landRoot.metadata.get("beings")
+          : landRoot?.metadata?.beings;
+        lmBeingOut = beings?.["land-manager"]?.beingId || null;
+      }
+    } catch (resErr) {
+      log.debug("LandManager", `land-manager being resolution skipped: ${resErr.message}`);
+    }
+
+    const { answer, summonId } = await runChat({
       beingId: req.beingId,
+      beingOut: lmBeingOut,
       username: user.username,
       message,
       mode: "land:manager",
       res,
     });
 
-    sendOk(res, { answer, chatId });
+    sendOk(res, { answer, summonId });
   } catch (err) {
     log.error("LandManager", "Chat error:", err.message);
     sendError(res, 500, ERR.INTERNAL, err.message);

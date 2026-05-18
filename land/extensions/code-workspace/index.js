@@ -1082,7 +1082,7 @@ export async function init(core) {
   // is the main driver of self-similar state maintenance.
   core.hooks.register(
     "afterArtifact",
-    async ({ artifact, nodeId, origin, action, chatId }) => {
+    async ({ artifact, nodeId, origin, action, summonId }) => {
       if (origin !== "ibp") return;
       if (!nodeId) return;
       try {
@@ -1096,7 +1096,7 @@ export async function init(core) {
         // capture that caused this artifact write. Silently null for
         // background writes (no chat context), in which case the
         // forensics layer no-ops.
-        const emitterChatId = chatId || null;
+        const emitterChatId = summonId || null;
 
         const { default: NodeModel } = await import("../../seed/models/node.js");
         const fileNode = await NodeModel.findById(nodeId).select("name metadata").lean();

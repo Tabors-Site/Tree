@@ -11,7 +11,7 @@ export default [
     schema: {
       rootId: z.string().describe("Tree root to analyze."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
@@ -48,7 +48,7 @@ export default [
     schema: {
       nodeId: z.string().describe("Branch node to preview splitting."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -69,7 +69,7 @@ export default [
     schema: {
       nodeId: z.string().describe("Branch node to split into a new tree."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -90,7 +90,7 @@ export default [
     schema: {
       rootId: z.string().describe("Tree root to check."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },

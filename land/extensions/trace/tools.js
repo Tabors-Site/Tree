@@ -14,7 +14,7 @@ export default [
       since: z.string().optional().describe("Time filter: ISO date or relative (7d, 30d)."),
       beingId: z.string().describe("Injected by server. Ignore."),
       username: z.string().optional().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -55,7 +55,7 @@ export default [
     schema: {
       nodeId: z.string().describe("The node to check."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },

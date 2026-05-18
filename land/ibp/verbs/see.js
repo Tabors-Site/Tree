@@ -5,9 +5,9 @@
 //   { id, stance:   "<stance>",   identity?, live?: boolean }
 //
 // Exactly one of `position` or `stance` is present. A position has no
-// embodiment qualifier; a stance has one. The handler returns a Position
+// being qualifier; a stance has one. The handler returns a Position
 // Description (see portal/docs/position-description.md) describing what is at
-// the addressed place, optionally augmented with embodiment-specific
+// the addressed place, optionally augmented with being-specific
 // fields when the address is a stance.
 //
 // One-shot is wired below. Live mode (live: true) returns VERB_NOT_SUPPORTED
@@ -78,7 +78,7 @@ export async function handleSee(socket, msg, ack) {
     if (isPortalError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("Portal", `ibp:see failed: ${err.message}`);
+    log.error("IBP", `ibp:see failed: ${err.message}`);
     return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }

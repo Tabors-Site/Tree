@@ -338,7 +338,7 @@ export class Scene {
       mesh.userData.activeTargetCoord = targetCoord;
 
       // Activity bubble: a small HTML label that follows the being. We
-      // keep it separate from the TALK-reply bubble (_bubble) so they
+      // keep it separate from the SUMMON-reply bubble (_bubble) so they
       // can coexist.
       if (activity?.content) {
         seen.add(being.embodiment);
@@ -1026,7 +1026,7 @@ export class Scene {
   }
 
   // Animated "thinking" bubble: three dots that pulse in sequence. Shown
-  // while we wait for an async TALK reply. Persists until replaced by
+  // while we wait for an async SUMMON reply. Persists until replaced by
   // showBeingMessage or cleared on look-away / navigation.
   showBeingThinking(embodiment) {
     const mesh = this._beingMeshes.get(embodiment);

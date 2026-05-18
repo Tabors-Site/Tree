@@ -27,8 +27,8 @@
 // same shape as metadata.permissions entries:
 //
 //   "do:set-meta:position"
-//   "talk:@planner*"
-//   "talk:@auth:be"
+//   "summon:@planner*"
+//   "summon:@auth:be"
 //   "do:create-child"
 //
 // Rules carry `requires` (stance property requirements). The registry

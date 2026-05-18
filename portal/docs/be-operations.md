@@ -6,9 +6,9 @@ Read [protocol.md](protocol.md) first.
 
 ## Why BE is its own verb
 
-SEE, DO, and TALK all operate from a be-er upon the world. They require an established identity. BE is the only verb that operates **upon the be-er itself**, and it is the only verb that handles unestablished requesters.
+SEE, DO, and SUMMON all operate from a be-er upon the world. They require an established identity. BE is the only verb that operates **upon the be-er itself**, and it is the only verb that handles unestablished requesters.
 
-The `@` in a Portal Address points at the be-er, not at an action. Identity operations act on what the `@` refers to. They are categorically different from acting in the world as an established be-er.
+The `@` in an IBP Address points at the be-er, not at an action. Identity operations act on what the `@` refers to. They are categorically different from acting in the world as an established be-er.
 
 Folding BE into DO would require an `anonymous-from` exception to the protocol's "identity required" rule and would conflate two different verb purposes. Keeping BE separate is cleaner.
 
@@ -20,7 +20,7 @@ The BE envelope always carries a `stance`. Self-identity operations target stanc
 { verb: "be", operation: "register" | "claim" | "release" | "switch", stance: "<stance>", identity?, payload? }
 ```
 
-The auth-being at the stance's land processes the operation. It is a real being inspectable via SEE on its stance; lands choose the qualifier name (`@auth`, `@identity`) and may install custom auth-being embodiments per land.
+The auth-being at the stance's land processes the operation. It is a real being inspectable via SEE on its stance; lands choose the qualifier name (`@auth`, `@identity`) and may install custom auth-being beings per land.
 
 ### register
 
@@ -37,7 +37,7 @@ Creates a new be-er at a land. There is no prior stance, so the address is the l
 
 The payload carries credentials and any registration data the land's auth-being requires (e.g., invite code, real name, contract acceptance).
 
-Returns: `{ identityToken, beingAddress }`. The new be-er is established for this session; subsequent SEE/DO/TALK use the returned token.
+Returns: `{ identityToken, beingAddress }`. The new be-er is established for this session; subsequent SEE/DO/SUMMON use the returned token.
 
 Errors: `FORBIDDEN` (registration not open on this land), `RESOURCE_CONFLICT` (username taken), `INVALID_INPUT` (missing required fields).
 
@@ -112,19 +112,19 @@ This is the operation behind "switch identity" in the portal's identity panel. I
 
 Every land has a per-land auth-being. By convention, addressable as `<land>/@auth` or `<land>/@identity` (land's choice). It handles BE operations.
 
-The auth-being is **a real being.** It has a position (the land root), an embodiment (`auth` or similar), an inbox, a record. It is inspectable like any being. A SEE on `<land>/@auth` returns a descriptor showing the auth-being's policies (open vs. closed registration, supported credential types, etc.).
+The auth-being is **a real being.** It has a position (the land root), an being (`auth` or similar), an inbox, a record. It is inspectable like any being. A SEE on `<land>/@auth` returns a descriptor showing the auth-being's policies (open vs. closed registration, supported credential types, etc.).
 
 This matters because:
 
 - **Each land can specialize its auth-being.** A public land's auth-being welcomes any registration. A private land's may require an invite code. A research land's may bind the be-er to a contract or NDA. A land with values about who can be there expresses those values through its auth-being.
-- **The auth-being can be replaced.** Lands install custom auth embodiments to change registration flow, credential schemes, identity verification, etc. The protocol stays uniform.
-- **The auth-being can have its own inbox.** A registration that requires manual approval can be a TALK from the auth-being to the land operator with `intent: chat`, awaiting a response.
+- **The auth-being can be replaced.** Lands install custom auth beings to change registration flow, credential schemes, identity verification, etc. The protocol stays uniform.
+- **The auth-being can have its own inbox.** A registration that requires manual approval can be a SUMMON from the auth-being to the land operator with `intent: chat`, awaiting a response.
 
-The auth-being's embodiment honors the BE operations as protocol-level interactions. The protocol does not deliver BE operations as TALK messages; they are dispatched directly to the auth-being's BE handler. But the auth-being may TALK to others as part of processing (e.g., notifying admins of new registrations).
+The auth-being's being honors the BE operations as protocol-level interactions. The protocol does not deliver BE operations as SUMMON messages; they are dispatched directly to the auth-being's BE handler. But the auth-being may SUMMON to others as part of processing (e.g., notifying admins of new registrations).
 
 ## Identity tokens
 
-The identity token returned by `register` and `claim` is the bearer credential for SEE/DO/TALK.
+The identity token returned by `register` and `claim` is the bearer credential for SEE/DO/SUMMON.
 
 The protocol does not specify the token format. The land may issue:
 - JWTs (current TreeOS convention)
@@ -133,7 +133,7 @@ The protocol does not specify the token format. The land may issue:
 
 Whatever the format, the contract is:
 - Returned by `register` and `claim`
-- Carried by the client on subsequent SEE/DO/TALK
+- Carried by the client on subsequent SEE/DO/SUMMON
 - Invalidated by `release`
 - Verified by the land on every request
 
@@ -168,9 +168,9 @@ Federation BE operations:
 
 Federation details belong to the Canopy spec and are out of scope here. The protocol envelope reserves the shape.
 
-## Switching as a TALK to the auth-being
+## Switching as a SUMMON to the auth-being
 
-`switch` is structurally a BE operation, but a more elaborate identity flow (proving identity through challenge-response, multi-factor, etc.) may use TALK to the auth-being:
+`switch` is structurally a BE operation, but a more elaborate identity flow (proving identity through challenge-response, multi-factor, etc.) may use SUMMON to the auth-being:
 
 ```
 {
@@ -186,7 +186,7 @@ Federation details belong to the Canopy spec and are out of scope here. The prot
 }
 ```
 
-The auth-being can respond with a challenge, await an answer, and complete the switch through a final BE operation. The protocol supports both: `BE switch` for simple held-be-er selection, TALK + final BE for complex flows.
+The auth-being can respond with a challenge, await an answer, and complete the switch through a final BE operation. The protocol supports both: `BE switch` for simple held-be-er selection, SUMMON + final BE for complex flows.
 
 ## The arrival stance
 
@@ -197,15 +197,15 @@ The protocol commits to:
 1. Every land has an arrival stance.
 2. BE addressed at the auth-being is always permitted from the arrival stance.
 
-Beyond those two, lands configure what an arrival can do. Some lands are open: arrivals SEE public scopes, TALK to a public host being, even DO bounded things like leave a guestbook entry. Some lands are closed: arrivals can only BE.
+Beyond those two, lands configure what an arrival can do. Some lands are open: arrivals SEE public scopes, SUMMON to a public host being, even DO bounded things like leave a guestbook entry. Some lands are closed: arrivals can only BE.
 
-Configuration lives at `<land>/` under `metadata.embodiments.arrival.permissions`:
+Configuration lives at `<land>/` under `metadata.beings.arrival.permissions`:
 
 ```
 {
   see:  { allowed: [...], denied: [...] },
   do:   { allowed: [{ action, scope, ... }] },
-  talk: { allowed: ["@auth", "@host", ...] },
+  summon: { allowed: ["@auth", "@host", ...] },
   be:   { allowed: ["register", "claim"] }
 }
 ```
@@ -252,7 +252,7 @@ client renders sign-in surface
 client -> { verb: "be", operation: "register", land: "treeos.ai", payload: { username: "tabor", password: "..." } }
 client receives { identityToken, beingAddress: "tabor@treeos.ai" }
 
-client now has an identity. All subsequent SEE/DO/TALK use the token.
+client now has an identity. All subsequent SEE/DO/SUMMON use the token.
 ```
 
 ### Returning user
@@ -286,5 +286,5 @@ Token invalidated; client may stop using it.
 
 - [protocol.md](protocol.md) the four-verb spec
 - [identity.md](identity.md) the identity-first session model
-- [portal-address.md](portal-address.md) what `@auth` and stance addresses mean
+- [ibp-address.md](ibp-address.md) what `@auth` and stance addresses mean
 - [server-protocol.md](server-protocol.md) wire-level rules for the be op

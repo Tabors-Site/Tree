@@ -27,9 +27,9 @@ import {
 } from "./ws/sessionRegistry.js";
 
 import {
-  startChat, finalizeChat, trackChainStep,
+  startSummon, finalizeSummon, trackChainStep,
   ensureSession as ensureChatSession,
-} from "./llm/chatTracker.js";
+} from "./llm/summonTracker.js";
 
 import {
   getClientForUser, resolveRootLlmForMode, userHasLlm,
@@ -69,6 +69,30 @@ import {
   acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple,
   isNodeLocked, getLockStats as getNodeLockStats,
 } from "./tree/nodeLocks.js";
+
+// IBP substrate (sibling layer to seed/, peer of canopy/ and routes/).
+// Re-exposed through core.ibp so extensions reach SUMMON/inbox/scheduler
+// primitives without importing from ibp/* directly.
+import { wake, abortCurrent, attachHandoff, getCurrentRootCorrelation } from "../ibp/scheduler.js";
+import { cancelByRootCorrelation as inboxCancelByRootCorrelation } from "../ibp/inbox.js";
+import { aggregate as ibpAggregate } from "../ibp/replyAggregator.js";
+import {
+  subscribe as ibpSubscribe,
+  unsubscribe as ibpUnsubscribe,
+  unsubscribeAllForBeing as ibpUnsubscribeAllForBeing,
+} from "../ibp/subscriptions.js";
+import {
+  schedule as ibpSchedule,
+  unschedule as ibpUnschedule,
+  unscheduleAllForBeing as ibpUnscheduleAllForBeing,
+  setEmitter as ibpSetScheduleEmitter,
+  resetEmitter as ibpResetScheduleEmitter,
+} from "../ibp/schedule.js";
+import {
+  registerRole as ibpRegisterRole,
+  unregisterRole as ibpUnregisterRole,
+} from "../ibp/roles/registry.js";
+import { makeBridgeEmbodiment as ibpMakeBridgeRole } from "../ibp/roles/bridge.js";
 
 // ---------------------------------------------------------------------------
 // Auth strategy registry (extensions register additional auth methods)
@@ -137,8 +161,8 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       SESSION_TYPES, registerSessionType,
     },
 
-    chat: {
-      startChat, finalizeChat, trackChainStep,
+    summon: {
+      startSummon, finalizeSummon, trackChainStep,
       ensureSession: ensureChatSession,
     },
 
@@ -207,6 +231,46 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
 
     // --- Cascade (extensions call deliverCascade to propagate signals) ---
     cascade: { deliverCascade },
+
+    // --- IBP (Inter-Being Protocol) primitives extensions can wire into.
+    //     Role templates (governing/Ruler, Planner, etc.) summon other
+    //     beings via `wake`, cascade cancellations via `cancelByRoot...`,
+    //     and wait for fanout replies via `aggregate`. The seed exposes
+    //     the substrate so extensions never reach into ibp/* directly.
+    ibp: {
+      wake,
+      abortCurrent,
+      attachHandoff,
+      getCurrentRootCorrelation,
+      cancelByRootCorrelation: inboxCancelByRootCorrelation,
+      aggregate: ibpAggregate,
+      // DO-trigger subscriptions. Extensions register interest on
+      // behalf of their beings; substrate hooks fan out matching
+      // events as do-trigger SUMMONs. Slice 6a.
+      subscribe:              ibpSubscribe,
+      unsubscribe:            ibpUnsubscribe,
+      unsubscribeAllForBeing: ibpUnsubscribeAllForBeing,
+      // Scheduled-wake registry. Beings declare wake cadences; the
+      // tick loop emits scheduled-wake SUMMONs on their intervals.
+      // Mode 2 (code-emitter) is the default; the embodied scheduler-
+      // being flavor swaps in via setScheduleEmitter. Slice 6b.
+      schedule:               ibpSchedule,
+      unschedule:             ibpUnschedule,
+      unscheduleAllForBeing:  ibpUnscheduleAllForBeing,
+      setScheduleEmitter:     ibpSetScheduleEmitter,
+      resetScheduleEmitter:   ibpResetScheduleEmitter,
+      // Being registry. Extensions register custom beings
+      // (code-cognition beings, custom LLM flows) without IBP needing
+      // to import from extensions/. Auth-being is the precedent; the
+      // intent extension is the first Slice 6c conversion using this.
+      registerRole:     ibpRegisterRole,
+      unregisterRole:   ibpUnregisterRole,
+      // Factory for the bridge role pattern — given a modeKey + zone,
+      // builds a role definition whose summon routes through `runChat`
+      // with that mode at the resolved nodeId. Extensions use this for
+      // LLM-cognition beings that already have a registered mode.
+      makeBridgeRole:   ibpMakeBridgeRole,
+    },
 
     // --- Response protocol (shapes, error codes, event types) ---
     protocol: { ok, error, sendOk, sendError, ERR, WS, CASCADE },

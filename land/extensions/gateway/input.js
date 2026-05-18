@@ -93,8 +93,8 @@ export async function processGatewayMessage(
 
     // Finalize any open chats that were in-flight
     try {
-      const Chat = (await import("../../seed/models/chat.js")).default;
-      await Chat.updateMany(
+      const Summon = (await import("../../seed/models/summon.js")).default;
+      await Summon.updateMany(
         {
           beingId: channel.beingId,
           "endMessage.time": null,
@@ -223,7 +223,7 @@ export async function processGatewayMessage(
           rootId: channel.rootId,
           skipRespond,
           forceQueryOnly,
-          rootChatId: rt.mainChatId || null,
+          rootSummonId: rt.mainChatId || null,
           sourceType,
         });
 

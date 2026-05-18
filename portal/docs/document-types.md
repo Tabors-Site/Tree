@@ -8,7 +8,7 @@ This index lists the document types each verb works with, and the atoms they sha
 
 ### Position Description
 
-The structured JSON description SEE returns. Names what's at the addressed position. Includes embodiment-augmented fields (inbox, honored intents, response mode, conversations for that embodiment) when the address carries an `@<embodiment>` qualifier.
+The structured JSON description SEE returns. Names what's at the addressed position. Includes being-augmented fields (inbox, honored intents, response mode, conversations for that being) when the address carries an `@<being>` qualifier.
 
 - Detail: [position-description.md](position-description.md)
 - Carried by: **SEE**
@@ -16,10 +16,10 @@ The structured JSON description SEE returns. Names what's at the addressed posit
 
 ### Message Envelope
 
-The TALK envelope. One uniform shape delivering messages to inboxes regardless of who's addressing whom.
+The SUMMON envelope. One uniform shape delivering messages to inboxes regardless of who's addressing whom.
 
 - Detail: [message-envelope.md](message-envelope.md)
-- Carried by: **TALK**
+- Carried by: **SUMMON**
 - Shape: `{ from, content, intent, correlation, inReplyTo?, attachments? }`
 
 ### Mutation Payload
@@ -48,17 +48,17 @@ A place in the world. Form `<land>/<path>`. Examples: `treeos.ai/` (Land Positio
 
 ### Stance
 
-A being at a position. Form `<position>@<embodiment>`. Examples: `treeos.ai/@auth`, `treeos.ai/flappybird@ruler`. Addressable; accepted by SEE, required by TALK and BE.
+A being at a position. Form `<position>@<being>`. Examples: `treeos.ai/@auth`, `treeos.ai/flappybird@ruler`. Addressable; accepted by SEE, required by SUMMON and BE.
 
 ### Land
 
 A sovereign server. Two forms distinguished by the trailing slash. `treeos.ai` (no slash) is the **Land identifier**, the name of the server, used by BE when dispatching to the land's auth-being. `treeos.ai/` (with slash) is the **Land Position**, the actual addressable place at path `/` on that land. The trailing slash is the load-bearing distinction.
 
-### Embodiment
+### Being
 
-A cognitive shape. Form `@<identifier>` (e.g., `@ruler`, `@archivist`, `@tabor`). Combines with a Position to form a Stance. Not addressable on its own. The `@qualifier` in a Stance address names the embodiment but never targets it.
+A cognitive shape. Form `@<identifier>` (e.g., `@ruler`, `@archivist`, `@tabor`). Combines with a Position to form a Stance. Not addressable on its own. The `@qualifier` in a Stance address names the being but never targets it.
 
-See [portal-address.md](portal-address.md) for the full grammar and [protocol.md](protocol.md) for how the verbs use these.
+See [ibp-address.md](ibp-address.md) for the full grammar and [protocol.md](protocol.md) for how the verbs use these.
 
 ## Why no umbrella name
 

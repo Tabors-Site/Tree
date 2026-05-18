@@ -71,7 +71,7 @@ export async function runPipeline({
     get aborted() { return rt.aborted; },
     get signal() { return rt.signal; },
     get sessionId() { return rt.sessionId; },
-    get chatId() { return rt.mainChatId; },
+    get summonId() { return rt.mainChatId; },
     get chainIndex() { return rt.chainIndex; },
     get llmProvider() { return rt.llmProvider; },
   };

@@ -188,7 +188,7 @@ export function groupIntoChains(chats) {
   const chainMap = new Map();
   const chainOrder = [];
   for (const chat of chats) {
-    const key = chat.rootChatId || chat._id;
+    const key = chat.rootSummonId || chat._id;
     if (!chainMap.has(key)) {
       chainMap.set(key, { root: null, steps: [] });
       chainOrder.push(key);

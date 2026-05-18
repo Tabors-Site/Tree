@@ -14,7 +14,7 @@ export default [
       query: z.string().describe("What to find. Natural language."),
       beingId: z.string().describe("Injected by server. Ignore."),
       username: z.string().optional().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -53,7 +53,7 @@ export default [
     schema: {
       nodeId: z.string().describe("The node to check."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -75,7 +75,7 @@ export default [
     schema: {
       nodeId: z.string().describe("The node to check."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },

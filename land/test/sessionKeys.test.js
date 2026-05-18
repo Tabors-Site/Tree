@@ -13,7 +13,7 @@ import {
 //
 // After Slice 6: aiSessionKey identifies a transport reach (which tab /
 // CLI / device). It's no longer the canonical conversation identifier
-// (that's portalAddress now). The per-reach split below is what the
+// (that's ibpAddress now). The per-reach split below is what the
 // in-flight registry uses for replay-on-reconnect bookkeeping.
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ describe("buildUserAiSessionKey", () => {
   test("same handle from two devices produces one merged transport key", () => {
     // Two reaches sharing a handle still merge — useful for tests, manual
     // multi-device coordination, etc. This is independent of the per-being
-    // conversation merge that happens at the portalAddress layer.
+    // conversation merge that happens at the ibpAddress layer.
     const a = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "web", handle: "shared" });
     const b = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "cli", handle: "shared" });
     assert.equal(a, b, "same handle must produce the same key regardless of device");
@@ -74,7 +74,7 @@ describe("buildUserAiSessionKey", () => {
     assert.notEqual(dashboard, cli);
     // Transport keys split per-tab so the in-flight event buffer can
     // replay correctly when one tab disconnects mid-stream. The
-    // conversation state (messages, mode) is keyed by portalAddress
+    // conversation state (messages, mode) is keyed by ibpAddress
     // and IS shared — that's a separate model.
   });
 
@@ -132,7 +132,7 @@ describe("buildUserAiSessionKey", () => {
 // resolvePipelineKey — runChat / OrchestratorRuntime stanceless pipeline
 //
 // After Slice 6: pipeline keys are explicitly namespaced under
-// `pipeline:*` so they don't collide with portalAddress (being-to-being
+// `pipeline:*` so they don't collide with ibpAddress (being-to-being
 // conversation identity) or aiSessionKey (transport identity). Used
 // for background internal cognition where no addressee being exists.
 // ─────────────────────────────────────────────────────────────────────────
@@ -269,7 +269,7 @@ describe("namespace isolation", () => {
     assert.notEqual(cli, browser);
     // Different transport keys are correct: the in-flight event buffer
     // is per-tab so replay-on-disconnect works per-window. Conversation
-    // state (messages, mode) is keyed by portalAddress at a higher
+    // state (messages, mode) is keyed by ibpAddress at a higher
     // layer and IS shared between the tabs.
   });
 

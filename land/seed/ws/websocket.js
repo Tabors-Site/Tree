@@ -54,10 +54,10 @@ import {
 import {
   ensureSession,
   rotateSession,
-  setActiveChat,
-  clearActiveChat,
-  finalizeOpenChat,
-} from "../llm/chatTracker.js";
+  setActiveSummon,
+  clearActiveSummon,
+  finalizeOpenSummon,
+} from "../llm/summonTracker.js";
 // Provided by tree-orchestrator extension if installed. No-op without it.
 let clearMemory = () => {};
 export function setClearMemoryFn(fn) { if (typeof fn === "function") clearMemory = fn; }
@@ -620,7 +620,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       socket.username = username;
 
       // Join the being-room so async chat events (chat-response,
-      // tool-result, thinking, descriptor patches, TALK replies) reach
+      // tool-result, thinking, descriptor patches, SUMMON replies) reach
       // every socket the being has connected. Single-context being
       // model: Tabor on web and Tabor on CLI share the same room and
       // see the same conversation state. Per-socket emits (registered,
@@ -633,23 +633,13 @@ export function initWebSocketServer(httpServer, originPolicy) {
       ensureSession(socket);
       syncRegistrySession(socket);
 
-      try {
-        // Internal JWT for MCP auth. beingId + username is enough —
-        // chatId / portalAddress travel through tool args, not JWT.
-        const mcpJwt = jwt.sign(
-          { beingId: String(beingId), username },
-          JWT_SECRET,
-          { expiresIn: "24h" },
-        );
-        await connectToMCP(MCP_SERVER_URL, aiSessionKey, mcpJwt);
-        socket.emit(WS.REGISTERED, { success: true, aiSessionKey });
-      } catch (err) {
-        log.error("WS",
-          `❌ MCP connection failed for ${aiSessionKey}:`,
-          err.message,
-        );
-        socket.emit(WS.REGISTERED, { success: false, error: err.message });
-      }
+      // MCP connection happens lazily inside runChat / runOrchestration
+      // under the canonical conversation key (IBP Address for
+      // being-to-being, pipeline key for stanceless). Pre-connecting
+      // here under `aiSessionKey` would orphan that client the moment
+      // the first runChat opens a new one under ibpAddress — see
+      // the two-client trace from before Slice 5 cleanup.
+      socket.emit(WS.REGISTERED, { success: true, aiSessionKey });
 
       logStats();
     });
@@ -665,7 +655,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       if (!aiSessionKey) return;
 
       // Finalize any in-flight chat before switching
-      await finalizeOpenChat(socket);
+      await finalizeOpenSummon(socket);
 
       try {
         const result = await switchMode(aiSessionKey, modeKey, {
@@ -814,7 +804,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
         (newBigMode !== BIG_MODES.HOME || isExplicitHome || !currentMode)
       ) {
         // Finalize any in-flight chat
-        await finalizeOpenChat(socket);
+        await finalizeOpenSummon(socket);
 
         if (shouldAbort && socket._chatAbort) {
           socket._chatAbort.abort();
@@ -960,7 +950,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       // If no mode, big mode doesn't match URL, or socket crossed a zone boundary → switch
       if (!currentMode || (urlBigMode && currentBig !== urlBigMode) || socketZoneTransition) {
         // Finalize any in-flight chat
-        await finalizeOpenChat(socket);
+        await finalizeOpenSummon(socket);
 
         if (shouldAbort && socket._chatAbort) {
           socket._chatAbort.abort();
@@ -1180,7 +1170,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
         const { abort, teeEmit } = beginChatTurn(socket, aiSessionKey, bigMode);
 
         // Finalize any leftover chat from a prior interrupted message.
-        await finalizeOpenChat(socket);
+        await finalizeOpenSummon(socket);
 
         // Persistent session + chat-record context.
         ensureSession(socket);
@@ -1210,7 +1200,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
               behavioral: safeChatMode === "be",
             },
             onChatCreated: (chat) => {
-              setActiveChat(socket, chat._id, chat.startMessage.time);
+              setActiveSummon(socket, chat._id, chat.startMessage.time);
             },
             onToolResults: (results) => {
               for (const r of results) teeEmit(WS.TOOL_RESULT, r);
@@ -1221,7 +1211,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
           });
 
           if (abort.signal.aborted) {
-            clearActiveChat(socket);
+            clearActiveSummon(socket);
             return;
           }
 
@@ -1242,11 +1232,11 @@ export function initWebSocketServer(httpServer, originPolicy) {
           }
 
           // runOrchestration finalized the Chat record. Clear the
-          // socket-level marker so finalizeOpenChat doesn't re-finalize.
-          clearActiveChat(socket);
+          // socket-level marker so finalizeOpenSummon doesn't re-finalize.
+          clearActiveSummon(socket);
         } catch (err) {
           if (abort.signal.aborted) {
-            clearActiveChat(socket);
+            clearActiveSummon(socket);
               return;
           }
           log.error("WS", `Chat error: ${err.message}`);
@@ -1258,7 +1248,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
           const errCode = (err && typeof err.errCode === "string" && err.errCode)
             || (err && err.name === "AbortError" ? ERR.HOOK_CANCELLED : ERR.INTERNAL);
           teeEmit(WS.CHAT_ERROR, { code: errCode, error: err.message, generation });
-          clearActiveChat(socket);
+          clearActiveSummon(socket);
         } finally {
           endChatTurn(socket, abort, aiSessionKey);
         }
@@ -1408,7 +1398,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       const aiSessionKey = socket.aiSessionKey;
       if (aiSessionKey) {
         // Finalize any in-flight chat
-        await finalizeOpenChat(socket);
+        await finalizeOpenSummon(socket);
 
         await resetConversation(aiSessionKey, {
           username: socket.username,
@@ -1442,12 +1432,12 @@ export function initWebSocketServer(httpServer, originPolicy) {
       }
 
       // Finalize any in-flight chat — but only when no chat is actually
-      // still running. finalizeOpenChat writes `stopped: true` to the
+      // still running. finalizeOpenSummon writes `stopped: true` to the
       // Chat record, which mis-labels a chat we left running on
       // purpose. When the chat completes naturally, runOrchestration
       // finalizes the record itself.
       if (!hadInFlight) {
-        await finalizeOpenChat(socket);
+        await finalizeOpenSummon(socket);
       }
 
       // Drop the per-socket abort handle. The controller still lives

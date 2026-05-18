@@ -9,7 +9,7 @@ export default [
     schema: {
       nodeId: z.string().describe("Node ID where scripts are stored."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z
+      summonId: z
         .string()
         .nullable()
         .optional()
@@ -186,7 +186,7 @@ export default [
           "The Id of the script to execute. Found inside of get-node. None if new script",
         ),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z
+      summonId: z
         .string()
         .nullable()
         .optional()
@@ -208,14 +208,14 @@ export default [
       idempotentHint: true,
       openWorldHint: false,
     },
-    handler: async ({ nodeId, scriptId, name, script, beingId, chatId, sessionId }) => {
+    handler: async ({ nodeId, scriptId, name, script, beingId, summonId, sessionId }) => {
       const result = await updateScript({
         nodeId,
         scriptId,
         name,
         script,
         beingId,
-        chatId,
+        summonId,
         sessionId,
       });
 
@@ -234,7 +234,7 @@ export default [
         .string()
         .describe("The Id of the script to execute. Found inside of get-node"),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z
+      summonId: z
         .string()
         .nullable()
         .optional()
@@ -251,12 +251,12 @@ export default [
       idempotentHint: false,
       openWorldHint: true,
     },
-    handler: async ({ nodeId, scriptId, beingId, chatId, sessionId }) => {
+    handler: async ({ nodeId, scriptId, beingId, summonId, sessionId }) => {
       const result = await executeScript({
         nodeId,
         scriptId,
         beingId,
-        chatId,
+        summonId,
         sessionId,
       });
 

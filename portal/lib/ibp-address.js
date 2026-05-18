@@ -1,18 +1,18 @@
-// Portal Address parser + formatter.
+// IBP Address parser + formatter.
 //
 // TreeOS replaces URLs with a three-tier addressing hierarchy:
 //
 //   Position           = land/path           (where)
 //   Stance             = land/path@embodiment (where + as what being) — one side of a bridge
-//   Portal Address = stance :: stance   (full bridged form — one being addressing another)
+//   IBP Address = stance :: stance   (full bridged form — one being addressing another)
 //
 // Each level answers a different question. "What's the position?" → just
 // the land/path. "What's the stance?" → land/path/embodiment (one side).
-// "What's the portal address?" → the full bridged form.
+// "What's the IBP address?" → the full bridged form.
 //
-// Full grammar (see ../docs/portal-address.md):
+// Full grammar (see ../docs/ibp-address.md):
 //
-//   PortalAddress := Bridge | Stance
+//   IbpAddress := Bridge | Stance
 //   Bridge             := Stance "::" Stance
 //   Stance             := Position "@" Embodiment | Position | Embodiment
 //   Position           := Land? Path?
@@ -57,7 +57,7 @@
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Parse a Portal Address string into a normalized object.
+ * Parse an IBP Address string into a normalized object.
  *
  * @param {string} input
  * @param {object} [ctx]
@@ -112,7 +112,7 @@ export function parse(input, ctx = {}) {
 }
 
 /**
- * Format a parsed PA back to its canonical string form. Inverse of
+ * Format a parsed IBPA back to its canonical string form. Inverse of
  * parse() — round-trips for any parser-acceptable input.
  *
  * @param {{ left?: Stance|null, right: Stance }} pa
@@ -133,7 +133,7 @@ export function format(pa, opts = {}) {
 }
 
 /**
- * Expand a PA's shorthands against a context. Returns a new PA with
+ * Expand a IBPA's shorthands against a context. Returns a new IBPA with
  * fully-resolved land / path / embodiment fields on each stance.
  * Useful at request time, where the server expects a fully-qualified
  * address.
@@ -158,7 +158,7 @@ export function canonical(input, ctx = {}) {
 }
 
 /**
- * Validate that a parsed PA is well-formed (after expansion). Returns
+ * Validate that a parsed IBPA is well-formed (after expansion). Returns
  * { ok: true } or { ok: false, errors: [...] }.
  */
 export function validate(pa, ctx = {}) {
@@ -461,7 +461,7 @@ export function isValidEmbodiment(embodiment) {
 // ─────────────────────────────────────────────────────────────────────
 
 function paError(code, input, message, extra = {}) {
-  const err = new Error(`PortalAddress: ${message}`);
+  const err = new Error(`IbpAddress: ${message}`);
   err.code = code;
   err.paInput = input;
   Object.assign(err, extra);
@@ -473,7 +473,7 @@ function paError(code, input, message, extra = {}) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Map a Stance (typically the right side of a PA) to the HTTP route
+ * Map a Stance (typically the right side of a IBPA) to the HTTP route
  * the land server uses. See ../docs/server-protocol.md for the contract.
  *
  * Returns: { url, method: "GET", embodiment }

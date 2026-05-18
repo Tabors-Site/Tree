@@ -9,7 +9,7 @@ export default [
       "what the tree did on its own, what's healthy, what's drifting.",
     schema: {
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -46,7 +46,7 @@ export default [
     description: "Past daily briefings.",
     schema: {
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },

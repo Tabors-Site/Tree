@@ -3,7 +3,7 @@
 // Namespace shape (all under metadata.position on a node):
 //   {
 //     coords:    { x, y },                     // this node's own coords
-//     beings:    { <embodiment>: { x, y } },   // beings invocable here
+//     beings:    { <being>: { x, y } },   // beings invocable here
 //     artifacts: { <noteId>:    { x, y } },    // artifacts attached here
 //   }
 //

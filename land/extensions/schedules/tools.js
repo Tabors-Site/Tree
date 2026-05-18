@@ -18,7 +18,7 @@ export default [
         .optional()
         .describe("Recurring interval in hours. e.g. 168 for weekly, 24 for daily. Omit for one-time."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z
+      summonId: z
         .string()
         .nullable()
         .optional()
@@ -39,7 +39,7 @@ export default [
       newSchedule,
       reeffectTime,
       beingId,
-      chatId,
+      summonId,
       sessionId,
     }) => {
       try {
@@ -48,7 +48,7 @@ export default [
           newSchedule,
           reeffectTime: reeffectTime || 0,
           beingId,
-          chatId,
+          summonId,
           sessionId,
         });
 

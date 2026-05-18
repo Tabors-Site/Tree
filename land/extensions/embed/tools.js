@@ -11,7 +11,7 @@ export default [
       rootId: z.string().optional().describe("Tree root to search within. Auto-resolved if omitted."),
       searchAll: z.boolean().optional().default(false).describe("Search entire tree instead of scoped neighborhood."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -46,7 +46,7 @@ export default [
     description: "Show embedding coverage. How many notes have vectors, what percentage of the total.",
     schema: {
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -64,7 +64,7 @@ export default [
     description: "Re-embed all text notes. Use after changing the embedding model. Token-intensive.",
     schema: {
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },

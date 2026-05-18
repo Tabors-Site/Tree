@@ -36,7 +36,7 @@ import log from "../../seed/log.js";
 import { WS } from "../../seed/protocol.js";
 import Node from "../../seed/models/node.js";
 import { v4 as uuidv4 } from "uuid";
-import { startChainStep, finalizeChat } from "../../seed/llm/chatTracker.js";
+import { startChainStep, finalizeSummon } from "../../seed/llm/summonTracker.js";
 import { appendSignal } from "./state/signalInbox.js";
 import { readMeta, mutateMeta, ensureScopeBookkeeping, initBranchRole } from "./state/meta.js";
 import { plan, setBranchStatus } from "./state/planAccess.js";
@@ -73,14 +73,14 @@ async function fireHook(_core, name, payload) {
  * Mirror a branch status transition onto the current AI forensics
  * capture (if treeos-base is loaded). Fire-and-forget.
  */
-async function recordBranchEvent({ chatId, branchName, from, to, reason }) {
-  if (!branchName || !to || !chatId) return;
+async function recordBranchEvent({ summonId, branchName, from, to, reason }) {
+  if (!branchName || !to || !summonId) return;
   try {
     const { getExtension } = await import("../loader.js");
     const tb = getExtension("treeos-base")?.exports;
     if (!tb?.recordBranchEvent) return;
     tb.recordBranchEvent({
-      chatId,
+      summonId,
       branchName,
       from: from || null,
       to,
@@ -328,7 +328,7 @@ async function resolveBranchMode({ branch, defaultBranchMode, branchNodeId }) {
 async function retryFailedBranches({
   results, branches, runBranch, rootProjectNode,
   sessionId, beingId, username, aiSessionKey, rootId,
-  signal, slot, socket, onToolLoopCheckpoint, rootChatId,
+  signal, slot, socket, onToolLoopCheckpoint, rootSummonId,
   core, emitStatus, rt, defaultBranchMode,
 }) {
   const failed = results.filter((r) => r.status === "failed" || r.status === "error");
@@ -424,7 +424,7 @@ async function retryFailedBranches({
             username, beingId, rootId,
             currentNodeId: String(rulerScope._id),
             signal, slot, socket,
-            sessionId, rootChatId, rt,
+            sessionId, rootSummonId, rt,
             readOnly: false, onToolLoopCheckpoint,
             wakeup,
           });
@@ -576,10 +576,10 @@ async function retryFailedBranches({
       // Phase E removed the recordBudgetConsumption call (Pass 3
       // budget tracking lived on metadata.plan.steps[]; that field
       // is gone). Retry-side finishChainStep UI tracking also
-      // dropped — chatId was read from the legacy step entry.
+      // dropped — summonId was read from the legacy step entry.
       // Pass 3 budget tracking lands on execution-record stepStatuses
       // when reputation work resumes.
-      await recordBranchEvent({ chatId: rootChatId, branchName: branch.name, from: "failed", to: "done", reason: "retry succeeded" });
+      await recordBranchEvent({ summonId: rootSummonId, branchName: branch.name, from: "failed", to: "done", reason: "retry succeeded" });
     } catch (err) {
       // Mirror the main per-branch catch's abort handling (line 1619).
       // A user-abort during the retry attempt is NOT a retry failure —
@@ -618,7 +618,7 @@ async function retryFailedBranches({
       // Phase E: budget consumption + retry finishChainStep UI tracking
       // removed (relied on metadata.plan.steps[]). Pass 3 budget land
       // when reputation work resumes; retry runtime UI degrades cleanly.
-      await recordBranchEvent({ chatId: rootChatId, branchName: branch.name, from: "failed", to: "failed", reason: `retry also failed: ${err.message}` });
+      await recordBranchEvent({ summonId: rootSummonId, branchName: branch.name, from: "failed", to: "failed", reason: `retry also failed: ${err.message}` });
     }
   }
 
@@ -659,7 +659,7 @@ async function runScoutLoop({
   rootProjectNode, workspaceAnchorNode = null,
   results, branches, core, socket, signal,
   runBranch, sessionId, beingId, username, aiSessionKey, rootId,
-  slot, onToolLoopCheckpoint, rootChatId, rt, defaultBranchMode,
+  slot, onToolLoopCheckpoint, rootSummonId, rt, defaultBranchMode,
 }) {
   if (!Array.isArray(branches) || branches.length < 2) {
     return { cycles: 0, status: "skipped", totalIssues: 0 };
@@ -764,7 +764,7 @@ async function runScoutLoop({
       await retryFailedBranches({
         results, branches, runBranch, rootProjectNode,
         sessionId, beingId, username, aiSessionKey, rootId,
-        signal, slot, socket, onToolLoopCheckpoint, rootChatId,
+        signal, slot, socket, onToolLoopCheckpoint, rootSummonId,
         core, emitStatus: () => {}, rt, defaultBranchMode,
       });
     }
@@ -805,7 +805,7 @@ async function runScoutLoop({
  * and re-runs retryFailedBranches to give those branches a fresh shot.
  */
 export async function runBranchSwarm({
-  branches, rootProjectNode, rootChatId, architectChatId, sessionId,
+  branches, rootProjectNode, rootSummonId, architectChatId, sessionId,
   aiSessionKey, beingId, username, rootId, signal, slot, socket,
   onToolLoopCheckpoint, core, runBranch, emitStatus, userRequest,
   rt, resumeMode = false, defaultBranchMode = null,
@@ -929,7 +929,7 @@ export async function runBranchSwarm({
         },
         core,
       );
-      await recordBranchEvent({ chatId: rootChatId, branchName: b.name, from: null, to: "pending", reason: "queued" });
+      await recordBranchEvent({ summonId: rootSummonId, branchName: b.name, from: null, to: "pending", reason: "queued" });
     }
   }
 
@@ -942,11 +942,11 @@ export async function runBranchSwarm({
     // architect → [dispatch marker backend → worker turns, dispatch
     // marker frontend → worker turns, ...] instead of a flat sibling
     // list.
-    const markerParent = architectChatId || rootChatId || null;
+    const markerParent = architectChatId || rootSummonId || null;
     if (rt && !rt._cleaned) {
       return rt.beginChainStep(modeKey, input, {
         treeContext: branchNodeId ? { targetNodeId: branchNodeId } : undefined,
-        parentChatId: markerParent,
+        parentSummonId: markerParent,
         dispatchOrigin: "branch-swarm",
       });
     }
@@ -954,8 +954,8 @@ export async function runBranchSwarm({
       beingIn: beingId,
       sessionId,
       chainIndex: fallbackChainIdx++,
-      rootChatId: rootChatId || null,
-      parentChatId: markerParent,
+      rootSummonId: rootSummonId || null,
+      parentSummonId: markerParent,
       modeKey,
       source: "swarm-branch",
       dispatchOrigin: "branch-swarm",
@@ -963,15 +963,15 @@ export async function runBranchSwarm({
       treeContext: branchNodeId ? { targetNodeId: branchNodeId } : undefined,
     });
     if (!chat) return null;
-    return { chatId: chat._id, chainIndex: chat.chainIndex };
+    return { summonId: chat._id, chainIndex: chat.chainIndex };
   };
 
   const finishBranchHeader = async (step, { output, stopped = false, modeKey }) => {
-    if (!step?.chatId) return;
+    if (!step?.summonId) return;
     if (rt && !rt._cleaned) {
-      await rt.finishChainStep(step.chatId, { output, stopped, modeKey });
+      await rt.finishChainStep(step.summonId, { output, stopped, modeKey });
     } else {
-      await finalizeChat({ chatId: step.chatId, content: output, stopped, modeKey }).catch(() => {});
+      await finalizeSummon({ summonId: step.summonId, content: output, stopped, modeKey }).catch(() => {});
     }
   };
 
@@ -1054,7 +1054,7 @@ export async function runBranchSwarm({
         core,
       );
       await recordBranchEvent({
-        chatId: rootChatId, branchName: q.name,
+        summonId: rootSummonId, branchName: q.name,
         from: "pending", to: "pending",
         reason: haltReason,
       });
@@ -1101,7 +1101,7 @@ export async function runBranchSwarm({
           core,
         );
         await recordBranchEvent({
-          chatId: rootChatId, branchName: q.name,
+          summonId: rootSummonId, branchName: q.name,
           from: "pending", to: "cancelled",
           reason: halt.pendingCancel?.reason || "cancel-subtree",
         });
@@ -1212,7 +1212,7 @@ export async function runBranchSwarm({
       },
       core,
     );
-    await recordBranchEvent({ chatId: rootChatId, branchName: branch.name, from: "pending", to: "running" });
+    await recordBranchEvent({ summonId: rootSummonId, branchName: branch.name, from: "pending", to: "running" });
 
     await fireHook(core, "swarm:beforeBranchRun", {
       branchNode, rootProjectNode, branch, branchMode,
@@ -1277,10 +1277,10 @@ export async function runBranchSwarm({
           aiSessionKey, username, beingId, rootId,
           signal: branchAbort.signal,
           onToolLoopCheckpoint, socket,
-          // Dispatch-marker chatId → worker-turn parent. Nests every
+          // Dispatch-marker summonId → worker-turn parent. Nests every
           // continuation of this branch under its own marker card so
           // the chats UI renders the dispatch tree correctly.
-          markerChatId: branchHeaderStep?.chatId || null,
+          markerChatId: branchHeaderStep?.summonId || null,
         });
       } finally {
         if (parentAbortListener && signal) {
@@ -1320,7 +1320,7 @@ export async function runBranchSwarm({
       // Phase E: dispatch-side budget tracking removed (relied on
       // metadata.plan.steps[]). Pass 3 reputation land on
       // execution-record stepStatuses when that work resumes.
-      await recordBranchEvent({ chatId: rootChatId, branchName: branch.name, from: "running", to: "done" });
+      await recordBranchEvent({ summonId: rootSummonId, branchName: branch.name, from: "running", to: "done" });
 
       // Fire per-branch hook. Handlers (e.g., code-workspace) run
       // their own validators (syntax sweep, smoke, dead-receiver
@@ -1366,7 +1366,7 @@ export async function runBranchSwarm({
           core,
         );
         await recordBranchEvent({
-          chatId: rootChatId, branchName: branch.name,
+          summonId: rootSummonId, branchName: branch.name,
           from: "done", to: resultEntry.status,
           reason: resultEntry.error || "handler override",
         });
@@ -1403,7 +1403,7 @@ export async function runBranchSwarm({
         },
         core,
       );
-      await recordBranchEvent({ chatId: rootChatId, branchName: branch.name, from: "running", to: resumableStatus, reason: err.message });
+      await recordBranchEvent({ summonId: rootSummonId, branchName: branch.name, from: "running", to: resumableStatus, reason: err.message });
       results.push({
         name: qualifiedName,
         rawName: branch.name,
@@ -1452,12 +1452,12 @@ export async function runBranchSwarm({
     await retryFailedBranches({
       results, branches, runBranch, rootProjectNode,
       sessionId, beingId, username, aiSessionKey, rootId,
-      signal, slot, socket, onToolLoopCheckpoint, rootChatId,
+      signal, slot, socket, onToolLoopCheckpoint, rootSummonId,
       core, emitStatus, rt, defaultBranchMode,
     });
   }
 
-  // chatId restoration to root is handled via pmCtx threading in the
+  // summonId restoration to root is handled via pmCtx threading in the
   // tree-orchestrator; swarm no longer maintains a global chat-context
   // side-channel.
 
@@ -1499,7 +1499,7 @@ export async function runBranchSwarm({
       await retryFailedBranches({
         results, branches, runBranch, rootProjectNode,
         sessionId, beingId, username, aiSessionKey, rootId,
-        signal, slot, socket, onToolLoopCheckpoint, rootChatId,
+        signal, slot, socket, onToolLoopCheckpoint, rootSummonId,
         core, emitStatus, rt, defaultBranchMode,
       });
     }
@@ -1517,7 +1517,7 @@ export async function runBranchSwarm({
         rootProjectNode, workspaceAnchorNode,
         results, branches, core, socket, signal,
         runBranch, sessionId, beingId, username, aiSessionKey, rootId,
-        slot, onToolLoopCheckpoint, rootChatId, rt, defaultBranchMode,
+        slot, onToolLoopCheckpoint, rootSummonId, rt, defaultBranchMode,
       });
       if (scoutOutcome.cycles > 0) {
         log.info("Swarm",

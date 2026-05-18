@@ -67,7 +67,7 @@ export default function AddressBar({ username, landDomain, currentAddress, onNav
 /**
  * Render the right-side text with the full domain prefix.
  * The bar shows `<land>/<path>` when both are known; if currentAddress
- * already contains the land (a full PA was typed), it is shown verbatim.
+ * already contains the land (a full IBPA was typed), it is shown verbatim.
  */
 function formatRight(currentAddress, landDomain) {
   const a = currentAddress || "";

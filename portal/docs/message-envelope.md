@@ -1,6 +1,6 @@
-# The TALK Message Envelope
+# The SUMMON Message Envelope
 
-TALK delivers one shape to a being's inbox. This document specifies the envelope, the semantics of each field, the intent classifier in detail, and the contract that the protocol holds with the embodiment.
+SUMMON delivers one shape to a being's inbox. This document specifies the envelope, the semantics of each field, the intent classifier in detail, and the contract that the protocol holds with the being.
 
 Read [being-summoned.md](being-summoned.md) first. The envelope only makes sense under the summoned-beings model.
 
@@ -8,7 +8,7 @@ Read [being-summoned.md](being-summoned.md) first. The envelope only makes sense
 
 ```
 {
-  from:        <position@embodiment>,
+  from:        <position@being>,
   content:     <text or structured value>,
   intent:      "chat" | "place" | "query" | "be",
   correlation: <id>,
@@ -22,15 +22,15 @@ Read [being-summoned.md](being-summoned.md) first. The envelope only makes sense
 
 Both `from` and the verb's outer `stance` field are stances. Inboxes are per-being-per-position; without a qualifier on either side there is no identifiable sender or destination.
 
-The `from` + outer `stance` together implicitly form a Portal Address `from :: stance` describing the relationship this TALK enacts.
+The `from` + outer `stance` together implicitly form an IBP Address `from :: stance` describing the relationship this SUMMON enacts.
 
-Every TALK carries this. User-to-being, being-to-being, cascade arrival, Ruler wake, gateway delivery: all the same shape.
+Every SUMMON carries this. User-to-being, being-to-being, cascade arrival, Ruler wake, gateway delivery: all the same shape.
 
 ## Fields
 
 ### from
 
-The sender's position with embodiment qualifier (`land/path@embodiment`). Always present and always qualified; the protocol does not deliver anonymous or unqualified TALK.
+The sender's position with being qualifier (`land/path@being`). Always present and always qualified; the protocol does not deliver anonymous or unqualified SUMMON.
 
 Examples:
 - `tabor@treeos.ai` (a human user at their home land)
@@ -41,9 +41,9 @@ The being at the receiving end reads `from` to know who it is responding to and 
 
 ### content
 
-The message payload. Usually a string (chat content). May be structured (e.g., a plan-card action). The embodiment knows what shape its content takes.
+The message payload. Usually a string (chat content). May be structured (e.g., a plan-card action). The being knows what shape its content takes.
 
-The protocol does not constrain content shape. Embodiments document what they expect.
+The protocol does not constrain content shape. Beings document what they expect.
 
 ### intent
 
@@ -51,14 +51,14 @@ The permission-and-response classifier. Four values:
 
 | Intent | Permission profile | Response expectation |
 |---|---|---|
-| `chat` | full (read + write tools the embodiment normally has) | response expected |
+| `chat` | full (read + write tools the being normally has) | response expected |
 | `place` | write only (place-shaped operations, no read introspection) | no response expected |
 | `query` | read only (cannot mutate) | response expected |
-| `be` | self-directed (persona-driven, embodiment-specific) | response shape per embodiment |
+| `be` | self-directed (persona-driven, being-specific) | response shape per being |
 
-On summoning, the being reads intent and gates its own tool surface accordingly. An embodiment that receives a `query` intent message must not invoke write tools, even if it has them. An embodiment that receives a `place` intent message must not return a response.
+On summoning, the being reads intent and gates its own tool surface accordingly. An being that receives a `query` intent message must not invoke write tools, even if it has them. An being that receives a `place` intent message must not return a response.
 
-Embodiments may decline intents they do not honor. An auth-being might only honor `chat` and `be`; a read-only oracle might only honor `query`. Declining returns `INVALID_INTENT`.
+Beings may decline intents they do not honor. An auth-being might only honor `chat` and `be`; a read-only oracle might only honor `query`. Declining returns `INVALID_INTENT`.
 
 ### correlation
 
@@ -72,11 +72,11 @@ The protocol does not interpret correlation values; it only requires them to be 
 ### inReplyTo
 
 The correlation id of a prior message this one responds to. Optional. Used for:
-- Async responses (a being's response TALK back at the original sender with `inReplyTo` set to the original message's correlation)
+- Async responses (a being's response SUMMON back at the original sender with `inReplyTo` set to the original message's correlation)
 - Conversation threading on the portal client side
 - Audit trails
 
-A TALK with `inReplyTo` is not structurally different from one without; the field is informational. The receiving embodiment may use it or ignore it.
+A SUMMON with `inReplyTo` is not structurally different from one without; the field is informational. The receiving being may use it or ignore it.
 
 ### attachments
 
@@ -85,17 +85,17 @@ Optional structured payloads alongside content. Kinds:
 - `node-link`: `{ kind: "node-link", position: "<position>" }` references another place. The receiver can SEE it.
 - `artifact-ref`: `{ kind: "artifact-ref", position: "<position>/notes/<id>" }` references specific artifact bytes.
 - `blob`: `{ kind: "blob", contentType, data }` inline binary. Use sparingly; prefer artifact-ref for large content.
-- `structured`: `{ kind: "structured", schema: <name>, data: <object> }` typed data the embodiment knows how to interpret (e.g., a plan-card response).
+- `structured`: `{ kind: "structured", schema: <name>, data: <object> }` typed data the being knows how to interpret (e.g., a plan-card response).
 
 ### sentAt
 
-Server-side timestamp at which the protocol accepted the TALK. The land sets this; senders do not provide it. Used for inbox ordering and history.
+Server-side timestamp at which the protocol accepted the SUMMON. The land sets this; senders do not provide it. Used for inbox ordering and history.
 
 ## Intent semantics in detail
 
 ### chat
 
-The default. The sender is asking the being to engage fully. Response is expected. The being uses whatever tools its embodiment has permission for.
+The default. The sender is asking the being to engage fully. Response is expected. The being uses whatever tools its being has permission for.
 
 A `chat` intent on a Ruler does not mean "produce text inline." It means "engage fully." A Ruler engaging fully may choose to fire-and-forget background work and respond async; that is a `respondMode: "async"` decision, not an intent decision.
 
@@ -106,7 +106,7 @@ The sender is asking the being to do something without expecting a textual respo
 - Bulk operations ("place these ten observations")
 - Pipeline stages where text would be noise
 
-Embodiments that receive `place` should perform the work and ack without generating content. The protocol does not deliver any inline response for `place`; the ack is "received and processed."
+Beings that receive `place` should perform the work and ack without generating content. The protocol does not deliver any inline response for `place`; the ack is "received and processed."
 
 ### query
 
@@ -115,36 +115,36 @@ The sender is asking the being to read and report. The being's write tools are b
 - Search ("find me notes mentioning X")
 - Consultation ("what would you recommend?")
 
-Embodiments that receive `query` must not mutate. The land enforces this at the tool-permission layer when summoning.
+Beings that receive `query` must not mutate. The land enforces this at the tool-permission layer when summoning.
 
 ### be
 
-The sender is asking the being for self-directed inquiry. The shape of the response is up to the embodiment. Used for:
+The sender is asking the being for self-directed inquiry. The shape of the response is up to the being. Used for:
 - Persona-driven reflection
 - Coaching invocations
-- Embodiment-specific behaviors that do not fit the other intents
+- Being-specific behaviors that do not fit the other intents
 
-This is the most open intent and the most embodiment-dependent. Document carefully when an embodiment honors `be`.
+This is the most open intent and the most being-dependent. Document carefully when an being honors `be`.
 
-## How the protocol handles a TALK
+## How the protocol handles a SUMMON
 
-1. Receive TALK at land.
+1. Receive SUMMON at land.
 2. Validate envelope shape. Reject with `INVALID_INPUT` if malformed.
-3. Resolve `address` to a position and embodiment. Reject with `NODE_NOT_FOUND` or `EMBODIMENT_UNAVAILABLE` if either fails.
-4. Authorize: does `identity` permit TALK at this address? Reject with `FORBIDDEN` if not.
-5. Validate intent: does the embodiment honor this intent? Reject with `INVALID_INTENT` if not.
+3. Resolve `address` to a position and being. Reject with `NODE_NOT_FOUND` or `EMBODIMENT_UNAVAILABLE` if either fails.
+4. Authorize: does `identity` permit SUMMON at this address? Reject with `FORBIDDEN` if not.
+5. Validate intent: does the being honor this intent? Reject with `INVALID_INTENT` if not.
 6. Append the message to the being's inbox at this position.
-7. Trigger the embodiment's summoning per `triggerOn`.
+7. Trigger the being's summoning per `triggerOn`.
 8. Depending on `respondMode`:
    - `sync`: hold the connection open, await the summoning's result, return inline.
-   - `async`: ack immediately. When the summoning produces a response (now or later), the protocol writes that response as a new TALK to `from`'s inbox with `inReplyTo` set.
+   - `async`: ack immediately. When the summoning produces a response (now or later), the protocol writes that response as a new SUMMON to `from`'s inbox with `inReplyTo` set.
    - `none`: ack immediately. No response is generated.
 
 Steps 6 and 7 are atomic: a write to the inbox without summoning means a message lost in limbo; summoning without a write means a being summoned to find nothing new. The land guarantees both happen or neither happens.
 
 ## Response shape
 
-A response is itself a TALK. There is no distinct "response envelope." When a being responds:
+A response is itself a SUMMON. There is no distinct "response envelope." When a being responds:
 
 ```
 {
@@ -168,13 +168,13 @@ For sync responses, the protocol returns the response inline rather than deposit
 
 ## Streaming
 
-Sync responses may stream within the ack channel. The protocol does not require it but supports it: the ack carries multiple `delta` frames followed by a `done` frame. Embodiments that benefit from streaming (long responses, tool-calling traces) declare `streaming: true` in their manifest.
+Sync responses may stream within the ack channel. The protocol does not require it but supports it: the ack carries multiple `delta` frames followed by a `done` frame. Beings that benefit from streaming (long responses, tool-calling traces) declare `streaming: true` in their manifest.
 
-Streaming is not separate from the envelope; it is a transport detail of how the response message is delivered. The final shape is the same TALK envelope.
+Streaming is not separate from the envelope; it is a transport detail of how the response message is delivered. The final shape is the same SUMMON envelope.
 
 ## Idempotency
 
-The protocol does not deduplicate TALKs by correlation. If the same correlation arrives twice, the inbox accumulates both. Senders that need idempotency should track which correlations they have already sent.
+The protocol does not deduplicate SUMMONs by correlation. If the same correlation arrives twice, the inbox accumulates both. Senders that need idempotency should track which correlations they have already sent.
 
 This is intentional: the protocol stays minimal; idempotency is a sender concern.
 
@@ -197,7 +197,7 @@ This is intentional: the protocol stays minimal; idempotency is a sender concern
 }
 ```
 
-### Cascade arrival as TALK
+### Cascade arrival as SUMMON
 
 ```
 {
@@ -214,7 +214,7 @@ This is intentional: the protocol stays minimal; idempotency is a sender concern
 }
 ```
 
-The cascade source is a being (the Ruler that emitted the plan). The arrival at the archivist is just another TALK with `intent: place`.
+The cascade source is a being (the Ruler that emitted the plan). The arrival at the archivist is just another SUMMON with `intent: place`.
 
 ### Async response
 
@@ -240,7 +240,7 @@ Arrives in tabor's home inbox. The portal client listening with `ibp:see { stanc
 
 ### Plan-card action
 
-The user accepts the plan via a structured-content TALK back at the Ruler:
+The user accepts the plan via a structured-content SUMMON back at the Ruler:
 
 ```
 {
@@ -259,7 +259,7 @@ The user accepts the plan via a structured-content TALK back at the Ruler:
 }
 ```
 
-Same envelope, structured content. The Ruler's embodiment recognizes the schema and acts accordingly.
+Same envelope, structured content. The Ruler's being recognizes the schema and acts accordingly.
 
 ## See also
 

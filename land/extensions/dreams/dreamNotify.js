@@ -6,7 +6,7 @@ import log from "../../seed/log.js";
 import { OrchestratorRuntime, LLM_PRIORITY } from "../../seed/orchestrators/runtime.js";
 import { SESSION_TYPES } from "../../seed/ws/sessionRegistry.js";
 import { getExtension } from "../loader.js";
-import Chat from "../../seed/models/chat.js";
+import Summon from "../../seed/models/summon.js";
 import Node from "../../seed/models/node.js";
 
 function getNotificationModel() {
@@ -81,7 +81,7 @@ export async function orchestrateDreamNotify({
 
   try {
     // Fetch dream AI chats
-    const dreamChats = await Chat.find({
+    const dreamChats = await Summon.find({
       sessionId: { $in: dreamSessionIds },
     })
       .sort({ sessionId: 1, chainIndex: 1 })

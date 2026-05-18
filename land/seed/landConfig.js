@@ -266,7 +266,7 @@ export const CONFIG_DEFAULTS = {
   circuitCheckInterval: 3600000,
 
   // Retention
-  chatRetentionDays: 90,
+  summonRetentionDays: 90,
   didRetentionDays: 365,
 
   // Orchestration — 45 min default. Compound code-workspace swarms (full

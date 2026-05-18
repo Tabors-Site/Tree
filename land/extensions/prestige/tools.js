@@ -11,7 +11,7 @@ export default [
       content: z.string().describe("The text content of the note."),
       nodeId: z.string().describe("The ID of the node the note belongs to."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: {
@@ -19,7 +19,7 @@ export default [
       destructiveHint: false,
       idempotentHint: false,
     },
-    handler: async ({ content, nodeId, beingId, chatId, sessionId }) => {
+    handler: async ({ content, nodeId, beingId, summonId, sessionId }) => {
       try {
         const version = await resolveVersion(nodeId, "latest");
         const result = await createArtifact({
@@ -27,7 +27,7 @@ export default [
           content,
           beingId,
           nodeId,
-          chatId,
+          summonId,
           sessionId,
           metadata: {
             treeos: { isReflection: true },
@@ -49,7 +49,7 @@ export default [
         .string()
         .describe("The unique ID of the node to add prestige to."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z
+      summonId: z
         .string()
         .nullable()
         .optional()
@@ -66,12 +66,12 @@ export default [
       idempotentHint: false,
       openWorldHint: false,
     },
-    handler: async ({ nodeId, beingId, chatId, sessionId }) => {
+    handler: async ({ nodeId, beingId, summonId, sessionId }) => {
       try {
         const result = await addPrestige({
           nodeId,
           beingId,
-          chatId,
+          summonId,
           sessionId,
         });
 

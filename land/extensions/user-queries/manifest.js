@@ -14,7 +14,7 @@ export default {
     "All three endpoints support HTML rendering when the html-rendering extension is " +
     "installed. Notes render with edit and delete controls, file notes show download links, " +
     "and every entry links back to its source node and version. The extension reads from " +
-    "kernel data (notes.js, contributions.js, chatHistory.js) and adds no models of its " +
+    "kernel data (artifacts.js, dids.js, summonHistory.js) and adds no models of its " +
     "own. Pure query layer. No writes. No hooks. No tools. Just the ability to ask " +
     "'what have I done' across the entire land.",
 

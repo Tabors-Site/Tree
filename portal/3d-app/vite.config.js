@@ -17,7 +17,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@portal-address": path.resolve(__dirname, "../lib/portal-address.js"),
+      "@ibp-address": path.resolve(__dirname, "../lib/ibp-address.js"),
     },
   },
 });

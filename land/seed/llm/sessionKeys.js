@@ -19,16 +19,16 @@
  *   - Position state. Lives on `Being.currentPositionId` keyed by beingId
  *     (Slice 1). Two tabs for the same being share position automatically.
  *   - Thread identity. The canonical identifier for a conversation between
- *     two beings is `Chat.portalAddress` (Slice 0).
- *   - Tool-call → chatId correlation. The conversation loop injects
- *     `chatId` / `rootChatId` / `portalAddress` into MCP tool args
+ *     two beings is `Chat.ibpAddress` (Slice 0).
+ *   - Tool-call → summonId correlation. The conversation loop injects
+ *     `summonId` / `rootSummonId` / `ibpAddress` into MCP tool args
  *     directly; mcp/server.js reads them without a Map lookup (Slice 2).
  *   - MCP client cache key for being-to-being conversations. Keyed by
- *     `portalAddress` so all the being's sockets share one MCP client
+ *     `ibpAddress` so all the being's sockets share one MCP client
  *     (Slice 3). Internal-cognition pipelines still key on aiSessionKey.
  *   - Per-conversation extension state (ruler/foreman decisions, abort
- *     registry, pending plans, swarm plans). Keyed on `rootChatId` or
- *     `portalAddress` per each Map's semantics (Slice 4).
+ *     registry, pending plans, swarm plans). Keyed on `rootSummonId` or
+ *     `ibpAddress` per each Map's semantics (Slice 4).
  *   - Per-socket broadcast for async chat events. The conversation loop
  *     emits via `io.to('being:' + beingId)` so every tab the being has
  *     connected receives the stream (Slice 5).
@@ -62,7 +62,7 @@
  * A pipeline key identifies a stanceless internal-cognition lane — the
  * conversation-equivalent cache key for work that has no addressee
  * being. Distinct namespace from `aiSessionKey` (transport identity)
- * and `portalAddress` (being-to-being conversation identity).
+ * and `ibpAddress` (being-to-being conversation identity).
  *
  * Three paths, in priority order:
  *   1. `pipelineKey` — explicit pass-through (extension joining an upstream caller's pipeline).

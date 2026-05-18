@@ -7,7 +7,7 @@
 // GET /.well-known/treeos-portal → { ws, protocolVersion, land }
 //
 // The response is intentionally minimal: just enough information for the
-// client to open a socket. Full capability discovery (zones, embodiments,
+// client to open a socket. Full capability discovery (zones, beings,
 // supported actions, version negotiation) moves to `see <land>/.discovery`
 // once the socket is open.
 //

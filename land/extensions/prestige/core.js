@@ -37,7 +37,7 @@ function calculateNextSchedule(scheduleData) {
 async function addPrestige({
   nodeId,
   beingId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 }) {
   const node = await Node.findById(nodeId).populate("children");
@@ -57,7 +57,7 @@ async function addPrestige({
   await logDid({
     beingId,
     nodeId,
-    chatId,
+    summonId,
     sessionId,
     action: "prestige",
     nodeVersion: currentLevel,

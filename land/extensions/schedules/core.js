@@ -16,7 +16,7 @@ async function updateSchedule({
   newSchedule,
   reeffectTime,
   beingId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 }) {
   if (!nodeId || reeffectTime === undefined) {
@@ -61,7 +61,7 @@ async function updateSchedule({
   await logDid({
     beingId,
     nodeId,
-    chatId,
+    summonId,
     sessionId,
     action: "editSchedule",
     scheduleEdited,

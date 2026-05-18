@@ -391,7 +391,7 @@ const AIArchitecturePage = () => {
                 <div>· abort handling</div>
                 <div>· MCP connect</div>
                 <div>· dispatch</div>
-                <div>· Chat record</div>
+                <div>· Summon record</div>
                 <div>· beforeResponse hook</div>
                 <div>· enqueue serialize</div>
                 <div>· cleanup</div>
@@ -928,7 +928,7 @@ const AIArchitecturePage = () => {
             The kernel handles the plumbing. You build the intelligence.
           </p>
           <p style={{color: "#666", fontSize: "0.95rem", maxWidth: 550, margin: "0 auto"}}>
-            MCP connections, session persistence, Chat tracking, abort handling, chain
+            MCP connections, session persistence, Summon tracking, abort handling, chain
             indexing, tool resolution, mode switching, hook firing, LLM failover. All
             automatic. Your extension calls one function and the rest happens.
           </p>

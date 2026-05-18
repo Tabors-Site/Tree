@@ -1,20 +1,25 @@
-// TreeOS IBP — echo embodiment (Phase 4 demonstration).
+// TreeOS IBP — echo being (substrate smoke test).
 //
-// The simplest possible sync-respond embodiment. Proves the TALK
-// round-trip without requiring an LLM. Echoes whatever was sent.
+// The simplest possible async-respond being. Proves the SUMMON
+// round-trip through the queue substrate without requiring an LLM.
+// Echoes whatever was sent.
 //
 // Honored intents: all four (chat/place/query/be). For `place`, the
-// embodiment honors the intent (no INVALID_INTENT) but produces no
+// being honors the intent (no INVALID_INTENT) but produces no
 // response (place expects none). For the others, it returns a response.
 //
-// respondMode: sync — the response returns inline on the TALK ack.
+// respondMode: async — SUMMON ACKs accepted; the scheduler runs this
+// being serially per being, with priority ordering, and pushes
+// the response through the handoff registered by the verb handler.
+// Sync was the Phase 4 placeholder; the queue substrate landed in
+// Slice 2 of the queue-driven shift, and echo is its smoke test.
 //
 // triggerOn: ["message"] — summon immediately on inbox-write.
 
 export const echoEmbodiment = Object.freeze({
   name: "echo",
   honoredIntents: ["chat", "place", "query", "be"],
-  respondMode: "sync",
+  respondMode: "async",
   triggerOn: ["message"],
   async summon(message, _ctx) {
     if (message.intent === "place") {

@@ -4,7 +4,7 @@
 //   {
 //     model:     string,                                  // this node's asset hint
 //     scale?:    number,                                  // optional, defaults to 1
-//     beings:    { <embodiment>: { model, scale? } },     // per-being visuals
+//     beings:    { <being>: { model, scale? } },     // per-being visuals
 //     artifacts: { <ref>:        { model, scale? } },     // per-artifact visuals
 //   }
 //
@@ -66,7 +66,7 @@ export function deriveModel(metadata) {
     return { model: ns.model, scale: typeof ns.scale === "number" ? ns.scale : 1 };
   }
   // Derived fallbacks. Each rule keys off a being-home registration in
-  // the protocol-level embodiments namespace, not on extension-private
+  // the protocol-level beings namespace, not on extension-private
   // state. A Ruler at home → render as a pyramid. Future rules layer
   // alongside (Planner home → podium, Worker home → workshop, etc.).
   const embodiments = readNs(metadata, "embodiments");

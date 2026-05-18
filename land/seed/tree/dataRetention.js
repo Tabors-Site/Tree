@@ -2,16 +2,16 @@
 /**
  * Kernel data retention cleanup.
  * Runs at configured interval (default daily).
- * Deletes old Chat and Did records based on land config.
+ * Deletes old Summon and Did records based on land config.
  * Sweeps timed-out AWAITING cascade signals.
  *
- * chatRetentionDays: default 90. 0 = keep forever.
+ * summonRetentionDays: default 90. 0 = keep forever.
  * didRetentionDays: default 365. 0 = keep forever.
  */
 
 import log from "../log.js";
 import { getLandConfigValue } from "../landConfig.js";
-import Chat from "../models/chat.js";
+import Summon from "../models/summon.js";
 import Did from "../models/did.js";
 import Node from "../models/node.js";
 import { CASCADE, SYSTEM_ROLE } from "../protocol.js";
@@ -25,30 +25,30 @@ const DELETE_BATCH_SIZE = 10000;
 export async function runRetentionCleanup() {
   const now = new Date();
 
-  // ── Chat cleanup ──
-  const chatDays = Number(getLandConfigValue("chatRetentionDays"));
-  if (chatDays > 0) {
+  // ── Summon cleanup ──
+  const summonDays = Number(getLandConfigValue("summonRetentionDays"));
+  if (summonDays > 0) {
     try {
-      const cutoff = new Date(now.getTime() - chatDays * 24 * 60 * 60 * 1000);
+      const cutoff = new Date(now.getTime() - summonDays * 24 * 60 * 60 * 1000);
       let totalDeleted = 0;
       // Batch delete: find IDs first, then delete by ID set.
       // deleteMany().limit() is not supported by MongoDB. Without batching,
       // one massive delete could block the DB for minutes on large collections.
       let batchCount;
       do {
-        const ids = await Chat.find({ "startMessage.time": { $lt: cutoff } })
+        const ids = await Summon.find({ "startMessage.time": { $lt: cutoff } })
           .select("_id").limit(DELETE_BATCH_SIZE).lean();
         batchCount = ids.length;
         if (batchCount > 0) {
-          await Chat.deleteMany({ _id: { $in: ids.map(d => d._id) } });
+          await Summon.deleteMany({ _id: { $in: ids.map(d => d._id) } });
           totalDeleted += batchCount;
         }
       } while (batchCount >= DELETE_BATCH_SIZE);
       if (totalDeleted > 0) {
-        log.info("Retention", `Deleted ${totalDeleted} chat records older than ${chatDays} days`);
+        log.info("Retention", `Deleted ${totalDeleted} summon records older than ${summonDays} days`);
       }
     } catch (err) {
-      log.error("Retention", `Chat cleanup failed: ${err.message}`);
+      log.error("Retention", `Summon cleanup failed: ${err.message}`);
     }
   }
 

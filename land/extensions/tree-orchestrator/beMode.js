@@ -25,7 +25,7 @@ import { emitStatus, buildSocketBridge } from "./dispatch.js";
 
 export async function runBeMode(message, {
   aiSessionKey, socket, username, beingId, rootId,
-  signal, slot, sessionId, rootChatId, onToolLoopCheckpoint,
+  signal, slot, sessionId, rootSummonId, onToolLoopCheckpoint,
   currentNodeId, modesUsed,
 }) {
   // ── Tier 1: Current node has an extension. Delegate. ──
@@ -69,8 +69,8 @@ export async function runBeMode(message, {
             });
             const result = await processMessage(aiSessionKey, decision?.message || message, {
               username, beingId, rootId, signal, slot, onToolLoopCheckpoint,
-              chatId: rootChatId || null,
-              rootChatId: rootChatId || null,
+              summonId: rootSummonId || null,
+              rootSummonId: rootSummonId || null,
               sessionId: sessionId || null,
               ...buildSocketBridge(socket, signal),
             });
@@ -90,8 +90,8 @@ export async function runBeMode(message, {
             });
             const result = await processMessage(aiSessionKey, message, {
               username, beingId, rootId, signal, socket, sessionId,
-              chatId: rootChatId || null,
-              rootChatId: rootChatId || null,
+              summonId: rootSummonId || null,
+              rootSummonId: rootSummonId || null,
             });
             modesUsed.push(coachMode);
             return { success: true, answer: result?.content || "", modeKey: coachMode, modesUsed, rootId };
@@ -153,8 +153,8 @@ export async function runBeMode(message, {
             });
             const result = await processMessage(aiSessionKey, decision?.message || message, {
               username, beingId, rootId, signal, slot, onToolLoopCheckpoint,
-              chatId: rootChatId || null,
-              rootChatId: rootChatId || null,
+              summonId: rootSummonId || null,
+              rootSummonId: rootSummonId || null,
               sessionId: sessionId || null,
               ...buildSocketBridge(socket, signal),
             });
@@ -179,8 +179,8 @@ export async function runBeMode(message, {
   });
   const result = await processMessage(aiSessionKey, message, {
     username, beingId, rootId, signal, socket, sessionId,
-    chatId: rootChatId || null,
-    rootChatId: rootChatId || null,
+    summonId: rootSummonId || null,
+    rootSummonId: rootSummonId || null,
   });
   modesUsed.push("tree:be");
   return { success: true, answer: result?.content || "", modeKey: "tree:be", modesUsed, rootId };

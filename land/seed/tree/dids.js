@@ -28,7 +28,7 @@ const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 export async function logDid(params) {
   const {
     beingId, nodeId, action,
-    chatId = null,
+    summonId = null,
     sessionId = null,
     statusEdited, editName, editType, artifactAction,
     updateChild, updateParent, branchLifecycle,
@@ -86,7 +86,7 @@ export async function logDid(params) {
 
   // Build doc with only defined fields (avoids storing nulls in MongoDB)
   const doc = { beingId, nodeId, action, date: new Date() };
-  if (chatId) doc.chatId = chatId;
+  if (summonId) doc.summonId = summonId;
   if (sessionId) doc.sessionId = sessionId;
   if (statusEdited) doc.statusEdited = statusEdited;
   if (editName) doc.editName = editName;

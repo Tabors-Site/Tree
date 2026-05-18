@@ -82,7 +82,7 @@ export async function ensureSystemBeings(landRootId) {
       // Fresh insert via the unified primitive. homeNodeId = land root
       // because system beings don't create their own child nodes —
       // they live at the land root itself. createBeingWithHome handles
-      // password generation and embodiments registration on the home.
+      // password generation and beings registration on the home.
       await createBeingWithHome({
         operatingMode: "ai",
         username:      spec.username,

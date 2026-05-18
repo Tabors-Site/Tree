@@ -284,7 +284,7 @@ export function hideAuthActions() {
 }
 
 // Talk panel: shown when in proximity+gaze of a non-auth being. Lets the
-// user type a message and send a ibp:talk. Typed state is preserved
+// user type a message and send a ibp:summon. Typed state is preserved
 // across re-opens (per being) so a brief look-away doesn't lose typing,
 // and is cleared on submit or when the user navigates to a new position.
 let _talkPanelEl = null;

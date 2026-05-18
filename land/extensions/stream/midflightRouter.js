@@ -389,7 +389,7 @@ export async function triggerPlanPivot({
       projectName: active.projectName,
       userRequest: message,
       architectChatId: null,
-      rootChatId: null,
+      rootSummonId: null,
       rootId,
       // Pivot stash dispatches through governance Ruler → typed
       // Workers; the modeKey field is informational only now (audit

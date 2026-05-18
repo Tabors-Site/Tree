@@ -45,7 +45,7 @@ const UsePage = () => {
         </div>
       </section>
 
-      {/* ── TALK ── */}
+      {/* ── SUMMON ── */}
       <section className="lp-section">
         <div className="lp-container" style={{maxWidth: 700}}>
           <h2 className="lp-section-title">Talk. It knows where you are.</h2>

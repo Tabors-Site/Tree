@@ -1,11 +1,11 @@
 /**
  * AiCapture — one document per LLM call, capturing everything the AI
  * saw and did during that call. Augments Chat (seed model) via the
- * `chatId` FK — Chat stays a lean summary, AiCapture holds the full
+ * `summonId` FK — Chat stays a lean summary, AiCapture holds the full
  * forensic detail.
  *
  * Fields:
- *   - chatId / sessionId / beingId / rootId / nodeId / mode — correlation
+ *   - summonId / sessionId / beingId / rootId / nodeId / mode — correlation
  *   - promptMessages[] — exactly what the AI was handed as its system
  *     prompt + conversation history, truncated per-message at 16KB and
  *     total at 128KB
@@ -16,7 +16,7 @@
  *   - startedAt / endedAt / abortReason / stopped
  *
  * One capture = one LLM call = one chat step. The renderer queries
- * `AiCapture.findOne({ chatId })` per step to inline the detail into
+ * `AiCapture.findOne({ summonId })` per step to inline the detail into
  * the session dashboard.
  *
  * Not registered as a `provides.models` entry because the extension
@@ -93,7 +93,7 @@ const BranchEventSchema = new mongoose.Schema(
 );
 
 // Cascade signal that this call emitted (a local write fired checkCascade).
-// One entry per onCascade firing correlated to this call's chatId.
+// One entry per onCascade firing correlated to this call's summonId.
 const CascadeEmittedSchema = new mongoose.Schema(
   {
     signalId: { type: String, required: true },
@@ -136,7 +136,7 @@ const AiCaptureSchema = new mongoose.Schema({
   },
 
   // Correlation to the Chat doc this capture augments
-  chatId: { type: String, index: true, default: null },
+  summonId: { type: String, index: true, default: null },
   sessionId: { type: String, default: null },
   beingId: { type: String, default: null },
   rootId: { type: String, default: null },
@@ -169,11 +169,11 @@ const AiCaptureSchema = new mongoose.Schema({
   // Swarm branch status transitions attributed to this call
   branchEvents: { type: [BranchEventSchema], default: [] },
 
-  // Cross-call lineage. Mirrors Chat.parentChatId so the forensics
+  // Cross-call lineage. Mirrors Chat.parentSummonId so the forensics
   // timeline can walk from a child capture (e.g., a summarizer rescue,
   // a swarm-dispatched branch) back to its parent call without a
   // Chat-side join.
-  parentChatId: { type: String, default: null, index: true },
+  parentSummonId: { type: String, default: null, index: true },
 
   // Cascade + swarm signal emission/reception. Fills the "why did the
   // AI do this?" gap that the plain toolCalls[] doesn't answer: a tool

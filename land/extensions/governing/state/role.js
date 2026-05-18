@@ -99,7 +99,7 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, core }) {
         homeNodeId:    String(nodeId),
       });
     }
-    // Augment the embodiments.ruler entry with governing's lineage info
+    // Augment the beings.ruler entry with governing's lineage info
     // (when/why/how the promotion happened). The createBeingWithHome
     // call above wrote the canonical { beingId, installedAt, installedBy }
     // fields; this merge layers governing's own bookkeeping alongside.
@@ -115,14 +115,14 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, core }) {
       await mergeExtMeta(node, "beings", { ruler: home });
     }
 
-    // Stamp the Ruler's open TALK policy: anyone — humans, citizens,
+    // Stamp the Ruler's open SUMMON policy: anyone — humans, citizens,
     // federated visitors — can address the Ruler at this scope. The
     // Ruler is the entry point for governance interactions; inner
     // beings (Planner, Contractor, Foreman) inside the rulership get
     // their own restrictive rules at their trio nodes.
     const { mergeExtMeta: kernelMergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
     await kernelMergeExtMeta(node, "permissions", {
-      talk: {
+      summon: {
         "@ruler*": { requires: {} },
       },
     });

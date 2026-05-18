@@ -171,7 +171,7 @@ export async function createPlanNode({
   beingId,
   name,
   systemSpec = null,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 } = {}) {
   if (!parentNodeId) throw new Error("createPlanNode requires parentNodeId");
@@ -192,7 +192,7 @@ export async function createPlanNode({
     parentId: String(parentNodeId),
     type: "plan",
     beingId,
-    chatId,
+    summonId,
     sessionId,
   });
 
@@ -239,7 +239,7 @@ export async function ensurePlanAtScope({
   beingId,
   name = "plans",
   systemSpec = null,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 }) {
   if (!scopeNodeId) return null;
@@ -264,7 +264,7 @@ export async function ensurePlanAtScope({
         beingId,
         name,
         systemSpec,
-        chatId, sessionId,
+        summonId, sessionId,
       });
     } catch (err) {
       // Race protection: unique partial index on (parent, type='plan')
@@ -335,7 +335,7 @@ export async function ensurePlanAtScope({
           scopeRulerId: String(scopeNodeId),
         },
       });
-      // Inner-being protection: TALK to the Planner at this trio is
+      // Inner-being protection: SUMMON to the Planner at this trio is
       // restricted to governing-role beings of THIS rulership. The
       // `homeInDomain: <scopeNodeId>` check ensures the requester's
       // home is within this rulership's subtree, so Rulers / sibling
@@ -343,7 +343,7 @@ export async function ensurePlanAtScope({
       // Humans and citizens are filtered by the role list. The Ruler
       // is how external beings interact with governance here.
       await kernelMergeExtMeta(node, "permissions", {
-        talk: {
+        summon: {
           "@planner*": {
             requires: {
               role:         ["ruler", "planner", "contractor", "foreman"],

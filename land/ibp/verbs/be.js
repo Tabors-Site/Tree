@@ -11,12 +11,12 @@
 // BE addresses the land's auth-being. The `land` field is shorthand for
 // addressing `<land>/@auth` (the auth-being stance at the land root).
 // For `release` and `switch`, the address is the specific held stance.
-// The auth-being implementation is in embodiments/auth.js.
+// The auth-being implementation is in roles/auth.js.
 
 import log from "../../seed/log.js";
 import { PortalError, PORTAL_ERR, isPortalError } from "../errors.js";
 import { extractStanceOrLand, ackOk, ackError } from "../envelope.js";
-import { authBeing } from "../embodiments/auth.js";
+import { authBeing } from "../roles/auth.js";
 import { getLandDomain } from "../address.js";
 import { authorize, getAuthConfig } from "../authorize.js";
 
@@ -129,7 +129,7 @@ export async function handleBe(socket, msg, ack) {
     if (isPortalError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("Portal", `ibp:be failed: ${err.message}`);
+    log.error("IBP", `ibp:be failed: ${err.message}`);
     return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }
@@ -173,7 +173,7 @@ async function handleClaim(address, payload, ctx) {
 
 function extractLandFromAddress(address) {
   if (address.kind === "land") return address.value;
-  // stance: "<land>/<path>@<embodiment>". Split off everything after the
+  // stance: "<land>/<path>@<being>". Split off everything after the
   // first "/" to get the land.
   const slashIndex = address.value.indexOf("/");
   if (slashIndex === -1) return address.value;

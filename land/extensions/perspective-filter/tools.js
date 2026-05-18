@@ -10,7 +10,7 @@ export default [
     schema: {
       nodeId: z.string().describe("The node to check."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: {
@@ -59,7 +59,7 @@ export default [
       accept: z.array(z.string()).optional().describe("Accept signals tagged with these topics. If set, only matching signals pass."),
       reject: z.array(z.string()).optional().describe("Reject signals tagged with these topics. Checked before accept list."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: {
@@ -98,7 +98,7 @@ export default [
     schema: {
       nodeId: z.string().describe("The node to clear."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: {

@@ -1,7 +1,7 @@
 // TreeOS Portal client. Speaks IBP (Inter-Being Protocol).
 //
 // Wraps a Socket.IO connection and exposes typed methods for IBP's four
-// verbs (see / do / talk / be). The client speaks only IBP, never raw HTTP
+// verbs (see / do / summon / be). The client speaks only IBP, never raw HTTP
 // routes (except the single /.well-known/treeos-portal bootstrap before
 // a socket is open).
 //
@@ -11,7 +11,7 @@
 import { io } from "socket.io-client";
 
 export class PortalClient {
-  constructor({ landUrl, token, useProxy, onConnectionChange, onTalkReply, onDescriptorEvent }) {
+  constructor({ landUrl, token, useProxy, onConnectionChange, onSummonReply, onDescriptorEvent }) {
     this.landUrl = landUrl;
     this.token = token;
     this.useProxy = !!useProxy; // dev: use Vite proxy (relative URLs, same-origin)
@@ -19,14 +19,14 @@ export class PortalClient {
     this.connected = false;
     this._reqCounter = 0;
     this._onConnectionChange = onConnectionChange || (() => {});
-    this._onTalkReply = onTalkReply || (() => {});
+    this._onSummonReply = onSummonReply || (() => {});
     this._onDescriptorEvent = onDescriptorEvent || (() => {});
   }
 
-  // Listener for async TALK responses. The server emits `ibp:talk-reply`
+  // Listener for async SUMMON responses. The server emits `ibp:summon-reply`
   // with a response envelope when an async embodiment completes summoning.
-  setTalkReplyHandler(handler) {
-    this._onTalkReply = handler || (() => {});
+  setSummonReplyHandler(handler) {
+    this._onSummonReply = handler || (() => {});
   }
 
   // Listener for live SEE updates. The server emits `descriptor:patch`,
@@ -92,9 +92,9 @@ export class PortalClient {
       this._onConnectionChange("error", err?.message);
     });
 
-    this.socket.on("ibp:talk-reply", (entry) => {
-      try { this._onTalkReply(entry); } catch (err) {
-        console.warn("[3D] talk-reply handler threw:", err);
+    this.socket.on("ibp:summon-reply", (entry) => {
+      try { this._onSummonReply(entry); } catch (err) {
+        console.warn("[3D] summon-reply handler threw:", err);
       }
     });
 
@@ -164,18 +164,18 @@ export class PortalClient {
   }
 
   /**
-   * TALK: deliver a message to a being's inbox.
+   * SUMMON: deliver a message to a being's inbox and wake them.
    *
    * Requires a stance (embodiment qualifier mandatory).
    *
    * @param {string} stance   position@embodiment
    * @param {object} message  { from, content, intent, correlation, inReplyTo?, attachments? }
    */
-  async talk(stance, message) {
-    // TALK can route through runChat() on the server (the bridge for
+  async summon(stance, message) {
+    // SUMMON can route through runChat() on the server (the bridge for
     // non-native embodiments), which means a full LLM round-trip. Give
     // it room — 90s — instead of the default 15s used by SEE/DO/BE.
-    return this._emitWithAck("ibp:talk", { stance, message }, { timeoutMs: 90000 });
+    return this._emitWithAck("ibp:summon", { stance, message }, { timeoutMs: 90000 });
   }
 
   /**

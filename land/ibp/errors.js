@@ -11,16 +11,16 @@
 // only for things seed cannot express:
 //
 //   ADDRESS_PARSE_ERROR     address string failed to parse
-//   EMBODIMENT_UNAVAILABLE  @embodiment qualifier not invocable here
+//   ROLE_UNAVAILABLE  @being qualifier not invocable here
 //   VERB_NOT_SUPPORTED      address does not support the requested verb
 //   ACTION_NOT_SUPPORTED    DO action unknown or not permitted here
-//   INVALID_INTENT          TALK intent not in embodiment's honoredIntents
+//   INVALID_INTENT          SUMMON intent not in being's honoredIntents
 
 import { ERR } from "../seed/protocol.js";
 
 const PORTAL_SPECIFIC = Object.freeze({
   ADDRESS_PARSE_ERROR:    "ADDRESS_PARSE_ERROR",
-  EMBODIMENT_UNAVAILABLE: "EMBODIMENT_UNAVAILABLE",
+  ROLE_UNAVAILABLE: "ROLE_UNAVAILABLE",
   VERB_NOT_SUPPORTED:     "VERB_NOT_SUPPORTED",
   ACTION_NOT_SUPPORTED:   "ACTION_NOT_SUPPORTED",
   INVALID_INTENT:         "INVALID_INTENT",

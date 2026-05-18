@@ -44,7 +44,7 @@ export function tokenQS(req) {
  * chat focus back to a session view).
  *
  *   buildLink(req, `/api/v1/node/${id}/chats`);
- *   buildLink(req, `/api/v1/node/${id}/chats/chat/${chatId}`);
+ *   buildLink(req, `/api/v1/node/${id}/chats/chat/${summonId}`);
  *   buildLink(req, `/api/v1/flow/signal/${signalId}`);
  */
 export function buildLink(req, path, extra = {}) {

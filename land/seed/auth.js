@@ -212,7 +212,7 @@ export async function findBeingByUsername(username) {
 //   - System beings (auth, land-manager, citizen): homeNodeId=land root.
 //     No new node — the being just lives at the land root.
 //   - Ruler promotion: homeNodeId=the ruler-scope node. Existing node,
-//     no rootOwner change. embodiments.ruler.beingId stamped on it.
+//     no rootOwner change. beings.ruler.beingId stamped on it.
 //   - Trio members (Planner, Contractor, Foreman): homeParent=ruler scope,
 //     homeName/Type=role-specific. Fresh child node created; the role
 //     template runs from the registry; the being lives at the new node.
@@ -359,10 +359,10 @@ export async function createBeingWithHome(opts) {
     homeNode.rootOwner = being._id;
   }
 
-  // ── Register the embodiment home on the home Node ──
-  // Skipped for humans — humans aren't surfaced as embodiments at their
+  // ── Register the being home on the home Node ──
+  // Skipped for humans — humans aren't surfaced as beings at their
   // own home. AI beings register under their role so the descriptor /
-  // authorize / TALK can resolve the specific being instance.
+  // authorize / SUMMON can resolve the specific being instance.
   if (operatingMode === "ai" && role) {
     try {
       const { mergeExtMeta } = await import("./tree/extensionMetadata.js");

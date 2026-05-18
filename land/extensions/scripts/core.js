@@ -39,7 +39,7 @@ export async function updateScript({
   name,
   script,
   beingId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 }) {
   const isCreating = !scriptId;
@@ -150,7 +150,7 @@ export async function updateScript({
   await logDid({
     beingId,
     nodeId,
-    chatId,
+    summonId,
     sessionId,
     action: "editScript",
     nodeVersion: "0",
@@ -175,7 +175,7 @@ export async function executeScript({
   nodeId,
   scriptId,
   beingId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 }) {
   if (!nodeId || !scriptId || !beingId) {
@@ -249,7 +249,7 @@ export async function executeScript({
     await logDid({
       beingId,
       nodeId,
-      chatId,
+      summonId,
       sessionId,
       action: "executeScript",
       nodeVersion: "0",
@@ -265,7 +265,7 @@ export async function executeScript({
     await logDid({
       beingId,
       nodeId,
-      chatId,
+      summonId,
       sessionId,
       action: "executeScript",
       nodeVersion: "0",

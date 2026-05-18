@@ -90,7 +90,7 @@ export async function init(core) {
           </div>
 
           <h3 style={{color: "#fff", marginTop: 32}}>needs.models</h3>
-          <P>Core models: <code>Node</code>, <code>User</code>, <code>Note</code>, <code>Contribution</code>, <code>LlmConnection</code>, <code>Chat</code>.</P>
+          <P>Core models: <code>Node</code>, <code>Being</code>, <code>Artifact</code>, <code>Did</code>, <code>LlmConnection</code>, <code>Summon</code>.</P>
 
           <h3 style={{color: "#fff", marginTop: 32}}>optional</h3>
           <P>

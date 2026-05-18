@@ -80,7 +80,7 @@ router.post("/home/chat", authenticate, async (req, res) => {
       res,
       sourceType: "api-home",
     });
-    sendOk(res, { answer: result.answer, chatId: result.chatId });
+    sendOk(res, { answer: result.answer, summonId: result.summonId });
   } catch (err) {
     if (!res.headersSent) {
       if (err.errCode) return sendError(res, err.httpStatus, err.errCode, err.message);

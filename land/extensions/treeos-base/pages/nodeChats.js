@@ -35,7 +35,7 @@ const formatToolArgHint = (args) => {
     }
   }
   const keys = Object.keys(args).filter(
-    (k) => !["beingId", "rootId", "nodeId", "chatId", "sessionId"].includes(k),
+    (k) => !["beingId", "rootId", "nodeId", "summonId", "sessionId"].includes(k),
   );
   if (!keys.length) return "";
   return "(" + keys.slice(0, 3).join(",") + ")";
@@ -286,7 +286,7 @@ const renderSubstep = (chat, tokenQS, capturesByChatId, childrenByParent, stepId
 
   // Self-link: clicking the chat's own id jumps into its focused
   // subtree view. Only rendered when ctx knows the parent nodeId so we
-  // can build the /node/:nodeId/chats/chat/:chatId URL.
+  // can build the /node/:nodeId/chats/chat/:summonId URL.
   const focusHref = ctx?.nodeId && ctx?.req
     ? buildLink(ctx.req, `/api/v1/node/${ctx.nodeId}/chats/chat/${chat._id}`)
     : null;
@@ -430,9 +430,9 @@ const SIGNAL_ICONS = {
 const renderForensicsSections = (capture, ctx = {}) => {
   const ctxReq = ctx.req || { query: {} };
   const ctxNodeId = ctx.nodeId || null;
-  const chatLink = (chatId) =>
+  const chatLink = (summonId) =>
     ctxNodeId
-      ? buildLink(ctxReq, `/api/v1/node/${ctxNodeId}/chats/chat/${chatId}`)
+      ? buildLink(ctxReq, `/api/v1/node/${ctxNodeId}/chats/chat/${summonId}`)
       : "#";
   const nodeLink = (nodeId) => buildLink(ctxReq, `/api/v1/node/${nodeId}/chats`);
   const signalLink = (signalId) => buildLink(ctxReq, `/api/v1/flow/signal/${signalId}`);
@@ -532,8 +532,8 @@ const renderForensicsSections = (capture, ctx = {}) => {
   // Every ID in here is a real link so the operator can walk the
   // dispatch tree and cascade trails by clicking.
   const correlationRows = [];
-  if (capture.parentChatId) {
-    const pid = String(capture.parentChatId);
+  if (capture.parentSummonId) {
+    const pid = String(capture.parentSummonId);
     correlationRows.push(`<div class="fx-correlation">↑ dispatched from <a class="fx-id-link" href="${chatLink(pid)}">${esc(pid.slice(0, 8))}</a></div>`);
   }
   if (Array.isArray(capture.cascadesEmitted) && capture.cascadesEmitted.length > 0) {
@@ -627,7 +627,7 @@ const renderRichToolCall = (tc) => {
 const renderPhases = (steps, tokenQS, capturesByChatId, childrenByParent, ctx) => {
   const stepIds = new Set(steps.map((s) => String(s._id)));
   const topLevel = steps.filter((s) => {
-    const pid = s.parentChatId ? String(s.parentChatId) : null;
+    const pid = s.parentSummonId ? String(s.parentSummonId) : null;
     return !pid || !stepIds.has(pid);
   });
   if (topLevel.length === 0) return "";
@@ -723,10 +723,10 @@ const renderChain = (chain, tokenQS, token, capturesByChatId, childrenByParent, 
   // Dispatched-from block: if this chat was spawned by another chat
   // (branch dispatch, plan expansion, retry, continuation), render a
   // backlink at the top of the chain so the operator can walk up the
-  // lineage. Looks at chat.parentChatId → parentByChatId map.
+  // lineage. Looks at chat.parentSummonId → parentByChatId map.
   const dispatchedFromHtml = (() => {
-    if (!chat.parentChatId || !parentByChatId) return "";
-    const parent = parentByChatId.get(String(chat.parentChatId));
+    if (!chat.parentSummonId || !parentByChatId) return "";
+    const parent = parentByChatId.get(String(chat.parentSummonId));
     if (!parent) return "";
     const parentNodeId = parent.treeContext?.targetNodeId || null;
     const parentMode = parent.aiContext?.mode ? `${esc(parent.aiContext.zone || "")}:${esc(parent.aiContext.mode)}` : "";

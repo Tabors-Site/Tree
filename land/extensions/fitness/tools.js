@@ -46,7 +46,7 @@ export default function getTools() {
         rootId: z.string().describe("Fitness root node ID."),
         modality: z.enum(["gym", "running", "home"]).describe("Which modality to add."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -70,7 +70,7 @@ export default function getTools() {
         parentId: z.string().describe("Parent node ID (modality branch like Gym or Home)."),
         name: z.string().describe("Group name (e.g. Chest, Push, Morning Routine)."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -105,7 +105,7 @@ export default function getTools() {
           .describe("Variation progression for bodyweight (e.g. ['standard', 'diamond', 'archer'])."),
         rootId: z.string().describe("Fitness root node ID (for channel creation)."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -130,7 +130,7 @@ export default function getTools() {
         exerciseName: z.string().optional().describe("Exercise name (case-insensitive substring). Requires rootId."),
         rootId: z.string().optional().describe("Fitness root node ID. Required when using exerciseName."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
@@ -168,7 +168,7 @@ export default function getTools() {
       schema: {
         rootId: z.string().describe("Fitness root node ID."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -195,7 +195,7 @@ export default function getTools() {
           weeklyMilesGoal: z.number().optional(),
         }).describe("Profile settings."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -221,7 +221,7 @@ export default function getTools() {
         unit: z.string().optional().describe("Unit: lb, kg, bodyweight, seconds, minutes, miles, km."),
         goals: z.record(z.number()).optional().describe("Optional goal values."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -261,13 +261,13 @@ export default function getTools() {
         }).passthrough()).describe("Parsed exercises from workout input."),
         date: z.string().optional().describe("Workout date (YYYY-MM-DD). Defaults to today."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       handler: async (args) => {
         try {
-          const { rootId, exercises, date, beingId, chatId, sessionId } = args;
+          const { rootId, exercises, date, beingId, summonId, sessionId } = args;
           const fitnessNodes = await findFitnessNodes(rootId);
           if (!fitnessNodes) return { content: [{ type: "text", text: "Fitness tree not found." }] };
 
@@ -283,7 +283,7 @@ export default function getTools() {
 
           // Record session to History node
           const historyNodeId = fitnessNodes.history?.id;
-          const record = await recordSessionHistory(historyNodeId, parsed, delivered, beingId, { chatId, sessionId });
+          const record = await recordSessionHistory(historyNodeId, parsed, delivered, beingId, { summonId, sessionId });
 
           // Build human-readable summary
           const { lines, summary } = buildWorkoutSummary(parsed, delivered);

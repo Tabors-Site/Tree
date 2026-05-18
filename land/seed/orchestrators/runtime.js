@@ -18,8 +18,8 @@ import {
 
 export { LLM_PRIORITY };
 import {
-  trackChainStep, startChat, startChainStep, finalizeChat,
-} from "../llm/chatTracker.js";
+  trackChainStep, startSummon, startChainStep, finalizeSummon,
+} from "../llm/summonTracker.js";
 import { connectToMCP, closeMCPClient, MCP_SERVER_URL } from "../ws/mcp.js";
 import {
   createSession, endSession, getSession, setSessionAbort, clearSessionAbort,
@@ -169,7 +169,7 @@ export class OrchestratorRuntime {
       }
 
       // Chat root record
-      const mainChat = await startChat({
+      const mainChat = await startSummon({
         beingIn: this.beingId,
         sessionId: this.sessionId,
         message: startMessage || this.description,
@@ -179,9 +179,9 @@ export class OrchestratorRuntime {
       });
       this.mainChatId = mainChat._id;
 
-      // MCP connection (with retry). chatId / sessionId travel through
+      // MCP connection (with retry). summonId / sessionId travel through
       // each runStep's pmCtx (this.beingId + this.sessionId + the
-      // step's chatId) rather than via a global Map.
+      // step's summonId) rather than via a global Map.
       await this._connectMcp();
     };
 
@@ -243,17 +243,17 @@ export class OrchestratorRuntime {
       username: this.username,
       beingId: this.beingId,
       rootId: this.rootId,
-      // chatId / sessionId let the tool loop attribute MCP calls to
+      // summonId / sessionId let the tool loop attribute MCP calls to
       // this pipeline's root chat record. Without them, tool-call
       // tracking falls back to "no current chat" which loses audit
       // attribution for background pipelines.
-      chatId: this.mainChatId || null,
-      rootChatId: this.mainChatId || null,
+      summonId: this.mainChatId || null,
+      rootSummonId: this.mainChatId || null,
       sessionId: this.sessionId || null,
       // Background pipelines are stanceless internal cognition; their
       // MCP client is cached under the internal session key (which
       // resolveInternalAiSessionKey shaped as `pipeline:ephemeral:<uuid>` or
-      // `pipeline:tree:<rootId>:<purpose>`), not a Portal Address.
+      // `pipeline:tree:<rootId>:<purpose>`), not an IBP Address.
       mcpCacheKey: this.aiSessionKey,
       signal: this.signal,
       llmPriority: this.llmPriority,
@@ -284,7 +284,7 @@ export class OrchestratorRuntime {
     trackChainStep({
       beingIn: this.beingId,
       sessionId: this.sessionId,
-      rootChatId: this.mainChatId,
+      rootSummonId: this.mainChatId,
       chainIndex: this.chainIndex++,
       modeKey,
       source: this.source,
@@ -302,23 +302,23 @@ export class OrchestratorRuntime {
   /**
    * Open a live chain step Chat record BEFORE running the LLM work.
    *
-   * Use this when you need the chatId up front so you can swap the
+   * Use this when you need the summonId up front so you can swap the
    * active chat context (so tool calls made during processMessage
    * land on this step's record, not the root). Contrast with
    * trackStep() which is fire-and-forget after the fact.
    *
-   * Returns { chatId, chainIndex } or null if cleanup already ran or
+   * Returns { summonId, chainIndex } or null if cleanup already ran or
    * the chain-step circuit breaker tripped.
    *
    *   const step = await rt.beginChainStep("tree:code-plan", promptText, { treeContext });
-   *   if (step) pmCtx.chatId = step.chatId;                 // thread through ctx, not via Map
-   *   await processMessage(...);                            // tool calls land on step.chatId
-   *   await rt.finishChainStep(step.chatId, { output: result.content });
+   *   if (step) pmCtx.summonId = step.summonId;                 // thread through ctx, not via Map
+   *   await processMessage(...);                            // tool calls land on step.summonId
+   *   await rt.finishChainStep(step.summonId, { output: result.content });
    */
   async beginChainStep(modeKey, input, {
     treeContext,
     llmProvider: stepLlm,
-    parentChatId = null,
+    parentSummonId = null,
     dispatchOrigin = null,
   } = {}) {
     if (this._cleaned) return null;
@@ -331,40 +331,40 @@ export class OrchestratorRuntime {
     const chat = await startChainStep({
       beingIn: this.beingId,
       sessionId: this.sessionId,
-      rootChatId: this.mainChatId,
+      rootSummonId: this.mainChatId,
       chainIndex,
       modeKey,
       source: this.source,
       input: input || "",
       treeContext: resolvedTreeContext,
       llmProvider: stepLlm || this.llmProvider,
-      parentChatId,
+      parentSummonId,
       dispatchOrigin,
     });
 
     if (!chat) return null;
-    return { chatId: chat._id, chainIndex };
+    return { summonId: chat._id, chainIndex };
   }
 
   /**
    * Finalize a chain step opened via beginChainStep. Writes the OUT
-   * (endMessage.content) via finalizeChat. Safe to call after cleanup
-   * (the finalizeChat no-ops on a missing chatId).
+   * (endMessage.content) via finalizeSummon. Safe to call after cleanup
+   * (the finalizeSummon no-ops on a missing summonId).
    *
    * `stopped: true` marks the step as cancelled/errored in the UI so
    * failed branches get the Stopped badge.
    */
-  async finishChainStep(chatId, { output, stopped = false, modeKey } = {}) {
-    if (!chatId) return;
+  async finishChainStep(summonId, { output, stopped = false, modeKey } = {}) {
+    if (!summonId) return;
     try {
-      await finalizeChat({
-        chatId,
+      await finalizeSummon({
+        summonId,
         content: typeof output === "string" ? output : (output == null ? null : JSON.stringify(output)),
         stopped: !!stopped,
         modeKey: modeKey || this.modeKeyForLlm || this.source,
       });
     } catch (err) {
-      log.debug("Orchestrator", `finishChainStep(${chatId}) failed: ${err.message}`);
+      log.debug("Orchestrator", `finishChainStep(${summonId}) failed: ${err.message}`);
     }
   }
 
@@ -377,7 +377,7 @@ export class OrchestratorRuntime {
     trackChainStep({
       beingIn: this.beingId,
       sessionId: this.sessionId,
-      rootChatId: this.mainChatId,
+      rootSummonId: this.mainChatId,
       chainIndex: this.chainIndex++,
       modeKey,
       source: this.source,
@@ -427,11 +427,11 @@ export class OrchestratorRuntime {
     // Full cleanup for background pipelines
     if (this.mainChatId) {
       const args = this._finalizeArgs || { content: "Pipeline ended without result", stopped: true, modeKey: "error" };
-      await finalizeChat({ chatId: this.mainChatId, ...args }).catch(e =>
+      await finalizeSummon({ summonId: this.mainChatId, ...args }).catch(e =>
         log.error("Orchestrator", `Failed to finalize pipeline chat: ${e.message}`)
       );
     }
-    // No chatContext Map to clear — chatId travels through pmCtx so
+    // No chatContext Map to clear — summonId travels through pmCtx so
     // there's no global state lingering between pipeline runs.
 
     if (this.sessionId) {

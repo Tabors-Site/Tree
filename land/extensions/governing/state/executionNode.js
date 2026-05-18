@@ -128,10 +128,10 @@ export async function ensureExecutionNode({ scopeNodeId, beingId, core }) {
           },
         });
         // Inner-being protection: only governing-role beings of THIS
-        // rulership can TALK to the Foreman. Scoped home check filters
+        // rulership can SUMMON the Foreman. Scoped home check filters
         // other rulerships; role check filters humans / citizens.
         await kernelMergeExtMeta(node, "permissions", {
-          talk: {
+          summon: {
             "@foreman*": {
               requires: {
                 role:         ["ruler", "planner", "contractor", "foreman"],

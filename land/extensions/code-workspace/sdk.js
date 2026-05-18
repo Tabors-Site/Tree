@@ -232,7 +232,7 @@ function specTexts(ctx) {
  * sibling branch; the sandbox is enforced at injection, not at the call site.
  *
  * The user's handler still receives everything it declared in schema, plus
- * the MCP-standard injected fields (beingId, nodeId, rootId, chatId, sessionId).
+ * the MCP-standard injected fields (beingId, nodeId, rootId, summonId, sessionId).
  */
 function wrapTool(tool) {
   if (!tool?.name) return tool;

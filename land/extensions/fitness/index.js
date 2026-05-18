@@ -63,6 +63,33 @@ export async function init(core) {
     core.llm.registerModeAssignment("tree:fitness-plan", "fitnessPlan");
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // Slice 6c — domain roles for the fitness domain.
+  //
+  // Multi-being domain: all fitness role instances live at the single
+  // `/fitness` domain node per tree, addressed individually:
+  //
+  //   <land>/<treeRoot>/fitness@fitness-log
+  //   <land>/<treeRoot>/fitness@fitness-coach
+  //   <land>/<treeRoot>/fitness@fitness-review
+  //   <land>/<treeRoot>/fitness@fitness-plan
+  //
+  // Multiple beings, one node, separate inboxes. Same pattern as
+  // food. See food/index.js for the architectural rationale.
+  //
+  // Bridge roles — runChat with the corresponding tree:fitness-* mode
+  // when summoned. Behavior unchanged from the existing modes;
+  // identity now first-class so SUMMONs route here.
+  //
+  // Being-instance materialization is deferred to Slice 7; existing
+  // hook handlers (afterBoot, breath:exhale, onCascade, afterArtifact,
+  // afterMetadataWrite, enrichContext) continue to drive behavior.
+  // ─────────────────────────────────────────────────────────────────
+  core.ibp.registerRole("fitness-log",    core.ibp.makeBridgeRole({ name: "fitness-log",    modeKey: "tree:fitness-log",    zone: "tree" }));
+  core.ibp.registerRole("fitness-coach",  core.ibp.makeBridgeRole({ name: "fitness-coach",  modeKey: "tree:fitness-coach",  zone: "tree" }));
+  core.ibp.registerRole("fitness-review", core.ibp.makeBridgeRole({ name: "fitness-review", modeKey: "tree:fitness-review", zone: "tree" }));
+  core.ibp.registerRole("fitness-plan",   core.ibp.makeBridgeRole({ name: "fitness-plan",   modeKey: "tree:fitness-plan",   zone: "tree" }));
+
   // ── Boot self-heal: ensure fitness roots have mode override ──
   core.hooks.register("afterBoot", async () => {
     try {

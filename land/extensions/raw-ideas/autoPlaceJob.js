@@ -5,7 +5,7 @@
 import log from "../../seed/log.js";
 import Being from "../../seed/models/being.js";
 import RawIdea from "./model.js";
-import Chat from "../../seed/models/chat.js";
+import Summon from "../../seed/models/summon.js";
 import { orchestrateRawIdeaPlacement } from "./pipeline.js";
 import { isUserOnline } from "../../seed/ws/websocket.js";
 import { userHasLlm } from "../../seed/llm/conversation.js";
@@ -142,7 +142,7 @@ export async function startRawIdeaAutoPlaceJob({ intervalMs = 15 * 60 * 1000 } =
 
   // Finalize any AI chats left without an endMessage from a previous server run
   try {
-    const { modifiedCount } = await Chat.updateMany(
+    const { modifiedCount } = await Summon.updateMany(
       { "endMessage.time": null },
       {
         $set: {

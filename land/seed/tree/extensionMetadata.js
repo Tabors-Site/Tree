@@ -31,7 +31,7 @@ import { getLandConfigValue } from "../landConfig.js";
 //     position, keyed by role). Multiple extensions legitimately
 //     declare beings here (governing registers Ruler/Planner/
 //     Contractor/Foreman/Worker; future extensions add their own).
-//     Renamed from "embodiments" in migration 0.5.0.
+//     Renamed from "beings" in migration 0.5.0.
 //   - permissions: per-position verb-action permission rules
 //     consumed by the authorize function (Layer 3 of stance auth).
 const CORE_NAMESPACES = new Set(["tools", "modes", "extensions", "cascade", "llm", "beings", "permissions"]);

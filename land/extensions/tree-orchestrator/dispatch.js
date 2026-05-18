@@ -226,10 +226,10 @@ export async function runRulerCycle({
   aiSessionKey, originalMode, message,
   username, beingId, rootId, signal, slot,
   readOnly, onToolLoopCheckpoint, socket,
-  sessionId, rootChatId, rt,
+  sessionId, rootSummonId, rt,
   skipRespond,
   currentNodeId,
-  parentChatId,
+  parentSummonId,
   dispatchOrigin,
 }) {
   // Architect-entry call sites omit currentNodeId because they treat
@@ -243,10 +243,10 @@ export async function runRulerCycle({
   const baseOpts = {
     username, beingId, rootId, signal, slot,
     readOnly, onToolLoopCheckpoint, socket,
-    sessionId, rootChatId, rt,
+    sessionId, rootSummonId, rt,
     skipRespond,
     currentNodeId,
-    parentChatId,
+    parentSummonId,
     dispatchOrigin,
   };
 
@@ -284,7 +284,7 @@ export async function runRulerCycle({
           scopeNodeId: currentNodeId,
           beingId,
           systemSpec: typeof message === "string" ? message.slice(0, 500) : null,
-          chatId: rootChatId,
+          summonId: rootSummonId,
           sessionId,
         });
         if (planNode?._id) planTrioNodeId = String(planNode._id);
@@ -611,7 +611,7 @@ export async function runModeAndReturn(aiSessionKey, mode, message, {
   currentNodeId, readOnly = false, clearHistory = false,
   onToolLoopCheckpoint, modesUsed,
   targetNodeId = null,
-  sessionId = null, rootChatId = null, rt = null,
+  sessionId = null, rootSummonId = null, rt = null,
   treeCapabilities = null,
   adjectives = null,
   quantifiers = null,
@@ -795,7 +795,7 @@ export async function runModeAndReturn(aiSessionKey, mode, message, {
       username, beingId, rootId,
       currentNodeId: currentNodeId || targetNodeId || rootId,
       signal, slot, socket,
-      sessionId, rootChatId, rt,
+      sessionId, rootSummonId, rt,
       readOnly, onToolLoopCheckpoint,
       dispatchOrigin: "ruler-turn",
     });
@@ -803,7 +803,7 @@ export async function runModeAndReturn(aiSessionKey, mode, message, {
     result = await runSteppedMode(aiSessionKey, mode, message, {
       username, beingId, rootId, signal, slot,
       readOnly, onToolLoopCheckpoint, socket,
-      sessionId, rootChatId, rt,
+      sessionId, rootSummonId, rt,
       skipRespond,
     });
   }
@@ -978,7 +978,7 @@ export async function runModeAndReturn(aiSessionKey, mode, message, {
           // revision branch pre-bumps version on the old stash before
           // re-invoking the Planner; reading that value here
           // preserves the count across the round-trip.
-          const architectChatId = result?._lastChatId || rootChatId || null;
+          const architectChatId = result?._lastChatId || rootSummonId || null;
           const { getPendingSwarmPlan, setPendingSwarmPlan } = await pendingSwarmPlanApi();
           const SWARM_WS = await swarmWsEvents();
           const existingStash = getPendingSwarmPlan(aiSessionKey);
@@ -1031,7 +1031,7 @@ export async function runModeAndReturn(aiSessionKey, mode, message, {
             projectName: projectNode.name || null,
             userRequest: message,
             architectChatId,
-            rootChatId: rootChatId || null,
+            rootSummonId: rootSummonId || null,
             rootId: rootId || null,
             modeKey: mode,
             targetNodeId: targetNodeId || currentNodeId || null,
@@ -1172,7 +1172,7 @@ export async function runModeAndReturn(aiSessionKey, mode, message, {
 export async function runChain(chain, message, aiSessionKey, {
   socket, username, beingId, rootId, signal, slot,
   onToolLoopCheckpoint, modesUsed,
-  sessionId = null, rootChatId = null,
+  sessionId = null, rootSummonId = null,
 }) {
   emitStatus(socket, "intent", "Chaining extensions...");
 
@@ -1194,8 +1194,8 @@ export async function runChain(chain, message, aiSessionKey, {
     const stepResult = await processMessage(aiSessionKey,
       isLast ? context : `${context}\n\nDo this step and return what you produced.`, {
         username, beingId, rootId, signal, slot,
-        chatId: rootChatId || null,
-        rootChatId: rootChatId || null,
+        summonId: rootSummonId || null,
+        rootSummonId: rootSummonId || null,
         sessionId: sessionId || null,
         onToolLoopCheckpoint,
         onToolResults(results) {
@@ -1461,7 +1461,7 @@ async function runLeafGroupAtScope({
   workerType,
   projectNode,
   aiSessionKey, beingId, username, rootId,
-  signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+  signal, slot, socket, onToolLoopCheckpoint, sessionId, rootSummonId, rt,
   stashedPlanText,
   allBranchNames,
 }) {
@@ -1631,9 +1631,9 @@ async function runLeafGroupAtScope({
   const workerResult = await runSteppedMode(aiSessionKey, modeKey, rulerWorkerMessage, {
     username, beingId, rootId, signal, slot,
     readOnly: false, onToolLoopCheckpoint, socket,
-    sessionId, rootChatId, rt,
+    sessionId, rootSummonId, rt,
     currentNodeId: String(projectNode._id),
-    parentChatId: rootChatId || null,
+    parentSummonId: rootSummonId || null,
     dispatchOrigin: `ruler-own-integration-${resolvedType}`,
   });
 
@@ -1678,7 +1678,7 @@ async function runBranchStepAtScope({
   projectNode,
   sw,
   aiSessionKey, beingId, username, rootId,
-  signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+  signal, slot, socket, onToolLoopCheckpoint, sessionId, rootSummonId, rt,
   architectChatId, userRequest,
 }) {
   const stepBranches = (branchStep?.branches || [])
@@ -1705,7 +1705,7 @@ async function runBranchStepAtScope({
   return await sw.runBranchSwarm({
     branches: stepBranches,
     rootProjectNode: projectNode,
-    rootChatId,
+    rootSummonId,
     architectChatId,
     sessionId,
     aiSessionKey,
@@ -1736,7 +1736,7 @@ async function runBranchStepAtScope({
         socket, username, beingId, signal,
         sessionId,
         rootId,
-        rootChatId,
+        rootSummonId,
         slot, onToolLoopCheckpoint,
         rt: (getActiveRequest(aiSessionKey) || {}).rt,
       });
@@ -1750,7 +1750,7 @@ async function runBranchStepAtScope({
         username, beingId, rootId,
         currentNodeId: branchIdStr,
         signal, slot: branchSlot, socket,
-        sessionId, rootChatId, rt,
+        sessionId, rootSummonId, rt,
         readOnly: false, onToolLoopCheckpoint,
         dispatchOrigin: "branch-swarm",
       });
@@ -1868,7 +1868,7 @@ async function wakeForemanForLeafFailure({
   projectNode, recordNodeIdForRollup,
   workerType, leafSteps, error,
   aiSessionKey, username, beingId, rootId,
-  signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+  signal, slot, socket, onToolLoopCheckpoint, sessionId, rootSummonId, rt,
 }) {
   if (!projectNode?._id) return;
   try {
@@ -1896,7 +1896,7 @@ async function wakeForemanForLeafFailure({
       username, beingId, rootId,
       currentNodeId: String(projectNode._id),
       signal, slot, socket,
-      sessionId, rootChatId, rt,
+      sessionId, rootSummonId, rt,
       readOnly: false, onToolLoopCheckpoint,
       wakeup: {
         reason: "leaf-failed",
@@ -1922,7 +1922,7 @@ async function wakeForemanForBranchFailure({
   projectNode, recordNodeIdForRollup,
   branchStep, rolledUpStatus, error,
   aiSessionKey, username, beingId, rootId,
-  signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+  signal, slot, socket, onToolLoopCheckpoint, sessionId, rootSummonId, rt,
 }) {
   if (!projectNode?._id) return;
   try {
@@ -1949,7 +1949,7 @@ async function wakeForemanForBranchFailure({
       username, beingId, rootId,
       currentNodeId: String(projectNode._id),
       signal, slot, socket,
-      sessionId, rootChatId, rt,
+      sessionId, rootSummonId, rt,
       readOnly: false, onToolLoopCheckpoint,
       wakeup: {
         reason: "branch-failed",
@@ -1987,7 +1987,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
 
   const {
     branches, contracts, projectNodeId, userRequest, architectChatId,
-    rootChatId: stashedRootChatId, rootId: stashedRootId,
+    rootSummonId: stashedRootChatId, rootId: stashedRootId,
     // The Planner's plan text with [[CONTRACTS]] and [[BRANCHES]] blocks
     // stripped — leaves the ## Reasoning and ## Plan sections. The
     // Ruler's Worker reads this to know which leaf integration files
@@ -1999,11 +1999,11 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
   const {
     aiSessionKey, beingId, username, rootId: ctxRootId,
     sessionId, signal, slot, socket, onToolLoopCheckpoint, rt,
-    rootChatId: ctxRootChatId,
+    rootSummonId: ctxRootChatId,
   } = runtimeCtx || {};
 
   const rootId = stashedRootId || ctxRootId;
-  const rootChatId = ctxRootChatId || stashedRootChatId || null;
+  const rootSummonId = ctxRootChatId || stashedRootChatId || null;
 
   // Note: branches.length === 0 is legitimate for leaf-only plans (the
   // Planner emitted only leaf steps at this scope, no sub-domains). We
@@ -2325,7 +2325,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
           workerType: group.workerType,
           projectNode,
           aiSessionKey, beingId, username, rootId,
-          signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+          signal, slot, socket, onToolLoopCheckpoint, sessionId, rootSummonId, rt,
           stashedPlanText,
           allBranchNames,
         });
@@ -2353,7 +2353,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
           leafSteps: group.steps,
           error: leafBatchError,
           aiSessionKey, username, beingId, rootId,
-          signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+          signal, slot, socket, onToolLoopCheckpoint, sessionId, rootSummonId, rt,
         });
       }
     } else if (group.kind === "branch") {
@@ -2364,7 +2364,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
           projectNode,
           sw,
           aiSessionKey, beingId, username, rootId,
-          signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+          signal, slot, socket, onToolLoopCheckpoint, sessionId, rootSummonId, rt,
           architectChatId, userRequest,
         });
       } catch (err) {
@@ -2401,7 +2401,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
           rolledUpStatus,
           error: branchStepError,
           aiSessionKey, username, beingId, rootId,
-          signal, slot, socket, onToolLoopCheckpoint, sessionId, rootChatId, rt,
+          signal, slot, socket, onToolLoopCheckpoint, sessionId, rootSummonId, rt,
         });
       }
     }
@@ -2538,7 +2538,7 @@ export async function dispatchSwarmPlan(planData, runtimeCtx) {
               username, beingId, rootId,
               currentNodeId: String(projectNode._id),
               signal, slot, socket,
-              sessionId, rootChatId, rt,
+              sessionId, rootSummonId, rt,
               readOnly: false, onToolLoopCheckpoint,
               wakeup: { reason: "swarm-completed", payload: summary },
             });
@@ -2598,7 +2598,7 @@ export async function dispatchResumePlan(rulerScopeNodeId, runtimeCtx) {
   const {
     aiSessionKey, beingId, username, rootId,
     sessionId, signal, slot, socket, onToolLoopCheckpoint, rt,
-    rootChatId, defaultBranchMode,
+    rootSummonId, defaultBranchMode,
   } = runtimeCtx || {};
 
   const NodeModel = (await import("../../seed/models/node.js")).default;
@@ -2628,7 +2628,7 @@ export async function dispatchResumePlan(rulerScopeNodeId, runtimeCtx) {
     const swarmResult = await sw.runBranchSwarm({
       branches: resumable.resumable,
       rootProjectNode: projectNode,
-      rootChatId,
+      rootSummonId,
       sessionId,
       aiSessionKey,
       beingId,
@@ -2650,7 +2650,7 @@ export async function dispatchResumePlan(rulerScopeNodeId, runtimeCtx) {
       runBranch: async ({ mode: branchMode, message: branchMessage, branchNodeId, slot: branchSlot, markerChatId }) => {
         setActiveRequest(aiSessionKey, {
           socket, username, beingId, signal,
-          sessionId, rootId, rootChatId,
+          sessionId, rootId, rootSummonId,
           slot, onToolLoopCheckpoint,
           rt: (getActiveRequest(aiSessionKey) || {}).rt,
         });
@@ -2664,7 +2664,7 @@ export async function dispatchResumePlan(rulerScopeNodeId, runtimeCtx) {
           username, beingId, rootId,
           currentNodeId: branchIdStr,
           signal, slot: branchSlot, socket,
-          sessionId, rootChatId, rt,
+          sessionId, rootSummonId, rt,
           readOnly: false, onToolLoopCheckpoint,
           dispatchOrigin: "branch-swarm",
         });

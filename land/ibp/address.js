@@ -1,12 +1,12 @@
-// Server-side Portal Address parsing.
+// Server-side IBP Address parsing.
 //
-// Re-exports the single-source-of-truth parser from /portal/lib/portal-address.js
+// Re-exports the single-source-of-truth parser from /portal/lib/ibp-address.js
 // and adds server-side context injection so handlers don't have to assemble
 // the parse context themselves.
 //
 // The parser itself is shared between Portal client (browser) and Land
 // server. Both need to parse the same grammar; both produce the same
-// normalized stance shape: { land, path, embodiment }.
+// normalized stance shape: { land, path, being }.
 
 import {
   parse as parseRaw,
@@ -18,13 +18,13 @@ import {
   isValidLand,
   isValidPath,
   isValidEmbodiment,
-} from "../../portal/lib/portal-address.js";
+} from "../../portal/lib/ibp-address.js";
 
 import { PortalError, PORTAL_ERR } from "./errors.js";
 
 // Cache the land's bare domain. Derived from process.env.LAND_DOMAIN with a
 // localhost fallback (matches canopy/identity.js). Stripped of protocol/port
-// because a Portal Address Land is just the domain.
+// because an IBP Address Land is just the domain.
 let cachedLandDomain = null;
 function getLandDomain() {
   if (cachedLandDomain) return cachedLandDomain;
@@ -36,7 +36,7 @@ function getLandDomain() {
   return cachedLandDomain;
 }
 
-// Parse a Portal Address string using a socket's identity context.
+// Parse an IBP Address string using a socket's identity context.
 // Throws PortalError on parse failure.
 //
 // The socket provides:
@@ -44,8 +44,8 @@ function getLandDomain() {
 // The land config provides:
 //   - currentLand (this server's bare domain)
 //
-// Returns the normalized PA: { left, right } where each side is a Stance
-// or null. See /portal/lib/portal-address.js for shape.
+// Returns the normalized IBPA: { left, right } where each side is a Stance
+// or null. See /portal/lib/ibp-address.js for shape.
 export function parseFromSocket(socket, input, extraCtx = {}) {
   const ctx = {
     currentLand: getLandDomain(),
@@ -57,7 +57,7 @@ export function parseFromSocket(socket, input, extraCtx = {}) {
   } catch (e) {
     throw new PortalError(
       PORTAL_ERR.ADDRESS_PARSE_ERROR,
-      e.message || "Invalid Portal Address",
+      e.message || "Invalid IBP Address",
       { code: e.code, paInput: e.paInput },
     );
   }
@@ -71,7 +71,7 @@ export function parseWithContext(input, ctx = {}) {
   } catch (e) {
     throw new PortalError(
       PORTAL_ERR.ADDRESS_PARSE_ERROR,
-      e.message || "Invalid Portal Address",
+      e.message || "Invalid IBP Address",
       { code: e.code, paInput: e.paInput },
     );
   }

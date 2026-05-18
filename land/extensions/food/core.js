@@ -272,7 +272,7 @@ export async function writeMealNote(foodNodes, mealSlot, summary, beingId, ctx =
       content: summary,
       origin: "ibp",
       beingId,
-      chatId: ctx.chatId ?? null,
+      summonId: ctx.summonId ?? null,
       sessionId: ctx.sessionId ?? null,
     });
   } catch (err) {

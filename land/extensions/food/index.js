@@ -62,6 +62,48 @@ export async function init(core) {
     core.llm.registerModeAssignment("tree:food-daily", "foodDaily");
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // Slice 6c — domain roles for the food domain.
+  //
+  // The food domain decomposes into multiple roles, one per mode key:
+  //   @food-log    — captures food log entries, maintains daily counters
+  //   @food-coach  — gives advice, reviews patterns
+  //   @food-review — periodic structured review
+  //   @food-daily  — daily summary
+  //
+  // **Addressing convention (locked 2026-05-18).** All food-domain
+  // being-instances live at the **single `/food` domain node** per
+  // tree, addressed individually:
+  //
+  //   <land>/<treeRoot>/food@food-log     — the food-log being
+  //   <land>/<treeRoot>/food@food-coach   — the food-coach being
+  //   <land>/<treeRoot>/food@food-review  — the food-review being
+  //   <land>/<treeRoot>/food@food-daily   — the food-daily being
+  //
+  // Multiple beings at one node have separate inboxes (per
+  // `metadata.inbox.<beingId>`); each is independently summonable.
+  // No language layer in seed for picking which sub-being — callers
+  // address by the right qualifier directly. Extensions can add their
+  // own language/translation layer if they want one-handle convenience.
+  //
+  // The role registrations below register role *templates*. Each is a
+  // bridge role: when summoned, the bridge runs the corresponding
+  // tree:food-* mode via runChat at the resolved nodeId. Same LLM
+  // behavior the modes already provide, now addressable as discrete
+  // beings.
+  //
+  // **Being-instance materialization is lazy / deferred.** Today, food
+  // logic runs through afterBoot + hook handlers (cascade, breath, etc.).
+  // Instance creation (at each tree's /food node) lands when Slice 7
+  // retires the orchestrator-driven flows and the role.summon pattern
+  // replaces the hooks. For now the role templates exist and SUMMONs
+  // route correctly; behavior is still driven by the hooks below.
+  // ─────────────────────────────────────────────────────────────────
+  core.ibp.registerRole("food-log",    core.ibp.makeBridgeRole({ name: "food-log",    modeKey: "tree:food-log",    zone: "tree" }));
+  core.ibp.registerRole("food-coach",  core.ibp.makeBridgeRole({ name: "food-coach",  modeKey: "tree:food-coach",  zone: "tree" }));
+  core.ibp.registerRole("food-review", core.ibp.makeBridgeRole({ name: "food-review", modeKey: "tree:food-review", zone: "tree" }));
+  core.ibp.registerRole("food-daily",  core.ibp.makeBridgeRole({ name: "food-daily",  modeKey: "tree:food-daily",  zone: "tree" }));
+
   // ── onCascade: macro accumulation ──
   // ── Boot self-heal: ensure food roots have mode override ──
   core.hooks.register("afterBoot", async () => {

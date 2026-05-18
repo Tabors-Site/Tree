@@ -16,7 +16,7 @@ This is also not the protocol's model. State accumulates across invocations; the
 
 ## The protocol's model
 
-A being is a **position in a tree with a registered embodiment.** The position holds the being's record. When the being is summoned (by user message, by hook fired, by parent dispatch, by cascade arrival, by scheduled wake), a fresh LLM invocation reads the record and acts according to the embodiment. The invocation ends. The record persists. The next summoning continues from the persisted record.
+A being is a **position in a tree with a registered being.** The position holds the being's record. When the being is summoned (by user message, by hook fired, by parent dispatch, by cascade arrival, by scheduled wake), a fresh LLM invocation reads the record and acts according to the being. The invocation ends. The record persists. The next summoning continues from the persisted record.
 
 Beings do not run continuously. They wake when called.
 
@@ -42,37 +42,37 @@ The protocol does not promise that any individual being is alive at any moment. 
 
 The aliveness of TreeOS is **distributed across summoned moments.** No single being is the locus of life. Life is a property of the system as a whole.
 
-This matters for how the portal renders beings. A being's "status" is not "running" or "idle" in a process sense. It is the state of its record: what is in its inbox, what work it has dispatched, what its embodiment is currently capable of. The portal shows the record; the record is what the being is.
+This matters for how the portal renders beings. A being's "status" is not "running" or "idle" in a process sense. It is the state of its record: what is in its inbox, what work it has dispatched, what its being is currently capable of. The portal shows the record; the record is what the being is.
 
 ## Implications for protocol design
 
 Because beings are summoned, the protocol can stay small:
 
 - **Delivery is enough.** The protocol's job is to write a message into the inbox and trigger the summoning. The being does the rest.
-- **No long-lived sessions.** A user "chatting" with a being is just a sequence of TALK deliveries and inbox-derived responses. There is no chat session in the protocol; there is correlation via `inReplyTo`.
-- **Embodiments own concurrency.** The protocol does not declare whether a being responds inline or later. The embodiment declares its `respondMode`; the protocol honors it. This keeps the protocol policy-free.
+- **No long-lived sessions.** A user "chatting" with a being is just a sequence of SUMMON deliveries and inbox-derived responses. There is no chat session in the protocol; there is correlation via `inReplyTo`.
+- **Beings own concurrency.** The protocol does not declare whether a being responds inline or later. The being declares its `respondMode`; the protocol honors it. This keeps the protocol policy-free.
 - **The record is the source of truth.** No protocol-level state about what a being is "doing" right now. If you want to know, read the record.
 
-## Implications for embodiment authors
+## Implications for being authors
 
-If you are writing an embodiment, the contract you implement is:
+If you are writing an being, the contract you implement is:
 
 > Given a record (including inbox), produce side effects and optionally a response. Then end.
 
 You do not maintain in-process state across summonings. Everything you need to know on the next summoning must be written somewhere the next summoning will read.
 
-Embodiments declare:
+Beings declare:
 - `triggerOn`: when summoning happens (`message`, `hook`, `cascade`, `schedule`, combinations)
 - `respondMode`: how the response is delivered (`sync`, `async`, `none`)
-- `permissions`: which intents this embodiment honors (some embodiments only accept `query`; some accept all four)
+- `permissions`: which intents this being honors (some beings only accept `query`; some accept all four)
 
-Everything else, including coordination across summonings, is the embodiment's own design.
+Everything else, including coordination across summonings, is the being's own design.
 
 ## Glossary
 
-**Being.** A position in a tree paired with an embodiment. Identity is `<address>@<embodiment>`.
+**Being.** A position in a tree paired with an being. Identity is `<address>@<being>`.
 
-**Embodiment.** A registered behavior pattern (Ruler, Worker, Oracle, Dreamer, etc.) that describes how a summoning at a position acts.
+**Being.** A registered behavior pattern (Ruler, Worker, Oracle, Dreamer, etc.) that describes how a summoning at a position acts.
 
 **Position.** A node in a tree on a land. Addresses name positions.
 
@@ -82,6 +82,6 @@ Everything else, including coordination across summonings, is the embodiment's o
 
 **Inbox.** Per-being-per-position metadata namespace holding messages that have arrived. Part of the record.
 
-**Intent.** The permission-and-response classifier on a TALK message (`chat`, `place`, `query`, `be`).
+**Intent.** The permission-and-response classifier on a SUMMON message (`chat`, `place`, `query`, `be`).
 
-**Sync vs async vs none.** The embodiment's declared response mode. Sync returns inline; async returns later as a follow-up TALK; none does not respond.
+**Sync vs async vs none.** The being's declared response mode. Sync returns inline; async returns later as a follow-up SUMMON; none does not respond.

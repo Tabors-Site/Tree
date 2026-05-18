@@ -43,12 +43,12 @@ router.post("/gateway/telegram/:channelId", async (req, res) => {
       }
     }
 
-    // Verify chatId matches
-    const expectedChatId = channel.config?.metadata?.chatId;
+    // Verify summonId matches
+    const expectedChatId = channel.config?.metadata?.summonId;
     const actualChatId = String(update.message.chat.id);
     if (expectedChatId && actualChatId !== expectedChatId) {
       log.error("GatewayTelegram",
-        `Telegram chatId mismatch for channel ${channelId}: expected ${expectedChatId}, got ${actualChatId}`,
+        `Telegram summonId mismatch for channel ${channelId}: expected ${expectedChatId}, got ${actualChatId}`,
       );
       return;
     }

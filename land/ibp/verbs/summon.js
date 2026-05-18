@@ -1,23 +1,20 @@
-// TreeOS IBP — TALK verb handler.
+// TreeOS IBP — SUMMON verb handler.
 //
 // Envelope:
 //   { id, stance: "<stance>", identity, message: { from, content,
 //     intent, correlation, inReplyTo?, attachments?, sentAt? } }
 //
-// TALK delivers a message to the inbox of the being at the addressed
-// stance and triggers a summoning. The protocol layer:
+// SUMMON delivers a message to the inbox of the being at the addressed
+// stance and wakes them. The protocol layer:
 //
 //   1. validates the envelope (stance qualified, message shape sane)
-//   2. resolves the stance to a (nodeId, embodiment)
-//   3. looks up the embodiment in the registry; rejects INVALID_INTENT
-//      if the embodiment does not honor the message's intent
+//   2. resolves the stance to a (nodeId, being)
+//   3. looks up the being in the registry; rejects INVALID_INTENT
+//      if the being does not honor the message's intent
 //   4. atomically appends to the inbox
-//   5. fires the embodiment's summoning per its triggerOn declaration
+//   5. fires the being's summoning per its triggerOn declaration
 //   6. for respondMode=sync, holds the ack open until the summoning
 //      returns; ACKs immediately for respondMode=async or none
-//
-// Phase 4 implements sync respond-mode end-to-end with the `echo`
-// embodiment. Async respond-mode lands in Phase 6.
 
 import { randomUUID } from "crypto";
 import log from "../../seed/log.js";
@@ -26,38 +23,39 @@ import { resolveStance } from "../resolver.js";
 import { PortalError, PORTAL_ERR, isPortalError } from "../errors.js";
 import { extractStance, ackOk, ackError } from "../envelope.js";
 import { appendToInbox, markInboxConsumed } from "../inbox.js";
-import { getEmbodiment } from "../embodiments/registry.js";
+import { getRole } from "../roles/registry.js";
 import { authorize } from "../authorize.js";
 import { getLandRootId } from "../../seed/landRoot.js";
 import { getIO } from "../../seed/ws/websocket.js";
+import { attachHandoff, wake } from "../scheduler.js";
 
 const VALID_INTENTS = new Set(["chat", "place", "query", "be"]);
 
 /**
- * Broadcast a TALK reply to every socket the asker being has
+ * Broadcast a SUMMON reply to every socket the asker being has
  * connected. The originating socket may have disconnected during async
  * summoning — other sockets for the same being still see the reply.
  * Falls back to the originating socket when beingId or the io server
  * isn't reachable.
  */
-function emitTalkReply(socket, entry) {
+function emitSummonReply(socket, entry) {
   const beingId = socket?.beingId;
   const io = getIO();
   if (beingId && io) {
     try {
-      io.to(`being:${String(beingId)}`).emit("ibp:talk-reply", entry);
+      io.to(`being:${String(beingId)}`).emit("ibp:summon-reply", entry);
       return;
     } catch {}
   }
   try {
-    if (socket?.connected) socket.emit("ibp:talk-reply", entry);
+    if (socket?.connected) socket.emit("ibp:summon-reply", entry);
   } catch {}
 }
 
-export async function handleTalk(socket, msg, ack) {
+export async function handleSummon(socket, msg, ack) {
   const id = msg?.id || null;
   try {
-    const stanceString = extractStance(msg, "ibp:talk");
+    const stanceString = extractStance(msg, "ibp:summon");
     const message = validateMessage(msg.message);
 
     const parsed = parseFromSocket(socket, stanceString);
@@ -70,8 +68,8 @@ export async function handleTalk(socket, msg, ack) {
     const qualifier = resolved.embodiment;
     if (!qualifier) {
       throw new PortalError(
-        PORTAL_ERR.EMBODIMENT_UNAVAILABLE,
-        "TALK requires a stance with an @qualifier",
+        PORTAL_ERR.ROLE_UNAVAILABLE,
+        "SUMMON requires a stance with an @qualifier",
       );
     }
     if (!resolved.nodeId && resolved.zone === "tree") {
@@ -92,26 +90,26 @@ export async function handleTalk(socket, msg, ack) {
       const targetNode = await Node.findById(resolved.nodeId).select("metadata").lean();
       const emb = targetNode?.metadata instanceof Map
         ? targetNode.metadata.get("beings")
-        : targetNode?.metadata?.embodiments;
+        : targetNode?.metadata?.beings;
       const homeBeingId = emb?.[qualifier]?.beingId || null;
       if (homeBeingId) toBeing = await Being.findById(homeBeingId);
     }
     if (!toBeing) {
       throw new PortalError(
-        PORTAL_ERR.EMBODIMENT_UNAVAILABLE,
+        PORTAL_ERR.ROLE_UNAVAILABLE,
         `No being addressable as "@${qualifier}" at this position`,
       );
     }
 
     // Behavior comes from the role template registered in
-    // embodiments/registry.js. Identity (homePositionId, llmDefault,
+    // roles/registry.js. Identity (homePositionId, llmDefault,
     // history) lives on the Being instance.
-    const embodimentName = toBeing.role || qualifier;
-    const embodiment = getEmbodiment(embodimentName);
-    if (!embodiment) {
+    const beingName = toBeing.role || qualifier;
+    const role = getRole(beingName);
+    if (!role) {
       throw new PortalError(
-        PORTAL_ERR.EMBODIMENT_UNAVAILABLE,
-        `Role template "${embodimentName}" for being @${toBeing.username} is not registered`,
+        PORTAL_ERR.ROLE_UNAVAILABLE,
+        `Role template "${beingName}" for being @${toBeing.username} is not registered`,
       );
     }
 
@@ -119,23 +117,23 @@ export async function handleTalk(socket, msg, ack) {
     const identity = socket.beingId ? { beingId: socket.beingId, username: socket.username } : null;
     const decision = await authorize({
       identity,
-      verb: "talk",
-      target: { kind: "stance", nodeId: resolved.nodeId, embodiment: embodimentName },
+      verb: "summon",
+      target: { kind: "stance", nodeId: resolved.nodeId, embodiment: beingName },
       intent: message.intent,
     });
     if (!decision.ok) {
       throw new PortalError(
         identity ? PORTAL_ERR.FORBIDDEN : PORTAL_ERR.UNAUTHORIZED,
-        `TALK denied for stance "${decision.stance}": ${decision.reason}`,
+        `SUMMON denied for stance "${decision.stance}": ${decision.reason}`,
         { stance: decision.stance },
       );
     }
 
-    if (!embodiment.honoredIntents.includes(message.intent)) {
+    if (!role.honoredIntents.includes(message.intent)) {
       throw new PortalError(
         PORTAL_ERR.INVALID_INTENT,
-        `Embodiment "${embodimentName}" does not honor intent "${message.intent}"`,
-        { honoredIntents: embodiment.honoredIntents },
+        `Role "${beingName}" does not honor intent "${message.intent}"`,
+        { honoredIntents: role.honoredIntents },
       );
     }
 
@@ -150,7 +148,7 @@ export async function handleTalk(socket, msg, ack) {
     if (!inboxNodeId) {
       throw new PortalError(
         PORTAL_ERR.VERB_NOT_SUPPORTED,
-        "TALK at this stance is not yet wired (no inbox target)",
+        "SUMMON at this stance is not yet wired (no inbox target)",
       );
     }
 
@@ -163,7 +161,7 @@ export async function handleTalk(socket, msg, ack) {
 
     const summonCtx = {
       nodeId:     inboxNodeId,
-      embodiment: embodimentName,
+      embodiment: beingName,
       toBeing,                                  // the resolved being instance (receiver)
       message:    { ...message, correlation: messageId, sentAt },
       resolved,
@@ -171,10 +169,10 @@ export async function handleTalk(socket, msg, ack) {
     };
 
     // Sync respond-mode: run summoning inline, ACK with the response.
-    if (embodiment.respondMode === "sync") {
+    if (role.respondMode === "sync") {
       let responseEntry = null;
-      if (embodiment.triggerOn.includes("message")) {
-        responseEntry = await runSummoning(embodiment, summonCtx);
+      if (role.triggerOn.includes("message")) {
+        responseEntry = await runSummoning(role, summonCtx);
       }
       await markInboxConsumed(
         inboxNodeId,
@@ -182,7 +180,7 @@ export async function handleTalk(socket, msg, ack) {
         [messageId],
         {
           responseId: responseEntry?.correlation || null,
-          chatId:     responseEntry?.chatId || null,
+          summonId:     responseEntry?.summonId || null,
         },
       );
       if (!responseEntry) {
@@ -191,40 +189,26 @@ export async function handleTalk(socket, msg, ack) {
       return ackOk(ack, id, responseEntry);
     }
 
-    // Async respond-mode: ACK accepted immediately, run summoning in
-    // the background, and push the response to the sender's socket via
-    // `ibp:talk-reply` when it lands. Errors are surfaced through the
-    // same channel so the client can render an inline error bubble.
-    if (embodiment.respondMode === "async") {
+    // Async respond-mode: ACK accepted immediately, hand the summoning
+    // off to the per-being scheduler. The scheduler serializes Summons
+    // for this being (no two run concurrently), enforces priority order
+    // on each pull, and exposes an AbortController so role templates
+    // can interrupt. The response is pushed to the sender's socket via
+    // `ibp:summon-reply` when summoning completes — and errors land on
+    // the same channel so the client can render an inline error bubble.
+    if (role.respondMode === "async") {
       ackOk(ack, id, { status: "accepted", messageId });
-      runSummoning(embodiment, summonCtx)
-        .then(async (responseEntry) => {
-          try {
-            await markInboxConsumed(
-              inboxNodeId,
-              recipientBeingId,
-              [messageId],
-              {
-                responseId: responseEntry?.correlation || null,
-                chatId:     responseEntry?.chatId || null,
-              },
-            );
-          } catch (err) {
-            log.warn("Portal", `markInboxConsumed failed: ${err.message}`);
-          }
-          // Broadcast the talk-reply to every socket the asker being
-          // has connected — same single-context being model the chat
-          // pipeline uses. The original socket may have disconnected
-          // during the async summoning; other sockets for the same
-          // being still receive the reply.
-          if (responseEntry) {
-            emitTalkReply(socket, responseEntry);
-          }
-        })
-        .catch((err) => {
-          log.error("Portal", `async summoning failed: ${err.message}`);
-          emitTalkReply(socket, {
-            from:        `${pathOfResolved(resolved)}@${embodimentName}`,
+      const responseFromStance = `${pathOfResolved(resolved)}@${beingName}`;
+      attachHandoff(recipientBeingId, messageId, {
+        identity:           summonCtx.identity,
+        resolved,
+        responseFromStance,
+        onResponse: (responseEntry) => {
+          emitSummonReply(socket, responseEntry);
+        },
+        onError: (err) => {
+          emitSummonReply(socket, {
+            from:        responseFromStance,
             content:     `[${err.code || "error"}] ${err.message || "summoning failed"}`,
             intent:      "chat",
             correlation: randomUUID(),
@@ -232,7 +216,9 @@ export async function handleTalk(socket, msg, ack) {
             sentAt:      new Date().toISOString(),
             error:       true,
           });
-        });
+        },
+      });
+      wake(recipientBeingId, inboxNodeId);
       return;
     }
 
@@ -243,7 +229,7 @@ export async function handleTalk(socket, msg, ack) {
     if (isPortalError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("Portal", `ibp:talk failed: ${err.message}`);
+    log.error("IBP", `ibp:summon failed: ${err.message}`);
     return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }
@@ -254,7 +240,7 @@ export async function handleTalk(socket, msg, ack) {
 
 function validateMessage(message) {
   if (!message || typeof message !== "object") {
-    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "TALK requires a `message` object");
+    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "SUMMON requires a `message` object");
   }
   if (!message.intent || !VALID_INTENTS.has(message.intent)) {
     throw new PortalError(
@@ -268,7 +254,7 @@ function validateMessage(message) {
   if (!/@[a-z][a-z0-9-]*$/i.test(message.from)) {
     throw new PortalError(
       PORTAL_ERR.INVALID_INPUT,
-      "`message.from` must be a qualified stance (position@embodiment)",
+      "`message.from` must be a qualified stance (position@being)",
     );
   }
   if (message.content === undefined || message.content === null) {
@@ -277,20 +263,20 @@ function validateMessage(message) {
   return message;
 }
 
-async function runSummoning(embodiment, ctx) {
+async function runSummoning(role, ctx) {
   let result;
   try {
-    result = await embodiment.summon(ctx.message, ctx);
+    result = await role.summon(ctx.message, ctx);
   } catch (err) {
-    log.error("Portal", `embodiment "${ctx.embodiment}" summoning errored: ${err.message}`);
+    log.error("IBP", `being "${ctx.embodiment}" summoning errored: ${err.message}`);
     throw new PortalError(PORTAL_ERR.LLM_FAILED, `Summoning failed: ${err.message}`);
   }
   if (!result || typeof result !== "object") {
     return null; // no-response or place-intent
   }
-  // The embodiment returned a response. Build a response envelope, write
+  // The being returned a response. Build a response envelope, write
   // it to the sender's inbox-equivalent, and return it for sync delivery.
-  // `chatId` (when the embodiment routed through runChat) propagates so
+  // `summonId` (when the being routed through runChat) propagates so
   // the caller's markInboxConsumed can stamp the consumed inbox entry
   // with a pointer to the Chat record this message became.
   const responseCorrelation = randomUUID();
@@ -301,7 +287,7 @@ async function runSummoning(embodiment, ctx) {
     correlation: responseCorrelation,
     inReplyTo:   ctx.message.correlation,
     sentAt:      new Date().toISOString(),
-    chatId:      result.chatId || null,
+    summonId:      result.summonId || null,
   };
 }
 

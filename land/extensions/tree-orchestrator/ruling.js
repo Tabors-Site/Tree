@@ -44,8 +44,8 @@ async function governingExports() {
 // summary lives in the Ruler's tool-result, ~150 tokens; the full
 // emission lives in metadata).
 //
-// chatTracker linkage: parentChatId is threaded through runChat →
-// startChat so the spawned chat is recorded as a child of the Ruler's
+// chatTracker linkage: parentSummonId is threaded through runChat →
+// startSummon so the spawned chat is recorded as a child of the Ruler's
 // chat. Pass 2 court hearings and Pass 3 reputation walks read this
 // linkage to reconstruct chain hierarchy.
 
@@ -60,7 +60,7 @@ async function governingExports() {
  *                   its first user message.
  *   beingId, username
  *   rootId, nodeId  Position context for the spawned session.
- *   parentChatId    The calling chat's chatId (from tool args.chatId).
+ *   parentSummonId    The calling chat's summonId (from tool args.summonId).
  *                   When set, the spawned chat is linked as a child
  *                   for audit walks.
  *   signal          Abort signal threaded from the caller.
@@ -130,7 +130,7 @@ export async function spawnRoleAsChainstep({
   username,
   rootId,
   nodeId,
-  parentChatId,
+  parentSummonId,
   parentSessionId,
   signal,
   source,
@@ -149,13 +149,13 @@ export async function spawnRoleAsChainstep({
   const startedAt = Date.now();
   log.info("Ruling",
     `↪️  spawnRoleAsChainstep: ${modeKey} ` +
-    `(parentChatId=${parentChatId ? String(parentChatId).slice(0, 8) : "(none)"}, ` +
+    `(parentSummonId=${parentSummonId ? String(parentSummonId).slice(0, 8) : "(none)"}, ` +
     `parentSessionId=${parentSessionId ? String(parentSessionId).slice(0, 8) : "(none)"}, ` +
     `signal=${signal ? "live" : "(none)"}, source=${source || "(unset)"})`);
-  if (!parentChatId) {
+  if (!parentSummonId) {
     log.warn("Ruling",
-      `↪️  ${modeKey} spawning WITHOUT parentChatId — chain hierarchy will not link. ` +
-      `Caller's args.chatId was null. Verify executeTool's chat-context injection.`);
+      `↪️  ${modeKey} spawning WITHOUT parentSummonId — chain hierarchy will not link. ` +
+      `Caller's args.summonId was null. Verify executeTool's chat-context injection.`);
   }
   if (!parentSessionId) {
     log.warn("Ruling",
@@ -187,7 +187,7 @@ export async function spawnRoleAsChainstep({
       rootId: rootId || null,
       nodeId: nodeId || null,
       signal: signal || null,
-      parentChatId: parentChatId || null,
+      parentSummonId: parentSummonId || null,
       parentSessionId: parentSessionId || null,
       source: source || `spawn:${modeKey}`,
       // Streaming callbacks — emit spawned role's tool calls +
@@ -242,7 +242,7 @@ export async function spawnRoleAsChainstep({
           modeKey,
           exitText: stripMarkerTokens(String(exitText)).slice(0, 4000),
           rulerNodeId: nodeId ? String(nodeId) : null,
-          parentChatId: parentChatId || null,
+          parentSummonId: parentSummonId || null,
           source: source || null,
           durationMs: ms,
           at: new Date().toISOString(),
@@ -290,7 +290,7 @@ export function spawnRoleAsChainstepAsync({
   username,
   rootId,
   nodeId,
-  parentChatId,
+  parentSummonId,
   parentSessionId,
   signal,
   source,
@@ -423,7 +423,7 @@ export function spawnRoleAsChainstepAsync({
         // Use the spawn-local signal so the kernel's stop button can
         // actually halt this background work via abortAllForUser.
         signal: effectiveSignal,
-        parentChatId: parentChatId || null,
+        parentSummonId: parentSummonId || null,
         parentSessionId: parentSessionId || null,
         source: source || `spawn:${modeKey}`,
         onToolResults: bridgeCallbacks.onToolResults || null,
@@ -526,7 +526,7 @@ export function spawnRoleAsChainstepAsync({
             modeKey,
             exitText: bubbleText,
             rulerNodeId: nodeId ? String(nodeId) : null,
-            parentChatId: parentChatId || null,
+            parentSummonId: parentSummonId || null,
             source: source || null,
             durationMs: ms,
             at: new Date().toISOString(),
@@ -595,7 +595,7 @@ export function spawnRoleAsChainstepAsync({
         beingId: beingId ? String(beingId) : null,
         username: username || null,
         kind: kind || null,
-        parentChatId: parentChatId || null,
+        parentSummonId: parentSummonId || null,
         parentSessionId: parentSessionId || null,
         socket: socket || null,
         signal: signal || null,
@@ -806,7 +806,7 @@ export async function runRulerTurn({
   slot,
   socket,
   sessionId,
-  rootChatId,
+  rootSummonId,
   rt,
   readOnly,
   onToolLoopCheckpoint,
@@ -862,9 +862,9 @@ export async function runRulerTurn({
   }
 
   // Clear any stale decision for this Ruler turn before running it.
-  // The Ruler decision register keys on rootChatId — the user-message-
+  // The Ruler decision register keys on rootSummonId — the user-message-
   // level chat that anchors this whole turn.
-  governing.clearRulerDecision?.(rootChatId);
+  governing.clearRulerDecision?.(rootSummonId);
 
   // Switch to the Ruler mode. The Ruler's buildSystemPrompt reads its
   // own snapshot via state/rulerSnapshot; we don't need to assemble
@@ -887,7 +887,7 @@ export async function runRulerTurn({
     {
       username, beingId, rootId, signal, slot,
       readOnly: false, onToolLoopCheckpoint, socket,
-      sessionId, rootChatId, rt,
+      sessionId, rootSummonId, rt,
       currentNodeId: scopeNodeId,
       dispatchOrigin: "ruler-turn",
     },
@@ -921,8 +921,8 @@ export async function runRulerTurn({
   // point — tools record what was chosen for logging/debugging, but
   // dispatch doesn't read from it. We log the recorded decision (if
   // any) and return the Ruler's synthesis.
-  const decision = governing.getRulerDecision?.(rootChatId) || null;
-  governing.clearRulerDecision?.(rootChatId);
+  const decision = governing.getRulerDecision?.(rootSummonId) || null;
+  governing.clearRulerDecision?.(rootSummonId);
   // Clear the wakeup side-channel so the next turn doesn't inherit
   // stale state. The Ruler mode's buildSystemPrompt has already read
   // it by this point.
@@ -994,7 +994,7 @@ export async function runForemanTurn({
   slot,
   socket,
   sessionId,
-  rootChatId,
+  rootSummonId,
   rt,
   readOnly,
   onToolLoopCheckpoint,
@@ -1011,7 +1011,7 @@ export async function runForemanTurn({
     return { success: false, answer: "Internal error: governing unavailable.", modeKey: null };
   }
 
-  governing.clearForemanDecision?.(rootChatId);
+  governing.clearForemanDecision?.(rootSummonId);
 
   // Foreman's buildSystemPrompt reads ctx.foremanWakeup. switchMode
   // doesn't let us pass arbitrary ctx fields directly, so we attach
@@ -1037,7 +1037,7 @@ export async function runForemanTurn({
     {
       username, beingId, rootId, signal, slot,
       readOnly: false, onToolLoopCheckpoint, socket,
-      sessionId, rootChatId, rt,
+      sessionId, rootSummonId, rt,
       currentNodeId: scopeNodeId,
       dispatchOrigin: "foreman-turn",
     },
@@ -1055,8 +1055,8 @@ export async function runForemanTurn({
 
   clearForemanWakeup(aiSessionKey);
 
-  const decision = governing.getForemanDecision?.(rootChatId) || null;
-  governing.clearForemanDecision?.(rootChatId);
+  const decision = governing.getForemanDecision?.(rootSummonId) || null;
+  governing.clearForemanDecision?.(rootSummonId);
 
   if (!decision) {
     const fallback = foremanResult?._allContent || foremanResult?.answer || foremanResult?.content || "";
@@ -1143,7 +1143,7 @@ export async function runForemanTurn({
   const dispatched = await dispatchForemanDecision({
     decision, scopeNodeId,
     aiSessionKey, username, beingId, rootId,
-    signal, slot, socket, sessionId, rootChatId, rt,
+    signal, slot, socket, sessionId, rootSummonId, rt,
     readOnly, onToolLoopCheckpoint,
   });
   // Surface the Foreman's decision on the returned result so callers
@@ -1159,7 +1159,7 @@ export async function runForemanTurn({
 async function dispatchForemanDecision({
   decision, scopeNodeId,
   aiSessionKey, username, beingId, rootId,
-  signal, slot, socket, sessionId, rootChatId, rt,
+  signal, slot, socket, sessionId, rootSummonId, rt,
   readOnly, onToolLoopCheckpoint,
 }) {
   const governing = await governingExports();
@@ -1234,7 +1234,7 @@ async function dispatchForemanDecision({
             branchName: decision.branchName,
             reason: decision.reason,
             aiSessionKey, username, beingId, rootId,
-            signal, slot, socket, sessionId, rootChatId, rt,
+            signal, slot, socket, sessionId, rootSummonId, rt,
             onToolLoopCheckpoint,
           });
         } else {
@@ -1259,7 +1259,7 @@ async function dispatchForemanDecision({
         aiSessionKey,
         message: escalationMessage,
         username, beingId, rootId, currentNodeId: scopeNodeId,
-        signal, slot, socket, sessionId, rootChatId, rt,
+        signal, slot, socket, sessionId, rootSummonId, rt,
         readOnly, onToolLoopCheckpoint,
         dispatchOrigin: "foreman-escalation",
       });
@@ -1388,7 +1388,7 @@ async function dispatchForemanDecision({
         const summary = await dispatchResumePlan(scopeNodeId, {
           aiSessionKey, beingId, username, rootId,
           sessionId, signal, slot, socket, onToolLoopCheckpoint, rt,
-          rootChatId,
+          rootSummonId,
           // No domain hint — sub-Rulers' own modes are stamped on
           // their plan-trio nodes via ensurePlanAtScope. The runBranch
           // closure in dispatchResumePlan dispatches via runRulerTurn.
@@ -1400,7 +1400,7 @@ async function dispatchForemanDecision({
             aiSessionKey,
             message: "Resume found no pending work; decide whether to freeze (completed) or escalate.",
             username, beingId, rootId, currentNodeId: scopeNodeId,
-            signal, slot, socket, sessionId, rootChatId, rt,
+            signal, slot, socket, sessionId, rootSummonId, rt,
             readOnly, onToolLoopCheckpoint,
             wakeup: { reason: "resume-found-no-work", payload: decision.reason || null },
             depth,

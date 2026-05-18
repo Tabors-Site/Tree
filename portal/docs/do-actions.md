@@ -12,14 +12,14 @@ Everything in TreeOS reduces to: positions have data. The data has namespaces. D
 - **Position-level content**: notes, file artifacts. Changed through named actions (`write-note`, `edit-note`, `upload-artifact`).
 - **Namespaced metadata** in `metadata.<namespace>`. Many kinds:
   - extension namespaces (`metadata.values`, `metadata.codebook`, ...) carry extension-specific data.
-  - embodiment namespaces (`metadata.ruler`, `metadata.archivist`, ...) carry embodiment configuration: system instructions, tools, permissions. When an embodiment is summoned at this position, the summoning reads its configuration from this namespace.
+  - being namespaces (`metadata.ruler`, `metadata.archivist`, ...) carry being configuration: system instructions, tools, permissions. When an being is summoned at this position, the summoning reads its configuration from this namespace.
   - kernel-aware namespaces (`metadata.modes`, `metadata.tools`, `metadata.scope`, `metadata.inbox`) carry first-class protocol state.
 
   All namespaces are written through the same `set-meta` action. The namespace's name is in the payload.
-- **Inbox writes**, technically a kind of namespaced metadata, but happen through **TALK** rather than DO. TALK is its own verb because it triggers summoning; DO would not.
+- **Inbox writes**, technically a kind of namespaced metadata, but happen through **SUMMON** rather than DO. SUMMON is its own verb because it triggers summoning; DO would not.
 - **Land-level operations** (install/disable/uninstall extensions, set-config, publish to Horizon). Same DO grammar, addressed at the Land Position (`<land>/`).
 
-Embodiments are not data targets. They are active instances, summoned on demand to read position data and act. The "programming" of an embodiment is just position data in the embodiment's namespace. There is no separate embodiment-tier of addressing; the only target is the position.
+Beings are not data targets. They are active instances, summoned on demand to read position data and act. The "programming" of an being is just position data in the being's namespace. There is no separate being-tier of addressing; the only target is the position.
 
 ## Address shape
 
@@ -35,7 +35,7 @@ Every DO carries one form. `position` is the only address field.
 }
 ```
 
-DO accepts `position` only. There is no `stance` form. The world is data at positions; embodiments are not data targets. If authorization checks need to know the requester's embodiment, they read it from the identity token, not from the address.
+DO accepts `position` only. There is no `stance` form. The world is data at positions; beings are not data targets. If authorization checks need to know the requester's being, they read it from the identity token, not from the address.
 
 Action names are kebab-case strings. Payload shape varies per action; this document specifies each.
 
@@ -186,7 +186,7 @@ Returns: `{ artifactId, position: "<position>/artifacts/<artifactId>" }`.
 
 ### Namespaced metadata
 
-Writes to `metadata.<namespace>` on the Node document. The same action shape covers every kind of namespace: extension data, embodiment configuration, kernel-aware namespaces (`modes`, `tools`, `scope`).
+Writes to `metadata.<namespace>` on the Node document. The same action shape covers every kind of namespace: extension data, being configuration, kernel-aware namespaces (`modes`, `tools`, `scope`).
 
 #### set-meta
 
@@ -198,13 +198,13 @@ Writes data into a metadata namespace at the position.
 
 - `namespace` (required): the namespace key. Examples:
   - An extension name: `"values"`, `"codebook"`, `"governance"`. Writes the extension's data.
-  - An embodiment name: `"ruler"`, `"archivist"`, `"<custom-embodiment>"`. Writes that embodiment's configuration at this position. When the embodiment is summoned here, the summoning reads from this namespace.
+  - An being name: `"ruler"`, `"archivist"`, `"<custom-being>"`. Writes that being's configuration at this position. When the being is summoned here, the summoning reads from this namespace.
   - A kernel-aware namespace: `"modes"`, `"tools"`, `"scope"`. Writes first-class protocol state.
 - `data` (required): the object to write into `metadata[namespace]`.
 - `merge` (optional, default true): when true, performs a shallow merge with existing data. When false, replaces the namespace contents.
 
 The kernel enforces:
-- Reserved namespace names cannot be written through this action (the kernel owns them: `inbox` for example, which is written through TALK).
+- Reserved namespace names cannot be written through this action (the kernel owns them: `inbox` for example, which is written through SUMMON).
 - For extension namespaces: the extension must not be blocked at this position (scope check).
 - The requesting identity must be authorized to write to this namespace at this position. Authorization is action+namespace-keyed: writing `metadata.ruler` may require ruler-level role; writing `metadata.values` may only require contributor role.
 
@@ -319,22 +319,22 @@ No new route. No new action name. The extension's logic for handling the write m
 
 The kernel does the dispatching. The extension does the reacting.
 
-## What configuring an embodiment looks like in DO terms
+## What configuring an being looks like in DO terms
 
-Configuring how a `@ruler` embodiment behaves at a position is the same shape: a `set-meta` write to the embodiment's namespace.
+Configuring how a `@ruler` being behaves at a position is the same shape: a `set-meta` write to the being's namespace.
 
 ```
 { verb: "do", action: "set-meta", position: "<position>", identity, payload: { namespace: "ruler", data: { systemInstructions: "...", tools: ["..."], permissions: { ... } } } }
 ```
 
-When `@ruler` is summoned at this position, the summoning reads `metadata.ruler` from the position and acts according to it. The embodiment itself does not store anything; the position holds the configuration the embodiment reads.
+When `@ruler` is summoned at this position, the summoning reads `metadata.ruler` from the position and acts according to it. The being itself does not store anything; the position holds the configuration the being reads.
 
 ## What about complex extension operations?
 
 Extensions sometimes have multi-step or computed operations (e.g., the `prune` extension's "scan stale branches" produces a list, not a metadata write). Two options:
 
 1. **Register a named DO action** (as `compress`, `prune`, etc. do above). The extension owns the dispatcher payload + return shape. Use this when the operation has a clear request/response surface from the user's side.
-2. **Expose a TALK-engaged being** (an embodiment whose summoning runs the operation). Use this when the operation is conversational, ongoing, or wants the being-summoned mental model (LLM reasoning, multi-step decisions, async work).
+2. **Expose a SUMMON-engaged being** (an being whose summoning runs the operation). Use this when the operation is conversational, ongoing, or wants the being-summoned mental model (LLM reasoning, multi-step decisions, async work).
 
 Example: an extension that wants to expose a tool the AI can use does NOT add a DO action; it registers a tool through the existing tool registry. The AI invokes the tool during a summoning; that is not a DO from the user's side.
 
@@ -344,11 +344,11 @@ DO authorization is action+namespace-keyed. The chain:
 
 1. Identity must be valid (`UNAUTHORIZED` if not).
 2. Identity must have write access at the position (`FORBIDDEN` if not).
-3. The action must be permitted for this identity at this position. The kernel resolves the active role from the address (the embodiment qualifier in `stance`, if present) and checks per-action permission. Some actions (`install-extension`, `set-config`) require `isAdmin`.
+3. The action must be permitted for this identity at this position. The kernel resolves the active role from the address (the being qualifier in `stance`, if present) and checks per-action permission. Some actions (`install-extension`, `set-config`) require `isAdmin`.
 4. For namespaced-metadata writes (`set-meta`, `clear-meta`):
    - The namespace must not be a reserved kernel namespace (`inbox` is not writable via set-meta).
    - For extension namespaces: the extension must not be blocked at this position (scope check).
-   - For embodiment namespaces: writing the embodiment's configuration may require a higher-trust role than writing extension data; the kernel applies the per-namespace policy.
+   - For being namespaces: writing the being's configuration may require a higher-trust role than writing extension data; the kernel applies the per-namespace policy.
 
 Hooks `beforeNodeCreate`, `beforeNote`, `beforeContribution`, `beforeStatusChange`, `beforeNodeDelete`, `beforeMetadataWrite` continue to fire as today. Extensions can gate DO actions through these hooks.
 

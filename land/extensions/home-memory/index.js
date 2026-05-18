@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
 import Artifact from "../../seed/models/artifact.js";
-import Chat from "../../seed/models/chat.js";
+import Summon from "../../seed/models/summon.js";
 import Being from "../../seed/models/being.js";
 import { createArtifact } from "../../seed/tree/artifacts.js";
 import { getArtifacts } from "../../seed/tree/artifacts.js";
@@ -286,7 +286,7 @@ async function summarizeSession(beingId, sessionId, runChat) {
   const windowFloor = Date.now() - SUMMARY_WINDOW_MS;
   const sinceTime = Math.max(lastTime, windowFloor);
 
-  const chats = await Chat.find({
+  const chats = await Summon.find({
     beingIn: beingId,
     "aiContext.zone": "home",
     "startMessage.time": { $gt: new Date(sinceTime) },

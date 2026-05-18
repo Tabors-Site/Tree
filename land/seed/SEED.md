@@ -489,10 +489,10 @@ These keys are configurable via `treeos config set` but most lands never need to
 | treeSummaryRecentArtifacts | 3 | Recent artifacts shown per node in tree summary |
 | treeSummaryPreviewChars | 200 | Characters of artifact content shown in preview |
 | chatContributionQueryLimit | 2000 | Max contributions linked per chat finalization |
-| chatHistoryMaxSessions | 50 | Max sessions returned per chat history query |
-| chatHistoryMaxChatsPerSession | 200 | Max chain steps loaded per session |
-| chatHistoryMaxDescendantIds | 500 | Cap on includeChildren node expansion |
-| chatHistoryMaxContributions | 5000 | Cap on contribution documents per chat history query |
+| summonHistoryMaxSessions | 50 | Max sessions returned per summon history query |
+| summonHistoryMaxSummonsPerSession | 200 | Max chain steps loaded per session |
+| summonHistoryMaxDescendantIds | 500 | Cap on includeChildren node expansion |
+| summonHistoryMaxDids | 5000 | Cap on did documents per summon history query |
 | maxChatContentBytes | 100000 | Max bytes stored per chat message (100KB) |
 | maxChainStepContentBytes | 2000 | Max bytes per orchestrator chain step log |
 | maxInheritedStatusNodes | 10000 | Max nodes affected by one inherited status change |

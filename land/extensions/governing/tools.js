@@ -468,7 +468,7 @@ export default function getGoverningTools(core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        // The MCP HTTP layer injects beingId, rootId, nodeId, chatId,
+        // The MCP HTTP layer injects beingId, rootId, nodeId, summonId,
         // sessionId into `args` on every call (loader's passthrough
         // schema wrapping preserves them). `core` comes from this
         // closure, not from args. Match code-workspace tools.js.

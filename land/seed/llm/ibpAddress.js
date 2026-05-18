@@ -1,21 +1,21 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 //
-// Canonical Portal Address helpers for chat storage.
+// Canonical IBP Address helpers for summon storage.
 //
-// A Portal Address is the protocol's stance-to-stance address grammar:
-// `<stance> :: <stance>` where each stance is `<land>/<path>@<embodiment>`.
-// Chats are records of one stance addressing another, so the natural
-// identifier for grouping chats — "every chat at this Portal Address" —
-// is just the Portal Address itself in canonical sorted form.
+// An IBP Address is the protocol's stance-to-stance address grammar:
+// `<stance> :: <stance>` where each stance is `<land>/<path>@<being>`.
+// Summons are records of one stance addressing another, so the natural
+// identifier for grouping summons — "every summon at this IBP Address" —
+// is just the IBP Address itself in canonical sorted form.
 //
 // "Canonical sorted" means the two stances are sorted lexicographically
-// so directional Portal Addresses A→B and B→A resolve to the same
+// so directional IBP Addresses A→B and B→A resolve to the same
 // stored key. Storage form mirrors the protocol's format() output
 // (joined with ` :: `).
 //
 // Path form: this module uses nodeId-rooted path form (`/<nodeId>`) so
-// stored Portal Addresses survive node renames. Renaming a node would
-// otherwise fork every historical Portal Address it appears in, which
+// stored IBP Addresses survive node renames. Renaming a node would
+// otherwise fork every historical IBP Address it appears in, which
 // is exactly the kind of provenance break we want to avoid. The protocol
 // parser separately handles the human-readable path form; both forms
 // are valid expressions of the same address grammar.
@@ -49,7 +49,7 @@ export function getLandDomain() {
  *
  * Output: `<land>/<nodeId>@<username>` (nodeId-rooted path form).
  * Returns null when nodeId or username is missing — incomplete stances
- * are not addressable as Portal Address halves.
+ * are not addressable as IBP Address halves.
  */
 export function stanceString(input) {
   if (input == null) return null;
@@ -67,7 +67,7 @@ export function stanceString(input) {
 const SEPARATOR = " :: ";
 
 /**
- * Canonical sorted Portal Address for a stance pair.
+ * Canonical sorted IBP Address for a stance pair.
  *
  * Returns `<smaller> :: <larger>` where the two stances are sorted
  * lexicographically. A→B and B→A produce the same string — that's the
@@ -79,7 +79,7 @@ const SEPARATOR = " :: ";
  * talking to itself at the same position has a degenerate Portal
  * Address that's still valid.
  */
-export function canonicalPortalAddress(stanceA, stanceB) {
+export function canonicalIbpAddress(stanceA, stanceB) {
   const a = stanceString(stanceA);
   const b = stanceString(stanceB);
   if (!a || !b) return null;
@@ -88,24 +88,24 @@ export function canonicalPortalAddress(stanceA, stanceB) {
 }
 
 /**
- * Split a canonical Portal Address back into its two stance strings.
+ * Split a canonical IBP Address back into its two stance strings.
  * Returns [a, b] (sorted, same order as in the stored form), or [s]
  * for self-addressed, or [] for invalid input.
  */
-export function parsePortalAddress(portalAddress) {
-  if (typeof portalAddress !== "string" || portalAddress.length === 0) return [];
-  return portalAddress.split(SEPARATOR).filter(Boolean);
+export function parseIbpAddress(ibpAddress) {
+  if (typeof ibpAddress !== "string" || ibpAddress.length === 0) return [];
+  return ibpAddress.split(SEPARATOR).filter(Boolean);
 }
 
 /**
- * Predicate: does this Portal Address include the given stance?
+ * Predicate: does this IBP Address include the given stance?
  * Exact stance-string match against either side.
  */
-export function portalAddressIncludes(portalAddress, stance) {
-  if (!portalAddress) return false;
+export function ibpAddressIncludes(ibpAddress, stance) {
+  if (!ibpAddress) return false;
   const stanceStr = stanceString(stance);
   if (!stanceStr) return false;
-  return parsePortalAddress(portalAddress).includes(stanceStr);
+  return parseIbpAddress(ibpAddress).includes(stanceStr);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -113,7 +113,7 @@ export function portalAddressIncludes(portalAddress, stance) {
 // ─────────────────────────────────────────────────────────────────────
 //
 // Used by chat writers that have a beingId in hand and need to compose
-// a stance for the Portal Address. The being's current position is
+// a stance for the IBP Address. The being's current position is
 // looked up; for humans this is wherever they navigated to (cached at
 // the conversation layer; persisted lookup may be added later), for
 // AI beings it defaults to their homePositionId.
@@ -169,7 +169,7 @@ export function invalidateStanceCache(beingId) {
  * username is always read from the Being record.
  *
  * Returns `{ land, nodeId, username }` ready to feed into stanceString
- * or canonicalPortalAddress. Returns null when the being cannot be
+ * or canonicalIbpAddress. Returns null when the being cannot be
  * loaded or has no valid position to anchor at.
  */
 export async function resolveStance(beingId, { currentPosition = null, land = null } = {}) {
@@ -186,15 +186,15 @@ export async function resolveStance(beingId, { currentPosition = null, land = nu
 }
 
 /**
- * Compute the canonical Portal Address for a chat between two beings.
+ * Compute the canonical IBP Address for a summon between two beings.
  *
- * Convenience over `resolveStance` + `canonicalPortalAddress` — most
+ * Convenience over `resolveStance` + `canonicalIbpAddress` — most
  * writers want both steps as one call. Returns null when either side
  * cannot be resolved (caller should tolerate the null; legacy chats
  * and system tasks without a paired being have always been allowed
- * to skip the Portal Address.)
+ * to skip the IBP Address.)
  */
-export async function computePortalAddressForChat({
+export async function computeIbpAddressForSummon({
   askerBeingId,
   askerPosition = null,
   addresseeBeingId,
@@ -204,10 +204,10 @@ export async function computePortalAddressForChat({
   try {
     const askerStance = await resolveStance(askerBeingId, { currentPosition: askerPosition, land });
     const addresseeStance = await resolveStance(addresseeBeingId, { currentPosition: addresseePosition, land });
-    return canonicalPortalAddress(askerStance, addresseeStance);
+    return canonicalIbpAddress(askerStance, addresseeStance);
   } catch (err) {
-    log.debug("PortalAddress",
-      `computePortalAddressForChat failed (asker=${String(askerBeingId).slice(0, 8)}, addressee=${String(addresseeBeingId).slice(0, 8)}): ${err.message}`);
+    log.debug("IbpAddress",
+      `computeIbpAddressForSummon failed (asker=${String(askerBeingId).slice(0, 8)}, addressee=${String(addresseeBeingId).slice(0, 8)}): ${err.message}`);
     return null;
   }
 }

@@ -5,9 +5,9 @@
 // Each conversation gets one MCP client. The cache key — `cacheKey` —
 // identifies the conversation:
 //
-//   - Being-to-being conversations key on `portalAddress` (the canonical
-//     stance::stance Portal Address). All sockets / chainsteps in the
-//     same Portal Address share one MCP client. Tabor on web and Tabor
+//   - Being-to-being conversations key on `ibpAddress` (the canonical
+//     stance::stance IBP Address). All sockets / chainsteps in the
+//     same IBP Address share one MCP client. Tabor on web and Tabor
 //     on CLI talking to the same Ruler at /MyTree use one client
 //     because they're in the same conversation under the single-context
 //     being model.
@@ -26,7 +26,7 @@
 // sockets for the same being might still be in the conversation. That
 // shift comes with the being-room WS broadcast slice; until then the
 // disconnect-close path becomes a soft no-op for being-to-being keys
-// (the lookup misses because the live cache entry is under portalAddress)
+// (the lookup misses because the live cache entry is under ibpAddress)
 // and continues to work for stanceless background pipelines whose key
 // matches their disconnect handler.
 

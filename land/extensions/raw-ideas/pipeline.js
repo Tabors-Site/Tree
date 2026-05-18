@@ -131,7 +131,7 @@ export async function orchestrateRawIdeaPlacement({
     logDid({
       beingId,
       nodeId: DELETED,
-      chatId: rt.mainChatId,
+      summonId: rt.mainChatId,
       sessionId: rt.sessionId,
       action: "rawIdea",
       nodeVersion: "0",
@@ -194,7 +194,7 @@ export async function orchestrateRawIdeaPlacement({
       rootId: chosenRootId,
       skipRespond: !withResponse,
       slot: "rawIdea",
-      rootChatId: rt.mainChatId,
+      rootSummonId: rt.mainChatId,
       sourceType: withResponse ? "raw-idea-chat" : "raw-idea-place",
       sourceId: rawIdeaId.toString(),
     });
@@ -262,7 +262,7 @@ export async function orchestrateRawIdeaPlacement({
     await logDid({
       beingId,
       nodeId: targetNodeId,
-      chatId: rt.mainChatId,
+      summonId: rt.mainChatId,
       sessionId: rt.sessionId,
       action: "rawIdea",
       nodeVersion,
@@ -303,7 +303,7 @@ export async function orchestrateRawIdeaPlacement({
       logDid({
         beingId,
         nodeId: DELETED,
-        chatId: rt.mainChatId,
+        summonId: rt.mainChatId,
         sessionId: rt.sessionId,
         action: "rawIdea",
         nodeVersion: "0",

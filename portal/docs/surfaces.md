@@ -16,7 +16,7 @@ The primary navigation surface. Always at the top.
 ```
 
 - **Left chip**: identity (signed-in being). Not editable. Click → roster dropdown to switch.
-- **Right text**: the destination stance (`land/path@embodiment`). Editable. The `::` bridge is rendered between them but not editable as a character.
+- **Right text**: the destination stance (`land/path@being`). Editable. The `::` bridge is rendered between them but not editable as a character.
 
 ### Behaviors
 
@@ -24,9 +24,9 @@ The primary navigation surface. Always at the top.
 - **Auto-complete** triggers on:
   - `~` → user homes in the current land
   - `/` → child paths from current position, then siblings, then known trees
-  - `@` → embodiments invocable at the current right-side path (from the Position Description's `beings:`)
+  - `@` → beings invocable at the current right-side path (from the Position Description's `beings:`)
   - bare typing → fuzzy match against navigation history + favorites
-- **Paste a full PA** (`tabor::treeos.ai/foo@ruler`) → portal parses it; if the left side matches the current identity it just navigates; if it doesn't, prompt to switch.
+- **Paste a full IBPA** (`tabor::treeos.ai/foo@ruler`) → portal parses it; if the left side matches the current identity it just navigates; if it doesn't, prompt to switch.
 - **Bridge mode** — typing `::` in the right-side field signals the user wants to address ANOTHER stance from theirs. Used for AI-to-AI bridges later. Pass 1: surface as advanced; the simple case is "I (left stance) address X (right stance)."
 
 ### Visual states
@@ -34,7 +34,7 @@ The primary navigation surface. Always at the top.
 - Normal: monospace text, subtle highlight on focused field
 - Loading: indicator next to the address while the Position Description is being fetched
 - Error: red highlight on the bad segment of the address with the parser's error message in a tooltip
-- Authorized-but-degraded: yellow pill ("guest"/"read-only") next to the embodiment when the identity can browse but not invoke
+- Authorized-but-degraded: yellow pill ("guest"/"read-only") next to the being when the identity can browse but not invoke
 
 ## 2. Identity panel
 
@@ -120,7 +120,7 @@ Sidebar or floating dock. Where the user talks to beings.
 
 ### Multi-thread model
 
-The user can have many chat threads open simultaneously — each addressing a different being at a different position. Switching threads is a click; the input bar retargets. Each thread's address (the PA bridge) is shown in the thread header.
+The user can have many chat threads open simultaneously — each addressing a different being at a different position. Switching threads is a click; the input bar retargets. Each thread's address (the IBPA bridge) is shown in the thread header.
 
 ### Inline rich content
 
@@ -167,7 +167,7 @@ Visualizes the local tree structure around the current position. Sidebar compone
 
 - Click any node → navigate to it.
 - Lifecycle pills next to each child (running / completed / stalled / idle).
-- Right-click → contextual actions (open in new tab, switch embodiment, view governance dashboard).
+- Right-click → contextual actions (open in new tab, switch being, view governance dashboard).
 - Drag a node to a chat thread → references it in the chat message.
 - Search inline (Ctrl-F) → fuzzy search across the local tree subgraph.
 
@@ -194,11 +194,11 @@ Multiple extensions can be active; the user controls which panels are expanded.
 
 ## Tabs
 
-Multiple PAs open at once. Each tab is one Portal Address.
+Multiple IBPAs open at once. Each tab is one IBP Address.
 
 ### Tab title
 
-Shows `<embodiment-emoji> <path-tail>@<embodiment>`. E.g., `👑 tagay-book@ruler`. Hover shows the full PA.
+Shows `<being-emoji> <path-tail>@<being>`. E.g., `👑 tagay-book@ruler`. Hover shows the full IBPA.
 
 ### Tab pinning
 

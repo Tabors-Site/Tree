@@ -4,30 +4,33 @@
 // `metadata.inbox.<beingId>` on the Node document. The kernel treats
 // `inbox` as a reserved namespace: it cannot be written through DO
 // set-meta (see actions/set-meta.js), only through these primitives,
-// which TALK uses.
+// which SUMMON uses.
 //
 // **Layering.** The inbox is *delivery infrastructure*, not conversation
 // history. Three distinct layers:
 //
-//   1. Portal Address — protocol-level addressing (sender / receiver stances).
-//   2. Chats — first-class exchange records. Conversation history. Stored
-//      with portalAddress, beingIn, beingOut, content.
-//   3. Inbox — the delivery queue at a position. Pending TALK messages
-//      before they get processed into Chats.
+//   1. IBP Address — protocol-level addressing (sender / receiver stances).
+//   2. Summons — first-class exchange records. Conversation history. Stored
+//      with ibpAddress, beingIn, beingOut, content.
+//   3. Inbox — the delivery queue at a position. Pending SUMMON messages
+//      before they get processed into Summons.
 //
 // An inbox entry is a *message in flight*. Once a being's summoning runs,
-// the message is processed into one or more Chat records; the inbox entry
-// is marked consumed and points at the resulting `chatId`. Trace from
-// incoming TALK → resulting chat → Portal Address using these references.
+// the message is processed into one or more Summon records; the inbox entry
+// is marked consumed and points at the resulting `summonId`. Trace from
+// incoming SUMMON → resulting summon record → IBP Address using these references.
 //
 // Each inbox entry:
 //   {
 //     from, content, intent, correlation, inReplyTo?, attachments?, sentAt,
+//     priority:    number   (LLM_PRIORITY-compatible: lower = higher precedence)
+//     rootCorrelation: string  (originating user message correlation, propagated through reply chains)
 //     consumed:    boolean,
+//     cancelledAt: ISO8601 | null  (set by cancelByRootCorrelation; scheduler skips cancelled entries)
 //     consumedAt?: ISO8601,
 //     summonedAt?: ISO8601,
 //     responseId?: <correlation id of the response, if any>,
-//     chatId?:     <id of the Chat record this message was processed into>,
+//     summonId?:   <id of the Summon record this message was processed into>,
 //   }
 //
 // Operations are atomic against the Node document. No read-modify-write
@@ -42,12 +45,20 @@ import Node from "../seed/models/node.js";
 
 const INBOX_NS = "inbox";
 
+// Priority defaults track LLM_PRIORITY (lower number = higher precedence).
+// Kept here as a local fallback so callers that don't pass priority still
+// get a deterministic, conservative HUMAN default.
+const DEFAULT_PRIORITY = 1;
+
 /**
  * Append a message to a being's inbox at this position.
  *
  * @param {string} nodeId
  * @param {string} beingId   the receiver Being's _id
- * @param {object} message   TALK envelope payload (from, content, intent, ...)
+ * @param {object} message   SUMMON envelope payload (from, content, intent, ...)
+ *                           Optional new fields:
+ *                             priority:        number, lower = higher precedence
+ *                             rootCorrelation: string, originating message id
  * @returns {Promise<{ messageId, sentAt }>}
  */
 export async function appendToInbox(nodeId, beingId, message) {
@@ -57,20 +68,30 @@ export async function appendToInbox(nodeId, beingId, message) {
 
   const sentAt = message.sentAt || new Date().toISOString();
   const messageId = message.correlation || randomUUID();
+  // rootCorrelation defaults to this message's own correlation. Reply
+  // chains propagate the originator's correlation by passing it through
+  // explicitly; root SUMMONs (no rootCorrelation supplied) ARE their
+  // own root, which keeps cancelByRootCorrelation symmetric for both
+  // standalone messages and chain heads.
+  const rootCorrelation = message.rootCorrelation || messageId;
+  const priority = Number.isFinite(message.priority) ? Number(message.priority) : DEFAULT_PRIORITY;
 
   const entry = {
-    from:         message.from || null,
-    content:      message.content ?? null,
-    intent:       message.intent || "chat",
-    correlation:  messageId,
-    inReplyTo:    message.inReplyTo || null,
-    attachments:  Array.isArray(message.attachments) ? message.attachments : [],
+    from:            message.from || null,
+    content:         message.content ?? null,
+    intent:          message.intent || "chat",
+    correlation:     messageId,
+    rootCorrelation,
+    priority,
+    inReplyTo:       message.inReplyTo || null,
+    attachments:     Array.isArray(message.attachments) ? message.attachments : [],
     sentAt,
-    consumed:     false,
-    summonedAt:   null,
-    consumedAt:   null,
-    responseId:   null,
-    chatId:       null,
+    consumed:        false,
+    cancelledAt:     null,
+    summonedAt:      null,
+    consumedAt:      null,
+    responseId:      null,
+    summonId:        null,
   };
 
   // Atomic $push to the per-being bucket. Mongo creates the path if it
@@ -119,7 +140,7 @@ export async function readInbox(nodeId, beingId, options = {}) {
  * @param {string[]} correlationIds   ids of entries being consumed
  * @param {object}   [opts]
  * @param {string}   [opts.responseId] correlation id of the response, if any
- * @param {string}   [opts.chatId]     id of the Chat record this message was
+ * @param {string}   [opts.summonId]     id of the Chat record this message was
  *                                     processed into (the inbox entry now
  *                                     points at conversation history).
  *
@@ -133,12 +154,12 @@ export async function markInboxConsumed(nodeId, beingId, correlationIds, opts = 
     return { consumed: 0 };
   }
   let responseId = null;
-  let chatId = null;
+  let summonId = null;
   if (typeof opts === "string") {
     responseId = opts;
   } else if (opts && typeof opts === "object") {
     responseId = opts.responseId ?? null;
-    chatId     = opts.chatId ?? null;
+    summonId     = opts.summonId ?? null;
   }
 
   const consumedAt = new Date().toISOString();
@@ -157,13 +178,108 @@ export async function markInboxConsumed(nodeId, beingId, correlationIds, opts = 
     updates[`${base}.consumed`]   = true;
     updates[`${base}.consumedAt`] = consumedAt;
     if (responseId) updates[`${base}.responseId`] = responseId;
-    if (chatId)     updates[`${base}.chatId`]     = chatId;
+    if (summonId)     updates[`${base}.summonId`]     = summonId;
     consumed++;
   });
 
   if (consumed === 0) return { consumed: 0 };
   await Node.updateOne({ _id: nodeId }, { $set: updates });
   return { consumed };
+}
+
+/**
+ * Pick the next entry the scheduler should process for this being.
+ * Highest priority first (lowest number wins); ties break to oldest
+ * (lowest array index, which is the earliest $push). Skips entries
+ * already consumed or cancelled.
+ *
+ * Returns `null` when the inbox has nothing actionable.
+ *
+ * @param {string} nodeId
+ * @param {string} beingId
+ * @returns {Promise<null | { entry: object, index: number }>}
+ */
+export async function pickNextEntry(nodeId, beingId) {
+  if (!nodeId || !beingId) return null;
+  const node = await Node.findById(nodeId)
+    .select(`metadata.${INBOX_NS}.${beingId}`)
+    .lean();
+  const bucket = readMetaPath(node, [INBOX_NS, beingId]);
+  if (!Array.isArray(bucket) || bucket.length === 0) return null;
+
+  let bestIdx = -1;
+  let bestPriority = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < bucket.length; i++) {
+    const e = bucket[i];
+    if (!e || e.consumed || e.cancelledAt) continue;
+    const p = Number.isFinite(e.priority) ? Number(e.priority) : DEFAULT_PRIORITY;
+    // Strictly less-than keeps the earliest array index (oldest) on ties.
+    if (p < bestPriority) {
+      bestPriority = p;
+      bestIdx = i;
+    }
+  }
+  if (bestIdx < 0) return null;
+  return { entry: bucket[bestIdx], index: bestIdx };
+}
+
+/**
+ * Mark every pending (non-consumed, non-cancelled) entry whose
+ * rootCorrelation matches as cancelled. Used by role templates that
+ * decide to cancel downstream work after receiving a cancel SUMMON,
+ * and by system cleanup paths.
+ *
+ * Returns the count of entries cancelled.
+ *
+ * @param {string} nodeId
+ * @param {string} beingId
+ * @param {string} rootCorrelation
+ * @returns {Promise<{ cancelled: number, correlations: string[] }>}
+ */
+export async function cancelByRootCorrelation(nodeId, beingId, rootCorrelation) {
+  if (!nodeId || !beingId || !rootCorrelation) {
+    return { cancelled: 0, correlations: [] };
+  }
+  const node = await Node.findById(nodeId)
+    .select(`metadata.${INBOX_NS}.${beingId}`)
+    .lean();
+  const bucket = readMetaPath(node, [INBOX_NS, beingId]);
+  if (!Array.isArray(bucket)) return { cancelled: 0, correlations: [] };
+
+  const cancelledAt = new Date().toISOString();
+  const updates = {};
+  const correlations = [];
+  bucket.forEach((entry, i) => {
+    if (!entry || entry.consumed || entry.cancelledAt) return;
+    if (entry.rootCorrelation !== rootCorrelation) return;
+    updates[`metadata.${INBOX_NS}.${beingId}.${i}.cancelledAt`] = cancelledAt;
+    correlations.push(entry.correlation);
+  });
+  if (correlations.length === 0) return { cancelled: 0, correlations: [] };
+  await Node.updateOne({ _id: nodeId }, { $set: updates });
+  return { cancelled: correlations.length, correlations };
+}
+
+/**
+ * Stamp the moment the scheduler picked an entry up (informational —
+ * the scheduler can compare summonedAt vs consumedAt to spot crashes
+ * where a Summon started but didn't finish). Idempotent: a second call
+ * leaves the first timestamp in place.
+ *
+ * Index is required because correlation lookup would race with concurrent
+ * appends; the scheduler already knows the index from pickNextEntry.
+ *
+ * @param {string} nodeId
+ * @param {string} beingId
+ * @param {number} index    array index returned by pickNextEntry
+ */
+export async function markSummoned(nodeId, beingId, index) {
+  if (!nodeId || !beingId || !Number.isInteger(index) || index < 0) return;
+  const summonedAt = new Date().toISOString();
+  await Node.updateOne(
+    { _id: nodeId },
+    { $set: { [`metadata.${INBOX_NS}.${beingId}.${index}.summonedAt`]: summonedAt } },
+  );
 }
 
 /**

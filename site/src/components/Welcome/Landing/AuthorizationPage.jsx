@@ -46,7 +46,7 @@ const AuthorizationPage = () => {
           <pre className="lp-envelope-code" style={{maxWidth: 760, margin: "0 auto"}}>{`authorize(
   actingStance,   // who is making the request
   target,         // a Position or a Stance
-  verb,           // "see" | "do" | "talk" | "be"
+  verb,           // "see" | "do" | "summon" | "be"
   details         // { action?, payload?, operation?, message? }
 ) → "allow" | "deny"`}</pre>
 
@@ -78,7 +78,7 @@ const AuthorizationPage = () => {
               <div className="ibp-auth-input-body">
                 <div className="ibp-auth-input-head">Target</div>
                 <div className="ibp-auth-input-source">From the envelope's address field</div>
-                <p>The right side of the portal connection. A Position (for SEE, DO) or a Stance (for SEE, TALK, BE). What is being addressed.</p>
+                <p>The right side of the portal connection. A Position (for SEE, DO) or a Stance (for SEE, SUMMON, BE). What is being addressed.</p>
               </div>
             </div>
             <div className="ibp-auth-input">
@@ -86,7 +86,7 @@ const AuthorizationPage = () => {
               <div className="ibp-auth-input-body">
                 <div className="ibp-auth-input-head">Verb and details</div>
                 <div className="ibp-auth-input-source">From the envelope</div>
-                <p>SEE, DO, TALK, or BE, plus the verb-specific specifics. The action name and payload namespace for DO. The message and intent for TALK. The operation for BE. Different details for different verbs.</p>
+                <p>SEE, DO, SUMMON, or BE, plus the verb-specific specifics. The action name and payload namespace for DO. The message and intent for SUMMON. The operation for BE. Different details for different verbs.</p>
               </div>
             </div>
             <div className="ibp-auth-input">
@@ -120,7 +120,7 @@ const AuthorizationPage = () => {
             </div>
             <div className="ibp-real-card">
               <div className="ibp-real-head">Beings are checked too</div>
-              <p>Beings invoking other beings through TALK flow through the same function. The protocol does not split "user requests" from "being requests" at the authorization layer; both are stance-bearing entities making verb calls.</p>
+              <p>Beings invoking other beings through SUMMON flow through the same function. The protocol does not split "user requests" from "being requests" at the authorization layer; both are stance-bearing entities making verb calls.</p>
             </div>
             <div className="ibp-real-card">
               <div className="ibp-real-head">Federation has a substrate</div>
@@ -139,18 +139,18 @@ const AuthorizationPage = () => {
           </p>
 
           <pre className="lp-envelope-code" style={{maxWidth: 760, margin: "0 auto"}}>{`// at the Land Position
-metadata.embodiments.arrival.permissions   = { see, do, talk, be }
-metadata.embodiments.owner.permissions     = { see, do, talk, be }
-metadata.embodiments.guest.permissions     = { see, do, talk, be }
-metadata.embodiments.member.permissions    = { see, do, talk, be }
-metadata.embodiments.moderator.permissions = { see, do, talk, be }
+metadata.beings.arrival.permissions   = { see, do, summon, be }
+metadata.beings.owner.permissions     = { see, do, summon, be }
+metadata.beings.guest.permissions     = { see, do, summon, be }
+metadata.beings.member.permissions    = { see, do, summon, be }
+metadata.beings.moderator.permissions = { see, do, summon, be }
 // ...whatever stance vocabulary the land defines
 
 // verb shape (simple allow-lists per verb):
-metadata.embodiments.<stance>.permissions = {
+metadata.beings.<stance>.permissions = {
   see:  { allowed_visibility: ["public"] | [] },
   do:   { allowed_actions:    [] | ["action", ...] | "*" },
-  talk: { allowed_targets:    [] | ["@embodiment", ...] | "*" },
+  summon: { allowed_targets:    [] | ["@being", ...] | "*" },
   be:   { allowed_operations: ["register", "claim", "release", "switch"] }
 }`}</pre>
 
@@ -175,7 +175,7 @@ metadata.embodiments.<stance>.permissions = {
           <div className="ibp-cases">
             <div className="ibp-case ibp-case-arrival">
               <div className="ibp-case-head">No identity token on the request</div>
-              <p>The requester is a stranger to the protocol — no signed-in identity anywhere. The land treats them as <strong>arrival stance</strong> and looks up <code>metadata.embodiments.arrival.permissions</code> on its own configuration. This is what arrival is for: visitors with no identity at all.</p>
+              <p>The requester is a stranger to the protocol — no signed-in identity anywhere. The land treats them as <strong>arrival stance</strong> and looks up <code>metadata.beings.arrival.permissions</code> on its own configuration. This is what arrival is for: visitors with no identity at all.</p>
             </div>
             <div className="ibp-case ibp-case-identified">
               <div className="ibp-case-head">Identity token present on the request</div>

@@ -65,7 +65,7 @@ const ArrivalPage = () => {
           </div>
 
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 24, textAlign: "center", maxWidth: 760, margin: "24px auto 0", fontSize: 15, color: "rgba(255,255,255,0.65)"}}>
-            That's it. SEE, DO, TALK, and every other BE operation are <strong>land-configured</strong>. Permission for an arrival to do any of them is whatever metadata the land has set for the arrival stance.
+            That's it. SEE, DO, SUMMON, and every other BE operation are <strong>land-configured</strong>. Permission for an arrival to do any of them is whatever metadata the land has set for the arrival stance.
           </p>
         </div>
       </section>
@@ -82,7 +82,7 @@ const ArrivalPage = () => {
             <div className="ibp-spectrum-row">
               <div className="ibp-spectrum-label ibp-spectrum-label-closed">Closed</div>
               <div className="ibp-spectrum-name">Private personal land</div>
-              <div className="ibp-spectrum-desc">BE-claim only (login by the owner). BE-register disabled. SEE, DO, TALK all denied. Nothing is visible to arrivals. Useful for personal installations or private workspaces.</div>
+              <div className="ibp-spectrum-desc">BE-claim only (login by the owner). BE-register disabled. SEE, DO, SUMMON all denied. Nothing is visible to arrivals. Useful for personal installations or private workspaces.</div>
             </div>
             <div className="ibp-spectrum-row">
               <div className="ibp-spectrum-label ibp-spectrum-label-closed">Closed</div>
@@ -97,7 +97,7 @@ const ArrivalPage = () => {
             <div className="ibp-spectrum-row">
               <div className="ibp-spectrum-label ibp-spectrum-label-mid">Middle</div>
               <div className="ibp-spectrum-name">Open browsing, sign-in for engagement</div>
-              <div className="ibp-spectrum-desc">Broader SEE: arrivals can browse everything marked public. Still can't TALK or DO until they sign in. Useful for content-oriented lands like a publication, a research archive, a public garden.</div>
+              <div className="ibp-spectrum-desc">Broader SEE: arrivals can browse everything marked public. Still can't SUMMON or DO until they sign in. Useful for content-oriented lands like a publication, a research archive, a public garden.</div>
             </div>
             <div className="ibp-spectrum-row">
               <div className="ibp-spectrum-label ibp-spectrum-label-mid">Middle</div>
@@ -107,12 +107,12 @@ const ArrivalPage = () => {
             <div className="ibp-spectrum-row">
               <div className="ibp-spectrum-label ibp-spectrum-label-open">Open</div>
               <div className="ibp-spectrum-name">Public-facing beings reachable</div>
-              <div className="ibp-spectrum-desc">Arrival can TALK to specific public-facing beings named in <code>allowed_targets</code> (a greeter, help desk, guide). Still can't reach private beings. The land has public beings as part of its surface for unauthenticated visitors.</div>
+              <div className="ibp-spectrum-desc">Arrival can SUMMON to specific public-facing beings named in <code>allowed_targets</code> (a greeter, help desk, guide). Still can't reach private beings. The land has public beings as part of its surface for unauthenticated visitors.</div>
             </div>
             <div className="ibp-spectrum-row">
               <div className="ibp-spectrum-label ibp-spectrum-label-open">Open</div>
               <div className="ibp-spectrum-name">Fully open community</div>
-              <div className="ibp-spectrum-desc">Arrival has near-full permissions: SEE public, DO with <code>allowed_actions: "*"</code>, TALK with <code>allowed_targets: "*"</code>. Sign-in is optional and just for persistence and identity. Useful for very open community spaces.</div>
+              <div className="ibp-spectrum-desc">Arrival has near-full permissions: SEE public, DO with <code>allowed_actions: "*"</code>, SUMMON with <code>allowed_targets: "*"</code>. Sign-in is optional and just for persistence and identity. Useful for very open community spaces.</div>
             </div>
           </div>
         </div>
@@ -123,14 +123,14 @@ const ArrivalPage = () => {
         <div className="lp-container" style={{maxWidth: 900}}>
           <h2 className="lp-section-title">Configuration shape</h2>
           <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center", maxWidth: 760, margin: "0 auto 28px"}}>
-            The arrival stance's permissions live in the land's metadata under the embodiment namespace. Each verb gets its own simple allow rule. The kernel checks them on every request from an arrival.
+            The arrival stance's permissions live in the land's metadata under the role namespace. Each verb gets its own simple allow rule. The kernel checks them on every request from an arrival.
           </p>
 
           <pre className="lp-envelope-code" style={{maxWidth: 760, margin: "0 auto"}}>{`// at the Land Position
-metadata.embodiments.arrival.permissions = {
+metadata.beings.arrival.permissions = {
   see:  { allowed_visibility: ["public"] },
   do:   { allowed_actions: [] },
-  talk: { allowed_targets: [] },
+  summon: { allowed_targets: [] },
   be:   { allowed_operations: ["register", "claim"] }
 }
 
@@ -139,7 +139,7 @@ metadata.auth.register_enabled = true
 metadata.auth.claim_enabled    = true`}</pre>
 
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 20, maxWidth: 760, margin: "20px auto 0", fontSize: 14.5, color: "rgba(255,255,255,0.7)"}}>
-            <strong>What this shape supports.</strong> SEE on positions whose <code>visibility</code> field is in the allow list (the Node schema already carries <code>visibility</code>). DO actions restricted to a named list, or <code>"*"</code> for all, or <code>[]</code> for none. TALK targeted at a named embodiment list (<code>"@auth"</code>, <code>"@guide"</code>), or <code>"*"</code>, or <code>[]</code>. BE operations restricted to a subset of <code>register / claim / release / switch</code>.
+            <strong>What this shape supports.</strong> SEE on positions whose <code>visibility</code> field is in the allow list (the Node schema already carries <code>visibility</code>). DO actions restricted to a named list, or <code>"*"</code> for all, or <code>[]</code> for none. SUMMON targeted at a named role list (<code>"@auth"</code>, <code>"@guide"</code>), or <code>"*"</code>, or <code>[]</code>. BE operations restricted to a subset of <code>register / claim / release / switch</code>.
           </p>
 
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 12, maxWidth: 760, margin: "12px auto 0", fontSize: 14, color: "rgba(255,255,255,0.55)"}}>
@@ -165,7 +165,7 @@ metadata.auth.claim_enabled    = true`}</pre>
               <div className="ibp-template-head">Personal home</div>
               <div className="ibp-template-line">SEE: denied</div>
               <div className="ibp-template-line">DO: denied</div>
-              <div className="ibp-template-line">TALK: denied</div>
+              <div className="ibp-template-line">SUMMON: denied</div>
               <div className="ibp-template-line">BE: claim only (register disabled)</div>
               <div className="ibp-template-desc">Your own land for personal use. Nothing visible to arrivals. Only you log in.</div>
             </div>
@@ -173,7 +173,7 @@ metadata.auth.claim_enabled    = true`}</pre>
               <div className="ibp-template-head">Community</div>
               <div className="ibp-template-line">SEE: public surfaces</div>
               <div className="ibp-template-line">DO: denied</div>
-              <div className="ibp-template-line">TALK: @auth, @host</div>
+              <div className="ibp-template-line">SUMMON: @auth, @host</div>
               <div className="ibp-template-line">BE: register, claim</div>
               <div className="ibp-template-desc">Multi-user land. Public profile content visible. Anyone can register or claim. Participation requires sign-in.</div>
             </div>
@@ -181,7 +181,7 @@ metadata.auth.claim_enabled    = true`}</pre>
               <div className="ibp-template-head">Public service</div>
               <div className="ibp-template-line">SEE: public surfaces</div>
               <div className="ibp-template-line">DO: bounded (forms, guestbook)</div>
-              <div className="ibp-template-line">TALK: public beings (greeter, support)</div>
+              <div className="ibp-template-line">SUMMON: public beings (greeter, support)</div>
               <div className="ibp-template-line">BE: register, claim</div>
               <div className="ibp-template-desc">Service-oriented land. Visitors can interact in bounded ways without signing in. Sign-in optional for richer access.</div>
             </div>
@@ -200,7 +200,7 @@ metadata.auth.claim_enabled    = true`}</pre>
             This means the protocol commits to almost nothing about arrivals (two rules, see above) and pushes all the variation to the land's configuration. The web's flexibility comes partly from HTTP being minimal and HTML/CSS/JS handling all the expressiveness above. IBP follows the same pattern. The substrate stays small; the lands handle their own character.
           </p>
           <p className="lp-section-sub lp-section-sub-wide">
-            The same architectural move applies to other stances a land might define. A "guest" stance for recognized visitors with ongoing presence. A "member" stance for full participants. A "moderator," "contributor," "owner." Each is an embodiment with permissions. Land owners shape the taxonomy that fits their land's character. The protocol stays uniform underneath.
+            The same architectural move applies to other stances a land might define. A "guest" stance for recognized visitors with ongoing presence. A "member" stance for full participants. A "moderator," "contributor," "owner." Each is a role with permissions. Land owners shape the taxonomy that fits their land's character. The protocol stays uniform underneath.
           </p>
           <p className="lp-section-sub lp-section-sub-wide" style={{fontStyle: "italic", borderLeft: "3px solid rgba(74, 222, 128, 0.4)", paddingLeft: 24, color: "rgba(255,255,255,0.7)"}}>
             Different lands feel different because they configure differently, not because the protocol has different modes.

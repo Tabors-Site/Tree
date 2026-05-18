@@ -59,7 +59,7 @@ async function setValueForNode({
   key,
   value,
   beingId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 }) {
   key = assertUserWritableKey(key);
@@ -86,7 +86,7 @@ async function setValueForNode({
   await _metadata.setExtMeta(node, "values", values);
 
   await logDid({
-    beingId, nodeId, chatId, sessionId,
+    beingId, nodeId, summonId, sessionId,
     action: "editValue",
     valueEdited: { [finalKey]: numericValue },
     nodeVersion: "0",
@@ -101,7 +101,7 @@ async function setGoalForNode({
   key,
   goal,
   beingId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 }) {
   key = assertUserWritableKey(key);
@@ -132,7 +132,7 @@ async function setGoalForNode({
   await _metadata.setExtMeta(node, "goals", goals);
 
   await logDid({
-    beingId, nodeId, chatId, sessionId,
+    beingId, nodeId, summonId, sessionId,
     action: "editGoal",
     goalEdited: { [finalKey]: numericGoal },
     nodeVersion: "0",

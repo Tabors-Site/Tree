@@ -1,6 +1,6 @@
 import log from "../../seed/log.js";
 import { DELETED, NODE_STATUS } from "../../seed/protocol.js";
-import { getChats } from "../../seed/llm/chatHistory.js";
+import { getSummons } from "../../seed/llm/summonHistory.js";
 
 export async function init(core) {
   const Node = core.models.Node;
@@ -90,7 +90,7 @@ export async function init(core) {
     const sessionId = data?.sessionId;
     if (!beingId || !sessionId) return;
     try {
-      const { sessions } = await getChats({
+      const { sessions } = await getSummons({
         beingId,
         sessionId,
         sessionLimit: 1,

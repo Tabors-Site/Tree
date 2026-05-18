@@ -22,7 +22,7 @@ export default [
       targetSize: z.number().optional().default(3000).describe("Target note size in characters for leaf nodes (default 3000)."),
       maxSteps: z.number().optional().default(10).describe("Max nodes to process in this call (default 10). Use for incremental processing."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: {
@@ -94,7 +94,7 @@ export default [
       nodeId: z.string().describe("The root node of the learn operation."),
       maxSteps: z.number().optional().default(10).describe("Max nodes to process in this call (default 10)."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: {
@@ -156,7 +156,7 @@ export default [
     schema: {
       nodeId: z.string().describe("The root node of the learn operation."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: {
@@ -196,7 +196,7 @@ export default [
     schema: {
       nodeId: z.string().describe("The root node of the learn operation."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
     },
     annotations: {

@@ -20,7 +20,7 @@ import Did from "../../seed/models/did.js";
 import log from "../../seed/log.js";
 
 let Chat = null;
-try { Chat = (await import("../../seed/models/chat.js")).default; } catch (err) { log.debug("Backup", "Chat model not available:", err.message); }
+try { Chat = (await import("../../seed/models/summon.js")).default; } catch (err) { log.debug("Backup", "Chat model not available:", err.message); }
 
 let seedVersion = "unknown";
 try { seedVersion = (await import("../../seed/version.js")).SEED_VERSION; } catch (err) { log.debug("Backup", "Could not load seed version:", err.message); }

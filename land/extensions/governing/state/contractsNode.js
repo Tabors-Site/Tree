@@ -124,11 +124,11 @@ export async function ensureContractsNode({ scopeNodeId, beingId, core }) {
           },
         });
         // Inner-being protection: only governing-role beings of THIS
-        // rulership can TALK to the Contractor. The scoped
+        // rulership can SUMMON the Contractor. The scoped
         // `homeInDomain` keeps other rulerships' beings out; the role
         // list keeps humans / citizens out.
         await kernelMergeExtMeta(node, "permissions", {
-          talk: {
+          summon: {
             "@contractor*": {
               requires: {
                 role:         ["ruler", "planner", "contractor", "foreman"],

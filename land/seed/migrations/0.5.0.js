@@ -1,15 +1,15 @@
 // TreeOS Seed — AGPL-3.0 — https://treeos.ai
 /**
- * Seed Migration 0.5.0 — rename metadata.embodiments → metadata.beings.
+ * Seed Migration 0.5.0 — rename metadata.beings → metadata.beings.
  *
  * Vocabulary cleanup. The metadata namespace that records which beings
- * live at a position has been renamed from "embodiments" to "beings"
+ * live at a position has been renamed from "beings" to "beings"
  * to match the unified-identity vocabulary:
  *
  *   - A "being" is the instance (a real account with identity, role,
  *     home position).
  *   - A "role" is the template the being follows (still defined in
- *     portal/embodiments/registry.js as the role-template registry).
+ *     portal/roles/registry.js as the role-template registry).
  *   - The metadata at a position is a residence index: beings live
  *     here. The natural name is `metadata.beings`.
  *
@@ -31,7 +31,7 @@ import log from "../log.js";
 
 export default async function migrate() {
   const coll = mongoose.connection.collection("nodes");
-  // Only touch documents that actually have metadata.embodiments. The
+  // Only touch documents that actually have metadata.beings. The
   // filter keeps this fast on fresh lands and idempotent on re-runs.
   const result = await coll.updateMany(
     { "metadata.embodiments": { $exists: true } },

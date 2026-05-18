@@ -1,6 +1,6 @@
 # The Inbox Model
 
-Every being has an inbox at its position. Every TALK lands there. Summonings read it. This document specifies the inbox's place in the record, the summoning triggers that fire on inbox writes, and the response delivery contract.
+Every being has an inbox at its position. Every SUMMON lands there. Summonings read it. This document specifies the inbox's place in the record, the summoning triggers that fire on inbox writes, and the response delivery contract.
 
 Read [being-summoned.md](being-summoned.md) and [message-envelope.md](message-envelope.md) first.
 
@@ -10,7 +10,7 @@ The inbox is per-being-per-position metadata, stored under the well-known namesp
 
 Although `metadata` is the same Map that extensions use, the inbox is **not an extension namespace.** The kernel knows about `metadata.inbox` the same way it knows about `metadata.modes` and `metadata.tools`. It is part of the protocol's commitment, not optional.
 
-A node may host multiple beings (one per embodiment invocable at that position). Each embodiment gets its own inbox bucket:
+A node may host multiple beings (one per being invocable at that position). Each being gets its own inbox bucket:
 
 ```
 node.metadata.inbox = {
@@ -20,7 +20,7 @@ node.metadata.inbox = {
 }
 ```
 
-The bucket key is the embodiment name. Messages within a bucket are ordered by `sentAt`.
+The bucket key is the being name. Messages within a bucket are ordered by `sentAt`.
 
 ## Inbox entry shape
 
@@ -28,7 +28,7 @@ Each entry is a complete message envelope plus protocol-side bookkeeping:
 
 ```
 {
-  // From the TALK envelope:
+  // From the SUMMON envelope:
   from:        <stance>,
   content:     <text or structured>,
   intent:      "chat" | "place" | "query" | "be",
@@ -49,17 +49,17 @@ Each entry is a complete message envelope plus protocol-side bookkeeping:
 
 ## Kernel helpers
 
-The kernel exposes three operations for inbox access. Extensions and embodiments use these; direct Map manipulation is not supported.
+The kernel exposes three operations for inbox access. Extensions and beings use these; direct Map manipulation is not supported.
 
 ```
-appendToInbox(nodeId, embodiment, message) -> { messageId }
-readInbox(nodeId, embodiment, options?) -> [<entry>, ...]
-markInboxConsumed(nodeId, embodiment, correlationIds, responseId?) -> void
+appendToInbox(nodeId, being, message) -> { messageId }
+readInbox(nodeId, being, options?) -> [<entry>, ...]
+markInboxConsumed(nodeId, being, correlationIds, responseId?) -> void
 ```
 
 ### appendToInbox
 
-Atomic. Writes one message into the embodiment's bucket and fires the inbox-write event the kernel uses to drive summoning. Used by the TALK handler and by any system code that wants to deliver a message (cascade-deliver, completion hooks, scheduler).
+Atomic. Writes one message into the being's bucket and fires the inbox-write event the kernel uses to drive summoning. Used by the SUMMON handler and by any system code that wants to deliver a message (cascade-deliver, completion hooks, scheduler).
 
 ### readInbox
 
@@ -68,17 +68,17 @@ Options:
 - `unconsumed: true` only entries with `consumed: false`
 - `limit: <n>` cap on entries returned
 
-Used by summonings to gather what is new. Most embodiments read with `unconsumed: true` to see only messages they have not yet processed.
+Used by summonings to gather what is new. Most beings read with `unconsumed: true` to see only messages they have not yet processed.
 
 ### markInboxConsumed
 
-Called by the embodiment (or by the protocol on behalf of the embodiment) after a summoning processes messages. Sets `consumed: true` and writes `consumedAt`. Optionally ties to a `responseId` so the audit chain is complete.
+Called by the being (or by the protocol on behalf of the being) after a summoning processes messages. Sets `consumed: true` and writes `consumedAt`. Optionally ties to a `responseId` so the audit chain is complete.
 
 Consumed messages stay in the inbox as history; they are not deleted. The being's accumulated history is part of its record.
 
 ## Summoning triggers
 
-Embodiments declare in their manifest when they want to be summoned. The kernel listens for triggers and fires summonings accordingly.
+Beings declare in their manifest when they want to be summoned. The kernel listens for triggers and fires summonings accordingly.
 
 ```
 manifest.triggerOn = ["message", "hook", "cascade", "schedule"]
@@ -88,7 +88,7 @@ Multiple triggers are allowed. Combinations are typical.
 
 ### message
 
-Summon immediately when a new TALK is appended to the inbox. The most common trigger. Sync-shaped beings (Workers, Oracles, simple chat beings) use this.
+Summon immediately when a new SUMMON is appended to the inbox. The most common trigger. Sync-shaped beings (Workers, Oracles, simple chat beings) use this.
 
 ```
 appendToInbox(...)
@@ -113,9 +113,9 @@ When the hook fires, the kernel summons the being. The summoning sees the hook p
 
 ### cascade
 
-Cascade arrivals are TALKs (per the protocol's unification), so technically they fire `message`. But embodiments may distinguish: some beings want to be summoned for direct messages but not for cascade arrivals, or vice versa.
+Cascade arrivals are SUMMONs (per the protocol's unification), so technically they fire `message`. But beings may distinguish: some beings want to be summoned for direct messages but not for cascade arrivals, or vice versa.
 
-The `cascade` trigger is shorthand for "summon on TALK whose `from` is a system cascade-deliver origin."
+The `cascade` trigger is shorthand for "summon on SUMMON whose `from` is a system cascade-deliver origin."
 
 ### schedule
 
@@ -130,20 +130,20 @@ The kernel runs the scheduler and summons accordingly.
 
 ## Response delivery
 
-The embodiment declares its `respondMode` in the manifest:
+The being declares its `respondMode` in the manifest:
 
 ```
 manifest.respondMode = "sync" | "async" | "none"
 ```
 
-This determines what the TALK handler does after appending the message and triggering summoning.
+This determines what the SUMMON handler does after appending the message and triggering summoning.
 
 ### sync
 
-The TALK handler holds the WebSocket ack open. When the summoning completes, the protocol writes the response inline as the ack content.
+The SUMMON handler holds the WebSocket ack open. When the summoning completes, the protocol writes the response inline as the ack content.
 
 ```
-client -> ibp:talk { stance: ..., message: { intent: "chat", ... } }
+client -> ibp:summon { stance: ..., message: { intent: "chat", ... } }
   land appends to inbox, triggers summoning (synchronously)
     summoning runs, produces response
   land returns response inline as the ack
@@ -154,30 +154,30 @@ Use sync for beings that respond fast: Workers producing direct artifacts, Oracl
 
 ### async
 
-The TALK handler acks immediately with `{ status: "accepted" }`. The summoning runs (now or later). When it produces a response, the protocol writes a new TALK back at the sender's inbox with `inReplyTo` set.
+The SUMMON handler acks immediately with `{ status: "accepted" }`. The summoning runs (now or later). When it produces a response, the protocol writes a new SUMMON back at the sender's inbox with `inReplyTo` set.
 
 ```
-client -> ibp:talk { stance: ..., message: { intent: "chat", ... } }
+client -> ibp:summon { stance: ..., message: { intent: "chat", ... } }
   land appends to inbox, triggers summoning, immediately acks
 client <- ack { status: "accepted" }
 ... time passes ...
 ... summoning completes, produces response ...
-  land writes TALK to sender's inbox (which is its own position's inbox)
+  land writes SUMMON to sender's inbox (which is its own position's inbox)
 client (listening on its home with live SEE) <- inbox update arrives
 ```
 
 Use async for beings with long-running work: Rulers dispatching plans, Foremen running pipelines, anything that fires-and-forgets and reports back later.
 
-A single async TALK may produce zero, one, or many response TALKs over time. The contract is "the response, if any, eventually arrives at the sender's inbox." It is not "exactly one response."
+A single async SUMMON may produce zero, one, or many response SUMMONs over time. The contract is "the response, if any, eventually arrives at the sender's inbox." It is not "exactly one response."
 
 ### none
 
-The TALK handler acks immediately with `{ status: "accepted" }`. No response is ever generated.
+The SUMMON handler acks immediately with `{ status: "accepted" }`. No response is ever generated.
 
-Place-intent beings often use `none`. So do logger-style embodiments and event-sink positions.
+Place-intent beings often use `none`. So do logger-style beings and event-sink positions.
 
 ```
-client -> ibp:talk { address: ..., message: { intent: "place", ... } }
+client -> ibp:summon { address: ..., message: { intent: "place", ... } }
   land appends to inbox, triggers summoning, acks
 client <- ack { status: "accepted" }
 ... summoning runs, does its work, ends ...
@@ -193,19 +193,19 @@ These are independent dimensions:
 | chat | inline response | response arrives later | (unusual; intent expects response) |
 | place | (unusual; place expects no response) | (unusual) | typical |
 | query | inline response | response arrives later | (unusual; intent expects response) |
-| be | inline or async per embodiment | inline or async per embodiment | (rare) |
+| be | inline or async per being | inline or async per being | (rare) |
 
-Most combinations are sensible. The protocol does not forbid any combination; it lets embodiments declare and senders adapt.
+Most combinations are sensible. The protocol does not forbid any combination; it lets beings declare and senders adapt.
 
-Mismatches are real: a sender with `intent: chat` addressing an embodiment with `respondMode: none` will get an ack and no response. The sender's UI should reflect this; the protocol does not warn.
+Mismatches are real: a sender with `intent: chat` addressing an being with `respondMode: none` will get an ack and no response. The sender's UI should reflect this; the protocol does not warn.
 
 ## Multiple senders, one being
 
-Multiple TALKs can arrive at the same being from different senders concurrently. Each `appendToInbox` is atomic; messages land in arrival order. Each fires its own summoning per `triggerOn`.
+Multiple SUMMONs can arrive at the same being from different senders concurrently. Each `appendToInbox` is atomic; messages land in arrival order. Each fires its own summoning per `triggerOn`.
 
 Summonings of the same being do not block each other at the protocol level. The land may serialize them per-being if it chooses (today's request queue does this for `chat`-intent messages), but the protocol does not require serialization.
 
-A being summoned multiple times concurrently sees the inbox state at the moment of each summoning. Two summonings may see overlapping unconsumed entries; the embodiment is responsible for using `markInboxConsumed` atomically.
+A being summoned multiple times concurrently sees the inbox state at the moment of each summoning. Two summonings may see overlapping unconsumed entries; the being is responsible for using `markInboxConsumed` atomically.
 
 This is consistent with the summoned-beings model: each summoning is an independent invocation reading a shared record.
 
@@ -240,14 +240,14 @@ This makes the inbox visible in the portal UI. A chat thread is just a rendered 
 
 ## What the inbox is not
 
-- **Not a queue with workers.** It is a record. The embodiment is summoned to read it, not a worker picking up jobs.
+- **Not a queue with workers.** It is a record. The being is summoned to read it, not a worker picking up jobs.
 - **Not a message bus.** Messages are delivered to specific positions, not broadcast.
-- **Not transactional.** Append is atomic; consumption is the embodiment's responsibility; there is no rollback.
+- **Not transactional.** Append is atomic; consumption is the being's responsibility; there is no rollback.
 - **Not encrypted at rest by default.** The inbox is part of the node record and lives under the same access controls. Extensions like sealed-transport may layer encryption on top.
 
 ## See also
 
-- [message-envelope.md](message-envelope.md) the TALK envelope
+- [message-envelope.md](message-envelope.md) the SUMMON envelope
 - [being-summoned.md](being-summoned.md) the architectural framing
 - [protocol.md](protocol.md) the four-verb spec
 - [position-description.md](position-description.md) how the inbox surfaces in SEE responses

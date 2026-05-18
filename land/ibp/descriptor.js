@@ -17,9 +17,9 @@ import { NODE_STATUS } from "../seed/protocol.js";
 import { getArtifacts } from "../seed/tree/artifacts.js";
 import { resolveTreeAccess } from "../seed/tree/treeAccess.js";
 import { getInboxSummary } from "./inbox.js";
-import { getEmbodiment, listEmbodiments } from "./embodiments/registry.js";
+import { getRole, listRoles } from "./roles/registry.js";
 import { getExtension } from "../extensions/loader.js";
-import { getLatestActiveChainstep, getLatestActiveChainstepForBeing } from "../seed/llm/chatTracker.js";
+import { getLatestActiveChainstep, getLatestActiveChainstepForBeing } from "../seed/llm/summonTracker.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Place-bundle readers
@@ -82,13 +82,13 @@ function childPlacement(meta) {
   return out;
 }
 
-function beingPlacement(parentMeta, embodiment) {
+function beingPlacement(parentMeta, beingName) {
   const pos = readPositionNs(parentMeta);
   const mod = readModelsNs(parentMeta);
   const out = {};
-  const coords = pos?.beings?.[embodiment];
+  const coords = pos?.beings?.[beingName];
   if (coords) out.position = { coords };
-  const m = mod?.beings?.[embodiment];
+  const m = mod?.beings?.[beingName];
   if (m?.model) out.model = { model: m.model, scale: m.scale ?? 1 };
   return out;
 }
@@ -120,7 +120,7 @@ async function resolveSceneBlock(nodeId) {
 // Beings list for a tree node
 //
 // A position's beings are the beings whose HOME is this position — not
-// "embodiments invocable here." Each being has a durable home (a place
+// "beings invocable here." Each being has a durable home (a place
 // in the world); the descriptor for a position lists the beings living
 // there. Beings at child positions (inline, non-doorway) are composed
 // into the parent's scene by the renderer, so the parent's descriptor
@@ -137,7 +137,7 @@ async function resolveSceneBlock(nodeId) {
 //      explicitly. As governing's lifecycle migrates to creating real
 //      sub-positions (plan/contract/foreman child nodes with their own
 //      beings), it can drop the derived signal in favor of explicit
-//      embodiment-home writes.
+//      being-home writes.
 //
 // Workers, Planners, Contractors, Foremen are NOT listed here for a
 // rulership — they live at their own positions (plan child node,
@@ -152,12 +152,12 @@ function readNsFrom(metadata, name) {
   return metadata[name] || null;
 }
 
-// Known embodiment presentation metadata. The kernel embodiment registry
-// (embodiments/registry.js) tracks behavior (honoredIntents, respondMode,
+// Known being presentation metadata. The kernel being registry
+// (roles/registry.js) tracks behavior (honoredIntents, respondMode,
 // summon). This map carries label/description/icon/modeKey for known
 // names so the descriptor can render whatever is found in
 // metadata.beings without each writer having to ship them.
-const EMBODIMENT_PRESENTATION = {
+const BEING_PRESENTATION = {
   ruler:      { label: "Ruler",      description: "Coordinates work at this scope.",            modeKey: "tree:governing-ruler",  icon: "\u{1F451}", invocableBy: "owner"  },
   planner:    { label: "Planner",    description: "Drafts plans for this scope.",                modeKey: "tree:governing-planner", icon: "\u{1F4DD}", invocableBy: "owner"  },
   contractor: { label: "Contractor", description: "Issues contracts for this scope.",            modeKey: "tree:governing-contractor", icon: "\u{1F4DC}", invocableBy: "owner" },
@@ -175,15 +175,15 @@ function beingsForTreeNode(node, { writeAllowed, authorizedHere }) {
   // member). We treat any entry NOT in the well-known stance set as a
   // being-home — letting future extensions register their own beings
   // without changing this filter.
-  const embodiments = readNsFrom(node?.metadata, "embodiments");
-  if (!embodiments) return beings;
+  const beingHomes = readNsFrom(node?.metadata, "beings");
+  if (!beingHomes) return beings;
   const STANCE_NAMES = new Set(["arrival", "owner", "member"]);
-  const names = embodiments instanceof Map
-    ? Array.from(embodiments.keys())
-    : Object.keys(embodiments);
+  const names = beingHomes instanceof Map
+    ? Array.from(beingHomes.keys())
+    : Object.keys(beingHomes);
   for (const name of names) {
     if (STANCE_NAMES.has(name)) continue;
-    const pres = EMBODIMENT_PRESENTATION[name] || {
+    const pres = BEING_PRESENTATION[name] || {
       label: name, description: "", modeKey: `tree:${name}`, icon: "\u{1F464}", invocableBy: "owner",
     };
     // The home record may carry a `scopeRulerId` (governing's lifecycle
@@ -192,7 +192,7 @@ function beingsForTreeNode(node, { writeAllowed, authorizedHere }) {
     // scopeRulerId lets activity derivation look up the chainstep in
     // the right place. Renderer-only field, ignored by clients that
     // don't need it.
-    const home = embodiments instanceof Map ? embodiments.get(name) : embodiments[name];
+    const home = beingHomes instanceof Map ? beingHomes.get(name) : beingHomes[name];
     beings.push({
       embodiment:  name,
       label:       pres.label,
@@ -247,12 +247,12 @@ async function deriveActivity(nodeId, modeKey) {
   } catch {
     return null;
   }
-  return chatToActivity(chat);
+  return summonToActivity(chat);
 }
 
 // Convert a Chat document into an activity object the descriptor surfaces
 // for the being whose chainstep it is. Returns null when no chat is given.
-async function chatToActivity(chat) {
+async function summonToActivity(chat) {
   if (!chat) return null;
   const toolCalls = Array.isArray(chat.toolCalls) ? chat.toolCalls : [];
   const lastCall = toolCalls.length ? toolCalls[toolCalls.length - 1] : null;
@@ -281,17 +281,17 @@ async function chatToActivity(chat) {
 
 // Infer what a chainstep is acting on. The Chat schema does not (yet)
 // carry an explicit `target` field, but the chainstep linkage tells us:
-//   - When parentChatId is set, the chainstep was spawned by another
+//   - When parentSummonId is set, the chainstep was spawned by another
 //     being. Treat the parent's stance as the target — sub-beings walk
 //     up to their spawner.
-//   - When parentChatId is null, the chainstep was initiated by a TALK
+//   - When parentSummonId is null, the chainstep was initiated by a SUMMON
 //     directly from a sender. No animation target.
 async function inferActivityTarget(chat) {
-  if (!chat?.parentChatId) return null;
+  if (!chat?.parentSummonId) return null;
   let parent;
   try {
-    const Chat = (await import("../seed/models/chat.js")).default;
-    parent = await Chat.findById(chat.parentChatId)
+    const Summon = (await import("../seed/models/summon.js")).default;
+    parent = await Summon.findById(chat.parentSummonId)
       .select("aiContext treeContext")
       .lean();
   } catch {
@@ -302,7 +302,7 @@ async function inferActivityTarget(chat) {
   const mode = parent.aiContext?.mode;
   const nodeId = parent.treeContext?.targetNodeId;
   if (!zone || !mode || !nodeId) return null;
-  // Map the parent's mode key back to a likely embodiment. We can't get
+  // Map the parent's mode key back to a likely being. We can't get
   // a perfect mapping without a registry, so we fall through with the
   // mode key — the renderer can resolve "which mesh corresponds to this
   // mode" via the being entries it already has in the descriptor.
@@ -774,14 +774,14 @@ function deriveLifecycle(status) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Enrich a beings list with registered embodiment metadata
- * (honoredIntents, respondMode, triggerOn) and the per-embodiment inbox
+ * Enrich a beings list with registered being metadata
+ * (honoredIntents, respondMode, triggerOn) and the per-being inbox
  * summary at this node.
  *
- * `entries` is the static portion (embodiment, label, description, kind,
+ * `entries` is the static portion (being, label, description, kind,
  * icon, invocableBy, available, modeKey). The function attaches:
- *   - honoredIntents, respondMode, triggerOn from the embodiment registry
- *     (or null if the embodiment is not registered yet)
+ *   - honoredIntents, respondMode, triggerOn from the being registry
+ *     (or null if the being is not registered yet)
  *   - inbox: { total, unconsumed, recent } from getInboxSummary
  */
 async function buildBeings(nodeId, entries) {
@@ -790,7 +790,7 @@ async function buildBeings(nodeId, entries) {
   // beingId, so it doubles as the inbox lookup key.
   const inboxByBeing = await getInboxSummary(nodeId);
   // Per-being placement lives on the parent node (where the being is
-  // listed): metadata.position.beings.<embodiment>, metadata.models.beings.<...>.
+  // listed): metadata.position.beings.<being>, metadata.models.beings.<...>.
   let parentMetadata = null;
   if (nodeId) {
     const parent = await Node.findById(nodeId).select("metadata").lean();
@@ -799,7 +799,7 @@ async function buildBeings(nodeId, entries) {
   // Look up the live chainstep for each being in parallel. Three paths
   // in priority order:
   //   1. _chainstepLookupBeingId — the canonical home-record beingId.
-  //      When governing/etc. write embodiments.<role>.beingId, this is
+  //      When governing/etc. write beings.<role>.beingId, this is
   //      a direct lookup by beingOut on the Chat collection.
   //   2. Activity bound directly to (this nodeId, modeKey).
   //   3. Activity bound to the home's scopeRulerId (legacy: governing's
@@ -808,7 +808,7 @@ async function buildBeings(nodeId, entries) {
     entries.map(async (e) => {
       if (e._chainstepLookupBeingId) {
         const chat = await getLatestActiveChainstepForBeing(e._chainstepLookupBeingId);
-        const fromChat = await chatToActivity(chat);
+        const fromChat = await summonToActivity(chat);
         if (fromChat) return fromChat;
       }
       const direct = await deriveActivity(nodeId, e.modeKey);
@@ -820,7 +820,7 @@ async function buildBeings(nodeId, entries) {
     }),
   );
   return entries.map((entry, i) => {
-    const def = getEmbodiment(entry.embodiment);
+    const def = getRole(entry.embodiment);
     // Inbox lookup key is the receiving being's id (not the role name).
     // Falls back to an empty summary when the entry has no resolved being
     // yet (e.g. an extension registered a being-home that hasn't been

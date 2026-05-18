@@ -19,7 +19,7 @@ function MAX_INHERITED_NODES() { return Math.max(100, Math.min(Number(getLandCon
 
 async function editStatus({
   nodeId, status, isInherited,
-  beingId, chatId = null, sessionId = null,
+  beingId, summonId = null, sessionId = null,
 }) {
   if (!nodeId || !beingId) throw new Error("nodeId and beingId are required");
   if (!status || !VALID_STATUSES.has(status)) {
@@ -50,7 +50,7 @@ async function editStatus({
   checkCascade(nodeId, { action: "status:change", status, beingId }).catch(() => {});
 
   await logDid({
-    beingId, nodeId, chatId, sessionId,
+    beingId, nodeId, summonId, sessionId,
     action: "editStatus",
     statusEdited: status,
   });
@@ -59,7 +59,7 @@ async function editStatus({
   if (isInherited && node.children?.length > 0) {
     const maxDepth = Number(getLandConfigValue("cascadeMaxDepth")) || 50;
     let totalAffected = 0;
-    await inheritStatus(node.children, status, beingId, chatId, sessionId, 0, maxDepth, { count: totalAffected, max: MAX_INHERITED_NODES() });
+    await inheritStatus(node.children, status, beingId, summonId, sessionId, 0, maxDepth, { count: totalAffected, max: MAX_INHERITED_NODES() });
   }
 
   return {
@@ -72,7 +72,7 @@ async function editStatus({
  * Explicit depth parameter (no arguments[] hack).
  * Capped by both depth and total node count.
  */
-async function inheritStatus(childIds, status, beingId, chatId, sessionId, depth, maxDepth, counter) {
+async function inheritStatus(childIds, status, beingId, summonId, sessionId, depth, maxDepth, counter) {
   if (depth >= maxDepth) return;
 
   for (const childId of childIds) {
@@ -85,14 +85,14 @@ async function inheritStatus(childIds, status, beingId, chatId, sessionId, depth
     counter.count++;
 
     await logDid({
-      beingId, nodeId: childId, chatId, sessionId,
+      beingId, nodeId: childId, summonId, sessionId,
       action: "editStatus",
       statusEdited: status,
     });
 
     const child = await Node.findById(childId).select("children").lean();
     if (child?.children?.length > 0) {
-      await inheritStatus(child.children, status, beingId, chatId, sessionId, depth + 1, maxDepth, counter);
+      await inheritStatus(child.children, status, beingId, summonId, sessionId, depth + 1, maxDepth, counter);
     }
   }
 }

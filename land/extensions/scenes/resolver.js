@@ -39,7 +39,7 @@ export function deriveScene(metadata) {
   let sceneType = typeof explicit.sceneType === "string" ? explicit.sceneType : null;
   let ambient   = explicit.ambient && typeof explicit.ambient === "object" ? explicit.ambient : null;
 
-  // Derivations key off the protocol-level embodiments namespace so any
+  // Derivations key off the protocol-level beings namespace so any
   // extension that places a Ruler home at a node gets the rulership
   // visual treatment, not just the governing extension specifically.
   const embodiments = readNs(metadata, "embodiments");

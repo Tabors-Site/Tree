@@ -122,7 +122,7 @@ async function createArtifact({
   beingId,
   nodeId,
   file,
-  chatId = null,
+  summonId = null,
   sessionId = null,
   metadata = {},
 }) {
@@ -203,7 +203,7 @@ async function createArtifact({
   // the AI walk past blocking errors. After hooks run parallel so
   // awaiting the Promise.all adds no serialization latency beyond
   // the slowest single handler.
-  await hooks.run("afterArtifact", { artifact: newArtifact, nodeId, beingId, origin, sizeKB, action: "create", chatId, sessionId }).catch((err) => {
+  await hooks.run("afterArtifact", { artifact: newArtifact, nodeId, beingId, origin, sizeKB, action: "create", summonId, sessionId }).catch((err) => {
     log.warn("Artifacts", `afterArtifact hook chain failed: ${err?.message}`);
   });
 
@@ -212,7 +212,7 @@ async function createArtifact({
   ).catch(() => {});
 
   await logDid({
-    beingId, nodeId, chatId, sessionId,
+    beingId, nodeId, summonId, sessionId,
     action: "artifact",
     artifactAction: { action: "add", artifactId: newArtifact._id.toString(), content: isIbpOrigin(origin) ? ibpText(newArtifact) : null },
   });
@@ -227,7 +227,7 @@ async function createArtifact({
 async function editArtifact({
   artifactId, content, beingId,
   lineStart = null, lineEnd = null,
-  chatId = null, sessionId = null,
+  summonId = null, sessionId = null,
 }) {
   if (!artifactId || !beingId) throw new Error("Missing required fields");
 
@@ -284,7 +284,7 @@ async function editArtifact({
   // Awaited: see comment in createArtifact above. Callers (tool handlers
   // on the LLM path) need the syntax validator + cascade signaling
   // complete before they return, or the next turn reads stale state.
-  await hooks.run("afterArtifact", { artifact, nodeId: artifact.nodeId, beingId, origin: artifact.origin, sizeKB: newSizeKB, deltaKB, action: "edit", chatId, sessionId }).catch((err) => {
+  await hooks.run("afterArtifact", { artifact, nodeId: artifact.nodeId, beingId, origin: artifact.origin, sizeKB: newSizeKB, deltaKB, action: "edit", summonId, sessionId }).catch((err) => {
     log.warn("Artifacts", `afterArtifact hook chain failed: ${err?.message}`);
   });
 
@@ -293,7 +293,7 @@ async function editArtifact({
   ).catch(() => {});
 
   await logDid({
-    beingId, nodeId: artifact.nodeId, chatId, sessionId,
+    beingId, nodeId: artifact.nodeId, summonId, sessionId,
     action: "artifact",
     artifactAction: { action: "edit", artifactId: artifact._id.toString(), content: typeof finalContent === "string" ? finalContent : "" },
   });
@@ -355,7 +355,7 @@ async function getAllArtifactsByUser(beingId, limit, startDate, endDate) {
 
 async function deleteArtifactAndFile({
   artifactId, beingId,
-  chatId = null, sessionId = null,
+  summonId = null, sessionId = null,
 }) {
   const artifact = await Artifact.findById(artifactId);
   if (!artifact) throw new Error("Artifact not found");
@@ -404,7 +404,7 @@ async function deleteArtifactAndFile({
       artifact, nodeId, beingId: fileOwnerId,
       origin: artifact.origin, fileSizeKB,
       action: "delete", fileDeleted,
-      chatId, sessionId,
+      summonId, sessionId,
     }).catch(() => {});
 
     import("./cascade.js").then(({ checkCascade }) =>
@@ -413,7 +413,7 @@ async function deleteArtifactAndFile({
   }
 
   await logDid({
-    beingId, nodeId, chatId, sessionId,
+    beingId, nodeId, summonId, sessionId,
     action: "artifact",
     artifactAction: { action: "remove", noteId: artifactId.toString(), fileDeleted: fileDeleted || undefined },
   });
@@ -515,7 +515,7 @@ function nodeMatchesStatus(node, filters) {
 
 async function transferArtifact({
   artifactId, targetNodeId, beingId,
-  chatId = null, sessionId = null,
+  summonId = null, sessionId = null,
 }) {
   if (!artifactId || !targetNodeId || !beingId) {
     throw new Error("Missing required fields: artifactId, targetNodeId, beingId");
@@ -545,13 +545,13 @@ async function transferArtifact({
   await artifact.save();
 
   await logDid({
-    beingId, nodeId: sourceNodeId, chatId, sessionId,
+    beingId, nodeId: sourceNodeId, summonId, sessionId,
     action: "artifact",
     artifactAction: { action: "remove", noteId: artifactId.toString() },
   });
 
   await logDid({
-    beingId, nodeId: targetNodeId, chatId, sessionId,
+    beingId, nodeId: targetNodeId, summonId, sessionId,
     action: "artifact",
     artifactAction: { action: "add", artifactId: artifactId.toString(), content: isIbpOrigin(artifact.origin) ? ibpText(artifact) : null },
   });

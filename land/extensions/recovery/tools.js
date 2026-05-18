@@ -22,7 +22,7 @@ export default function getTools() {
         startingTarget: z.number().optional().describe("Current daily usage amount."),
         finalTarget: z.number().optional().describe("Target daily usage (0 for quit)."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -44,7 +44,7 @@ export default function getTools() {
       schema: {
         rootId: z.string().describe("Root node ID of the recovery tree."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },

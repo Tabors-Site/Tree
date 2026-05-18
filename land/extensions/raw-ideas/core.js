@@ -173,7 +173,7 @@ async function convertRawIdeaToNote({
   rawIdeaId,
   beingId,
   nodeId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 }) {
   if (!rawIdeaId || !beingId || !nodeId) {
@@ -200,7 +200,7 @@ async function convertRawIdeaToNote({
     beingId,
     nodeId,
     file: rawIdea.contentType === "file" ? { filename: rawIdea.content, size: 0 } : null,
-    chatId,
+    summonId,
     sessionId,
   });
 
@@ -210,7 +210,7 @@ async function convertRawIdeaToNote({
   await logDid({
     beingId,
     nodeId,
-    chatId,
+    summonId,
     sessionId,
     action: "rawIdea",
     nodeVersion: 0,

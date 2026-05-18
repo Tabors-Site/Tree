@@ -27,7 +27,7 @@
 import log from "../../seed/log.js";
 
 // conversationKey -> { items: string[], createdAt: number, mode: string }.
-// Keyed per-conversation: Portal Address for being-to-being chats,
+// Keyed per-conversation: IBP Address for being-to-being chats,
 // internal session key for stanceless background pipelines. The Map
 // is string-keyed; callers pass whichever flavor identifies their
 // conversation context.
@@ -89,7 +89,7 @@ export function parsePlan(responseText) {
  * Stash a plan for this conversation. Overwrites any previous plan —
  * the newest one wins. Also clears stale plans as a side effect.
  *
- * `conversationKey` is the canonical name (Portal Address for being-
+ * `conversationKey` is the canonical name (IBP Address for being-
  * to-being conversations, internal session key for stanceless
  * background pipelines). `aiSessionKey` is accepted as a legacy alias
  * during the per-conversation rekey migration.

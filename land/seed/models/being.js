@@ -60,7 +60,7 @@ const BeingSchema = new mongoose.Schema({
   isAdmin:  { type: Boolean, default: false },
 
   // role: present only for AI beings (operatingMode === "ai"). Names
-  // the template in embodiments/registry.js (ruler, planner, contractor,
+  // the template in roles/registry.js (ruler, planner, contractor,
   // foreman, worker, auth, ...). Behavior comes from the template;
   // identity, history, and current state live here on the being itself.
   role: { type: String, default: null },
@@ -90,9 +90,9 @@ const BeingSchema = new mongoose.Schema({
   // during chainsteps that take an AI being to a child node.
   //
   // Used by the chat layer to compute the asker's stance for new
-  // chats — the canonical Portal Address `<land>/<currentPositionId>@<username>`.
+  // chats — the canonical IBP Address `<land>/<currentPositionId>@<username>`.
   // Position-fork: when this changes, the being's next chat lands at
-  // a new Portal Address. Old chats persist with their original
+  // a new IBP Address. Old chats persist with their original
   // address; no thread "ends," it just stops accumulating.
   currentPositionId: { type: String, ref: "Node", default: null, index: true },
 

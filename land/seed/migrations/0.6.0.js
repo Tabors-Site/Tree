@@ -1,37 +1,37 @@
 // TreeOS Seed — AGPL-3.0 — https://treeos.ai
 /**
- * Seed Migration 0.6.0 — Chat.portalAddress introduction.
+ * Seed Migration 0.6.0 — Chat.ibpAddress introduction.
  *
- * 0.6.0 introduces `portalAddress` on Chat as the canonical identifier
+ * 0.6.0 introduces `ibpAddress` on Chat as the canonical identifier
  * for "the conversation context this chat belongs to." The shape is
  * `<stance> :: <stance>` (canonical sorted), matching the protocol's
- * Portal Address grammar (see /portal/lib/portal-address.js and
- * seed/llm/portalAddress.js). New chats compute and write it at
+ * IBP Address grammar (see /portal/lib/ibp-address.js and
+ * seed/llm/ibpAddress.js). New chats compute and write it at
  * creation time.
  *
  * What this migration does:
  *
  * 1. Clean up any previously-shipped `threadKey` field (renamed to
- *    `portalAddress` mid-development). Mongoose strict mode strips
+ *    `ibpAddress` mid-development). Mongoose strict mode strips
  *    unknown fields on read but persisted docs may still carry it
  *    from earlier 0.6.0 dev runs. $unset removes the orphan field.
  *
  * 2. Clean up the previously-shipped per-chat position fields
  *    (`askerPosition`, `addresseePosition`). Their information is now
- *    encoded in the Portal Address itself — stance includes the
+ *    encoded in the IBP Address itself — stance includes the
  *    position — so the separate fields are redundant. Same $unset
  *    treatment as threadKey above.
  *
  * What this migration does NOT do:
  *
- * Historical chats are not backfilled with portalAddress. Reconstruct-
+ * Historical chats are not backfilled with ibpAddress. Reconstruct-
  * ing each chat's stance pair would require knowing where each being
  * was when that chat happened — data we never captured. Using the
- * being's CURRENT position to synthesize a historical Portal Address
+ * being's CURRENT position to synthesize a historical IBP Address
  * would rewrite the past against today's state, which is exactly the
  * provenance break the position-based threading model is built to
- * avoid. Old chats keep `portalAddress: null`; new chats get accurate
- * Portal Addresses from creation forward.
+ * avoid. Old chats keep `ibpAddress: null`; new chats get accurate
+ * IBP Addresses from creation forward.
  *
  * Non-destructive and idempotent. $unset on a missing field is a
  * no-op, so re-running this migration on already-cleaned data does
@@ -65,6 +65,6 @@ export default async function migrate() {
     log.info("Seed/0.6.0",
       `cleaned ${result.modifiedCount} aichats row(s) — removed legacy threadKey / askerPosition / addresseePosition fields`);
   } else {
-    log.info("Seed/0.6.0", "no legacy chat fields to clean — Portal Address is the new identifier");
+    log.info("Seed/0.6.0", "no legacy chat fields to clean — IBP Address is the new identifier");
   }
 }

@@ -69,7 +69,7 @@ export default function getForemanTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { aiSessionKey, beingId, username, rootId, chatId, sessionId, recordNodeId, stepIndex, branchName, reason } = args;
+        const { aiSessionKey, beingId, username, rootId, summonId, sessionId, recordNodeId, stepIndex, branchName, reason } = args;
         if (!aiSessionKey) return text("foreman-retry-branch: missing aiSessionKey; substrate bug.");
         if (!beingId) return text("foreman-retry-branch: missing beingId; substrate bug.");
         if (!recordNodeId || typeof stepIndex !== "number" || !branchName) {
@@ -114,7 +114,7 @@ export default function getForemanTools(_core) {
 
         // Record the decision (so swarm-level coordination still sees
         // it in batch contexts; harmless when single).
-        setForemanDecision(args.rootChatId || args.chatId, {
+        setForemanDecision(args.rootSummonId || args.summonId, {
           kind: "retry-branch",
           recordNodeId, stepIndex,
           branchName: String(branchName).trim(),
@@ -184,7 +184,7 @@ export default function getForemanTools(_core) {
           username,
           rootId: rootId || null,
           nodeId: String(branchScopeId),
-          parentChatId: chatId || null,
+          parentSummonId: summonId || null,
           parentSessionId: sessionId || null,
           signal: callerSignal,
           socket: callerSocket,
@@ -261,7 +261,7 @@ export default function getForemanTools(_core) {
         if (!r) return text("foreman-mark-failed: reason is required for the audit trail.");
         if (r.length > REASON_CAP) return text(`foreman-mark-failed: reason exceeds ${REASON_CAP} chars; trim.`);
         const err = typeof error === "string" ? error.trim().slice(0, ERROR_CAP) : null;
-        setForemanDecision(args.rootChatId || args.chatId, {
+        setForemanDecision(args.rootSummonId || args.summonId, {
           kind: "mark-failed",
           recordNodeId,
           stepIndex,
@@ -304,7 +304,7 @@ export default function getForemanTools(_core) {
           return text(`foreman-freeze-record: terminalStatus must be one of ${[...TERMINAL_STATUSES].join(", ")}.`);
         }
         const s = typeof summary === "string" ? summary.trim().slice(0, SUMMARY_CAP) : null;
-        setForemanDecision(args.rootChatId || args.chatId, {
+        setForemanDecision(args.rootSummonId || args.summonId, {
           kind: "freeze-record",
           recordNodeId,
           terminalStatus,
@@ -360,7 +360,7 @@ export default function getForemanTools(_core) {
         const p = typeof payload === "string" ? payload.trim() : "";
         if (!s) return text("foreman-escalate-to-ruler: signal is required.");
         if (!p) return text("foreman-escalate-to-ruler: payload is required.");
-        setForemanDecision(args.rootChatId || args.chatId, { kind: "escalate-to-ruler", signal: s, payload: p });
+        setForemanDecision(args.rootSummonId || args.summonId, { kind: "escalate-to-ruler", signal: s, payload: p });
         // Return the escalation content as the tool result text. The
         // Foreman's final answer (this text + any synthesis) flows
         // back to whoever invoked the Foreman (typically the Ruler's
@@ -404,7 +404,7 @@ export default function getForemanTools(_core) {
         const r = typeof response === "string" ? response.trim() : "";
         if (!r) return text("foreman-respond-directly: response is required.");
         if (r.length > RESPONSE_CAP) return text(`foreman-respond-directly: response exceeds ${RESPONSE_CAP} chars.`);
-        setForemanDecision(args.rootChatId || args.chatId, { kind: "respond-directly", response: r });
+        setForemanDecision(args.rootSummonId || args.summonId, { kind: "respond-directly", response: r });
         // Return the response as tool result text so it's part of
         // the Foreman's final answer; the calling Ruler tool
         // (route-to-foreman or resume-execution) reads this as the
@@ -510,7 +510,7 @@ export default function getForemanTools(_core) {
         const r = typeof reason === "string" ? reason.trim() : "";
         if (!r) return text("foreman-cancel-subtree: reason is required.");
         if (r.length > REASON_CAP) return text(`foreman-cancel-subtree: reason exceeds ${REASON_CAP} chars; trim.`);
-        setForemanDecision(args.rootChatId || args.chatId, { kind: "cancel-subtree", recordNodeId, reason: r });
+        setForemanDecision(args.rootSummonId || args.summonId, { kind: "cancel-subtree", recordNodeId, reason: r });
         return text(JSON.stringify({ ok: true, decision: "cancel-subtree", reason: r }, null, 2));
       },
     },
@@ -539,7 +539,7 @@ export default function getForemanTools(_core) {
         if (!recordNodeId) return text("foreman-propagate-cancel-to-children: recordNodeId required.");
         const r = typeof reason === "string" ? reason.trim() : "";
         if (!r) return text("foreman-propagate-cancel-to-children: reason is required.");
-        setForemanDecision(args.rootChatId || args.chatId, { kind: "propagate-cancel-to-children", recordNodeId, reason: r });
+        setForemanDecision(args.rootSummonId || args.summonId, { kind: "propagate-cancel-to-children", recordNodeId, reason: r });
         return text(JSON.stringify({ ok: true, decision: "propagate-cancel-to-children", reason: r }, null, 2));
       },
     },
@@ -572,7 +572,7 @@ export default function getForemanTools(_core) {
         const r = typeof reason === "string" ? reason.trim() : "";
         if (!r) return text("foreman-pause-frame: reason is required.");
         const atIdx = typeof atStepIndex === "number" ? atStepIndex : null;
-        setForemanDecision(args.rootChatId || args.chatId, {
+        setForemanDecision(args.rootSummonId || args.summonId, {
           kind: "pause-frame",
           recordNodeId,
           atStepIndex: atIdx,
@@ -610,7 +610,7 @@ export default function getForemanTools(_core) {
         if (!recordNodeId) return text("foreman-resume-frame: recordNodeId required.");
         const r = typeof reason === "string" ? reason.trim() : "";
         if (!r) return text("foreman-resume-frame: reason is required.");
-        setForemanDecision(args.rootChatId || args.chatId, { kind: "resume-frame", recordNodeId, reason: r });
+        setForemanDecision(args.rootSummonId || args.summonId, { kind: "resume-frame", recordNodeId, reason: r });
         return text(JSON.stringify({ ok: true, decision: "resume-frame", reason: r }, null, 2));
       },
     },
@@ -733,7 +733,7 @@ export default function getForemanTools(_core) {
         if (errors.length) {
           return text(`foreman-judge-batch rejected:\n  - ${errors.join("\n  - ")}`);
         }
-        setForemanDecision(args.rootChatId || args.chatId, {
+        setForemanDecision(args.rootSummonId || args.summonId, {
           kind: "judge-batch",
           decisions: decisions.map((d) => ({
             branchName: String(d.branchName).trim(),
@@ -786,7 +786,7 @@ export default function getForemanTools(_core) {
         const r = typeof reason === "string" ? reason.trim() : "";
         if (!r) return text("foreman-advance-step: reason is required for the audit trail.");
         if (r.length > REASON_CAP) return text(`foreman-advance-step: reason exceeds ${REASON_CAP} chars; trim.`);
-        setForemanDecision(args.rootChatId || args.chatId, {
+        setForemanDecision(args.rootSummonId || args.summonId, {
           kind: "advance-step",
           recordNodeId,
           fromStepIndex,

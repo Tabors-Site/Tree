@@ -326,7 +326,7 @@ export function buildTools() {
         "Fetches all notes written by a specific user (optionally limited to the most recent N). Recommend limit 10 or less. Use get-searched-notes-by-user if looking for specifics.",
       schema: {
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -376,7 +376,7 @@ export function buildTools() {
       description: "Search text notes by a user based on text matching.",
       schema: {
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -424,7 +424,7 @@ export function buildTools() {
         "Fetches all notes where a specific user was tagged (optionally limited to the most recent N). May be referenced as mail.",
       schema: {
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -753,7 +753,7 @@ export function buildTools() {
           .describe(
             "ID of the user making the status edit (for contribution logging).",
           ),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -776,7 +776,7 @@ export function buildTools() {
         prestige,
         isInherited,
         beingId,
-        chatId,
+        summonId,
         sessionId,
       }) => {
         try {
@@ -785,7 +785,7 @@ export function buildTools() {
             status,
             isInherited,
             beingId,
-            chatId,
+            summonId,
             sessionId,
           });
           return json(result);
@@ -806,7 +806,7 @@ export function buildTools() {
           .string()
           .describe("The text content of the note."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -830,7 +830,7 @@ export function buildTools() {
         content,
         beingId,
         nodeId,
-        chatId,
+        summonId,
         sessionId,
       }) => {
         try {
@@ -839,7 +839,7 @@ export function buildTools() {
             content,
             beingId,
             nodeId,
-            chatId,
+            summonId,
             sessionId,
             metadata: { treeos: { isReflection: true } },
           });
@@ -892,7 +892,7 @@ export function buildTools() {
           .describe(
             "ID of the user making the edit (for contribution logging).",
           ),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -915,7 +915,7 @@ export function buildTools() {
         lineStart,
         lineEnd,
         beingId,
-        chatId,
+        summonId,
         sessionId,
       }) => {
         try {
@@ -925,7 +925,7 @@ export function buildTools() {
             beingId,
             lineStart: lineStart ?? null,
             lineEnd: lineEnd ?? null,
-            chatId,
+            summonId,
             sessionId,
           });
           return json(result);
@@ -955,7 +955,7 @@ export function buildTools() {
             "Target version (defaults to latest).",
           ),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -977,7 +977,7 @@ export function buildTools() {
         targetNodeId,
         prestige,
         beingId,
-        chatId,
+        summonId,
         sessionId,
       }) => {
         try {
@@ -986,7 +986,7 @@ export function buildTools() {
             targetNodeId,
             beingId,
             prestige: prestige ?? null,
-            chatId,
+            summonId,
             sessionId,
           });
           return json(result);
@@ -1006,7 +1006,7 @@ export function buildTools() {
           .string()
           .describe("The ID of the note to delete."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -1029,12 +1029,12 @@ export function buildTools() {
         idempotentHint: false,
         openWorldHint: false,
       },
-      handler: async ({ noteId, beingId, chatId, sessionId }) => {
+      handler: async ({ noteId, beingId, summonId, sessionId }) => {
         try {
           const result = await deleteArtifactAndFile({
             noteId,
             beingId,
-            chatId,
+            summonId,
             sessionId,
           });
           return json(result);
@@ -1055,7 +1055,7 @@ export function buildTools() {
           .string()
           .describe("ID of the parent node."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -1090,7 +1090,7 @@ export function buildTools() {
         beingId,
         note,
         type,
-        chatId,
+        summonId,
         sessionId,
       }) => {
         try {
@@ -1100,7 +1100,7 @@ export function buildTools() {
             beingId,
             type: type ?? null,
             note: note ?? null,
-            chatId: chatId ?? null,
+            summonId: summonId ?? null,
             sessionId: sessionId ?? null,
           });
           return json(newNode);
@@ -1132,7 +1132,7 @@ export function buildTools() {
             "Optional semantic type. Core types: goal, plan, task, knowledge, resource, identity. Custom types are valid.",
           ),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -1154,7 +1154,7 @@ export function buildTools() {
         note,
         type,
         beingId,
-        chatId,
+        summonId,
         sessionId,
         rootId,
       }) => {
@@ -1168,7 +1168,7 @@ export function buildTools() {
             beingId,
             type: type ?? null,
             note: note ?? null,
-            chatId: chatId ?? null,
+            summonId: summonId ?? null,
             sessionId: sessionId ?? null,
           });
           return json(rootNode);
@@ -1194,7 +1194,7 @@ export function buildTools() {
             "Parent node ID for the root of this subtree. Required.",
           ),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -1215,7 +1215,7 @@ export function buildTools() {
         nodeData,
         parentId,
         beingId,
-        chatId,
+        summonId,
         sessionId,
       }) => {
         try {
@@ -1224,7 +1224,7 @@ export function buildTools() {
               nodeData,
               parentId,
               beingId,
-              chatId,
+              summonId,
               sessionId,
             );
           return text(
@@ -1250,7 +1250,7 @@ export function buildTools() {
           .string()
           .describe("ID of the node branch to delete."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -1267,12 +1267,12 @@ export function buildTools() {
         idempotentHint: false,
         openWorldHint: false,
       },
-      handler: async ({ nodeId, beingId, chatId, sessionId }) => {
+      handler: async ({ nodeId, beingId, summonId, sessionId }) => {
         try {
           const deletedNode = await deleteNodeBranch(
             nodeId,
             beingId,
-            chatId,
+            summonId,
             sessionId,
           );
           return text(
@@ -1300,7 +1300,7 @@ export function buildTools() {
           .string()
           .describe("The new name to assign to the node."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -1321,7 +1321,7 @@ export function buildTools() {
         nodeId,
         newName,
         beingId,
-        chatId,
+        summonId,
         sessionId,
       }) => {
         try {
@@ -1330,7 +1330,7 @@ export function buildTools() {
               nodeId,
               newName,
               beingId,
-              chatId,
+              summonId,
               sessionId,
             });
           return text(
@@ -1358,7 +1358,7 @@ export function buildTools() {
             "Type label or null to clear. Core types: goal, plan, task, knowledge, resource, identity. Custom types are valid.",
           ),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -1379,7 +1379,7 @@ export function buildTools() {
         nodeId,
         newType,
         beingId,
-        chatId,
+        summonId,
         sessionId,
       }) => {
         try {
@@ -1388,7 +1388,7 @@ export function buildTools() {
               nodeId,
               newType,
               beingId,
-              chatId,
+              summonId,
               sessionId,
             });
           return text(
@@ -1418,7 +1418,7 @@ export function buildTools() {
           .describe(
             "The user performing the operation (optional).",
           ),
-        chatId: z
+        summonId: z
           .string()
           .nullable()
           .optional()
@@ -1439,7 +1439,7 @@ export function buildTools() {
         nodeChildId,
         nodeNewParentId,
         beingId,
-        chatId,
+        summonId,
         sessionId,
       }) => {
         try {
@@ -1448,7 +1448,7 @@ export function buildTools() {
               nodeChildId,
               nodeNewParentId,
               beingId,
-              chatId,
+              summonId,
               sessionId,
             );
           return text(

@@ -18,7 +18,7 @@ export default [
       "Use this to check what's happening today or this week.",
     schema: {
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       rootId: z.string().describe("The tree root to check."),
       window: z
@@ -75,7 +75,7 @@ export default [
       "with a recurring item.",
     schema: {
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+      summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       nodeId: z.string().describe("The node to check reliability for."),
     },

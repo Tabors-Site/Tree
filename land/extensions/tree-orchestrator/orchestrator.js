@@ -103,7 +103,7 @@ export { updatePronounState, getLastRouting, getLastRoutingRing, clearLastRoutin
 // Refine for "fix" items, Build for "add" items, etc.).
 async function runPendingPlan(pending, triggerMessage, aiSessionKey, {
   socket, username, beingId, signal, sessionId,
-  rootId, rootChatId, slot, onToolLoopCheckpoint,
+  rootId, rootSummonId, slot, onToolLoopCheckpoint,
 }) {
   emitStatus(socket, "intent", `Applying ${pending.items.length} planned fixes...`);
 
@@ -140,7 +140,7 @@ async function runPendingPlan(pending, triggerMessage, aiSessionKey, {
         username, beingId, rootId,
         currentNodeId: getCurrentNodeId(beingId) || rootId,
         signal, slot, socket,
-        sessionId, rootChatId, rt: null,
+        sessionId, rootSummonId, rt: null,
         readOnly: false, onToolLoopCheckpoint,
         dispatchOrigin: "plan-expand",
       });
@@ -154,8 +154,8 @@ async function runPendingPlan(pending, triggerMessage, aiSessionKey, {
     appliedLines.push(`${i + 1}. ✓ ${item}`);
   }
 
-  // chatId restoration to the root chat happens via processMessage's
-  // ctx now; nothing to do here. The upstream finalize uses the chatId
+  // summonId restoration to the root chat happens via processMessage's
+  // ctx now; nothing to do here. The upstream finalize uses the summonId
   // passed into runOrchestration directly.
 
   const summary = appliedLines.length === items.length
@@ -195,7 +195,7 @@ export async function orchestrateTreeRequest({
   skipRespond = false,
   forceQueryOnly = false,
   slot,
-  rootChatId = null,
+  rootSummonId = null,
   sourceType = null,
   sourceId = null,
   onToolLoopCheckpoint = null,
@@ -224,7 +224,7 @@ export async function orchestrateTreeRequest({
     slot,
   });
   const llmProvider = await resolveLlmProvider(beingId, rootId, "tree:librarian", slot);
-  rt.attach({ sessionId, mainChatId: rootChatId, llmProvider, signal, chainIndex: 1 });
+  rt.attach({ sessionId, mainChatId: rootSummonId, llmProvider, signal, chainIndex: 1 });
 
   // Stash the active request context so extensions (like misroute) can
   // redispatch on the same socket if they detect a correction. Cleared in
@@ -232,12 +232,12 @@ export async function orchestrateTreeRequest({
   // so downstream helpers can read/increment the shared chain counter.
   setActiveRequest(aiSessionKey, {
     socket, username, beingId, signal, sessionId, rootId,
-    rootChatId, slot, sourceType, sourceId, onToolLoopCheckpoint,
+    rootSummonId, slot, sourceType, sourceId, onToolLoopCheckpoint,
     rt,
   });
 
-  // chatId / sessionId travel through processMessage's ctx; nothing to
-  // stash in a side-channel here. Downstream callers receive rootChatId
+  // summonId / sessionId travel through processMessage's ctx; nothing to
+  // stash in a side-channel here. Downstream callers receive rootSummonId
   // explicitly via the runtime / pmCtx pattern.
 
   // The legacy resumeAtRuler intercept lived here. With the Ruler
@@ -281,7 +281,7 @@ export async function orchestrateTreeRequest({
         clearPendingPlan(aiSessionKey);
         return runPendingPlan(pending, message, aiSessionKey, {
           socket, username, beingId, signal, sessionId,
-          rootId, rootChatId, slot, onToolLoopCheckpoint,
+          rootId, rootSummonId, slot, onToolLoopCheckpoint,
         });
       } else {
         // User said something else — they moved on. Drop the stash.
@@ -348,7 +348,7 @@ export async function orchestrateTreeRequest({
       // step Chat records against the user's real session. Without these,
       // rt=null / sessionId=null and startChainStep returns null — the
       // query produces no visible response.
-      sessionId, rootChatId, rt,
+      sessionId, rootSummonId, rt,
       skipRespond,
     });
   }
@@ -370,8 +370,8 @@ export async function orchestrateTreeRequest({
       emitStatus(socket, "intent", "");
       const result = await processMessage(aiSessionKey, message, {
         username, beingId, rootId, signal, slot, onToolLoopCheckpoint,
-        chatId: rootChatId || null,
-        rootChatId: rootChatId || null,
+        summonId: rootSummonId || null,
+        rootSummonId: rootSummonId || null,
         sessionId: sessionId || null,
         ...buildSocketBridge(socket, signal),
       });
@@ -655,7 +655,7 @@ export async function orchestrateTreeRequest({
         username,
         beingId,
         rootId,
-        rootChatId,
+        rootSummonId,
         sessionId,
         originalMessage: message,
         responseHint:
@@ -701,7 +701,7 @@ export async function orchestrateTreeRequest({
     return runBeMode(message, {
       aiSessionKey, socket, username, beingId, rootId,
       signal, slot, sessionId, onToolLoopCheckpoint,
-      currentNodeId, modesUsed, rootChatId,
+      currentNodeId, modesUsed, rootSummonId,
     });
   }
 
@@ -798,7 +798,7 @@ export async function orchestrateTreeRequest({
               socket, username, beingId, rootId, signal, slot,
               currentNodeId: effectMatch.targetNodeId,
               onToolLoopCheckpoint, modesUsed,
-              sessionId, rootChatId, rt,
+              sessionId, rootSummonId, rt,
               skipRespond,
             });
           }
@@ -811,7 +811,7 @@ export async function orchestrateTreeRequest({
           steps: allMatches.map(m => makeDispatch(m.mode, m.extName, m.targetNodeId, { tense: "present" })),
           source: "multi-extension",
         };
-        return executeGraph(chainGraph, message, aiSessionKey, { socket, username, beingId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootChatId, rt, skipRespond });
+        return executeGraph(chainGraph, message, aiSessionKey, { socket, username, beingId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootSummonId, rt, skipRespond });
       }
     } catch (err) {
       log.debug("Tree Orchestrator", `Chain check failed: ${err.message}`);
@@ -987,7 +987,7 @@ export async function orchestrateTreeRequest({
       currentNodeId: classification.targetNodeId || currentNodeId,
       onToolLoopCheckpoint, modesUsed,
       reroutePrefix, // null unless misroute intercept fired above
-      sessionId, rootChatId, rt,
+      sessionId, rootSummonId, rt,
       skipRespond,
     });
   }
@@ -1028,7 +1028,7 @@ export async function orchestrateTreeRequest({
           socket, username, beingId, rootId, signal, slot,
           currentNodeId: single.targetNodeId, clearHistory: true,
           onToolLoopCheckpoint, modesUsed,
-          sessionId, rootChatId, rt,
+          sessionId, rootSummonId, rt,
           skipRespond,
         });
       }
@@ -1040,7 +1040,7 @@ export async function orchestrateTreeRequest({
           steps: indexMatches.map(m => makeDispatch(m.mode, m.extName, m.targetNodeId, { tense: "present" })),
           source: "converse-multi",
         };
-        return executeGraph(converseChainGraph, message, aiSessionKey, { socket, username, beingId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootChatId, rt, skipRespond });
+        return executeGraph(converseChainGraph, message, aiSessionKey, { socket, username, beingId, rootId, signal, slot, onToolLoopCheckpoint, modesUsed, sessionId, rootSummonId, rt, skipRespond });
       }
     } catch (err) {
       log.debug("Tree Orchestrator", `Converse check failed: ${err.message}`);
@@ -1103,7 +1103,7 @@ export async function orchestrateTreeRequest({
       socket, username, beingId, rootId, signal, slot,
       currentNodeId, clearHistory: true,
       onToolLoopCheckpoint, modesUsed,
-      sessionId, rootChatId, rt,
+      sessionId, rootSummonId, rt,
       skipRespond,
     });
   }
@@ -1115,7 +1115,7 @@ export async function orchestrateTreeRequest({
     treeCapabilities,
     // Same reason as the query fast path — downstream steppedMode needs
     // these to open Chat records against the user's live session.
-    sessionId, rootChatId, rt,
+    sessionId, rootSummonId, rt,
     skipRespond,
   });
 }

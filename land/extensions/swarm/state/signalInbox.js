@@ -21,7 +21,7 @@ const MAX_INBOX = 30;
  * caused this signal emission (afterNote/afterToolCall), passing it
  * lets treeos-base's AI forensics attribute the emission to that
  * capture's `swarmSignalsEmitted[]`. Best-effort: if the treeos-base
- * extension isn't present or has no pending capture for the chatId,
+ * extension isn't present or has no pending capture for the summonId,
  * the call silently no-ops.
  */
 export async function appendSignal({ nodeId, signal, core, emitterChatId = null }) {
@@ -43,7 +43,7 @@ export async function appendSignal({ nodeId, signal, core, emitterChatId = null 
       const forensics = getExtension("treeos-base")?.exports?.recordSwarmSignalEmitted;
       if (typeof forensics === "function") {
         forensics({
-          chatId: emitterChatId,
+          summonId: emitterChatId,
           toNodeId: String(nodeId),
           kind: signal.kind || "unknown",
           filePath: signal.filePath || null,

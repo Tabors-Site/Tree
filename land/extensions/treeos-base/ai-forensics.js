@@ -11,9 +11,9 @@
  *   afterLLMCall   — finalizes the capture with responseText and
  *                    writes to the AiCapture collection
  *
- * Correlation happens via chatId + sessionId fields that the kernel's
+ * Correlation happens via summonId + sessionId fields that the kernel's
  * `conversation.js` now includes in hook data. The pending capture
- * lives in a module-level Map keyed by chatId; stale entries get swept
+ * lives in a module-level Map keyed by summonId; stale entries get swept
  * every 60 seconds.
  *
  * Everything is best-effort: every operation is wrapped in try/catch,
@@ -44,7 +44,7 @@ function emitCaptureUpdated(capture) {
   if (!_emitToUser || !capture) return;
   try {
     _emitToUser(capture.beingId, "captureUpdated", {
-      chatId: capture.chatId,
+      summonId: capture.summonId,
       captureId: String(capture._id || ""),
       rootId: capture.rootId || null,
       sessionId: capture.sessionId || null,
@@ -60,11 +60,11 @@ function emitCaptureUpdated(capture) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Pending captures keyed by chatId. Each entry is a draft AiCapture
+ * Pending captures keyed by summonId. Each entry is a draft AiCapture
  * being assembled as the hooks fire. Finalized by afterLLMCall.
  *
  * Multiple captures can coexist if multiple chat steps are running in
- * parallel (different sessions, different users). The chatId is unique
+ * parallel (different sessions, different users). The summonId is unique
  * per chat record so collisions are impossible within a single LLM
  * call cycle.
  */
@@ -319,28 +319,28 @@ function summarizeSignal(s) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * beforeLLMCall handler. Creates a pending capture keyed by chatId,
+ * beforeLLMCall handler. Creates a pending capture keyed by summonId,
  * stamps the promptMessages snapshot, and stores until afterLLMCall
  * finalizes it.
  *
- * Skips silently if chatId is missing (background jobs, scout,
- * understanding, and other non-chat LLM callers don't have a chatId).
+ * Skips silently if summonId is missing (background jobs, scout,
+ * understanding, and other non-chat LLM callers don't have a summonId).
  */
 export async function onBeforeLLMCall(data) {
-  if (!data?.chatId) return;
+  if (!data?.summonId) return;
   try {
     const { messages, totalBytes, truncated } = cleanMessages(data.messages || []);
     const draft = {
-      chatId: data.chatId,
+      summonId: data.summonId,
       sessionId: data.sessionId || null,
       beingId: data.beingId || null,
       rootId: data.rootId || null,
       nodeId: data.nodeId || null,
       mode: data.mode || null,
-      // If the kernel passes parentChatId (continuations, branch-swarm
+      // If the kernel passes parentSummonId (continuations, branch-swarm
       // dispatches, summarizer rescues), record it so the forensics
       // timeline can walk the dispatch lineage across LLM calls.
-      parentChatId: data.parentChatId || null,
+      parentSummonId: data.parentSummonId || null,
       startedAt: new Date(),
       promptMessages: messages,
       promptBytes: totalBytes,
@@ -360,13 +360,13 @@ export async function onBeforeLLMCall(data) {
     // partial forensics instead of losing the whole capture.
     try {
       const doc = await AiCapture.create({
-        chatId: draft.chatId,
+        summonId: draft.summonId,
         sessionId: draft.sessionId,
         beingId: draft.beingId,
         rootId: draft.rootId,
         nodeId: draft.nodeId,
         mode: draft.mode,
-        parentChatId: draft.parentChatId,
+        parentSummonId: draft.parentSummonId,
         startedAt: draft.startedAt,
         promptMessages: draft.promptMessages,
         promptBytes: draft.promptBytes,
@@ -378,7 +378,7 @@ export async function onBeforeLLMCall(data) {
       log.debug("AiForensics", `onBeforeLLMCall create failed: ${err.message}`);
     }
 
-    pendingCaptures.set(data.chatId, draft);
+    pendingCaptures.set(data.summonId, draft);
     emitCaptureUpdated(draft);
   } catch (err) {
     log.debug("AiForensics", `onBeforeLLMCall failed: ${err.message}`);
@@ -391,9 +391,9 @@ export async function onBeforeLLMCall(data) {
  * can compute signal deltas.
  */
 export async function onBeforeToolCall(data) {
-  if (!data?.chatId) return;
+  if (!data?.summonId) return;
   try {
-    const capture = pendingCaptures.get(data.chatId);
+    const capture = pendingCaptures.get(data.summonId);
     if (!capture) return;
 
     // Snapshot signalInbox on the current tree node so we can diff
@@ -438,9 +438,9 @@ export async function onBeforeToolCall(data) {
  * call.
  */
 export async function onAfterToolCall(data) {
-  if (!data?.chatId) return;
+  if (!data?.summonId) return;
   try {
-    const capture = pendingCaptures.get(data.chatId);
+    const capture = pendingCaptures.get(data.summonId);
     if (!capture) return;
 
     // Find the most recent open entry that matches this tool name
@@ -498,9 +498,9 @@ export async function onAfterToolCall(data) {
  * to the renderer.
  */
 export async function onAfterLLMCall(data) {
-  if (!data?.chatId) return;
+  if (!data?.summonId) return;
   try {
-    const capture = pendingCaptures.get(data.chatId);
+    const capture = pendingCaptures.get(data.summonId);
     if (!capture) return;
 
     // Capture the response text if available via _failedGeneration or
@@ -546,7 +546,7 @@ export async function onAfterLLMCall(data) {
       await AiCapture.create(toWrite);
     }
 
-    pendingCaptures.delete(data.chatId);
+    pendingCaptures.delete(data.summonId);
   } catch (err) {
     log.debug("AiForensics", `onAfterLLMCall failed: ${err.message}`);
   }
@@ -562,10 +562,10 @@ export async function onAfterLLMCall(data) {
  *
  * Safe to call repeatedly; later calls overwrite earlier ones.
  */
-export function recordLLMResponse({ chatId, responseText }) {
-  if (!chatId || !responseText) return;
+export function recordLLMResponse({ summonId, responseText }) {
+  if (!summonId || !responseText) return;
   try {
-    const capture = pendingCaptures.get(chatId);
+    const capture = pendingCaptures.get(summonId);
     if (!capture) return;
     const r = truncateString(responseText, CAPTURE_LIMITS.RESPONSE_BYTES);
     capture.responseText = r.value;
@@ -587,14 +587,14 @@ export function recordLLMResponse({ chatId, responseText }) {
  * capture. Called directly by swarm.js — not via a hook — every time
  * `upsertSubPlanEntry` is called with a status change.
  *
- * If no pending capture exists for this chatId, we silently skip. If
- * the chatId is the root orchestrator's chat, the transition attaches
+ * If no pending capture exists for this summonId, we silently skip. If
+ * the summonId is the root orchestrator's chat, the transition attaches
  * to that. The renderer shows these as a timeline on the chat step.
  */
-export function recordBranchEvent({ chatId, branchName, from, to, reason }) {
-  if (!chatId || !branchName || !to) return;
+export function recordBranchEvent({ summonId, branchName, from, to, reason }) {
+  if (!summonId || !branchName || !to) return;
   try {
-    const capture = pendingCaptures.get(chatId);
+    const capture = pendingCaptures.get(summonId);
     if (!capture) return;
     const event = {
       branchName,
@@ -619,14 +619,14 @@ export function recordBranchEvent({ chatId, branchName, from, to, reason }) {
  * from the onCascade listener below; also exposed for anything else
  * that wants to attribute a cascade to the active capture.
  *
- * Matching is by chatId — we attach to the pending capture only if one
+ * Matching is by summonId — we attach to the pending capture only if one
  * exists for the given chat. No-op otherwise (background jobs that
- * don't pass chatId through).
+ * don't pass summonId through).
  */
-export function recordCascadeEmitted({ chatId, signalId, nodeId, status }) {
-  if (!chatId || !signalId) return;
+export function recordCascadeEmitted({ summonId, signalId, nodeId, status }) {
+  if (!summonId || !signalId) return;
   try {
-    const capture = pendingCaptures.get(chatId);
+    const capture = pendingCaptures.get(summonId);
     if (!capture) return;
     const entry = {
       signalId,
@@ -649,10 +649,10 @@ export function recordCascadeEmitted({ chatId, signalId, nodeId, status }) {
  * propagation extension when a deliverCascade arrives and the local
  * position has a pending capture.
  */
-export function recordCascadeReceived({ chatId, signalId, sourceNodeId }) {
-  if (!chatId || !signalId) return;
+export function recordCascadeReceived({ summonId, signalId, sourceNodeId }) {
+  if (!summonId || !signalId) return;
   try {
-    const capture = pendingCaptures.get(chatId);
+    const capture = pendingCaptures.get(summonId);
     if (!capture) return;
     const entry = {
       signalId,
@@ -677,10 +677,10 @@ export function recordCascadeReceived({ chatId, signalId, sourceNodeId }) {
  * Called by swarm's appendSignal path (via getExtension("treeos-base"))
  * when the current visitor's chat has a pending capture.
  */
-export function recordSwarmSignalEmitted({ chatId, toNodeId, kind, filePath }) {
-  if (!chatId || !toNodeId || !kind) return;
+export function recordSwarmSignalEmitted({ summonId, toNodeId, kind, filePath }) {
+  if (!summonId || !toNodeId || !kind) return;
   try {
-    const capture = pendingCaptures.get(chatId);
+    const capture = pendingCaptures.get(summonId);
     if (!capture) return;
     const entry = {
       toNodeId,
@@ -706,7 +706,7 @@ export function recordSwarmSignalEmitted({ chatId, toNodeId, kind, filePath }) {
  * `cascadesReceived[]` — so the forensics timeline answers both
  * "which call emitted this cascade?" and "which call saw it arrive?".
  *
- * When the hookData doesn't carry chatId (current kernel path), we
+ * When the hookData doesn't carry summonId (current kernel path), we
  * fall back to matching by nodeId against every pending capture.
  *
  * Best-effort: never blocks, never throws. A missed attachment just
@@ -716,28 +716,28 @@ export async function onCascadeSignal(data) {
   if (!data?.signalId) return;
   try {
     const isReception = (data.depth || 0) > 0;
-    const attach = (chatId) => {
+    const attach = (summonId) => {
       if (isReception) {
         recordCascadeReceived({
-          chatId,
+          summonId,
           signalId: data.signalId,
           sourceNodeId: data.source || null,
         });
       } else {
         recordCascadeEmitted({
-          chatId,
+          summonId,
           signalId: data.signalId,
           nodeId: data.nodeId,
           status: data._resultStatus,
         });
       }
     };
-    const chatId = data.chatId;
-    if (chatId) {
-      attach(chatId);
+    const summonId = data.summonId;
+    if (summonId) {
+      attach(summonId);
       return;
     }
-    // No direct chatId on hookData — attach to any pending capture whose
+    // No direct summonId on hookData — attach to any pending capture whose
     // active nodeId matches the target node (emission = the writer's
     // capture; reception = whatever capture happens to be running at the
     // receiving node, if any).

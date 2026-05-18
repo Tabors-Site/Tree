@@ -1,4 +1,4 @@
-// Portal Address → stance resolution.
+// IBP Address → stance resolution.
 //
 // Given a parsed Stance, resolve what the Land server needs to ACT on:
 //   - zone:        "land" | "home" | "tree"
@@ -8,11 +8,11 @@
 //   - chain:       [{ name, id }] top-down (land root → leaf)
 //   - leafName:    convenience: chain[last].name
 //   - leafId:      convenience: chain[last].id
-//   - embodiment:  the @label from the stance (unchanged)
+//   - being:  the @label from the stance (unchanged)
 //
 // Pass 1 Slice 1 implemented ONLY the land-zone case (path === "/").
 // Home and tree zones are now wired through; the rest of the verbs
-// (DO/TALK/BE) will consume this resolver next.
+// (DO/SUMMON/BE) will consume this resolver next.
 
 import { PortalError, PORTAL_ERR } from "./errors.js";
 import { getLandDomain } from "./address.js";
@@ -22,7 +22,7 @@ import { getLandRootId } from "../seed/landRoot.js";
 import { resolveRootNode } from "../seed/tree/treeFetch.js";
 
 /**
- * @param {{ land: string|null, path: string|null, embodiment: string|null }} stance
+ * @param {{ land: string|null, path: string|null, being: string|null }} stance
  * @param {object} [opts]
  * @param {boolean} [opts.requireLandMatch=true] — when true, reject stances whose land doesn't match this server
  * @returns {Promise<{
@@ -33,7 +33,7 @@ import { resolveRootNode } from "../seed/tree/treeFetch.js";
  *   chain: Array<{name: string, id: string}>,
  *   leafName: string|null,
  *   leafId: string|null,
- *   embodiment: string|null,
+ *   being: string|null,
  * }>}
  */
 export async function resolveStance(stance, opts = {}) {
@@ -152,7 +152,7 @@ export async function resolveStance(stance, opts = {}) {
  * @param {string} args.startUnderParent — parent node id to start from (typically landRootId)
  * @param {string[]} args.segments — path segments (already split by "/")
  * @param {object} args.ownerFilter — extra filter on the FIRST segment (e.g. rootOwner)
- * @param {object} args.stance — the original parsed stance (for embodiment)
+ * @param {object} args.stance — the original parsed stance (for being)
  * @param {object|null} args.contextUser — user owning a home zone, if any
  */
 async function resolveNodePath({ startUnderParent, segments, ownerFilter, stance, contextUser }) {

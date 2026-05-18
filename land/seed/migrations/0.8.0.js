@@ -5,7 +5,7 @@
  *
  * Contribution rows are the audit log of IBP DO emissions. The model is
  * renamed Did (past tense — a "did" is a thing that was done) so the kernel
- * pairs cleanly with TALK ↔ Chat. The schema stays the same except:
+ * pairs cleanly with SUMMON ↔ Summon. The schema stays the same except:
  *
  *   - Collection renamed: `contributions` → `dids`.
  *   - Field dropped: `wasAi` (derivable from Being.operatingMode).

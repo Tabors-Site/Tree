@@ -29,13 +29,13 @@ export default function getTools() {
         goal: z.string().optional().describe("Goal type: bulk, cut, maintain, general."),
         restrictions: z.string().nullable().optional().describe("Dietary restrictions or preferences."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       handler: async (args) => {
         try {
-          const { rootId, beingId, chatId, sessionId, ...profile } = args;
+          const { rootId, beingId, summonId, sessionId, ...profile } = args;
           const foodNodes = await findFoodNodes(rootId);
           if (!foodNodes) return { content: [{ type: "text", text: "Food tree not found." }] };
           await saveProfile(rootId, profile, foodNodes, beingId);
@@ -60,7 +60,7 @@ export default function getTools() {
         role: z.string().describe("The role name (lowercase, no spaces). e.g. 'sugar', 'fiber', 'sodium'."),
         goal: z.number().optional().describe("Optional daily goal in grams."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
@@ -92,13 +92,13 @@ export default function getTools() {
         meal: z.string().optional().describe("Meal slot: breakfast, lunch, dinner, snack. Auto-detected from time if omitted."),
         summary: z.string().describe("Readable food description for the log note. e.g. '2 eggs and a cup of rice'"),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
       handler: async (args) => {
         try {
-          const { rootId, items, totals, meal, summary, beingId, chatId, sessionId } = args;
+          const { rootId, items, totals, meal, summary, beingId, summonId, sessionId } = args;
           const foodNodes = await findFoodNodes(rootId);
           if (!foodNodes) return { content: [{ type: "text", text: "Food tree not found." }] };
 
@@ -113,7 +113,7 @@ export default function getTools() {
             content: logContent,
             origin: "ibp",
             beingId: beingId || "SYSTEM",
-            chatId: chatId ?? null,
+            summonId: summonId ?? null,
             sessionId: sessionId ?? null,
           });
           const logNoteId = logNote?._id ? String(logNote._id) : null;
@@ -124,7 +124,7 @@ export default function getTools() {
           // Write to meal slot
           const slot = detectMealSlot(summary, meal);
           const mealNoteContent = JSON.stringify({ text: summary, totals, logNoteId });
-          await writeMealNote(foodNodes, slot, mealNoteContent, beingId || "SYSTEM", { chatId, sessionId });
+          await writeMealNote(foodNodes, slot, mealNoteContent, beingId || "SYSTEM", { summonId, sessionId });
 
           // Build running totals for confirmation
           const picture = await getDailyPicture(rootId);

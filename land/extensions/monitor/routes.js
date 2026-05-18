@@ -21,7 +21,7 @@ router.post("/land/activity", authenticate, async (req, res) => {
 
     const { runChat } = await import("../../seed/llm/conversation.js");
 
-    const { answer, chatId } = await runChat({
+    const { answer, summonId } = await runChat({
       beingId: req.beingId,
       username: user.username,
       message: query,
@@ -29,7 +29,7 @@ router.post("/land/activity", authenticate, async (req, res) => {
       res,
     });
 
-    sendOk(res, { answer, chatId });
+    sendOk(res, { answer, summonId });
   } catch (err) {
     log.error("Monitor", "Activity query error:", err.message);
     sendError(res, 500, ERR.INTERNAL, err.message);
@@ -48,7 +48,7 @@ router.get("/land/activity", authenticate, async (req, res) => {
     const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
     const oneWeekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
 
-    const Chat = (await import("../../seed/models/chat.js")).default;
+    const Summon = (await import("../../seed/models/summon.js")).default;
     const { getSessionsForUser } = await import("../../seed/ws/sessionRegistry.js");
     const { hooks } = await import("../../seed/hooks.js");
     const { getLoadedExtensionNames } = await import("../../extensions/loader.js");
@@ -63,8 +63,8 @@ router.get("/land/activity", authenticate, async (req, res) => {
     ] = await Promise.all([
       Did.countDocuments({ date: { $gte: oneDayAgo } }),
       Did.countDocuments({ date: { $gte: oneWeekAgo } }),
-      Chat.countDocuments({ "startMessage.time": { $gte: oneDayAgo } }),
-      Chat.countDocuments({ "startMessage.time": { $gte: oneWeekAgo } }),
+      Summon.countDocuments({ "startMessage.time": { $gte: oneDayAgo } }),
+      Summon.countDocuments({ "startMessage.time": { $gte: oneWeekAgo } }),
       Being.countDocuments({}),
     ]);
 
@@ -77,7 +77,7 @@ router.get("/land/activity", authenticate, async (req, res) => {
     ]);
 
     // AI mode breakdown today
-    const modeBreakdown = await Chat.aggregate([
+    const modeBreakdown = await Summon.aggregate([
       { $match: { "startMessage.time": { $gte: oneDayAgo } } },
       { $group: { _id: { zone: "$aiContext.zone", mode: "$aiContext.mode" }, count: { $sum: 1 } } },
       { $sort: { count: -1 } },

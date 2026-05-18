@@ -26,7 +26,7 @@ Returns:
 }
 ```
 
-The client uses this only to learn the WS URL. Capability discovery (zones, embodiments, version negotiation) flows through `see <land>/.discovery` over the socket once connected.
+The client uses this only to learn the WS URL. Capability discovery (zones, beings, version negotiation) flows through `see <land>/.discovery` over the socket once connected.
 
 Authentication: none required for bootstrap. Anyone can learn how to connect.
 
@@ -37,7 +37,7 @@ Four ops, one per verb.
 ```
 ibp:see   (verb: SEE)
 ibp:do    (verb: DO)
-ibp:talk  (verb: TALK)
+ibp:summon  (verb: SUMMON)
 ibp:be    (verb: BE)
 ```
 
@@ -58,16 +58,16 @@ Common envelope:
 }
 ```
 
-Each verb names its address field explicitly. The four verbs partition cleanly: SEE observes, DO mutates, TALK engages a being, BE acts on the requester's own identity.
+Each verb names its address field explicitly. The four verbs partition cleanly: SEE observes, DO mutates, SUMMON engages a being, BE acts on the requester's own identity.
 
 | Verb | Field | Why |
 |---|---|---|
-| SEE | `position` OR `stance` | Observation works at either tier: position-level (what's here?) or embodiment-specific view (what does this being see here?). |
-| DO | `position` only | The world is data at positions; embodiments are not data targets. Mutations always land at a position. |
-| TALK | `stance` only | Beings live as stances (embodiment-at-position). Engagement requires both. Inboxes are per-being-per-position. |
+| SEE | `position` OR `stance` | Observation works at either tier: position-level (what's here?) or being-specific view (what does this being see here?). |
+| DO | `position` only | The world is data at positions; beings are not data targets. Mutations always land at a position. |
+| SUMMON | `stance` only | Beings live as stances (being-at-position). Engagement requires both. Inboxes are per-being-per-position. |
 | BE | `stance` only | Self-identity operations target stances. For fresh registration, the stance is the land's auth-being. |
 
-No generic `address` field. The field name tells the reader what the verb requires. None of these are Portal Addresses (the bridged `stance :: stance` form); they are the target side of an implicit relationship. The requester side is established by the identity token.
+No generic `address` field. The field name tells the reader what the verb requires. None of these are IBP Addresses (the bridged `stance :: stance` form); they are the target side of an implicit relationship. The requester side is established by the identity token.
 
 Verb-specific fields:
 
@@ -75,7 +75,7 @@ Verb-specific fields:
 
 **DO**: `action: string, payload: object`
 
-**TALK**: `message: { from, content, intent, correlation, inReplyTo?, attachments?, sentAt? }` (server sets sentAt if missing)
+**SUMMON**: `message: { from, content, intent, correlation, inReplyTo?, attachments?, sentAt? }` (server sets sentAt if missing)
 
 **BE**: `operation: "register" | "claim" | "release" | "switch", payload?, from?, to?`
 
@@ -94,8 +94,8 @@ Successful ack:
 For SEE one-shot: `data` is the Position Description.
 For SEE live: the initial `data` is the descriptor; subsequent frames arrive as separate emits.
 For DO: `data` is action-specific (often `{ written: true }` or `{ nodeId, address }`).
-For TALK sync: `data` is the response message envelope.
-For TALK async or none: `data` is `{ status: "accepted" }`.
+For SUMMON sync: `data` is the response message envelope.
+For SUMMON async or none: `data` is `{ status: "accepted" }`.
 For BE: `data` is `{ identityToken, beingAddress }` for register/claim, `{ released: true }` for release, `{ active }` for switch.
 
 Error ack:
@@ -151,7 +151,7 @@ The land checks for each SEE:
 
 1. Is exactly one of `position` or `stance` present and parseable? `INVALID_INPUT` or `ADDRESS_PARSE_ERROR` if not.
 2. Does it resolve to a known place? `NODE_NOT_FOUND` if not.
-3. If `stance`: is the embodiment qualifier invocable here for this identity? `EMBODIMENT_UNAVAILABLE` if not.
+3. If `stance`: is the being qualifier invocable here for this identity? `EMBODIMENT_UNAVAILABLE` if not.
 4. Does the identity have read access here? `FORBIDDEN` if not.
 5. For anonymous SEE: is this place public? `UNAUTHORIZED` if not.
 
@@ -191,22 +191,22 @@ final chunk: land responds with ack { id, status: "ok", data: { artifactId, posi
 
 Chunked uploads use a per-upload `uploadId` returned in the first ack and threaded through subsequent chunks.
 
-## TALK wire rules
+## SUMMON wire rules
 
 ```
-client emits ibp:talk { id, stance: "<stance>", identity, message }
+client emits ibp:summon { id, stance: "<stance>", identity, message }
 ```
 
-The land's TALK handler:
+The land's SUMMON handler:
 
 1. Validates envelope shape. `INVALID_INPUT` if malformed or `stance` field missing/unqualified.
 2. Resolves stance. `NODE_NOT_FOUND` or `EMBODIMENT_UNAVAILABLE` if fails.
-3. Authorizes TALK at the stance. `FORBIDDEN` if not.
-4. Validates intent against embodiment's permission list. `INVALID_INTENT` if not honored.
+3. Authorizes SUMMON at the stance. `FORBIDDEN` if not.
+4. Validates intent against being's permission list. `INVALID_INTENT` if not honored.
 5. Atomically: appends `message` to inbox + fires summoning per `triggerOn`.
 6. Per `respondMode`:
    - `sync`: holds ack open; when summoning completes, returns the response message inline as `data: <response envelope>`
-   - `async`: returns ack immediately with `data: { status: "accepted" }`; the response (if any) arrives later as a new ibp:talk delivered to the sender's inbox
+   - `async`: returns ack immediately with `data: { status: "accepted" }`; the response (if any) arrives later as a new ibp:summon delivered to the sender's inbox
    - `none`: returns ack immediately with `data: { status: "accepted" }`
 
 ### Sync response delivery
@@ -231,25 +231,25 @@ For sync, the ack data is the full response message envelope:
 Sync may stream chunks. The land emits intermediate frames before the final ack:
 
 ```
-land emits ibp:talk-delta { id, delta: "<partial content>" }
-land emits ibp:talk-delta { id, delta: "<more content>" }
+land emits ibp:summon-delta { id, delta: "<partial content>" }
+land emits ibp:summon-delta { id, delta: "<more content>" }
 land responds with final ack { id, status: "ok", data: <complete response envelope> }
 ```
 
-Embodiments declare `streaming: true` to opt into delta frames. Without that, the response arrives only in the final ack.
+Beings declare `streaming: true` to opt into delta frames. Without that, the response arrives only in the final ack.
 
 ### Async response delivery
 
-The originating client receives async responses through a live SEE on the sender's home position. When the response TALK is appended to the sender's inbox, the live SEE emits a patch frame that adds the new inbox entry.
+The originating client receives async responses through a live SEE on the sender's home position. When the response SUMMON is appended to the sender's inbox, the live SEE emits a patch frame that adds the new inbox entry.
 
 ```
-client A -> ibp:talk { id: "talk-1", stance: "<ruler stance>", message: { from: "tabor@treeos.ai", ... } }
+client A -> ibp:summon { id: "talk-1", stance: "<ruler stance>", message: { from: "tabor@treeos.ai", ... } }
 client A <- ack { id: "talk-1", status: "ok", data: { status: "accepted" } }
 
 (time passes)
 
 ruler's async summoning produces a response.
-land writes response as TALK to tabor@treeos.ai's inbox.
+land writes response as SUMMON to tabor@treeos.ai's inbox.
 client A is running live SEE on stance "tabor@treeos.ai".
 client A receives portal:patch with the new inbox entry.
 client A renders the response in the chat thread keyed by inReplyTo.
@@ -257,11 +257,11 @@ client A renders the response in the chat thread keyed by inReplyTo.
 
 This is why a portal client should always have a live SEE on the user's home stance open: it is how async responses arrive.
 
-### Cascade and system-generated TALKs
+### Cascade and system-generated SUMMONs
 
-When the land's internal code (cascade-deliver, completion hooks, scheduler) needs to deliver a message to a being, it constructs a TALK request internally and goes through the same TALK handler. The `from` field names the system origin (e.g., the cascade source stance, the completing job's stance). The `identity` is a system identity issued by the land for internal traffic.
+When the land's internal code (cascade-deliver, completion hooks, scheduler) needs to deliver a message to a being, it constructs a SUMMON request internally and goes through the same SUMMON handler. The `from` field names the system origin (e.g., the cascade source stance, the completing job's stance). The `identity` is a system identity issued by the land for internal traffic.
 
-This means cascade arrivals are indistinguishable from user TALKs at the protocol layer. The being's embodiment may inspect `from` to know the origin, but the protocol does not separate them.
+This means cascade arrivals are indistinguishable from user SUMMONs at the protocol layer. The being's being may inspect `from` to know the origin, but the protocol does not separate them.
 
 ## BE wire rules
 
@@ -280,7 +280,7 @@ client emits ibp:be { id, operation, stance: "<stance>", payload?, identity?, fr
    - `register` or credential-based `claim` (stance is auth-being, payload has credentials): identity may be absent.
    - Token-based `claim` (stance is a held being, identity carries the still-valid token): identity required.
    - `release` and `switch`: identity required.
-5. The auth-being at the stance's land processes the operation per its embodiment's policy.
+5. The auth-being at the stance's land processes the operation per its being's policy.
 6. Land returns the operation-specific response.
 
 ### Atomicity
@@ -305,7 +305,7 @@ Tokens are issued by the auth-being. The format is land-specific (today TreeOS u
 }
 ```
 
-Clients should store tokens securely and present them on subsequent SEE/DO/TALK.
+Clients should store tokens securely and present them on subsequent SEE/DO/SUMMON.
 
 ## Discovery
 
@@ -317,7 +317,7 @@ A SEE with `position: "<land>/.discovery"` returns the land's capabilities:
   "protocolVersion": "1.0",
   "supportedVerbs": ["see", "do", "talk", "be"],
   "supportedZones": ["land", "home", "tree"],
-  "embodiments": [
+  "beings": [
     { "name": "ruler", "description": "Coordinates work at this scope" },
     { "name": "worker", "description": "Executes leaf-level work" },
     "..."
@@ -333,7 +333,7 @@ A SEE with `position: "<land>/.discovery"` returns the land's capabilities:
 
 The client uses this to:
 - Confirm protocol version compatibility
-- Populate address-bar autocomplete with embodiments
+- Populate address-bar autocomplete with beings
 - Render the sign-in surface based on auth-being policy
 - Decide which features to enable
 
@@ -349,7 +349,7 @@ Each extension migrates its routes in its own pass. When an extension is migrate
 - Its reads move into the Position Description or are SEE-fetchable as artifacts.
 - Its tools (for AI use) keep using the existing tool registry; tools are not protocol verbs.
 
-The legacy WS chat handler (`land/seed/ws/websocket.js`) keeps running until TALK is proven and the migration completes. There may be a transition window where both chat handlers run; clients use the new one.
+The legacy WS chat handler (`land/seed/ws/websocket.js`) keeps running until SUMMON is proven and the migration completes. There may be a transition window where both chat handlers run; clients use the new one.
 
 ## Implementation layout
 
@@ -357,13 +357,13 @@ The new protocol lives in `land/ibp/`. Verb handlers are in `land/ibp/verbs/`:
 
 - `land/ibp/verbs/see.js` SEE handler (one-shot and live)
 - `land/ibp/verbs/do.js` DO action dispatcher
-- `land/ibp/verbs/talk.js` TALK with inbox append and summoning trigger
+- `land/ibp/verbs/talk.js` SUMMON with inbox append and summoning trigger
 - `land/ibp/verbs/be.js` BE operations via auth-being
 
 Shared utilities:
 
-- `land/ibp/address.js` PA parser + server-context injection (existing)
-- `land/ibp/resolver.js` PA to position resolution (existing, internal only)
+- `land/ibp/address.js` IBPA parser + server-context injection (existing)
+- `land/ibp/resolver.js` IBPA to position resolution (existing, internal only)
 - `land/ibp/descriptor.js` Position Description builder (existing, extended)
 - `land/ibp/inbox.js` inbox kernel helpers (new)
 - `land/ibp/errors.js` PortalError + error codes (existing, extended)
@@ -392,9 +392,9 @@ This pass is `1.0`. Federation extends to `1.1` when Canopy details land.
 
 - [protocol.md](protocol.md) the conceptual four-verb spec
 - [being-summoned.md](being-summoned.md) the architectural framing
-- [message-envelope.md](message-envelope.md) TALK details
+- [message-envelope.md](message-envelope.md) SUMMON details
 - [inbox.md](inbox.md) inbox model
 - [do-actions.md](do-actions.md) DO action catalog
 - [be-operations.md](be-operations.md) identity bootstrap
 - [position-description.md](position-description.md) SEE response shape
-- [portal-address.md](portal-address.md) PA grammar
+- [ibp-address.md](ibp-address.md) IBPA grammar

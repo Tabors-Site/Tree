@@ -19,18 +19,18 @@ Five lines.
 - **Position = scene.** Each position is a 3D scene. Walking around at a position means walking around inside its scene.
 - **Children = objects in the scene.** A position's children render as objects within the parent's scene. The objects sit in space; the user can see them, walk around them, approach them.
 - **Doorway = scene boundary.** A child position whose metadata marks it as a doorway is an entry point. Entering it triggers a SEE on that position and a scene transition. The user is now inside the child's scene.
-- **Being = figure in a scene.** Beings at a position render as figures (avatars, low-poly shapes, whatever the embodiment specifies). They stand in the scene; the user can approach them, look at them, talk to them.
-- **User = first-person camera.** The user moves through scenes as a first-person presence. Their left stance (`<land>/@<username>`) follows them everywhere. The right side of any TALK or DO is the being or position they are interacting with in the current scene.
+- **Being = figure in a scene.** Beings at a position render as figures (avatars, low-poly shapes, whatever the being specifies). They stand in the scene; the user can approach them, look at them, talk to them.
+- **User = first-person camera.** The user moves through scenes as a first-person presence. Their left stance (`<land>/@<username>`) follows them everywhere. The right side of any SUMMON or DO is the being or position they are interacting with in the current scene.
 
 Everything follows from these five lines.
 
 ## How the four verbs work in 3D
 
-**SEE** happens on every scene load. The client SEEs the position to get its Position Description, then renders it. SEE on a stance (when the user is looking at a being) augments the descriptor with embodiment-specific content; the client renders the focus accordingly (e.g. a UI panel showing the being's surface). Live SEE keeps the scene in sync with the underlying data; new children appear as new objects, status changes update visual state.
+**SEE** happens on every scene load. The client SEEs the position to get its Position Description, then renders it. SEE on a stance (when the user is looking at a being) augments the descriptor with being-specific content; the client renders the focus accordingly (e.g. a UI panel showing the being's surface). Live SEE keeps the scene in sync with the underlying data; new children appear as new objects, status changes update visual state.
 
 **DO** happens when the user interacts with an object. Approach an object, hit interact (or click), pick an action from a small menu, and the client sends the DO call against the object's position. Mutation lands at the position; the live SEE patches the scene.
 
-**TALK** happens by proximity and gaze. Get close to a being. Look at them. A chat pane (or eventually a voice channel) opens. Type or speak. The client constructs a TALK envelope with the being's stance as target and the user's stance as `from`. The being's response renders as a speech bubble above their head (MVP), later as TTS audio in 3D space.
+**SUMMON** happens by proximity and gaze. Get close to a being. Look at them. A chat pane (or eventually a voice channel) opens. Type or speak. The client constructs a SUMMON envelope with the being's stance as target and the user's stance as `from`. The being's response renders as a speech bubble above their head (MVP), later as TTS audio in 3D space.
 
 **BE** happens in the land scene itself. The auth-being stands somewhere in the land as a real figure the user encounters on arrival (the architectural commitment that the auth-being is a being made literal). Staring at the auth-being triggers a hazy glare effect (sensory cue: you are entering an identity moment) and a login menu opens overlaid in 3D space. The user picks register or claim, fills in credentials, the BE call goes out, the token comes back, the glare clears, and they are in the world as their established stance. Switching identity later is the same flow: walk back to the auth-being, stare, the glare returns, switch. The flat Portal's BE surface still exists for users who prefer it, but the native 3D flow is gaze-on-auth-being.
 
@@ -57,7 +57,7 @@ metadata.rendering = {
   sceneType: "outdoor" | "indoor" | "abstract" | "<custom>",
   isDoorway: boolean,
   layout: { ... },                  // optional: how children are placed
-  beingPlacements: { "<embodiment>": { x, y, z } },  // optional: where beings stand
+  beingPlacements: { "<being>": { x, y, z } },  // optional: where beings stand
   ambient: { ... },                 // optional: lighting, sound, mood
   model: "<asset ref>",             // optional: a 3D model for this position itself
 }
@@ -67,25 +67,25 @@ The flat Portal ignores this namespace. The 3D client reads it. Other clients in
 
 ### 2. Extension seed declarations
 
-Extensions can declare named **seed patterns**. A seed is a structured scaffolding operation: when planted at a position, it creates child positions, registers embodiments, installs related extensions, and sets metadata.
+Extensions can declare named **seed patterns**. A seed is a structured scaffolding operation: when planted at a position, it creates child positions, registers beings, installs related extensions, and sets metadata.
 
 Example: a `rulership-tree` extension declares a `basic-court` seed. Planting it at a position scaffolds:
 - a `court-chamber` child position with the right rendering metadata
-- `@ruler`, `@judge` embodiments registered at the new positions
+- `@ruler`, `@judge` beings registered at the new positions
 - the court contracts installed
 - whatever else the rulership pattern needs
 
-Invocation is a DO action: `do plant-seed { extension, seedName }` at the target position. The kernel routes to the extension; the extension does its work using existing primitives (create-child, set-meta, register-embodiment).
+Invocation is a DO action: `do plant-seed { extension, seedName }` at the target position. The kernel routes to the extension; the extension does its work using existing primitives (create-child, set-meta, register-being).
 
 In 3D this looks like growing a tree. In the flat Portal it looks like a structured set of new children appearing.
 
 ### 3. Being placement hints
 
-Optional `metadata.rendering.beingPlacements` maps embodiment names to scene coordinates. When absent, the 3D client places beings by default rules (center of scene, or at named anchors if the position model defines them). Lets land owners curate scenes without forcing them to.
+Optional `metadata.rendering.beingPlacements` maps being names to scene coordinates. When absent, the 3D client places beings by default rules (center of scene, or at named anchors if the position model defines them). Lets land owners curate scenes without forcing them to.
 
 ## Implementation order
 
-Phase 6 and Phase 7 happen as planned. The flat Portal needs to be useful for real users before the 3D client is meaningful — beings need real LLM backing (Phase 6), the chrome needs DO/TALK affordances (Phase 7).
+Phase 6 and Phase 7 happen as planned. The flat Portal needs to be useful for real users before the 3D client is meaningful — beings need real LLM backing (Phase 6), the chrome needs DO/SUMMON affordances (Phase 7).
 
 The extension seed mechanism can land alongside Phase 6 or Phase 7. It is a natural extension capability that doesn't require 3D rendering. The flat Portal can plant seeds too. It just looks like scaffolded structure appearing in the tree.
 
@@ -97,11 +97,11 @@ The 3D client is its own track. It can begin experimentally in parallel with Pha
 
 A minimal Three.js client that:
 
-1. Speaks IBP via the existing PortalClient primitives (`see`, `do`, `talk`, `be`).
+1. Speaks IBP via the existing PortalClient primitives (`see`, `do`, `summon`, `be`).
 2. Renders a small overworld. Land position as an outdoor scene. Public trees visible as 3D objects (simple shapes based on `metadata.rendering.sceneType` or sensible defaults).
 3. Handles doorway transitions for one or two positions to prove the scene-change pattern works.
 4. Renders beings as low-poly avatars at their stances.
-5. Wires TALK via proximity + gaze + chat pane. Speech bubbles above being heads. Voice later.
+5. Wires SUMMON via proximity + gaze + chat pane. Speech bubbles above being heads. Voice later.
 6. Supports the 2D/3D toggle.
 7. Supports one seed extension end to end (plant it in 3D, watch the structure grow).
 

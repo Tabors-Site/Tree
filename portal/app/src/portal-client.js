@@ -1,7 +1,7 @@
 // TreeOS Portal client. Speaks IBP (Inter-Being Protocol).
 //
 // Wraps a Socket.IO connection and exposes typed methods for IBP's four
-// verbs (see / do / talk / be). The client speaks only IBP, never raw HTTP
+// verbs (see / do / summon / be). The client speaks only IBP, never raw HTTP
 // routes (except the single /.well-known/treeos-portal bootstrap before
 // a socket is open).
 //
@@ -127,15 +127,15 @@ export class PortalClient {
   }
 
   /**
-   * TALK: deliver a message to a being's inbox.
+   * SUMMON: deliver a message to a being's inbox and wake them.
    *
    * Requires a stance (embodiment qualifier mandatory).
    *
    * @param {string} stance   position@embodiment
    * @param {object} message  { from, content, intent, correlation, inReplyTo?, attachments? }
    */
-  async talk(stance, message) {
-    return this._emitWithAck("ibp:talk", { stance, message });
+  async summon(stance, message) {
+    return this._emitWithAck("ibp:summon", { stance, message });
   }
 
   /**

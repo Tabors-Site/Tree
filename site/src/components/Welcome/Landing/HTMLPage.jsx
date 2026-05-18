@@ -161,11 +161,11 @@ const cards = resolveSlots("apps-grid", { userId, rootMap, tokenParam });
           <div style={{maxWidth: 600, margin: "0 auto"}}>
             {[
               ["apps-grid", "App cards on the /apps page. Fitness, food, recovery, study, kb each register one."],
-              ["user-quick-links", "Links on the user profile page. Notes, AI Chats, Contributions, Mail, Invites, etc."],
+              ["user-quick-links", "Links on the user profile page. Artifacts, Summons, Dids, Mail, Invites, etc."],
               ["user-profile-badge", "Tier badge or plan badge on the profile header."],
               ["user-profile-energy", "Energy meter on the profile header."],
               ["user-profile-sections", "Full sections below the profile header. Raw idea capture form, etc."],
-              ["tree-quick-links", "Back-nav links on the tree overview page. AI Chats, etc."],
+              ["tree-quick-links", "Back-nav links on the tree overview page. Summons, etc."],
               ["tree-owner-sections", "Owner-only sections on the tree overview. Gateway config, etc."],
               ["tree-holdings", "Holdings section on tree overview. Deferred cascade items."],
               ["tree-dream", "Dream schedule section on tree overview."],
@@ -212,7 +212,7 @@ const cards = resolveSlots("apps-grid", { userId, rootMap, tokenParam });
             the dashboard updates without a page refresh. Two mechanisms work together.
           </P>
 
-          <h3 style={{color: "#fff", fontSize: "1rem", marginTop: 20, marginBottom: 12}}>After Chat Response</h3>
+          <h3 style={{color: "#fff", fontSize: "1rem", marginTop: 20, marginBottom: 12}}>After Summon Response</h3>
           <P>
             Every app dashboard includes a chat bar (via <code>chatBarJs</code>). After the AI responds,
             the built-in <code>refreshDashboardData()</code> function re-fetches the page HTML, parses it,

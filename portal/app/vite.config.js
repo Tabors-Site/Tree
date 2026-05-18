@@ -24,9 +24,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      // The Portal Address parser lives one level up at /portal/lib/
+      // The IBP Address parser lives one level up at /portal/lib/
       // and is the single source of truth shared with the Land server.
-      "@portal-address": path.resolve(__dirname, "../lib/portal-address.js"),
+      "@ibp-address": path.resolve(__dirname, "../lib/ibp-address.js"),
     },
   },
 });

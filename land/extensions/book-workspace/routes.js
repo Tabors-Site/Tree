@@ -737,7 +737,7 @@ router.post("/:nodeId/bookstudio/start", authenticate, express.json(), async (re
         const swarmResult = await swx.runBranchSwarm({
           branches: parsedBranches,
           rootProjectNode: projectNode,
-          rootChatId: null,
+          rootSummonId: null,
           sessionId: null,
           aiSessionKey,
           beingId,
@@ -989,7 +989,7 @@ router.get("/:nodeId/bookstudio/chats", (req, res, next) => htmlAuth(req, res, n
       }
     }
 
-    const chats = await Chat.find({
+    const chats = await Summon.find({
       $or: [
         { "treeContext.rootId": projectId },
         { "treeContext.targetNodeId": { $in: [...descendants] } },
@@ -998,7 +998,7 @@ router.get("/:nodeId/bookstudio/chats", (req, res, next) => htmlAuth(req, res, n
     })
       .sort({ "startMessage.time": -1 })
       .limit(80)
-      .select("_id beingIn beingOut portalAddress sessionId chainIndex rootChatId parentChatId dispatchOrigin startMessage endMessage aiContext treeContext")
+      .select("_id beingIn beingOut ibpAddress sessionId chainIndex rootSummonId parentSummonId dispatchOrigin startMessage endMessage aiContext treeContext")
       .lean();
 
     const shaped = chats.map(c => ({

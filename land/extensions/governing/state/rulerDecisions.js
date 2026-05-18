@@ -2,7 +2,7 @@
 // Ruler chose this turn." The Ruler's tools write here; the orchestrator's
 // runRulerTurn reads after the Ruler exits and dispatches accordingly.
 //
-// Keying: chatId. Each Ruler turn runs inside one chat record (one
+// Keying: summonId. Each Ruler turn runs inside one chat record (one
 // chainstep of the conversation). The decision belongs to that turn,
 // not to the broader conversation — multiple turns within a thread
 // each get their own decision entry, all live simultaneously until
@@ -34,20 +34,20 @@ const decisions = new Map();
  * this ("Pick exactly one tool. After the tool call, exit."), and
  * the register's overwrite semantics fail safely if the model misbehaves.
  */
-export function setRulerDecision(chatId, decision) {
-  if (!chatId || !decision?.kind) return;
-  decisions.set(String(chatId), {
+export function setRulerDecision(summonId, decision) {
+  if (!summonId || !decision?.kind) return;
+  decisions.set(String(summonId), {
     ...decision,
     decidedAt: new Date().toISOString(),
   });
 }
 
-export function getRulerDecision(chatId) {
-  if (!chatId) return null;
-  return decisions.get(String(chatId)) || null;
+export function getRulerDecision(summonId) {
+  if (!summonId) return null;
+  return decisions.get(String(summonId)) || null;
 }
 
-export function clearRulerDecision(chatId) {
-  if (!chatId) return;
-  decisions.delete(String(chatId));
+export function clearRulerDecision(summonId) {
+  if (!summonId) return;
+  decisions.delete(String(summonId));
 }

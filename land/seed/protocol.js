@@ -173,7 +173,7 @@ export const WS = Object.freeze({
   // sub-role's exit text so the chat UI can render it as an inline
   // sub-bubble between the user's message and the Ruler's final
   // synthesis — exposing the internal dialogue between Ruler and
-  // its hired roles. Payload: { role, modeKey, exitText, parentChatId, source }.
+  // its hired roles. Payload: { role, modeKey, exitText, parentSummonId, source }.
   CHAINSTEP_COMPLETED:  "chainstepCompleted",
   // Lifecycle activity signal — fired when a fire-and-forget spawn
   // begins at a Ruler scope (planner/contractor/dispatch/etc.) and

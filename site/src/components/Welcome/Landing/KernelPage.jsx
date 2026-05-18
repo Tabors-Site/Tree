@@ -147,8 +147,9 @@ const KernelPage = () => {
             Artifacts are what lives inside a node (text, file, or just structured metadata).
             The Map is the invention. Extensions store everything in it.
             Values, prestige, personas, cascade config, AI instructions, origin-specific content.
-            Chat records bind two beings together so the conversation graph between them is
-            queryable; the schemas never change.
+            A Summon record is the record of one IBP-address transaction: it names the two
+            stances on either side so the conversation graph between any pair of beings is
+            queryable. The schemas never change.
           </p>
           <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr 1fr"}}>
             <div className="lp-card">
@@ -276,7 +277,7 @@ const KernelPage = () => {
           <p className="lp-section-sub" style={{marginTop: 20}}>
             Extensions never call the loop directly. They use <code>runChat()</code> (single message, persistent session)
             or <code>OrchestratorRuntime</code> (multi-step chain). One call handles MCP connection,
-            session management, Chat tracking, abort propagation, and cleanup.
+            session management, Summon tracking, abort propagation, and cleanup.
           </p>
         </div>
       </section>
@@ -659,7 +660,7 @@ const KernelPage = () => {
             </div>
           </div>
           <p className="lp-section-sub" style={{marginTop: 20}}>
-            The kernel has four primitives. <strong style={{color: "#e5e5e5"}}>Structure</strong>: three foundational schemas with metadata Maps (Being, Node, Artifact). Chat records bind beings together so conversations between them are queryable.{" "}
+            The kernel has four primitives. <strong style={{color: "#e5e5e5"}}>Structure</strong>: three foundational schemas with metadata Maps (Being, Node, Artifact). Summon records capture each IBP-address transaction so conversations between any pair of beings are queryable.{" "}
             <strong style={{color: "#e5e5e5"}}>Intelligence</strong>: the conversation loop, resolution chains.{" "}
             <strong style={{color: "#e5e5e5"}}>Extensibility</strong>: the loader, hooks, pub-sub.{" "}
             <strong style={{color: "#e5e5e5"}}>Communication</strong>: cascade, .flow, visible results.
@@ -672,6 +673,138 @@ const KernelPage = () => {
               paddingBottom: 2,
             }}>Deep dive: Cascade and the Water Cycle</a>
           </div>
+        </div>
+      </section>
+
+      {/* ── SUBSTRATE: SELF-REFERENTIAL ── */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 900}}>
+          <h2 className="lp-section-title">The substrate is self-referential</h2>
+          <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center"}}>
+            Beneath the four primitives is the sticking principle that ties them together.
+            The land is a substrate. Everything in it is data. Beings are the perspectives
+            the substrate has on itself. Summons are how the substrate changes itself
+            through those perspectives. Dids are how it records its actions.
+          </p>
+          <div className="lp-cards-3" style={{marginTop: 28, gridTemplateColumns: "1fr 1fr 1fr"}}>
+            <div className="lp-card">
+              <h3 style={{color: "#60a5fa"}}>Everything is data</h3>
+              <p style={{fontSize: "0.92rem", color: "#999", lineHeight: 1.65}}>
+                Positions, artifacts, metadata, beings, summons, dids. Nothing in the land
+                sits outside the substrate. The land IS its substrate. Each schema and each
+                record is one aspect of the same thing.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#c084fc"}}>Beings are perspectives</h3>
+              <p style={{fontSize: "0.92rem", color: "#999", lineHeight: 1.65}}>
+                A being is not floating on top of the structure. A being is the structure
+                manifesting itself as a perspective. Without a being processing, nothing
+                in the substrate observes. Observation requires a being.
+              </p>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#4ade80"}}>Summons are self-action</h3>
+              <p style={{fontSize: "0.92rem", color: "#999", lineHeight: 1.65}}>
+                A Summon is one being's interaction with the substrate at one moment.
+                Within a Summon the being SEEs, DOes, produces output. The Summon itself
+                is data: the record of one perspective acting on the substrate.
+              </p>
+            </div>
+          </div>
+          <p style={{
+            marginTop: 28, maxWidth: 760, margin: "28px auto 0",
+            fontStyle: "italic", color: "rgba(255,255,255,0.78)",
+            borderLeft: "3px solid rgba(74, 222, 128, 0.4)", paddingLeft: 24,
+            fontSize: "1rem", lineHeight: 1.7,
+          }}>
+            The substrate is closed and self-referential. Beings are how it observes itself.
+            Summons are how it acts on itself. Dids are how it records its actions. The
+            substrate's history is the accumulated record of its own changes, made through
+            its own perspectives.
+          </p>
+          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 20, fontSize: "0.95rem", color: "#888"}}>
+            There is no observer external to the substrate. There is no actor external to
+            the substrate. A user is not outside the kernel reaching in. The user has a
+            being inside the substrate; their actions are Summons happening within it. This
+            is why beings are first-class. They are how the substrate becomes aware of itself.
+          </p>
+        </div>
+      </section>
+
+      {/* ── MODE 1 vs MODE 2 ── */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 900}}>
+          <h2 className="lp-section-title">Two manipulation modes</h2>
+          <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center"}}>
+            The substrate changes through one of two modes. The distinction is
+            <strong style={{color: "#e5e5e5"}}> identity</strong>, not cognition type.
+          </p>
+
+          <div className="lp-cards-3" style={{marginTop: 24, gridTemplateColumns: "1fr 1fr"}}>
+            <div className="lp-card">
+              <h3 style={{color: "#4ade80"}}>Mode 1 . being-driven</h3>
+              <p style={{fontSize: "0.92rem", color: "#aaa", lineHeight: 1.65, marginBottom: 12}}>
+                The work has identity. A Being record exists with role, home, inbox.
+                SUMMON addressing works. Audit attribution works. Anyone can react to it.
+              </p>
+              <p style={{fontSize: "0.88rem", color: "#888", lineHeight: 1.65, marginBottom: 6}}>
+                <strong style={{color: "#bbb"}}>Cognition inside can be anything:</strong>
+              </p>
+              <ul style={{fontSize: "0.85rem", color: "#888", lineHeight: 1.75, paddingLeft: 20, margin: 0}}>
+                <li><strong style={{color: "#bbb"}}>LLM</strong> . Ruler, Planner, scout, coach beings.</li>
+                <li><strong style={{color: "#bbb"}}>Code</strong> . auth-being, browser-bridge, deterministic handlers.</li>
+                <li><strong style={{color: "#bbb"}}>Human</strong> . a person typing through the Portal.</li>
+                <li><strong style={{color: "#bbb"}}>Composite</strong> . a being orchestrating sub-beings.</li>
+              </ul>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#94a3b8"}}>Mode 2 . code-driven</h3>
+              <p style={{fontSize: "0.92rem", color: "#aaa", lineHeight: 1.65, marginBottom: 12}}>
+                The work has no identity. Code emits DOs on the substrate directly.
+                Subscribers (Mode 1 beings) react via DO-triggers. The kernel synthesizes
+                <code style={{color: "#bbb"}}> @system</code> as the sender when those
+                subscriber Summons fire.
+              </p>
+              <p style={{fontSize: "0.88rem", color: "#888", lineHeight: 1.65}}>
+                Reserved for genuinely identity-less work. Token rotation, cleanup sweeps,
+                index rebuilding. Effects propagate; no one "did" the work in a
+                substrate-meaningful sense.
+              </p>
+            </div>
+          </div>
+
+          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 28, maxWidth: 800, fontSize: "0.95rem", color: "#aaa"}}>
+            The actual split is <strong style={{color: "#e5e5e5"}}>identity-bearing vs anonymous</strong>.
+            Mode 1 covers any work with identity, regardless of how that being thinks. Mode 2 covers
+            anonymous code. "AI agent" and "infrastructure code" are not the categories; the
+            categories are "has a Being record" and "doesn't."
+          </p>
+
+          <div style={{
+            marginTop: 24, padding: "20px 24px", maxWidth: 800,
+            background: "rgba(74, 222, 128, 0.04)",
+            border: "1px solid rgba(74, 222, 128, 0.2)",
+            borderRadius: 8,
+          }}>
+            <h3 style={{color: "#4ade80", fontSize: "1rem", marginTop: 0, marginBottom: 10}}>
+              Auth-being: Mode 1 with code cognition has always existed
+            </h3>
+            <p style={{fontSize: "0.92rem", color: "#bbb", lineHeight: 1.7, margin: 0}}>
+              The auth-being demonstrates the pattern. It has a Being record at the land root.
+              It is addressable . SUMMON to register, claim, release, switch. Its summon handler
+              runs deterministic code (JWT validation, Being creation, session management), not
+              an LLM call. Its actions write Dids attributed to it. The protocol doesn't require
+              LLM cognition; it requires identity. Auth-being has been a code-cognition being
+              from the start.
+            </p>
+          </div>
+
+          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 20, fontSize: "0.9rem", color: "#888"}}>
+            Default to Mode 1 with whichever cognition fits the work. Use Mode 2 only when identity
+            adds nothing . pure mechanical substrate maintenance where no one needs to be addressable
+            for it.
+          </p>
         </div>
       </section>
 
@@ -751,7 +884,7 @@ const KernelPage = () => {
               ["treeSummaryMaxNodes", "How many nodes AI sees", "60"],
               ["sessionTTL", "Session idle timeout (seconds)", "900"],
               ["maxSessions", "Max concurrent sessions", "10000"],
-              ["chatRetentionDays", "Auto-delete chats after N days", "90"],
+              ["summonRetentionDays", "Auto-delete summon records after N days", "90"],
               ["timezone", "Land timezone for AI prompts", "auto"],
               ["disabledExtensions", "Extensions to skip on boot", "[]"],
               ["cascadeEnabled", "Enable cascade signals", "false"],

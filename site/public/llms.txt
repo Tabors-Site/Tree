@@ -112,13 +112,13 @@ Contracts are whatever invariant keeps parallel branches coherent. Wire message 
 
 A sibling to the World Wide Web. HTTP, URL, and HTML gave the world a Web of documents opened in a browser. IBP, the Inter-Being Protocol, gives it a Web of beings opened in the Portal. Both ride the same internet substrate. Both coexist. IBP is identity first, not URI first.
 
-Vocabulary mapping. HTTP corresponds to IBP itself. URL corresponds to Portal Address (the address format, stance :: stance). Browser corresponds to Portal (the client that inhabits stances). HTML corresponds to Position Descriptors (what IBP returns).
+Vocabulary mapping. HTTP corresponds to IBP itself. URL corresponds to IBP Address (the address format, stance :: stance). Browser corresponds to Portal (the client that inhabits stances). HTML corresponds to Position Descriptors (what IBP returns).
 
-A Portal Address has the shape `tabor :: treeos.ai/flappybird@ruler`. The left stance is the visitor. The right stance is the destination. The bridge `::` is the conversation between them. A Position Descriptor pins down three things: Land (which sovereign server), Position (which node in that land's tree), and Embodiment (which role lives at that position, like ruler, worker, planner, citizen, or persona).
+An IBP Address has the shape `tabor :: treeos.ai/flappybird@ruler`. The left stance is the visitor. The right stance is the destination. The bridge `::` is the conversation between them. A Position Descriptor pins down three things: Land (which sovereign server), Position (which node in that land's tree), and Embodiment (which role lives at that position, like ruler, worker, planner, citizen, or persona).
 
 The left side is shorthand when the speaker is the human user. The full form is symmetric. `treeos.ai/@tabor :: treeos.ai/flappybird@ruler`. Today every human message is assumed to come from the land itself. `treeos.ai/@tabor` means "the human being Tabor, speaking from the root of their land," bringing whole life experience rather than a slice scoped to one node. Later humans will speak from other positions too, and the left side will be written in full when they do. When both sides are AI beings, both stances are written in full from the start. There is no privileged default position for an AI, so there is no shorthand.
 
-Two addressable categories. Position and Stance. These are the targets of verb calls. Everything else in the vocabulary (IBP itself, Portal Address, Land, Embodiment, Portal) is structural — names for the protocol, the address format, or building blocks, not addressable on their own.
+Two addressable categories. Position and Stance. These are the targets of verb calls. Everything else in the vocabulary (IBP itself, IBP Address, Land, Embodiment, Portal) is structural — names for the protocol, the address format, or building blocks, not addressable on their own.
 
 Position is a place in the world. Always written `land/path`. The path can be `/` (root), `/~` (the left stance's home thinking space on that land, a private place to reflect), or `/anything` (any node in the tree). SEE accepts it, DO accepts it.
 
@@ -126,7 +126,7 @@ Stance is a Position with an embodiment qualifier at the end. `treeos.ai/flappyb
 
 Structural vocabulary, not addressable on its own.
 - Land does double duty, distinguished by the trailing slash. `treeos.ai` (no slash) is the bare domain identifier, the name of the sovereign server, used by BE when dispatching to the land's auth-being. `treeos.ai/` (with slash) is the Land Position of that land, the addressable place at path `/`, in the same category as any other Position; SEE and DO target it like any other position. The trailing slash is the load-bearing distinction.
-- Portal Address is the bridge form, `stance :: stance`. The syntax for expressing addressing relationships between two stances. Not a thing that gets addressed. The format used to address things. Like URL is not addressed; URLs are the format that points at what is addressed.
+- IBP Address is the bridge form, `stance :: stance`. The syntax for expressing addressing relationships between two stances. Not a thing that gets addressed. The format used to address things. Like URL is not addressed; URLs are the format that points at what is addressed.
 - Embodiment is a cognitive shape (`@ruler`, `@archivist`, a username). Not addressable on its own. Combines with a Position to form a Stance. The `@qualifier` in a Stance address names the embodiment but never targets it.
 
 Addressing grammar table.

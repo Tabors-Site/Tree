@@ -9,14 +9,14 @@
 //
 //   - extension namespaces: `values`, `codebook`, `governance`, etc.
 //     carry extension-specific data.
-//   - embodiment namespaces: `ruler`, `archivist`, ..., carry embodiment
+//   - being namespaces: `ruler`, `archivist`, ..., carry being
 //     configuration (system instructions, tools, permissions) that the
-//     embodiment will read when summoned at this position.
+//     being will read when summoned at this position.
 //   - kernel-aware namespaces: `tools`, `modes`, `scope`, `llm`. These are
 //     CORE_NAMESPACES in seed; the kernel allows direct writes to them.
 //
 // Reserved namespaces NOT writable through set-meta:
-//   - `inbox`: written through TALK (per-being-per-position inbox).
+//   - `inbox`: written through SUMMON (per-being-per-position inbox).
 //
 // Returns { written: true, nodeId, namespace }.
 

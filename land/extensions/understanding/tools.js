@@ -19,7 +19,7 @@ export default [
         .default("general")
         .describe("Perspective for this understanding run."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z
+      summonId: z
         .string()
         .nullable()
         .optional()
@@ -36,13 +36,13 @@ export default [
       idempotentHint: false,
       openWorldHint: false,
     },
-    handler: async ({ rootNodeId, perspective, beingId, chatId, sessionId }) => {
+    handler: async ({ rootNodeId, perspective, beingId, summonId, sessionId }) => {
       const result = await createUnderstandingRun(
         rootNodeId,
         beingId,
         perspective,
         true,
-        chatId,
+        summonId,
         sessionId,
       );
 
@@ -71,7 +71,7 @@ export default [
         .string()
         .describe("Root node ID to list understandings for."),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z
+      summonId: z
         .string()
         .nullable()
         .optional()
@@ -253,7 +253,7 @@ Then IMMEDIATELY call understanding-capture with:
       encoding,
       rootNodeId,
       beingId,
-      chatId,
+      summonId,
       sessionId,
     }) => {
       await commitCompressionResult({
@@ -263,7 +263,7 @@ Then IMMEDIATELY call understanding-capture with:
         currentLayer,
         encoding,
         beingId,
-        chatId,
+        summonId,
         sessionId,
       });
 
@@ -312,7 +312,7 @@ Then IMMEDIATELY call understanding-capture with:
           "Omit on first call. Include your summary from previous task on subsequent calls.",
         ),
       beingId: z.string().describe("Injected by server. Ignore."),
-      chatId: z
+      summonId: z
         .string()
         .nullable()
         .optional()
@@ -334,7 +334,7 @@ Then IMMEDIATELY call understanding-capture with:
       rootNodeId,
       previousResult,
       beingId,
-      chatId,
+      summonId,
       sessionId,
     }) => {
       // 1. Commit previous result if provided
@@ -347,7 +347,7 @@ Then IMMEDIATELY call understanding-capture with:
             understandingNodeId: previousResult.understandingNodeId,
             currentLayer: previousResult.currentLayer,
             beingId,
-            chatId,
+            summonId,
             sessionId,
           });
         } catch (err) {

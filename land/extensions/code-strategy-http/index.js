@@ -60,7 +60,7 @@ const strategy = defineStrategy({
           .describe("Routes to wire. If empty, emits a / health handler only."),
         filePath: z.string().optional().describe("Target filename. Defaults to 'server.js'."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false },
@@ -88,7 +88,7 @@ const strategy = defineStrategy({
         "if coherent; FAIL lists the mismatches.",
       schema: {
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true },

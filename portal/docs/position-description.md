@@ -1,25 +1,25 @@
 # Position Description: the JSON shape SEE returns
 
-When the SEE verb of IBP (the Inter-Being Protocol) addresses a position (with or without an embodiment qualifier), the land returns a **Position Description**: structured JSON describing what is at that address. The Portal renders the descriptor according to TreeOS conventions. No HTML, no land-supplied layout. The land owns the data; the Portal owns the rendering.
+When the SEE verb of IBP (the Inter-Being Protocol) addresses a position (with or without an being qualifier), the land returns a **Position Description**: structured JSON describing what is at that address. The Portal renders the descriptor according to TreeOS conventions. No HTML, no land-supplied layout. The land owns the data; the Portal owns the rendering.
 
 Position Description is to IBP what HTML is to HTTP: the response shape the client knows how to render.
 
 ## What the descriptor describes
 
-The descriptor describes **what is at the addressed position**, with embodiment-specific augmentation when the address has a qualifier. Recall the terminology:
+The descriptor describes **what is at the addressed position**, with being-specific augmentation when the address has a qualifier. Recall the terminology:
 
 - **Position**: `<land>/<path>`. The slash is always present. The path may be empty (`treeos.ai/`, the Land Position), `~user...` (a home), or any tree node (`treeos.ai/flappybird/chapter-1`). A position is the actual place in the world.
-- **Stance**: `<position>@<embodiment>`. A being at a position. `treeos.ai/flappybird@ruler`.
-- **Portal Address**: `<stance> :: <stance>`. `tabor :: treeos.ai/flappybird@ruler`. Names the relationship between two stances. Used in UI and being-to-being framing; the verb envelope carries only the "to" side.
+- **Stance**: `<position>@<being>`. A being at a position. `treeos.ai/flappybird@ruler`.
+- **IBP Address**: `<stance> :: <stance>`. `tabor :: treeos.ai/flappybird@ruler`. Names the relationship between two stances. Used in UI and being-to-being framing; the verb envelope carries only the "to" side.
 
 There are two things addressable in the world: a position (a place) and a stance (a being at a place). The SEE verb accepts either; the descriptor returned reflects which was asked for.
 
 SEE accepts either an unqualified position or a qualified one:
 
-- **Unqualified** (`see treeos.ai/flappybird`): the descriptor describes the position. Children, artifacts, lineage, governance, the list of beings invocable here. Embodiment-specific fields reflect the union of all invocable embodiments so the user can pick.
-- **Qualified** (`see treeos.ai/flappybird@ruler`): the descriptor is augmented with the named embodiment's specific data. That embodiment's inbox, its honored intents, its response mode, its open conversations. The base position fields remain the same.
+- **Unqualified** (`see treeos.ai/flappybird`): the descriptor describes the position. Children, artifacts, lineage, governance, the list of beings invocable here. Being-specific fields reflect the union of all invocable beings so the user can pick.
+- **Qualified** (`see treeos.ai/flappybird@ruler`): the descriptor is augmented with the named being's specific data. That being's inbox, its honored intents, its response mode, its open conversations. The base position fields remain the same.
 
-Same position with different embodiment qualifiers returns different augmented descriptors. The Ruler-augmented descriptor at /flappybird emphasizes governance state. The Historian-augmented descriptor emphasizes accumulated history. The Oracle-augmented descriptor emphasizes synthesis. Same position, same base shape, different augmentation.
+Same position with different being qualifiers returns different augmented descriptors. The Ruler-augmented descriptor at /flappybird emphasizes governance state. The Historian-augmented descriptor emphasizes accumulated history. The Oracle-augmented descriptor emphasizes synthesis. Same position, same base shape, different augmentation.
 
 The descriptor is **filtered by the requesting identity**. Which beings appear in the `beings` list, what data is visible in `governance` or `artifacts`, what panels are populated, all depend on what the requesting identity is permitted to see at this position. The descriptor is named "Position Description" because the requester-plus-addressed-position together form an implicit stance relationship even when the address itself is unqualified.
 
@@ -30,11 +30,11 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
   // Identifies the stance this descriptor describes.
   // The address carries the path in BOTH forms (names and ids) at full
   // chain depth. The portal renders whichever form the user prefers
-  // and can switch freely (the four forms in portal-address.md).
+  // and can switch freely (the four forms in ibp-address.md).
   "address": {
     "land": "treeos.ai",
     "path": "/flappybird/chapter-1",        // the form the request used (verbatim)
-    "embodiment": "ruler",                  // the embodiment the request asked for
+    "being": "ruler",                  // the being the request asked for
     "nodeId": "<uuid-b>",                   // leaf node id (canonical, stable across renames)
     "userId": "<uuid|null>",                // user-owner of this scope, when applicable
 
@@ -57,21 +57,21 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
   // Zone type — controls which top-level chrome the portal draws.
   "zone": "land" | "home" | "tree",
 
-  // Embodiments invocable AT this position by the addressing identity.
+  // Beings invocable AT this position by the addressing identity.
   // The portal uses this list to populate the address-bar autocomplete
   // and the chat-panel invoke dropdown.
   "beings": [
     {
-      "embodiment": "ruler",
+      "being": "ruler",
       "label": "Ruler",
       "description": "Coordinates work at this scope. Hires Planner/Contractor/Foreman, dispatches workers.",
       "invocableBy": "owner" | "anyone" | "members" | "custom-rule-name",
       "available": true,                    // whether the current identity is authorized to invoke this
-      "honoredIntents": ["chat", "place", "query", "be"],  // which TALK intents this embodiment accepts
-      "respondMode": "sync" | "async" | "none",            // how this embodiment delivers responses
-      "triggerOn": ["message", "hook", "schedule"],        // when summoning fires for this embodiment
+      "honoredIntents": ["chat", "place", "query", "be"],  // which SUMMON intents this being accepts
+      "respondMode": "sync" | "async" | "none",            // how this being delivers responses
+      "triggerOn": ["message", "hook", "schedule"],        // when summoning fires for this being
       "icon": "👑",
-      // Per-embodiment inbox preview at this position
+      // Per-being inbox preview at this position
       "inbox": {
         "total":      47,
         "unconsumed": 3,
@@ -115,7 +115,7 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
       "previewBytes": 4217,
       "totalBytes": 12894,
       "createdAt": "2026-05-15T10:38:00Z",
-      "byBeing": "<embodiment that produced it>",
+      "byBeing": "<being that produced it>",
       "fullContentRef": "/api/v1/node/<nodeId>/notes/<noteId>"  // portal fetches on demand
     },
     // ...
@@ -180,7 +180,7 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
     }
   ],
 
-  // Conversation threads at this position. A thread is a chain of TALK
+  // Conversation threads at this position. A thread is a chain of SUMMON
   // messages walking inReplyTo back to an original message. The portal
   // renders one chat panel per active thread keyed by the originating
   // correlation id. This field replaces the older chatThreads/sessionId
@@ -189,7 +189,7 @@ The descriptor is **filtered by the requesting identity**. Which beings appear i
     {
       "rootCorrelation": "msg-12",         // correlation id of the message that started this thread
       "withStance":      "tabor@treeos.ai", // the other end of the conversation
-      "embodiment":      "ruler",           // which being at this position is in the thread
+      "being":      "ruler",           // which being at this position is in the thread
       "openedAt":        "2026-05-15T09:00:00Z",
       "lastMessageAt":   "2026-05-15T10:42:00Z",
       "messageCount":    12,
@@ -308,10 +308,10 @@ The full union above is the example. Most tree-zone stances will have governance
 
 | Field | Portal surface |
 |---|---|
-| `address` | Address bar shows it. Tab title uses path + embodiment. |
+| `address` | Address bar shows it. Tab title uses path + being. |
 | `zone` | Determines top-level chrome (land discovery / home dashboard / node renderer). |
 | `beings` | Address-bar autocomplete on `@`. Chat-panel invoke dropdown. Each being's inbox drives a chat-panel preview. |
-| `beings[].honoredIntents` | Portal-side intent picker for TALK. Disables intents the embodiment refuses. |
+| `beings[].honoredIntents` | Portal-side intent picker for SUMMON. Disables intents the being refuses. |
 | `beings[].respondMode` | Portal-side rendering choice: sync (block UI for response) vs async (background panel + notification on response). |
 | `beings[].inbox` | Preview of recent messages. Click expands to full conversation view. |
 | `children` | Tree navigator. Click-to-navigate. |
@@ -329,7 +329,7 @@ The full union above is the example. Most tree-zone stances will have governance
 
 - **Consistent rendering.** Every land's positions look like TreeOS positions because the portal draws them the same way. Visitors do not learn each land's UI; they learn TreeOS once.
 - **Live updates.** Live SEE streams RFC 6902 patches. New plan emission patches `governance.plan.active`. New inbox message patches `beings[].inbox`. No re-fetching.
-- **Embodiment-aware rendering.** The same position fetched as `@ruler` vs `@archivist` returns different subsets of the same shape. The portal strips DO/TALK write surfaces in archivist mode. The land does not render two variants; it returns the same descriptor with different `beings[].available` and `identity.writeAllowed`.
+- **Being-aware rendering.** The same position fetched as `@ruler` vs `@archivist` returns different subsets of the same shape. The portal strips DO/SUMMON write surfaces in archivist mode. The land does not render two variants; it returns the same descriptor with different `beings[].available` and `identity.writeAllowed`.
 - **Federation.** A portal session can navigate across lands; each land returns the same descriptor shape; no per-land rendering quirks.
 - **Extensibility.** Adding a new artifact `kind` or extension `surface` does not require a rewrite. It adds a field the portal recognizes.
 

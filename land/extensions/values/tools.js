@@ -11,12 +11,12 @@ export default function getTools() {
         key: z.string().describe("The key of the value to modify."),
         value: z.number().describe("The numeric value to assign."),
         beingId: z.string().describe("The ID of the user performing the edit."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-      handler: async ({ nodeId, key, value, beingId, chatId, sessionId }) => {
-        const result = await setValueForNode({ nodeId, key, value, beingId, chatId, sessionId });
+      handler: async ({ nodeId, key, value, beingId, summonId, sessionId }) => {
+        const result = await setValueForNode({ nodeId, key, value, beingId, summonId, sessionId });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       },
     },
@@ -28,13 +28,13 @@ export default function getTools() {
         key: z.string().describe("The key of the goal (must match an existing value key)."),
         goal: z.number().describe("The numeric goal value."),
         beingId: z.string().describe("The ID of the user performing the edit."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-      handler: async ({ nodeId, key, goal, beingId, chatId, sessionId }) => {
+      handler: async ({ nodeId, key, goal, beingId, summonId, sessionId }) => {
         try {
-          const result = await setGoalForNode({ nodeId, key, goal, beingId, chatId, sessionId });
+          const result = await setGoalForNode({ nodeId, key, goal, beingId, summonId, sessionId });
           return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
         } catch (err) {
           return { content: [{ type: "text", text: `Failed to update goal: ${err.message}` }] };

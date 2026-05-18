@@ -1,6 +1,6 @@
 # Identity-first session model
 
-IBP (the Inter-Being Protocol) cannot be opened anonymously. Every Portal session begins **signed in as a being at a land**. Identity is the root of every action; without it, no Portal Address can form, no IBP verb (SEE/DO/TALK) can fire.
+IBP (the Inter-Being Protocol) cannot be opened anonymously. Every Portal session begins **signed in as a being at a land**. Identity is the root of every action; without it, no IBP Address can form, no IBP verb (SEE/DO/SUMMON) can fire.
 
 This document defines what a being is, how identity flows, and what's deferred to future passes.
 
@@ -18,7 +18,7 @@ The web's anonymous-by-default model breaks all three. The TreeOS Portal inverts
 
 ## What a being is
 
-A **being** is an actor that can sit on either side of a Portal Address — i.e. it occupies a Stance (`land/path@embodiment`). The `@<label>` portion of the Stance names the being at that position. The label resolves to one of two kinds:
+A **being** is an actor that can sit on either side of an IBP Address — i.e. it occupies a Stance (`land/path@being`). The `@<label>` portion of the Stance names the being at that position. The label resolves to one of two kinds:
 
 ### Human being
 
@@ -35,7 +35,7 @@ Display shorthand: bare `tabor` on the left side of a bridge means `<current-lan
 
 ### AI being at a node
 
-`@<embodiment>` — the label is an embodiment kind (Ruler, Planner, Oracle, Dreamer, etc.). The being lives at the position; its "home" IS the node it operates from. The embodiment kind names the cognition active there — system instructions, enabled tools, permissions surface, voice.
+`@<being>` — the label is an being kind (Ruler, Planner, Oracle, Dreamer, etc.). The being lives at the position; its "home" IS the node it operates from. The being kind names the cognition active there — system instructions, enabled tools, permissions surface, voice.
 
 ```
 treeos.ai/flappybird@ruler             # the Ruler-AI-being at the flappybird node
@@ -48,8 +48,8 @@ AI beings don't have their own stored credentials in Pass 1. They run under the 
 
 The land looks at the `@<label>` and the position:
 - Label matches a registered username on this land → human being.
-- Label matches a known embodiment kind invocable at this position → AI being.
-- Both could in principle match — the label-namespace is shared — but in practice usernames and embodiment kinds occupy disjoint namespaces (usernames are user-picked; embodiment kinds come from the extension manifest).
+- Label matches a known being kind invocable at this position → AI being.
+- Both could in principle match — the label-namespace is shared — but in practice usernames and being kinds occupy disjoint namespaces (usernames are user-picked; being kinds come from the extension manifest).
 
 The Position Description's `beings[]` field tells the portal which kind each invocable label resolves to.
 
@@ -64,14 +64,14 @@ tabor :: otherland.com/library@oracle                        # human → AI bein
 treeos.ai/flappybird@tabor :: /flappybird/chapter-1@worker   # human at a node → AI being deeper in the tree
 ```
 
-The grammar is uniform: both sides are `land/path@embodiment`. The position and the label-kind together determine whether a side is human or AI. The only stored-identity layer at Pass 1 is the human; AI beings exist *at* nodes and are addressed *by* position + embodiment kind.
+The grammar is uniform: both sides are `land/path@being`. The position and the label-kind together determine whether a side is human or AI. The only stored-identity layer at Pass 1 is the human; AI beings exist *at* nodes and are addressed *by* position + being kind.
 
 ## What's deferred (not Pass 1)
 
 - **AI beings with their own credentials.** A Ruler that owns its own auth, its own LLM keys, its own cross-session persistence — a true second-class actor. Requires Pass 2 governance (courts) and Pass 5 federation.
-- **A third identity layer** between the human and the in-PA embodiment. Reserved namespace, not yet designed.
+- **A third identity layer** between the human and the in-IBPA being. Reserved namespace, not yet designed.
 
-Pass 1 keeps it simple: humans are stored identities; AI beings are positions-plus-embodiments invoked under a human's auth.
+Pass 1 keeps it simple: humans are stored identities; AI beings are positions-plus-beings invoked under a human's auth.
 
 ## The sign-in surface
 
@@ -82,7 +82,7 @@ The portal's first screen — opened before any address is loaded — is the sig
 3. **Federate an existing being** (Pass 5+). Carry credentials from another land via Canopy. Placeholder.
 4. **Local-only mode.** Sign in to a being on `localhost` or a local-only land. For development or offline use.
 
-After sign-in, the portal has a **session identity**: which human being on which land. This is the left side of every PA typed in the address bar until the user explicitly switches.
+After sign-in, the portal has a **session identity**: which human being on which land. This is the left side of every IBPA typed in the address bar until the user explicitly switches.
 
 ## The identity panel
 

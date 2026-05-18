@@ -868,7 +868,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
               // IMPORTANT: register via registerTool() with a pre-built
               // passthrough zod object so the SDK does NOT strip context
               // fields that the MCP HTTP layer injects on every call
-              // (beingId, rootId, nodeId, chatId, sessionId). The shorthand
+              // (beingId, rootId, nodeId, summonId, sessionId). The shorthand
               // server.tool() wraps raw shapes in a strict z.object which
               // silently drops unknown fields, leaving every tool handler
               // blind to its own position in the tree. This broke tools

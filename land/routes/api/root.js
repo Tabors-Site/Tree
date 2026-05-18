@@ -8,7 +8,7 @@ import { getExtension } from "../../extensions/loader.js";
 
 import Node from "../../seed/models/node.js";
 import { isValidRootLlmSlot, getAllRootLlmSlots } from "../../seed/llm/connections.js";
-import { getNodeChats } from "../../seed/llm/chatHistory.js";
+import { getNodeSummons } from "../../seed/llm/summonHistory.js";
 
 import { registerWithHorizon } from "../../canopy/horizon.js";
 
@@ -571,7 +571,7 @@ router.get("/root/:rootId/chats", authenticate, async (req, res) => {
       return sendError(res, 404, ERR.TREE_NOT_FOUND, "Root not found");
     }
 
-    const { sessions } = await getNodeChats({
+    const { sessions } = await getNodeSummons({
       nodeId: rootId,
       sessionLimit: limit || 10,
       sessionId,

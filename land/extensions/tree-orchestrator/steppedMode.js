@@ -10,7 +10,7 @@ import {
   getCurrentNodeId,
   setCurrentNodeId as setCurrentNodeIdSafely,
 } from "../../seed/llm/conversation.js";
-import { startChainStep, finalizeChat } from "../../seed/llm/chatTracker.js";
+import { startChainStep, finalizeSummon } from "../../seed/llm/summonTracker.js";
 // Run processMessage for a mode, but split the tool-call work across
 // chainIndex steps. The first call reuses the rootChat created upstream.
 // If processMessage signals _continue (the mode's maxToolCallsPerStep cap
@@ -22,8 +22,8 @@ import { startChainStep, finalizeChat } from "../../seed/llm/chatTracker.js";
 export async function runSteppedMode(aiSessionKey, mode, message, {
   username, beingId, rootId, signal, slot,
   readOnly, onToolLoopCheckpoint, socket,
-  parentChatId = null, dispatchOrigin = null,
-  sessionId, rootChatId, rt,
+  parentSummonId = null, dispatchOrigin = null,
+  sessionId, rootSummonId, rt,
   currentNodeId = null,
   // Place mode — tells processMessage's tool loop to exit after a
   // successful tool call instead of re-invoking the LLM for prose.
@@ -48,15 +48,15 @@ export async function runSteppedMode(aiSessionKey, mode, message, {
   const beginStep = async (stepModeKey, stepInput) => {
     const currentNodeId = getCurrentNodeId(beingId) || rootId;
     log.info("Tree Orchestrator",
-      `📍 beginChainStep ${stepModeKey} targetNodeId=${currentNodeId?.slice?.(0, 8)} (rootId=${rootId?.slice?.(0, 8)}, dispatchOrigin=${dispatchOrigin || "continuation"}, parentChatId=${parentChatId ? parentChatId.slice(0, 8) : "null"}, rt=${rt && !rt._cleaned ? "live" : "fallback"})`,
+      `📍 beginChainStep ${stepModeKey} targetNodeId=${currentNodeId?.slice?.(0, 8)} (rootId=${rootId?.slice?.(0, 8)}, dispatchOrigin=${dispatchOrigin || "continuation"}, parentSummonId=${parentSummonId ? parentSummonId.slice(0, 8) : "null"}, rt=${rt && !rt._cleaned ? "live" : "fallback"})`,
     );
     if (rt && !rt._cleaned) {
-      // chatId for the opened step is carried back via the return value;
-      // the caller threads it into pmCtx.chatId before the next
+      // summonId for the opened step is carried back via the return value;
+      // the caller threads it into pmCtx.summonId before the next
       // processMessage. No Map / setChatContext side-channel.
       return await rt.beginChainStep(stepModeKey, stepInput, {
         treeContext: currentNodeId ? { targetNodeId: currentNodeId } : undefined,
-        parentChatId: parentChatId || null,
+        parentSummonId: parentSummonId || null,
         dispatchOrigin: dispatchOrigin || "continuation",
       });
     }
@@ -71,17 +71,17 @@ export async function runSteppedMode(aiSessionKey, mode, message, {
         beingIn: beingId,
         sessionId,
         chainIndex: fallbackChainIndex++,
-        rootChatId: rootChatId || null,
+        rootSummonId: rootSummonId || null,
         modeKey: stepModeKey,
         source: "branch",
         input: stepInput,
         treeContext: currentNodeId ? { targetNodeId: currentNodeId } : undefined,
-        parentChatId: parentChatId || null,
+        parentSummonId: parentSummonId || null,
         dispatchOrigin: dispatchOrigin || "branch-swarm",
       });
       if (chat?._id) {
         log.info("Tree Orchestrator", `📍 fallback chat created: ${chat._id.slice(0, 8)} target=${currentNodeId?.slice(0, 8)}`);
-        return { chatId: chat._id, chainIndex: fallbackChainIndex - 1 };
+        return { summonId: chat._id, chainIndex: fallbackChainIndex - 1 };
       }
       log.warn("Tree Orchestrator", `beginStep fallback: startChainStep returned null`);
     } catch (err) {
@@ -91,16 +91,16 @@ export async function runSteppedMode(aiSessionKey, mode, message, {
   };
 
   const finishStep = async (step, outputText, stopped = false) => {
-    if (!step?.chatId) return;
+    if (!step?.summonId) return;
     if (rt && !rt._cleaned) {
-      await rt.finishChainStep(step.chatId, {
+      await rt.finishChainStep(step.summonId, {
         output: outputText,
         stopped,
         modeKey: mode,
       });
     } else {
-      await finalizeChat({
-        chatId: step.chatId,
+      await finalizeSummon({
+        summonId: step.summonId,
         content: outputText,
         stopped,
         modeKey: mode,
@@ -216,11 +216,11 @@ export async function runSteppedMode(aiSessionKey, mode, message, {
   const pmCtx = {
     username, beingId, rootId, signal, slot,
     currentNodeId: pmCurrentNodeId,
-    // chatId / sessionId are populated per-step below so processMessage's
+    // summonId / sessionId are populated per-step below so processMessage's
     // tool loop attributes tool calls to the correct chain step's chat
-    // record. We start with the upstream rootChatId; beginStep replaces
-    // it with the freshly-opened step's chatId on each iteration.
-    chatId: rootChatId || null,
+    // record. We start with the upstream rootSummonId; beginStep replaces
+    // it with the freshly-opened step's summonId on each iteration.
+    summonId: rootSummonId || null,
     sessionId: sessionId || null,
     readOnly,
     skipRespond,
@@ -268,11 +268,11 @@ export async function runSteppedMode(aiSessionKey, mode, message, {
   // chainIndex 0 stays reserved for the root (user's message + final
   // aggregated answer), set up upstream by runOrchestration.
   let firstStep = await beginStep(mode, message || "(empty)");
-  // Track the most recent chain-step chatId so the caller (dispatch.js
+  // Track the most recent chain-step summonId so the caller (dispatch.js
   // swarm wiring) can point branch workers at the step that actually
   // emitted [[BRANCHES]] instead of the whole session's root chat.
-  let lastStepChatId = firstStep?.chatId || null;
-  if (firstStep?.chatId) pmCtx.chatId = firstStep.chatId;
+  let lastStepChatId = firstStep?.summonId || null;
+  if (firstStep?.summonId) pmCtx.summonId = firstStep.summonId;
   let result;
   const allContent = []; // accumulate content across continuation turns
   try {
@@ -280,7 +280,7 @@ export async function runSteppedMode(aiSessionKey, mode, message, {
     if (result?.content) allContent.push(result.content);
   } catch (err) {
     await finishStep(firstStep, `Error: ${err.message}`, true);
-    if (rootChatId) pmCtx.chatId = rootChatId;
+    if (rootSummonId) pmCtx.summonId = rootSummonId;
     throw err;
   }
 
@@ -345,15 +345,15 @@ export async function runSteppedMode(aiSessionKey, mode, message, {
       `you actually wrote something in this turn.`;
 
     const retryStep = await beginStep(mode, nudge);
-    if (retryStep?.chatId) {
-      lastStepChatId = retryStep.chatId;
-      pmCtx.chatId = retryStep.chatId;
+    if (retryStep?.summonId) {
+      lastStepChatId = retryStep.summonId;
+      pmCtx.summonId = retryStep.summonId;
     }
     try {
       result = await processMessage(aiSessionKey, nudge, pmCtx);
     } catch (err) {
       await finishStep(retryStep, `Error: ${err.message}`, true);
-      if (rootChatId) pmCtx.chatId = rootChatId;
+      if (rootSummonId) pmCtx.summonId = rootSummonId;
       throw err;
     }
     const afterRetry = stripMarkers(result);
@@ -463,9 +463,9 @@ export async function runSteppedMode(aiSessionKey, mode, message, {
 
     const useContinuation = result?._continue; // only true for empty-message re-entry
     const stepChat = await beginStep(mode, nudgeMessage);
-    if (stepChat?.chatId) {
-      lastStepChatId = stepChat.chatId;
-      pmCtx.chatId = stepChat.chatId;
+    if (stepChat?.summonId) {
+      lastStepChatId = stepChat.summonId;
+      pmCtx.summonId = stepChat.summonId;
     }
 
     try {
@@ -476,7 +476,7 @@ export async function runSteppedMode(aiSessionKey, mode, message, {
       if (result?.content) allContent.push(result.content);
     } catch (err) {
       await finishStep(stepChat, `Error: ${err.message}`, true);
-      if (rootChatId) pmCtx.chatId = rootChatId;
+      if (rootSummonId) pmCtx.summonId = rootSummonId;
       throw err;
     }
 
@@ -492,12 +492,12 @@ export async function runSteppedMode(aiSessionKey, mode, message, {
     );
   }
 
-  // Restore chatId to the root chat so any subsequent processMessage
+  // Restore summonId to the root chat so any subsequent processMessage
   // calls in this ctx attribute tool calls to chainIndex 0. pmCtx is
   // mutated in-place; callers reading pmCtx after this point see the
-  // restored chatId.
-  if (rootChatId) {
-    pmCtx.chatId = rootChatId;
+  // restored summonId.
+  if (rootSummonId) {
+    pmCtx.summonId = rootSummonId;
   }
 
   // Attach accumulated content from all continuation turns so the
@@ -515,7 +515,7 @@ export async function runSteppedMode(aiSessionKey, mode, message, {
     result._writeTrace = writeTrace;
     result._writeCount = writeCount;
     result._readCount = readCount;
-    // The last chain-step chatId. Used by dispatch.js to nest branch
+    // The last chain-step summonId. Used by dispatch.js to nest branch
     // workers under the architect's final step (the one that emitted
     // [[BRANCHES]]) so the chat-history tree groups correctly.
     result._lastChatId = lastStepChatId;

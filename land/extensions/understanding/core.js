@@ -26,7 +26,7 @@ export async function createUnderstandingRun(
   rootNodeId,
   beingId,
   perspective = "general",
-  chatId = null,
+  summonId = null,
   sessionId = null,
 ) {
   const descendantIds = await getDescendantIds(rootNodeId, { maxResults: 10000 });
@@ -85,7 +85,7 @@ export async function createUnderstandingRun(
   await logDid({
     beingId: beingId,
     nodeId: rootNodeId,
-    chatId,
+    summonId,
     sessionId,
     energyUsed,
 
@@ -116,7 +116,7 @@ export async function findOrCreateUnderstandingRun(
   rootNodeId,
   beingId,
   perspective = "general",
-  chatId = null,
+  summonId = null,
   sessionId = null,
 ) {
   const existing = await UnderstandingRun.findOne({
@@ -146,7 +146,7 @@ export async function findOrCreateUnderstandingRun(
     rootNodeId,
     beingId,
     perspective,
-    chatId,
+    summonId,
     sessionId,
   );
 }
@@ -609,7 +609,7 @@ export async function commitCompressionResult({
   understandingNodeId,
   currentLayer,
   beingId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 }) {
   const run = await UnderstandingRun.findById(understandingRunId).lean();
@@ -651,7 +651,7 @@ export async function commitCompressionResult({
     await logDid({
       beingId,
       nodeId: node.realNodeId,
-      chatId,
+      summonId,
       sessionId,
       energyUsed,
       action: "understanding",
@@ -727,7 +727,7 @@ export async function commitCompressionResult({
       await logDid({
         beingId,
         nodeId: node.realNodeId,
-        chatId,
+        summonId,
         sessionId,
         energyUsed,
         action: "understanding",

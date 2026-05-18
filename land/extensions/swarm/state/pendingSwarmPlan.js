@@ -28,7 +28,7 @@
 
 import log from "../../../seed/log.js";
 
-// conversationKey -> entry. Per-conversation stash: Portal Address for
+// conversationKey -> entry. Per-conversation stash: IBP Address for
 // being-to-being chats, internal session key for stanceless pipelines.
 // The Map stays string-keyed; callers pass whichever flavor identifies
 // the conversation context the swarm plan belongs to.
@@ -48,7 +48,7 @@ const SWARM_PLAN_TTL_MS = 30 * 60 * 1000;
  *   contracts         parsed [[CONTRACTS]] entries
  *   userRequest       the original user message that produced the plan
  *   architectChatId   chat id of the architect turn that emitted this
- *   rootChatId        chat id of the root user turn
+ *   rootSummonId        chat id of the root user turn
  *   rootId            tree root
  *   cleanedAnswer     architect's visible answer (branches block stripped)
  *   modeKey           mode the architect used (tree:code-plan typically)

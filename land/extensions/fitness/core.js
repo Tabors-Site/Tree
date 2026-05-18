@@ -498,7 +498,7 @@ export async function recordSessionHistory(historyNodeId, parsed, delivered, bei
       content: JSON.stringify(record),
       origin: "ibp",
       beingId,
-      chatId: ctx.chatId ?? null,
+      summonId: ctx.summonId ?? null,
       sessionId: ctx.sessionId ?? null,
     });
   } catch (err) {

@@ -186,14 +186,14 @@ treeos start`}</Code>
               ["Being", "The unified identity type. A human (operatingMode: human) authenticates with a password. An AI being (operatingMode: ai) is driven by an LLM through chainsteps. Both live at a home position. Both register, both speak through the protocol the same way."],
               ["Node", "One position in a tree. Has a name, type, status, children, parent, and a metadata Map where extensions store everything."],
               ["Artifact", "A thing that lives inside a node. Has an origin (ibp, filesystem, web, cross-land) that names the system its content comes from. Subsumes what used to be called notes, files, and metadata-only objects."],
-              ["Chat", "A record that binds a being-in to a being-out. Conversations are queryable as a graph: every chat names both ends, so 'all the chats between A and B' is one query."],
+              ["Summon", "The record of one IBP-address transaction. A left stance reaches a right stance; the being there wakes, processes one inbox entry through one LLM call (possibly with tool calls), produces one output, and ends. Made of the two stances on either side of the IBP address, so 'all the summons between A and B' is one query."],
               ["Extension", "A folder with a manifest and an init function. Adds capabilities: tools, modes, hooks, routes, jobs."],
               ["Mode", "How the AI thinks at a position. A system prompt plus a tool set. Extensions register them."],
               ["Cascade", "Signals that flow between nodes when content is written. The tree's internal communication."],
               ["Canopy", "The federation protocol. How lands discover and connect to each other."],
               ["Horizon", "The public directory at horizon.treeos.ai. Lands register here to be discovered. Extensions are published here. Anyone can host their own Horizon."],
               ["Zone", "Land (/), Home (~), or Tree (/MyTree). Where you are determines what the AI can do."],
-              ["runChat", "One LLM call with session persistence. Extensions use this for single AI interactions. Handles MCP connection, mode switching, chat tracking, and abort automatically."],
+              ["runChat", "One LLM call with session persistence. Extensions use this for single AI interactions. Handles MCP connection, mode switching, Summon tracking, and abort automatically."],
               ["Orchestrator", "The entire conversation flow. Classifies intent, routes to the right extension and mode, chains multi-extension messages. The built-in tree-orchestrator is itself an extension. Replace it and you control every AI interaction."],
               ["Land Zone", "The root position (/). The public face of the server. Visitors from other lands arrive here. Public trees are discoverable here. For admins, the AI manages extensions, config, beings, peers, and Horizon registration."],
               ["Home Zone", "A being's personal space (~). See all your trees, recent activity, conversations. Capture raw ideas. Chat without tree context. The being-focused hub where everything is visible."],
@@ -458,8 +458,9 @@ treeos ext-scope               # see what's active at this position`}</Code>
             Maps. <code>Being</code> is the unified identity type for humans and AI agents.
             <code> Node</code> is a position in the tree. <code>Artifact</code> is a thing that
             lives inside a node, with an <code>origin</code> field that names where the content
-            comes from. Chat records bind two beings together so the conversation graph between
-            them is queryable.
+            comes from. Summon records are the records of IBP-address transactions: each
+            Summon names the two stances on either side, so the conversation graph between any
+            pair of beings is queryable.
             <strong> Intelligence</strong>: the conversation loop, LLM resolution, tool execution
             via MCP.
             <strong> Extensibility</strong>: the loader, 30 hooks, 5 registries (hooks, modes,
@@ -478,6 +479,104 @@ treeos ext-scope               # see what's active at this position`}</Code>
           </P>
           <P>
             <a href="/seed" style={{color: "#7dd385"}}>Deep dive: The Seed</a>
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 9b. THE SUBSTRATE (sticking principle) */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">The Substrate</h2>
+          <P>
+            Beneath the four primitives is the sticking principle. The land is a
+            <strong> substrate</strong>. Everything in it is data: positions, artifacts,
+            metadata, beings, summons, dids. <strong>Beings are perspectives</strong> the
+            substrate has on itself, not actors floating on top of it.
+            <strong> Summons are how the substrate changes itself</strong> through those
+            perspectives. <strong>Dids are how it records its actions</strong>.
+          </P>
+          <P>
+            A Summon is one being's interaction with the substrate at one moment. The
+            being SEEs, DOes, produces output, and ends. The Summon record captures all
+            of it. So Summons are two things at once: the mechanism through which beings
+            manipulate data, and the data that records what happened.
+          </P>
+          <P style={{borderLeft: "3px solid rgba(125, 211, 133, 0.4)", paddingLeft: 20, fontStyle: "italic", color: "rgba(255,255,255,0.78)"}}>
+            The substrate is closed and self-referential. There is no observer external
+            to it. There is no actor external to it. A user is not outside the kernel
+            reaching in. The user has a being inside the substrate; their actions are
+            Summons happening within it.
+          </P>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════════ */}
+      {/* 9c. MODE 1 vs MODE 2 */}
+      {/* ══════════════════════════════════════════════════════════════ */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 800}}>
+          <h2 className="lp-section-title">Two manipulation modes</h2>
+          <P>
+            The substrate changes through one of two modes. The split is
+            <strong> identity, not cognition type</strong>.
+          </P>
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr", marginTop: 16}}>
+            <div className="lp-card">
+              <h3 style={{color: "#7dd385"}}>Mode 1 . being-driven</h3>
+              <p style={{fontSize: "0.92rem", color: "rgba(255,255,255,0.65)", lineHeight: 1.65}}>
+                The work has identity. A Being record exists with role, home, inbox.
+                Anyone can SUMMON it. The work shows up in audit. Inside, the being's
+                cognition can be:
+              </p>
+              <ul style={{fontSize: "0.88rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.75, paddingLeft: 20, margin: "8px 0 0"}}>
+                <li><strong style={{color: "rgba(255,255,255,0.75)"}}>LLM</strong> . Ruler, Planner, coach beings</li>
+                <li><strong style={{color: "rgba(255,255,255,0.75)"}}>Code</strong> . auth-being, browser-bridge</li>
+                <li><strong style={{color: "rgba(255,255,255,0.75)"}}>Human</strong> . a person at the Portal</li>
+                <li><strong style={{color: "rgba(255,255,255,0.75)"}}>Composite</strong> . a being orchestrating sub-beings</li>
+              </ul>
+            </div>
+            <div className="lp-card">
+              <h3 style={{color: "#94a3b8"}}>Mode 2 . code-driven</h3>
+              <p style={{fontSize: "0.92rem", color: "rgba(255,255,255,0.65)", lineHeight: 1.65}}>
+                The work has no identity. Code emits DOs on the substrate directly.
+                Subscribers (Mode 1 beings) react via DO-triggers. The kernel synthesizes
+                <code style={{color: "rgba(255,255,255,0.75)"}}> @system</code> as the sender
+                when those subscriber Summons fire.
+              </p>
+              <p style={{fontSize: "0.88rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.65, marginTop: 8}}>
+                Reserved for identity-less work. Token rotation, cleanup sweeps,
+                index rebuilds. Effects propagate; no one "did" the work.
+              </p>
+            </div>
+          </div>
+          <P style={{marginTop: 20, fontSize: "0.95rem", color: "rgba(255,255,255,0.7)"}}>
+            "AI agent" and "infrastructure code" are not the categories. The categories
+            are <strong>has a Being record</strong> and <strong>doesn't</strong>. Code-cognition
+            beings (Mode 1) are perfectly fine for infrastructure that wants to be addressable.
+            LLM-cognition is just one option inside Mode 1.
+          </P>
+          <div style={{
+            marginTop: 16, padding: "16px 20px",
+            background: "rgba(125, 211, 133, 0.06)",
+            border: "1px solid rgba(125, 211, 133, 0.25)",
+            borderRadius: 8,
+          }}>
+            <h3 style={{color: "#7dd385", fontSize: "0.95rem", marginTop: 0, marginBottom: 8}}>
+              Auth-being: this pattern has always existed
+            </h3>
+            <p style={{fontSize: "0.9rem", color: "rgba(255,255,255,0.72)", lineHeight: 1.7, margin: 0}}>
+              The auth-being has a Being record at the land root. You SUMMON it to register,
+              claim, release, or switch. Its handler runs deterministic code (JWT validation,
+              Being creation, session management), not an LLM call. Its actions write Dids
+              attributed to it. It has been a code-cognition Mode 1 being from day one. The
+              protocol never required LLM cognition; it required identity.
+            </p>
+          </div>
+          <P style={{marginTop: 18, fontSize: "0.92rem", color: "rgba(255,255,255,0.65)"}}>
+            Default to Mode 1 with whichever cognition fits. Use Mode 2 only when identity
+            adds nothing.
           </P>
         </div>
       </section>

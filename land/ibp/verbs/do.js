@@ -3,7 +3,7 @@
 // Envelope:
 //   { id, action, position: "<position>", identity, payload }
 //
-// DO accepts `position` only. The world is data at positions; embodiments
+// DO accepts `position` only. The world is data at positions; beings
 // are not data targets. The requester's role, when relevant for
 // authorization, lives in the identity token.
 //
@@ -95,7 +95,7 @@ export async function handleDo(socket, msg, ack) {
     if (isPortalError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("Portal", `ibp:do failed: ${err.message}`);
+    log.error("IBP", `ibp:do failed: ${err.message}`);
     return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }

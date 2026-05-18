@@ -37,7 +37,7 @@ export async function createNode({
   note = null,
   metadata = null,
   validatedUser = null,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 } = {}) {
   if (!name || typeof name !== "string" || !name.trim()) {
@@ -131,7 +131,7 @@ export async function createNode({
       await logDid({
         beingId: user._id,
         nodeId: parentId,
-        chatId,
+        summonId,
         sessionId,
         action: "updateChild",
         updateChild: {
@@ -147,7 +147,7 @@ export async function createNode({
   await logDid({
     beingId: user._id,
     nodeId: newNode._id,
-    chatId,
+    summonId,
     sessionId,
     action: "create",
 
@@ -159,7 +159,7 @@ export async function createNode({
       content: note,
       beingId: user._id,
       nodeId: newNode._id,
-      chatId,
+      summonId,
       sessionId,
     });
   }
@@ -214,7 +214,7 @@ export async function createNodeBranch(
   nodeData,
   parentId,
   beingId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 ) {
   const user = await getUserOrThrow(beingId);
@@ -223,7 +223,7 @@ export async function createNodeBranch(
     nodeData,
     parentId,
     user,
-    chatId,
+    summonId,
     sessionId,
   );
 }
@@ -232,7 +232,7 @@ async function createNodeBranchInternal(
   nodeData,
   parentId,
   user,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 ) {
   const { name, note, type, metadata } = nodeData;
@@ -254,7 +254,7 @@ async function createNodeBranchInternal(
     note: note || null,
     metadata: metadataMap,
     validatedUser: user,
-    chatId,
+    summonId,
     sessionId,
   });
 
@@ -265,7 +265,7 @@ async function createNodeBranchInternal(
       childData,
       newNode._id,
       user,
-      chatId,
+      summonId,
       sessionId,
     );
     totalCreated += childResult.totalCreated;
@@ -281,7 +281,7 @@ async function createNodeBranchInternal(
 export async function deleteNodeBranch(
   nodeId,
   beingId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 ) {
   const nodeToDelete = await Node.findById(nodeId);
@@ -321,7 +321,7 @@ export async function deleteNodeBranch(
       await logDid({
         beingId,
         nodeId: oldParent.toString(),
-        chatId,
+        summonId,
         sessionId,
         action: "updateChild",
         updateChild: {
@@ -336,7 +336,7 @@ export async function deleteNodeBranch(
   await logDid({
     beingId,
     nodeId: nodeId,
-    chatId,
+    summonId,
     sessionId,
     action: "branchLifecycle",
 
@@ -353,7 +353,7 @@ export async function updateParentRelationship(
   nodeChildId,
   nodeNewParentId,
   beingId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
   opts = {},
 ) {
@@ -447,7 +447,7 @@ export async function updateParentRelationship(
     await logDid({
       beingId,
       nodeId: oldParent._id.toString(),
-      chatId,
+      summonId,
       sessionId,
       action: "updateChild",
       updateChild: { action: "removed", childId: nodeChildId.toString() },
@@ -457,7 +457,7 @@ export async function updateParentRelationship(
   await logDid({
     beingId,
     nodeId: nodeChildId,
-    chatId,
+    summonId,
     sessionId,
     action: "updateParent",
     updateParent: {
@@ -469,7 +469,7 @@ export async function updateParentRelationship(
   await logDid({
     beingId,
     nodeId: nodeNewParentId.toString(),
-    chatId,
+    summonId,
     sessionId,
     action: "updateChild",
     updateChild: { action: "added", childId: nodeChildId.toString() },
@@ -490,7 +490,7 @@ export async function editNodeName({
   nodeId,
   newName,
   beingId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 }) {
   if (!newName || typeof newName !== "string" || !newName.trim()) {
@@ -531,7 +531,7 @@ export async function editNodeName({
     beingId,
     nodeId,
     action: "editName",
-    chatId,
+    summonId,
     sessionId,
 
     editName: {
@@ -660,7 +660,7 @@ export async function editNodeType({
   nodeId,
   newType,
   beingId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 }) {
   if (newType !== null) {
@@ -700,7 +700,7 @@ export async function editNodeType({
     beingId,
     nodeId,
     action: "editType",
-    chatId,
+    summonId,
     sessionId,
     editType: { oldType, newType },
   });
@@ -717,7 +717,7 @@ export async function reorderChildren({
   nodeId,
   children: newOrder,
   beingId,
-  chatId = null,
+  summonId = null,
   sessionId = null,
 }) {
   if (!Array.isArray(newOrder)) throw new Error("children must be an array");
@@ -738,7 +738,7 @@ export async function reorderChildren({
     beingId,
     nodeId,
     action: "reorder",
-    chatId,
+    summonId,
     sessionId,
   });
 

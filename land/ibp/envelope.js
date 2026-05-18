@@ -1,11 +1,11 @@
 // TreeOS IBP envelope helpers.
 //
 // The four IBP verbs have distinct address rules:
-//   SEE  accepts position OR stance (observation works at either tier).
-//   DO   accepts position only (mutations always land at a position).
-//   TALK accepts stance only (inboxes are per-being-per-position).
-//   BE   accepts stance only (self-identity targets stances; for fresh
-//        registration, the stance is the land's auth-being).
+//   SEE     accepts position OR stance (observation works at either tier).
+//   DO      accepts position only (mutations always land at a position).
+//   SUMMON  accepts stance only (inboxes are per-being-per-position).
+//   BE      accepts stance only (self-identity targets stances; for fresh
+//           registration, the stance is the land's auth-being).
 //
 // These helpers validate that the envelope matches its verb's contract
 // and extract the canonical address string for downstream parsing.
@@ -18,13 +18,13 @@ const EMBODIMENT_SUFFIX = /@[a-z][a-z0-9-]*$/i;
  * SEE and DO: extract the position-or-stance string from the envelope.
  *
  * Returns { addressString, isStance } so handlers can choose which path to
- * walk for embodiment-aware logic (DO authorization, descriptor augmentation).
+ * walk for being-aware logic (DO authorization, descriptor augmentation).
  *
  * Throws PortalError with INVALID_INPUT when:
  *   - neither `position` nor `stance` is present
  *   - both are present
- *   - `position` contains an @embodiment qualifier
- *   - `stance` lacks an @embodiment qualifier
+ *   - `position` contains an @being qualifier
+ *   - `stance` lacks an @being qualifier
  */
 export function extractPositionOrStance(msg, verbName) {
   if (!msg || typeof msg !== "object") {
@@ -52,13 +52,13 @@ export function extractPositionOrStance(msg, verbName) {
   if (hasPosition && looksLikeStance) {
     throw new PortalError(
       PORTAL_ERR.INVALID_INPUT,
-      "`position` field must not include an @embodiment qualifier; use `stance` instead",
+      "`position` field must not include an @being qualifier; use `stance` instead",
     );
   }
   if (hasStance && !looksLikeStance) {
     throw new PortalError(
       PORTAL_ERR.INVALID_INPUT,
-      "`stance` field must include an @embodiment qualifier; use `position` instead",
+      "`stance` field must include an @being qualifier; use `position` instead",
     );
   }
 
@@ -67,9 +67,9 @@ export function extractPositionOrStance(msg, verbName) {
 
 /**
  * DO: extract a required position string. The `stance` field is not
- * accepted (mutations target positions only; embodiments are summoned
+ * accepted (mutations target positions only; beings are summoned
  * moments, not storage). If a client sends `position` with a trailing
- * `@<embodiment>` qualifier, the qualifier is stripped (informational,
+ * `@<being>` qualifier, the qualifier is stripped (informational,
  * not load-bearing for DO).
  */
 export function extractPosition(msg, verbName) {
@@ -88,15 +88,15 @@ export function extractPosition(msg, verbName) {
       `${verbName} requires a \`position\` field`,
     );
   }
-  return stripEmbodimentQualifier(msg.position);
+  return stripBeingQualifier(msg.position);
 }
 
-function stripEmbodimentQualifier(addressString) {
+function stripBeingQualifier(addressString) {
   return addressString.replace(EMBODIMENT_SUFFIX, "");
 }
 
 /**
- * TALK: extract a required stance string. Stance must be qualified.
+ * SUMMON: extract a required stance string. Stance must be qualified.
  */
 export function extractStance(msg, verbName) {
   if (!msg || typeof msg !== "object") {
@@ -105,13 +105,13 @@ export function extractStance(msg, verbName) {
   if (typeof msg.stance !== "string" || msg.stance.length === 0) {
     throw new PortalError(
       PORTAL_ERR.INVALID_INPUT,
-      `${verbName} requires a \`stance\` field (qualified position@embodiment)`,
+      `${verbName} requires a \`stance\` field (qualified position@being)`,
     );
   }
   if (!EMBODIMENT_SUFFIX.test(msg.stance)) {
     throw new PortalError(
       PORTAL_ERR.INVALID_INPUT,
-      `${verbName} \`stance\` must include an @embodiment qualifier`,
+      `${verbName} \`stance\` must include an @being qualifier`,
     );
   }
   return msg.stance;
@@ -152,7 +152,7 @@ export function extractStanceOrLand(msg, verbName) {
     if (!EMBODIMENT_SUFFIX.test(msg.stance)) {
       throw new PortalError(
         PORTAL_ERR.INVALID_INPUT,
-        `${verbName} \`stance\` must include an @embodiment qualifier`,
+        `${verbName} \`stance\` must include an @being qualifier`,
       );
     }
     return { kind: "stance", value: msg.stance };
@@ -161,7 +161,7 @@ export function extractStanceOrLand(msg, verbName) {
   if (msg.land.includes("/") || msg.land.includes("@")) {
     throw new PortalError(
       PORTAL_ERR.INVALID_INPUT,
-      `${verbName} \`land\` must be a bare domain with no path or @embodiment`,
+      `${verbName} \`land\` must be a bare domain with no path or @being`,
     );
   }
   return { kind: "land", value: msg.land };

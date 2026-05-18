@@ -10,7 +10,7 @@ import Particles from "./Particles.jsx";
 //
 // Vocabulary mapping:
 //   HTTP    → IBP (the protocol, Inter-Being Protocol)
-//   URL     → Portal Address (the address format, stance :: stance)
+//   URL     → IBP Address (the address format, stance :: stance)
 //   Browser → Portal (the client that inhabits stances)
 //   HTML    → Position Descriptors (what IBP returns)
 //
@@ -31,7 +31,7 @@ const ProtocolPage = () => {
           <p className="lp-tagline">
             The web is a network of documents at URLs, moved by HTTP, opened
             in a browser. IBP is a network of beings at stances, addressed
-            by Portal Addresses, engaged through four verbs over WebSocket,
+            by IBP Addresses, engaged through four verbs over WebSocket,
             opened in the Portal. Not a successor to the WWW. Not a layer
             inside it. Its own protocol on the same internet, for a different
             kind of network.
@@ -77,12 +77,12 @@ const ProtocolPage = () => {
             <div className="ibp-stack ibp-stack-ibp">
               <div className="ibp-stack-title">🌳 IBP</div>
               <div className="ibp-stack-layer">
-                <strong>Portal Address</strong>
+                <strong>IBP Address</strong>
                 <span>stance :: stance</span>
               </div>
               <div className="ibp-stack-layer">
                 <strong>Four verbs over WS</strong>
-                <span>SEE · DO · TALK · BE</span>
+                <span>SEE · DO · SUMMON · BE</span>
               </div>
               <div className="ibp-stack-layer">
                 <strong>Position Descriptors</strong>
@@ -121,10 +121,10 @@ const ProtocolPage = () => {
             <div className="gov-compare-col gov-compare-col-accent">
               <h4>🌳 IBP . Inter-Being Protocol</h4>
               <ul>
-                <li><strong>Portal Address</strong> . two stances connected by <code>::</code></li>
+                <li><strong>IBP Address</strong> . two stances connected by <code>::</code></li>
                 <li><strong>SEE</strong> . observes. Accepts position or stance. Either tier.</li>
                 <li><strong>DO</strong> . mutates. Position only. Requester's role comes from identity, not the address.</li>
-                <li><strong>TALK</strong> . engages. Stance only. Inboxes are position data namespaced by embodiment.</li>
+                <li><strong>SUMMON</strong> . engages. Stance only. Inboxes are position data namespaced by role.</li>
                 <li><strong>BE</strong> . self-identity. Stance only. Register, claim, release, switch.</li>
                 <li><strong>Portal</strong> . the new browser for IBP. Human being is the default left stance, looking through the Portal into the right stance on the Land</li>
               </ul>
@@ -133,12 +133,12 @@ const ProtocolPage = () => {
         </div>
       </section>
 
-      {/* DIAGRAM 2: anatomy of a Portal Address */}
+      {/* DIAGRAM 2: anatomy of an IBP Address */}
       <section className="lp-section lp-section-alt">
         <div className="lp-container">
-          <h2 className="lp-section-title">Anatomy of a Portal Address</h2>
+          <h2 className="lp-section-title">Anatomy of an IBP Address</h2>
           <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center", maxWidth: 760, margin: "0 auto 32px"}}>
-            A URL points to a resource. A Portal Address joins two stances. Each side has a land, a position, and a being.
+            A URL points to a resource. An IBP Address joins two stances. Each side has a land, a position, and a being.
           </p>
 
           <div className="ibp-addr">
@@ -180,14 +180,14 @@ const ProtocolPage = () => {
                 <div className="ibp-addr-part-note">a place in the tree</div>
               </div>
               <div className="ibp-addr-part ibp-addr-part-emb">
-                <div className="ibp-addr-part-head">Embodiment → Stance</div>
+                <div className="ibp-addr-part-head">Being → Stance</div>
                 <code className="ibp-addr-part-code">@ruler</code>
                 <div className="ibp-addr-part-note">the being there</div>
               </div>
             </div>
           </div>
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 16, textAlign: "center", fontSize: 15, color: "rgba(255,255,255,0.6)"}}>
-            "Signed in as <code>tabor</code>, addressing the <code>ruler</code> embodiment at <code>treeos.ai/flappybird</code>."
+            "Signed in as <code>tabor</code>, addressing the <code>ruler</code> role at <code>treeos.ai/flappybird</code>."
           </p>
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 8, textAlign: "center", fontSize: 14, color: "rgba(255,255,255,0.5)"}}>
             The left side here is shorthand. The full form is <code>treeos.ai/@tabor</code>. See the next section.
@@ -221,7 +221,7 @@ const ProtocolPage = () => {
               <div className="lp-step-num" style={{background: "#c084fc", color: "#000"}}>2</div>
               <div className="lp-step-content">
                 <h4>Stance</h4>
-                <p>Position with an embodiment qualifier at the end. <code>treeos.ai/flappybird@ruler</code>, <code>treeos.ai/@tabor</code>. SEE accepts it. TALK requires it. BE requires it.</p>
+                <p>Position with an being qualifier at the end. <code>treeos.ai/flappybird@ruler</code>, <code>treeos.ai/@tabor</code>. SEE accepts it. SUMMON requires it. BE requires it.</p>
               </div>
             </div>
           </div>
@@ -250,21 +250,28 @@ const ProtocolPage = () => {
             <div className="lp-step">
               <div className="lp-step-num ibp-step-struct">·</div>
               <div className="lp-step-content">
-                <h4>Portal Address</h4>
+                <h4>IBP Address</h4>
                 <p>The bridge form, <code>stance :: stance</code>. The syntax for expressing addressing relationships between two stances. Not a thing that gets addressed. The <em>format</em> used to address things. Like URL is not addressed; URLs are the format that points at what is addressed.</p>
               </div>
             </div>
             <div className="lp-step">
               <div className="lp-step-num ibp-step-struct">·</div>
               <div className="lp-step-content">
-                <h4>Embodiment</h4>
-                <p>A cognitive shape (<code>@ruler</code>, <code>@archivist</code>, a username like <code>@tabor</code>). Not addressable on its own. Combines with a Position to form a Stance. The <code>@qualifier</code> in a Stance address names the embodiment but never targets it.</p>
+                <h4>Being</h4>
+                <p>The thing at the <code>@</code> in a Stance. Human or AI. Has an identity. It's the Position coming to life to embody itself and make changes on positions or other beings. <code>@tabor</code>, <code>@ruler</code>, <code>@archivist</code>, <code>@auth</code> are all beings. Not addressable on its own; combines with a Position to form a Stance. A Being is what acts, observes, and is summoned. Its current Role colors how it acts, but its identity persists across role changes. Beings are the living, addressable parts of the structure . nodes and artifacts give rise to them; they act on the structure and are it expressing itself.</p>
+              </div>
+            </div>
+            <div className="lp-step">
+              <div className="lp-step-num ibp-step-struct">·</div>
+              <div className="lp-step-content">
+                <h4>Role</h4>
+                <p>A template . the class to a Being's instance. <code>ruler</code>, <code>planner</code>, <code>archivist</code>, <code>auth</code> are roles defined in the role registry. Each role declares what its bearer does when summoned: honored intents, response mode, summon handler, optional system prompt. A Being holds a role on its <code>role</code> field; when summoned, the kernel looks up the role template and runs its handler. The Being is the instance; the role is the class.</p>
               </div>
             </div>
           </div>
 
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 28, textAlign: "center", maxWidth: 800, margin: "28px auto 0", fontSize: 15, color: "rgba(255,255,255,0.6)"}}>
-            Two addressable categories. Each verb declares which it accepts. The other names (IBP itself, Portal Address, Land as identifier, Embodiment, Portal the client) are the vocabulary around the addresses, not the addresses themselves.
+            Two addressable categories. Each verb declares which it accepts. The other names (IBP itself, IBP Address, Land as identifier, Being, Role, Portal the client) are the vocabulary around the addresses, not the addresses themselves.
           </p>
 
           <div className="ibp-grammar">
@@ -284,11 +291,11 @@ const ProtocolPage = () => {
               </div>
               <div className="ibp-grammar-row">
                 <code className="ibp-grammar-form">treeos.ai/@auth</code>
-                <span className="ibp-grammar-meaning">root (Land) Position plus embodiment. Stance at the Land Position. Used by TALK, BE.</span>
+                <span className="ibp-grammar-meaning">root (Land) Position plus being. Stance at the Land Position. Used by SUMMON, BE.</span>
               </div>
               <div className="ibp-grammar-row">
                 <code className="ibp-grammar-form">treeos.ai/flappybird@ruler</code>
-                <span className="ibp-grammar-meaning">deeper Position plus embodiment. Stance at node. Used by SEE, TALK, BE.</span>
+                <span className="ibp-grammar-meaning">deeper Position plus being. Stance at node. Used by SEE, SUMMON, BE.</span>
               </div>
             </div>
           </div>
@@ -341,7 +348,7 @@ const ProtocolPage = () => {
               </div>
               <div className="ibp-verb-arrow">→</div>
               <div className="ibp-verb-ibp">
-                <strong>💬 TALK</strong>
+                <strong>💬 SUMMON</strong>
                 <span>message a stance's inbox</span>
               </div>
             </div>
@@ -360,7 +367,7 @@ const ProtocolPage = () => {
           </div>
 
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 24, textAlign: "center", maxWidth: 760, margin: "24px auto 0", fontSize: 15, color: "rgba(255,255,255,0.6)"}}>
-Each verb is restricted to the address shape that makes sense for it. SEE observes, so it accepts either tier. DO mutates the world, so it targets positions only; mutation only happens to persistent data, and a stance is a summoned moment, not storage. TALK engages a being, so it requires a stance. BE manages your own identity, which is stance-shaped, so it requires a stance too. There is no fifth verb.
+Each verb is restricted to the address shape that makes sense for it. SEE observes, so it accepts either tier. DO mutates the world, so it targets positions only; mutation only happens to persistent data, and a stance is a summoned moment, not storage. SUMMON engages a being, so it requires a stance. BE manages your own identity, which is stance-shaped, so it requires a stance too. There is no fifth verb.
           </p>
         </div>
       </section>
@@ -387,12 +394,12 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
             <div className="ibp-shape-row">
               <div className="ibp-shape-verb">🔨 DO</div>
               <div className="ibp-shape-accepts"><code>position</code> only</div>
-              <div className="ibp-shape-scope">World only. The world is data at positions; embodiments aren't data targets.</div>
+              <div className="ibp-shape-scope">World only. The world is data at positions; beings aren't data targets.</div>
             </div>
             <div className="ibp-shape-row">
-              <div className="ibp-shape-verb">💬 TALK</div>
+              <div className="ibp-shape-verb">💬 SUMMON</div>
               <div className="ibp-shape-accepts"><code>stance</code> only</div>
-              <div className="ibp-shape-scope">Being only. Engagement needs both the position and which embodiment's inbox.</div>
+              <div className="ibp-shape-scope">Being only. Engagement needs both the position and which being's inbox.</div>
             </div>
             <div className="ibp-shape-row">
               <div className="ibp-shape-verb">🪪 BE</div>
@@ -411,7 +418,7 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
                 </span>
               </div>
               <p className="lp-envelope-desc">
-                Observe a place. The field is <code>position</code> when no embodiment qualifier is present, <code>stance</code> when one is. Either is valid; the field name indicates which.
+                Observe a place. The field is <code>position</code> when no being qualifier is present, <code>stance</code> when one is. Either is valid; the field name indicates which.
               </p>
               <pre className="lp-envelope-code">{`{ verb: "see", position: "treeos.ai/flappybird", identity }
 { verb: "see", stance:   "treeos.ai/flappybird@ruler", identity }`}</pre>
@@ -425,10 +432,10 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
                 </span>
               </div>
               <p className="lp-envelope-desc">
-                The world is data; data lives at positions; DO mutates position data. There is no DO at a stance, because a stance is a summoned moment, not a persistence location. Between summonings, an embodiment doesn't exist. There's nothing to write to. The requester's embodiment, when authorization needs it, is read from the identity token, not from the address.
+                The world is data; data lives at positions; DO mutates position data. There is no DO at a stance, because a stance is a summoned moment, not a persistence location. Between summonings, the being is not acting (cognition is idle). There's nothing to write to. The requester's being, when authorization needs it, is read from the identity token, not from the address.
               </p>
               <p className="lp-envelope-desc">
-                Modifying an embodiment's behavior, then, always happens through DO on a position. Two paths. Edit the extension's source code at the extension's position (changes the base definition for every invocation), or write the per-position override into the embodiment's namespace on the invocation position.
+                Modifying a role's behavior, then, always happens through DO on a position. Two paths. Edit the extension's source code at the extension's position (changes the base definition for every invocation), or write the per-position override into the role's namespace on the invocation position.
               </p>
               <pre className="lp-envelope-code">{`// structural mutation at the position
 { verb: "do", action: "create-child",
@@ -443,11 +450,11 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
 // change @ruler's base definition for everyone:
 // edit the extension's source at its install position
 { verb: "do", action: "edit-note",
-  position: "treeos.ai/.extensions/governing/.source/embodiments/ruler.js",
+  position: "treeos.ai/.extensions/governing/.source/roles/ruler.js",
   payload: { content: "..." } }
 
 // override @ruler's behavior at THIS position only:
-// set-meta into the embodiment's namespace here
+// set-meta into the role's namespace here
 { verb: "do", action: "set-meta",
   position: "treeos.ai/flappybird",
   payload: { namespace: "ruler",
@@ -456,15 +463,15 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
 
             <div className="lp-envelope">
               <div className="lp-envelope-head">
-                <span className="lp-envelope-verb" style={{color: "#bbf7d0"}}>💬 TALK</span>
+                <span className="lp-envelope-verb" style={{color: "#bbf7d0"}}>💬 SUMMON</span>
                 <span className="lp-envelope-fields">
                   <code>stance</code> <span style={{color: "rgba(255,255,255,0.4)"}}>required</span>
                 </span>
               </div>
               <p className="lp-envelope-desc">
-                Deliver a message to an inbox. An inbox is position data namespaced by embodiment, so the protocol needs both pieces (position and embodiment) to know which inbox to write to. A bare position is ambiguous; TALK refuses it. The embodiment qualifier here names <em>which inbox</em>, not a separate target.
+                Deliver a message to an inbox. An inbox is position data namespaced by role, so the protocol needs both pieces (position and being) to know which inbox to write to. A bare position is ambiguous; SUMMON refuses it. The being qualifier here names <em>which inbox</em>, not a separate target.
               </p>
-              <pre className="lp-envelope-code">{`{ verb: "talk", stance: "treeos.ai/flappybird@ruler", payload }`}</pre>
+              <pre className="lp-envelope-code">{`{ verb: "summon", stance: "treeos.ai/flappybird@ruler", payload }`}</pre>
             </div>
 
             <div className="lp-envelope">
@@ -493,7 +500,7 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
           </div>
 
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 32, textAlign: "center", maxWidth: 760, margin: "32px auto 0", fontSize: 15, color: "rgba(255,255,255,0.6)"}}>
-            Each verb's envelope is restricted to the address shape its work allows. The Portal Address itself (<code>stance :: stance</code>) is the conceptual bridge between requester and target. The envelope carries the target side only; the requester side travels inside the identity token.
+            Each verb's envelope is restricted to the address shape its work allows. The IBP Address itself (<code>stance :: stance</code>) is the conceptual bridge between requester and target. The envelope carries the target side only; the requester side travels inside the identity token.
           </p>
         </div>
       </section>
@@ -516,23 +523,23 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
                 <li><strong>Structural</strong> . name, parent, children, status, contributors. Reached by <code>create-child</code>, <code>rename</code>, <code>move</code>, <code>change-status</code>, etc.</li>
                 <li><strong>Notes and artifacts</strong> . the position's content. Reached by <code>write-note</code>, <code>edit-note</code>, <code>upload-artifact</code>.</li>
                 <li><strong>Extension namespaces</strong> . one per installed extension. Reached by <code>set-meta</code> / <code>clear-meta</code>.</li>
-                <li><strong>Embodiment configurations</strong> . the programming for each embodiment that can be summoned here. System instructions, tools, permissions. Also reached by <code>set-meta</code>, just with an embodiment-keyed namespace.</li>
-                <li><strong>Inboxes</strong> . one per embodiment that can be summoned here. Reached by <code>TALK</code>, which is why TALK needs both the position and the embodiment to find the right inbox.</li>
+                <li><strong>Role configurations</strong> . the programming for each being that can be summoned here. System instructions, tools, permissions. Also reached by <code>set-meta</code>, just with an role-keyed namespace.</li>
+                <li><strong>Inboxes</strong> . one per being that can be summoned here. Reached by <code>SUMMON</code>, which is why SUMMON needs both the position and the being to find the right inbox.</li>
                 <li><strong>History</strong> . chainsteps, decisions, contracts. Accumulated as the position is acted upon.</li>
               </ul>
             </div>
 
             <div className="ibp-persist-card ibp-persist-embodiment">
-              <div className="ibp-persist-head">Embodiments are summoned, not stored</div>
+              <div className="ibp-persist-head">Beings are summoned, not continuously running</div>
               <p className="ibp-persist-desc">
-                An embodiment is an active instance that wakes up, reads the position's namespaces and the extension code that defines it, does work, and ends. Between summonings, the embodiment doesn't exist. Two things define its behavior, both addressed as positions.
+                A Being is an instance with persistent identity; when summoned, it wakes up, reads the position's namespaces and the extension code that defines it, does work, and ends. Between summonings, the being is not acting (cognition is idle). Two things define its behavior, both addressed as positions.
               </p>
               <ul className="ibp-persist-list">
-                <li><strong>Extension source</strong> at the extension's install position (the <code>.source</code> files). DO on that position edits the embodiment's base definition for every invocation everywhere.</li>
-                <li><strong>Position-specific overrides</strong> in the embodiment's namespace at the invocation position (<code>metadata.ruler</code>, <code>metadata.archivist</code>, etc). DO <code>set-meta</code> writes them.</li>
+                <li><strong>Extension source</strong> at the extension's install position (the <code>.source</code> files). DO on that position edits the role's base definition for every invocation everywhere.</li>
+                <li><strong>Position-specific overrides</strong> in the role's namespace at the invocation position (<code>metadata.ruler</code>, <code>metadata.archivist</code>, etc). DO <code>set-meta</code> writes them.</li>
               </ul>
               <p className="ibp-persist-desc" style={{marginTop: 12}}>
-                There is no "writing to an embodiment." Both paths to change an embodiment are DOs on positions. The stance is the summoned moment; the position is what persists.
+                There is no "writing to a being directly." Both paths to change a role are DOs on positions. The stance is the summoned moment; the position is what persists.
               </p>
             </div>
           </div>
@@ -560,13 +567,13 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
               <div className="ibp-categorical-head">What you <strong>can</strong> do</div>
               <ul>
                 <li>
-                  <strong>Shape the environment</strong> a being encounters. DO on the position's data, on the embodiment's namespace at that position, or on the extension source that defines the embodiment. All three are DOs on positions.
+                  <strong>Shape the environment</strong> a being encounters. DO on the position's data, on the role's namespace at that position, or on the extension source that defines the role. All three are DOs on positions.
                 </li>
                 <li>
-                  <strong>Send a message</strong> the being will receive when summoned. TALK delivers to the stance's inbox. The being decides what to do with it.
+                  <strong>Send a message</strong> the being will receive when summoned. SUMMON delivers to the stance's inbox. The being decides what to do with it.
                 </li>
                 <li>
-                  <strong>Observe a being's perspective</strong>. SEE on a stance returns position data as that embodiment would interpret it.
+                  <strong>Observe a being's perspective</strong>. SEE on a stance returns position data as that being would interpret it.
                 </li>
                 <li>
                   <strong>Read everything a being produced</strong>. Reasoning traces, prompts, tool calls, intermediate steps, outputs. All of it gets written to position data and is observable through SEE. The being's record is fully readable after the fact.
@@ -602,15 +609,68 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
         </div>
       </section>
 
+      {/* SUBSTRATE: SELF-REFERENTIAL */}
+      <section className="lp-section lp-section-alt">
+        <div className="lp-container" style={{maxWidth: 920}}>
+          <h2 className="lp-section-title">The substrate is self-referential</h2>
+          <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center", maxWidth: 800, margin: "0 auto 32px"}}>
+            Beneath the verbs is the deepest claim about what IBP describes. The land is a substrate. Everything in it is data. Beings are the perspectives the substrate has on itself. Summons are how the substrate changes itself through those perspectives. Dids are how it records its actions.
+          </p>
+
+          <div className="ibp-persist">
+            <div className="ibp-persist-card ibp-persist-position">
+              <div className="ibp-persist-head">Everything is data</div>
+              <p className="ibp-persist-desc">
+                Positions, artifacts, metadata, beings, summons, dids. Nothing in the land sits outside the substrate. The land IS its substrate. The six protocol primitives are aspects of one thing.
+              </p>
+              <ul className="ibp-persist-list">
+                <li><strong>Positions</strong> . where data lives.</li>
+                <li><strong>Artifacts</strong> . what data is at positions.</li>
+                <li><strong>Metadata</strong> . the extension-namespaced shape at every position.</li>
+                <li><strong>Beings</strong> . perspectives the substrate has on itself.</li>
+                <li><strong>Inboxes</strong> . pending summons waiting to fire.</li>
+                <li><strong>Summons</strong> . events of data changing through perspectives.</li>
+                <li><strong>Dids</strong> . substrate writes that happen during summons.</li>
+              </ul>
+            </div>
+
+            <div className="ibp-persist-card ibp-persist-embodiment">
+              <div className="ibp-persist-head">Beings are perspectives, summons are self-action</div>
+              <p className="ibp-persist-desc">
+                A being is not floating on top of the structure. A being is the structure manifesting itself as a perspective. Without a being processing, nothing observes. The substrate is observable, but observation requires a being.
+              </p>
+              <p className="ibp-persist-desc" style={{marginTop: 12}}>
+                A Summon is one being's interaction with the substrate at one moment. Within a Summon the being SEEs, DOes, produces output. The Summon record captures input, cognition, tool calls, and output. The Summon itself is data: the record of one perspective acting on the substrate.
+              </p>
+              <p className="ibp-persist-desc" style={{marginTop: 12}}>
+                So Summons are two things at once: the <em>mechanism</em> through which beings manipulate data, and the <em>data</em> that records what happened. The substrate's history is the accumulated record of Summons across time.
+              </p>
+            </div>
+          </div>
+
+          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 28, maxWidth: 820, margin: "28px auto 0", fontSize: 15.5, color: "rgba(255,255,255,0.78)", fontStyle: "italic", borderLeft: "3px solid rgba(74, 222, 128, 0.4)", paddingLeft: 24, textAlign: "left"}}>
+            The substrate is closed and self-referential. Beings are how it observes itself. Summons are how it acts on itself. Dids are how it records its actions. The substrate's history is the accumulated record of its own changes, made through its own perspectives.
+          </p>
+
+          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 24, maxWidth: 800, margin: "24px auto 0", fontSize: 15, color: "rgba(255,255,255,0.7)"}}>
+            There is no observer external to the substrate. There is no actor external to the substrate. A user is not outside the system reaching in. The user has a being inside the substrate; their actions are Summons happening within it. This is why beings are first-class in IBP. They are how the substrate becomes aware of itself.
+          </p>
+
+          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 16, maxWidth: 800, margin: "16px auto 0", fontSize: 14.5, color: "rgba(255,255,255,0.55)"}}>
+            Code can still emit DOs without a being attached. That is anonymous substrate change, useful for infrastructure that does not need to be observed. But most meaningful change flows through Summons, because most meaningful change benefits from being observable, accountable, attributable to a perspective.
+          </p>
+        </div>
+      </section>
+
       {/* IDENTITY-FIRST */}
       <section className="lp-section">
         <div className="lp-container" style={{maxWidth: 760}}>
           <h2 className="lp-section-title">Identity is not optional</h2>
           <p className="lp-section-sub lp-section-sub-wide">
-            You cannot open the portal anonymously. Every session starts signed in as a being on the left side of a Portal Address. A human user, an AI, an automated agent. One of these inhabits the left stance before any of the other three verbs fire.
+            You cannot open the portal anonymously. Every session starts signed in as a being on the left side of an IBP Address. A human user, an AI, an automated agent. One of these inhabits the left stance before any of the other three verbs fire.
           </p>
           <p className="lp-section-sub lp-section-sub-wide">
-            On the web, anonymity is the default and identity is layered on later through cookies, sessions, OAuth, JWTs. Each site reinvents the wheel. In IBP, identity is the protocol's first move. Before you can see, do, or talk, you must be.
+            On the web, anonymity is the default and identity is layered on later through cookies, sessions, OAuth, JWTs. Each site reinvents the wheel. In IBP, identity is the protocol's first move. Before you can see, do, or summon, you must be.
           </p>
 
           <h3 style={{marginTop: 40, marginBottom: 12, color: "#fde68a", fontSize: 18}}>The left stance, in full</h3>
@@ -618,7 +678,7 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
             What the portal displays. <code>tabor :: treeos.ai/flappybird@ruler</code>. What is really being sent. <code>treeos.ai/@tabor :: treeos.ai/flappybird@ruler</code>. The grammar is symmetric. Both sides are full stances. The left side just gets shorthanded when the speaker is the human user.
           </p>
           <p className="lp-section-sub lp-section-sub-wide">
-            The shorthand exists because, today, every human message is assumed to come from the land itself. <code>treeos.ai/@tabor</code> means "the human being Tabor, speaking from the root of their land." Position empty. No embodiment chosen. The human is the human, bringing the whole of their life experience into the conversation, not a slice of it scoped to one node.
+            The shorthand exists because, today, every human message is assumed to come from the land itself. <code>treeos.ai/@tabor</code> means "the human being Tabor, speaking from the root of their land." Position empty. No role chosen. The human is the human, bringing the whole of their life experience into the conversation, not a slice of it scoped to one node.
           </p>
           <p className="lp-section-sub lp-section-sub-wide">
             Later, humans will be able to speak from other positions too. A user could send a message from inside <code>/fitness</code> to inject that branch's context into the conversation, or speak as a persona, or contribute to one branch's plans without bringing the rest of their tree with them. When that lands, the left side gets written in full like the right side does.
@@ -634,20 +694,20 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
         <div className="lp-container">
           <h2 className="lp-section-title">The auth-being . every land's gatekeeper</h2>
           <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center", maxWidth: 800, margin: "0 auto 24px"}}>
-            Identity has to be establishable, which means some embodiment has to accept requests from unestablished requesters. Every land that speaks IBP runs one specifically for that. It lives at a fixed address.
+            Identity has to be establishable, which means some being has to accept requests from unestablished requesters. Every land that speaks IBP runs one specifically for that. It lives at a fixed address.
           </p>
 
           <div className="ibp-auth-addr">
             <code className="ibp-auth-addr-code">
               <span style={{color: "#4ade80"}}>treeos.ai</span><span style={{color: "rgba(255,255,255,0.5)"}}>/</span><span style={{color: "#c084fc"}}>@auth</span>
             </code>
-            <div className="ibp-auth-addr-note">A Stance at the Land Position. The auth embodiment at <code>/</code>.</div>
+            <div className="ibp-auth-addr-note">A Stance at the Land Position. The auth-being at <code>/</code>.</div>
           </div>
 
           <div className="ibp-auth-grid">
             <div className="ibp-auth-card">
               <div className="ibp-auth-head">What it is</div>
-              <p>An embodiment registered at every land. Same kind of thing as any other embodiment (it sits in the registry, declares its trigger pattern, has a summon function) but its job is processing identity operations rather than generating text. The auth-being is the only embodiment that accepts requests from unestablished requesters, because identity bootstrap has to start somewhere.</p>
+              <p>A role registered at every land. Same kind of thing as any other role (it sits in the registry, declares its trigger pattern, has a summon function) but its job is processing identity operations rather than generating text. The auth-being is the only being that accepts requests from unestablished requesters, because identity bootstrap has to start somewhere.</p>
             </div>
             <div className="ibp-auth-card">
               <div className="ibp-auth-head">The four BE operations it handles</div>
@@ -661,12 +721,38 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
           </div>
 
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 24, maxWidth: 800, margin: "24px auto 0", fontSize: 15, color: "rgba(255,255,255,0.7)"}}>
-            <strong>Specialized per land.</strong> The auth-being's character is what the land's posture toward newcomers actually feels like. Public lands have welcoming auth-beings that accept any registration. Private lands have gatekeeping auth-beings that require invite codes or vouching. A research land might bind every new user to an ethics contract on register. Same protocol shape on every land; different behavior, set by whichever embodiment the operator wires in at <code>@auth</code>.
+            <strong>Specialized per land.</strong> The auth-being's character is what the land's posture toward newcomers actually feels like. Public lands have welcoming auth-beings that accept any registration. Private lands have gatekeeping auth-beings that require invite codes or vouching. A research land might bind every new user to an ethics contract on register. Same protocol shape on every land; different behavior, set by whichever role the operator wires in at <code>@auth</code>.
           </p>
 
           <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 12, maxWidth: 800, margin: "12px auto 0", fontSize: 14, color: "rgba(255,255,255,0.55)", fontStyle: "italic"}}>
             The auth-being is inspectable like any being. <code>SEE treeos.ai/@auth</code> returns its policies (open vs. closed registration, supported credential types) the same way SEE on any stance returns a Position Description. The gatekeeper has no special protocol status; it just has special authority within its land.
           </p>
+
+          <div style={{
+            marginTop: 24, padding: "20px 24px", maxWidth: 800, margin: "24px auto 0",
+            background: "rgba(74, 222, 128, 0.05)",
+            border: "1px solid rgba(74, 222, 128, 0.22)",
+            borderRadius: 8,
+          }}>
+            <h3 style={{color: "#4ade80", fontSize: "1rem", marginTop: 0, marginBottom: 10}}>
+              The auth-being proves cognition is not the line
+            </h3>
+            <p style={{fontSize: 14.5, color: "rgba(255,255,255,0.78)", lineHeight: 1.75, margin: 0}}>
+              The auth-being's summon handler runs deterministic code . JWT validation, Being
+              creation, session management. No LLM call. Its actions still write Dids attributed
+              to it. SUMMON addressing still works. It is a fully first-class being whose cognition
+              happens to be code.
+            </p>
+            <p style={{fontSize: 14.5, color: "rgba(255,255,255,0.7)", lineHeight: 1.75, marginTop: 12, marginBottom: 0}}>
+              This generalizes. A being's cognition can be an <strong style={{color: "#bbf7d0"}}>LLM</strong>
+              (typical AI beings), <strong style={{color: "#bbf7d0"}}>deterministic code</strong>
+              (auth-being, browser-bridge, protocol handlers), <strong style={{color: "#bbf7d0"}}>a human</strong>
+              (people typing through the Portal), or <strong style={{color: "#bbf7d0"}}>composite</strong>
+              (a being orchestrating sub-beings). The protocol does not care. It cares that the
+              SUMMON contract is honored: envelope arrives in the inbox, handler runs, output emerges.
+              Identity is what IBP requires; cognition is the being's business.
+            </p>
+          </div>
 
           <div className="ibp-auth-link">
             Before a visitor registers or claims, they're an <strong>arrival stance</strong>. Its permissions are configurable per land, anywhere from "completely closed" to "fully open." <a href="/ibp/arrival">The arrival stance →</a>
@@ -685,7 +771,7 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
             A web browser speaks HTTP and renders HTML. The Portal speaks IBP, the four verbs over WebSocket, and renders Position Descriptors. Same shape of role in the architecture, different protocol underneath, different thing on screen.
           </p>
           <p className="lp-section-sub lp-section-sub-wide">
-            Where a browser opens a page, the Portal opens a stance. Where a browser has tabs full of documents, the Portal has tabs full of Portal Addresses. Many beings addressed in parallel, each a different stance into the inhabited internet.
+            Where a browser opens a page, the Portal opens a stance. Where a browser has tabs full of documents, the Portal has tabs full of IBP Addresses. Many beings addressed in parallel, each a different stance into the inhabited internet.
           </p>
           <p className="lp-section-sub lp-section-sub-wide">
             The Portal renders consistently across lands because IBP's response format is uniform. Every position arrives as a Position Descriptor; the Portal owns the visual language. A book-workspace position and a code-workspace position both look like TreeOS positions because the Portal draws them that way.
@@ -704,7 +790,7 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
             A land server can serve both audiences. Visit <code>https://treeos.ai/some/page</code> in a web browser, get HTML over HTTP. Open <code>treeos.ai/some/position@ruler</code> in the Portal, get a Position Descriptor over IBP and engage through the four verbs. Same land, two surfaces, no conflict.
           </p>
           <p className="lp-section-sub lp-section-sub-wide">
-            For domains outside TreeOS (any HTTP site), the Portal can still present the domain's being-side. Any site that publishes an AI-being layer becomes addressable over IBP. Invite a being there with TALK, engage it through the protocol, rather than scraping the HTML or stitching MCP servers on top of a website built for humans.
+            For domains outside TreeOS (any HTTP site), the Portal can still present the domain's being-side. Any site that publishes an AI-being layer becomes addressable over IBP. Invite a being there with SUMMON, engage it through the protocol, rather than scraping the HTML or stitching MCP servers on top of a website built for humans.
           </p>
         </div>
       </section>
@@ -717,7 +803,7 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
             The honest layered answer: IBP and the WWW both run on the internet. They both use DNS to resolve land names. They both use TCP/IP and TLS. At the network layer, they share the same plumbing.
           </p>
           <p className="lp-section-sub lp-section-sub-wide">
-            But the WWW is defined by URL + HTTP + HTML + Browser working together. Those four things make the web the web, not just the internet. The Inter-Being Web is defined by Portal Address + IBP + Position Descriptors + Portal. Four things, different family.
+            But the WWW is defined by URL + HTTP + HTML + Browser working together. Those four things make the web the web, not just the internet. The Inter-Being Web is defined by IBP Address + IBP + Position Descriptors + Portal. Four things, different family.
           </p>
           <p className="lp-section-sub lp-section-sub-wide" style={{fontStyle: "italic", borderLeft: "3px solid rgba(74, 222, 128, 0.4)", paddingLeft: 24}}>
             The WWW is a network of documents that link to each other. The Inter-Being Web is a network of worlds inhabited by beings who address each other. Different networks because they network different kinds of things.

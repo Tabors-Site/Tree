@@ -3,7 +3,7 @@ import express from "express";
 import authenticate from "../../seed/middleware/authenticate.js";
 import { sendOk, sendError, ERR } from "../../seed/protocol.js";
 import Being from "../../seed/models/being.js";
-import { getChats } from "../../seed/llm/chatHistory.js";
+import { getSummons } from "../../seed/llm/summonHistory.js";
 import { getExtension } from "../loader.js";
 import {
   getAllArtifactsByUser,
@@ -160,7 +160,7 @@ export default function createRouter(core) {
         sessionId = sessionId.replace(/^"+|"+$/g, "");
       }
 
-      const { sessions } = await getChats({
+      const { sessions } = await getSummons({
         beingId,
         sessionLimit: limit || 10,
         sessionId,

@@ -31,9 +31,9 @@ const state = {
   descriptor: null,
   // Whichever non-auth being currently has the talk panel open.
   currentTalkBeing: null,
-  // Correlation id -> embodiment, for routing async ibp:talk-reply
+  // Correlation id -> embodiment, for routing async ibp:summon-reply
   // events back to the being whose bubble should be updated.
-  pendingTalks: new Map(),
+  pendingSummons: new Map(),
   // Navigation history. Linear; back/forward step through it without
   // re-visiting via see() until the user actually clicks back/forward.
   history: [],
@@ -94,7 +94,7 @@ async function connectAnonymous(landUrl, useProxy) {
     token: null,
     useProxy,
     onConnectionChange: (status) => setHud(`socket: ${status}`),
-    onTalkReply: handleTalkReply,
+    onSummonReply: handleSummonReply,
     onDescriptorEvent: handleDescriptorEvent,
   });
   state.client.connect();
@@ -108,7 +108,7 @@ async function connectAndLand(session) {
     token: session.token,
     useProxy: session.landIsProxied,
     onConnectionChange: (status) => setHud(`${session.username} | ${status}`),
-    onTalkReply: handleTalkReply,
+    onSummonReply: handleSummonReply,
     onDescriptorEvent: handleDescriptorEvent,
   });
   state.client.connect();
@@ -138,15 +138,15 @@ function handleDescriptorEvent(_event) {
   }, 100); // debounce a touch so a flurry of patches collapses into one render
 }
 
-// Async TALK reply arrives via `ibp:talk-reply`. Look up which being
+// Async SUMMON reply arrives via `ibp:summon-reply`. Look up which being
 // the reply belongs to (by correlation id) and swap the thinking bubble
 // for the real content.
-function handleTalkReply(entry) {
+function handleSummonReply(entry) {
   const correlation = entry?.inReplyTo;
   if (!correlation) return;
-  const embodiment = state.pendingTalks.get(correlation);
+  const embodiment = state.pendingSummons.get(correlation);
   if (!embodiment) return;
-  state.pendingTalks.delete(correlation);
+  state.pendingSummons.delete(correlation);
   const text = entry.content || "(no reply)";
   state.scene.showBeingMessage(embodiment, text);
 }
@@ -228,7 +228,7 @@ function onGaze(_target, _info) {
 
 // Proximity dispatcher: fires from scene.js whenever any being's
 // proximity+gaze state flips. Auth-being opens sign-in/logout; every
-// other being opens the TALK panel.
+// other being opens the talk panel.
 function onBeingProximity(being, inRange, _distance) {
   if (being.embodiment === "auth") {
     return onAuthProximity(inRange);
@@ -300,16 +300,16 @@ function openTalkPanel(being) {
   state.currentTalkBeing = being.embodiment;
   showTalkPanel({
     being,
-    onSubmit: (text) => sendTalk(being, text),
+    onSubmit: (text) => sendSummon(being, text),
   });
 }
 
-// Build the TALK envelope and dispatch via ibp:talk. Sync embodiments
+// Build the SUMMON envelope and dispatch via ibp:summon. Sync embodiments
 // return their response on the ack; async embodiments ACK accepted and
-// later push a `ibp:talk-reply` event handled by handleTalkReply().
+// later push a `ibp:summon-reply` event handled by handleSummonReply().
 // While we wait for an async reply, we show an animated thinking bubble
 // above the being's head.
-async function sendTalk(being, text) {
+async function sendSummon(being, text) {
   if (!state.descriptor || !state.client) return;
   // Drop the chat panel as soon as the user hits send. The thinking
   // bubble (or final reply) lives in the world above the being's head;
@@ -333,11 +333,11 @@ async function sendTalk(being, text) {
     correlation,
   };
   try {
-    const reply = await state.client.talk(stance, message);
+    const reply = await state.client.summon(stance, message);
     if (reply?.status === "accepted") {
       // Async path: server kicked off summoning; show thinking dots and
-      // wait for `ibp:talk-reply` to swap them for real content.
-      state.pendingTalks.set(correlation, being.embodiment);
+      // wait for `ibp:summon-reply` to swap them for real content.
+      state.pendingSummons.set(correlation, being.embodiment);
       state.scene.showBeingThinking(being.embodiment);
       return;
     }
@@ -346,7 +346,7 @@ async function sendTalk(being, text) {
   } catch (err) {
     state.scene.showBeingMessage(
       being.embodiment,
-      `[${err.code || "error"}] ${err.message || "talk failed"}`,
+      `[${err.code || "error"}] ${err.message || "summon failed"}`,
     );
     throw err;
   }

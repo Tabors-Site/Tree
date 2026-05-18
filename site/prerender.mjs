@@ -104,7 +104,7 @@ const PAGE_META = {
   },
   "/ibp": {
     title: "IBP . Inter-Being Protocol . Sibling to the World Wide Web",
-    description: "HTTP/URL/WWW gave the world the Web of documents. IBP, the Inter-Being Protocol, gives it the Web of beings. Portal Addresses, four verbs (SEE/DO/TALK/BE), Position Descriptors. The protocol layer for identity-first interaction with sovereign AI on TreeOS lands. The Portal is its browser.",
+    description: "HTTP/URL/WWW gave the world the Web of documents. IBP, the Inter-Being Protocol, gives it the Web of beings. IBP Addresses, four verbs (SEE/DO/TALK/BE), Position Descriptors. The protocol layer for identity-first interaction with sovereign AI on TreeOS lands. The Portal is its browser.",
   },
   "/ibp/arrival": {
     title: "The arrival stance . IBP",

@@ -10,7 +10,7 @@
 // updateParent, branchLifecycle) carry typed payloads for kernel-named
 // actions. Extension-defined actions stash their payload in `extensionData`.
 //
-// Pairs with Chat ↔ TALK: TALK emits Chat records that bind beingIn/beingOut;
+// Pairs with Summon ↔ SUMMON: SUMMON emits Summon records that bind beingIn/beingOut;
 // DO emits Did records that record who-did-what-where. Together they make
 // the kernel-recorded activity surface queryable end to end.
 //
@@ -24,7 +24,7 @@ const DidSchema = new mongoose.Schema({
   _id: { type: String, default: uuidv4 },
   beingId: { type: String, ref: "Being", required: true },
   nodeId: { type: String, ref: "Node" },
-  chatId: { type: String, ref: "Chat" },
+  summonId: { type: String, ref: "Summon" },
   sessionId: { type: String, index: true },
 
   // Action type (DO action name)
@@ -53,7 +53,7 @@ const DidSchema = new mongoose.Schema({
 // Query indexes
 DidSchema.index({ beingId: 1, date: -1 }); // a being's action history
 DidSchema.index({ nodeId: 1, date: -1 });  // a node's action history
-DidSchema.index({ chatId: 1 }, { sparse: true }); // finalizeChat: Did.find({ chatId })
+DidSchema.index({ summonId: 1 }, { sparse: true }); // finalizeSummon: Did.find({ summonId })
 
 // Retention: kernel deletes Did rows older than didRetentionDays (default 365, 0 = forever)
 

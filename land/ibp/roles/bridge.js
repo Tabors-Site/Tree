@@ -1,12 +1,12 @@
-// TreeOS IBP — bridge embodiment factory.
+// TreeOS IBP — bridge being factory.
 //
 // Most beings shown in Position Descriptors (ruler, worker, archivist,
 // land-manager, citizen, etc.) are modes in the legacy conversation
-// loop. Until each one migrates to a first-class IBP embodiment, the
-// bridge lets TALK route to them by invoking `runChat()` with the
+// loop. Until each one migrates to a first-class IBP being, the
+// bridge lets SUMMON route to them by invoking `runChat()` with the
 // corresponding modeKey and returning the answer inline.
 //
-// The bridge is a stopgap — per-embodiment implementations will replace
+// The bridge is a stopgap — per-being implementations will replace
 // these one-by-one. The shape is sync respond-mode so the 3D client can
 // render the reply as a speech bubble without polling an outbox.
 
@@ -16,7 +16,7 @@ export function makeBridgeEmbodiment({ name, modeKey, zone, honoredIntents = ["c
   return Object.freeze({
     name,
     honoredIntents,
-    // Async: the underlying runChat() can take many minutes. TALK ACKs
+    // Async: the underlying runChat() can take many minutes. SUMMON ACKs
     // immediately; the protocol layer pushes the response to the sender
     // when summoning completes.
     respondMode: "async",
@@ -51,7 +51,7 @@ export function makeBridgeEmbodiment({ name, modeKey, zone, honoredIntents = ["c
         // runChat returns the Chat record's id. Surface it so the inbox
         // entry can reference the conversation history this message was
         // processed into (markInboxConsumed stores it on the entry).
-        chatId: result?.chatId || null,
+        summonId: result?.summonId || null,
       };
     },
   });

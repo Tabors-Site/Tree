@@ -17,10 +17,10 @@
 //      deny with a reason.
 //
 // Lookup key shape per verb:
-//   see:  "*"                                          (universal for now)
-//   do:   "<action>:<param>" or "<action>"             (e.g. "set-meta:position")
-//   talk: "@<qualifier>:<intent>" or "@<qualifier>"    (qualifier supports prefix wildcard)
-//   be:   "<operation>"                                (register|claim|release|switch)
+//   see:     "*"                                          (universal for now)
+//   do:      "<action>:<param>" or "<action>"             (e.g. "set-meta:position")
+//   summon:  "@<qualifier>:<intent>" or "@<qualifier>"    (qualifier supports prefix wildcard)
+//   be:      "<operation>"                                (register|claim|release|switch)
 //
 // Specificity precedence: exact > prefix-wildcard > "*"  per key part.
 // Position precedence: closer position beats farther via parent walk.
@@ -47,17 +47,17 @@ import { PORTAL_ERR } from "./errors.js";
 // ─────────────────────────────────────────────────────────────────────
 
 export const DEFAULT_ARRIVAL_PERMISSIONS = Object.freeze({
-  see:  Object.freeze({ allowed_visibility: ["public"] }),
-  do:   Object.freeze({ allowed_actions: [] }),
-  talk: Object.freeze({ allowed_targets: [] }),
-  be:   Object.freeze({ allowed_operations: ["register", "claim"] }),
+  see:    Object.freeze({ allowed_visibility: ["public"] }),
+  do:     Object.freeze({ allowed_actions: [] }),
+  summon: Object.freeze({ allowed_targets: [] }),
+  be:     Object.freeze({ allowed_operations: ["register", "claim"] }),
 });
 
 export const DEFAULT_OWNER_PERMISSIONS = Object.freeze({
-  see:  Object.freeze({ allowed_visibility: "*" }),
-  do:   Object.freeze({ allowed_actions: "*" }),
-  talk: Object.freeze({ allowed_targets: "*" }),
-  be:   Object.freeze({ allowed_operations: ["register", "claim", "release", "switch"] }),
+  see:    Object.freeze({ allowed_visibility: "*" }),
+  do:     Object.freeze({ allowed_actions: "*" }),
+  summon: Object.freeze({ allowed_targets: "*" }),
+  be:     Object.freeze({ allowed_operations: ["register", "claim", "release", "switch"] }),
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -69,11 +69,11 @@ export const DEFAULT_OWNER_PERMISSIONS = Object.freeze({
  *
  * @param {object} args
  * @param {object|null} args.identity { beingId, username } if authenticated
- * @param {"see"|"do"|"talk"|"be"} args.verb
- * @param {object} args.target     { kind, value, nodeId?, visibility?, embodiment?, isDiscovery? }
+ * @param {"see"|"do"|"summon"|"be"} args.verb
+ * @param {object} args.target     { kind, value, nodeId?, visibility?, being?, isDiscovery? }
  * @param {string} [args.action]   DO action name
  * @param {string} [args.namespace] set-meta namespace
- * @param {string} [args.intent]   TALK intent
+ * @param {string} [args.intent]   SUMMON intent
  * @param {string} [args.operation] BE operation
  * @returns {Promise<{ ok: boolean, stance: string, reason?: string }>}
  */
@@ -154,7 +154,7 @@ function buildKeyParts(args) {
       }
       return [args.action];
     }
-    case "talk": {
+    case "summon": {
       const qualifier = args.target?.embodiment || args.target?.username;
       if (!qualifier) return null;
       const qPart = qualifier.startsWith("@") ? qualifier : `@${qualifier}`;
@@ -317,17 +317,25 @@ async function legacyAuthorize(args, props) {
   const permissions = await loadLegacyStancePermissions(stance);
   if (!permissions) return null;
   switch (args.verb) {
-    case "see":  return legacyDecideSee(stance, permissions, args);
-    case "do":   return legacyDecideDo(stance, permissions, args);
-    case "talk": return legacyDecideTalk(stance, permissions, args);
-    case "be":   return legacyDecideBe(stance, permissions, args);
-    default:     return null;
+    case "see":    return legacyDecideSee(stance, permissions, args);
+    case "do":     return legacyDecideDo(stance, permissions, args);
+    case "summon": return legacyDecideSummon(stance, permissions, args);
+    case "be":     return legacyDecideBe(stance, permissions, args);
+    default:       return null;
   }
 }
 
 async function loadLegacyStancePermissions(stance) {
   if (stance === "arrival") return (await readLandStanceMeta("arrival")) || DEFAULT_ARRIVAL_PERMISSIONS;
   if (stance === "owner")   return (await readLandStanceMeta("owner"))   || DEFAULT_OWNER_PERMISSIONS;
+  // "member" (and any other authenticated non-owner): the legacy decide
+  // functions short-circuit to allow for this stance without consulting
+  // permissions. Returning an empty object engages that short-circuit
+  // path instead of falling through to default-deny. Without this an
+  // authenticated being who is not the owner gets FORBIDDEN on every
+  // SEE / DO / SUMMON / BE because no Tier-5 default-permission rule
+  // covers their stance and the kernel has no implicit member-allow.
+  if (stance === "member") return {};
   return null;
 }
 
@@ -337,7 +345,7 @@ async function readLandStanceMeta(stanceName) {
   const root = await Node.findById(landRootId)
     .select(`metadata.beings.${stanceName}.permissions`)
     .lean();
-  const path = root?.metadata?.embodiments;
+  const path = root?.metadata?.beings;
   if (!path) return null;
   const stance = path instanceof Map ? path.get(stanceName) : path[stanceName];
   if (!stance) return null;
@@ -373,20 +381,20 @@ function legacyDecideDo(stance, permissions, { action }) {
     : { ok: false, stance, reason: `action "${action}" not in allowed list` };
 }
 
-function legacyDecideTalk(stance, permissions, { target }) {
+function legacyDecideSummon(stance, permissions, { target }) {
   if (stance === "owner") return { ok: true, stance };
   if (stance === "member") return { ok: true, stance };
-  const rule = permissions.talk?.allowed_targets;
+  const rule = permissions.summon?.allowed_targets;
   if (rule === "*") return { ok: true, stance };
   if (!Array.isArray(rule) || rule.length === 0) {
-    return { ok: false, stance, reason: "stance not permitted to TALK" };
+    return { ok: false, stance, reason: "stance not permitted to SUMMON" };
   }
-  const targetEmbodiment = target?.embodiment;
-  if (!targetEmbodiment) return { ok: false, stance, reason: "TALK requires a target embodiment" };
-  const targetTag = `@${targetEmbodiment}`;
-  return rule.includes(targetTag) || rule.includes(targetEmbodiment)
+  const targetBeing = target?.embodiment;
+  if (!targetBeing) return { ok: false, stance, reason: "SUMMON requires a target being" };
+  const targetTag = `@${targetBeing}`;
+  return rule.includes(targetTag) || rule.includes(targetBeing)
     ? { ok: true, stance }
-    : { ok: false, stance, reason: `embodiment "${targetTag}" not in allowed list` };
+    : { ok: false, stance, reason: `role "${targetTag}" not in allowed list` };
 }
 
 function legacyDecideBe(stance, permissions, { operation }) {
@@ -421,7 +429,7 @@ export async function seedDefaultStancePermissions() {
   if (!landRootId) return { seeded: false, reason: "land root not initialized" };
 
   const root = await Node.findById(landRootId).select("metadata").lean();
-  const existing = root?.metadata?.embodiments;
+  const existing = root?.metadata?.beings;
 
   const updates = {};
   const hasArrival = existing instanceof Map

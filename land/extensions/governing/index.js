@@ -364,10 +364,10 @@ export async function init(core) {
         // Backfill being homes on the four kinds of governing structural
         // nodes: Ruler, plan trio (Planner), contracts trio (Contractor),
         // execution node (Foreman). For each kind we query by governing
-        // role marker and add the matching embodiments entry where it
+        // role marker and add the matching beings entry where it
         // does not already exist.
         // Each backfill entry carries a `permissions(scopeNodeId)`
-        // function that produces the TALK rule for the node. Trio
+        // function that produces the SUMMON rule for the node. Trio
         // rules use the scopeRulerId (read from the existing
         // governing metadata) as the homeInDomain bound, so beings
         // from other rulerships can't address this trio's inner being.
@@ -382,11 +382,11 @@ export async function init(core) {
         const BACKFILLS = [
           {
             nodeType: "ruler", beingRole: "ruler",
-            permissions: () => ({ talk: { "@ruler*": { requires: {} } } }),
+            permissions: () => ({ summon: { "@ruler*": { requires: {} } } }),
           },
           {
             nodeType: "plan", beingRole: "planner",
-            permissions: (scopeId) => ({ talk: { "@planner*": {
+            permissions: (scopeId) => ({ summon: { "@planner*": {
               requires: {
                 role:         ["ruler", "planner", "contractor", "foreman"],
                 homeInDomain: scopeId,
@@ -395,7 +395,7 @@ export async function init(core) {
           },
           {
             nodeType: "contracts", beingRole: "contractor",
-            permissions: (scopeId) => ({ talk: { "@contractor*": {
+            permissions: (scopeId) => ({ summon: { "@contractor*": {
               requires: {
                 role:         ["ruler", "planner", "contractor", "foreman"],
                 homeInDomain: scopeId,
@@ -404,7 +404,7 @@ export async function init(core) {
           },
           {
             nodeType: "execution", beingRole: "foreman",
-            permissions: (scopeId) => ({ talk: { "@foreman*": {
+            permissions: (scopeId) => ({ summon: { "@foreman*": {
               requires: {
                 role:         ["ruler", "planner", "contractor", "foreman"],
                 homeInDomain: scopeId,
@@ -424,7 +424,7 @@ export async function init(core) {
             const emb = meta instanceof Map ? meta.get("beings") : meta?.embodiments;
             const existingPerms = meta instanceof Map ? meta.get("permissions") : meta?.permissions;
             const beingPresent = !!emb?.[beingRole]?.beingId;
-            const permsPresent = !!existingPerms?.talk?.[`@${beingRole}*`];
+            const permsPresent = !!existingPerms?.summon?.[`@${beingRole}*`];
             if (beingPresent && permsPresent) continue;     // fully migrated
             const gov = meta instanceof Map ? meta.get("governing") : meta?.governing;
             const fresh = await Node.findById(n._id);
@@ -815,7 +815,7 @@ export async function init(core) {
                 signal: payload.signal || null,
                 socket: payload.socket || null,
                 sessionId: payload.parentSessionId || null,
-                rootChatId: payload.parentChatId || null,
+                rootSummonId: payload.parentSummonId || null,
                 wakeup: {
                   source: "hook-wakeup",
                   reason: wakeReason,

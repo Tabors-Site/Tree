@@ -242,7 +242,7 @@ function sanitizeArgs(args) {
   if (!args || typeof args !== "object") return {};
   const safe = {};
   for (const [key, val] of Object.entries(args)) {
-    if (key === "beingId" || key === "chatId" || key === "sessionId") continue;
+    if (key === "beingId" || key === "summonId" || key === "sessionId") continue;
     if (typeof val === "string" && val.length > 500) {
       safe[key] = val.slice(0, 497) + "...";
     } else {

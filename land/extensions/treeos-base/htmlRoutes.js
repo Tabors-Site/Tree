@@ -16,7 +16,7 @@ import { getExtMeta, setExtMeta } from "../../seed/tree/extensionMetadata.js";
 import { getTreeStructure } from "../../seed/tree/treeData.js";
 import { getDids } from "../../seed/tree/dids.js";
 import { buildPathString, resolveRootNode } from "../../seed/tree/treeFetch.js";
-import { getNodeChats, getChatChain } from "../../seed/llm/chatHistory.js";
+import { getNodeSummons, getSummonChain } from "../../seed/llm/summonHistory.js";
 import { getConnectionsForUser, getAllRootLlmSlots } from "../../seed/llm/connections.js";
 import getNodeName from "../../routes/api/helpers/getNameById.js";
 import { getExtension } from "../loader.js";
@@ -46,12 +46,12 @@ import { renderNodeLlmPage } from "./pages/nodeLlmPage.js";
 import { escapeHtml, renderMedia } from "../html-rendering/html/utils.js";
 import { notFoundPage } from "../html-rendering/notFoundPage.js";
 import AiCapture from "./models/aiCapture.js";
-import Chat from "../../seed/models/chat.js";
+import Summon from "../../seed/models/summon.js";
 
 /**
  * Bulk-load AI forensics captures for a list of chat docs. Single
- * query keyed on chatId so the renderer can look up O(1) without
- * per-row awaits. Returns a Map<chatId, capture>. Errors swallow to
+ * query keyed on summonId so the renderer can look up O(1) without
+ * per-row awaits. Returns a Map<summonId, capture>. Errors swallow to
  * empty map — rendering must succeed even if the capture collection
  * is missing or indexed badly.
  */
@@ -60,13 +60,13 @@ async function loadCapturesForChats(chats) {
   if (!Array.isArray(chats) || chats.length === 0) return map;
   try {
     const ids = chats.map((c) => String(c._id));
-    const caps = await AiCapture.find({ chatId: { $in: ids } })
+    const caps = await AiCapture.find({ summonId: { $in: ids } })
       .sort({ startedAt: -1 })
       .lean();
     // If multiple captures exist for a chat (retry path), the first
     // (most recent) wins.
     for (const cap of caps) {
-      if (cap.chatId && !map.has(cap.chatId)) map.set(cap.chatId, cap);
+      if (cap.summonId && !map.has(cap.summonId)) map.set(cap.summonId, cap);
     }
   } catch (err) {
     log.debug("HTML", `loadCapturesForChats failed: ${err.message}`);
@@ -77,11 +77,11 @@ async function loadCapturesForChats(chats) {
 /**
  * Bulk-load dispatch lineage for a page of chats. Returns two maps:
  *
- *   childrenByParent: Map<parentChatId, Array<childChat>>
+ *   childrenByParent: Map<parentSummonId, Array<childChat>>
  *       "For this chat step, these are the chats it dispatched"
  *       Used to render "▶ Dispatched to N branches" on a step.
  *
- *   parentByChatId:   Map<chatId, parentChat>
+ *   parentByChatId:   Map<summonId, parentChat>
  *       "This chat was dispatched from that one"
  *       Used to render "◀ Dispatched from <parent>" at the top of a
  *       branch chain.
@@ -100,26 +100,26 @@ async function loadLineageForChats(chats) {
     const ids = chats.map((c) => String(c._id));
 
     // Forward query: chats dispatched BY any of our chats
-    const children = await Chat.find({ parentChatId: { $in: ids } })
-      .select("_id parentChatId sessionId chainIndex rootChatId treeContext aiContext dispatchOrigin endMessage.stopped")
+    const children = await Summon.find({ parentSummonId: { $in: ids } })
+      .select("_id parentSummonId sessionId chainIndex rootSummonId treeContext aiContext dispatchOrigin endMessage.stopped")
       .sort({ chainIndex: 1 })
       .lean();
     for (const child of children) {
-      const key = String(child.parentChatId);
+      const key = String(child.parentSummonId);
       if (!childrenByParent.has(key)) childrenByParent.set(key, []);
       childrenByParent.get(key).push(child);
     }
 
-    // Backward query: parents of any chats whose parentChatId is set.
+    // Backward query: parents of any chats whose parentSummonId is set.
     // Deduplicate parent ids so we only load each parent once.
     const parentIds = [...new Set(
       chats
-        .map((c) => c.parentChatId)
+        .map((c) => c.parentSummonId)
         .filter((p) => typeof p === "string" && p.length > 0),
     )];
     if (parentIds.length > 0) {
-      const parents = await Chat.find({ _id: { $in: parentIds } })
-        .select("_id sessionId chainIndex rootChatId treeContext aiContext dispatchOrigin")
+      const parents = await Summon.find({ _id: { $in: parentIds } })
+        .select("_id sessionId chainIndex rootSummonId treeContext aiContext dispatchOrigin")
         .lean();
       for (const p of parents) {
         parentByChatId.set(String(p._id), p);
@@ -727,14 +727,14 @@ export function buildTreeosHtmlRoutes() {
   // version segment is cosmetic for URL consistency with notes/contributions.
   async function renderNodeChatsHandler(req, res) {
     try {
-      const { nodeId, sessionId: sessionIdFromPath, chatId: chatIdFromPath } = req.params;
+      const { nodeId, sessionId: sessionIdFromPath, summonId: chatIdFromPath } = req.params;
       const node = await Node.findById(nodeId).select("name rootOwner").lean();
       if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
 
       // Three entry shapes:
       //   /node/:nodeId/chats                           — list N recent sessions
       //   /node/:nodeId/chats/session/:sessionId        — zoom one session
-      //   /node/:nodeId/chats/chat/:chatId              — zoom one chat subtree
+      //   /node/:nodeId/chats/chat/:summonId              — zoom one chat subtree
       // The path-level param wins. Legacy ?sessionId= query still accepted
       // so existing bookmarks keep working.
       const focusSessionId = sessionIdFromPath || req.query.sessionId || null;
@@ -743,12 +743,12 @@ export function buildTreeosHtmlRoutes() {
       let sessions;
       let ancestors = [];
       if (focusChatId) {
-        const r = await getChatChain(focusChatId, { maxDescendants: 200 });
+        const r = await getSummonChain(focusChatId, { maxDescendants: 200 });
         sessions = r.sessions;
         ancestors = r.ancestors || [];
       } else {
         const sessionLimit = Math.min(Number(req.query.limit) || 3, 10);
-        const r = await getNodeChats({
+        const r = await getNodeSummons({
           nodeId,
           sessionLimit: focusSessionId ? 1 : sessionLimit,
           sessionId: focusSessionId,
@@ -796,7 +796,7 @@ export function buildTreeosHtmlRoutes() {
 
   router.get("/node/:nodeId/chats", urlAuth, htmlOnly, renderNodeChatsHandler);
   router.get("/node/:nodeId/chats/session/:sessionId", urlAuth, htmlOnly, renderNodeChatsHandler);
-  router.get("/node/:nodeId/chats/chat/:chatId", urlAuth, htmlOnly, renderNodeChatsHandler);
+  router.get("/node/:nodeId/chats/chat/:summonId", urlAuth, htmlOnly, renderNodeChatsHandler);
   router.get("/node/:nodeId/:version/chats", urlAuth, htmlOnly, renderNodeChatsHandler);
 
   // ===================================================================
@@ -968,7 +968,7 @@ export function buildTreeosHtmlRoutes() {
       if (!root) return sendError(res, 404, ERR.TREE_NOT_FOUND, "Tree not found");
 
       const sessionLimit = Math.min(Number(req.query.limit) || 3, 10);
-      const { sessions } = await getNodeChats({
+      const { sessions } = await getNodeSummons({
         nodeId: rootId, sessionLimit,
         sessionId: req.query.sessionId || null,
         startDate: req.query.startDate || null,

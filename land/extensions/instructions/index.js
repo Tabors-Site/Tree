@@ -151,7 +151,7 @@ export async function init(core) {
         text: z.string().describe("The instruction in second person, e.g. 'use kg for weights' or 'never suggest meat'. Be brief and direct."),
         scope: z.string().describe("'global' for everywhere, or an extension name like 'food', 'fitness', 'study'."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
@@ -204,7 +204,7 @@ export async function init(core) {
         "to review what's been saved.",
       schema: {
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
@@ -242,7 +242,7 @@ export async function init(core) {
       schema: {
         id: z.string().describe("The instruction id (or its first 8 chars) to remove."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },

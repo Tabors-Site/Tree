@@ -107,7 +107,7 @@ export async function orchestrateUnderstanding({
   source = "orchestrator",
   fromSite = false,
   sessionId: externalSessionId,
-  rootChatId: externalRootChatId,
+  rootSummonId: externalRootChatId,
   startingChainIndex,
 }) {
   // Load and validate run
@@ -267,7 +267,7 @@ export async function orchestrateUnderstanding({
             understandingNodeId: nodeId,
             currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
             beingId,
-            chatId: rt.mainChatId,
+            summonId: rt.mainChatId,
             sessionId: rt.sessionId,
           });
           nodesProcessed++;
@@ -288,7 +288,7 @@ export async function orchestrateUnderstanding({
         understandingNodeId: payload.target.understandingNodeId,
         currentLayer: payload.mode === "leaf" ? 0 : payload.target.nextLayer,
         beingId,
-        chatId: rt.mainChatId,
+        summonId: rt.mainChatId,
         sessionId: rt.sessionId,
       });
 

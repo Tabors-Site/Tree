@@ -75,7 +75,7 @@ const strategy = defineStrategy({
         needsExtensions: z.array(z.string()).optional().describe("Other extensions this one depends on."),
         needsServices: z.array(z.string()).optional().describe("Core services required."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false },
@@ -107,7 +107,7 @@ const strategy = defineStrategy({
       schema: {
         key: z.string().describe("Mode key, e.g. 'tree:my-ext-plan'. Must match ^[a-z]+:[a-z0-9_-]+$."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false },
@@ -131,7 +131,7 @@ const strategy = defineStrategy({
       schema: {
         name: z.string().describe("Tool name, kebab-case (e.g. 'my-ext-list')."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false },
@@ -155,7 +155,7 @@ const strategy = defineStrategy({
         "index.js exports async init. PASS/FAIL with any missing pieces listed.",
       schema: {
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true },

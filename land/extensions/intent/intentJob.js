@@ -1,13 +1,18 @@
 // Intent Job
 //
-// The background job that makes the tree autonomous. Runs on a configurable
-// interval. For each opted-in tree, collects state, generates intents
-// through the AI, then executes each intent as a real AI interaction
-// at the target node.
+// The autonomous intent engine. Slice 6c converted this from a
+// setInterval-driven background job into the `@intent` Mode 1 being
+// (see intentEmbodiment.js). The work — observing trees, generating
+// intents, executing them — is unchanged; what shifted is the
+// trigger: schedule registry emits a scheduled-wake SUMMON to the
+// @intent being on cadence; the being calls `runCycle` here.
 //
-// Uses OrchestratorRuntime for session lifecycle, lock management,
-// abort support, and step tracking. Lock prevents two intent cycles
-// from racing on the same tree.
+// OrchestratorRuntime stays inside per-tree processing for now — it
+// manages session lifecycle, lock management, abort signal, and step
+// tracking for the multi-LLM-call cycle. A future pass decomposes
+// each cycle into multiple smaller SUMMONs (one per tree, one per
+// intent) which makes the orchestrator usage unnecessary; for now the
+// being wraps the existing pipeline.
 //
 // The intent cycle:
 // 1. Find trees with metadata.intent.enabled = true
@@ -15,8 +20,8 @@
 // 3. Send the state to the AI via rt.runStep with the intent generation prompt
 // 4. Parse the returned intents (JSON array)
 // 5. For each intent, rt.runStep at the target node
-// 6. Log each execution as a contribution (action: "intent:executed")
-// 7. Write results to .intent node as notes
+// 6. Log each execution as a Did (action: "intent:executed")
+// 7. Write results to .intent node as artifacts
 
 import log from "../../seed/log.js";
 import { collectTreeState, formatStateForPrompt } from "./stateCollector.js";
@@ -45,10 +50,9 @@ export function setServices({ models, contributions, energy, metadata }) {
   if (metadata) _metadata = metadata;
 }
 
-let _timer = null;
 let _running = false;
 
-function getIntervalMs() {
+export function getIntervalMs() {
   return Number(getLandConfigValue("intentIntervalMs")) || 30 * 60 * 1000; // 30 min default
 }
 
@@ -56,20 +60,11 @@ function getMaxIntentsPerCycle() {
   return Number(getLandConfigValue("intentMaxPerCycle")) || 5;
 }
 
-export function startIntentJob() {
-  if (_timer) return;
-  const interval = getIntervalMs();
-  _timer = setInterval(runCycle, interval);
-  if (_timer.unref) _timer.unref();
-  log.info("Intent", `Intent job started (checking every ${Math.round(interval / 60000)}m)`);
-}
-
-export function stopIntentJob() {
-  if (_timer) {
-    clearInterval(_timer);
-    _timer = null;
-  }
-}
+// Legacy lifecycle hooks. Kept as no-ops so existing job-list wiring
+// doesn't break during the Slice 6c rollout. The @intent being's
+// scheduled wake replaces these; setInterval is gone.
+export function startIntentJob() { /* no-op — schedule registry drives now */ }
+export function stopIntentJob()  { /* no-op — unschedule via core.ibp.unschedule("intent:cycle") */ }
 
 // ─────────────────────────────────────────────────────────────────────────
 // INTENT GENERATION PROMPT
@@ -105,10 +100,22 @@ Current tree state:
 // CYCLE
 // ─────────────────────────────────────────────────────────────────────────
 
-async function runCycle() {
-  if (_running) return; // prevent overlap
+// Public entry point. Called by intentEmbodiment.summon when @intent
+// is summoned (scheduled or manual). Returns a brief summary the
+// being uses as its response content.
+//
+// `opts.signal` is the per-summon AbortController signal threaded
+// from the scheduler. Long cycles check it between trees so cancel
+// SUMMONs can interrupt mid-cycle.
+export async function runCycle({ signal } = {}) {
+  if (_running) {
+    log.debug("Intent", "runCycle re-entered while already running; skipping overlap");
+    return { skipped: true, reason: "already-running", treesProcessed: 0, intentsExecuted: 0 };
+  }
   _running = true;
 
+  let treesProcessed = 0;
+  let intentsExecuted = 0;
   try {
     // Find all trees opted in for autonomous intent
     const roots = await Node.find({
@@ -117,34 +124,41 @@ async function runCycle() {
     }).select("_id name rootOwner metadata").lean();
 
     if (roots.length === 0) {
-      _running = false;
-      return;
+      return { treesProcessed: 0, intentsExecuted: 0, text: "no trees opted in" };
     }
 
     log.verbose("Intent", `Intent cycle: ${roots.length} tree(s) opted in`);
 
     for (const root of roots) {
+      if (signal?.aborted) {
+        log.info("Intent", `runCycle aborted at tree ${root._id} (signal aborted)`);
+        break;
+      }
       try {
         // Check if paused
         const intentMeta = _metadata.getExtMeta(root, "intent");
         if (intentMeta.paused) continue;
 
-        await processTree(root);
+        const count = await processTree(root, { signal });
+        treesProcessed++;
+        if (Number.isFinite(count)) intentsExecuted += count;
       } catch (err) {
         log.warn("Intent", `Intent cycle failed for tree ${root.name} (${root._id}): ${err.message}`);
       }
     }
+    return { treesProcessed, intentsExecuted };
   } catch (err) {
     log.error("Intent", `Intent cycle error: ${err.message}`);
+    return { treesProcessed, intentsExecuted, error: err.message };
   } finally {
     _running = false;
   }
 }
 
-async function processTree(root) {
+async function processTree(root, { signal } = {}) {
   const rootId = root._id.toString();
   const beingId = root.rootOwner?.toString();
-  if (!beingId) return;
+  if (!beingId) return 0;
 
   const user = await Being.findById(beingId).select("username").lean();
   if (!user) return;
@@ -282,6 +296,7 @@ async function processTree(root) {
     }
 
     rt.setResult(`Executed ${recentExecutions.length} intent(s)`, "tree:respond");
+    return recentExecutions.length;
   } catch (err) {
     rt.setError(err.message, "tree:respond");
     throw err;

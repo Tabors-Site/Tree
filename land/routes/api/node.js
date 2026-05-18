@@ -13,7 +13,7 @@ import {
 import { editStatus } from "../../seed/tree/statuses.js";
 
 import Node from "../../seed/models/node.js";
-import { getNodeChats } from "../../seed/llm/chatHistory.js";
+import { getNodeSummons } from "../../seed/llm/summonHistory.js";
 import { getExtension } from "../../extensions/loader.js";
 
 const router = express.Router();
@@ -72,7 +72,7 @@ router.get("/node/:nodeId/chats", authenticate, async (req, res) => {
       return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
     }
 
-    const { sessions } = await getNodeChats({
+    const { sessions } = await getNodeSummons({
       nodeId,
       sessionLimit: limit || 10,
       sessionId,

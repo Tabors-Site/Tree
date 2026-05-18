@@ -78,7 +78,7 @@ const strategy = defineStrategy({
         options: z.record(z.any()).optional().describe("Domain-specific options."),
         filePath: z.string().optional().describe("Target filename. Defaults below."),
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: false },
@@ -99,7 +99,7 @@ const strategy = defineStrategy({
       description: "One-line description of what this tool checks.",
       schema: {
         beingId: z.string().describe("Injected by server. Ignore."),
-        chatId: z.string().nullable().optional().describe("Injected by server. Ignore."),
+        summonId: z.string().nullable().optional().describe("Injected by server. Ignore."),
         sessionId: z.string().nullable().optional().describe("Injected by server. Ignore."),
       },
       annotations: { readOnlyHint: true },

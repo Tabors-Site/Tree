@@ -9,7 +9,7 @@ Every position in the TreeOS Portal belongs to one of three zone types. The zone
 ### What it surfaces
 
 - **Public trees** — anything ext-allow'd at land scope, browsable by visitors.
-- **Land-level beings** — embodiments invocable on the land itself (`@citizen`, `@oracle` for public knowledge, `@merchant` if there's a marketplace, custom land-defined beings).
+- **Land-level beings** — beings invocable on the land itself (`@citizen`, `@oracle` for public knowledge, `@merchant` if there's a marketplace, custom land-defined beings).
 - **Available extensions** — what this land hosts that users can install on their trees.
 - **Source data** — public files / artifacts shared at land scope.
 - **Land metadata** — who runs it, what's its operating policy, registration status, economy (if any).
@@ -26,7 +26,7 @@ Every position in the TreeOS Portal belongs to one of three zone types. The zone
 - Sidebar: navigation into specific public trees
 - Identity panel still in place — the visitor's signed-in identity is shown; if they're not a being here, the prompt to register is visible
 
-### Default embodiment
+### Default being
 
 `@citizen` — generic participant. Read-only browsing. Talking to public beings allowed; creating things on the land typically requires elevation (which the land's auth model gates).
 
@@ -37,7 +37,7 @@ Every position in the TreeOS Portal belongs to one of three zone types. The zone
 ### What it surfaces
 
 - **The user's tree** — every project / book / note / branch they've created.
-- **Configured beings** — the user's personally invocable embodiments. May include custom beings the user has crafted with their own prompts and tools.
+- **Configured beings** — the user's personally invocable beings. May include custom beings the user has crafted with their own prompts and tools.
 - **Active extensions** — what's ext-allow'd in the home's spatial scope.
 - **Accumulated history** — recent activity, chat threads, recent navigation, favorites.
 - **Personal LLM config** — visible to the home's owner only. Switch model defaults, manage API keys.
@@ -57,7 +57,7 @@ The home zone is the most-visited part of the portal for any given user. Buildin
 - Sidebar: recent activity, favorite positions, chat-thread restore
 - Quick-create: "new tree" gesture to spawn a fresh tree root
 
-### Default embodiment
+### Default being
 
 `@dreamer` for creative-leaning users (poetic / generative interactions feel right). `@builder` for engineering-leaning users (focused on construction). User picks via setting; can be overridden per-tab via the address bar.
 
@@ -120,7 +120,7 @@ When the position is a leaf with artifact content, the artifact takes center sta
 
 A Ruler with sub-Ruler children. Governance panel collapsed (smaller); child tree expanded so the user can drill in. Each child has a status pill (running / completed / stalled / etc.).
 
-### Default embodiment
+### Default being
 
 - Ruler scopes: `@ruler` (the user can coordinate the scope)
 - Worker leaves: `@worker` (rare — usually the user observes via `@archivist`)
@@ -131,9 +131,9 @@ A Ruler with sub-Ruler children. Governance panel collapsed (smaller); child tre
 
 Every zone has:
 
-- **Address bar** at the top (left = identity, right = position+embodiment)
+- **Address bar** at the top (left = identity, right = position+being)
 - **Identity panel** always visible
-- **Tabs** for multiple Portal Addresses open at once
+- **Tabs** for multiple IBP Addresses open at once
 - **Back / forward / home buttons** (home = home zone of current land; tree button to go to tree root when inside a tree)
 - **No refresh button** — everything is live via WS. State invalidation is event-driven.
 

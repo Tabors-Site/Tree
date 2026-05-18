@@ -14,10 +14,10 @@ import { getLandUrl } from "../canopy/identity.js";
 const PORTAL_PROTOCOL_VERSION = "1.0";
 const DESCRIPTOR_VERSION = "1.0";
 
-// Canonical embodiments declared at the IBP level. Lands can extend with
-// custom embodiments; the discovery only lists the ones every IBP-speaking
+// Canonical beings declared at the IBP level. Lands can extend with
+// custom beings; the discovery only lists the ones every IBP-speaking
 // land knows.
-const CANONICAL_EMBODIMENTS = [
+const CANONICAL_ROLES = [
   "citizen",
   "ruler",
   "planner",
@@ -47,8 +47,8 @@ export function buildDiscovery() {
     ws: wsUrl,
     auth: { method: "bearer" },
     zones: SUPPORTED_ZONES,
-    embodiments: CANONICAL_EMBODIMENTS,
-    supportedVerbs: ["see", "do", "talk", "be"],
+    roles: CANONICAL_ROLES,
+    supportedVerbs: ["see", "do", "summon", "be"],
     upcomingVerbs: [],
     capabilities: [],
   };
@@ -57,6 +57,6 @@ export function buildDiscovery() {
 export {
   PORTAL_PROTOCOL_VERSION,
   DESCRIPTOR_VERSION,
-  CANONICAL_EMBODIMENTS,
+  CANONICAL_ROLES,
   SUPPORTED_ZONES,
 };
