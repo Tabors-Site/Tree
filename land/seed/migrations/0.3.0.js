@@ -32,7 +32,7 @@
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import log from "../log.js";
+import log from "../core/log.js";
 import Being from "../models/being.js";
 import Node from "../models/node.js";
 import { getLandRootId } from "../landRoot.js";
@@ -65,7 +65,7 @@ export default async function migrate() {
       if (!existing) {
         const beingDoc = {
           _id:           u._id,
-          username:      u.username,
+          name:      u.name,
           operatingMode: "human",
           password:      u.password,         // already bcrypt-hashed
           isAdmin:       !!u.isAdmin,
@@ -93,7 +93,7 @@ export default async function migrate() {
       }
 
       if (!homeNodeId) {
-        const homeName = `~${u.username}`;
+        const homeName = `~${u.name}`;
         // Direct insert through Mongoose so afterNodeCreate hooks fire
         // (position auto-placement etc.). Mirrors createNode but uses
         // direct create to keep migration self-contained.
@@ -121,7 +121,7 @@ export default async function migrate() {
     } catch (err) {
       failed++;
       log.warn("Seed/0.3.0",
-        `failed to migrate user ${String(u._id).slice(0, 8)} (${u.username}): ${err.message}`);
+        `failed to migrate user ${String(u._id).slice(0, 8)} (${u.name}): ${err.message}`);
     }
   }
 

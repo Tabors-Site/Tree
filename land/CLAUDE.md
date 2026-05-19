@@ -4,17 +4,43 @@ This is a TreeOS land. An operating system for AI agents. You are inside a runni
 
 ## What you are looking at
 
+Three concerns live at the top level: **what TreeOS is** (seed/), **what conversation over the wire looks like** (protocols/), and **how it gets carried** (transports/). Plus extensions.
+
 ```
-seed/              The kernel. NEVER modify.
+seed/              The kernel. Data shape + registries + hooks. NEVER modify.
+  core/              protocol.js, hooks.js, operations.js, tools.js, services.js,
+                     verbs.js, auth.js, log.js, version.js, ...
+  models/            Mongoose schemas: Node, Being, Artifact, Did, Summon, LlmConnection
+  tree/              createNode, artifacts, dids, registryMirror, cascade, ...
+  llm/               AI conversation runtime
+  being/             Being position helpers
+  migrations/        Versioned schema migrations
+  landRoot.js        This land's root + system nodes
+  landConfig.js      This land's config
+
+protocols/         What conversation over the wire looks like. Never owns transport.
+  ibp/               Four-verb protocol (SEE/DO/SUMMON/BE) on stances/positions
+  canopy/            Federation protocol between lands
+  mcp/               MCP adapter for AI tool execution
+
+transports/        Thin carriers. Translate transport-shape into protocol envelopes.
+  http/              Express handlers; canonical /ibp/<verb>/<addr> adapter
+    handler.js         Main router; wires middleware + extension routes
+    api/ibp.js         The single IBP HTTP adapter (every op derivable)
+    api/config.js      Horizon proxies + /land/root (deferred surface)
+    auth.js users.js   Auth shims into IBP BE verb
+    canopy.js          Federation transport routes
+    middleware/        authenticate, dbHealth, securityHeaders, ...
+  ws/                Socket.io server; same dispatchIbp the HTTP adapter uses
+  cli/               (reserved for the eventual CLI adapter)
+
 extensions/        95 extensions. This is where you build.
-canopy/            Federation. How lands find and talk to each other.
-routes/            HTTP API. Core endpoints. Extensions add their own routes.
-orchestrators/     Pipeline runtime for multi-step AI operations.
-mcp/               MCP server. AI tool execution bridge.
 boot.js            Entry point. First-run setup wizard.
-server.js          Express server, CORS, WebSocket, graceful shutdown.
-startup.js         Boot sequence. Indexes, config, migrations, extensions, jobs.
+server.js          Express + WebSocket bring-up, graceful shutdown.
+startup.js         Boot sequence: indexes, config, migrations, extensions, jobs.
 ```
+
+**The dependency direction.** transports → protocols → seed. Extensions sit beside the three and consume them. seed never imports from protocols or transports; protocols never import from transports.
 
 ## The six rules (never violated)
 

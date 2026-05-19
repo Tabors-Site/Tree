@@ -9,12 +9,12 @@
  * didRetentionDays: default 365. 0 = keep forever.
  */
 
-import log from "../log.js";
+import log from "../core/log.js";
 import { getLandConfigValue } from "../landConfig.js";
 import Summon from "../models/summon.js";
 import Did from "../models/did.js";
 import Node from "../models/node.js";
-import { CASCADE, SYSTEM_ROLE } from "../protocol.js";
+import { CASCADE, SYSTEM_ROLE } from "../core/protocol.js";
 
 let cleanupTimer = null;
 

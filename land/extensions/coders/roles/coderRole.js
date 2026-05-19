@@ -9,8 +9,8 @@
 // follow-up slice along with the substrate-side auto-sync for
 // origin=filesystem artifacts.
 
-import { runChat } from "../../../seed/llm/conversation.js";
-import log from "../../../seed/log.js";
+import { runChat } from "../../../seed/llm/runChat.js";
+import log from "../../../seed/core/log.js";
 
 const CODER_PROMPT_BODY = `You are a Coder. You see and write code artifacts at this scope.
 

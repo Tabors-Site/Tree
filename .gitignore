@@ -9,6 +9,7 @@ land/.land/
 land/.env
 land/extensions/.disabled
 .land/
+land/oldExtensions/
 
 create-treeos/template/uploads
 create-treeos/template/.env

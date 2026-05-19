@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import { getAncestorChain, resolveTreeAccessFromChain } from "./ancestorCache.js";
-import { ERR } from "../protocol.js";
+import { ERR } from "../core/protocol.js";
 
 /**
  * Resolve tree access by walking the parent chain via the ancestor cache.

@@ -14,8 +14,8 @@
 // LLM behavior (prompt, tools, modeKey, …) — see memory
 // `role-subsumes-mode`.
 
-import log from "../../../seed/log.js";
-import { runChat } from "../../../seed/llm/conversation.js";
+import log from "../../../seed/core/log.js";
+import { runChat } from "../../../seed/llm/runChat.js";
 import { emitReplyToAsker } from "./_shared.js";
 
 const CONTRACTOR_PROMPT_BODY = `You are a Contractor. The Ruler at this scope has
@@ -307,7 +307,7 @@ export const contractorRole = Object.freeze({
       await emitReplyToAsker({
         fromNodeId:      contractsNodeId,
         fromBeing:       ctx.toBeing,
-        fromRoleName:    ctx.toBeing?.username || "contractor",
+        fromRoleName:    ctx.toBeing?.name || "contractor",
         originalMessage: message,
         exitText:        `Contractor error: ${err.message}`,
       });
@@ -323,7 +323,7 @@ export const contractorRole = Object.freeze({
     await emitReplyToAsker({
       fromNodeId:      contractsNodeId,
       fromBeing:       ctx.toBeing,
-      fromRoleName:    ctx.toBeing?.username || "contractor",
+      fromRoleName:    ctx.toBeing?.name || "contractor",
       originalMessage: message,
       exitText,
     });

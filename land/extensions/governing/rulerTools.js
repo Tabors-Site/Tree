@@ -25,7 +25,7 @@
 // reaches the Ruler's next turn.
 
 import { z } from "zod";
-import log from "../../seed/log.js";
+import log from "../../seed/core/log.js";
 import Node from "../../seed/models/node.js";
 import {
   tryClaim as tryClaimSpawn,
@@ -164,22 +164,11 @@ async function resolveRulerScope(nodeId) {
   }
 }
 
-// Caller signal/socket lookups previously reached into tree-orchestrator's
-// per-visitor active-request map. Slice 7 retires that path —
-// SUMMON-based dispatch is fire-and-forget (no threaded AbortSignal;
-// cancellation routes through high-priority SUMMON + cancelByRootCorrelation),
-// and the spawned being communicates via its own being-room broadcast (not
-// via the caller's socket). These helpers stay as null returns to keep
-// the existing call-site shapes intact while we finish the migration;
-// pass-through values become null in the resulting handoff/hook payloads,
-// and downstream listeners (dashboard SSE, etc.) tolerate that gracefully.
-async function getCallerAbortSignal(_aiSessionKey) {
-  return null;
-}
-
-async function getCallerSocket(_aiSessionKey) {
-  return null;
-}
+// Caller signal/socket lookups retired 2026-05-18. SUMMON-based dispatch
+// is fire-and-forget — cancellation routes through high-priority SUMMON
+// + scheduler.abortByRootCorrelations, and the spawned being communicates
+// via its own being-room broadcast (`io.to('being:'+beingId)`), not via
+// the caller's socket. Hook payloads no longer carry `socket`/`signal`.
 
 export default function getRulerTools(_core) {
   return [
@@ -220,13 +209,12 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { aiSessionKey, beingId, username, nodeId, rootId, summonId, sessionId } = args;
+        const { beingId, username, nodeId, rootId, summonId, sessionId } = args;
         const briefing = typeof args.briefing === "string" ? args.briefing.trim() : "";
         if (!briefing) return text("governing-hire-planner: briefing is required.");
         if (briefing.length > BRIEFING_CAP) {
           return text(`governing-hire-planner: briefing exceeds ${BRIEFING_CAP} chars; trim or push detail into your reasoning.`);
         }
-        if (!aiSessionKey) return text("governing-hire-planner: missing aiSessionKey; substrate bug — surface.");
         if (!beingId) return text("governing-hire-planner: missing beingId; substrate bug.");
 
         // Resolve the Ruler scope (the scope where the Planner anchors).
@@ -263,7 +251,6 @@ export default function getRulerTools(_core) {
         const claim = tryClaimSpawn({
           rulerNodeId: ruler._id,
           kind: "hire-planner",
-          aiSessionKey,
           briefing,
         });
         if (!claim.ok) {
@@ -321,8 +308,8 @@ export default function getRulerTools(_core) {
           }, null, 2));
         }
         const planner = await Being.findById(plannerBeingId)
-          .select("username").lean();
-        const plannerUsername = planner?.username;
+          .select("name").lean();
+        const plannerUsername = planner?.name;
         if (!plannerUsername) {
           releaseSpawn(claim.key);
           return text(JSON.stringify({
@@ -344,12 +331,12 @@ export default function getRulerTools(_core) {
           : rulerNodeFull?.metadata?.beings;
         const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
         const rulerBeing = rulerBeingIdAtScope
-          ? await Being.findById(rulerBeingIdAtScope).select("username").lean()
+          ? await Being.findById(rulerBeingIdAtScope).select("name").lean()
           : null;
-        const rulerUsername = rulerBeing?.username || "ruler";
+        const rulerUsername = rulerBeing?.name || "ruler";
 
         // 4. Build stances. Path uses UUID for stability across renames.
-        const { getLandDomain } = await import("../../ibp/address.js");
+        const { getLandDomain } = await import("../../protocols/ibp/address.js");
         const landDomain = getLandDomain();
         const stancePath = `${landDomain}/${ruler._id}`;
         const rulerStance = `${stancePath}@${rulerUsername}`;
@@ -377,11 +364,9 @@ export default function getRulerTools(_core) {
         //    is the Planner stance for the reply's `from` field. The
         //    response handler re-fires the existing governing hook so
         //    the Ruler wakeup path stays unchanged.
-        const callerSignal = await getCallerAbortSignal(aiSessionKey);
-        const callerSocket = await getCallerSocket(aiSessionKey);
-        const { appendToInbox } = await import("../../ibp/inbox.js");
-        const { attachHandoff, wake } = await import("../../ibp/scheduler.js");
-        const { hooks } = await import("../../seed/hooks.js");
+        const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
+        const { attachHandoff, wake } = await import("../../protocols/ibp/scheduler.js");
+        const { hooks } = await import("../../seed/core/hooks.js");
         const startMs = Date.now();
 
         try {
@@ -413,8 +398,6 @@ export default function getRulerTools(_core) {
                 exitText:        responseEntry?.content || null,
                 durationMs:      Date.now() - startMs,
                 error:           null,
-                socket:          callerSocket,
-                signal:          callerSignal,
                 parentSummonId:  summonId || null,
                 parentSessionId: sessionId || null,
               });
@@ -436,8 +419,6 @@ export default function getRulerTools(_core) {
                 exitText:        null,
                 durationMs:      Date.now() - startMs,
                 error:           err?.message || String(err),
-                socket:          callerSocket,
-                signal:          callerSignal,
                 parentSummonId:  summonId || null,
                 parentSessionId: sessionId || null,
               });
@@ -509,8 +490,7 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { aiSessionKey, beingId, username, nodeId, rootId, summonId, sessionId } = args;
-        if (!aiSessionKey) return text("governing-hire-contractor: missing aiSessionKey; substrate bug.");
+        const { beingId, username, nodeId, rootId, summonId, sessionId } = args;
         if (!beingId) return text("governing-hire-contractor: missing beingId; substrate bug.");
 
         const briefing = typeof args.briefing === "string" ? args.briefing.trim() : "";
@@ -598,7 +578,6 @@ export default function getRulerTools(_core) {
         const claim = tryClaimSpawn({
           rulerNodeId: ruler._id,
           kind: "hire-contractor",
-          aiSessionKey,
           briefing,
         });
         if (!claim.ok) {
@@ -650,8 +629,8 @@ export default function getRulerTools(_core) {
           }, null, 2));
         }
         const contractor = await Being.findById(contractorBeingId)
-          .select("username").lean();
-        const contractorUsername = contractor?.username;
+          .select("name").lean();
+        const contractorUsername = contractor?.name;
         if (!contractorUsername) {
           releaseSpawn(claim.key);
           return text(JSON.stringify({
@@ -669,12 +648,12 @@ export default function getRulerTools(_core) {
           : rulerNodeFull?.metadata?.beings;
         const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
         const rulerBeing = rulerBeingIdAtScope
-          ? await Being.findById(rulerBeingIdAtScope).select("username").lean()
+          ? await Being.findById(rulerBeingIdAtScope).select("name").lean()
           : null;
-        const rulerUsername = rulerBeing?.username || "ruler";
+        const rulerUsername = rulerBeing?.name || "ruler";
 
         // 4. Build stances + SUMMON envelope.
-        const { getLandDomain } = await import("../../ibp/address.js");
+        const { getLandDomain } = await import("../../protocols/ibp/address.js");
         const landDomain = getLandDomain();
         const stancePath = `${landDomain}/${ruler._id}`;
         const rulerStance = `${stancePath}@${rulerUsername}`;
@@ -696,11 +675,9 @@ export default function getRulerTools(_core) {
         // 5. Append + handoff + wake. Handoff onResponse re-fires the
         //    existing governing:contractorCompleted hook so the Ruler
         //    wake-up path stays unchanged.
-        const callerSignal = await getCallerAbortSignal(aiSessionKey);
-        const callerSocket = await getCallerSocket(aiSessionKey);
-        const { appendToInbox } = await import("../../ibp/inbox.js");
-        const { attachHandoff, wake } = await import("../../ibp/scheduler.js");
-        const { hooks } = await import("../../seed/hooks.js");
+        const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
+        const { attachHandoff, wake } = await import("../../protocols/ibp/scheduler.js");
+        const { hooks } = await import("../../seed/core/hooks.js");
         const startMs = Date.now();
 
         try {
@@ -732,8 +709,6 @@ export default function getRulerTools(_core) {
                 exitText:        responseEntry?.content || null,
                 durationMs:      Date.now() - startMs,
                 error:           null,
-                socket:          callerSocket,
-                signal:          callerSignal,
                 parentSummonId:  summonId || null,
                 parentSessionId: sessionId || null,
               });
@@ -755,8 +730,6 @@ export default function getRulerTools(_core) {
                 exitText:        null,
                 durationMs:      Date.now() - startMs,
                 error:           err?.message || String(err),
-                socket:          callerSocket,
-                signal:          callerSignal,
                 parentSummonId:  summonId || null,
                 parentSessionId: sessionId || null,
               });
@@ -816,10 +789,9 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { aiSessionKey, beingId, username, nodeId, rootId, summonId, sessionId } = args;
+        const { beingId, username, nodeId, rootId, summonId, sessionId } = args;
         const wakeupReason = typeof args.wakeupReason === "string" ? args.wakeupReason.trim() : "";
         if (!wakeupReason) return text("governing-route-to-foreman: wakeupReason is required.");
-        if (!aiSessionKey) return text("governing-route-to-foreman: missing aiSessionKey; substrate bug.");
         if (!beingId) return text("governing-route-to-foreman: missing beingId; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
@@ -838,7 +810,6 @@ export default function getRulerTools(_core) {
         const claim = tryClaimSpawn({
           rulerNodeId: ruler._id,
           kind: "route-to-foreman",
-          aiSessionKey,
           briefing: wakeupReason,
         });
         if (!claim.ok) {
@@ -888,8 +859,8 @@ export default function getRulerTools(_core) {
           }, null, 2));
         }
         const foreman = await Being.findById(foremanBeingId)
-          .select("username").lean();
-        const foremanUsername = foreman?.username;
+          .select("name").lean();
+        const foremanUsername = foreman?.name;
         if (!foremanUsername) {
           releaseSpawn(claim.key);
           return text(JSON.stringify({
@@ -907,12 +878,12 @@ export default function getRulerTools(_core) {
           : rulerNodeFull?.metadata?.beings;
         const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
         const rulerBeing = rulerBeingIdAtScope
-          ? await Being.findById(rulerBeingIdAtScope).select("username").lean()
+          ? await Being.findById(rulerBeingIdAtScope).select("name").lean()
           : null;
-        const rulerUsername = rulerBeing?.username || "ruler";
+        const rulerUsername = rulerBeing?.name || "ruler";
 
         // 4. Build stances + SUMMON envelope.
-        const { getLandDomain } = await import("../../ibp/address.js");
+        const { getLandDomain } = await import("../../protocols/ibp/address.js");
         const landDomain = getLandDomain();
         const stancePath = `${landDomain}/${ruler._id}`;
         const rulerStance = `${stancePath}@${rulerUsername}`;
@@ -937,11 +908,9 @@ export default function getRulerTools(_core) {
         // 5. Append + handoff + wake. Handoff onResponse re-fires the
         //    existing governing:foremanRouted hook so the Ruler wake-up
         //    path stays unchanged.
-        const callerSignal = await getCallerAbortSignal(aiSessionKey);
-        const callerSocket = await getCallerSocket(aiSessionKey);
-        const { appendToInbox } = await import("../../ibp/inbox.js");
-        const { attachHandoff, wake } = await import("../../ibp/scheduler.js");
-        const { hooks } = await import("../../seed/hooks.js");
+        const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
+        const { attachHandoff, wake } = await import("../../protocols/ibp/scheduler.js");
+        const { hooks } = await import("../../seed/core/hooks.js");
         const startMs = Date.now();
 
         try {
@@ -973,8 +942,6 @@ export default function getRulerTools(_core) {
                 exitText:        responseEntry?.content || null,
                 durationMs:      Date.now() - startMs,
                 error:           null,
-                socket:          callerSocket,
-                signal:          callerSignal,
                 parentSummonId:  summonId || null,
                 parentSessionId: sessionId || null,
               });
@@ -996,8 +963,6 @@ export default function getRulerTools(_core) {
                 exitText:        null,
                 durationMs:      Date.now() - startMs,
                 error:           err?.message || String(err),
-                socket:          callerSocket,
-                signal:          callerSignal,
                 parentSummonId:  summonId || null,
                 parentSessionId: sessionId || null,
               });
@@ -1053,16 +1018,12 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: true },
       async handler(args) {
-        const { aiSessionKey } = args;
-        const response = typeof args.response === "string" ? args.response.trim() : "";
+                const response = typeof args.response === "string" ? args.response.trim() : "";
         if (!response) {
           return text("governing-respond-directly: response is required.");
         }
         if (response.length > RESPONSE_CAP) {
           return text(`governing-respond-directly: response exceeds ${RESPONSE_CAP} chars; trim.`);
-        }
-        if (!aiSessionKey) {
-          return text("governing-respond-directly: missing aiSessionKey; substrate bug — surface.");
         }
         return text(JSON.stringify({
           ok: true,
@@ -1097,13 +1058,12 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { aiSessionKey, beingId, username, nodeId, rootId, summonId, sessionId } = args;
+        const { beingId, username, nodeId, rootId, summonId, sessionId } = args;
         const revisionReason = typeof args.revisionReason === "string" ? args.revisionReason.trim() : "";
         if (!revisionReason) return text("governing-revise-plan: revisionReason is required.");
         if (revisionReason.length > REASON_CAP) {
           return text(`governing-revise-plan: revisionReason exceeds ${REASON_CAP} chars; trim.`);
         }
-        if (!aiSessionKey) return text("governing-revise-plan: missing aiSessionKey; substrate bug.");
         if (!beingId) return text("governing-revise-plan: missing beingId; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
@@ -1153,7 +1113,6 @@ export default function getRulerTools(_core) {
         const claim = tryClaimSpawn({
           rulerNodeId: ruler._id,
           kind: "hire-planner",
-          aiSessionKey,
           briefing: revisionReason,
         });
         if (!claim.ok) {
@@ -1209,8 +1168,8 @@ export default function getRulerTools(_core) {
             error: "planner-being-missing",
           }, null, 2));
         }
-        const planner = await BeingModel.findById(plannerBeingId).select("username").lean();
-        const plannerUsername = planner?.username;
+        const planner = await BeingModel.findById(plannerBeingId).select("name").lean();
+        const plannerUsername = planner?.name;
         if (!plannerUsername) {
           releaseSpawn(claim.key);
           return text(JSON.stringify({
@@ -1225,11 +1184,11 @@ export default function getRulerTools(_core) {
           : rulerNodeFull?.metadata?.beings;
         const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
         const rulerBeing = rulerBeingIdAtScope
-          ? await BeingModel.findById(rulerBeingIdAtScope).select("username").lean()
+          ? await BeingModel.findById(rulerBeingIdAtScope).select("name").lean()
           : null;
-        const rulerUsername = rulerBeing?.username || "ruler";
+        const rulerUsername = rulerBeing?.name || "ruler";
 
-        const { getLandDomain } = await import("../../ibp/address.js");
+        const { getLandDomain } = await import("../../protocols/ibp/address.js");
         const landDomain = getLandDomain();
         const stancePath = `${landDomain}/${ruler._id}`;
         const rulerStance = `${stancePath}@${rulerUsername}`;
@@ -1248,9 +1207,9 @@ export default function getRulerTools(_core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../ibp/inbox.js");
-        const { attachHandoff, wake } = await import("../../ibp/scheduler.js");
-        const { hooks } = await import("../../seed/hooks.js");
+        const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
+        const { attachHandoff, wake } = await import("../../protocols/ibp/scheduler.js");
+        const { hooks } = await import("../../seed/core/hooks.js");
         const startMs = Date.now();
         try {
           await appendToInbox(String(ruler._id), plannerBeingId, message);
@@ -1371,8 +1330,7 @@ export default function getRulerTools(_core) {
       schema: {},
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { aiSessionKey, beingId, username, nodeId, rootId, summonId, sessionId } = args;
-        if (!aiSessionKey) return text("governing-dispatch-execution: missing aiSessionKey; substrate bug.");
+        const { beingId, username, nodeId, rootId, summonId, sessionId } = args;
         if (!beingId) return text("governing-dispatch-execution: missing beingId; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
@@ -1439,7 +1397,6 @@ export default function getRulerTools(_core) {
         const claim = tryClaimSpawn({
           rulerNodeId: ruler._id,
           kind: "dispatch-execution",
-          aiSessionKey,
         });
         if (!claim.ok) {
           log.info("Governing",
@@ -1461,8 +1418,8 @@ export default function getRulerTools(_core) {
         // chain reaches the parent).
         if (beingId) {
           try {
-            const { emitToBeing } = await import("../../seed/ws/websocket.js");
-            const { WS } = await import("../../seed/protocol.js");
+            const { emitToBeing } = await import("../../transports/ws/websocket.js");
+            const { WS } = await import("../../seed/core/protocol.js");
             emitToBeing(String(beingId), WS.LIFECYCLE_ACTIVE, {
               active: true,
               rulerNodeId: String(ruler._id),
@@ -1488,10 +1445,10 @@ export default function getRulerTools(_core) {
           : rulerNodeFull?.metadata?.beings;
         const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
         const rulerBeing = rulerBeingIdAtScope
-          ? await BeingModel.findById(rulerBeingIdAtScope).select("username").lean()
+          ? await BeingModel.findById(rulerBeingIdAtScope).select("name").lean()
           : null;
-        const rulerUsername = rulerBeing?.username || "ruler";
-        const { getLandDomain } = await import("../../ibp/address.js");
+        const rulerUsername = rulerBeing?.name || "ruler";
+        const { getLandDomain } = await import("../../protocols/ibp/address.js");
         const landDomain = getLandDomain();
         const rulerStance = `${landDomain}/${ruler._id}@${rulerUsername}`;
 
@@ -1502,8 +1459,8 @@ export default function getRulerTools(_core) {
         // is automatic via the parent-walk substrate reads; no
         // explicit pass needed.
         const { promoteToRuler, PROMOTED_FROM } = await import("./state/role.js");
-        const { appendToInbox } = await import("../../ibp/inbox.js");
-        const { wake } = await import("../../ibp/scheduler.js");
+        const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
+        const { wake } = await import("../../protocols/ibp/scheduler.js");
         const { writeLineage } = await import("./state/lineage.js");
         const { randomUUID } = await import("crypto");
         const rootCorrelation = args.rootSummonId || summonId || `${spawnId}-root`;
@@ -1602,7 +1559,7 @@ export default function getRulerTools(_core) {
 
         // Fire dashboard SSE so the governance panel re-renders.
         try {
-          const { hooks } = await import("../../seed/hooks.js");
+          const { hooks } = await import("../../seed/core/hooks.js");
           hooks.run("governing:swarmDispatched", {
             spawnId,
             rulerNodeId: String(ruler._id),
@@ -1672,7 +1629,7 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { aiSessionKey, beingId, nodeId } = args;
+        const { beingId, nodeId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-ratify-plan: reason is required for audit.");
         if (reason.length > REASON_CAP) {
@@ -1806,10 +1763,9 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { aiSessionKey, nodeId } = args;
+        const { nodeId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-archive-plan: reason is required.");
-        if (!aiSessionKey) return text("governing-archive-plan: missing aiSessionKey; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
         if (!ruler) {
@@ -1916,10 +1872,8 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { aiSessionKey } = args;
-        const reason = typeof args.reason === "string" ? args.reason.trim() : "";
+                const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-pause-execution: reason is required.");
-        if (!aiSessionKey) return text("governing-pause-execution: missing aiSessionKey; substrate bug.");
         return text(JSON.stringify({ ok: true, decision: "pause-execution", reason }, null, 2));
       },
     },
@@ -1946,10 +1900,9 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { aiSessionKey, beingId, username, nodeId, rootId, summonId, sessionId } = args;
+        const { beingId, username, nodeId, rootId, summonId, sessionId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-resume-execution: reason is required.");
-        if (!aiSessionKey) return text("governing-resume-execution: missing aiSessionKey; substrate bug.");
         if (!beingId) return text("governing-resume-execution: missing beingId; substrate bug.");
 
         const ruler = await resolveRulerScope(nodeId);
@@ -2001,7 +1954,6 @@ export default function getRulerTools(_core) {
         const claim = tryClaimSpawn({
           rulerNodeId: ruler._id,
           kind: "resume-execution",
-          aiSessionKey,
           briefing: reason,
         });
         if (!claim.ok) {
@@ -2055,11 +2007,11 @@ export default function getRulerTools(_core) {
           : rulerNodeFull?.metadata?.beings;
         const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
         const rulerBeing = rulerBeingIdAtScope
-          ? await BeingModel.findById(rulerBeingIdAtScope).select("username").lean()
+          ? await BeingModel.findById(rulerBeingIdAtScope).select("name").lean()
           : null;
-        const rulerUsername = rulerBeing?.username || "ruler";
+        const rulerUsername = rulerBeing?.name || "ruler";
 
-        const { getLandDomain } = await import("../../ibp/address.js");
+        const { getLandDomain } = await import("../../protocols/ibp/address.js");
         const landDomain = getLandDomain();
         const rulerStance = `${landDomain}/${ruler._id}@${rulerUsername}`;
 
@@ -2078,9 +2030,9 @@ export default function getRulerTools(_core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../ibp/inbox.js");
-        const { attachHandoff, wake } = await import("../../ibp/scheduler.js");
-        const { hooks } = await import("../../seed/hooks.js");
+        const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
+        const { attachHandoff, wake } = await import("../../protocols/ibp/scheduler.js");
+        const { hooks } = await import("../../seed/core/hooks.js");
         const startMs = Date.now();
         try {
           await appendToInbox(String(ruler._id), foremanBeingId, message);
@@ -2225,10 +2177,9 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { aiSessionKey, nodeId } = args;
+        const { nodeId } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-convene-court: reason is required.");
-        if (!aiSessionKey) return text("governing-convene-court: missing aiSessionKey; substrate bug.");
 
         // Write a court-pending marker on the Ruler scope (durable —
         // courts are part of the audit trail). Doesn't replace the
@@ -2255,7 +2206,7 @@ export default function getRulerTools(_core) {
               });
             }
           }
-          const { hooks } = await import("../../seed/hooks.js");
+          const { hooks } = await import("../../seed/core/hooks.js");
           hooks.run("governing:courtConvened", {
             rulerNodeId: nodeId ? String(nodeId) : null,
             reason,

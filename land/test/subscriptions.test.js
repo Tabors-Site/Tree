@@ -26,7 +26,7 @@ mock.module("../seed/tree/ancestorCache.js", {
 const appendCalls = [];   // { nodeId, beingId, message }
 const wakeCalls = [];     // { beingId, nodeId }
 
-mock.module("../ibp/inbox.js", {
+mock.module("../protocols/ibp/inbox.js", {
   namedExports: {
     appendToInbox: async (nodeId, beingId, message) => {
       appendCalls.push({ nodeId, beingId, message });
@@ -35,13 +35,13 @@ mock.module("../ibp/inbox.js", {
   },
 });
 
-mock.module("../ibp/scheduler.js", {
+mock.module("../protocols/ibp/scheduler.js", {
   namedExports: {
     wake: (beingId, nodeId) => { wakeCalls.push({ beingId, nodeId }); },
   },
 });
 
-mock.module("../ibp/address.js", {
+mock.module("../protocols/ibp/address.js", {
   namedExports: { getLandDomain: () => "treeos.ai" },
 });
 
@@ -57,7 +57,7 @@ const {
   emitToSubscribers,
   getStats,
   _resetAll,
-} = await import("../ibp/subscriptions.js");
+} = await import("../protocols/ibp/subscriptions.js");
 
 beforeEach(() => {
   _resetAll();

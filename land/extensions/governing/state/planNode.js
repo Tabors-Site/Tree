@@ -14,7 +14,7 @@
 // they read substrate state and don't depend on the trio shape.
 
 import Node from "../../../seed/models/node.js";
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 
 export const PLAN_NS = "plan";
 

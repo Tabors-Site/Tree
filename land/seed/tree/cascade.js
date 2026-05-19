@@ -18,11 +18,11 @@
  * The kernel never blocks inbound. Results are always written.
  */
 
-import log from "../log.js";
+import log from "../core/log.js";
 import Node from "../models/node.js";
-import { hooks } from "../hooks.js";
+import { hooks } from "../core/hooks.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { CASCADE, SYSTEM_ROLE } from "../protocol.js";
+import { CASCADE, SYSTEM_ROLE } from "../core/protocol.js";
 import { v4 as uuidv4 } from "uuid";
 import { checkWriteSize, estimateWriteSize } from "./documentGuard.js";
 

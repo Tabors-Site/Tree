@@ -3,138 +3,15 @@
 
 import { test, describe } from "node:test";
 import { strict as assert } from "node:assert";
-import {
-  buildUserAiSessionKey,
-  resolvePipelineKey,
-} from "../seed/llm/sessionKeys.js";
-
-// ─────────────────────────────────────────────────────────────────────────
-// buildUserAiSessionKey — per-reach transport-session key
-//
-// After Slice 6: aiSessionKey identifies a transport reach (which tab /
-// CLI / device). It's no longer the canonical conversation identifier
-// (that's ibpAddress now). The per-reach split below is what the
-// in-flight registry uses for replay-on-reconnect bookkeeping.
-// ─────────────────────────────────────────────────────────────────────────
-
-describe("buildUserAiSessionKey", () => {
-  test("tree zone with device", () => {
-    assert.equal(
-      buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "cli" }),
-      "user:u1:r1:cli",
-    );
-  });
-
-  test("home zone with device", () => {
-    assert.equal(
-      buildUserAiSessionKey({ beingId: "u1", zone: "home", device: "web" }),
-      "user:u1:home:web",
-    );
-  });
-
-  test("land zone with device", () => {
-    assert.equal(
-      buildUserAiSessionKey({ beingId: "u1", zone: "land", device: "http" }),
-      "user:u1:land:http",
-    );
-  });
-
-  test("handle replaces device (explicit override)", () => {
-    const k = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "cli", handle: "shared" });
-    assert.equal(k, "user:u1:r1:shared");
-    assert.ok(!k.includes("cli"), "handle should replace device, not append");
-  });
-
-  test("same handle from two devices produces one merged transport key", () => {
-    // Two reaches sharing a handle still merge — useful for tests, manual
-    // multi-device coordination, etc. This is independent of the per-being
-    // conversation merge that happens at the ibpAddress layer.
-    const a = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "web", handle: "shared" });
-    const b = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "cli", handle: "shared" });
-    assert.equal(a, b, "same handle must produce the same key regardless of device");
-  });
-
-  test("gateway-composed device (colons preserved)", () => {
-    assert.equal(
-      buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "telegram:12345" }),
-      "user:u1:r1:telegram:12345",
-    );
-  });
-
-  test("canopy-proxied remote reach device", () => {
-    assert.equal(
-      buildUserAiSessionKey({ beingId: "owner", zone: "tree", rootId: "r1", device: "canopy:other-land.org:remote-u" }),
-      "user:owner:r1:canopy:other-land.org:remote-u",
-    );
-  });
-
-  test("CLI and browser get distinct transport keys (replay bookkeeping)", () => {
-    const dashboard = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "web" });
-    const cli = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "cli" });
-    assert.notEqual(dashboard, cli);
-    // Transport keys split per-tab so the in-flight event buffer can
-    // replay correctly when one tab disconnects mid-stream. The
-    // conversation state (messages, mode) is keyed by ibpAddress
-    // and IS shared — that's a separate model.
-  });
-
-  test("missing beingId throws", () => {
-    assert.throws(
-      () => buildUserAiSessionKey({ zone: "tree", rootId: "r1", device: "web" }),
-      /beingId required/,
-    );
-  });
-
-  test("missing zone throws", () => {
-    assert.throws(
-      () => buildUserAiSessionKey({ beingId: "u1", rootId: "r1", device: "web" }),
-      /zone required/,
-    );
-  });
-
-  test("tree zone requires rootId", () => {
-    assert.throws(
-      () => buildUserAiSessionKey({ beingId: "u1", zone: "tree", device: "web" }),
-      /zone='tree' requires rootId/,
-    );
-  });
-
-  test("unknown zone throws", () => {
-    assert.throws(
-      () => buildUserAiSessionKey({ beingId: "u1", zone: "bogus", device: "web" }),
-      /unknown zone/,
-    );
-  });
-
-  test("missing device and handle throws", () => {
-    assert.throws(
-      () => buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1" }),
-      /device or handle required/,
-    );
-  });
-
-  test("device sanitizer rejects empty result", () => {
-    assert.throws(
-      () => buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "!!!" }),
-      /reduced to empty/,
-    );
-  });
-
-  test("device sanitizer keeps colons and dashes, strips spaces and slashes", () => {
-    assert.equal(
-      buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "x/y\\z q:w-v.ext" }),
-      "user:u1:r1:xyzq:w-v.ext",
-    );
-  });
-});
+import { resolvePipelineKey } from "../seed/llm/sessionKeys.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // resolvePipelineKey — runChat / OrchestratorRuntime stanceless pipeline
 //
-// After Slice 6: pipeline keys are explicitly namespaced under
-// `pipeline:*` so they don't collide with ibpAddress (being-to-being
-// conversation identity) or aiSessionKey (transport identity). Used
-// for background internal cognition where no addressee being exists.
+// Pipeline keys are namespaced under `pipeline:*` so they don't collide
+// with ibpAddress (being-to-being conversation identity) or clientSessionId
+// (transport identity). Used for background internal cognition where no
+// addressee being exists.
 // ─────────────────────────────────────────────────────────────────────────
 
 describe("resolvePipelineKey", () => {
@@ -255,38 +132,5 @@ describe("resolvePipelineKey", () => {
     });
     // spaces and slashes stripped, colons preserved
     assert.equal(key, "pipeline:tree:r:p:helloworldbad");
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────
-// Namespace isolation invariants
-// ─────────────────────────────────────────────────────────────────────────
-
-describe("namespace isolation", () => {
-  test("CLI and browser on same user+tree get different transport keys", () => {
-    const cli = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "cli" });
-    const browser = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "web" });
-    assert.notEqual(cli, browser);
-    // Different transport keys are correct: the in-flight event buffer
-    // is per-tab so replay-on-disconnect works per-window. Conversation
-    // state (messages, mode) is keyed by ibpAddress at a higher
-    // layer and IS shared between the tabs.
-  });
-
-  test("Two Telegram chats for same user+tree get different transport keys", () => {
-    const chatA = buildUserAiSessionKey({ beingId: "owner", zone: "tree", rootId: "r1", device: "telegram:111" });
-    const chatB = buildUserAiSessionKey({ beingId: "owner", zone: "tree", rootId: "r1", device: "telegram:222" });
-    assert.notEqual(chatA, chatB);
-  });
-
-  test("Pipeline key never collides with transport key (prefix guarantees isolation)", () => {
-    const userKey = buildUserAiSessionKey({ beingId: "u1", zone: "tree", rootId: "r1", device: "web" });
-    const { key: pipelineKey } = resolvePipelineKey({
-      scope: "tree", purpose: "reflect", beingId: "u1", rootId: "r1",
-      makeEphemeral: () => "x",
-    });
-    assert.ok(userKey.startsWith("user:"));
-    assert.ok(pipelineKey.startsWith("pipeline:"));
-    assert.notEqual(userKey, pipelineKey);
   });
 });

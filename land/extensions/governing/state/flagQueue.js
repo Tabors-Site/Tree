@@ -23,7 +23,7 @@
 // individual emission.
 
 import Node from "../../../seed/models/node.js";
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 import { NS } from "./role.js";
 
 // The five kinds carve at real joints surfaced by the MS Paint test.
@@ -181,7 +181,7 @@ export async function appendFlag({
   // (and any future court adjudicator) picks up new flags without
   // polling. Fire-and-forget; subscribers handle their own errors.
   try {
-    const { hooks } = await import("../../../seed/hooks.js");
+    const { hooks } = await import("../../../seed/core/hooks.js");
     hooks.run("governing:flagAppended", {
       rulerNodeId: String(rulerNodeId),
       flagId: flag.id,

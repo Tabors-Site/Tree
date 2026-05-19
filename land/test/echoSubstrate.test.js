@@ -17,13 +17,13 @@
 import { test, describe, beforeEach, afterEach } from "node:test";
 import { strict as assert } from "node:assert";
 import { mock } from "node:test";
-import { echoEmbodiment } from "../ibp/roles/echo.js";
+import { echoEmbodiment } from "../protocols/ibp/roles/echo.js";
 
 // Same inbox + Being stubs the scheduler.test.js uses. Kept local rather
 // than shared so the two test files stay independently runnable.
 const fakeBucket = new Map();
 
-mock.module("../ibp/inbox.js", {
+mock.module("../protocols/ibp/inbox.js", {
   namedExports: {
     pickNextEntry: async (_nodeId, beingId) => {
       const bucket = fakeBucket.get(beingId) || [];
@@ -77,13 +77,13 @@ mock.module("../seed/models/being.js", {
 // Stub the registry to return the REAL echoEmbodiment. Importing the
 // real registry.js would pull in bridge.js (which imports the LLM
 // conversation layer and Mongo), defeating the no-DB premise.
-mock.module("../ibp/roles/registry.js", {
+mock.module("../protocols/ibp/roles/registry.js", {
   namedExports: {
     getRole: (name) => name === "echo" ? echoEmbodiment : null,
   },
 });
 
-const { wake, attachHandoff, _resetAll } = await import("../ibp/scheduler.js");
+const { wake, attachHandoff, _resetAll } = await import("../protocols/ibp/scheduler.js");
 
 beforeEach(() => {
   _resetAll();

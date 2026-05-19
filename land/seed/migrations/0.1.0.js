@@ -6,7 +6,7 @@
  * on lands created before the versioning system.
  */
 
-import log from "../log.js";
+import log from "../core/log.js";
 import { getLandConfigValue, setLandConfigValue } from "../landConfig.js";
 
 const DEFAULTS = {

@@ -21,15 +21,15 @@
  * Defaults to OFF (treeCircuitEnabled: false).
  */
 
-import log from "../log.js";
+import log from "../core/log.js";
 import Node from "../models/node.js";
 import Being from "../models/being.js";
 import Did from "../models/did.js";
-import { hooks } from "../hooks.js";
+import { hooks } from "../core/hooks.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { invalidateNode } from "./ancestorCache.js";
 import { resolveTreeAccess } from "./treeAccess.js";
-import { CASCADE, SYSTEM_ROLE, SYSTEM_OWNER } from "../protocol.js";
+import { CASCADE, SYSTEM_ROLE, SYSTEM_OWNER } from "../core/protocol.js";
 
 /**
  * Check if the tree circuit breaker feature is enabled.
@@ -239,10 +239,9 @@ export async function reviveTree(rootId, actorId) {
   // Authorization: only tree owner or admin can revive
   const access = await resolveTreeAccess(rootId, actorId);
   if (!access.ok || !access.isOwner) {
-    const actor = await Being.findById(actorId).select("isAdmin").lean();
-    if (!actor?.isAdmin) {
-      throw new Error("Only the tree owner or admin can revive a tripped tree");
-    }
+    // Admin bypass retired 2026-05-18; stance authorization will gate
+    // non-owner revival policies later. For now: owner only.
+    throw new Error("Only the tree owner can revive a tripped tree");
   }
 
   // Only revive if actually tripped. Prevents unnecessary writes and hook fires.

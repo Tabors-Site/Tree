@@ -53,123 +53,73 @@ For server internals (boot sequence, extension building, the four primitives, ho
 
 ## Project Structure
 
+Three top-level concerns live inside `land/`: **what TreeOS is** (`seed/`), **what conversation over the wire looks like** (`protocols/`), and **how it's carried** (`transports/`). Plus extensions.
+
 ```
 land/
-├── seed/              # Kernel: business logic, hooks, registries. ZERO extension imports.
-│   ├── protocol.js    # Response shapes, ERR codes, WS event types, CASCADE statuses
-│   ├── hooks.js       # 29 lifecycle hooks (see SEED.md for full list)
-│   ├── orchestratorRegistry.js  # Extensions register conversation orchestrators
-│   ├── services.js    # Core services bundle passed to extensions via init(core)
-│   ├── auth.js        # User creation, verification, JWT generation
-│   ├── landRoot.js    # Land boot, system nodes
-│   ├── landConfig.js
-│   ├── version.js     # SEED_VERSION constant, checked at boot for migrations
-│   ├── middleware/     # authenticate, authenticateMCP, securityHeaders, preUploadCheck
-│   └── tree/          # Node CRUD, artifacts, statuses, dids, invites, public access
-│       ├── treeManagement.js    # createNode, deleteNode
-│       ├── treeFetch.js         # getContextForAi, navigation, path building
-│       ├── treeData.js           # getTree, getNodeForAi, getTreeStructure
-│       ├── artifacts.js         # Artifact CRUD (fires beforeArtifact/afterArtifact hooks)
-│       ├── statuses.js          # Status changes (fires beforeStatusChange/afterStatusChange hooks)
-│       ├── dids.js              # Did query helpers (audit trail of DO emissions; renamed from contributions.js in 0.8.0)
-│       ├── extensionMetadata.js # getExtMeta/setExtMeta for node.metadata
-│       ├── beingMetadata.js     # getBeingMeta/setBeingMeta for being.metadata
-│       └── artifactMetadata.js  # getArtifactMeta/setArtifactMeta for artifact.metadata
-├── seed/models/       # Kernel models (zero extension models)
-│   ├── node.js        # _id, name, type, status, dateCreated, llmDefault, visibility, children, parent, rootOwner, contributors, systemRole, metadata
-│   ├── being.js       # _id, username, operatingMode, password, roles[], defaultRole, homePositionId, llmSlot, isAdmin, isRemote, homeLand, metadata
-│   ├── artifact.js    # A thing inside a node. Fields: nodeId, beingId, origin (ibp/filesystem/web/cross-land), content (shape varies), metadata
-│   ├── did.js         # Audit trail of DO emissions (renamed from contribution.js in 0.8.0; wasAi removed, artifactAction sub-shape)
-│   ├── summon.js      # One being's wake-and-act record. Fields: beingIn, beingOut, ibpAddress, rootSummonId, parentSummonId, dids[], toolCalls[]. (renamed from chat.js in 0.9.0)
-│   └── llmConnection.js # LLM endpoint storage
-├── extensions/        # 95 extensions. ALL optional functionality lives here.
-│   ├── _template/     # Scaffold for new extensions
-│   ├── loader.js      # Scans manifests, validates deps, wires routes/tools/modes/hooks/jobs
-│   ├── EXTENSION_FORMAT.md  # Full extension developer documentation
+├── seed/                # The kernel. Data shape + registries + hooks. ZERO extension imports.
+│   ├── core/              # protocol.js, hooks.js, operations.js, tools.js, services.js,
+│   │                      # verbs.js, auth.js, log.js, version.js, coreOperations.js, ...
+│   ├── models/            # node.js, being.js, artifact.js, did.js, summon.js, llmConnection.js
+│   ├── tree/              # createNode, artifacts, dids, registryMirror, cascade, ownership, ...
+│   ├── llm/               # conversation.js (processMessage/runChat/runPipeline), summon*, ibpAddress
+│   ├── being/             # position helpers
+│   ├── migrations/        # versioned schema migrations
+│   ├── landRoot.js        # this land's root + system nodes (.identity/.config/.peers/...)
+│   └── landConfig.js      # this land's config
+│
+├── protocols/           # What conversation over the wire looks like. Never owns transport.
+│   ├── ibp/               # Four-verb protocol (SEE/DO/SUMMON/BE) on stances/positions
+│   │   ├── index.js         # wires IBP onto Express + Socket.IO
+│   │   ├── protocol.js      # dispatchIbp — the single verb router used by every transport
+│   │   ├── address.js  resolver.js  descriptor.js  authorize.js  envelope.js  inbox.js
+│   │   ├── scheduler.js  stanceProperties.js  discovery.js  defaultPermissions.js
+│   │   ├── verbs/           # see.js, do.js, summon.js, be.js
+│   │   ├── roles/           # role template registry: registry.js + auth.js, echo.js
+│   │   └── actions/         # DO action handlers (set-meta, create-child, rename)
+│   ├── canopy/            # Federation protocol between lands
+│   │   └── models/          # canopyEvent, landPeer, remoteUser
+│   └── mcp/               # MCP adapter for AI tool execution
+│
+├── transports/          # Thin carriers. Translate transport-shape into protocol envelopes.
+│   ├── http/              # Express handlers
+│   │   ├── handler.js       # main router; wires middleware + extension routes
+│   │   ├── api/ibp.js       # the canonical /ibp/<verb>/<addr> adapter (every op derivable)
+│   │   ├── api/config.js    # Horizon proxies + /land/root (deferred surface)
+│   │   ├── auth.js  users.js  # auth shims into IBP BE verb
+│   │   ├── canopy.js        # federation HTTP routes
+│   │   └── middleware/      # authenticate, authenticateMCP, dbHealth, securityHeaders, preUploadCheck
+│   ├── ws/                # Socket.io carrier; calls the same dispatchIbp as HTTP
+│   │   └── websocket.js  sessionRegistry.js  requestQueue.js  mcp.js
+│   └── cli/               # (reserved for the eventual CLI adapter)
+│
+├── extensions/          # 95 extensions. ALL optional functionality lives here.
+│   ├── _template/         # Scaffold for new extensions
+│   ├── loader.js          # Scans manifests, validates deps, wires routes/tools/roles/hooks/jobs
+│   ├── EXTENSION_FORMAT.md
 │   │
-│   │  # Base TreeOS (21 extensions, ship with every land)
-│   ├── treeos/             # Home zone orchestrator
-│   ├── tree-orchestrator/  # Tree zone chat/place/query orchestrator (REPLACEABLE)
-│   ├── land-manager/       # Land zone management, extension install/config
-│   ├── navigation/         # cd, ls, path management, recent roots
-│   ├── starter-types/      # Default node types
-│   ├── console/            # Log formatting
-│   ├── dashboard/          # Real-time web dashboard
-│   ├── notifications/      # Push notifications
-│   ├── monitor/            # Activity tracking and AI narrative
-│   ├── llm-response-formatting/ # Response display cleanup
-│   ├── team/               # Collaboration, @mentions, invites
-│   ├── user-tiers/         # Tier system (basic/standard/premium/god)
-│   ├── html-rendering/     # Server-rendered HTML pages
-│   ├── water/              # Hydration view (read-only dashboard)
-│   ├── heartbeat/          # Presence detection (alive/quiet/dormant)
-│   ├── purpose/            # Root thesis and coherence checking
-│   ├── phase/              # Cognitive state detection (awareness/attention)
-│   ├── remember/           # Memorial for pruned/split/retired nodes
+│   │  # Base TreeOS (21, ship with every land)
+│   ├── treeos-base/  land-manager/  navigation/  starter-types/  console/  dashboard/
+│   ├── notifications/  monitor/  llm-response-formatting/  team/  user-tiers/  html-rendering/
+│   ├── water/  heartbeat/  purpose/  phase/  remember/  breath/  instructions/  channels/
 │   │
-│   │  # Four bundles (35 extensions)
-│   ├── treeos-cascade/     # Bundle: nervous system (8)
-│   ├── treeos-connect/     # Bundle: rain layer (11)
-│   ├── treeos-intelligence/ # Bundle: self-awareness (14)
-│   ├── treeos-maintenance/ # Bundle: hygiene (5)
+│   │  # Four bundles
+│   ├── treeos-cascade/  treeos-connect/  treeos-intelligence/  treeos-maintenance/
 │   │
-│   │  # Standalone (8)
-│   ├── persona/            # AI identity per node
-│   ├── mycelium/           # Intelligent inter-land routing
-│   ├── peer-review/        # AI revision loop on artifacts
-│   ├── seed-export/        # Tree export and planting
-│   ├── channels/           # Direct cascade signal paths
-│   ├── governance/         # Network governance visibility
-│   ├── teach/              # Meta-knowledge extraction
-│   └── split/              # Tree mitosis
-├── orchestrators/     # Core: orchestrator utilities (ships with land, used by extensions)
-│   ├── runtime.js     # OrchestratorRuntime (init/attach/runStep/trackStep/cleanup)
-│   ├── locks.js       # Concurrency locks
-│   └── helpers.js     # parseJsonSafe (handles fences, think tags, trailing commas, single quotes)
-├── seed/ws/           # WebSocket transport + session management
-│   ├── websocket.js       # Socket.IO server, message handler, orchestrator dispatch, auto-abort
-│   ├── sessionRegistry.js # Session lifecycle
-│   ├── requestQueue.js    # Per-being request queue
-│   ├── inFlightChats.js   # In-flight Summon tracking
-│   └── mcp.js             # MCP connection management
-├── seed/llm/          # AI conversation system
-│   ├── conversation.js    # processMessage(), runChat(), runPipeline(), LLM resolution
-│   ├── summonTracker.js   # Summon record create/finalize (renamed from chatTracker.js)
-│   ├── summonHistory.js   # Summon record queries (renamed from chatHistory.js)
-│   ├── ibpAddress.js      # Canonical IBPA computation for Summon storage (renamed from portalAddress.js in 0.10.0)
-│   ├── sessionKeys.js     # Session key derivation
-│   ├── assignments.js     # LLM slot assignments per-tree/per-being
-│   └── connections.js     # LLM connection management
-├── seed/modes/        # Kernel mode registry + tools
-│   ├── registry.js    # registerMode(), resolveMode(), getToolsForMode(), getAllToolNamesForBigMode()
-│   ├── fallback.js    # Default tree:fallback mode
-│   └── tools.js       # Core MCP tool definitions (lives here, not in ibp/ — extensions register their own)
-├── ibp/               # Inter-Being Protocol (server side). Renamed from land/portal/ in 2026-05-17.
-│   ├── index.js       # Wires IBP onto Express + Socket.IO (initIBPHttp, initIBPWS)
-│   ├── protocol.js    # WS verb dispatch (ibp:see, ibp:do, ibp:summon, ibp:be)
-│   ├── address.js     # IBPA parsing (wraps portal/lib/ibp-address.js)
-│   ├── resolver.js    # IBPA → resolved stance (zone, beingId, rootId, nodeId, being)
-│   ├── descriptor.js  # Position Descriptor builder (what SEE returns)
-│   ├── inbox.js       # Per-being inbox at every position
-│   ├── scheduler.js   # Per-being summon scheduler (priority, abort, sequential)
-│   ├── authorize.js   # Stance Authorization (every verb call gates here)
-│   ├── envelope.js    # Per-verb envelope validation
-│   ├── stanceProperties.js # Resolve a stance into operational properties
-│   ├── discovery.js   # Land discovery payload (canonical roles, supported verbs)
-│   ├── verbs/         # see.js, do.js, summon.js, be.js
-│   ├── roles/         # Role template registry: registry.js + auth.js, bridge.js, echo.js (renamed from embodiments/ in 2026-05-18)
-│   └── actions/       # DO action handlers (set-meta, etc.)
-├── mcp/               # MCP server
-├── routes/            # Core HTTP routes
-├── canopy/            # Federation protocol
-│   └── models/        # Federation models (canopyEvent, landPeer, remoteUser)
-├── middleware/        # Auth middleware
-└── startup.js         # Boot sequence
+│   │  # Standalone
+│   ├── persona/  mycelium/  peer-review/  seed-export/  governance/  teach/  split/  approve/
+│   └── governing/         # Ruler/Planner/Contractor/Foreman/Worker roles
+│
+├── boot.js              # Entry point. First-run setup wizard.
+├── server.js            # Express + WebSocket bring-up, graceful shutdown.
+└── startup.js           # Boot sequence: indexes, config, migrations, extensions, jobs.
 
-site/src/              # React frontend (landing page, docs, about pages)
-horizon/             # The Horizon (separate standalone)
-cli/                   # CLI package
+site/src/                # React frontend (landing page, docs, about pages)
+horizon/                 # The Horizon (separate standalone)
+cli/                     # CLI package
 ```
+
+**Dependency direction.** `transports/` → `protocols/` → `seed/`. Extensions sit beside the three and consume them. `seed/` never imports from `protocols/` or `transports/`; `protocols/` never imports from `transports/`.
 
 ## Kernel Schemas
 
@@ -338,7 +288,7 @@ When content is written at a node with `metadata.cascade.enabled = true` and `ca
 
 ## Response Protocol
 
-Single file `seed/protocol.js` defines how the kernel talks to everything outside itself. Extensions access via `core.protocol`.
+Single file `seed/core/protocol.js` defines how the kernel talks to everything outside itself. Extensions access via `core.protocol`.
 
 **HTTP response shape:** `{ status: "ok", data }` or `{ status: "error", error: { code, message, detail? } }`. Constructors: `sendOk(res, data, httpStatus)`, `sendError(res, httpStatus, code, message, detail)`.
 

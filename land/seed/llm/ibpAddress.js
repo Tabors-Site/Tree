@@ -21,7 +21,7 @@
 // are valid expressions of the same address grammar.
 
 import Being from "../models/being.js";
-import log from "../log.js";
+import log from "../core/log.js";
 
 // Cached land domain. Derived from LAND_DOMAIN env (same source the
 // ibp/ side uses). Lazily computed to survive boot order.
@@ -45,23 +45,23 @@ export function getLandDomain() {
  *
  * Inputs are accepted in two shapes:
  *   - string         — pass-through (assumed already formatted)
- *   - { land?, nodeId, username }
+ *   - { land?, nodeId, name }
  *
- * Output: `<land>/<nodeId>@<username>` (nodeId-rooted path form).
- * Returns null when nodeId or username is missing — incomplete stances
+ * Output: `<land>/<nodeId>@<name>` (nodeId-rooted path form).
+ * Returns null when nodeId or name is missing — incomplete stances
  * are not addressable as IBP Address halves.
  */
 export function stanceString(input) {
   if (input == null) return null;
   if (typeof input === "string") return input.length > 0 ? input : null;
-  const { land, nodeId, username } = input;
-  if (!nodeId || !username) return null;
+  const { land, nodeId, name } = input;
+  if (!nodeId || !name) return null;
   const landPart = land || getLandDomain();
-  return `${landPart}/${nodeId}@${username}`;
+  return `${landPart}/${nodeId}@${name}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// PORTAL ADDRESS CANONICAL FORM
+// IBP ADDRESS CANONICAL FORM
 // ─────────────────────────────────────────────────────────────────────
 
 const SEPARATOR = " :: ";
@@ -76,7 +76,7 @@ const SEPARATOR = " :: ";
  *
  * Returns null when either side is incomplete. Self-addressed (the
  * same stance twice) returns the single stance string — a being
- * talking to itself at the same position has a degenerate Portal
+ * talking to itself at the same position has a degenerate IBP
  * Address that's still valid.
  */
 export function canonicalIbpAddress(stanceA, stanceB) {
@@ -118,7 +118,7 @@ export function ibpAddressIncludes(ibpAddress, stance) {
 // the conversation layer; persisted lookup may be added later), for
 // AI beings it defaults to their homePositionId.
 
-// Bounded LRU cache keyed by beingId. Username + homePositionId rarely
+// Bounded LRU cache keyed by beingId. Name + homePositionId rarely
 // change; renames are explicit so a stale cache is bounded in damage.
 const STANCE_CACHE_MAX = 2048;
 const stanceCache = new Map();
@@ -134,13 +134,13 @@ async function loadBeingFields(beingId) {
   }
   let row = null;
   try {
-    row = await Being.findById(key).select("username homePositionId").lean();
+    row = await Being.findById(key).select("name homePositionId").lean();
   } catch {
     row = null;
   }
   if (!row) return null;
   const value = {
-    username:       row.username,
+    name:       row.name,
     homePositionId: row.homePositionId || null,
   };
   if (stanceCache.size >= STANCE_CACHE_MAX) {
@@ -166,9 +166,9 @@ export function invalidateStanceCache(beingId) {
  * The caller can pass an explicit `currentPosition` (most often the
  * asker's current navigated position from the conversation runtime).
  * If omitted, the being's `homePositionId` is used as fallback. The
- * username is always read from the Being record.
+ * name is always read from the Being record.
  *
- * Returns `{ land, nodeId, username }` ready to feed into stanceString
+ * Returns `{ land, nodeId, name }` ready to feed into stanceString
  * or canonicalIbpAddress. Returns null when the being cannot be
  * loaded or has no valid position to anchor at.
  */
@@ -177,11 +177,11 @@ export async function resolveStance(beingId, { currentPosition = null, land = nu
   const fields = await loadBeingFields(beingId);
   if (!fields) return null;
   const nodeId = currentPosition || fields.homePositionId;
-  if (!nodeId || !fields.username) return null;
+  if (!nodeId || !fields.name) return null;
   return {
     land:     land || getLandDomain(),
     nodeId:   String(nodeId),
-    username: fields.username,
+    name: fields.name,
   };
 }
 

@@ -28,7 +28,7 @@
 // can probe with foreman-read-branch-detail.
 
 import Node from "../../../seed/models/node.js";
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 import { NS as ROLE_NS } from "./role.js";
 import { readActivePlanEmission } from "./planApprovals.js";
 import { readActiveExecutionRecord } from "./foreman.js";

@@ -15,7 +15,7 @@
 // is a structural query that wants exact ancestry).
 
 import Node from "../../../seed/models/node.js";
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 
 const MAX_DEPTH = 64; // paranoia cap; real trees nest much shallower
 

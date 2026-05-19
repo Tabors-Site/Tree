@@ -2,9 +2,9 @@
 /**
  * LLM assignment resolution.
  *
- * Reads assignment slots from node/user metadata and returns a flat
+ * Reads assignment slots from node/being metadata and returns a flat
  * { slotName: connectionId } map. The resolution chain in conversation.js
- * uses these to pick which LLM connection handles each mode.
+ * uses these to pick which LLM connection handles each role.
  *
  * Security: metadata is untrusted (extensions write to it). Slots are
  * sanitized to prevent prototype pollution and type confusion.

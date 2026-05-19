@@ -17,7 +17,7 @@
  * (compound indexes, metadata path indexes, cross-collection concerns).
  */
 
-import log from "../log.js";
+import log from "../core/log.js";
 import mongoose from "mongoose";
 import { getLandConfigValue } from "../landConfig.js";
 
@@ -54,7 +54,7 @@ const REQUIRED_INDEXES = [
   { collection: "dids", fields: { summonId: 1 }, options: { sparse: true } },
 
   // User queries (login by username, already unique in schema but verify)
-  { collection: "users", fields: { username: 1 }, options: { unique: true } },
+  { collection: "users", fields: { name: 1 }, options: { unique: true } },
 
   // AIChat queries (chat history by user, by session, by node)
   { collection: "aichats", fields: { beingId: 1, "startMessage.time": -1 }, options: {} },

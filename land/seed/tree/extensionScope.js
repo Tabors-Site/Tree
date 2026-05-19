@@ -20,11 +20,11 @@
  * Same ancestor cache. Same snapshot. Zero new queries. One check per confined extension.
  */
 
-import log from "../log.js";
+import log from "../core/log.js";
 import Node from "../models/node.js";
-import { SYSTEM_ROLE } from "../protocol.js";
+import { SYSTEM_ROLE } from "../core/protocol.js";
 import { getAncestorChain, resolveExtensionScopeFromChain, invalidateAll as clearAncestorCache } from "./ancestorCache.js";
-import { hooks } from "../hooks.js";
+import { hooks } from "../core/hooks.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFINED EXTENSIONS REGISTRY

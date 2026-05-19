@@ -21,7 +21,7 @@
  * on next boot repairs any partial structural mutation.
  */
 
-import log from "../log.js";
+import log from "../core/log.js";
 import { getLandConfigValue } from "../landConfig.js";
 
 const locks = new Map(); // nodeId -> { sessionId, acquiredAt }

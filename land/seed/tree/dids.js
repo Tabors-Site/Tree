@@ -5,10 +5,10 @@
 // hook `beforeContribution` is now `beforeDid`. The `wasAi` field is gone —
 // derive from `Being.findById(beingId).operatingMode === "ai"` when needed.
 
-import log from "../log.js";
+import log from "../core/log.js";
 import Did from "../models/did.js";
-import { hooks } from "../hooks.js";
-import { ERR, ProtocolError } from "../protocol.js";
+import { hooks } from "../core/hooks.js";
+import { ERR, ProtocolError } from "../core/protocol.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { resolveTreeAccess } from "./treeAccess.js";
 
@@ -152,7 +152,7 @@ export async function getDids({ nodeId, limit, offset, startDate, endDate, actor
   const safeOffset = Math.max(0, Number(offset) || 0);
 
   const dids = await Did.find(query)
-    .populate("beingId", "username")
+    .populate("beingId", "name")
     .populate("nodeId", "name")
     .sort({ date: -1 })
     .skip(safeOffset)
@@ -172,7 +172,7 @@ export async function getDidsByBeing(beingId, limit, startDate, endDate) {
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), MAX_QUERY_LIMIT());
 
   const dids = await Did.find(query)
-    .populate("beingId", "username")
+    .populate("beingId", "name")
     .populate("nodeId", "name")
     .sort({ date: -1 })
     .limit(safeLimit)

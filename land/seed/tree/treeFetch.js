@@ -1,8 +1,8 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import Node from "../models/node.js";
 import Artifact from "../models/artifact.js";
-import { hooks } from "../hooks.js";
-import { NODE_STATUS, DELETED, ARTIFACT_ORIGIN, SYSTEM_OWNER } from "../protocol.js";
+import { hooks } from "../core/hooks.js";
+import { DELETED, ARTIFACT_ORIGIN, SYSTEM_OWNER } from "../core/protocol.js";
 import { getAncestorChain } from "./ancestorCache.js";
 import { getLandConfigValue } from "../landConfig.js";
 
@@ -164,9 +164,6 @@ export async function getActiveLeafExecutionFrontier(rootId) {
   async function traverse(node, depth, path) {
     if (leaves.length >= maxLeaves || nodesVisited >= maxNodes) return false;
     if (depth > maxDepth) return false;
-    if ((node.status || NODE_STATUS.ACTIVE) !== NODE_STATUS.ACTIVE) {
-      return false;
-    }
 
     nodesVisited++;
     let foundDeeperActive = false;
@@ -175,7 +172,7 @@ export async function getActiveLeafExecutionFrontier(rootId) {
 
     if (childrenIds.length > 0) {
       const children = await Node.find({ _id: { $in: childrenIds } })
-        .select("_id name children status")
+        .select("_id name children")
         .lean()
         .exec();
 
@@ -203,7 +200,6 @@ export async function getActiveLeafExecutionFrontier(rootId) {
         name: node.name,
         path,
         depth,
-        status: node.status || NODE_STATUS.ACTIVE,
         next: false,
       });
     }
@@ -551,7 +547,6 @@ export async function getContextForAi(nodeId, options = {}) {
   const context = {
     id: node._id.toString(),
     name: node.name,
-    status: node.status || NODE_STATUS.ACTIVE,
     isRoot: !!node.rootOwner && node.rootOwner !== SYSTEM_OWNER,
     dateCreated: node.dateCreated,
   };
@@ -585,7 +580,7 @@ export async function getContextForAi(nodeId, options = {}) {
       })
         .sort({ _id: -1 })
         .limit(Number(getLandConfigValue("treeSummaryRecentArtifacts")) || 3)
-        .populate("beingId", "username -_id")
+        .populate("beingId", "name -_id")
         .lean()
         .exec();
 
@@ -594,7 +589,7 @@ export async function getContextForAi(nodeId, options = {}) {
         const content = typeof a.content === "string" ? a.content : "";
         return {
           id: a._id.toString(),
-          username: a.beingId?.username || "Unknown",
+          name: a.beingId?.name || "Unknown",
           preview:
             content.length > MAX_PREVIEW
               ? content.slice(0, MAX_PREVIEW) + "…"

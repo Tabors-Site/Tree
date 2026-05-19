@@ -9,7 +9,7 @@
 // legacy callers don't crash during the rewrite. Logs once.
 
 import Node from "../../../seed/models/node.js";
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 
 let _warned = false;
 export async function ensureContractsNode({ scopeNodeId, core: _core } = {}) {

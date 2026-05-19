@@ -28,10 +28,10 @@
  *   - Stats reset at 1B to prevent overflow.
  */
 
-import log from "../log.js";
+import log from "../core/log.js";
 import Node from "../models/node.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { ERR, SYSTEM_OWNER } from "../protocol.js";
+import { ERR, SYSTEM_OWNER } from "../core/protocol.js";
 
 // ── Cache storage ──
 

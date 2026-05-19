@@ -15,9 +15,9 @@ import Node from "../models/node.js";
 import Being from "../models/being.js";
 import { resolveTreeAccess } from "./treeAccess.js";
 import { invalidateNode } from "./ancestorCache.js";
-import { hooks } from "../hooks.js";
+import { hooks } from "../core/hooks.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { SYSTEM_OWNER, ERR, ProtocolError } from "../protocol.js";
+import { SYSTEM_OWNER, ERR, ProtocolError } from "../core/protocol.js";
 import { acquireNodeLock, releaseNodeLock } from "./nodeLocks.js";
 
 /**
@@ -30,7 +30,7 @@ export async function addContributor(nodeId, contributorId, actorId) {
   if (node.systemRole) throw new Error("Cannot modify system nodes");
 
   await assertUserExists(contributorId);
-  await assertOwnerOrAdmin(nodeId, actorId);
+  await assertOwner(nodeId, actorId);
 
   // Prevent adding the resolved owner as a contributor (redundant, logically wrong)
   const targetAccess = await resolveTreeAccess(nodeId, contributorId);
@@ -66,7 +66,7 @@ export async function removeContributor(nodeId, contributorId, actorId) {
 
   // Self-removal is always allowed
   if (contributorId !== actorId) {
-    await assertOwnerOrAdmin(nodeId, actorId);
+    await assertOwner(nodeId, actorId);
   }
 
   await Node.updateOne(
@@ -96,17 +96,18 @@ export async function setOwner(nodeId, newOwnerId, actorId) {
   // If this node already has rootOwner, only that owner or an admin can change it.
   // If it doesn't, resolve the owner above.
   if (node.rootOwner && node.rootOwner !== SYSTEM_OWNER) {
-    // Current owner or admin can reassign
-    const isCurrentOwner = node.rootOwner.toString() === actorId;
-    if (!isCurrentOwner) {
-      await assertAdmin(actorId);
+    // Only the current owner can reassign. (Admin bypass retired
+    // 2026-05-18; stance authorization replaces it.)
+    if (node.rootOwner.toString() !== actorId) {
+      throw new Error("Only the current owner can reassign rootOwner");
     }
   } else if (node.parent) {
     // No rootOwner here. Check the owner above.
-    await assertOwnerOrAdmin(node.parent, actorId);
+    await assertOwner(node.parent, actorId);
   } else {
-    // No parent, no rootOwner. Only admin can set on orphaned nodes.
-    await assertAdmin(actorId);
+    // Orphaned node with no parent and no owner. No path forward
+    // without stance authorization rules; refuse for now.
+    throw new Error("Cannot set owner on a top-level node with no current owner (stance authorization pending)");
   }
 
   const previousOwnerId = node.rootOwner ? node.rootOwner.toString() : null;
@@ -152,12 +153,13 @@ export async function removeOwner(nodeId, actorId) {
   if (node.systemRole) throw new Error("Cannot modify system nodes");
   if (!node.rootOwner || node.rootOwner === SYSTEM_OWNER) throw new Error("Node has no owner to remove");
 
-  // Only the owner above, or admin, can revoke
+  // Only the owner ABOVE this node can revoke. Top-level roots can't
+  // have their owner removed under the current rules; stance
+  // authorization will eventually grant exceptions per land policy.
   if (node.parent) {
-    await assertOwnerOrAdmin(node.parent, actorId);
+    await assertOwner(node.parent, actorId);
   } else {
-    // Top-level root. Only admin can remove the top owner.
-    await assertAdmin(actorId);
+    throw new Error("Cannot remove owner on a top-level root (stance authorization pending)");
   }
 
   const removedOwnerId = node.rootOwner.toString();
@@ -194,9 +196,10 @@ export async function transferOwnership(nodeId, newOwnerId, actorId) {
     throw new Error("User is already the owner at this node");
   }
 
-  const isCurrentOwner = oldOwnerId === actorId;
-  if (!isCurrentOwner) {
-    await assertAdmin(actorId);
+  // Only the current owner can transfer. Admin bypass retired
+  // 2026-05-18 ([[project_stance_authorization]] is the replacement).
+  if (oldOwnerId !== actorId) {
+    throw new Error("Only the current owner can transfer ownership");
   }
 
   const locked = await acquireNodeLock(nodeId, actorId);
@@ -225,22 +228,18 @@ export async function transferOwnership(nodeId, newOwnerId, actorId) {
 
 // ── Helpers ──
 
-async function assertOwnerOrAdmin(nodeId, actorId) {
+// `isAdmin` retired 2026-05-18. The fallback "admin bypass" is gone;
+// only the tree's owner can perform owner-only actions. Future
+// stance-authorization rules ([[project_stance_authorization]]) replace
+// the admin-bypass with proper per-stance grants.
+async function assertOwner(nodeId, actorId) {
   const access = await resolveTreeAccess(nodeId, actorId);
   if (access.ok && access.isOwner) return;
-
-  const actor = await Being.findById(actorId).select("isAdmin").lean();
-  if (actor?.isAdmin) return;
-
-  throw new Error("Only the tree owner or admin can perform this action");
+  throw new Error("Only the tree owner can perform this action");
 }
 
-async function assertAdmin(actorId) {
-  const actor = await Being.findById(actorId).select("isAdmin").lean();
-  if (!actor?.isAdmin) {
-    throw new Error("Only an admin can perform this action");
-  }
-}
+// assertAdmin is dead. Callers that used it had owner fallbacks via
+// assertOwner; pure-admin gates retire pending stance authorization.
 
 async function assertUserExists(beingId) {
   if (!beingId) throw new Error("User ID is required");

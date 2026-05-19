@@ -13,8 +13,8 @@
 // their content; the scheduler invokes the handoff; the aggregator
 // counts the reply, and the Foreman continues.
 
-import log from "../../../seed/log.js";
-import { runChat } from "../../../seed/llm/conversation.js";
+import log from "../../../seed/core/log.js";
+import { runChat } from "../../../seed/llm/runChat.js";
 import { buildWorkerPrompt, WORKER_BASE_CONFIG } from "./workerBase.js";
 
 // ─────────────────────────────────────────────────────────────────────

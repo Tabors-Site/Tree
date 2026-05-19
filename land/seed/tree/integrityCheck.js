@@ -18,11 +18,11 @@
  * Progress logged every 10K nodes on large lands.
  */
 
-import log from "../log.js";
+import log from "../core/log.js";
 import Node from "../models/node.js";
 import { invalidateAll } from "./ancestorCache.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { SYSTEM_ROLE, DELETED } from "../protocol.js";
+import { SYSTEM_ROLE, DELETED } from "../core/protocol.js";
 
 const MAX_DETAILS = 500; // cap report details to prevent unbounded memory
 const PROGRESS_INTERVAL = 10000; // log progress every N nodes

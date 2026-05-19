@@ -1,59 +1,38 @@
 /**
- * AI-chat session key builders.
+ * Session key builders.
  *
- * What `aiSessionKey` IS, after the per-being / per-Portal-Address refactor:
+ * What `clientSessionId` IS:
+ *   - A transport-session identifier. One per tab / CLI / mobile reach.
+ *     Built at connect time in transports/ws/websocket.js as
+ *     `${beingId}:${clientKind}:${clientInstance}` and stable for the
+ *     lifetime of the reach (survives socket reconnect because
+ *     `clientInstance` is client-stable across refresh; `socket.id`
+ *     rotates). Used for per-tab enqueue serialization, in-flight chat
+ *     re-attach, and tracing/logging.
+ *   - A tracing/logging label. JWTs and MCP tool calls correlate back
+ *     to the reach that initiated them via this id.
  *
- *   - A transport-session identifier. Each tab / CLI / mobile reach gets
- *     its own key so the in-memory `sessions` Map in conversation.js can
- *     hold per-tab LLM-conversation buffers (messages[], modeKey) without
- *     two tabs clobbering each other's working state.
- *   - The cache key for stanceless background pipelines (compress, scout,
- *     intent, dreams, …). Those use `pipeline:ephemeral:<uuid>` or
- *     `pipeline:tree:<rootId>:<purpose>` keys — see
- *     `resolveInternalAiSessionKey` below.
- *   - A tracing/logging label. JWTs carry it so MCP tool calls and server
- *     logs can be correlated to the reach that initiated them.
- *
- * What `aiSessionKey` IS NOT used for anymore:
- *
- *   - Position state. Lives on `Being.currentPositionId` keyed by beingId
- *     (Slice 1). Two tabs for the same being share position automatically.
- *   - Thread identity. The canonical identifier for a conversation between
- *     two beings is `Chat.ibpAddress` (Slice 0).
- *   - Tool-call → summonId correlation. The conversation loop injects
- *     `summonId` / `rootSummonId` / `ibpAddress` into MCP tool args
- *     directly; mcp/server.js reads them without a Map lookup (Slice 2).
- *   - MCP client cache key for being-to-being conversations. Keyed by
- *     `ibpAddress` so all the being's sockets share one MCP client
- *     (Slice 3). Internal-cognition pipelines still key on aiSessionKey.
+ * What `clientSessionId` IS NOT:
+ *   - Conversation identity. The canonical identifier for a conversation
+ *     between two beings is `Summon.ibpAddress` (the stance pair).
+ *   - Position state. Lives on `Being.currentPositionId`. Two tabs for
+ *     the same being share position automatically.
+ *   - Tool-call → summonId correlation. The SUMMON loop injects
+ *     `summonId` / `rootCorrelation` / `ibpAddress` into MCP tool args
+ *     directly; mcp/server.js reads them without a Map lookup.
+ *   - MCP client cache key. Keyed by `ibpAddress` so all the being's
+ *     sockets share one MCP client.
  *   - Per-conversation extension state (ruler/foreman decisions, abort
- *     registry, pending plans, swarm plans). Keyed on `rootSummonId` or
- *     `ibpAddress` per each Map's semantics (Slice 4).
- *   - Per-socket broadcast for async chat events. The conversation loop
+ *     registry, pending plans). Keyed on `rootCorrelation` or
+ *     `ibpAddress` per each Map's semantics.
+ *   - Per-socket broadcast for async chat events. The SUMMON loop
  *     emits via `io.to('being:' + beingId)` so every tab the being has
- *     connected receives the stream (Slice 5).
+ *     connected receives the stream.
  *
- * Entry points (websocket.js, routes/api/orchestrate.js, gateway extensions)
- * pass raw ingredients to runOrchestration; runOrchestration is the sole
- * caller of buildUserAiSessionKey. Extensions never import this file.
- *
- * Key shapes:
- *   user:${beingId}:${rootId}:${device}       (tree; handle replaces device)
- *   user:${beingId}:home:${device}
- *   user:${beingId}:land:${device}
- *
- * `device` (from socket.clientKind, "http", or a gateway-composed
- * "${channel}:${external_id}") is the default last segment so CLI,
- * dashboard, mobile, and every gateway auto-decouple. Two simultaneous
- * reaches on the same tree get separate aiSessionKeys (which means
- * separate per-tab LLM buffers) but share their being-level state.
- *
- * `handle`, when provided, REPLACES device:
- *   - handle="shared" from two devices → one merged tab-level buffer
- *   - handle="draft-xyz" from one device → a named side-thread
- *
- * nodeId intentionally omitted from the key — position is per-being now,
- * not per-aiSessionKey.
+ * Composing a session-shaped key from payload state at dispatch time
+ * (the retired `buildUserAiSessionKey` shape) is a legacy anti-pattern
+ * — reach the transport key via `socket.clientSessionId`; reach
+ * conversation continuity via IBP Address.
  */
 
 /**
@@ -61,7 +40,7 @@
  *
  * A pipeline key identifies a stanceless internal-cognition lane — the
  * conversation-equivalent cache key for work that has no addressee
- * being. Distinct namespace from `aiSessionKey` (transport identity)
+ * being. Distinct namespace from `clientSessionId` (transport identity)
  * and `ibpAddress` (being-to-being conversation identity).
  *
  * Three paths, in priority order:
@@ -119,33 +98,4 @@ function cryptoRandomUUID() {
   // Fallback: node < 19
   // eslint-disable-next-line global-require
   return require("node:crypto").randomUUID();
-}
-
-export function buildUserAiSessionKey({ beingId, zone, rootId = null, device = null, handle = null }) {
-  if (!beingId) throw new Error("buildUserAiSessionKey: beingId required");
-  if (!zone) throw new Error("buildUserAiSessionKey: zone required");
-  // At least one of `device` or `handle` must be present. Without this
-  // guard, a caller that forgets to pass device silently collapses every
-  // reach into one shared `…:default` session — a latent cross-user /
-  // cross-device collision. Entry points (ws/http/gateways) must pass
-  // `device` at minimum. Handle is the opt-in override.
-  if (!device && !handle) {
-    throw new Error("buildUserAiSessionKey: device or handle required (entry points must declare the reach)");
-  }
-
-  let anchor;
-  if (zone === "tree") {
-    if (!rootId) throw new Error("buildUserAiSessionKey: zone='tree' requires rootId");
-    anchor = rootId;
-  } else if (zone === "home" || zone === "land") {
-    anchor = zone;
-  } else {
-    throw new Error(`buildUserAiSessionKey: unknown zone "${zone}"`);
-  }
-
-  const suffix = handle || device;
-  const u = String(beingId).slice(0, 64);
-  const s = String(suffix).slice(0, 64).replace(/[^a-z0-9:._-]/gi, "");
-  if (!s) throw new Error("buildUserAiSessionKey: device/handle reduced to empty after sanitization");
-  return `user:${u}:${anchor}:${s}`;
 }

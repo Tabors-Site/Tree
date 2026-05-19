@@ -2,16 +2,16 @@
 import mongoose from "mongoose";
 import Node from "../models/node.js";
 import { logDid } from "./dids.js";
-import { containsHtml } from "../utils.js";
+import { containsHtml } from "../core/utils.js";
 import Being from "../models/being.js";
 import { createArtifact } from "./artifacts.js";
 import { resolveTreeAccess } from "./treeAccess.js";
 import { isDescendant } from "./treeFetch.js";
-import { hooks } from "../hooks.js";
+import { hooks } from "../core/hooks.js";
 import { getLandRootId } from "../landRoot.js";
 import { invalidateAll, invalidateNode } from "./ancestorCache.js";
-import log from "../log.js";
-import { NODE_STATUS, DELETED, ARTIFACT_ORIGIN, ERR, ProtocolError, SYSTEM_OWNER } from "../protocol.js";
+import log from "../core/log.js";
+import { DELETED, ARTIFACT_ORIGIN, ERR, ProtocolError, SYSTEM_OWNER } from "../core/protocol.js";
 import { acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple } from "./nodeLocks.js";
 import { getLandConfigValue } from "../landConfig.js";
 
@@ -87,7 +87,6 @@ export async function createNode({
   const newNode = new Node({
     name,
     type,
-    status: NODE_STATUS.ACTIVE,
     children: [],
     parent: isRoot ? getLandRootId() : (parentId || null),
     rootOwner: isRoot ? user._id : null,
@@ -200,7 +199,6 @@ export async function createSystemNode({ name, parentId, metadata = null }) {
     parent: parentId,
     children: [],
     contributors: [],
-    status: NODE_STATUS.ACTIVE,
     metadata: metadata instanceof Map ? metadata : new Map(),
   });
   await newNode.save();

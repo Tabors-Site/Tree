@@ -17,8 +17,8 @@
 // LLM behavior (prompt, tools, modeKey, …) — see memory
 // `role-subsumes-mode`.
 
-import log from "../../../seed/log.js";
-import { runChat } from "../../../seed/llm/conversation.js";
+import log from "../../../seed/core/log.js";
+import { runChat } from "../../../seed/llm/runChat.js";
 import { renderRulerSnapshot } from "../state/rulerSnapshot.js";
 import { findChainInitialCaller, emitReplyToStance } from "./_shared.js";
 
@@ -619,7 +619,7 @@ export const rulerRole = Object.freeze({
           askerStance,
           fromNodeId:      scopeNodeId,
           fromBeing:       ctx.toBeing,
-          fromRoleName:    ctx.toBeing?.username || "ruler",
+          fromRoleName:    ctx.toBeing?.name || "ruler",
           exitText:        answer,
           rootCorrelation,
         });

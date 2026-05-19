@@ -9,11 +9,11 @@
  * No function in this file can trigger unbounded DB queries.
  */
 
-import log from "../log.js";
+import log from "../core/log.js";
 import Node from "../models/node.js";
 import Artifact from "../models/artifact.js";
 import Did from "../models/did.js";
-import { NODE_STATUS, ARTIFACT_ORIGIN } from "../protocol.js";
+import { ARTIFACT_ORIGIN } from "../core/protocol.js";
 import { getLandConfigValue } from "../landConfig.js";
 
 // Configurable caps. Read at call time so config changes take effect.
@@ -47,7 +47,7 @@ export async function getNodeForAi(nodeId) {
   if (!node) throw new Error(`Node ${nodeId} not found`);
 
   const artifacts = await Artifact.find({ nodeId: node._id, origin: ARTIFACT_ORIGIN.IBP })
-    .populate("beingId", "username -_id")
+    .populate("beingId", "name -_id")
     .sort({ createdAt: -1 })
     .limit(maxArtifactsPerNodeQuery())
     .lean();
@@ -67,12 +67,11 @@ export async function getNodeForAi(nodeId) {
   const result = {
     id: node._id.toString(),
     name: node.name,
-    status: node.status || NODE_STATUS.ACTIVE,
     parentNodeId,
     parentName,
     children,
     artifacts: artifacts.map(a => ({
-      username: a.beingId?.username || "Unknown",
+      name: a.beingId?.name || "Unknown",
       content: a.content,
     })),
   };
@@ -87,30 +86,23 @@ export async function getNodeForAi(nodeId) {
  * Depth and node count capped via config (treeSummaryMaxDepth, treeSummaryMaxNodes).
  * Returns JSON string of { tree: { id, name, type?, children[] } }
  */
-export async function getTreeForAi(rootId, filter = null) {
+export async function getTreeForAi(rootId, _filter = null) {
   if (!rootId) throw new Error("Root node ID is required");
 
   const depthCap = maxTreeDepth();
   const nodeCap = maxTreeNodes();
   let nodeCount = 0;
 
-  const filters = !filter
-    ? { [NODE_STATUS.ACTIVE]: true, [NODE_STATUS.TRIMMED]: false, [NODE_STATUS.COMPLETED]: true }
-    : { [NODE_STATUS.ACTIVE]: !!filter.active, [NODE_STATUS.TRIMMED]: !!filter.trimmed, [NODE_STATUS.COMPLETED]: !!filter.completed };
-
-  const allowedStatuses = new Set();
-  if (filters[NODE_STATUS.ACTIVE]) allowedStatuses.add(NODE_STATUS.ACTIVE);
-  if (filters[NODE_STATUS.TRIMMED]) allowedStatuses.add(NODE_STATUS.TRIMMED);
-  if (filters[NODE_STATUS.COMPLETED]) allowedStatuses.add(NODE_STATUS.COMPLETED);
+  // Status filtering retired with Node.status (kernel doesn't claim a
+  // universal state machine). Callers that need to hide subsets at a
+  // position should set domain-specific metadata flags via extensions
+  // and filter at consumption time.
 
   async function buildNode(nodeId, depth) {
     if (depth > depthCap || nodeCount >= nodeCap) return null;
 
-    const node = await Node.findById(nodeId).select("_id name type status children").lean();
+    const node = await Node.findById(nodeId).select("_id name type children").lean();
     if (!node) return null;
-
-    const status = node.status || NODE_STATUS.ACTIVE;
-    if (!allowedStatuses.has(status)) return null;
 
     nodeCount++;
     const simplified = { id: node._id.toString(), name: node.name?.replace(/\s+/g, " ").trim() };
@@ -149,15 +141,10 @@ export async function getTreeStructure(rootId, filters = {}) {
 
   const includeMetadata = filters.includeMetadata === true;
   const FIELDS = includeMetadata
-    ? "_id name type status children parent systemRole metadata"
-    : "_id name type status children parent systemRole";
+    ? "_id name type children parent systemRole metadata"
+    : "_id name type children parent systemRole";
   const depthCap = maxTreeDepth() + 2; // structure needs slightly more depth than AI summary
   const nodeCap = maxTreeNodes() * 5; // structure serves HTML, needs more nodes
-
-  const allowedStatuses = [];
-  if (filters.active !== false) allowedStatuses.push(NODE_STATUS.ACTIVE);
-  if (filters.trimmed === true) allowedStatuses.push(NODE_STATUS.TRIMMED);
-  if (filters.completed !== false) allowedStatuses.push(NODE_STATUS.COMPLETED);
 
   let nodeCount = 0;
 
@@ -168,7 +155,6 @@ export async function getTreeStructure(rootId, filters = {}) {
     if (!node) return null;
 
     nodeCount++;
-    const status = node.status || NODE_STATUS.ACTIVE;
 
     const children = [];
     if (node.children?.length > 0 && depth < depthCap && nodeCount < nodeCap) {
@@ -179,10 +165,7 @@ export async function getTreeStructure(rootId, filters = {}) {
       }
     }
 
-    // Filter: skip nodes with wrong status and no children (never skip the root)
-    if (depth > 0 && !allowedStatuses.includes(status) && children.length === 0) return null;
-
-    const out = { _id: node._id, name: node.name, type: node.type || null, status, parent: node.parent, children };
+    const out = { _id: node._id, name: node.name, type: node.type || null, parent: node.parent, children };
     if (includeMetadata && node.metadata) out.metadata = node.metadata;
     return out;
   }
@@ -231,11 +214,11 @@ export async function getAllNodeData(rootId, filters = {}) {
       .lean();
 
     const artifacts = await Artifact.find({ nodeId: node._id, origin: ARTIFACT_ORIGIN.IBP })
-      .populate("beingId", "username -_id")
+      .populate("beingId", "name -_id")
       .sort({ createdAt: -1 })
       .limit(maxArtifactsPerNodeQuery())
       .lean();
-    node.artifacts = artifacts.map(a => ({ username: a.beingId?.username || "Unknown", content: a.content }));
+    node.artifacts = artifacts.map(a => ({ name: a.beingId?.name || "Unknown", content: a.content }));
 
     if (node.children?.length > 0) {
       const kids = [];
@@ -268,39 +251,8 @@ export async function getAllNodeData(rootId, filters = {}) {
   }
   rootNode.ancestors = ancestors;
 
-  const statusFilters = {
-    active: filters.active !== undefined ? filters.active : true,
-    trimmed: filters.trimmed !== undefined ? filters.trimmed : false,
-    completed: filters.completed !== undefined ? filters.completed : true,
-  };
-
-  const filteredChildren = filterTreeByStatus({ ...rootNode, children: rootNode.children }, statusFilters)?.children ?? [];
-  return { ...rootNode, children: filteredChildren };
-}
-
-/**
- * Filter a populated tree by status.
- */
-export function filterTreeByStatus(node, filters) {
-  if (!node) return null;
-
-  const allowedStatuses = [];
-  if (filters[NODE_STATUS.ACTIVE] === true) allowedStatuses.push(NODE_STATUS.ACTIVE);
-  if (filters[NODE_STATUS.TRIMMED] === true) allowedStatuses.push(NODE_STATUS.TRIMMED);
-  if (filters[NODE_STATUS.COMPLETED] === true) allowedStatuses.push(NODE_STATUS.COMPLETED);
-
-  const filteringEnabled =
-    filters[NODE_STATUS.ACTIVE] !== undefined || filters[NODE_STATUS.TRIMMED] !== undefined || filters[NODE_STATUS.COMPLETED] !== undefined;
-
-  const status = node.status || NODE_STATUS.ACTIVE;
-  const filteredChildren = node.children?.map(child => filterTreeByStatus(child, filters)).filter(Boolean) || [];
-
-  if (!filteringEnabled) return { ...node, children: filteredChildren };
-
-  const nodeMatches = allowedStatuses.includes(status);
-  if (!nodeMatches && filteredChildren.length === 0) return null;
-
-  return { ...node, children: filteredChildren };
+  // Status filtering retired with Node.status; return the populated tree.
+  return rootNode;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

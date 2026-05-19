@@ -16,7 +16,7 @@
 // state/contracts.js for the contracts-side implementation this mirrors.
 
 import Node from "../../../seed/models/node.js";
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 
 const NS = "governing";
 
@@ -110,7 +110,7 @@ export async function appendPlanApproval({
   // can observe plan approvals the same way they observe contract
   // approvals. Mirrors the governing:contractRatified pattern.
   try {
-    const { hooks } = await import("../../../seed/hooks.js");
+    const { hooks } = await import("../../../seed/core/hooks.js");
     hooks.run("governing:planRatified", {
       rulerNodeId: String(rulerNodeId),
       planNodeId: String(planNodeId),

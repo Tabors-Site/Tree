@@ -32,7 +32,7 @@
 // not its origin record.
 
 import Node from "../../../seed/models/node.js";
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 
 const NS = "governing";
 

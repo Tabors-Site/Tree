@@ -8,7 +8,7 @@ const MONGO_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/treeos";
 await mongoose.connect(MONGO_URI);
 
 // Boot extensions so swarm + plan are loaded.
-const { default: services } = await import("./seed/services.js");
+const { default: services } = await import("./seed/core/services.js");
 const { initLandRoot } = await import("./seed/landRoot.js");
 const land = await initLandRoot();
 const { loadExtensions } = await import("./extensions/loader.js");

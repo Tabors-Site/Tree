@@ -23,7 +23,7 @@
  * DELETED sentinel.
  */
 
-import log from "../log.js";
+import log from "../core/log.js";
 import path from "path";
 import fs from "fs";
 import Artifact from "../models/artifact.js";
@@ -31,12 +31,12 @@ import Being from "../models/being.js";
 import Node from "../models/node.js";
 import Did from "../models/did.js";
 import { logDid } from "./dids.js";
-import { escapeRegex } from "../utils.js";
-import { hooks } from "../hooks.js";
+import { escapeRegex } from "../core/utils.js";
+import { hooks } from "../core/hooks.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { fileURLToPath } from "url";
 import { resolveRootNode } from "./treeFetch.js";
-import { ARTIFACT_ORIGIN, DELETED, NODE_STATUS, ERR, ProtocolError } from "../protocol.js";
+import { ARTIFACT_ORIGIN, DELETED, ERR, ProtocolError } from "../core/protocol.js";
 import { incBeingMeta } from "./beingMetadata.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -84,12 +84,10 @@ function ibpText(artifact) {
 // VALIDATION
 // ─────────────────────────────────────────────────────────────────────────
 
-async function assertArtifactTextWithinLimit(content, beingId) {
+async function assertArtifactTextWithinLimit(content, _beingId) {
   if (!content || typeof content !== "string") return;
-  if (beingId) {
-    const being = await Being.findById(beingId).select("isAdmin").lean();
-    if (being?.isAdmin) return;
-  }
+  // Admin bypass retired 2026-05-18. Size cap applies to every being;
+  // stance-authorization-based exemptions can land here later if needed.
   const max = artifactMaxChars();
   if (content.length > max) {
     throw new Error(`Artifact exceeds maximum length of ${max} characters`);
@@ -314,7 +312,7 @@ async function getArtifacts({ nodeId, limit, offset, startDate, endDate }) {
 
   const artifacts = await Artifact.find(query)
     .sort({ createdAt: -1 })
-    .populate("beingId", "username")
+    .populate("beingId", "name")
     .skip(safeOffset)
     .limit(safeLimit)
     .lean();
@@ -325,7 +323,7 @@ async function getArtifacts({ nodeId, limit, offset, startDate, endDate }) {
       _id: a._id,
       origin: a.origin,
       content: a.content,
-      username: a.beingId ? a.beingId.username : null,
+      name: a.beingId ? a.beingId.name : null,
       beingId: a.beingId?._id?.toString(),
       nodeId: a.nodeId,
       metadata: a.metadata,
@@ -504,15 +502,6 @@ async function collectSubtreeNodeIds(rootId) {
   return ids;
 }
 
-function nodeMatchesStatus(node, filters) {
-  const status = node.status || NODE_STATUS.ACTIVE;
-  if (!status) return false;
-  if (!filters) return status === NODE_STATUS.ACTIVE || status === NODE_STATUS.COMPLETED;
-  if (filters[status] === true) return true;
-  if (filters[status] === false) return false;
-  return status === NODE_STATUS.ACTIVE || status === NODE_STATUS.COMPLETED;
-}
-
 async function transferArtifact({
   artifactId, targetNodeId, beingId,
   summonId = null, sessionId = null,
@@ -573,7 +562,7 @@ async function getArtifactEditHistory(artifactId, limit = 100, offset = 0) {
     "artifactAction.artifactId": artifactId,
     "artifactAction.action": { $in: ["add", "edit"] },
   })
-    .populate("beingId", "username")
+    .populate("beingId", "name")
     .sort({ date: 1 })
     .skip(safeOffset)
     .limit(safeLimit)
@@ -581,7 +570,7 @@ async function getArtifactEditHistory(artifactId, limit = 100, offset = 0) {
 
   return contributions.map(c => ({
     _id: c._id,
-    username: c.beingId?.username ?? "Unknown",
+    name: c.beingId?.name ?? "Unknown",
     date: c.date,
     content: c.artifactAction.content,
     action: c.artifactAction.action,
@@ -591,6 +580,6 @@ async function getArtifactEditHistory(artifactId, limit = 100, offset = 0) {
 export {
   createArtifact, editArtifact, getArtifacts, deleteArtifactAndFile,
   transferArtifact, getAllArtifactsByUser, searchArtifactsByUser,
-  collectSubtreeNodeIds, nodeMatchesStatus, getArtifactEditHistory,
+  collectSubtreeNodeIds, getArtifactEditHistory,
   assertArtifactTextWithinLimit,
 };

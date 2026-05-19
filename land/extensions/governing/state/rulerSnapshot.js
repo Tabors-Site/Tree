@@ -18,7 +18,7 @@
 // from existing Pass 1 substrate.
 
 import Node from "../../../seed/models/node.js";
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 import { findRulerScope, NS as ROLE_NS } from "./role.js";
 
 // Decision latency was previously surfaced into the snapshot from

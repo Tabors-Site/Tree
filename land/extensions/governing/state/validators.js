@@ -35,7 +35,7 @@
 // "failed" on the branch-complete payload to force a retry); callers
 // preserve that contract.
 
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 
 const PHASE_ORDER = { pre: 0, main: 1, post: 2 };
 

@@ -22,11 +22,11 @@
 // LLM-vs-human cognition distinction.
 
 import { randomUUID } from "crypto";
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 import Being from "../../../seed/models/being.js";
-import { appendToInbox, readInbox } from "../../../ibp/inbox.js";
-import { wake } from "../../../ibp/scheduler.js";
-import { getLandDomain } from "../../../ibp/address.js";
+import { appendToInbox, readInbox } from "../../../protocols/ibp/inbox.js";
+import { wake } from "../../../protocols/ibp/scheduler.js";
+import { getLandDomain } from "../../../protocols/ibp/address.js";
 
 // Mongoose lean() returns metadata as a plain object whose entries may
 // be nested Maps depending on driver version. Walk a path against both
@@ -77,7 +77,7 @@ function parseAskerStance(stance) {
  * @param {string} opts.fromNodeId       The replier's home (plan/contracts/execution/ruler scope node)
  * @param {object} opts.fromBeing        The replier Being instance
  * @param {string} [opts.fromRoleName]   Stance qualifier for the reply's `from` field;
- *                                       defaults to fromBeing.username
+ *                                       defaults to fromBeing.name
  * @param {object} opts.originalMessage  The inbox entry being responded to (must have `.from`)
  * @param {string} opts.exitText         Content of the reply
  * @param {string} [opts.intent]         Reply intent (default "chat")
@@ -116,8 +116,8 @@ export async function emitReplyToAsker({
     // Resolve the asker Being by username. Usernames are globally
     // unique in a land, so qualifier-as-username is the canonical
     // lookup. Users and sub-beings both follow this convention.
-    const askerBeing = await Being.findOne({ username: askerStance.qualifier })
-      .select("_id username defaultRole roles operatingMode").lean();
+    const askerBeing = await Being.findOne({ name: askerStance.qualifier })
+      .select("_id name defaultRole roles operatingMode").lean();
     if (!askerBeing) {
       log.warn("Governing/replyToAsker",
         `asker being "${askerStance.qualifier}" not found; skipping reply`);
@@ -128,7 +128,7 @@ export async function emitReplyToAsker({
     const landDomain = getLandDomain() || "land";
     const fromQualifier =
       fromRoleName
-      || fromBeing?.username
+      || fromBeing?.name
       || (Array.isArray(fromBeing?.roles) && fromBeing.roles[0])
       || "sub-being";
     const fromStance = `${landDomain}/${fromNodeId}@${fromQualifier}`;
@@ -157,7 +157,7 @@ export async function emitReplyToAsker({
     wake(String(askerBeing._id), String(askerStance.nodeId));
 
     log.info("Governing/replyToAsker",
-      `↩  ${fromQualifier} → ${askerBeing.username} ` +
+      `↩  ${fromQualifier} → ${askerBeing.name} ` +
       `at ${String(askerStance.nodeId).slice(0, 8)} ` +
       `(correlation=${correlation.slice(0, 8)})`);
     return true;
@@ -219,8 +219,8 @@ export async function emitReplyToStance({
         `unparseable asker stance "${askerStance}"; skipping reply`);
       return false;
     }
-    const askerBeing = await Being.findOne({ username: parsed.qualifier })
-      .select("_id username defaultRole roles operatingMode").lean();
+    const askerBeing = await Being.findOne({ name: parsed.qualifier })
+      .select("_id name defaultRole roles operatingMode").lean();
     if (!askerBeing) {
       log.warn("Governing/replyToStance",
         `asker being "${parsed.qualifier}" not found; skipping reply`);
@@ -230,7 +230,7 @@ export async function emitReplyToStance({
     const landDomain = getLandDomain() || "land";
     const fromQualifier =
       fromRoleName
-      || fromBeing?.username
+      || fromBeing?.name
       || (Array.isArray(fromBeing?.roles) && fromBeing.roles[0])
       || "sub-being";
     const fromStance = `${landDomain}/${fromNodeId}@${fromQualifier}`;
@@ -253,7 +253,7 @@ export async function emitReplyToStance({
     wake(String(askerBeing._id), String(parsed.nodeId));
 
     log.info("Governing/replyToStance",
-      `↩  ${fromQualifier} → ${askerBeing.username} ` +
+      `↩  ${fromQualifier} → ${askerBeing.name} ` +
       `at ${String(parsed.nodeId).slice(0, 8)} ` +
       `(correlation=${correlation.slice(0, 8)})`);
     return true;

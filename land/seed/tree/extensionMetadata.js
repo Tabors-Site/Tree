@@ -1,5 +1,5 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
-import { hooks } from "../hooks.js";
+import { hooks } from "../core/hooks.js";
 import { guardMetadataWrite } from "./documentGuard.js";
 import { invalidateNode } from "./ancestorCache.js";
 import Node from "../models/node.js";

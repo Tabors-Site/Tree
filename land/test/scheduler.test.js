@@ -25,7 +25,7 @@ let summonImpl = async (message, ctx) => ({ content: `default for ${message.corr
 function freshBucket(beingId, entries) { fakeBucket.set(beingId, entries); }
 function setSummonImpl(fn) { summonImpl = fn; summonCalls = []; }
 
-mock.module("../ibp/inbox.js", {
+mock.module("../protocols/ibp/inbox.js", {
   namedExports: {
     pickNextEntry: async (nodeId, beingId) => {
       const bucket = fakeBucket.get(beingId) || [];
@@ -84,7 +84,7 @@ mock.module("../seed/models/being.js", {
 // without booting the real WS server. Tests inspect `humanEmits` to
 // verify being-room delivery.
 const humanEmits = [];
-mock.module("../seed/ws/websocket.js", {
+mock.module("../transports/ws/websocket.js", {
   namedExports: {
     getIO: () => ({
       to: (room) => ({
@@ -94,7 +94,7 @@ mock.module("../seed/ws/websocket.js", {
   },
 });
 
-mock.module("../ibp/roles/registry.js", {
+mock.module("../protocols/ibp/roles/registry.js", {
   namedExports: {
     getRole: () => ({
       name: fakeBeingRole,
@@ -109,7 +109,7 @@ mock.module("../ibp/roles/registry.js", {
   },
 });
 
-const { wake, abortCurrent, getCurrentRootCorrelation, attachHandoff, _resetAll, getStats } = await import("../ibp/scheduler.js");
+const { wake, abortCurrent, getCurrentRootCorrelation, attachHandoff, _resetAll, getStats } = await import("../protocols/ibp/scheduler.js");
 
 beforeEach(() => {
   _resetAll();

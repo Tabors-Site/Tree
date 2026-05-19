@@ -4,9 +4,9 @@
 // Every getLandConfigValue and setLandConfigValue in the entire system
 // flows through this file.
 
-import log from "./log.js";
+import log from "./core/log.js";
 import Node from "./models/node.js";
-import { SYSTEM_ROLE } from "./protocol.js";
+import { SYSTEM_ROLE } from "./core/protocol.js";
 
 let configCache = null;
 let initialized = false;

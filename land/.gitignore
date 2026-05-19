@@ -6,3 +6,4 @@ uploads
 extensions/.disabled
 extensions/.treeos-profile
 extensions/.staging-*
+oldExtensions/

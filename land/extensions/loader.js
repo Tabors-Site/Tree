@@ -6,11 +6,11 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
-import { buildCoreServices } from "../seed/services.js";
-import { setExtensionToolResolver } from "../seed/llm/conversation.js";
-import { hooks } from "../seed/hooks.js";
+import { buildCoreServices } from "../seed/core/services.js";
+import { setExtensionToolResolver } from "../seed/llm/runChat.js";
+import { hooks } from "../seed/core/hooks.js";
 import { registerToolOwner, getToolOwner } from "../seed/tree/extensionScope.js";
-import log from "../seed/log.js";
+import log from "../seed/core/log.js";
 
 /** Convert a file path to a URL string for dynamic import (Windows compat) */
 function toImportURL(filePath) {
@@ -862,7 +862,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Wire MCP tools and register in tool resolver
       if (instance.tools && mcpServer) {
-        const { registerToolDef } = await import("../seed/tools.js");
+        const { registerToolDef } = await import("../seed/core/tools.js");
         const { zodToJsonSchema } = await import("zod-to-json-schema");
         const { z } = await import("zod");
 
@@ -966,7 +966,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Register session types
       if (manifest.provides?.sessionTypes) {
-        const { registerSessionType } = await import("../seed/ws/sessionRegistry.js");
+        const { registerSessionType } = await import("../transports/ws/sessionRegistry.js");
         for (const [key, value] of Object.entries(manifest.provides.sessionTypes)) {
           registerSessionType(key, value);
         }
@@ -987,7 +987,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Either form accepted; both register under the extension owner so
       // unload cleans them up. See seed/seeds.js for recipe shape.
       if (instance.seeds || manifest.provides?.seeds) {
-        const { registerSeed } = await import("../seed/seeds.js");
+        const { registerSeed } = await import("../seed/core/seeds.js");
         const namespace = (localName) => `${manifest.name}:${localName}`;
         // Path 1: returned from init
         if (Array.isArray(instance.seeds)) {
@@ -1027,7 +1027,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Idempotent — re-registering replaces this extension's prior rules.
       if (manifest.provides?.defaultPermissions) {
         try {
-          const { registerDefaultPermissions } = await import("../ibp/defaultPermissions.js");
+          const { registerDefaultPermissions } = await import("../protocols/ibp/defaultPermissions.js");
           registerDefaultPermissions(manifest.name, manifest.provides.defaultPermissions);
         } catch (err) {
           log.warn("Extensions", `default-permissions registration failed for "${manifest.name}": ${err.message}`);
@@ -1056,7 +1056,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
   // Register extension names provider for canopy /info endpoint
   try {
-    const { setExtensionNamesProvider } = await import("../canopy/identity.js");
+    const { setExtensionNamesProvider } = await import("../protocols/canopy/identity.js");
     setExtensionNamesProvider(getLoadedExtensionNames);
   } catch {}
 
@@ -1621,16 +1621,16 @@ export async function uninstallExtension(name) {
     // don't linger in the registry after uninstall.
     try {
       // Remove from MCP replay array and invalidate active sessions
-      const { mcpServerInstance } = await import("../mcp/server.js");
+      const { mcpServerInstance } = await import("../protocols/mcp/server.js");
       if (mcpServerInstance?.removeToolsByOwner) {
         mcpServerInstance.removeToolsByOwner(name, getToolOwner);
       }
       // Remove from tool definition registry
-      const { unregisterToolsForExtension } = await import("../seed/tools.js");
+      const { unregisterToolsForExtension } = await import("../seed/core/tools.js");
       unregisterToolsForExtension(name, getToolOwner);
     } catch {}
     try {
-      const { unregisterSeedsFromExtension } = await import("../seed/seeds.js");
+      const { unregisterSeedsFromExtension } = await import("../seed/core/seeds.js");
       unregisterSeedsFromExtension(name);
     } catch {}
     try {
@@ -1640,7 +1640,7 @@ export async function uninstallExtension(name) {
     // Drop this extension's default permission rules from the registry
     // so authorize stops consulting them post-uninstall.
     try {
-      const { unregisterDefaultPermissions } = await import("../ibp/defaultPermissions.js");
+      const { unregisterDefaultPermissions } = await import("../protocols/ibp/defaultPermissions.js");
       unregisterDefaultPermissions(name);
     } catch {}
   }
@@ -2017,7 +2017,7 @@ export async function disableExtension(name) {
 
   // Unregister hooks belonging to this extension
   try {
-    const { hooks } = await import("../seed/hooks.js");
+    const { hooks } = await import("../seed/core/hooks.js");
     hooks.unregister(name);
   } catch {}
 
@@ -2118,7 +2118,7 @@ export async function runExtensionMigrations() {
 
   // Find the .extensions system node once, so per-extension queries are scoped correctly.
   // Without this, a user-created tree node named the same as an extension would be matched.
-  const { SYSTEM_ROLE } = await import("../seed/protocol.js");
+  const { SYSTEM_ROLE } = await import("../seed/core/protocol.js");
   const extensionsParent = await Node.findOne({ systemRole: SYSTEM_ROLE.EXTENSIONS }).select("_id").lean();
 
   for (const [name, { manifest, instance }] of loaded) {

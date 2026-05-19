@@ -10,18 +10,14 @@
 //   setActiveSummon / clearActiveSummon / finalizeOpenSummon — socket-side marker
 //   startSummon / finalizeSummon                    — Summon lifecycle writes
 //   appendToolCall                                  — writes a tool-call Did
-//   getLatestActiveChainstepForBeing                — descriptor activity lookup
-//
-// Deprecated no-ops (orchestrator-era; tree-orchestrator + swarm slated for
-// deletion in Slice 7, callers will retire with them):
-//   trackChainStep / startChainStep / appendModeSwitch / getLatestActiveChainstep
+//   getActiveSummonForBeing                — descriptor activity lookup
 
-import log from "../log.js";
+import log from "../core/log.js";
 import { getLandConfigValue } from "../landConfig.js";
 import { v4 as uuidv4 } from "uuid";
 import Summon from "../models/summon.js";
 import Did from "../models/did.js";
-import { createSession, SESSION_TYPES } from "../ws/sessionRegistry.js";
+import { createSession, SESSION_TYPES } from "../../transports/ws/sessionRegistry.js";
 import { computeIbpAddressForSummon, invalidateStanceCache } from "./ibpAddress.js";
 
 export { invalidateStanceCache };
@@ -32,21 +28,21 @@ export { invalidateStanceCache };
 
 /**
  * Initialize or retrieve the AI session on a socket. Returns sessionId.
- * Per-transport scopeKey: socket.aiSessionKey already encodes (being,
+ * Per-transport scopeKey: socket.clientSessionId already encodes (being,
  * clientKind, clientInstance), so CLI and browser on the same being get
  * independent sessions. endSession(sessionId) aborts any registered abort
  * controller on that sessionId.
  */
 export function ensureSession(socket) {
-  const scopeKey = `ws:${socket.aiSessionKey}`;
+  const scopeKey = `ws:${socket.clientSessionId}`;
   const { sessionId, reused } = createSession({
     beingId: socket.beingId,
     type: SESSION_TYPES.WEBSOCKET_CHAT,
     scopeKey,
-    description: `Chat session for ${socket.username || "unknown"}`,
-    meta: { aiSessionKey: socket.aiSessionKey },
+    description: `Chat session for ${socket.name || "unknown"}`,
+    meta: { clientSessionId: socket.clientSessionId },
   });
-  if (!reused) log.debug("AI", `New AI session for ${socket.aiSessionKey}: ${sessionId}`);
+  if (!reused) log.debug("AI", `New AI session for ${socket.clientSessionId}: ${sessionId}`);
   socket._aiSession = { id: sessionId, lastActivity: Date.now() };
   return sessionId;
 }
@@ -55,12 +51,12 @@ export function rotateSession(socket) {
   const { sessionId } = createSession({
     beingId: socket.beingId,
     type: SESSION_TYPES.WEBSOCKET_CHAT,
-    scopeKey: `ws:${socket.aiSessionKey}`,
+    scopeKey: `ws:${socket.clientSessionId}`,
     idleTTL: 0,
-    description: `Chat session for ${socket.username || "unknown"}`,
-    meta: { aiSessionKey: socket.aiSessionKey },
+    description: `Chat session for ${socket.name || "unknown"}`,
+    meta: { clientSessionId: socket.clientSessionId },
   });
-  log.debug("AI", `Rotated AI session for ${socket.aiSessionKey}: ${sessionId}`);
+  log.debug("AI", `Rotated AI session for ${socket.clientSessionId}: ${sessionId}`);
   socket._aiSession = { id: sessionId, lastActivity: Date.now() };
   return sessionId;
 }
@@ -74,21 +70,21 @@ export function getSessionId(socket) {
 // ─────────────────────────────────────────────────────────────────────────
 
 export function setActiveSummon(socket, summonId, startTime) {
-  socket._activeChat = { summonId, startTime };
+  socket._activeSummon = { summonId, startTime };
 }
 
 export function clearActiveSummon(socket) {
-  socket._activeChat = null;
+  socket._activeSummon = null;
 }
 
 /** Finalize an orphaned in-flight Summon on socket disconnect. */
 export async function finalizeOpenSummon(socket) {
-  const active = socket._activeChat;
+  const active = socket._activeSummon;
   if (!active) return;
-  socket._activeChat = null;
+  socket._activeSummon = null;
   try {
     await finalizeSummon({ summonId: active.summonId, content: null, stopped: true });
-    log.debug("AI", `Finalized orphaned summon ${active.summonId} for ${socket.aiSessionKey}`);
+    log.debug("AI", `Finalized orphaned summon ${active.summonId} for ${socket.clientSessionId}`);
   } catch (err) {
     log.warn("AI", `Failed to finalize orphaned summon: ${err.message}`);
   }
@@ -111,10 +107,9 @@ function capContent(s) {
 /**
  * Phase 1: create the Summon record when a wake fires.
  *
- * Persists the slim Summon shape (beingIn/beingOut, ibpAddress, activeRole,
- * inReplyTo/rootCorrelation, start/end messages, llmProvider).
- * Legacy field names (beingId, parentSummonId, rootSummonId, role) are
- * accepted and mapped to the canonical names.
+ * Persists the slim Summon shape: beingIn/beingOut, ibpAddress,
+ * activeRole, inReplyTo, rootCorrelation, receivedAt, summonedAt,
+ * startMessage, llmProvider.
  */
 export async function startSummon(opts = {}) {
   const {
@@ -127,36 +122,26 @@ export async function startSummon(opts = {}) {
     inReplyTo = null,
     rootCorrelation = null,
     receivedAt = null,
-
-    // Aliases — accepted, mapped, then dropped
-    beingId,                    // alias for beingIn
-    role = null,                // alias for activeRole (role.name)
-    parentSummonId = null,      // alias for inReplyTo
-    rootSummonId = null,        // alias for rootCorrelation
   } = opts;
 
-  const resolvedActiveRole = activeRole || role || null;
-
-  const askerBeingId = beingIn || beingId;
-  if (!askerBeingId) {
-    log.warn("SummonTracker", "startSummon called without beingIn/beingId");
+  if (!beingIn) {
+    log.warn("SummonTracker", "startSummon called without beingIn");
     return null;
   }
 
-  const resolvedInReplyTo = inReplyTo || parentSummonId || null;
-  let resolvedRoot = rootCorrelation || rootSummonId || null;
+  let resolvedRoot = rootCorrelation || null;
 
   // Resolve rootCorrelation: when there's a parent and no explicit root,
   // inherit the parent's rootCorrelation so audit walks see the whole
   // reply chain rooted at the originating user message.
-  if (!resolvedRoot && resolvedInReplyTo) {
+  if (!resolvedRoot && inReplyTo) {
     try {
-      const parent = await Summon.findById(resolvedInReplyTo)
+      const parent = await Summon.findById(inReplyTo)
         .select("rootCorrelation")
         .lean();
-      resolvedRoot = parent?.rootCorrelation || resolvedInReplyTo;
+      resolvedRoot = parent?.rootCorrelation || inReplyTo;
     } catch {
-      resolvedRoot = resolvedInReplyTo;
+      resolvedRoot = inReplyTo;
     }
   }
 
@@ -165,7 +150,7 @@ export async function startSummon(opts = {}) {
   if (!resolvedRoot) resolvedRoot = summonId;
 
   const ibpAddress = await computeIbpAddressForSummon({
-    askerBeingId,
+    askerBeingId:     beingIn,
     askerPosition,
     addresseeBeingId: beingOut,
     addresseePosition,
@@ -176,18 +161,18 @@ export async function startSummon(opts = {}) {
 
   try {
     const summon = await Summon.create({
-      _id: summonId,
-      beingIn: askerBeingId,
-      beingOut: beingOut || null,
+      _id:          summonId,
+      beingIn,
+      beingOut:     beingOut || null,
       ibpAddress,
-      activeRole: resolvedActiveRole,
+      activeRole,
       inboxMessageId,
-      inReplyTo: resolvedInReplyTo,
+      inReplyTo,
       rootCorrelation: resolvedRoot,
-      receivedAt: receivedAt || now,
-      summonedAt: now,
+      receivedAt:   receivedAt || now,
+      summonedAt:   now,
       startMessage: { content: safeMessage, source },
-      llmProvider: llmProvider
+      llmProvider:  llmProvider
         ? { model: llmProvider.model || null, connectionId: llmProvider.connectionId || null }
         : { model: null, connectionId: null },
     });
@@ -310,7 +295,7 @@ export async function appendToolCall(summonId, { tool, args, result, success, er
  * responder. "Active" = endMessage.time is null. Used by descriptor.js
  * to surface "this being is currently doing X."
  */
-export async function getLatestActiveChainstepForBeing(beingOut) {
+export async function getActiveSummonForBeing(beingOut) {
   if (!beingOut) return null;
   try {
     return await Summon.findOne({
@@ -323,39 +308,4 @@ export async function getLatestActiveChainstepForBeing(beingOut) {
   } catch {
     return null;
   }
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// DEPRECATED NO-OPS (orchestrator-era; retire with tree-orchestrator/swarm)
-// ─────────────────────────────────────────────────────────────────────────
-
-let _deprecationWarned = new Set();
-function warnOnce(name) {
-  if (_deprecationWarned.has(name)) return;
-  _deprecationWarned.add(name);
-  log.warn("SummonTracker",
-    `${name} is deprecated under the slim Summon shape. ` +
-    `Caller is orchestrator-era and will retire with tree-orchestrator/swarm (Slice 7).`);
-}
-
-/** @deprecated Mode switches no longer recorded — role IS the behavior. */
-export async function appendModeSwitch(/* summonId, { modeKey, reason } */) {
-  warnOnce("appendModeSwitch");
-}
-
-/** @deprecated chainIndex/sessionId removed; recursive sub-Ruler dispatch obsoletes chain steps. */
-export function trackChainStep() {
-  warnOnce("trackChainStep");
-}
-
-/** @deprecated chainIndex removed; sub-summons are normal startSummon writes with inReplyTo. */
-export async function startChainStep() {
-  warnOnce("startChainStep");
-  return null;
-}
-
-/** @deprecated aiContext/treeContext removed; lookup by being via getLatestActiveChainstepForBeing instead. */
-export async function getLatestActiveChainstep(/* nodeId, modeKey */) {
-  warnOnce("getLatestActiveChainstep");
-  return null;
 }

@@ -10,7 +10,7 @@
 // `findExecutionNode` is also retired (returns the rulership node).
 
 import Node from "../../../seed/models/node.js";
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 
 let _warned = false;
 export async function ensureExecutionNode({ scopeNodeId, core: _core } = {}) {

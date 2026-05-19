@@ -2,23 +2,24 @@
 /**
  * LLM Connection Management
  *
- * CRUD for user LLM connections. Each connection stores an encrypted API key,
- * base URL, and model name. The resolution chain in conversation.js picks
- * which connection handles each request.
+ * CRUD for per-being LLM connections. Each connection stores an
+ * encrypted API key, base URL, and model name. The resolution chain in
+ * conversation.js picks which connection handles each request.
  *
  * Security model:
  *   - API keys encrypted at rest (AES-256-CBC)
- *   - Base URLs validated against SSRF blocklist (admins exempt)
+ *   - Base URLs validated against SSRF blocklist (every connection,
+ *     no admin bypass — local LLM hosts go in `allowedLlmDomains`)
  *   - DNS resolution checked at write time AND at request time
  *   - Slot names validated to prevent MongoDB path injection
  *   - Connection IDs validated as strings before querying
  */
 
-import log from "../log.js";
+import log from "../core/log.js";
 import Being from "../models/being.js";
 import LlmConnection from "../models/llmConnection.js";
 import Node from "../models/node.js";
-import { clearUserClientCache } from "./conversation.js";
+import { clearBeingClientCache } from "./llmClient.js";
 import crypto from "crypto";
 import { getLandConfigValue } from "../landConfig.js";
 import dns from "dns/promises";
@@ -124,10 +125,13 @@ async function resolveAndValidateHost(hostname) {
 
 /**
  * Validate and sanitize a base URL. Returns the cleaned URL.
- * Non-admin users are blocked from private/internal hosts.
- * Admin users get format validation only (can use localhost for local LLMs).
+ *
+ * Admin-bypass retired 2026-05-18. The SSRF + private-host gate applies
+ * to every connection now. Local-LLM-style usage (Ollama, etc.) requires
+ * adding the host to the land's `allowedLlmDomains` config; stance
+ * authorization will eventually grant per-stance exceptions.
  */
-function validateBaseUrl(baseUrl, isAdmin) {
+function validateBaseUrl(baseUrl) {
   let parsed;
   try {
     parsed = new URL(baseUrl);
@@ -145,21 +149,19 @@ function validateBaseUrl(baseUrl, isAdmin) {
 
   const hostname = parsed.hostname.toLowerCase();
 
-  if (!isAdmin) {
-    if (BLOCKED_HOSTS.has(hostname)) {
-      throw new Error("This base URL is not allowed");
-    }
-    if (isBlockedIp(hostname)) {
-      throw new Error("Local/private network URLs are not allowed");
-    }
+  if (BLOCKED_HOSTS.has(hostname)) {
+    throw new Error("This base URL is not allowed");
+  }
+  if (isBlockedIp(hostname)) {
+    throw new Error("Local/private network URLs are not allowed");
+  }
 
-    // Operator whitelist: if set, only listed domains are allowed for non-admins
-    const allowed = getLandConfigValue("allowedLlmDomains");
-    if (Array.isArray(allowed) && allowed.length > 0) {
-      const match = allowed.some(d => hostname === d.toLowerCase() || hostname.endsWith("." + d.toLowerCase()));
-      if (!match) {
-        throw new Error(`LLM domain "${hostname}" is not in this land's allowed list. Contact your admin.`);
-      }
+  // Operator whitelist: when set, only listed domains are allowed.
+  const allowed = getLandConfigValue("allowedLlmDomains");
+  if (Array.isArray(allowed) && allowed.length > 0) {
+    const match = allowed.some(d => hostname === d.toLowerCase() || hostname.endsWith("." + d.toLowerCase()));
+    if (!match) {
+      throw new Error(`LLM domain "${hostname}" is not in this land's allowed list.`);
     }
   }
 
@@ -260,10 +262,8 @@ export function getAllRootLlmSlots() { return [...CORE_ROOT_SLOTS, ..._extRootSl
 // ─────────────────────────────────────────────────────────────────────────
 
 export async function addLlmConnection(beingId, { name, baseUrl, apiKey, model }) {
-  const being = await Being.findById(beingId).select("_id roles").lean();
+  const being = await Being.findById(beingId).select("_id").lean();
   if (!being) throw new Error("Being not found");
-
-  const isAdmin = Array.isArray(being.roles) && being.roles.includes("admin");
 
   const count = await LlmConnection.countDocuments({ beingId });
   if (count >= MAX_CONNECTIONS_PER_USER) {
@@ -273,13 +273,11 @@ export async function addLlmConnection(beingId, { name, baseUrl, apiKey, model }
   const safeName = validateName(name);
   const safeModel = validateModel(model);
   validateApiKey(apiKey, true);
-  const safeBaseUrl = validateBaseUrl(baseUrl, isAdmin);
+  const safeBaseUrl = validateBaseUrl(baseUrl);
 
-  // DNS resolution check for non-admin (SSRF protection at write time)
-  if (!isAdmin) {
-    const hostname = new URL(safeBaseUrl).hostname;
-    await resolveAndValidateHost(hostname);
-  }
+  // SSRF protection — every connection validated against the allowlist.
+  const hostname = new URL(safeBaseUrl).hostname;
+  await resolveAndValidateHost(hostname);
 
   const conn = await LlmConnection.create({
     beingId,
@@ -298,23 +296,19 @@ export async function addLlmConnection(beingId, { name, baseUrl, apiKey, model }
 }
 
 export async function updateLlmConnection(beingId, connectionId, { name, baseUrl, apiKey, model }) {
-  const being = await Being.findById(beingId).select("llmDefault metadata roles").lean();
+  const being = await Being.findById(beingId).select("llmDefault metadata").lean();
   if (!being) throw new Error("Being not found");
 
   const safeConnId = validateConnectionId(connectionId);
   const existing = await LlmConnection.findOne({ _id: safeConnId, beingId });
   if (!existing) throw new Error("Connection not found");
 
-  const isAdmin = Array.isArray(being.roles) && being.roles.includes("admin");
-
   const update = {};
 
   if (baseUrl !== undefined) {
-    const safeBaseUrl = validateBaseUrl(baseUrl, isAdmin);
-    if (!isAdmin) {
-      const hostname = new URL(safeBaseUrl).hostname;
-      await resolveAndValidateHost(hostname);
-    }
+    const safeBaseUrl = validateBaseUrl(baseUrl);
+    const hostname = new URL(safeBaseUrl).hostname;
+    await resolveAndValidateHost(hostname);
     update.baseUrl = safeBaseUrl;
   }
 
@@ -342,10 +336,10 @@ export async function updateLlmConnection(beingId, connectionId, { name, baseUrl
   );
 
   // Bust cache if this connection is currently assigned
-  const userLlmMeta = user.metadata instanceof Map ? user.metadata.get("userLlm") : user.metadata?.userLlm;
+  const userLlmMeta = being.metadata instanceof Map ? being.metadata.get("userLlm") : being.metadata?.userLlm;
   const userSlots = userLlmMeta?.slots || {};
-  if (user.llmDefault === connectionId || Object.values(userSlots).includes(connectionId)) {
-    clearUserClientCache(beingId);
+  if (being.llmDefault === connectionId || Object.values(userSlots).includes(connectionId)) {
+    clearBeingClientCache(beingId);
   }
 
   return {
@@ -361,23 +355,23 @@ export async function deleteLlmConnection(beingId, connectionId) {
   const conn = await LlmConnection.findOneAndDelete({ _id: safeConnId, beingId });
   if (!conn) throw new Error("Connection not found");
 
-  // Clear user assignments pointing to deleted connection
-  const user = await Being.findById(beingId).select("llmDefault metadata").lean();
-  if (user) {
+  // Clear being assignments pointing to the deleted connection.
+  const being = await Being.findById(beingId).select("llmDefault metadata").lean();
+  if (being) {
     const updates = {};
-    if (user.llmDefault === connectionId) {
+    if (being.llmDefault === connectionId) {
       updates.llmDefault = null;
     }
-    const userLlmMeta = user.metadata instanceof Map ? user.metadata.get("userLlm") : user.metadata?.userLlm;
-    const userSlots = userLlmMeta?.slots || {};
-    for (const [s, val] of Object.entries(userSlots)) {
+    const beingLlmMeta = being.metadata instanceof Map ? being.metadata.get("userLlm") : being.metadata?.userLlm;
+    const beingSlots = beingLlmMeta?.slots || {};
+    for (const [s, val] of Object.entries(beingSlots)) {
       if (val === connectionId) {
         updates[`metadata.userLlm.slots.${s}`] = null;
       }
     }
     if (Object.keys(updates).length > 0) {
       await Being.findByIdAndUpdate(beingId, { $set: updates });
-      clearUserClientCache(beingId);
+      clearBeingClientCache(beingId);
     }
   }
 
@@ -397,13 +391,6 @@ export async function deleteLlmConnection(beingId, connectionId) {
   }
 
   return { removed: true };
-}
-
-export async function getConnectionsForUser(beingId) {
-  return LlmConnection.find({ beingId })
-    .select("_id name baseUrl model lastUsedAt createdAt")
-    .sort({ createdAt: -1 })
-    .lean();
 }
 
 export async function assignConnection(beingId, slot, connectionId) {
@@ -431,7 +418,7 @@ export async function assignConnection(beingId, slot, connectionId) {
   }
 
   // Bust cache so the new assignment takes effect
-  clearUserClientCache(beingId);
+  clearBeingClientCache(beingId);
 
   return { slot, connectionId: safeConnId };
 }

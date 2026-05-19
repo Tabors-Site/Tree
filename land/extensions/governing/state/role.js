@@ -41,7 +41,7 @@
 //   }
 
 import Node from "../../../seed/models/node.js";
-import log  from "../../../seed/log.js";
+import log  from "../../../seed/core/log.js";
 
 export const NS = "governing";
 
@@ -133,7 +133,7 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, parentBeing
   // createBeingWithHome handles both the parentBeingId stamp on the
   // new being AND the $addToSet into the parent's children list, so
   // no separate link write is needed here.
-  const { createBeingWithHome } = await import("../../../seed/auth.js");
+  const { createBeingWithHome } = await import("../../../seed/core/auth.js");
   const rulerCreated = await createBeingWithHome({
     operatingMode: "ai",
     role:          "ruler",
@@ -197,7 +197,7 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, parentBeing
     `+ spawned ${INNER_ROLES.length} inner beings`);
 
   try {
-    const { hooks } = await import("../../../seed/hooks.js");
+    const { hooks } = await import("../../../seed/core/hooks.js");
     hooks.run("governing:rulerPromoted", {
       nodeId: String(nodeId),
       data: { ...data, beings: { ruler: rulerBeingId, ...innerBeings } },

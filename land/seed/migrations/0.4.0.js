@@ -36,7 +36,7 @@
  */
 
 import mongoose from "mongoose";
-import log from "../log.js";
+import log from "../core/log.js";
 
 export default async function migrate() {
   const db = mongoose.connection.db;

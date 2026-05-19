@@ -4,15 +4,15 @@ import http from "http";
 import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
 
-import registerURLRoutes from "./routes/handler.js";
-import { initWebSocketServer } from "./seed/ws/websocket.js";
-import { initIBPHttp, initIBPWS } from "./ibp/index.js";
-import { sendOk, sendError, ERR } from "./seed/protocol.js";
+import registerURLRoutes from "./transports/http/handler.js";
+import { initWebSocketServer } from "./transports/ws/websocket.js";
+import { initIBPHttp, initIBPWS } from "./protocols/ibp/index.js";
+import { sendOk, sendError, ERR } from "./seed/core/protocol.js";
 import { getExtension } from "./extensions/loader.js";
-import securityHeaders from "./seed/middleware/securityHeaders.js";
+import securityHeaders from "./transports/http/middleware/securityHeaders.js";
 import { onListen } from "./startup.js";
-import { getLandUrl } from "./canopy/identity.js";
-import log from "./seed/log.js";
+import { getLandUrl } from "./protocols/canopy/identity.js";
+import log from "./seed/core/log.js";
 
 function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {
   const fn = getExtension("html-rendering")?.exports?.notFoundPage;
@@ -65,7 +65,7 @@ function corsOriginCheck(origin, cb) {
   if (!origin) return cb(null, true);
   // Configured allow-list.
   if (corsOrigins.includes(origin)) return cb(null, true);
-  // Chrome extensions (parity with the WS CORS in seed/ws/websocket.js).
+  // Chrome extensions (parity with the WS CORS in transports/ws/websocket.js).
   if (origin.startsWith("chrome-extension://")) return cb(null, true);
   // Dev mode: any localhost origin (so the Portal at localhost:5175,
   // a separate dev tool, etc. can all talk to a local Land at 3000).
@@ -145,9 +145,9 @@ async function shutdown(signal) {
 
   // Close all MCP clients (these hold connections open)
   try {
-    const { mcpClients, closeMCPClient } = await import("./seed/ws/mcp.js");
-    for (const [aiSessionKey] of mcpClients) {
-      try { closeMCPClient(aiSessionKey); } catch {}
+    const { mcpClients, closeMCPClient } = await import("./transports/ws/mcp.js");
+    for (const [cacheKey] of mcpClients) {
+      try { closeMCPClient(cacheKey); } catch {}
     }
   } catch {}
 

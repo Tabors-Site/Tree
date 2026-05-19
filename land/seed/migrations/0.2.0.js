@@ -20,7 +20,7 @@
  * After cleanup the operator can re-run boot and the index will create
  * successfully.
  */
-import log from "../log.js";
+import log from "../core/log.js";
 import Node from "../models/node.js";
 
 export default async function migrate() {

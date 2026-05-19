@@ -3,9 +3,9 @@
 // Idempotent: runs every boot but only creates what's missing.
 // This is the foundation. If this fails, nothing works.
 
-import log from "./log.js";
+import log from "./core/log.js";
 import Node from "./models/node.js";
-import { NODE_STATUS, SYSTEM_ROLE, SYSTEM_OWNER } from "./protocol.js";
+import { SYSTEM_ROLE, SYSTEM_OWNER } from "./core/protocol.js";
 
 let landRootCache = null;
 
@@ -32,6 +32,18 @@ const SYSTEM_NODES = [
   { name: ".peers", systemRole: SYSTEM_ROLE.PEERS },
   { name: ".extensions", systemRole: SYSTEM_ROLE.EXTENSIONS },
   { name: ".flow", systemRole: SYSTEM_ROLE.FLOW },
+  // Registry-mirror system nodes. Children are added/removed when
+  // tools / roles / DO operations register or unregister. SEE on
+  // `<land>/.tools` etc. returns the live registry via the standard
+  // descriptor pipeline.
+  { name: ".tools",      systemRole: SYSTEM_ROLE.TOOLS },
+  { name: ".roles",      systemRole: SYSTEM_ROLE.ROLES },
+  { name: ".operations", systemRole: SYSTEM_ROLE.OPERATIONS },
+  // The .source self-tree. Children are filesystem-origin artifacts in
+  // a recursive tree mirroring land/. Populated by seed/source.js at
+  // boot. Read-only: DO writes against artifacts under this node reject
+  // with ORIGIN_READ_ONLY.
+  { name: ".source",     systemRole: SYSTEM_ROLE.SOURCE },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -59,7 +71,6 @@ export async function ensureLandRoot() {
       systemRole: SYSTEM_ROLE.LAND_ROOT,
       children: [],
       contributors: [],
-      status: NODE_STATUS.ACTIVE,
     });
     await landRoot.save();
     log.info("Land", `Created land root: ${landRoot._id}`);
@@ -79,7 +90,6 @@ export async function ensureLandRoot() {
         systemRole: def.systemRole,
         children: [],
         contributors: [],
-        status: NODE_STATUS.ACTIVE,
         ...(def.buildMetadata ? { metadata: def.buildMetadata() } : {}),
       });
       try {
@@ -200,13 +210,32 @@ export async function syncExtensionsToTree(manifests) {
   for (const manifest of manifests) {
     currentNames.add(manifest.name);
 
-    const metadata = { version: manifest.version || "0.0.0" };
-    if (manifest.description) metadata.description = manifest.description;
-    if (manifest.scope === "confined") metadata.scope = "confined";
+    // Substrate is the source of truth for "what's installed here":
+    // mirror enough manifest fields so SEE on `<land>/.extensions/<name>`
+    // returns the extension's full surface (capabilities, deps, version,
+    // scope flags). Clients introspect via standard ibp:see; no legacy
+    // /land/extensions endpoint needed. See [[project_meta_positions]].
+    const extensionMeta = {
+      version:     manifest.version     || "0.0.0",
+      description: manifest.description || null,
+      type:        manifest.type        || null,
+      scope:       manifest.scope === "confined" ? "confined" : "open",
+      needs:       manifest.needs       || {},
+      optional:    manifest.optional    || {},
+      provides:    {
+        routes:        !!manifest.provides?.routes,
+        tools:         !!manifest.provides?.tools,
+        jobs:          !!manifest.provides?.jobs,
+        models:        Object.keys(manifest.provides?.models        || {}),
+        energyActions: Object.keys(manifest.provides?.energyActions || {}),
+        sessionTypes:  Object.keys(manifest.provides?.sessionTypes  || {}),
+      },
+    };
+    const metadata = new Map([["extension", extensionMeta]]);
 
     if (existingByName.has(manifest.name)) {
       await Node.findByIdAndUpdate(existingByName.get(manifest.name), {
-        $set: { type: "resource", status: NODE_STATUS.ACTIVE, metadata },
+        $set: { type: "resource", metadata },
       });
     } else {
       try {
@@ -214,15 +243,11 @@ export async function syncExtensionsToTree(manifests) {
           name: manifest.name,
           parent: extNode._id,
           type: "resource",
-          status: NODE_STATUS.ACTIVE,
           children: [],
           contributors: [],
           metadata,
         });
         await child.save();
-        // Use atomic $addToSet instead of in-memory push + single save.
-        // If this save fails, the child exists but isn't in children[].
-        // The integrity check repairs it. No in-memory corruption.
         await Node.findByIdAndUpdate(extNode._id, { $addToSet: { children: child._id } });
         childrenChanged = true;
       } catch (err) {
@@ -231,11 +256,12 @@ export async function syncExtensionsToTree(manifests) {
     }
   }
 
-  // Mark unloaded extensions as trimmed
+  // Unloaded extensions: mark via extension-owned metadata namespace
+  // (kernel doesn't carry a universal "trimmed" status anymore).
   for (const [name, nodeId] of existingByName) {
     if (!currentNames.has(name)) {
       await Node.findByIdAndUpdate(nodeId, {
-        $set: { status: NODE_STATUS.TRIMMED },
+        $set: { "metadata.extension.loaded": false },
       });
     }
   }

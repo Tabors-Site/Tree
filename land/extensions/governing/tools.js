@@ -17,7 +17,7 @@
 
 import { z } from "zod";
 import Node from "../../seed/models/node.js";
-import log from "../../seed/log.js";
+import log from "../../seed/core/log.js";
 import {
   WORKER_TYPES,
   DEFAULT_WORKER_TYPE,

@@ -15,7 +15,7 @@
 // is single-level; the dashboard wants the recursive tree on one
 // page).
 
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 import Node from "../../../seed/models/node.js";
 import { walkRulers, readRole } from "./role.js";
 import { buildRulerSnapshot } from "./rulerSnapshot.js";

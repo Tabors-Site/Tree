@@ -10,11 +10,11 @@
 //   GET  /api/v1/root/:rootId/governance/stream       SSE live-update stream
 
 import express from "express";
-import { sendOk, sendError, ERR } from "../../seed/protocol.js";
-import authenticate from "../../seed/middleware/authenticate.js";
+import { sendOk, sendError, ERR } from "../../seed/core/protocol.js";
+import authenticate from "../../transports/http/middleware/authenticate.js";
 import { getExtension } from "../loader.js";
 import Node from "../../seed/models/node.js";
-import log from "../../seed/log.js";
+import log from "../../seed/core/log.js";
 import { readPlan } from "./state/planNode.js";
 import { renderPlanPanel } from "./pages/planPanel.js";
 import { renderDashboardPage } from "./pages/dashboard.js";

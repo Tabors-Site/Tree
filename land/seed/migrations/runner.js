@@ -21,8 +21,8 @@
  *   - Discovery errors surfaced (not swallowed)
  */
 
-import log from "../log.js";
-import { SEED_VERSION } from "../version.js";
+import log from "../core/log.js";
+import { SEED_VERSION } from "../core/version.js";
 import { getLandConfigValue, setLandConfigValue } from "../landConfig.js";
 import fs from "fs";
 import path from "path";

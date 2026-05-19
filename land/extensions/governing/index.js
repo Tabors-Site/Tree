@@ -14,7 +14,7 @@
 // Pass 1; the LLM-driven retry-vs-escalate / court-convening logic
 // lands in Pass 2.
 
-import log from "../../seed/log.js";
+import log from "../../seed/core/log.js";
 // Single-source role specs. Each role file carries BOTH dispatch
 // (summon, honoredIntents, …) AND LLM behavior (buildSystemPrompt,
 // toolNames, permissions, …) in one frozen spec. Roles are the unit
@@ -25,7 +25,7 @@ import { plannerRole } from "./roles/plannerRole.js";
 import { contractorRole } from "./roles/contractorRole.js";
 import { foremanRole } from "./roles/foremanRole.js";
 import { allWorkerRoles } from "./roles/workerRoles.js";
-import { registerRole } from "../../ibp/roles/registry.js";
+import { registerRole } from "../../protocols/ibp/roles/registry.js";
 import {
   WORKER_TYPES,
   DEFAULT_WORKER_TYPE,
@@ -399,7 +399,7 @@ export async function init(core) {
             } } }),
           },
         ];
-        const { createBeingWithHome } = await import("../../seed/auth.js");
+        const { createBeingWithHome } = await import("../../seed/core/auth.js");
         const counts = {};
         for (const { nodeType, beingRole, permissions } of BACKFILLS) {
           const nodes = await Node.find({ "metadata.governing.role": nodeType })

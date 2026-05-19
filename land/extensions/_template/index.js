@@ -1,4 +1,4 @@
-import log from "../../seed/log.js";
+import log from "../../seed/core/log.js";
 
 export async function init(core) {
   // Logging: use log.info/verbose/debug/warn/error instead of console.log
@@ -47,7 +47,7 @@ export async function init(core) {
     // orchestrator, // Replace the conversation orchestrator for a bigMode:
     // orchestrator: {
     //   bigMode: "tree",  // which bigMode to intercept
-    //   async handle({ aiSessionKey, message, socket, beingId, sessionId, ...ctx }) {
+    //   async handle({ clientSessionId, message, socket, beingId, sessionId, ...ctx }) {
     //     // Full control over chat/place/query flow
     //     // Use core.conversation.processMessage() for LLM calls
     //   },

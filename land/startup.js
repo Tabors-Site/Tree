@@ -1,23 +1,23 @@
-import mongoose from "./seed/dbConfig.js";
-import { getLandIdentity, getLandUrl } from "./canopy/identity.js";
+import mongoose from "./seed/core/dbConfig.js";
+import { getLandIdentity, getLandUrl } from "./protocols/canopy/identity.js";
 import { ensureLandRoot } from "./seed/landRoot.js";
 import { initLandConfig, getLandConfigValue } from "./seed/landConfig.js";
 import { startExtensionJobs, getLoadedManifests, runExtensionMigrations, getLoadedExtensionNames, getBootReport } from "./extensions/loader.js";
 import { startUploadCleanup } from "./seed/tree/uploadCleanup.js";
 import { startRetentionJob } from "./seed/tree/dataRetention.js";
 import { getBlockedExtensionsAtNode } from "./seed/tree/extensionScope.js";
-import { hooks } from "./seed/hooks.js";
+import { hooks } from "./seed/core/hooks.js";
 import { syncExtensionsToTree } from "./seed/landRoot.js";
-import { registerCanopyAuth } from "./canopy/auth.js";
-import { startHeartbeatJob } from "./canopy/peers.js";
-import { startOutboxJob, startCanopyRetentionJob } from "./canopy/events.js";
-import { startHorizonRegistration } from "./canopy/horizon.js";
+import { registerCanopyAuth } from "./protocols/canopy/auth.js";
+import { startHeartbeatJob } from "./protocols/canopy/peers.js";
+import { startOutboxJob, startCanopyRetentionJob } from "./protocols/canopy/events.js";
+import { startHorizonRegistration } from "./protocols/canopy/horizon.js";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import log from "./seed/log.js";
-import { SYSTEM_ROLE } from "./seed/protocol.js";
+import log from "./seed/core/log.js";
+import { SYSTEM_ROLE } from "./seed/core/protocol.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -39,10 +39,18 @@ export function onListen() {
     await ensureLandRoot();
     await initLandConfig();
 
+    // Mirror the land/ source tree into substrate under `.source`.
+    // Primes the source-node id cache for the read-only DO gate, then
+    // kicks off the disk walk detached so a multi-thousand-file scan
+    // does not block boot. Subsequent boots reconcile incrementally.
+    // See [[project_seed_source_system_node]].
+    const { ensureSourceTree } = await import("./seed/core/source.js");
+    await ensureSourceTree();
+
     // Seed default stance permissions (arrival, owner) and BE config flags
     // on the land root if not already present. Idempotent; does not
     // overwrite operator configuration.
-    const { seedDefaultStancePermissions } = await import("./ibp/authorize.js");
+    const { seedDefaultStancePermissions } = await import("./protocols/ibp/authorize.js");
     await seedDefaultStancePermissions();
 
     // Run seed migrations (after config is loaded, before extensions)
@@ -53,7 +61,7 @@ export function onListen() {
     // exist as real Being rows at the land root. Idempotent — runs
     // every boot, creates only what's missing. Must come after the
     // 0.3.0 migration so the Being model is populated before we add to it.
-    const { ensureSystemBeings } = await import("./seed/systemBeings.js");
+    const { ensureSystemBeings } = await import("./seed/core/systemBeings.js");
     const { getLandRootId } = await import("./seed/landRoot.js");
     await ensureSystemBeings(getLandRootId());
 
@@ -64,7 +72,7 @@ export function onListen() {
     // Apply land config to kernel settings
     try {
       const { getLandConfigValue } = await import("./seed/landConfig.js");
-      const { setKernelConfig } = await import("./seed/llm/conversation.js");
+      const { setKernelConfig } = await import("./seed/llm/runChat.js");
 
       // Kernel config keys: read from land .config node, apply to runtime
       const KERNEL_CONFIG = {
@@ -80,13 +88,13 @@ export function onListen() {
         staleConversationTimeout:{ setter: setKernelConfig },
         treeSummaryMaxDepth:     { load: () => import("./seed/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(v, null)) },
         treeSummaryMaxNodes:     { load: () => import("./seed/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(null, v)) },
-        carryMessages:           { load: () => import("./seed/llm/conversation.js").then(m => m.setCarryMessages) },
-        maxRegisteredTools:      { load: () => import("./seed/tools.js").then(m => m.setMaxTools) },
-        sessionTTL:              { load: () => import("./seed/ws/sessionRegistry.js").then(m => (v) => m.setSessionTTL(v * 1000)) },
-        staleSessionTimeout:     { load: () => import("./seed/ws/sessionRegistry.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
-        maxSessions:             { load: () => import("./seed/ws/sessionRegistry.js").then(m => m.setMaxSessions) },
-        llmClientCacheTtl:       { load: () => import("./seed/llm/conversation.js").then(m => (v) => m.setClientCacheTtl(v * 1000)) },
-        canopyProxyCacheTtl:     { load: () => import("./seed/llm/conversation.js").then(m => (v) => m.setProxyCacheTtl(v * 1000)) },
+        carryMessages:           { load: () => import("./seed/llm/runChat.js").then(m => m.setCarryMessages) },
+        maxRegisteredTools:      { load: () => import("./seed/core/tools.js").then(m => m.setMaxTools) },
+        sessionTTL:              { load: () => import("./transports/ws/sessionRegistry.js").then(m => (v) => m.setSessionTTL(v * 1000)) },
+        staleSessionTimeout:     { load: () => import("./transports/ws/sessionRegistry.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
+        maxSessions:             { load: () => import("./transports/ws/sessionRegistry.js").then(m => m.setMaxSessions) },
+        llmClientCacheTtl:       { load: () => import("./seed/llm/llmClient.js").then(m => (v) => m.setClientCacheTtl(v * 1000)) },
+        canopyProxyCacheTtl:     { load: () => import("./seed/llm/llmClient.js").then(m => (v) => m.setProxyCacheTtl(v * 1000)) },
         maxConnectionsPerUser:   { load: () => import("./seed/llm/connections.js").then(m => m.setMaxConnectionsPerUser) },
       };
 
@@ -104,12 +112,6 @@ export function onListen() {
           log.warn("Land", `Config "${key}" failed: ${e.message}`);
         }
       }
-    } catch {}
-
-    // Initialize orchestrator lock config from land config
-    try {
-      const { initLockConfig } = await import("./seed/orchestrators/locks.js");
-      initLockConfig();
     } catch {}
 
     // Ensure .extensions system node exists (for lands created before this feature)
@@ -202,13 +204,37 @@ export function onListen() {
 
     log.verbose("Land", "Background jobs started (includes daily data retention)");
 
-    const { authStrategies } = await import("./seed/services.js");
+    const { authStrategies } = await import("./seed/core/services.js");
     registerCanopyAuth(authStrategies);
     startHeartbeatJob();
     startOutboxJob();
     startCanopyRetentionJob();
     startHorizonRegistration();
     log.verbose("Canopy", "Peering, outbox, Horizon, retention ready");
+
+    // Sync runtime registries into their `.tools`, `.roles`,
+    // `.operations` mirror nodes. SEE on those addresses now reflects
+    // the live registry via the standard descriptor pipeline. See
+    // [[project_meta_positions]]. Detached so a sync failure doesn't
+    // block boot; logged inside the helpers.
+    (async () => {
+      try {
+        const { syncToolsToSubstrate }      = await import("./seed/core/tools.js");
+        const { syncRolesToSubstrate }      = await import("./protocols/ibp/roles/registry.js");
+        const { syncOperationsToSubstrate } = await import("./seed/core/operations.js");
+        const [t, r, o] = await Promise.all([
+          syncToolsToSubstrate(),
+          syncRolesToSubstrate(),
+          syncOperationsToSubstrate(),
+        ]);
+        log.info("RegistryMirror",
+          `synced: tools(${t.created}+${t.kept}-${t.removed}) ` +
+          `roles(${r.created}+${r.kept}-${r.removed}) ` +
+          `operations(${o.created}+${o.kept}-${o.removed})`);
+      } catch (err) {
+        log.warn("RegistryMirror", `registry sync failed: ${err.message}`);
+      }
+    })();
 
     hooks.run("afterBoot", {}).catch(() => {});
     printReady();

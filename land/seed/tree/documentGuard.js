@@ -15,8 +15,8 @@
  */
 
 import { getLandConfigValue } from "../landConfig.js";
-import { hooks } from "../hooks.js";
-import log from "../log.js";
+import { hooks } from "../core/hooks.js";
+import log from "../core/log.js";
 
 const DEFAULT_MAX_BYTES = 14 * 1024 * 1024; // 14MB
 const PRESSURE_THRESHOLD = 0.8; // 80%

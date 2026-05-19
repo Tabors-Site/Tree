@@ -9,7 +9,7 @@
 // Idempotent: `promoteToRuler` no-ops on already-promoted nodes; the
 // coder-worker creation checks for an existing entry before spawning.
 
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 
 export default {
   description:
@@ -60,7 +60,7 @@ export default {
     //    registered in metadata.beings.
     let coderBeingId = beingsMeta?.coder?.beingId || null;
     if (!coderBeingId) {
-      const { createBeingWithHome } = await import("../../../seed/auth.js");
+      const { createBeingWithHome } = await import("../../../seed/core/auth.js");
       const { being: coder } = await createBeingWithHome({
         operatingMode: "ai",
         role:          "coder",

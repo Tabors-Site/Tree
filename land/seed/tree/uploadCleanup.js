@@ -17,10 +17,10 @@
 import fs from "fs/promises";
 import fsSync from "fs";
 import path from "path";
-import log from "../log.js";
+import log from "../core/log.js";
 import Artifact from "../models/artifact.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { ARTIFACT_ORIGIN } from "../protocol.js";
+import { ARTIFACT_ORIGIN } from "../core/protocol.js";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);

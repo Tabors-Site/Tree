@@ -32,7 +32,7 @@
 // preserving the audit chain.
 
 import Node from "../../../seed/models/node.js";
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 import { ensureExecutionNode, findExecutionNode } from "./executionNode.js";
 
 const NS = "governing";
@@ -364,7 +364,7 @@ export async function appendExecutionApproval({
   // Fire the ratification hook for Pass 2 court listeners and the
   // dashboard. Mirrors governing:planRatified / contractRatified.
   try {
-    const { hooks } = await import("../../../seed/hooks.js");
+    const { hooks } = await import("../../../seed/core/hooks.js");
     hooks.run("governing:executionRatified", {
       rulerNodeId: String(rulerNodeId),
       executionRef: String(executionRef),
@@ -614,7 +614,7 @@ export async function freezeExecutionRecord({
     const hookName = hookMap[nextStatus];
     if (hookName) {
       try {
-        const { hooks } = await import("../../../seed/hooks.js");
+        const { hooks } = await import("../../../seed/core/hooks.js");
         hooks.run(hookName, {
           recordNodeId: String(recordNodeId),
           priorStatus,

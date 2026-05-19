@@ -28,7 +28,7 @@
 
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { ARTIFACT_ORIGIN } from "../protocol.js";
+import { ARTIFACT_ORIGIN } from "../core/protocol.js";
 
 const ArtifactSchema = new mongoose.Schema({
   _id: {

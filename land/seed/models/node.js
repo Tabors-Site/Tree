@@ -1,7 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { SYSTEM_ROLE, DELETED } from "../protocol.js";
+import { SYSTEM_ROLE, DELETED } from "../core/protocol.js";
 
 const NodeSchema = new mongoose.Schema({
   _id: {

@@ -33,10 +33,11 @@ const BeingSchema = new mongoose.Schema({
   _id: { type: String, required: true, default: uuidv4 },
 
   // Addressable identifier inside this land. Drives the @qualifier in
-  // stance addresses (e.g. treeos.ai/<path>@<username>). Unique per
+  // stance addresses (e.g. treeos.ai/<path>@<name>). Unique per
   // land at the kernel level. Federation crosses lands using
-  // <username>@<landDomain> on top of this.
-  username: { type: String, required: true, unique: true },
+  // <name>@<landDomain> on top of this. Matches Node.name and
+  // Artifact.name — every primitive uses `name`.
+  name: { type: String, required: true, unique: true },
 
   // How this being is operated.
   //   "human" — a real person, authenticated by credentials.

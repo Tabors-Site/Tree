@@ -22,7 +22,7 @@
 // having to reason about a mutable map.
 
 import Node from "../../../seed/models/node.js";
-import log from "../../../seed/log.js";
+import log from "../../../seed/core/log.js";
 import { validateScopeAuthority } from "./lca.js";
 import { ensureContractsNode } from "./contractsNode.js";
 
@@ -423,7 +423,7 @@ export async function setContracts({
 
   // Fire ratification hook.
   try {
-    const { hooks } = await import("../../../seed/hooks.js");
+    const { hooks } = await import("../../../seed/core/hooks.js");
     hooks.run("governing:contractRatified", {
       rulerNodeId: String(scopeNodeId),
       contractsNodeId: String(contractsNode._id),

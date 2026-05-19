@@ -25,7 +25,7 @@
  * maxDocumentSizeBytes (default 14MB). Writes exceeding the limit are rejected.
  */
 
-import { hooks } from "../hooks.js";
+import { hooks } from "../core/hooks.js";
 import { guardMetadataWrite } from "./documentGuard.js";
 import Artifact from "../models/artifact.js";
 import { getLandConfigValue } from "../landConfig.js";

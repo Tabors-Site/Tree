@@ -4,8 +4,8 @@
 // and exposes its seed via manifest.provides.seeds. The seed plants a
 // governing-coder rulership at the target node.
 
-import log from "../../seed/log.js";
-import { registerRole } from "../../ibp/roles/registry.js";
+import log from "../../seed/core/log.js";
+import { registerRole } from "../../protocols/ibp/roles/registry.js";
 import { coderRole } from "./roles/coderRole.js";
 
 export async function init(_core) {

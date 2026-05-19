@@ -15,8 +15,8 @@
 // LLM behavior (prompt, tools, modeKey, …) — see memory
 // `role-subsumes-mode`.
 
-import log from "../../../seed/log.js";
-import { runChat } from "../../../seed/llm/conversation.js";
+import log from "../../../seed/core/log.js";
+import { runChat } from "../../../seed/llm/runChat.js";
 import { emitReplyToAsker } from "./_shared.js";
 
 const PLANNER_PROMPT_BODY = `You are a Planner. The Ruler at this scope has
@@ -620,7 +620,7 @@ export const plannerRole = Object.freeze({
       await emitReplyToAsker({
         fromNodeId:      planNodeId,
         fromBeing:       ctx.toBeing,
-        fromRoleName:    ctx.toBeing?.username || "planner",
+        fromRoleName:    ctx.toBeing?.name || "planner",
         originalMessage: message,
         exitText:        `Planner error: ${err.message}`,
       });
@@ -638,7 +638,7 @@ export const plannerRole = Object.freeze({
     await emitReplyToAsker({
       fromNodeId:      planNodeId,
       fromBeing:       ctx.toBeing,
-      fromRoleName:    ctx.toBeing?.username || "planner",
+      fromRoleName:    ctx.toBeing?.name || "planner",
       originalMessage: message,
       exitText,
     });
