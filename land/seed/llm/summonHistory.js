@@ -1,46 +1,55 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
+//
+// summonHistory.js — read surface for Summon records on the slim shape.
+//
+// Conversation grouping under the slim shape:
+//   sessionId           → rootCorrelation        (the chain root id)
+//   parentSummonId      → inReplyTo              (reply graph)
+//   rootSummonId        → rootCorrelation        (chain root)
+//   startMessage.time   → summonedAt             (wake time)
+//   chainIndex          → ordering by summonedAt
+//   aiContext.mode      → activeRole
+//   treeContext.targetNodeId → not on Summon; readers walk substrate
+//   toolCalls[]         → Did.find({ summonId, action: "tool-call" })
+//
+// Existing API surface preserved (getSummons/getNodeSummons/getSummonChain/
+// getSummonsByIbpAddress/getIbpAddressesForBeing) so callers don't change.
+// Internally "session" now means "chain root" — a rootCorrelation groups
+// every Summon in one reply tree.
 import log from "../log.js";
 import Summon from "../models/summon.js";
 import Did from "../models/did.js";
 import { getDescendantIds } from "../tree/treeFetch.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { canonicalIbpAddress, parseIbpAddress, ibpAddressIncludes } from "./ibpAddress.js";
+import { canonicalIbpAddress, parseIbpAddress } from "./ibpAddress.js";
 
 // ─────────────────────────────────────────────────────────────────────────
-// LIMITS (configurable via land config, read at use time)
+// LIMITS
 // ─────────────────────────────────────────────────────────────────────────
 
-function MAX_SESSION_LIMIT() { return Math.max(1, Math.min(Number(getLandConfigValue("summonHistoryMaxSessions")) || 50, 500)); }
-function MAX_CHATS_PER_SESSION() { return Math.max(1, Math.min(Number(getLandConfigValue("summonHistoryMaxPerSession")) || 200, 2000)); }
-function MAX_DESCENDANT_IDS() { return Math.max(10, Math.min(Number(getLandConfigValue("summonHistoryMaxDescendantIds")) || 500, 10000)); }
+function MAX_SESSION_LIMIT()       { return Math.max(1, Math.min(Number(getLandConfigValue("summonHistoryMaxSessions")) || 50, 500)); }
+function MAX_CHATS_PER_SESSION()   { return Math.max(1, Math.min(Number(getLandConfigValue("summonHistoryMaxPerSession")) || 200, 2000)); }
+function MAX_DESCENDANT_IDS()      { return Math.max(10, Math.min(Number(getLandConfigValue("summonHistoryMaxDescendantIds")) || 500, 10000)); }
 function MAX_CONTRIBUTIONS_PER_QUERY() { return Math.max(100, Math.min(Number(getLandConfigValue("summonHistoryMaxDids")) || 5000, 50000)); }
+function MAX_CHATS_PER_PORTAL_ADDRESS() { return Math.max(20, Math.min(Number(getLandConfigValue("summonHistoryMaxSummonsPerIbpAddress")) || 500, 5000)); }
+function MAX_PORTAL_ADDRESSES_PER_BEING() { return Math.max(10, Math.min(Number(getLandConfigValue("summonHistoryMaxIbpAddressesPerBeing")) || 200, 2000)); }
 
 // ─────────────────────────────────────────────────────────────────────────
 // SHARED HELPERS
 // ─────────────────────────────────────────────────────────────────────────
 
-/**
- * Validate and clamp sessionLimit.
- */
 function clampSessionLimit(sessionLimit) {
   const n = Number(sessionLimit);
   if (!n || n <= 0) return 10;
   return Math.min(n, MAX_SESSION_LIMIT());
 }
 
-/**
- * Validate a date string. Returns a Date or null if invalid.
- */
 function parseDate(value) {
   if (!value) return null;
   const d = new Date(value);
-  if (isNaN(d.getTime())) return null;
-  return d;
+  return isNaN(d.getTime()) ? null : d;
 }
 
-/**
- * Build a time range filter for startMessage.time.
- */
 function buildTimeFilter(startDate, endDate) {
   const start = parseDate(startDate);
   const end = parseDate(endDate);
@@ -52,107 +61,87 @@ function buildTimeFilter(startDate, endDate) {
 }
 
 /**
- * Find the N most recent distinct session IDs matching a query.
+ * Find the N most-recent distinct rootCorrelations matching a query.
+ * A rootCorrelation groups every Summon in one reply tree — the new
+ * "session" for grouping purposes.
  */
-async function findRecentSessionIds(matchQuery, limit) {
+async function findRecentRootCorrelations(matchQuery, limit) {
   return Summon.aggregate([
     { $match: matchQuery },
-    { $sort: { "startMessage.time": -1 } },
-    { $group: { _id: "$sessionId", latestTime: { $first: "$startMessage.time" } } },
+    { $sort: { summonedAt: -1 } },
+    { $group: { _id: "$rootCorrelation", latestTime: { $first: "$summonedAt" } } },
     { $sort: { latestTime: -1 } },
     { $limit: limit },
     { $project: { _id: 1 } },
-  ]).then(docs => docs.map(d => d._id));
+  ]).then((docs) => docs.map((d) => d._id).filter(Boolean));
 }
 
 /**
- * Fetch chats for a list of session IDs with populates.
- * Caps per-session results to MAX_CHATS_PER_SESSION.
+ * Fetch Summons under a list of rootCorrelations.
+ * Caps per-root results to MAX_CHATS_PER_SESSION.
  */
-async function fetchChatsForSessions(sessionIds, extraMatch = {}, populateUser = false) {
-  const query = {
-    sessionId: { $in: sessionIds },
-    ...extraMatch,
-  };
-
+async function fetchSummonsForRoots(roots, extraMatch = {}, populateUser = false) {
+  const query = { rootCorrelation: { $in: roots }, ...extraMatch };
   const q = Summon.find(query);
-
-  if (populateUser) {
-    q.populate({ path: "beingIn", select: "username", model: "Being" });
-  }
-
-  // Lean populates: only fetch the fields we need from references.
-  // Skip the contributions populate entirely. We fetch contributions
-  // directly by summonId below, which is faster and more accurate.
-  q.populate({ path: "treeContext.targetNodeId", select: "name", model: "Node" });
+  if (populateUser) q.populate({ path: "beingIn", select: "username", model: "Being" });
   q.populate({ path: "llmProvider.connectionId", select: "name model", model: "LlmConnection" });
-  q.sort({ "startMessage.time": -1 });
-
-  // Hard ceiling: MAX_CHATS_PER_SESSION() * number of sessions
-  q.limit(MAX_CHATS_PER_SESSION() * sessionIds.length);
-
+  q.sort({ summonedAt: -1 });
+  q.limit(MAX_CHATS_PER_SESSION() * roots.length);
   return q.lean();
 }
 
 /**
- * Attach contributions to chats by direct summonId lookup.
- * More accurate than the contributions[] array on the Chat doc
- * because it catches in-progress chats where the array hasn't been finalized.
+ * Attach Dids (action="tool-call" plus other audit entries) by direct
+ * summonId lookup. More accurate than any in-document array.
  */
-async function attachContributions(chats) {
-  if (chats.length === 0) return;
-  const chatIds = chats.map(c => c._id);
-
-  const contribs = await Did.find({ summonId: { $in: chatIds } })
-    .select("_id action nodeId date extensionData summonId")
+async function attachDids(summons) {
+  if (!summons.length) return;
+  const summonIds = summons.map((s) => s._id);
+  const dids = await Did.find({ summonId: { $in: summonIds } })
+    .select("_id action nodeId date extensionData summonId toolCall")
     .populate({ path: "nodeId", select: "name" })
     .limit(MAX_CONTRIBUTIONS_PER_QUERY())
     .lean();
-
-  if (contribs.length === 0) return;
-
+  if (!dids.length) return;
   const byChat = new Map();
-  for (const c of contribs) {
-    const key = String(c.summonId);
+  for (const d of dids) {
+    const key = String(d.summonId);
     if (!byChat.has(key)) byChat.set(key, []);
-    byChat.get(key).push(c);
+    byChat.get(key).push(d);
   }
-  for (const chat of chats) {
-    const direct = byChat.get(String(chat._id));
-    if (direct) chat.contributions = direct;
+  for (const s of summons) {
+    const direct = byChat.get(String(s._id));
+    if (direct) s.dids = direct;
   }
 }
 
 /**
- * Group chats into sessions, sorted by time then chain index.
- * Returns session objects with metadata.
+ * Group Summons into chains, one per rootCorrelation, ordered by
+ * summonedAt. Returns chain objects with metadata. The legacy field
+ * name `sessions` is preserved for the renderer's external shape.
  */
-function groupIntoSessions(sessionIds, chats) {
-  const sessionMap = new Map();
-  for (const sid of sessionIds) sessionMap.set(sid, []);
-
-  for (const chat of chats) {
-    const sid = chat.sessionId || "unknown";
-    if (sessionMap.has(sid)) sessionMap.get(sid).push(chat);
+function groupIntoChains(roots, summons) {
+  const byRoot = new Map();
+  for (const r of roots) byRoot.set(r, []);
+  for (const s of summons) {
+    const k = s.rootCorrelation || "unknown";
+    if (byRoot.has(k)) byRoot.get(k).push(s);
   }
-
-  return sessionIds
-    .filter(sid => sessionMap.get(sid).length > 0)
-    .map(sid => {
-      const sessionChats = sessionMap.get(sid).sort((a, b) => {
-        const ta = new Date(a.startMessage?.time || 0).getTime();
-        const tb = new Date(b.startMessage?.time || 0).getTime();
-        if (ta !== tb) return ta - tb;
-        return (a.chainIndex || 0) - (b.chainIndex || 0);
+  return roots
+    .filter((r) => byRoot.get(r) && byRoot.get(r).length > 0)
+    .map((r) => {
+      const chain = byRoot.get(r).sort((a, b) => {
+        const ta = new Date(a.summonedAt || 0).getTime();
+        const tb = new Date(b.summonedAt || 0).getTime();
+        return ta - tb;
       });
-      // Cap per-session to prevent one massive orchestrator chain from dominating
-      const capped = sessionChats.slice(0, MAX_CHATS_PER_SESSION());
+      const capped = chain.slice(0, MAX_CHATS_PER_SESSION());
       return {
-        sessionId: sid,
-        chats: capped,
-        startTime: capped[0]?.startMessage?.time || null,
-        chatCount: capped.length,
-        truncated: sessionChats.length > MAX_CHATS_PER_SESSION(),
+        sessionId:  r,         // legacy name kept for renderer compat
+        chats:      capped,
+        startTime:  capped[0]?.summonedAt || null,
+        chatCount:  capped.length,
+        truncated:  chain.length > MAX_CHATS_PER_SESSION(),
       };
     });
 }
@@ -162,41 +151,36 @@ function groupIntoSessions(sessionIds, chats) {
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Get chat history for a user, grouped by session.
- * Returns the N most recent sessions with their chain steps.
+ * Get Summon history for a being, grouped by chain (rootCorrelation).
+ * Returns the N most recent chains.
  */
 async function getSummons({ beingId, sessionLimit = 10, sessionId, startDate, endDate }) {
   if (!beingId) throw new Error("Missing required parameter: beingId");
-
   const limit = clampSessionLimit(sessionLimit);
   const timeFilter = buildTimeFilter(startDate, endDate);
 
   try {
-    // The function param is named `beingId` for caller ergonomics
-    // (callers think of "this user's chats") but the Chat schema field
-    // is `beingIn` — the asker side of the conversation. A user's chat
-    // history is "all chats this being initiated."
+    // "A being's history" = every Summon they initiated (beingIn).
     const matchQuery = { beingIn: beingId };
-    if (timeFilter) matchQuery["startMessage.time"] = timeFilter;
+    if (timeFilter) matchQuery.summonedAt = timeFilter;
 
-    const sessionIds = sessionId
+    const roots = sessionId
       ? [sessionId]
-      : await findRecentSessionIds(matchQuery, limit);
+      : await findRecentRootCorrelations(matchQuery, limit);
 
-    if (!sessionIds.length) {
+    if (!roots.length) {
       return { message: `No AI chats found for being ${beingId}`, sessions: [] };
     }
 
-    // Fetch chats + contributions
-    const extraMatch = { beingIn: beingId };
-    if (timeFilter) extraMatch["startMessage.time"] = timeFilter;
+    const extraMatch = {};
+    if (timeFilter) extraMatch.summonedAt = timeFilter;
 
-    const chats = await fetchChatsForSessions(sessionIds, extraMatch);
-    await attachContributions(chats);
+    const summons = await fetchSummonsForRoots(roots, extraMatch);
+    await attachDids(summons);
 
     return {
       message: "AI chats retrieved successfully",
-      sessions: groupIntoSessions(sessionIds, chats),
+      sessions: groupIntoChains(roots, summons),
     };
   } catch (err) {
     log.error("AI", "getSummons:", err.message);
@@ -205,12 +189,11 @@ async function getSummons({ beingId, sessionLimit = 10, sessionId, startDate, en
 }
 
 /**
- * Get chat history for a node (and optionally its children), grouped by session.
- * Finds sessions that touched the node via contributions or tree context.
+ * Get Summon history for a node (and optionally its descendants),
+ * grouped by chain. Surfaces chains that touched the node via a Did.
  */
 async function getNodeSummons({ nodeId, sessionLimit = 10, sessionId, startDate, endDate, includeChildren = false }) {
   if (!nodeId) throw new Error("Missing required parameter: nodeId");
-
   const limit = clampSessionLimit(sessionLimit);
   const timeFilter = buildTimeFilter(startDate, endDate);
 
@@ -228,42 +211,41 @@ async function getNodeSummons({ nodeId, sessionLimit = 10, sessionId, startDate,
       nodeIds = [nodeId];
     }
 
-    // Path A: sessions via contributions that touched these nodes
-    const contribQuery = { nodeId: { $in: nodeIds } };
-    if (timeFilter) contribQuery.date = timeFilter;
-    const contribSessionIds = await Did.distinct("sessionId", contribQuery);
-
-    // Path B: sessions via Chat.treeContext.targetNodeId
-    const treeCtxQuery = { "treeContext.targetNodeId": { $in: nodeIds } };
-    if (timeFilter) treeCtxQuery["startMessage.time"] = timeFilter;
-    const treeCtxSessionIds = await Summon.distinct("sessionId", treeCtxQuery);
-
-    // Union and deduplicate
-    const allSessionIds = [...new Set([...contribSessionIds, ...treeCtxSessionIds])].filter(Boolean);
-
-    if (sessionId && !allSessionIds.includes(sessionId)) {
-      return { message: `No AI chats found for node ${nodeId}`, sessions: [] };
-    }
-    if (allSessionIds.length === 0) {
+    // The Summon row no longer carries treeContext.targetNodeId; Dids
+    // (audit log of DO emissions, including tool calls) are the source
+    // of truth for "what nodes did this chain touch."
+    const didQuery = { nodeId: { $in: nodeIds } };
+    if (timeFilter) didQuery.date = timeFilter;
+    const touchedSummonIds = await Did.distinct("summonId", didQuery);
+    if (!touchedSummonIds.length) {
       return { message: `No AI chats found for node ${nodeId}`, sessions: [] };
     }
 
-    // Find the N most recent sessions from the candidate set
-    const targetSessionIds = sessionId
+    // Resolve the rootCorrelations covering those Summon ids.
+    const roots = await Summon.distinct("rootCorrelation", { _id: { $in: touchedSummonIds } });
+    const filtered = roots.filter(Boolean);
+
+    if (sessionId && !filtered.includes(sessionId)) {
+      return { message: `No AI chats found for node ${nodeId}`, sessions: [] };
+    }
+    if (!filtered.length) {
+      return { message: `No AI chats found for node ${nodeId}`, sessions: [] };
+    }
+
+    const targetRoots = sessionId
       ? [sessionId]
-      : await findRecentSessionIds({ sessionId: { $in: allSessionIds } }, limit);
+      : await findRecentRootCorrelations({ rootCorrelation: { $in: filtered } }, limit);
 
-    if (!targetSessionIds.length) {
+    if (!targetRoots.length) {
       return { message: `No AI chats found for node ${nodeId}`, sessions: [] };
     }
 
-    // Fetch chats + contributions
-    const chats = await fetchChatsForSessions(targetSessionIds, {}, true);
-    await attachContributions(chats);
+    const summons = await fetchSummonsForRoots(targetRoots, {}, true);
+    await attachDids(summons);
 
     return {
       message: "AI chats retrieved successfully",
-      sessions: groupIntoSessions(targetSessionIds, chats),
+      sessions: groupIntoChains(targetRoots, summons),
     };
   } catch (err) {
     log.error("AI", "getNodeSummons:", err.message);
@@ -271,31 +253,28 @@ async function getNodeSummons({ nodeId, sessionLimit = 10, sessionId, startDate,
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Chat-level focus view. Fetch a single chat + its descendants via
-// parentSummonId BFS, plus an ancestor trail for breadcrumb rendering.
-// Shape mirrors getNodeSummons so the renderer doesn't fork.
-// ─────────────────────────────────────────────────────────────────────────
+/**
+ * Fetch a single Summon + its descendants via inReplyTo BFS, plus an
+ * ancestor trail for breadcrumb rendering. Shape mirrors getNodeSummons
+ * so the renderer doesn't fork.
+ */
 async function getSummonChain(summonId, { maxDescendants = 200, maxDepth = 20, includeAncestors = true } = {}) {
   if (!summonId) throw new Error("Missing required parameter: summonId");
   try {
     const focus = await Summon.findById(summonId)
-      .populate({ path: "treeContext.targetNodeId", select: "name", model: "Node" })
       .populate({ path: "llmProvider.connectionId", select: "name model", model: "LlmConnection" })
       .lean();
     if (!focus) {
       return { message: `No chat found for id ${summonId}`, sessions: [], ancestors: [] };
     }
 
-    // Walk down via parentSummonId. Cap total descendants and depth so a
-    // pathological chain never eats the request budget.
+    // Walk down via inReplyTo. Cap descendants and depth.
     const collected = [focus];
     let frontier = [String(focus._id)];
     let depth = 0;
     while (frontier.length > 0 && collected.length < maxDescendants && depth < maxDepth) {
       depth++;
-      const kids = await Summon.find({ parentSummonId: { $in: frontier } })
-        .populate({ path: "treeContext.targetNodeId", select: "name", model: "Node" })
+      const kids = await Summon.find({ inReplyTo: { $in: frontier } })
         .populate({ path: "llmProvider.connectionId", select: "name model", model: "LlmConnection" })
         .lean();
       if (!kids.length) break;
@@ -305,43 +284,36 @@ async function getSummonChain(summonId, { maxDescendants = 200, maxDepth = 20, i
       frontier = next.map((k) => String(k._id));
     }
 
-    // Walk up via parentSummonId for breadcrumb. Stop at null or session
-    // boundary (a chat with a different sessionId is another session's
-    // root — shouldn't happen via normal dispatch but guard anyway).
+    // Walk up via inReplyTo for breadcrumb. Stop on null or chain-root change.
     const ancestors = [];
     if (includeAncestors) {
-      let cursorId = focus.parentSummonId ? String(focus.parentSummonId) : null;
+      let cursorId = focus.inReplyTo ? String(focus.inReplyTo) : null;
       let hops = 0;
       while (cursorId && hops < 20) {
         hops++;
         const parent = await Summon.findById(cursorId)
-          .select("_id sessionId chainIndex aiContext treeContext parentSummonId startMessage endMessage dispatchOrigin")
-          .populate({ path: "treeContext.targetNodeId", select: "name", model: "Node" })
+          .select("_id rootCorrelation activeRole inReplyTo startMessage endMessage summonedAt beingIn beingOut")
           .lean();
         if (!parent) break;
-        if (String(parent.sessionId) !== String(focus.sessionId)) break;
+        if (String(parent.rootCorrelation) !== String(focus.rootCorrelation)) break;
         ancestors.unshift(parent);
-        cursorId = parent.parentSummonId ? String(parent.parentSummonId) : null;
+        cursorId = parent.inReplyTo ? String(parent.inReplyTo) : null;
       }
     }
 
-    await attachContributions(collected);
+    await attachDids(collected);
 
-    // The renderer's `groupIntoChains` treats a chat as the chain root
-    // only if `chainIndex === 0` OR `_id === rootSummonId`. In a focused
-    // subtree the focus chat is neither — it inherited the session's
-    // original rootSummonId (a user turn higher up). Rewrite rootSummonId
-    // on the in-memory copies so the renderer groups the focused chain
-    // correctly: all collected chats map to focus._id, focus itself
-    // becomes the chain root. Doesn't touch DB.
+    // The renderer groups by rootCorrelation. In a focused subtree,
+    // rewrite rootCorrelation on the in-memory copies so the focus chat
+    // becomes the chain root. DB unchanged.
     const focusIdStr = String(focus._id);
     for (const c of collected) {
-      c.rootSummonId = focusIdStr;
+      c.rootCorrelation = focusIdStr;
     }
 
     return {
       message: "AI chat chain retrieved successfully",
-      sessions: groupIntoSessions([String(focus.sessionId)], collected),
+      sessions: groupIntoChains([focusIdStr], collected),
       ancestors,
     };
   } catch (err) {
@@ -351,41 +323,19 @@ async function getSummonChain(summonId, { maxDescendants = 200, maxDepth = 20, i
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// PORTAL ADDRESS QUERIES
+// IBP ADDRESS QUERIES
 //
-// Every chat is one stance addressing another. The canonical Portal
-// Address — `<stance> :: <stance>` sorted lexicographically — is the
-// natural identifier for grouping chats. There is no separate "thread"
-// concept; "show me the conversation at this IBP Address" is just a
-// query on `Chat.ibpAddress`.
-//
-// IBP Address queries co-exist with the position-centric and
-// asker-centric queries above:
-//   - getSummons        — asker-centric ("messages I sent").
-//   - getNodeSummons    — position-centric ("messages that touched
-//                       this node").
-//   - getSummonsByIbpAddress / getIbpAddressesForBeing — stance-pair
-//                       ("conversations at this IBP Address" or
-//                       "every IBP Address this being is in").
-//
-// Position changes fork IBP Addresses naturally — the asker stance
-// includes their current position, so navigating to a new position
-// lands their next chat at a new IBP Address. The old IBP Address
-// remains in history with its accumulated chats; the new one starts
-// accumulating from there.
+// Stance-pair-centric conversation views. An IBP Address groups every
+// Summon between two stances; the row carries it directly. The legacy
+// position-centric / asker-centric queries above co-exist; pick whichever
+// shape fits the caller.
 // ─────────────────────────────────────────────────────────────────────────
 
-function MAX_CHATS_PER_PORTAL_ADDRESS() { return Math.max(20, Math.min(Number(getLandConfigValue("summonHistoryMaxSummonsPerIbpAddress")) || 500, 5000)); }
-function MAX_PORTAL_ADDRESSES_PER_BEING() { return Math.max(10, Math.min(Number(getLandConfigValue("summonHistoryMaxIbpAddressesPerBeing")) || 200, 2000)); }
-
 /**
- * Get every chat at an IBP Address, oldest-first.
+ * Every Summon at an IBP Address, oldest-first.
  *
- * Pass `ibpAddress` directly when you already have it, OR `stances`
- * (an array of two stance strings) and the helper canonicalizes it for
- * you. Time-bounded queries pass startDate / endDate. The IBP Address
- * index `{ ibpAddress: 1, "startMessage.time": -1 }` handles both
- * shapes efficiently.
+ * Pass `ibpAddress` directly, OR `stances` (array of two stance strings)
+ * and the helper canonicalizes. Time-bounded via startDate/endDate.
  */
 async function getSummonsByIbpAddress({ ibpAddress, stances, startDate, endDate, limit } = {}) {
   let address = ibpAddress;
@@ -397,13 +347,13 @@ async function getSummonsByIbpAddress({ ibpAddress, stances, startDate, endDate,
   const cap = Math.max(1, Math.min(Number(limit) || MAX_CHATS_PER_PORTAL_ADDRESS(), MAX_CHATS_PER_PORTAL_ADDRESS()));
   const query = { ibpAddress: address };
   const timeFilter = buildTimeFilter(startDate, endDate);
-  if (timeFilter) query["startMessage.time"] = timeFilter;
+  if (timeFilter) query.summonedAt = timeFilter;
 
   try {
     const chats = await Summon.find(query)
-      .sort({ "startMessage.time": 1 })
+      .sort({ summonedAt: 1 })
       .limit(cap)
-      .select("_id beingIn beingOut ibpAddress sessionId chainIndex rootSummonId parentSummonId dispatchOrigin startMessage endMessage aiContext treeContext llmProvider toolCalls")
+      .select("_id beingIn beingOut ibpAddress activeRole rootCorrelation inReplyTo summonedAt receivedAt startMessage endMessage llmProvider")
       .lean();
     return {
       ibpAddress: address,
@@ -418,44 +368,29 @@ async function getSummonsByIbpAddress({ ibpAddress, stances, startDate, endDate,
 }
 
 /**
- * List the distinct IBP Addresses a being participates in,
- * most-recent first.
- *
- * Inbox query. Returns one entry per IBP Address with the latest
- * exchange surfaced for rendering:
- *
- *   { ibpAddress, otherStances, lastChatId, lastTime, startMessage,
- *     endMessage, chatCount }
- *
- * `otherStances` is every stance in the IBP Address except the
- * being's — useful for labelling the inbox entry by who else is in
- * the conversation. The being is identified by matching their username
- * against the stance suffix (`@<username>`), so a being conversing
- * from multiple positions appears in each IBP Address they used.
+ * List the distinct IBP Addresses a being participates in, newest first.
+ * Returns one row per address with the latest exchange.
  */
 async function getIbpAddressesForBeing({ beingId, username, limit, startDate, endDate } = {}) {
   if (!beingId) throw new Error("getIbpAddressesForBeing requires beingId");
   const cap = Math.max(1, Math.min(Number(limit) || MAX_PORTAL_ADDRESSES_PER_BEING(), MAX_PORTAL_ADDRESSES_PER_BEING()));
 
-  // Match chats where the being is either side. The indexed beingIn /
-  // beingOut paths satisfy this OR efficiently; the IBP Address is
-  // collapsed in the group stage.
   const match = {
     ibpAddress: { $ne: null },
     $or: [{ beingIn: String(beingId) }, { beingOut: String(beingId) }],
   };
   const timeFilter = buildTimeFilter(startDate, endDate);
-  if (timeFilter) match["startMessage.time"] = timeFilter;
+  if (timeFilter) match.summonedAt = timeFilter;
 
   try {
     const agg = await Summon.aggregate([
       { $match: match },
-      { $sort: { "startMessage.time": -1 } },
+      { $sort: { summonedAt: -1 } },
       {
         $group: {
-          _id: "$ibpAddress",
+          _id:          "$ibpAddress",
           lastChatId:   { $first: "$_id" },
-          lastTime:     { $first: "$startMessage.time" },
+          lastTime:     { $first: "$summonedAt" },
           startMessage: { $first: "$startMessage" },
           endMessage:   { $first: "$endMessage" },
           beingIn:      { $first: "$beingIn" },
@@ -472,7 +407,7 @@ async function getIbpAddressesForBeing({ beingId, username, limit, startDate, en
       const stances = parseIbpAddress(row._id);
       const otherStances = usernameSuffix
         ? stances.filter((s) => !s.endsWith(usernameSuffix))
-        : stances; // caller didn't pass username — give them all stances
+        : stances;
       return {
         ibpAddress: row._id,
         otherStances,

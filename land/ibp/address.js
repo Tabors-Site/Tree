@@ -17,7 +17,7 @@ import {
   toHttpRoute,
   isValidLand,
   isValidPath,
-  isValidEmbodiment,
+  isValidBeing,
 } from "../../portal/lib/ibp-address.js";
 
 import { PortalError, PORTAL_ERR } from "./errors.js";
@@ -86,6 +86,6 @@ export {
   toHttpRoute,
   isValidLand,
   isValidPath,
-  isValidEmbodiment,
+  isValidBeing,
   getLandDomain,
 };

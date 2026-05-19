@@ -982,7 +982,14 @@
       "Bash(grep -v \"0\\\\.5\\\\.0\\\\.js\\\\|^.*//\\\\|^.*\\\\*\\\\| \\\\* \\\\|\\\\\\\\.embodiment\\\\\\\\b\\\\\\\\|stance\\\\\\\\.embodiment\\\\\\\\|resolved\\\\\\\\.embodiment\\\\\\\\|right\\\\\\\\.embodiment\\\\\\\\|target\\\\\\\\.embodiment\\\\\\\\|ctx\\\\\\\\.embodiment\\\\\\\\|expanded\\\\\\\\.right\\\\\\\\.embodiment\\\\\\\\|`embodiment` qualifier\\\\\\\\|embodiment: beingName\\\\\\\\|embodiment: stance\")",
       "Bash(perl -i -pe 's/\\\\bEMBODIMENT_PRESENTATION\\\\b/BEING_PRESENTATION/g' land/ibp/descriptor.js)",
       "Bash(perl -i -pe 's/\\\\.embodiment\\\\b/.being/g; s/\\\\bembodiment:\\\\s*/being: /g' portal/3d-app/src/main.js portal/3d-app/src/scene.js portal/3d-app/src/ui.js portal/app/src/components/zones/TreeZone.jsx portal/app/src/components/zones/LandZone.jsx portal/app/src/components/zones/HomeZone.jsx portal/app/src/components/AddressBar.jsx portal/app/src/portal-client.js portal/3d-app/src/portal-client.js)",
-      "Bash(perl -i -pe 's/\\\\bembodiment\\\\b/being/g' land/extensions/models/index.js land/extensions/position/index.js)"
+      "Bash(perl -i -pe 's/\\\\bembodiment\\\\b/being/g' land/extensions/models/index.js land/extensions/position/index.js)",
+      "Bash(grep -rn \"from:\\\\s*\\\\`\\\\|from:\\\\s*\\\\\"\" /home/tabor/github/Tree/land/ibp/verbs/ /home/tabor/github/Tree/land/extensions/governing/)",
+      "Bash(grep -E \"@|inbox|summon|from:.*\\\\\\\\\\\\$\\\\{\")",
+      "Bash(grep -rn \"being:.*emit\\\\|being-room\\\\|inbox-arrived\\\\|ibp:inbox\\\\|being:\\\\\\\\\\\\${\" /home/tabor/github/Tree/land/ibp/ /home/tabor/github/Tree/land/seed/ws/)",
+      "Bash([ -f \"/home/tabor/github/Tree/land/extensions/tree-orchestrator/$f\" ])",
+      "Bash(awk 'NR>=1200 && NR<=1290 { if \\(/name:.*governing-/\\) print NR\": \"$0 }' /home/tabor/github/Tree/land/extensions/governing/rulerTools.js)",
+      "Bash(awk 'NR>=1840 && NR<=1900 { if \\(/name:.*governing-/\\) print NR\": \"$0 }' /home/tabor/github/Tree/land/extensions/governing/rulerTools.js)",
+      "Bash(awk '/name:.*\"governing-/ { last=NR\": \"$0 } NR==1270 || NR==1473 || NR==1540 || NR==1880 { print \"Line \"NR\" is inside tool starting at \"last }' /home/tabor/github/Tree/land/extensions/governing/rulerTools.js)"
     ],
     "additionalDirectories": [
       "/home/tabor/github/Tree",

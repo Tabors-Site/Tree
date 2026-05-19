@@ -29,7 +29,10 @@ import { getLandRootId } from "../../seed/landRoot.js";
 import { getIO } from "../../seed/ws/websocket.js";
 import { attachHandoff, wake } from "../scheduler.js";
 
-const VALID_INTENTS = new Set(["chat", "place", "query", "be"]);
+// intent field retired 2026-05-18. Permissions belong to role identity
+// (see memory `role-permissions-not-envelope`); envelopes no longer
+// declare chat/place/query/be. Legacy senders may still pass `intent`
+// strings — the field is accepted but ignored.
 
 /**
  * Broadcast a SUMMON reply to every socket the asker being has
@@ -38,17 +41,17 @@ const VALID_INTENTS = new Set(["chat", "place", "query", "be"]);
  * Falls back to the originating socket when beingId or the io server
  * isn't reachable.
  */
-function emitSummonReply(socket, entry) {
+function emitSummon(socket, entry) {
   const beingId = socket?.beingId;
   const io = getIO();
   if (beingId && io) {
     try {
-      io.to(`being:${String(beingId)}`).emit("ibp:summon-reply", entry);
+      io.to(`being:${String(beingId)}`).emit("ibp:summon", entry);
       return;
     } catch {}
   }
   try {
-    if (socket?.connected) socket.emit("ibp:summon-reply", entry);
+    if (socket?.connected) socket.emit("ibp:summon", entry);
   } catch {}
 }
 
@@ -153,13 +156,9 @@ export async function handleSummon(socket, msg, ack) {
       );
     }
 
-    if (!role.honoredIntents.includes(message.intent)) {
-      throw new PortalError(
-        PORTAL_ERR.INVALID_INTENT,
-        `Role "${activeRole}" does not honor intent "${message.intent}"`,
-        { honoredIntents: role.honoredIntents },
-      );
-    }
+    // Intent-honoring check retired with intent field. Role permissions
+    // (declared on the role spec) handle tool-level capability scoping
+    // inside the role's summon → runChat call.
 
     // Inbox writes attach to a real Node. Priority:
     //   1. The resolved position's nodeId (tree zone or specific node)
@@ -219,7 +218,7 @@ export async function handleSummon(socket, msg, ack) {
     // for this being (no two run concurrently), enforces priority order
     // on each pull, and exposes an AbortController so role templates
     // can interrupt. The response is pushed to the sender's socket via
-    // `ibp:summon-reply` when summoning completes — and errors land on
+    // `ibp:summon` when summoning completes — and errors land on
     // the same channel so the client can render an inline error bubble.
     if (role.respondMode === "async") {
       ackOk(ack, id, { status: "accepted", messageId });
@@ -229,10 +228,10 @@ export async function handleSummon(socket, msg, ack) {
         resolved,
         responseFromStance,
         onResponse: (responseEntry) => {
-          emitSummonReply(socket, responseEntry);
+          emitSummon(socket, responseEntry);
         },
         onError: (err) => {
-          emitSummonReply(socket, {
+          emitSummon(socket, {
             from:        responseFromStance,
             content:     `[${err.code || "error"}] ${err.message || "summoning failed"}`,
             intent:      "chat",
@@ -266,12 +265,6 @@ export async function handleSummon(socket, msg, ack) {
 function validateMessage(message) {
   if (!message || typeof message !== "object") {
     throw new PortalError(PORTAL_ERR.INVALID_INPUT, "SUMMON requires a `message` object");
-  }
-  if (!message.intent || !VALID_INTENTS.has(message.intent)) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
-      "`message.intent` must be one of: chat, place, query, be",
-    );
   }
   if (typeof message.from !== "string" || !message.from.length) {
     throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`message.from` is required");

@@ -24,7 +24,7 @@
 // — without the registry, dispatch can't find the typed worker mode
 // the workspace specialized.
 
-import { WORKER_TYPES } from "../modes/workerBase.js";
+import { WORKER_TYPES } from "../roles/workerBase.js";
 
 const REGISTRY = new Map();
 

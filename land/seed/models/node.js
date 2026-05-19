@@ -1,7 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { NODE_STATUS, SYSTEM_ROLE, DELETED } from "../protocol.js";
+import { SYSTEM_ROLE, DELETED } from "../protocol.js";
 
 const NodeSchema = new mongoose.Schema({
   _id: {
@@ -10,7 +10,9 @@ const NodeSchema = new mongoose.Schema({
   },
   name: { type: String, required: true },
   type: { type: String, default: null },
-  status: { type: String, default: NODE_STATUS.ACTIVE },
+  // status field retired 2026-05-18. Status is domain-specific and
+  // belongs in extension metadata; the kernel doesn't claim a universal
+  // state machine. See [[project_substrate_as_universal_workspace]].
   dateCreated: { type: Date, default: Date.now },
   // Core LLM assignment: tree-wide default. Extension slots live in metadata.
   llmDefault: { type: String, ref: "LlmConnection", default: null },

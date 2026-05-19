@@ -1,8 +1,11 @@
 // Foreman tool surface.
 //
-// The Foreman's tools are execution-oversight decisions. Same pattern
-// as the Ruler: each tool records the decision in a per-visitor
-// register; runForemanTurn reads it and applies the action.
+// The Foreman's tools are execution-oversight decisions. State-write
+// tools update the execution-record's stepStatuses (mark-failed,
+// freeze-record, pause/resume-frame, advance-step). Dispatch tools
+// (foreman-retry-branch) emit SUMMONs to the relevant branch sub-
+// Ruler. Exit tools (foreman-respond-directly, foreman-escalate-to-
+// ruler) shape the Foreman's reply-SUMMON content.
 //
 // The Foreman is narrower than the Ruler. It does not plan, contract,
 // or hire other roles. It judges in-progress execution: should this
@@ -13,7 +16,6 @@
 import { z } from "zod";
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import { setForemanDecision } from "./state/foremanDecisions.js";
 import {
   tryClaim as tryClaimSpawn,
   release as releaseSpawn,
@@ -47,9 +49,10 @@ export default function getForemanTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "foreman-retry-branch",
+      verb: "summon",
       description:
         "Retry a failed branch by spawning the branch's Ruler turn " +
-        "as a chainstep. Use when the failure looks transient or a " +
+        "via SUMMON. Use when the failure looks transient or a " +
         "sibling's progress has unblocked it. The branch's Ruler runs " +
         "with retry-context briefing (prior error + your reason), " +
         "decides how to re-attempt (typically hire-planner with the " +
@@ -114,12 +117,6 @@ export default function getForemanTools(_core) {
 
         // Record the decision (so swarm-level coordination still sees
         // it in batch contexts; harmless when single).
-        setForemanDecision(args.rootSummonId || args.summonId, {
-          kind: "retry-branch",
-          recordNodeId, stepIndex,
-          branchName: String(branchName).trim(),
-          reason: r,
-        });
 
         log.info("Governing",
           `🔁 Foreman retrying branch "${branchName}" at ${String(branchScopeId).slice(0, 8)} ` +
@@ -145,7 +142,7 @@ export default function getForemanTools(_core) {
           ));
         }
 
-        // Spawn the branch's Ruler as a chainstep. The branch Ruler
+        // Spawn the branch's Ruler via SUMMON. The branch Ruler
         // re-runs its cycle with retry-context as the inherited
         // message. Its decisions (hire planner with revision, etc.)
         // are the branch's own; we just await the outcome.
@@ -157,70 +154,130 @@ export default function getForemanTools(_core) {
           `Sibling work has likely advanced since the first attempt — read your ` +
           `enrichContext for current state, apply the fix, complete the branch.`;
 
-        // Thread caller's abort signal + socket so user-cancel reaches
-        // the retry's LLM call AND the retry's tool calls + thinking
-        // events stream to the user's chat. The orchestrator's per-
-        // visitor active-request map carries both.
-        let callerSignal = null;
-        let callerSocket = null;
-        try {
-          const { getActiveRequest } = await import("../tree-orchestrator/state.js");
-          const active = getActiveRequest(aiSessionKey);
-          callerSignal = active?.signal || null;
-          callerSocket = active?.socket || null;
-        } catch {}
-
-        // Fire-and-forget. The branch retry spawns its own Ruler turn
-        // recursively (which itself can hire-planner / hire-contractor /
-        // dispatch-execution — all of those are now fire-and-forget too).
-        // governing:branchRetried fires when the branch Ruler's turn
-        // settles. The Foreman that initiated this retry wakes in a
-        // fresh turn from that hook and synthesizes the outcome.
-        const { spawnRoleAsChainstepAsync } = await import("../tree-orchestrator/ruling.js");
-        const spawn = spawnRoleAsChainstepAsync({
-          modeKey: "tree:governing-ruler",
-          message: briefing,
-          beingId,
-          username,
-          rootId: rootId || null,
-          nodeId: String(branchScopeId),
-          parentSummonId: summonId || null,
-          parentSessionId: sessionId || null,
-          signal: callerSignal,
-          socket: callerSocket,
-          source: "foreman-retry-branch",
-          kind: "foreman-retry-branch",
-          completionHookName: "governing:branchRetried",
-          hookPayload: {
-            branchName,
-            stepIndex,
-            branchScopeId: String(branchScopeId),
-            recordNodeId,
-          },
-          releaseClaimKey: claim.key,
-        });
-        if (!spawn?.spawnId) {
+        // SUMMON the branch's sub-Ruler with the retry briefing. The
+        // sub-Ruler wakes via the scheduler, reads its snapshot
+        // (which reflects the prior execution state for this branch),
+        // and re-runs its cycle. Its decisions (revise plan, retry,
+        // etc.) are the sub-Ruler's own. The handoff fires
+        // `governing:branchRetried` for dashboard SSE on settle.
+        const NodeModel = (await import("../../seed/models/node.js")).default;
+        const BeingModel = (await import("../../seed/models/being.js")).default;
+        const branchNodeFull = await NodeModel.findById(branchScopeId).select("metadata").lean();
+        const branchBeings = branchNodeFull?.metadata instanceof Map
+          ? branchNodeFull.metadata.get("beings")
+          : branchNodeFull?.metadata?.beings;
+        const branchRulerBeingId = branchBeings?.ruler?.beingId || null;
+        if (!branchRulerBeingId) {
           releaseSpawn(claim.key);
           return text(JSON.stringify({
             ok: false,
             decision: "retry-branch",
-            error: "spawn-failed-to-start",
+            error: "branch-ruler-being-missing",
+            note: "Cannot retry: no Ruler being found at the branch scope.",
           }, null, 2));
         }
+
+        // Build the Foreman's stance (who's sending the retry SUMMON).
+        // Foreman lives at the parent Ruler's execution scope; use that.
+        const { getLandDomain } = await import("../../ibp/address.js");
+        const landDomain = getLandDomain();
+        const foremanStance = `${landDomain}/${branchScopeId}@foreman`;
+
+        const { randomUUID } = await import("crypto");
+        const correlation = randomUUID();
+        const rootCorrelation = args.rootSummonId || summonId || correlation;
+        const message = {
+          from:            foremanStance,
+          content:         briefing,
+          intent:          "chat",
+          correlation,
+          rootCorrelation,
+          activeRole:      "ruler",
+          priority:        3, // INTERACTIVE
+          sentAt:          new Date().toISOString(),
+        };
+
+        const { appendToInbox } = await import("../../ibp/inbox.js");
+        const { attachHandoff, wake } = await import("../../ibp/scheduler.js");
+        const { hooks } = await import("../../seed/hooks.js");
+        const startMs = Date.now();
+        try {
+          await appendToInbox(String(branchScopeId), branchRulerBeingId, message);
+        } catch (err) {
+          releaseSpawn(claim.key);
+          return text(JSON.stringify({
+            ok: false,
+            decision: "retry-branch",
+            error: "appendToInbox failed: " + (err?.message || String(err)),
+          }, null, 2));
+        }
+        attachHandoff(branchRulerBeingId, correlation, {
+          identity:   { beingId, username },
+          resolved:   { being: "ruler", nodeId: String(branchScopeId), zone: "tree" },
+          onResponse: async (responseEntry) => {
+            try { releaseSpawn(claim.key); } catch {}
+            try {
+              await hooks.fire("governing:branchRetried", {
+                spawnId:         correlation,
+                rulerNodeId:     String(branchScopeId),
+                beingId,
+                username,
+                rootId:          rootId || null,
+                kind:            "foreman-retry-branch",
+                branchName,
+                stepIndex,
+                branchScopeId:   String(branchScopeId),
+                recordNodeId,
+                exitText:        responseEntry?.content || null,
+                durationMs:      Date.now() - startMs,
+                error:           null,
+                parentSummonId:  summonId || null,
+                parentSessionId: sessionId || null,
+              });
+            } catch (err) {
+              log.warn("Governing", `branchRetried hook fire failed: ${err.message}`);
+            }
+          },
+          onError: async (err) => {
+            try { releaseSpawn(claim.key); } catch {}
+            try {
+              await hooks.fire("governing:branchRetried", {
+                spawnId:         correlation,
+                rulerNodeId:     String(branchScopeId),
+                beingId,
+                username,
+                rootId:          rootId || null,
+                kind:            "foreman-retry-branch",
+                branchName,
+                stepIndex,
+                branchScopeId:   String(branchScopeId),
+                recordNodeId,
+                exitText:        null,
+                durationMs:      Date.now() - startMs,
+                error:           err?.message || String(err),
+                parentSummonId:  summonId || null,
+                parentSessionId: sessionId || null,
+              });
+            } catch (hookErr) {
+              log.warn("Governing", `branchRetried (error path) hook fire failed: ${hookErr.message}`);
+            }
+          },
+        });
+        wake(branchRulerBeingId, String(branchScopeId));
 
         return text(JSON.stringify({
           status: "spawned",
           decision: "retry-branch",
-          spawnId: spawn.spawnId,
+          spawnId: correlation,
           branchName,
           stepIndex,
           branchScopeId: String(branchScopeId),
           note:
-            "Branch retry started in the background. This turn ends now. " +
+            "Branch retry SUMMON sent. This turn ends now. " +
             `Synthesize one short sentence — 'Retry of "${branchName}" initiated.' — ` +
-            "and stop. When the retry settles, governing:branchRetried wakes " +
-            "you in a fresh turn; you'll see the new execution state and " +
-            "synthesize the actual outcome THEN.",
+            "and stop. The branch sub-Ruler will re-run its cycle and reply via " +
+            "the substrate inbox; you'll see the new execution state in your " +
+            "next snapshot.",
         }, null, 2));
       },
     },
@@ -236,6 +293,7 @@ export default function getForemanTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "foreman-mark-failed",
+      verb: "do",
       description:
         "Mark a branch or leaf step as terminally failed. Use when " +
         "retries are exhausted, the contract is violated, or the error " +
@@ -261,14 +319,6 @@ export default function getForemanTools(_core) {
         if (!r) return text("foreman-mark-failed: reason is required for the audit trail.");
         if (r.length > REASON_CAP) return text(`foreman-mark-failed: reason exceeds ${REASON_CAP} chars; trim.`);
         const err = typeof error === "string" ? error.trim().slice(0, ERROR_CAP) : null;
-        setForemanDecision(args.rootSummonId || args.summonId, {
-          kind: "mark-failed",
-          recordNodeId,
-          stepIndex,
-          branchName: branchName ? String(branchName).trim() : null,
-          reason: r,
-          error: err,
-        });
         return text(JSON.stringify({ ok: true, decision: "mark-failed" }));
       },
     },
@@ -284,6 +334,7 @@ export default function getForemanTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "foreman-freeze-record",
+      verb: "do",
       description:
         "Freeze the execution-record at a terminal status. Use when " +
         "all steps reached terminal state (terminalStatus=\"completed\" " +
@@ -304,12 +355,6 @@ export default function getForemanTools(_core) {
           return text(`foreman-freeze-record: terminalStatus must be one of ${[...TERMINAL_STATUSES].join(", ")}.`);
         }
         const s = typeof summary === "string" ? summary.trim().slice(0, SUMMARY_CAP) : null;
-        setForemanDecision(args.rootSummonId || args.summonId, {
-          kind: "freeze-record",
-          recordNodeId,
-          terminalStatus,
-          summary: s,
-        });
         return text(JSON.stringify({ ok: true, decision: "freeze-record" }));
       },
     },
@@ -336,6 +381,7 @@ export default function getForemanTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "foreman-escalate-to-ruler",
+      verb: "summon",
       description:
         "Escalate to the Ruler. Use when the situation exceeds your " +
         "authority — contract conflicts between sub-Rulers, plans that " +
@@ -360,17 +406,15 @@ export default function getForemanTools(_core) {
         const p = typeof payload === "string" ? payload.trim() : "";
         if (!s) return text("foreman-escalate-to-ruler: signal is required.");
         if (!p) return text("foreman-escalate-to-ruler: payload is required.");
-        setForemanDecision(args.rootSummonId || args.summonId, { kind: "escalate-to-ruler", signal: s, payload: p });
         // Return the escalation content as the tool result text. The
-        // Foreman's final answer (this text + any synthesis) flows
-        // back to whoever invoked the Foreman (typically the Ruler's
-        // route-to-foreman tool). Chain-nested architecture: this
-        // tool result IS the Foreman's exit payload.
+        // Foreman's exit text flows back to its asker (the Ruler that
+        // SUMMONed it) via emitReplyToAsker. This tool result shapes
+        // the reply-SUMMON content.
         return text(
           `[ESCALATION TO RULER]\n` +
           `signal: ${s}\n\n` +
           `payload:\n${p}\n\n` +
-          `(Foreman's chainstep ends with this escalation. Synthesize a final ` +
+          `(Foreman's turn ends with this escalation. Synthesize a final ` +
           `message saying you're returning control to the Ruler with this ` +
           `payload, then exit.)`,
         );
@@ -388,6 +432,7 @@ export default function getForemanTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "foreman-respond-directly",
+      verb: "summon",
       description:
         "Respond to the user without changing execution. Use for " +
         "status queries that don't need any action — \"what's the " +
@@ -404,7 +449,6 @@ export default function getForemanTools(_core) {
         const r = typeof response === "string" ? response.trim() : "";
         if (!r) return text("foreman-respond-directly: response is required.");
         if (r.length > RESPONSE_CAP) return text(`foreman-respond-directly: response exceeds ${RESPONSE_CAP} chars.`);
-        setForemanDecision(args.rootSummonId || args.summonId, { kind: "respond-directly", response: r });
         // Return the response as tool result text so it's part of
         // the Foreman's final answer; the calling Ruler tool
         // (route-to-foreman or resume-execution) reads this as the
@@ -422,6 +466,7 @@ export default function getForemanTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "foreman-read-branch-detail",
+      verb: "see",
       description:
         "Inspect a sub-Ruler's plan emission and most recent worker " +
         "output. Use when your snapshot summary isn't enough to decide " +
@@ -491,6 +536,7 @@ export default function getForemanTools(_core) {
     // distinguishes the two for Pass 2 court adjudication.
     {
       name: "foreman-cancel-subtree",
+      verb: "do",
       description:
         "Cancel this execution-record and every descendant sub-Ruler's " +
         "execution. Use when work should stop entirely — operator " +
@@ -510,7 +556,6 @@ export default function getForemanTools(_core) {
         const r = typeof reason === "string" ? reason.trim() : "";
         if (!r) return text("foreman-cancel-subtree: reason is required.");
         if (r.length > REASON_CAP) return text(`foreman-cancel-subtree: reason exceeds ${REASON_CAP} chars; trim.`);
-        setForemanDecision(args.rootSummonId || args.summonId, { kind: "cancel-subtree", recordNodeId, reason: r });
         return text(JSON.stringify({ ok: true, decision: "cancel-subtree", reason: r }, null, 2));
       },
     },
@@ -522,6 +567,7 @@ export default function getForemanTools(_core) {
     // wants to abandon one subtree but not the whole stack. Rare.
     {
       name: "foreman-propagate-cancel-to-children",
+      verb: "do",
       description:
         "Cancel the IMMEDIATE child sub-Rulers of this frame, but keep " +
         "this frame itself running on its other steps. Use when a parent " +
@@ -539,7 +585,6 @@ export default function getForemanTools(_core) {
         if (!recordNodeId) return text("foreman-propagate-cancel-to-children: recordNodeId required.");
         const r = typeof reason === "string" ? reason.trim() : "";
         if (!r) return text("foreman-propagate-cancel-to-children: reason is required.");
-        setForemanDecision(args.rootSummonId || args.summonId, { kind: "propagate-cancel-to-children", recordNodeId, reason: r });
         return text(JSON.stringify({ ok: true, decision: "propagate-cancel-to-children", reason: r }, null, 2));
       },
     },
@@ -552,6 +597,7 @@ export default function getForemanTools(_core) {
     // queue stops just before dispatching that step.
     {
       name: "foreman-pause-frame",
+      verb: "do",
       description:
         "Pause this frame's execution. Without atStepIndex: immediate " +
         "pause (current work flushes; no new dispatch). With atStepIndex: " +
@@ -572,12 +618,6 @@ export default function getForemanTools(_core) {
         const r = typeof reason === "string" ? reason.trim() : "";
         if (!r) return text("foreman-pause-frame: reason is required.");
         const atIdx = typeof atStepIndex === "number" ? atStepIndex : null;
-        setForemanDecision(args.rootSummonId || args.summonId, {
-          kind: "pause-frame",
-          recordNodeId,
-          atStepIndex: atIdx,
-          reason: r,
-        });
         return text(JSON.stringify({
           ok: true,
           decision: "pause-frame",
@@ -595,6 +635,7 @@ export default function getForemanTools(_core) {
     // pause was set (or, if no atStepIndex, at the first non-done step).
     {
       name: "foreman-resume-frame",
+      verb: "do",
       description:
         "Resume a paused frame's execution. Clears pause markers and " +
         "re-dispatches pending work starting at the saved step index. " +
@@ -610,7 +651,6 @@ export default function getForemanTools(_core) {
         if (!recordNodeId) return text("foreman-resume-frame: recordNodeId required.");
         const r = typeof reason === "string" ? reason.trim() : "";
         if (!r) return text("foreman-resume-frame: reason is required.");
-        setForemanDecision(args.rootSummonId || args.summonId, { kind: "resume-frame", recordNodeId, reason: r });
         return text(JSON.stringify({ ok: true, decision: "resume-frame", reason: r }, null, 2));
       },
     },
@@ -657,6 +697,7 @@ export default function getForemanTools(_core) {
     // my per-branch judgments."
     {
       name: "foreman-judge-batch",
+      verb: "do",
       description:
         "Judge multiple failed branches in one turn. Use when the wakeup " +
         "lists 2 or more failures. Read them as a SET — are these all the " +
@@ -733,14 +774,6 @@ export default function getForemanTools(_core) {
         if (errors.length) {
           return text(`foreman-judge-batch rejected:\n  - ${errors.join("\n  - ")}`);
         }
-        setForemanDecision(args.rootSummonId || args.summonId, {
-          kind: "judge-batch",
-          decisions: decisions.map((d) => ({
-            branchName: String(d.branchName).trim(),
-            action: d.action,
-            reason: String(d.reason).trim(),
-          })),
-        });
         const summary = decisions.map((d) => `${d.branchName}:${d.action}`).join(", ");
         return text(JSON.stringify({
           ok: true,
@@ -764,6 +797,7 @@ export default function getForemanTools(_core) {
     // Reason field required for the audit trail.
     {
       name: "foreman-advance-step",
+      verb: "do",
       description:
         "RARE-USE OVERRIDE. Mark a stuck non-terminal step as advanced " +
         "so the queue can move past it. NOT routine glue — routine " +
@@ -786,12 +820,6 @@ export default function getForemanTools(_core) {
         const r = typeof reason === "string" ? reason.trim() : "";
         if (!r) return text("foreman-advance-step: reason is required for the audit trail.");
         if (r.length > REASON_CAP) return text(`foreman-advance-step: reason exceeds ${REASON_CAP} chars; trim.`);
-        setForemanDecision(args.rootSummonId || args.summonId, {
-          kind: "advance-step",
-          recordNodeId,
-          fromStepIndex,
-          reason: r,
-        });
         return text(JSON.stringify({
           ok: true,
           decision: "advance-step",

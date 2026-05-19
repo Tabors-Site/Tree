@@ -9,7 +9,7 @@ Open source operating system for AI agents. Minimal kernel + modular extensions 
 ## CRITICAL: Three Layers
 
 ### Kernel (cannot change without forking)
-The data contract. Node schema, Being schema, Artifact model, Contribution model. The API protocol (chat/place/query behavioral contracts). The hook system. The mode registry. The orchestrator registry. The extension loader. Federation (Canopy). These define what TreeOS IS. Do not add fields to Node or Being schemas. Do not import from extensions/ into kernel files.
+The data contract. Node schema, Being schema, Artifact model, Did model, Summon model, LlmConnection. The API protocol (chat/place/query behavioral contracts in the tree orchestrator; SEE/DO/SUMMON/BE for IBP). The hook system. The mode registry. The orchestrator registry. The extension loader. Federation (Canopy). IBP (Inter-Being Protocol) in land/ibp/. These define what TreeOS IS. Do not add fields to Node or Being schemas. Do not import from extensions/ into kernel files.
 
 ### Core (ships with every land, replaceable)
 The reference implementation. The AI conversation loop (`processMessage`, `runChat`, `runPipeline`). The WebSocket server. The MCP bridge. Session management. `OrchestratorRuntime`. `parseJsonSafe`. The built-in tree modes (navigate, structure, edit, respond, librarian, notes). These ship by default but can be overridden by extensions. A custom orchestrator can replace the entire conversation flow. Custom modes can replace how the AI thinks at any node.
@@ -18,6 +18,31 @@ The reference implementation. The AI conversation loop (`processMessage`, `runCh
 Everything else. Values, schedules, prestige, scripts, dreams, understanding, energy, billing, solana, blog, gateway, shell, land-manager, tree-orchestrator. Each is a folder with a manifest. Install what you need. Remove what you don't. Build your own. The kernel boots without any of them.
 
 **The rule: kernel NEVER imports from extensions. Core NEVER imports from extensions. Extensions import from kernel and core. Extensions reach each other through dynamic imports with try/catch.**
+
+## Vocabulary (post-rename current state)
+
+Several primitives were renamed in 2026-05. Code, comments, and git history mix old and new names; use the new ones in new work.
+
+| New name | Old name | Migration |
+|---|---|---|
+| **Being** (identity instance) + **Role** (template/class) | "Embodiment" conflated both | terminology shift 2026-05-18 |
+| **Artifact** (what lives in a node, with `origin` field: ibp/filesystem/web/cross-land) | "Note" | 0.4.0 |
+| **Did** (record of one DO emission, audit log) | "Contribution" | 0.8.0 |
+| **Summon** (one being's wake-and-act through one LLM call) | "Chat" | 0.9.0 |
+| **IBPA** / **IBP Address** (`<stance> :: <stance>`) | "Portal Address" | 0.10.0 |
+| **Being.roles[]** + **defaultRole** (composable per summon) | `Being.role` (one fixed role) | 0.11.0 |
+| **IBP verb SUMMON** | "TALK" | code rename 2026-05-17 |
+| **land/ibp/** (server-side IBP) | "land/portal/" | folder rename 2026-05-17 |
+| **land/ibp/roles/** (role template registry) | "land/ibp/embodiments/" | folder rename 2026-05-18 |
+
+**Three metadata buckets, peer not nested:**
+- **Node.metadata.<ns>** — extension data at a position. `metadata.beings.<roleName>` is the node-hosted being registry: which beings of which roles live here (beingIds bound to role names), permission sets for stance-named role keys (arrival/owner/member/etc.), and any positional role config. Stays named `beings` because it's about beings-at-this-position.
+- **Being.metadata.<ns>** — identity-bearing data per Being instance (auth email, billing plan, energy balance, etc.). Persists with the being across role changes. Use `setBeingMeta`.
+- **Artifact.metadata.<ns>** — data about a specific artifact. Use `setArtifactMeta`.
+
+**The `@` qualifier in a Stance always names a Being, not a Role.** `@king-bob` is a specific being with some `role` field; `@auth` is the auth-being's name (which happens to match its role).
+
+For server internals (boot sequence, extension building, the four primitives, hook execution model, how to build an extension), see [land/CLAUDE.md](land/CLAUDE.md).
 
 ## Tech Stack
 
@@ -40,21 +65,22 @@ land/
 │   ├── landConfig.js
 │   ├── version.js     # SEED_VERSION constant, checked at boot for migrations
 │   ├── middleware/     # authenticate, authenticateMCP, securityHeaders, preUploadCheck
-│   └── tree/          # Node CRUD, notes, statuses, contributions, invites, public access
+│   └── tree/          # Node CRUD, artifacts, statuses, dids, invites, public access
 │       ├── treeManagement.js    # createNode, deleteNode
 │       ├── treeFetch.js         # getContextForAi, navigation, path building
 │       ├── treeData.js           # getTree, getNodeForAi, getTreeStructure
 │       ├── artifacts.js         # Artifact CRUD (fires beforeArtifact/afterArtifact hooks)
 │       ├── statuses.js          # Status changes (fires beforeStatusChange/afterStatusChange hooks)
-│       ├── contributions.js     # Audit trail queries
+│       ├── dids.js              # Did query helpers (audit trail of DO emissions; renamed from contributions.js in 0.8.0)
 │       ├── extensionMetadata.js # getExtMeta/setExtMeta for node.metadata
-│       └── userMetadata.js      # getUserMeta/setUserMeta for user.metadata
-├── seed/models/       # Kernel models (6 files, zero extension models)
+│       ├── beingMetadata.js     # getBeingMeta/setBeingMeta for being.metadata
+│       └── artifactMetadata.js  # getArtifactMeta/setArtifactMeta for artifact.metadata
+├── seed/models/       # Kernel models (zero extension models)
 │   ├── node.js        # _id, name, type, status, dateCreated, llmDefault, visibility, children, parent, rootOwner, contributors, systemRole, metadata
-│   ├── being.js       # _id, username, operatingMode, password, role, homePositionId, llmSlot, isAdmin, isRemote, homeLand, metadata
+│   ├── being.js       # _id, username, operatingMode, password, roles[], defaultRole, homePositionId, llmSlot, isAdmin, isRemote, homeLand, metadata
 │   ├── artifact.js    # A thing inside a node. Fields: nodeId, beingId, origin (ibp/filesystem/web/cross-land), content (shape varies), metadata
-│   ├── contribution.js # Audit trail
-│   ├── chat.js        # AI conversation sessions
+│   ├── did.js         # Audit trail of DO emissions (renamed from contribution.js in 0.8.0; wasAi removed, artifactAction sub-shape)
+│   ├── summon.js      # One being's wake-and-act record. Fields: beingIn, beingOut, ibpAddress, rootSummonId, parentSummonId, dids[], toolCalls[]. (renamed from chat.js in 0.9.0)
 │   └── llmConnection.js # LLM endpoint storage
 ├── extensions/        # 95 extensions. ALL optional functionality lives here.
 │   ├── _template/     # Scaffold for new extensions
@@ -90,7 +116,7 @@ land/
 │   │  # Standalone (8)
 │   ├── persona/            # AI identity per node
 │   ├── mycelium/           # Intelligent inter-land routing
-│   ├── peer-review/        # AI revision loop on notes
+│   ├── peer-review/        # AI revision loop on artifacts
 │   ├── seed-export/        # Tree export and planting
 │   ├── channels/           # Direct cascade signal paths
 │   ├── governance/         # Network governance visibility
@@ -100,15 +126,39 @@ land/
 │   ├── runtime.js     # OrchestratorRuntime (init/attach/runStep/trackStep/cleanup)
 │   ├── locks.js       # Concurrency locks
 │   └── helpers.js     # parseJsonSafe (handles fences, think tags, trailing commas, single quotes)
-├── ws/                # Core: WebSocket + AI conversation system
-│   ├── conversation.js    # processMessage(), runChat(), runPipeline(), LLM resolution
+├── seed/ws/           # WebSocket transport + session management
 │   ├── websocket.js       # Socket.IO server, message handler, orchestrator dispatch, auto-abort
 │   ├── sessionRegistry.js # Session lifecycle
-│   ├── chatTracker.js     # LLM call logging
-│   ├── mcp.js             # MCP connection management
-│   ├── tools.js           # Core MCP tool definitions
-│   └── modes/             # Kernel: mode registry. Core: built-in tree modes
-│       └── registry.js    # registerMode(), resolveMode(), getToolsForMode(), getAllToolNamesForBigMode()
+│   ├── requestQueue.js    # Per-being request queue
+│   ├── inFlightChats.js   # In-flight Summon tracking
+│   └── mcp.js             # MCP connection management
+├── seed/llm/          # AI conversation system
+│   ├── conversation.js    # processMessage(), runChat(), runPipeline(), LLM resolution
+│   ├── summonTracker.js   # Summon record create/finalize (renamed from chatTracker.js)
+│   ├── summonHistory.js   # Summon record queries (renamed from chatHistory.js)
+│   ├── ibpAddress.js      # Canonical IBPA computation for Summon storage (renamed from portalAddress.js in 0.10.0)
+│   ├── sessionKeys.js     # Session key derivation
+│   ├── assignments.js     # LLM slot assignments per-tree/per-being
+│   └── connections.js     # LLM connection management
+├── seed/modes/        # Kernel mode registry + tools
+│   ├── registry.js    # registerMode(), resolveMode(), getToolsForMode(), getAllToolNamesForBigMode()
+│   ├── fallback.js    # Default tree:fallback mode
+│   └── tools.js       # Core MCP tool definitions (lives here, not in ibp/ — extensions register their own)
+├── ibp/               # Inter-Being Protocol (server side). Renamed from land/portal/ in 2026-05-17.
+│   ├── index.js       # Wires IBP onto Express + Socket.IO (initIBPHttp, initIBPWS)
+│   ├── protocol.js    # WS verb dispatch (ibp:see, ibp:do, ibp:summon, ibp:be)
+│   ├── address.js     # IBPA parsing (wraps portal/lib/ibp-address.js)
+│   ├── resolver.js    # IBPA → resolved stance (zone, beingId, rootId, nodeId, being)
+│   ├── descriptor.js  # Position Descriptor builder (what SEE returns)
+│   ├── inbox.js       # Per-being inbox at every position
+│   ├── scheduler.js   # Per-being summon scheduler (priority, abort, sequential)
+│   ├── authorize.js   # Stance Authorization (every verb call gates here)
+│   ├── envelope.js    # Per-verb envelope validation
+│   ├── stanceProperties.js # Resolve a stance into operational properties
+│   ├── discovery.js   # Land discovery payload (canonical roles, supported verbs)
+│   ├── verbs/         # see.js, do.js, summon.js, be.js
+│   ├── roles/         # Role template registry: registry.js + auth.js, bridge.js, echo.js (renamed from embodiments/ in 2026-05-18)
+│   └── actions/       # DO action handlers (set-meta, etc.)
 ├── mcp/               # MCP server
 ├── routes/            # Core HTTP routes
 ├── canopy/            # Federation protocol
@@ -255,7 +305,7 @@ Two rules, no exceptions. Before hooks run sequential because they can cancel. A
 | beforeNodeCreate | before | Gate node creation. Enforce naming, child limits, compliance. |
 | beforeArtifact | before | Modify artifact data before save. Payload: { nodeId, content, beingId, origin, metadata }. |
 | afterArtifact | after | React to artifact create/edit/delete. Payload: { artifact, nodeId, beingId, origin, sizeKB, action }. |
-| beforeContribution | before | Modify contribution data. Extensions add to extensionData via hook. |
+| beforeDid | before | Modify Did data before audit log write. Extensions add to extensionData via hook. (Renamed from beforeContribution in 0.8.0.) |
 | afterNodeCreate | after | Initialize extension data |
 | beforeStatusChange | before | Validate, intercept |
 | afterStatusChange | after | React to status changes |

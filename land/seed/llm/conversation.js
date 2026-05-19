@@ -1157,28 +1157,10 @@ async function prepareConversation(session, ctx, message, mode, aiSessionKey) {
     // Persist the rendered system prompt + enrichContext output onto the
     // active chat record so the /chats viewer can replay exactly what
     // the AI saw. Fire-and-forget; we only write on the first turn per
-    // chat (summonId stays in context across iterations). Subsequent turns
-    // of the same chat keep the first capture — that's the one the user
-    // cares about auditing.
-    try {
-      const _chatId = ctx?.summonId || null;
-      if (_chatId && !session._chatContextPersisted?.[_chatId]) {
-        session._chatContextPersisted ||= {};
-        session._chatContextPersisted[_chatId] = true;
-        const _setFields = { $set: { systemPrompt } };
-        if (enrichedContext && Object.keys(enrichedContext).length > 0) {
-          _setFields.$set.enrichedContext = enrichedContext;
-        }
-        (async () => {
-          try {
-            const Summon = (await import("../models/summon.js")).default;
-            await Summon.updateOne({ _id: _chatId, systemPrompt: null }, _setFields);
-          } catch (err) {
-            log.debug("LLM", `systemPrompt persist skipped: ${err.message}`);
-          }
-        })();
-      }
-    } catch {}
+    // systemPrompt / enrichedContext were copied onto the Summon row pre-
+    // slim schema. The slim shape doesn't carry them — they're heavy
+    // per-Summon copies that reference the role version instead. Stays
+    // in session memory for the prompt builder; not persisted.
   }
 
 
@@ -1377,7 +1359,7 @@ function resolveLlmConfig(ancestors, mode) {
  * Uses the per-message snapshot (zero DB queries). Falls back to ancestor cache on miss.
  * Returns { tools, blockedExtensions, restrictedExtensions }.
  */
-async function resolveToolsForPosition(session, beingId) {
+async function resolveToolsForPosition(session, beingId, rolePermissions = null) {
   let treeToolConfig = null;
   let blockedExtensions = null;
   let restrictedExtensions = null;
@@ -1418,7 +1400,9 @@ async function resolveToolsForPosition(session, beingId) {
   }
   // Mode-based tool resolution: each mode declares its own tools.
   // Extensions chain via the orchestrator when a message needs multiple extensions.
-  let tools = getToolsForMode(session.modeKey, treeToolConfig);
+  // rolePermissions (when present) filters tools to those whose verb tag is in
+  // the role's declared permission set. See memory `role-permissions-not-envelope`.
+  let tools = getToolsForMode(session.modeKey, treeToolConfig, rolePermissions);
   // Filter tools by spatial extension scope (blocked + restricted)
   if (blockedExtensions || restrictedExtensions) {
     const { filterToolsByScope } = await import("../tree/extensionScope.js");
@@ -1461,8 +1445,8 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, aiSessio
   if (_llmChatId) {
     try {
       const { default: _Summon } = await import("../models/summon.js");
-      const _chatDoc = await _Summon.findById(_llmChatId).select("parentSummonId").lean();
-      if (_chatDoc?.parentSummonId) _llmParentChatId = String(_chatDoc.parentSummonId);
+      const _chatDoc = await _Summon.findById(_llmChatId).select("inReplyTo").lean();
+      if (_chatDoc?.inReplyTo) _llmParentChatId = String(_chatDoc.inReplyTo);
     } catch {}
   }
   const llmHookData = {
@@ -2145,7 +2129,7 @@ export async function processMessage(aiSessionKey, message, ctx) {
   await prepareConversation(session, ctx, message, mode, aiSessionKey);
 
   // Phase 5: Resolve tools for current position
-  let { tools } = await resolveToolsForPosition(session, ctx.beingId);
+  let { tools } = await resolveToolsForPosition(session, ctx.beingId, ctx.rolePermissions);
 
   // Query constraint: when readOnly is set, only tools registered with readOnlyHint
   // are available. Write tools are filtered before the mode fires. The AI cannot
@@ -2289,18 +2273,6 @@ export async function processMessage(aiSessionKey, message, ctx) {
     if (ctx.skipRespond && toolResults.some((r) => r?.success !== false)) {
       continueReason = "place-done";
       break;
-    }
-
-    // Mid-flight checkpoint: let callers inject user updates between tool iterations.
-    // Same pattern as onToolResults. Optional callback. Zero overhead if unused.
-    if (ctx.onToolLoopCheckpoint) {
-      const update = await ctx.onToolLoopCheckpoint();
-      if (update?.inject) {
-        session.messages.push({ role: "user", content: update.inject });
-      }
-      if (update?.abort) {
-        break;
-      }
     }
 
     // Mid-conversation compression: when messages pile up during long tool chains,
@@ -2542,7 +2514,17 @@ export async function runChat({
   // through this chat); it stamps the Chat row so chainstep-by-being
   // lookups work.
   beingIn, beingId, beingOut = null,
-  username, message, mode,
+  username, message,
+  // Behavior selector. Two surfaces:
+  //   role  — a role spec from ibp/roles/registry.js (the new way).
+  //           role.modeKey identifies its mode-registry mirror; the
+  //           kernel reads the mirror to build the system prompt and
+  //           resolve tools. Passing `role` is sugar for `mode: role.modeKey`.
+  //   mode  — legacy mode key string ("tree:governing-ruler", "home:default").
+  //           Still accepted while external callers migrate.
+  // Exactly one of role / mode must be present.
+  role = null,
+  mode,
   rootId = null, nodeId = null,
   signal = null, res = null, llmPriority = null,
   onToolResults = null, onToolCalled = null, onThinking = null,
@@ -2582,8 +2564,18 @@ export async function runChat({
   // the asker. Internal code below uses beingId for cache/session keys
   // (most names predate the rename).
   beingId = beingIn || beingId;
+  // Role → mode bridge. `role` is the new public surface; internally
+  // the kernel still routes via mode keys (mode-registry mirror), so a
+  // role spec is normalized to its modeKey here. `role` and `mode` are
+  // mutually exclusive at the API; `role` wins if both are provided.
+  if (role) {
+    if (typeof role.modeKey !== "string" || !role.modeKey) {
+      throw new Error(`runChat: role "${role.name || "(unnamed)"}" has no modeKey`);
+    }
+    mode = role.modeKey;
+  }
   if (!beingId || !message || !mode) {
-    throw new Error("runChat requires beingId/beingIn, message, and mode");
+    throw new Error("runChat requires beingId/beingIn, message, and role or mode");
   }
 
   // Auto-abort on client disconnect if Express res object is provided
@@ -2751,6 +2743,11 @@ export async function runChat({
       onToolResults,
       onToolCalled,
       onThinking,
+      // Role permissions ∩ tool verbs — narrows the LLM's tool surface
+      // to what the role declares. Permissions are role identity; no
+      // envelope or caller may widen them. Untagged tools default to
+      // "do" (see modes/tools.js).
+      rolePermissions: Array.isArray(role?.permissions) ? role.permissions : null,
     });
   } catch (err) {
     if (chat) {
@@ -2837,7 +2834,6 @@ export async function runOrchestration({
   onToolResults = null,
   onToolCalled = null,                   // Announce tool calls BEFORE they run
   onThinking = null,                     // Mid-turn assistant prose (reasoning)
-  onToolLoopCheckpoint = null,
 }) {
   if (!beingId || !message || !zone) {
     throw new Error("runOrchestration requires zone, beingId, and message");
@@ -3149,7 +3145,6 @@ export async function runOrchestration({
             rootSummonId: chat?._id || null,
             ibpAddress: eagerIbpAddress,
             sourceType: sourceType || `${zone}-chat`,
-            onToolLoopCheckpoint,
             onToolResults,
             onToolCalled,
             onThinking,
@@ -3187,7 +3182,6 @@ export async function runOrchestration({
             onToolResults,
             onToolCalled,
             onThinking,
-            onToolLoopCheckpoint,
           });
         }
       } catch (err) {

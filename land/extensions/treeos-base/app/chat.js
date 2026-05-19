@@ -1392,6 +1392,27 @@ router.get("/chat", authenticateLite, async (req, res) => {
       }
     });
 
+    // SUMMON reply listener — Slice 7 entry-path switch.
+    //
+    // Tree-zone chat messages route through the SUMMON queue rather
+    // than the orchestrator. The Ruler's role.summon eventually calls
+    // emitReplyToStance, which appends to the user-being's inbox; the
+    // cognition-aware wake() broadcasts `ibp:summon` to the
+    // user's being-room. Render the content as an assistant bubble.
+    socket.on("ibp:summon", (entry) => {
+      if (!entry || entry.content === undefined || entry.content === null) return;
+      removeTyping();
+      const text = typeof entry.content === "string"
+        ? entry.content
+        : (entry.content && typeof entry.content === "object" && entry.content.exit)
+          ? String(entry.content.exit)
+          : JSON.stringify(entry.content, null, 2);
+      addMessage(text, "assistant");
+      isSending = false;
+      updateSendBtn();
+      refreshLifecycleChip();
+    });
+
     // Lifecycle activity signal. Fire-and-forget spawn tools emit
     // "active=true" when starting, "active=false" when settling. The
     // chat panel keeps a per-Ruler set of in-flight spawnIds; the

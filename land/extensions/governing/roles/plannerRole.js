@@ -1,65 +1,25 @@
-// tree:governing-planner
+// TreeOS governing — Planner role.
 //
-// A Ruler hires a Planner when it takes on a domain and needs help
-// decomposing the work. The Planner traverses the tree under this
-// scope, considers available extensions and existing precedent, drafts
-// a plan with reasoning, presents it to the Ruler via the
-// governing-emit-plan tool, and exits.
+// A Ruler hires a Planner via SUMMON when it takes on a domain and
+// needs help decomposing the work. The Planner traverses the tree
+// under this scope, considers available extensions and existing
+// precedent, drafts a plan with reasoning, presents it to the Ruler
+// via the governing-emit-plan tool, and replies.
 //
 // The Planner is transient. Its emission is advisory until the Ruler
 // approves. The Ruler's approval is what binds. The Planner does not
 // write code, does not draft contracts, does not dispatch branches —
 // those are other roles' jobs.
 //
-// Phase 2 prototype: emission via tool call. The Planner emits ONCE
-// through governing-emit-plan with a structured argument carrying the
-// full plan (reasoning + typed steps + branch rationale). The server
-// validates strictly and returns errors phrased as instructions the
-// Planner can act on directly. Dispatch in this prototype still reads
-// the legacy [[BRANCHES]] path for compound plans, so until that
-// swap lands, the Planner ALSO emits a [[BRANCHES]] block when the
-// plan contains branch steps. Phase 2 main removes the [[BRANCHES]]
-// duplication.
+// This file carries BOTH dispatch (summon, honoredIntents, …) AND
+// LLM behavior (prompt, tools, modeKey, …) — see memory
+// `role-subsumes-mode`.
 
-export default {
-  name: "tree:governing-planner",
-  emoji: "🧭",
-  label: "Planner",
-  bigMode: "tree",
+import log from "../../../seed/log.js";
+import { runChat } from "../../../seed/llm/conversation.js";
+import { emitReplyToAsker, resolveBeingInOut } from "./_shared.js";
 
-  maxMessagesBeforeLoop: 12,
-  preserveContextOnLoop: true,
-  maxToolCallsPerStep: 2,
-
-  toolNames: [
-    "get-tree-context",
-    "navigate-tree",
-    "governing-emit-plan",
-  ],
-
-  buildSystemPrompt(ctx) {
-    // username intentionally not destructured. The Planner's cognition
-    // is uniform across all scopes — to the Planner, every hiring
-    // instruction comes from "the Ruler at this scope" regardless of
-    // what authority sits above that Ruler. The translation layer
-    // handles any user-facing rendering separately.
-    // void ctx;
-    const e = ctx.enrichedContext || {};
-    const parentBlocks = [
-      e.governingLineage,
-      e.governingParentPlan,
-      e.governingContracts,
-      // Active workspace identity + its node-type / artifact shape.
-      // Without this, the Planner generalizes from training-prior
-      // and tends toward code-style plans (package.json, server.js)
-      // even when the active workspace is book-workspace and the
-      // Workers can only produce prose notes. Surfacing this here
-      // lets the Planner pick branch names + leaf specs that the
-      // active workspace's Workers can actually realize.
-      e.governingActiveWorkspace,
-    ].filter(Boolean).join("\n\n");
-    const prelude = parentBlocks ? `${parentBlocks}\n\n` : "";
-    return prelude + `You are a Planner. The Ruler at this scope has
+const PLANNER_PROMPT_BODY = `You are a Planner. The Ruler at this scope has
 hired you to draft a plan for the work the Ruler is taking on.
 
 READ THE ACTIVE WORKSPACE BLOCK FIRST
@@ -144,11 +104,11 @@ breakdowns):
 
   branches: [
     { name: "chapter-04-legacy",
-      spec: "Chapter 4 covers Flappy Bird's lasting cultural \
-and technical legacy: viral impact, technical legacy on mobile \
-HTML5 development, the deletion paradox, clone culture, Nguyen's \
-philosophy, industry implications. Target 3000-4000 words in the \
-technical-accessible voice. Cite primary sources per chapter \
+      spec: "Chapter 4 covers Flappy Bird's lasting cultural \\
+and technical legacy: viral impact, technical legacy on mobile \\
+HTML5 development, the deletion paradox, clone culture, Nguyen's \\
+philosophy, industry implications. Target 3000-4000 words in the \\
+technical-accessible voice. Cite primary sources per chapter \\
 contracts."
     },
     ...
@@ -589,6 +549,113 @@ restatement, no "I've emitted a plan" summary. Just close with
 
 Do not call any other tools after the emit. Do not write code, do
 not draft contracts, do not dispatch branches, do not invoke
-workspace-* or any execution tools. Those are other roles' jobs.`.trim();
+workspace-* or any execution tools. Those are other roles' jobs.`;
+
+export const plannerRole = Object.freeze({
+  // Dispatch contract
+  name: "planner",
+  // Planner reads Ruler briefing + writes a structured plan emission.
+  // SEE for context; DO for emit-plan. No SUMMON (Planner doesn't
+  // delegate — Ruler hires it, reads the plan back, decides next).
+  permissions: ["see", "do"],
+  respondMode: "async",
+  triggerOn: ["message"],
+
+  // LLM behavior contract (mirrored to mode registry via registerRole)
+  modeKey: "tree:governing-planner",
+  emoji: "🧭",
+  label: "Planner",
+  bigMode: "tree",
+  maxMessagesBeforeLoop: 12,
+  preserveContextOnLoop: true,
+  maxToolCallsPerStep: 2,
+  toolNames: [
+    "get-tree-context",
+    "navigate-tree",
+    "governing-emit-plan",
+  ],
+  buildSystemPrompt(ctx) {
+    // username intentionally not destructured. The Planner's cognition
+    // is uniform across all scopes — every hiring instruction comes
+    // from "the Ruler at this scope" regardless of what authority sits
+    // above that Ruler.
+    const e = ctx.enrichedContext || {};
+    const parentBlocks = [
+      e.governingLineage,
+      e.governingParentPlan,
+      e.governingContracts,
+      // Active workspace identity + its node-type / artifact shape.
+      // Surfacing this lets the Planner pick branch names + leaf specs
+      // that the active workspace's Workers can actually realize.
+      e.governingActiveWorkspace,
+    ].filter(Boolean).join("\n\n");
+    const prelude = parentBlocks ? `${parentBlocks}\n\n` : "";
+    return prelude + PLANNER_PROMPT_BODY.trim();
   },
-};
+
+  // Summon function — kernel scheduler invokes this on inbox arrival.
+  async summon(message, ctx) {
+    const startMs = Date.now();
+    const planNodeId = ctx.nodeId || ctx.resolved?.nodeId;
+    if (!planNodeId) {
+      log.warn("Planner", "summon without nodeId; returning empty");
+      return { content: "Internal error: no plan node.", intent: "chat" };
+    }
+    log.info("Planner",
+      `📐 summons at ${String(planNodeId).slice(0, 8)} ` +
+      `(from=${message.from || "?"}, correlation=${message.correlation?.slice(0, 8) || "?"})`);
+
+    const { beingIn, beingOut, username } = resolveBeingInOut(ctx);
+
+    let result;
+    try {
+      result = await runChat({
+        beingId: beingIn,
+        beingIn,
+        beingOut,
+        username,
+        message: String(message.content || ""),
+        role:    plannerRole,
+        rootId:  ctx.resolved?.rootId || null,
+        nodeId:  planNodeId,
+        signal:  ctx.signal,
+      });
+    } catch (err) {
+      if (ctx.signal?.aborted) {
+        log.info("Planner", `summon aborted (${err.message})`);
+        return null;
+      }
+      log.warn("Planner", `LLM call failed: ${err.message}`);
+      await emitReplyToAsker({
+        fromNodeId:      planNodeId,
+        fromBeing:       ctx.toBeing,
+        fromRoleName:    ctx.toBeing?.username || "planner",
+        originalMessage: message,
+        exitText:        `Planner error: ${err.message}`,
+      });
+      return { content: `Planner error: ${err.message}`, intent: "chat" };
+    }
+
+    const exitText = result?.answer || "(plan emitted)";
+    const durationMs = Date.now() - startMs;
+    log.info("Planner",
+      `📐 summons complete at ${String(planNodeId).slice(0, 8)} in ${durationMs}ms`);
+
+    // Reply to whoever asked (the Ruler in the normal chain). The
+    // Planner doesn't gate on scope; user-approval gating lives at the
+    // Ruler. See memory `card-is-a-summon`.
+    await emitReplyToAsker({
+      fromNodeId:      planNodeId,
+      fromBeing:       ctx.toBeing,
+      fromRoleName:    ctx.toBeing?.username || "planner",
+      originalMessage: message,
+      exitText,
+    });
+
+    return {
+      content:  exitText,
+      intent:   "chat",
+      summonId: result?.summonId || null,
+    };
+  },
+});

@@ -71,8 +71,11 @@ export async function appendPlanApproval({
   status = "approved",
   supersedes = null,
   reason = null,
+  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
+  core,
 }) {
   if (!rulerNodeId || !planNodeId) return null;
+  if (!core?.do) throw new Error("appendPlanApproval requires `core` (verb surface)");
   const node = await Node.findById(rulerNodeId);
   if (!node) return null;
 
@@ -93,13 +96,15 @@ export async function appendPlanApproval({
     reason: reason || null,
   };
 
-  const next = {
-    ...(meta || {}),
-    planApprovals: [...existing, entry],
-  };
-
-  const { setExtMeta: kernelSetExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-  await kernelSetExtMeta(node, NS, next);
+  // Phase 3 migration ([[project_seed_four_verbs_only]]): write through
+  // the verb surface so plan-approval writes auto-audit as Dids.
+  // merge:true preserves other keys in NS atomically (the prior
+  // read-spread-write would clobber concurrent writes to sibling keys).
+  await core.do(node, "set-meta", {
+    namespace: NS,
+    data: { planApprovals: [...existing, entry] },
+    merge: true,
+  });
 
   // Fire ratification hook so Pass 2 courts and dashboard listeners
   // can observe plan approvals the same way they observe contract
@@ -143,6 +148,33 @@ export async function readPlanApprovalsAtRuler(rulerNodeId) {
   const node = await Node.findById(rulerNodeId).select("_id metadata").lean();
   if (!node) return [];
   return readPlanApprovalLedger(node);
+}
+
+/**
+ * Find the latest non-superseded plan approval at a Ruler scope,
+ * regardless of status. Used by the snapshot to surface "pending"
+ * plans (waiting on the Ruler's delegate to ratify) alongside
+ * approved ones. Caller inspects `.status` to branch.
+ *
+ * `supersedes` chains apply: a status="approved" entry that supersedes
+ * a prior planRef removes the prior from the active set. Same logic
+ * for any other transition (e.g., a pending entry replaces a prior
+ * pending if it carries `supersedes`).
+ */
+export async function readLatestPlanApproval(rulerNodeId) {
+  const ledger = await readPlanApprovalsAtRuler(rulerNodeId);
+  if (!ledger.length) return null;
+  const supersededSet = new Set();
+  for (const entry of ledger) {
+    if (entry?.supersedes) supersededSet.add(String(entry.supersedes));
+  }
+  for (let i = ledger.length - 1; i >= 0; i--) {
+    const entry = ledger[i];
+    if (!entry) continue;
+    if (supersededSet.has(String(entry.planRef))) continue;
+    return entry;
+  }
+  return null;
 }
 
 /**
@@ -214,4 +246,28 @@ export async function readActivePlanEmission(rulerNodeId) {
     `readActivePlanEmission(${String(rulerNodeId).slice(0, 8)}): emission node ${String(parsed.planNodeId).slice(0, 8)} ` +
     `has role=plan-emission but no metadata.governing.emission payload (likely depth-cap rejection during stamp)`);
   return null;
+}
+
+/**
+ * Read the structured plan emission for a PENDING approval. Symmetric
+ * to readActivePlanEmission but reads the latest entry regardless of
+ * status, and only resolves when status === "pending". Used by the
+ * snapshot to surface plan content waiting on the Ruler's delegate
+ * to ratify (see memory `card-is-a-summon` for the architecture).
+ *
+ * Returns the emission payload (`reasoning`, `steps[]`, `emittedAt`,
+ * `_emissionNodeId`) or null.
+ */
+export async function readPendingPlanEmission(rulerNodeId) {
+  const latest = await readLatestPlanApproval(rulerNodeId);
+  if (!latest || latest.status !== "pending" || !latest.planRef) return null;
+  const parsed = parsePlanRef(latest.planRef);
+  if (!parsed) return null;
+  const node = await Node.findById(parsed.planNodeId).select("_id type metadata").lean();
+  if (!node) return null;
+  const meta = node.metadata instanceof Map
+    ? node.metadata.get(NS)
+    : node.metadata?.[NS];
+  if (meta?.role !== "plan-emission" || !meta?.emission) return null;
+  return { ...meta.emission, _emissionNodeId: String(node._id), _planRef: latest.planRef };
 }

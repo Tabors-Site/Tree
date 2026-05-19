@@ -32,7 +32,7 @@
 import { randomUUID } from "crypto";
 import log from "../seed/log.js";
 import Being from "../seed/models/being.js";
-import { pickNextEntry, markSummoned, markInboxConsumed } from "./inbox.js";
+import { pickNextEntry, markSummoned, markInboxConsumed, readInbox } from "./inbox.js";
 import { getRole } from "./roles/registry.js";
 
 // Per-being scheduler state.
@@ -57,6 +57,17 @@ const DEFAULT_BACKPRESSURE = Object.freeze({
 //   beingId -> { tokens, lastRefillMs }
 const _rate = new Map();
 
+// Cached cognition mode per being. Humans don't have schedulers
+// running their inboxes — they have browser observers joined to their
+// being-room (see ibp/verbs/summon.js::emitSummon pattern). On
+// wake() we branch to a notify path that emits to the being-room
+// instead of entering the runLoop. The cache avoids re-reading the
+// Being doc on every wake. operatingMode rarely changes; if a land
+// does mutate it the test-helper _resetAll() also clears this map.
+//
+//   beingId -> "human" | "agent"
+const _cognitionMode = new Map();
+
 // ────────────────────────────────────────────────────────────────
 // Public API
 // ────────────────────────────────────────────────────────────────
@@ -79,6 +90,10 @@ export function wake(beingId, nodeId) {
   if (!state.running) {
     state.running = true;
     // Fire and forget — runLoop owns its own error handling.
+    // The cognition branch (agent vs human) happens at the top of
+    // runLoop so wake() stays synchronous and the test ordering
+    // contract holds: wake() returns → state.running === true →
+    // abortCurrent / getStats see the in-flight Summon.
     runLoop(beingId).catch((err) => {
       log.error("Scheduler", `runLoop crashed for being ${beingId.slice(0, 8)}: ${err.message}`);
       const s = _state.get(beingId);
@@ -122,6 +137,34 @@ export function getCurrentRootCorrelation(beingId) {
 }
 
 /**
+ * Abort every in-flight Summon across all beings whose currentRoot
+ * matches one of the supplied rootCorrelations. Returns the count of
+ * aborts actually fired.
+ *
+ * Cancel-button surface: the caller computes the set of rootCorrelations
+ * the user originated (via Summon.find({ beingIn: user, "endMessage.time": null })
+ * and walking rootCorrelation), then calls this to halt the chain
+ * cascade in one sweep. Pending inbox entries get cleaned separately
+ * via cancelByRootCorrelation per (nodeId, beingId).
+ *
+ * @param {Iterable<string>} rootCorrelations
+ * @param {string} [reason]
+ */
+export function abortByRootCorrelations(rootCorrelations, reason = "cancelled") {
+  const set = rootCorrelations instanceof Set
+    ? rootCorrelations
+    : new Set(rootCorrelations);
+  if (!set.size) return 0;
+  let aborted = 0;
+  for (const [beingId, state] of _state) {
+    if (!state?.currentRoot) continue;
+    if (!set.has(String(state.currentRoot))) continue;
+    if (abortCurrent(beingId, reason)) aborted++;
+  }
+  return aborted;
+}
+
+/**
  * Diagnostic snapshot of scheduler state. Used by tests and the
  * health-check dashboard.
  */
@@ -150,6 +193,7 @@ export function _resetAll() {
   }
   _state.clear();
   _rate.clear();
+  _cognitionMode.clear();
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -165,6 +209,13 @@ async function runLoop(beingId) {
     // drains the wakeQueue, then picks one per iteration. New wakes
     // arriving mid-loop just add to wakeQueue and the next iteration
     // sees them.
+    //
+    // Cognition branch (agent vs human) lives inside processEntry,
+    // after the receiver Being is loaded. For humans, processEntry
+    // emits being-room notifications and returns { humanBreakNode },
+    // which signals this per-node loop to break — entries stay
+    // pending in the inbox and the human responds by emitting a
+    // new SUMMON, not by scheduler processing.
     while (state.wakeQueue.size > 0) {
       // Take a snapshot of nodeIds to check this iteration. Wakes
       // landing during the iteration get picked up on the next round.
@@ -185,8 +236,11 @@ async function runLoop(beingId) {
           }
           const picked = await pickNextEntry(nodeId, beingId);
           if (!picked) break;
-          await processEntry(beingId, nodeId, picked);
+          const result = await processEntry(beingId, nodeId, picked);
           processedAny = true;
+          // Humans: entries stay pending; we've notified observers
+          // and shouldn't re-pick the same entry forever.
+          if (result?.humanBreakNode) break;
         }
       }
 
@@ -228,6 +282,22 @@ async function processEntry(beingId, nodeId, picked) {
       log.warn("Scheduler", `being ${beingId.slice(0, 8)} not found; marking entry consumed and skipping`);
       await markInboxConsumed(nodeId, beingId, [entry.correlation]);
       return;
+    }
+    // Cache cognition mode on first encounter so future wakes for this
+    // being don't re-resolve it (rarely changes; cleared on _resetAll).
+    if (!_cognitionMode.has(beingId)) {
+      _cognitionMode.set(beingId, toBeing.operatingMode === "human" ? "human" : "agent");
+    }
+    // Human cognition branch. Entries stay pending; we emit
+    // being-room notifications for each unconsumed entry at this
+    // node (dedup via state.humanNotified), release the controller,
+    // and signal the runLoop to break this node's loop. The human
+    // responds by emitting a new SUMMON, not by scheduler processing.
+    if (toBeing.operatingMode === "human") {
+      state.controller = null;
+      state.currentRoot = null;
+      await _notifyHumanObservers(beingId, nodeId, state);
+      return { humanBreakNode: true };
     }
     if (entry.activeRole) {
       const carried = Array.isArray(toBeing.roles) ? toBeing.roles : [];
@@ -368,6 +438,37 @@ export function attachHandoff(beingId, correlation, handoff) {
 // ────────────────────────────────────────────────────────────────
 // Internals
 // ────────────────────────────────────────────────────────────────
+
+/**
+ * Notify a human being's connected browser observers that pending
+ * inbox entries arrived at this position. Emits `ibp:summon` to
+ * the being's socket room for each unconsumed entry that hasn't been
+ * notified yet (tracked in `state.humanNotified`). Entries stay
+ * pending — humans consume by replying (new SUMMON with `inReplyTo`),
+ * not by scheduler processing.
+ *
+ * `getIO` is imported dynamically to avoid an ESM cycle through the
+ * verb handler (websocket.js → verbs/summon.js → scheduler.js).
+ *
+ * The notified set is in-memory; on crash the browser refetches the
+ * full inbox over HTTP and renders pending entries that way, so
+ * persistent dedup isn't needed.
+ */
+async function _notifyHumanObservers(beingId, nodeId, state) {
+  const { getIO } = await import("../seed/ws/websocket.js");
+  const io = getIO();
+  const entries = await readInbox(nodeId, beingId, { unconsumed: true });
+  if (!entries.length) return;
+  if (!state.humanNotified) state.humanNotified = new Set();
+  for (const entry of entries) {
+    if (!entry?.correlation) continue;
+    if (state.humanNotified.has(entry.correlation)) continue;
+    state.humanNotified.add(entry.correlation);
+    if (io) {
+      try { io.to(`being:${String(beingId)}`).emit("ibp:summon", entry); } catch {}
+    }
+  }
+}
 
 function _ensureState(beingId) {
   let state = _state.get(beingId);

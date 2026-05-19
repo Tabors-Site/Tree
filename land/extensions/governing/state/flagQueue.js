@@ -105,8 +105,12 @@ export async function appendFlag({
   beingId = null,
   sourceWorkerScopeId = null,
   sourceWorkerType = null,
+  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core
+  // so the write goes through core.do (auto-Did, one dispatcher).
+  core,
 }) {
   if (!rulerNodeId || !payload) return null;
+  if (!core?.do) throw new Error("appendFlag requires `core` (verb surface)");
   if (!isValidFlagKind(payload.kind)) {
     log.warn("Governing/Flags", `appendFlag rejected: invalid kind=${payload.kind}`);
     return null;
@@ -156,10 +160,15 @@ export async function appendFlag({
     : [];
   const queue = [...existingQueue, flag];
 
-  const { setExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-  await setExtMeta(node, NS, {
-    ...(meta || {}),
-    pendingContractIssues: queue,
+  // Phase 3 migration ([[project_seed_four_verbs_only]]): write through
+  // the verb surface so the change auto-audits as a Did and flows
+  // through one dispatcher path. merge:true preserves other keys in NS
+  // atomically (better than the previous read-spread-write pattern,
+  // which would clobber concurrent writes to sibling keys).
+  await core.do(node, "set-meta", {
+    namespace: NS,
+    data: { pendingContractIssues: queue },
+    merge: true,
   });
 
   log.info("Governing/Flags",
@@ -210,7 +219,8 @@ export async function readPendingIssues(rulerNodeId) {
  * has no caller for this yet, but the primitive lands here so the
  * mark-resolved code path exists when courts arrive).
  */
-export async function markFlagResolved({ rulerNodeId, flagId, resolution }) {
+export async function markFlagResolved({ rulerNodeId, flagId, resolution, core }) {
+  if (!core?.do) throw new Error("markFlagResolved requires `core` (verb surface)");
   if (!rulerNodeId || !flagId) return null;
   const node = await Node.findById(rulerNodeId);
   if (!node) return null;
@@ -237,10 +247,12 @@ export async function markFlagResolved({ rulerNodeId, flagId, resolution }) {
     return f;
   });
   if (!mutated) return null;
-  const { setExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-  await setExtMeta(node, NS, {
-    ...(meta || {}),
-    pendingContractIssues: next,
+  // Phase 3 migration: verb-surface write, atomic merge of the resolved
+  // flag back into the queue. See appendFlag for the rationale.
+  await core.do(node, "set-meta", {
+    namespace: NS,
+    data: { pendingContractIssues: next },
+    merge: true,
   });
   return next.find((f) => f?.id === flagId) || null;
 }

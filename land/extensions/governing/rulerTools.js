@@ -2,32 +2,31 @@
 //
 // Two tool shapes, matched to what the tool actually does:
 //
-// SPAWN-AND-AWAIT — invokes another role as a chainstep, awaits its
-//   completion, returns a concise summary the Ruler reads. The Ruler's
-//   chat continues after the tool result so it can synthesize for the
-//   user. Tools: hire-planner, revise-plan, route-to-foreman,
-//   resume-execution.
+// DISPATCH — emits a SUMMON to another being's inbox and returns
+//   immediately ("status: spawned"). The receiving being runs its
+//   own role.summon in parallel via the per-being scheduler; when
+//   it finishes, it replies via emitReplyToAsker which lands in
+//   this Ruler's inbox and wakes its next turn. Tools: hire-planner,
+//   hire-contractor, revise-plan, route-to-foreman, dispatch-execution,
+//   resume-execution, ratify-plan.
 //
-// STATE-WRITE DECISION-RECORDER — writes metadata (or fires a hook,
-//   or returns text), no LLM spawn. Decision is recorded to the
-//   per-visitor register; runRulerTurn applies state writes after the
-//   Ruler's chat ends. Tools: archive-plan, pause-execution,
-//   convene-court, respond-directly.
+// STATE-WRITE — writes metadata or fires a lifecycle hook, no LLM
+//   spawn. Tools: archive-plan, pause-execution, convene-court,
+//   respond-directly.
 //
 // INSPECTION — read-only utility that does NOT end the turn. The
 //   Ruler can call it before deciding. Tools: read-plan-detail.
 //
-// The architecture is "the Ruler is the addressable being." Tools
-// that invoke other roles spawn them as chain-nested chainsteps so
-// each role still runs in its own LLM call (own mode, own context),
-// but the Ruler stays open to synthesize what happened back to the
-// user. Each role's full output lives in metadata; only a concise
-// summary flows back to the Ruler's tool-result.
+// Architecture: "the Ruler is the addressable being." Each role runs
+// in its own LLM call (own mode, own context). The Ruler emits
+// SUMMONs that fan work out across the substrate; replies fan back
+// in via the inbox. No central dispatcher; no chainstep nesting.
+// Each role's full output lives in metadata; only a concise summary
+// reaches the Ruler's next turn.
 
 import { z } from "zod";
 import log from "../../seed/log.js";
 import Node from "../../seed/models/node.js";
-import { setRulerDecision } from "./state/rulerDecisions.js";
 import {
   tryClaim as tryClaimSpawn,
   release as releaseSpawn,
@@ -107,79 +106,12 @@ function formatContractorSpawnSummary(emission) {
 //
 // Returns true if emit succeeded, false if skipped (sub-Ruler, no
 // socket, or no emission).
-async function emitPlanCard({ aiSessionKey, ruler, emission, isRevision }) {
-  if (!aiSessionKey || !emission) return false;
-
-  // Entry-scope vs sub-Ruler detection. Sub-Rulers have a parentRulerId
-  // in their lineage; entry-scope Rulers (the scope where the
-  // instruction-chain first landed) don't.
-  try {
-    const { readLineage } = await import("./state/lineage.js");
-    const lineage = ruler?._id ? await readLineage(ruler._id) : null;
-    if (lineage?.parentRulerId) {
-      log.info("Governing",
-        `🎴 Plan card skipped at sub-Ruler ${String(ruler._id).slice(0, 8)} ` +
-        `(parent=${String(lineage.parentRulerId).slice(0, 8)}); ` +
-        `parent cycle implicitly ratifies — no external gate at this scope`);
-      return false;
-    }
-  } catch (err) {
-    // If lineage read fails, fall through and emit the card — better
-    // to over-show than under-show during a transient read failure.
-    log.debug("Governing", `emitPlanCard lineage check skipped: ${err.message}`);
-  }
-
-  try {
-    const { getActiveRequest } = await import("../tree-orchestrator/state.js");
-    const { GOVERNING_WS_EVENTS } = await import("./wsEvents.js");
-    const active = getActiveRequest(aiSessionKey);
-    const socket = active?.socket;
-    if (!socket?.emit) return false;
-
-    // Build branches list for the card from the emission's branch
-    // steps. The card renders these as "sub-Rulers about to dispatch."
-    const branches = [];
-    for (const step of (emission.steps || [])) {
-      if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
-      for (const b of step.branches) {
-        if (!b?.name) continue;
-        branches.push({
-          name: b.name,
-          spec: b.spec || "",
-          path: null,
-          files: [],
-          slot: null,
-          mode: null,
-          parentBranch: null,
-        });
-      }
-    }
-
-    const payload = {
-      version: emission.ordinal || 1,
-      projectNodeId: String(ruler._id),
-      projectName: ruler.name || null,
-      branches,
-      contracts: [],
-      emission,
-      ...(isRevision ? { trigger: "revision" } : {}),
-    };
-
-    const eventName = isRevision
-      ? GOVERNING_WS_EVENTS.PLAN_UPDATED
-      : GOVERNING_WS_EVENTS.PLAN_PROPOSED;
-    socket.emit(eventName, payload);
-
-    log.info("Governing",
-      `🎴 ${isRevision ? "PLAN_UPDATED" : "PLAN_PROPOSED"} emitted at ` +
-      `${String(ruler._id).slice(0, 8)} ` +
-      `(emission-${emission.ordinal}, ${branches.length} branches, ${emission.steps?.length || 0} steps)`);
-    return true;
-  } catch (err) {
-    log.debug("Governing", `plan card emit skipped: ${err.message}`);
-    return false;
-  }
-}
+// emitPlanCard was the legacy direct-socket card emitter (called from
+// hire-planner's old chainstep path). Retired in Slice 7: the plan card
+// is now a reply-SUMMON from the Ruler to its delegateToHigherBeing
+// (or chain-initial caller), and rendering happens client-side via the
+// `ibp:summon` listener on the user-being's room. No direct
+// socket emit, no helper function. See memory `card-is-a-summon`.
 
 // Build the concise summary returned to the Ruler after the Planner
 // emits. The full structured emission lives in metadata.governing.emission;
@@ -232,38 +164,21 @@ async function resolveRulerScope(nodeId) {
   }
 }
 
-// Fetch the calling visitor's active abort signal. Tool handlers
-// can't receive AbortSignal through args (not JSON-serializable),
-// so the orchestrator's per-visitor active-request map is the
-// indirection. When the user cancels their turn, that signal aborts;
-// spawn-and-await tools threading it through to runChat propagate
-// the cancel into the spawned role.
-async function getCallerAbortSignal(aiSessionKey) {
-  if (!aiSessionKey) return null;
-  try {
-    const { getActiveRequest } = await import("../tree-orchestrator/state.js");
-    const active = getActiveRequest(aiSessionKey);
-    return active?.signal || null;
-  } catch {
-    return null;
-  }
+// Caller signal/socket lookups previously reached into tree-orchestrator's
+// per-visitor active-request map. Slice 7 retires that path —
+// SUMMON-based dispatch is fire-and-forget (no threaded AbortSignal;
+// cancellation routes through high-priority SUMMON + cancelByRootCorrelation),
+// and the spawned being communicates via its own being-room broadcast (not
+// via the caller's socket). These helpers stay as null returns to keep
+// the existing call-site shapes intact while we finish the migration;
+// pass-through values become null in the resulting handoff/hook payloads,
+// and downstream listeners (dashboard SSE, etc.) tolerate that gracefully.
+async function getCallerAbortSignal(_aiSessionKey) {
+  return null;
 }
 
-// Fetch the calling visitor's active socket. Same indirection as the
-// abort signal — tool handlers can't receive Socket through args.
-// Threading the socket lets spawned roles emit tool-call/thinking
-// events back to the user's chat so they see the inner chain unfold
-// live (Planner narration, Contractor reasoning, etc.) instead of
-// only the parent's post-synthesis.
-async function getCallerSocket(aiSessionKey) {
-  if (!aiSessionKey) return null;
-  try {
-    const { getActiveRequest } = await import("../tree-orchestrator/state.js");
-    const active = getActiveRequest(aiSessionKey);
-    return active?.socket || null;
-  } catch {
-    return null;
-  }
+async function getCallerSocket(_aiSessionKey) {
+  return null;
 }
 
 export default function getRulerTools(_core) {
@@ -280,9 +195,10 @@ export default function getRulerTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-hire-planner",
+      verb: "summon",
       description:
         "Hire a Planner to decompose the work at this scope. Spawns " +
-        "the Planner as a chainstep child of your turn — it runs in " +
+        "the Planner via SUMMON (fire-and-forget) — it runs in " +
         "its own LLM call (own context, own prompt), emits a structured " +
         "plan to metadata, and the plan card is emitted upward for " +
         "ratification. The tool returns a concise summary (emission " +
@@ -370,6 +286,7 @@ export default function getRulerTools(_core) {
           beingId,
           summonId,
           sessionId,
+          core: _core,
         });
         if (!planNode) {
           releaseSpawn(claim.key);
@@ -531,12 +448,6 @@ export default function getRulerTools(_core) {
         });
         wake(plannerBeingId, String(ruler._id));
 
-        setRulerDecision(args.rootSummonId || args.summonId, {
-          kind: "hire-planner",
-          briefing,
-          spawnId: correlation,
-        });
-
         return text(JSON.stringify({
           status: "spawned",
           decision: "hire-planner",
@@ -571,9 +482,10 @@ export default function getRulerTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-hire-contractor",
+      verb: "summon",
       description:
         "Hire a Contractor to draft contracts shaped around the active " +
-        "plan. Spawns the Contractor as a chainstep child of your turn " +
+        "plan. Spawns the Contractor via SUMMON (fire-and-forget) " +
         "— it reads the active plan emission, identifies shared " +
         "vocabulary (events, storage keys, dom ids, message types, " +
         "function signatures) that sub-domains must agree on, validates " +
@@ -707,6 +619,7 @@ export default function getRulerTools(_core) {
           beingId,
           summonId,
           sessionId,
+          core: _core,
         });
         if (!contractsNode) {
           releaseSpawn(claim.key);
@@ -854,12 +767,6 @@ export default function getRulerTools(_core) {
         });
         wake(contractorBeingId, String(ruler._id));
 
-        setRulerDecision(args.rootSummonId || args.summonId, {
-          kind: "hire-contractor",
-          briefing: briefing || null,
-          spawnId: correlation,
-        });
-
         return text(JSON.stringify({
           status: "spawned",
           decision: "hire-contractor",
@@ -887,8 +794,9 @@ export default function getRulerTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-route-to-foreman",
+      verb: "summon",
       description:
-        "Spawn the Foreman as a chainstep child of your turn to make " +
+        "Spawn the Foreman via SUMMON (fire-and-forget) to make " +
         "an execution-judgment decision. The Foreman runs in its own " +
         "LLM call (own context — call-stack snapshot of execution " +
         "state), reads the wakeup reason and the instruction from " +
@@ -951,6 +859,7 @@ export default function getRulerTools(_core) {
           beingId,
           summonId,
           sessionId,
+          core: _core,
         });
         if (!executionNode) {
           releaseSpawn(claim.key);
@@ -1099,12 +1008,6 @@ export default function getRulerTools(_core) {
         });
         wake(foremanBeingId, String(ruler._id));
 
-        setRulerDecision(args.rootSummonId || args.summonId, {
-          kind: "route-to-foreman",
-          wakeupReason,
-          spawnId: correlation,
-        });
-
         return text(JSON.stringify({
           status: "spawned",
           decision: "route-to-foreman",
@@ -1134,6 +1037,7 @@ export default function getRulerTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-respond-directly",
+      verb: "summon",
       description:
         "Respond above yourself, without invoking other roles. " +
         "Use for questions, clarifications, status reports the Ruler " +
@@ -1160,7 +1064,6 @@ export default function getRulerTools(_core) {
         if (!aiSessionKey) {
           return text("governing-respond-directly: missing aiSessionKey; substrate bug — surface.");
         }
-        setRulerDecision(args.rootSummonId || args.summonId, { kind: "respond-directly", response });
         return text(JSON.stringify({
           ok: true,
           decision: "respond-directly",
@@ -1179,6 +1082,7 @@ export default function getRulerTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-revise-plan",
+      verb: "do",
       description:
         "Archive the currently-ratified plan and hire a Planner to " +
         "draft a replacement. Use when the instruction from above " +
@@ -1222,6 +1126,7 @@ export default function getRulerTools(_core) {
                 status: "archived",
                 supersedes: prior.planRef,
                 reason: `revise: ${revisionReason}`.slice(0, 500),
+                core: _core,
               });
               archived = true;
             }
@@ -1261,58 +1166,162 @@ export default function getRulerTools(_core) {
           ));
         }
 
-        // Fire-and-forget. The revision Planner runs in background;
-        // when it settles, governing:planRevised fires and wakes the
-        // Ruler in a fresh turn. The Ruler reads the new plan from
-        // its snapshot and proceeds.
-        const callerSignal = await getCallerAbortSignal(aiSessionKey);
-        const callerSocket = await getCallerSocket(aiSessionKey);
-        const { spawnRoleAsChainstepAsync } = await import("../tree-orchestrator/ruling.js");
-        const spawn = spawnRoleAsChainstepAsync({
-          modeKey: "tree:governing-planner",
-          message: briefing,
+        // SUMMON the Planner via inbox. Same pattern as hire-planner:
+        //   1. Ensure the plan trio is materialized (idempotent — exists already on revise).
+        //   2. Resolve Planner being's username for the SUMMON stance.
+        //   3. Append briefing to the Planner's inbox at the Ruler scope.
+        //   4. Handoff releases the spawn claim and fires
+        //      `governing:planRevised` for dashboard SSE on settle.
+        //   5. wake() the per-being scheduler.
+        //
+        // The reply path is substrate-based: plannerRole.summon calls
+        // emitReplyToAsker, which wakes the Ruler with the revision
+        // emission visible in its next snapshot.
+        const { ensurePlanAtScope } = await import("./state/planNode.js");
+        const planNode = await ensurePlanAtScope({
+          scopeNodeId: String(ruler._id),
           beingId,
-          username,
-          rootId: rootId || null,
-          nodeId: String(ruler._id),
-          parentSummonId: summonId || null,
-          parentSessionId: sessionId || null,
-          signal: callerSignal,
-          socket: callerSocket,
-          source: "ruler-revise-planner",
-          kind: "revise-plan",
-          completionHookName: "governing:planRevised",
-          hookPayload: { revisionReason },
-          releaseClaimKey: claim.key,
+          summonId,
+          sessionId,
+          core: _core,
         });
-        if (!spawn?.spawnId) {
+        if (!planNode) {
           releaseSpawn(claim.key);
           return text(JSON.stringify({
             ok: false,
             decision: "revise-plan",
-            error: "spawn-failed-to-start",
-            note: "Revision spawn could not be initiated.",
+            error: "ensure-plan-failed",
+            note: "Could not materialize the plan trio for revision. Substrate bug.",
           }, null, 2));
         }
+        const NodeModel = (await import("../../seed/models/node.js")).default;
+        const BeingModel = (await import("../../seed/models/being.js")).default;
+        const planNodeFull = await NodeModel.findById(planNode._id).select("metadata").lean();
+        const planBeings = planNodeFull?.metadata instanceof Map
+          ? planNodeFull.metadata.get("beings")
+          : planNodeFull?.metadata?.beings;
+        const plannerBeingId = planBeings?.planner?.beingId || null;
+        if (!plannerBeingId) {
+          releaseSpawn(claim.key);
+          return text(JSON.stringify({
+            ok: false,
+            decision: "revise-plan",
+            error: "planner-being-missing",
+          }, null, 2));
+        }
+        const planner = await BeingModel.findById(plannerBeingId).select("username").lean();
+        const plannerUsername = planner?.username;
+        if (!plannerUsername) {
+          releaseSpawn(claim.key);
+          return text(JSON.stringify({
+            ok: false,
+            decision: "revise-plan",
+            error: "planner-username-missing",
+          }, null, 2));
+        }
+        const rulerNodeFull = await NodeModel.findById(ruler._id).select("metadata").lean();
+        const rulerBeings = rulerNodeFull?.metadata instanceof Map
+          ? rulerNodeFull.metadata.get("beings")
+          : rulerNodeFull?.metadata?.beings;
+        const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
+        const rulerBeing = rulerBeingIdAtScope
+          ? await BeingModel.findById(rulerBeingIdAtScope).select("username").lean()
+          : null;
+        const rulerUsername = rulerBeing?.username || "ruler";
 
-        setRulerDecision(args.rootSummonId || args.summonId, {
-          kind: "revise-plan",
-          revisionReason,
-          spawnId: spawn.spawnId,
+        const { getLandDomain } = await import("../../ibp/address.js");
+        const landDomain = getLandDomain();
+        const stancePath = `${landDomain}/${ruler._id}`;
+        const rulerStance = `${stancePath}@${rulerUsername}`;
+
+        const { randomUUID } = await import("crypto");
+        const correlation = randomUUID();
+        const rootCorrelation = args.rootSummonId || summonId || correlation;
+        const message = {
+          from:            rulerStance,
+          content:         briefing,
+          intent:          "chat",
+          correlation,
+          rootCorrelation,
+          activeRole:      "planner",
+          priority:        3, // INTERACTIVE
+          sentAt:          new Date().toISOString(),
+        };
+
+        const { appendToInbox } = await import("../../ibp/inbox.js");
+        const { attachHandoff, wake } = await import("../../ibp/scheduler.js");
+        const { hooks } = await import("../../seed/hooks.js");
+        const startMs = Date.now();
+        try {
+          await appendToInbox(String(ruler._id), plannerBeingId, message);
+        } catch (err) {
+          releaseSpawn(claim.key);
+          return text(JSON.stringify({
+            ok: false,
+            decision: "revise-plan",
+            error: "appendToInbox failed: " + (err?.message || String(err)),
+          }, null, 2));
+        }
+        attachHandoff(plannerBeingId, correlation, {
+          identity:   { beingId, username },
+          resolved:   { being: "planner", nodeId: String(ruler._id), zone: "tree" },
+          onResponse: async (responseEntry) => {
+            try { releaseSpawn(claim.key); } catch {}
+            try {
+              await hooks.fire("governing:planRevised", {
+                spawnId:         correlation,
+                rulerNodeId:     String(ruler._id),
+                beingId,
+                username,
+                rootId:          rootId || null,
+                kind:            "revise-plan",
+                revisionReason,
+                exitText:        responseEntry?.content || null,
+                durationMs:      Date.now() - startMs,
+                error:           null,
+                parentSummonId:  summonId || null,
+                parentSessionId: sessionId || null,
+              });
+            } catch (err) {
+              log.warn("Governing", `planRevised hook fire failed: ${err.message}`);
+            }
+          },
+          onError: async (err) => {
+            try { releaseSpawn(claim.key); } catch {}
+            try {
+              await hooks.fire("governing:planRevised", {
+                spawnId:         correlation,
+                rulerNodeId:     String(ruler._id),
+                beingId,
+                username,
+                rootId:          rootId || null,
+                kind:            "revise-plan",
+                revisionReason,
+                exitText:        null,
+                durationMs:      Date.now() - startMs,
+                error:           err?.message || String(err),
+                parentSummonId:  summonId || null,
+                parentSessionId: sessionId || null,
+              });
+            } catch (hookErr) {
+              log.warn("Governing", `planRevised (error path) hook fire failed: ${hookErr.message}`);
+            }
+          },
         });
+        wake(plannerBeingId, String(ruler._id));
 
         return text(JSON.stringify({
           status: "spawned",
           decision: "revise-plan",
-          spawnId: spawn.spawnId,
+          spawnId: correlation,
           rulerNodeId: String(ruler._id),
           revisionReason,
           priorArchived: archived,
           note:
-            "Prior plan archived. Revision Planner started in the background. " +
+            "Prior plan archived. Revision Planner SUMMON sent. " +
             "This turn ends now. Synthesize 'Plan revision in progress.' and " +
-            "stop. When the revision settles, governing:planRevised wakes you; " +
-            "you'll see the new emission in your snapshot.",
+            "stop. When the Planner emits the revised plan, you wake via " +
+            "reply-SUMMON with the new emission visible in your snapshot.",
         }, null, 2));
       },
     },
@@ -1343,9 +1352,10 @@ export default function getRulerTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-dispatch-execution",
+      verb: "summon",
       description:
         "Dispatch the approved plan + ratified contracts to execution. " +
-        "Spawns the full dispatch flow as a chainstep child of your " +
+        "Emits a SUMMON to the Foreman for dispatch coordination. Each plan step becomes a sub-Ruler dispatched in parallel via the substrate scheduler (fire-and-forget) from your " +
         "turn: execution-record created, Ruler-own integration runs " +
         "(Worker writes leaf-step files at this scope), sub-Ruler " +
         "turns recursively dispatch each branch step, and the Foreman " +
@@ -1401,37 +1411,31 @@ export default function getRulerTools(_core) {
           }, null, 2));
         }
 
-        // Build branch list from the plan emission's branch steps.
-        // Each entry maps to a sub-Ruler dispatch in swarm.runBranchSwarm.
-        const branches = [];
-        for (const step of (planEmission.steps || [])) {
-          if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
-          for (const b of step.branches) {
-            if (!b?.name) continue;
-            branches.push({
-              name: b.name,
-              spec: b.spec || "",
-              path: null,
-              files: [],
-              slot: null,
-              mode: null,
-              parentBranch: null,
-            });
-          }
+        // Collect plan steps. Slice 7 retires the branch-vs-leaf
+        // distinction at dispatch level: EVERY step becomes a sub-Ruler.
+        // The sub-Ruler at narrower scope reads its substrate and decides
+        // whether it needs to plan further or just hire Foreman/Worker
+        // directly. See memory `recursive-sub-ruler-dispatch` for the
+        // architectural commitment, and `card-is-a-summon` for the reply
+        // mechanism that bubbles results back up through the chain.
+        const steps = Array.isArray(planEmission.steps) ? planEmission.steps : [];
+        if (!steps.length) {
+          return text(JSON.stringify({
+            ok: false,
+            decision: "dispatch-execution",
+            error: "empty-plan",
+            note: "Plan emission has no steps to dispatch.",
+          }, null, 2));
         }
 
         log.info("Governing",
           `🚀 Ruler dispatching execution at ${String(ruler._id).slice(0, 8)} ` +
           `(plan emission-${planEmission.ordinal}, ` +
           `contracts emission-${contractsEmission.ordinal}, ` +
-          `${branches.length} branches)`);
+          `${steps.length} step${steps.length === 1 ? "" : "s"})`);
 
-        // In-flight guard. dispatch-execution is the longest-running
-        // tool in the substrate — a 6-chapter book swarm can exceed
-        // 30 minutes. Fire-and-forget below sidesteps the MCP timeout
-        // entirely; the guard still catches duplicate dispatch calls
-        // that the Ruler could accidentally emit (e.g., on transient
-        // tool errors followed by retry).
+        // In-flight guard. dispatch-execution still claims so a
+        // duplicate fire doesn't double-spawn the sub-Rulers.
         const claim = tryClaimSpawn({
           rulerNodeId: ruler._id,
           kind: "dispatch-execution",
@@ -1447,66 +1451,14 @@ export default function getRulerTools(_core) {
           ));
         }
 
-        // Worker dispatch is fully owned by governance's typed Worker
-        // resolver now — dispatch.resolveWorkerModeForType picks the
-        // mode per leaf based on the leaf's workerType + governing's
-        // workspace registry. The legacy stashedModeKey (the workspace
-        // plan mode the user originally invoked) is no longer threaded
-        // through; dispatch infers the workspace from the registry.
-
-        const callerSignal = await getCallerAbortSignal(aiSessionKey);
-        const callerSocket = await getCallerSocket(aiSessionKey);
-
-        // Invoke the refactored dispatch flow. dispatchSwarmPlan still
-        // exists in tree-orchestrator/dispatch.js but its Contractor
-        // step (Step 1) has been removed (Stage 1 moved that to the
-        // hire-contractor tool). What remains: execution-record, Ruler-
-        // own integration, swarm dispatch, Foreman freeze.
-        // Fire-and-forget dispatch. Returns immediately; the
-        // recursive swarm runs in background. The Foreman's existing
-        // swarm-completed wakeup (fired from inside dispatchSwarmPlan
-        // when all branches settle) is what eventually drives the
-        // Ruler to read terminal state and synthesize the user-facing
-        // report. governing:swarmDispatched also fires here on settle
-        // (success or failure) to wake the Ruler in a fresh turn.
-        const { getActiveRequest } = await import("../tree-orchestrator/state.js");
-        const { dispatchSwarmPlan } = await import("../tree-orchestrator/dispatch.js");
-        const activeRequest = getActiveRequest(aiSessionKey) || {};
         const spawnId = `spawn_${Date.now().toString(36)}_dispatch`;
-        const planData = {
-          branches,
-          contracts: contractsEmission.contracts || [],
-          projectNodeId: String(ruler._id),
-          projectName: ruler.name || null,
-          userRequest: "",
-          architectChatId: summonId || null,
-          rootSummonId: summonId || null,
-          rootId: rootId || null,
-          targetNodeId: String(ruler._id),
-          cleanedAnswer: "",
-          emission: planEmission,
-        };
-        const runtimeCtx = {
-          aiSessionKey,
-          beingId,
-          username,
-          rootId: rootId || null,
-          sessionId: sessionId || null,
-          signal: callerSignal,
-          slot: activeRequest.slot || null,
-          socket: activeRequest.socket || null,
-          onToolLoopCheckpoint: activeRequest.onToolLoopCheckpoint || null,
-          rt: activeRequest.rt || null,
-          rootSummonId: summonId || null,
-        };
         const startedAt = Date.now();
 
-        // LIFECYCLE_ACTIVE start. dispatch-execution is the longest
-        // phase in any lifecycle and the most important one for the
-        // user to see "still active" through. Fire via emitToUser so
-        // the chip reaches every socket the user has open right now
-        // (not just the one captured at request time — that one goes
-        // stale during long dispatches and across page reloads).
+        // LIFECYCLE_ACTIVE start. Lets the UI surface "dispatch in
+        // progress" across socket reloads. The clear-event fires
+        // when all sub-Ruler chains settle (Phase 2 work — for now
+        // the chip stays on until manual clearance / sub-Ruler reply
+        // chain reaches the parent).
         if (beingId) {
           try {
             const { emitToUser } = await import("../../seed/ws/websocket.js");
@@ -1517,7 +1469,7 @@ export default function getRulerTools(_core) {
               rootId: rootId || null,
               phase: "dispatch-execution",
               spawnId,
-              branchCount: branches.length,
+              stepCount: steps.length,
               at: new Date().toISOString(),
             });
           } catch (err) {
@@ -1525,108 +1477,289 @@ export default function getRulerTools(_core) {
           }
         }
 
-        // Register a spawn-local AbortController so the stop button
-        // can cancel the entire dispatch chain (sub-Rulers, Worker
-        // batches, recursive sub-spawns). Without this, the stop
-        // button can't halt fire-and-forget dispatches — the user's
-        // only escape is killing the server.
-        const dispatchAbort = new AbortController();
-        if (callerSignal) {
-          if (callerSignal.aborted) dispatchAbort.abort();
-          else callerSignal.addEventListener("abort", () => dispatchAbort.abort(), { once: true });
-        }
-        let unregisterDispatchAbort = () => {};
-        try {
-          const { registerSpawnAbort } = await import("../tree-orchestrator/spawnAborts.js");
-          unregisterDispatchAbort = registerSpawnAbort(String(beingId), dispatchAbort, `dispatch:${spawnId.slice(0, 8)}`);
-        } catch {}
-        runtimeCtx.signal = dispatchAbort.signal;
+        // Resolve the parent Ruler's being username for the SUMMON
+        // `from` stance. Sub-Rulers will reply UP through emitReplyToAsker
+        // which reads message.from on their incoming SUMMON.
+        const NodeModel = (await import("../../seed/models/node.js")).default;
+        const BeingModel = (await import("../../seed/models/being.js")).default;
+        const rulerNodeFull = await NodeModel.findById(ruler._id).select("metadata name").lean();
+        const rulerBeings = rulerNodeFull?.metadata instanceof Map
+          ? rulerNodeFull.metadata.get("beings")
+          : rulerNodeFull?.metadata?.beings;
+        const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
+        const rulerBeing = rulerBeingIdAtScope
+          ? await BeingModel.findById(rulerBeingIdAtScope).select("username").lean()
+          : null;
+        const rulerUsername = rulerBeing?.username || "ruler";
+        const { getLandDomain } = await import("../../ibp/address.js");
+        const landDomain = getLandDomain();
+        const rulerStance = `${landDomain}/${ruler._id}@${rulerUsername}`;
 
-        // Kick off the dispatch WITHOUT awaiting. On settle (success
-        // or failure), release the claim + fire governing:swarmDispatched.
-        (async () => {
-          let dispatchSummary = "";
-          let dispatchError = null;
+        // For each plan step, create a child node at this Ruler's
+        // scope, promote it to a sub-Ruler (which creates the sub-
+        // Ruler being via promoteToRuler), and SUMMON the sub-Ruler
+        // with the step's spec as the briefing. Contracts inheritance
+        // is automatic via the parent-walk substrate reads; no
+        // explicit pass needed.
+        const { promoteToRuler, PROMOTED_FROM } = await import("./state/role.js");
+        const { appendToInbox } = await import("../../ibp/inbox.js");
+        const { wake } = await import("../../ibp/scheduler.js");
+        const { writeLineage } = await import("./state/lineage.js");
+        const { randomUUID } = await import("crypto");
+        const rootCorrelation = args.rootSummonId || summonId || `${spawnId}-root`;
+
+        const dispatched = [];
+        const failures = [];
+        for (let i = 0; i < steps.length; i++) {
+          const step = steps[i] || {};
+          const stepName = (step.name && String(step.name).slice(0, 60))
+            || (step.spec && String(step.spec).split("\n")[0].slice(0, 60))
+            || `step-${i + 1}`;
+          const stepBody = step.spec || step.name || JSON.stringify(step);
           try {
-            dispatchSummary = await dispatchSwarmPlan(planData, runtimeCtx);
-          } catch (err) {
-            dispatchError = String(err?.message || err);
-            log.warn("Governing",
-              `dispatch-execution: dispatchSwarmPlan failed: ${dispatchError}`);
-          }
-          releaseSpawn(claim.key);
-          try { unregisterDispatchAbort(); } catch {}
+            const childNode = new NodeModel({
+              name: stepName,
+              type: "ruler",
+              parent: ruler._id,
+            });
+            await childNode.save();
 
-          // LIFECYCLE_ACTIVE clear for dispatch via emitToUser so
-          // it survives the user's request socket closing.
-          if (beingId) {
+            await promoteToRuler({
+              nodeId: String(childNode._id),
+              promotedFrom: PROMOTED_FROM.BRANCH_DISPATCH,
+              reason: `dispatched by ${rulerUsername} for: ${stepName}`,
+              core: _core,
+            });
+
+            // Lineage: record parent Ruler + parent step index so the
+            // sub-Ruler's snapshot/enrichContext can surface where it
+            // sits in the parent's decomposition.
             try {
-              const { emitToUser } = await import("../../seed/ws/websocket.js");
-              const { WS } = await import("../../seed/protocol.js");
-              emitToUser(String(beingId), WS.LIFECYCLE_ACTIVE, {
-                active: false,
-                rulerNodeId: String(ruler._id),
-                rootId: rootId || null,
-                phase: "dispatch-execution",
-                spawnId,
-                error: dispatchError,
-                durationMs: Date.now() - startedAt,
-                at: new Date().toISOString(),
+              await writeLineage({
+                subRulerNodeId:  String(childNode._id),
+                parentRulerId:   String(ruler._id),
+                parentStepIndex: i + 1,
+                core: _core,
               });
-            } catch (err) {
-              log.debug("Governing", `LIFECYCLE_ACTIVE emit (dispatch clear) skipped: ${err.message}`);
+            } catch (linErr) {
+              log.debug("Governing", `lineage write skipped for step ${i + 1}: ${linErr.message}`);
             }
-          }
 
-          try {
-            const { hooks } = await import("../../seed/hooks.js");
-            hooks.run("governing:swarmDispatched", {
-              spawnId,
-              rulerNodeId: String(ruler._id),
-              rootId: rootId || null,
-              beingId: beingId || null,
-              username: username || null,
-              parentSummonId: summonId || null,
-              parentSessionId: sessionId || null,
-              socket: activeRequest.socket || null,
-              signal: callerSignal,
-              source: "ruler-dispatch-execution",
-              dispatchSummary: typeof dispatchSummary === "string"
-                ? dispatchSummary.slice(0, 4000)
-                : null,
-              error: dispatchError,
-              durationMs: Date.now() - startedAt,
-              planEmissionId: planEmission._emissionNodeId,
-              contractsEmissionId: contractsEmission._emissionNodeId,
-            }).catch(() => {});
-          } catch (hookErr) {
-            log.debug("Governing",
-              `governing:swarmDispatched fire skipped: ${hookErr.message}`);
-          }
-        })();
+            // Resolve the new sub-Ruler being.
+            const childFull = await NodeModel.findById(childNode._id).select("metadata").lean();
+            const childBeings = childFull?.metadata instanceof Map
+              ? childFull.metadata.get("beings")
+              : childFull?.metadata?.beings;
+            const subRulerBeingId = childBeings?.ruler?.beingId || null;
+            if (!subRulerBeingId) {
+              failures.push({ stepName, error: "sub-ruler-being-missing" });
+              continue;
+            }
 
-        setRulerDecision(args.rootSummonId || args.summonId, {
-          kind: "dispatch-execution",
-          spawnId,
-          planEmissionId: planEmission._emissionNodeId,
-          contractsEmissionId: contractsEmission._emissionNodeId,
-        });
+            const correlation = randomUUID();
+            const briefing =
+              `You are a sub-Ruler dispatched by ${rulerUsername} to handle one step of a larger plan.\n\n` +
+              `Your assigned step (${i + 1} of ${steps.length}): ${stepName}\n\n` +
+              `Spec:\n${stepBody}\n\n` +
+              `Read your snapshot for the parent's plan + contracts. Decide whether to plan further ` +
+              `(governing-hire-planner), draft contracts (governing-hire-contractor), or dispatch ` +
+              `execution (governing-dispatch-execution). Reply when your work settles.`;
+
+            await appendToInbox(String(childNode._id), String(subRulerBeingId), {
+              from:            rulerStance,
+              content:         briefing,
+              intent:          "chat",
+              correlation,
+              rootCorrelation,
+              activeRole:      "ruler",
+              priority:        3, // INTERACTIVE
+              sentAt:          new Date().toISOString(),
+            });
+            wake(String(subRulerBeingId), String(childNode._id));
+
+            dispatched.push({
+              subRulerNodeId: String(childNode._id),
+              subRulerBeingId: String(subRulerBeingId),
+              stepName,
+              stepIndex: i + 1,
+              correlation,
+            });
+            log.info("Governing",
+              `🌱 sub-Ruler "${stepName}" dispatched at ${String(childNode._id).slice(0, 8)} ` +
+              `(${i + 1}/${steps.length})`);
+          } catch (err) {
+            log.warn("Governing",
+              `dispatch step ${i + 1} ("${stepName}") failed: ${err.message}`);
+            failures.push({ stepName, error: err.message });
+          }
+        }
+
+        releaseSpawn(claim.key);
+
+        // Fire dashboard SSE so the governance panel re-renders.
+        try {
+          const { hooks } = await import("../../seed/hooks.js");
+          hooks.run("governing:swarmDispatched", {
+            spawnId,
+            rulerNodeId: String(ruler._id),
+            rootId: rootId || null,
+            beingId: beingId || null,
+            username: username || null,
+            parentSummonId: summonId || null,
+            parentSessionId: sessionId || null,
+            source: "ruler-dispatch-execution",
+            dispatchSummary: `dispatched ${dispatched.length}/${steps.length} sub-Rulers`,
+            error: failures.length ? `${failures.length} step(s) failed to dispatch` : null,
+            durationMs: Date.now() - startedAt,
+            planEmissionId: planEmission._emissionNodeId,
+            contractsEmissionId: contractsEmission._emissionNodeId,
+          }).catch(() => {});
+        } catch (hookErr) {
+          log.debug("Governing", `governing:swarmDispatched fire skipped: ${hookErr.message}`);
+        }
 
         return text(JSON.stringify({
           status: "spawned",
           decision: "dispatch-execution",
           spawnId,
           rulerNodeId: String(ruler._id),
-          branchCount: branches.length,
+          dispatchedCount: dispatched.length,
+          dispatched,
+          failures,
           note:
-            "Dispatch started in the background. This turn ends now. " +
-            `Synthesize one short sentence — 'Dispatch started across ${branches.length} branch${branches.length === 1 ? "" : "es"}.' — ` +
-            "and stop. The recursive swarm runs asynchronously; sub-Rulers " +
-            "promote, plan, contract, dispatch their own work. When the " +
-            "swarm settles, governing:swarmDispatched (and the Foreman's " +
-            "swarm-completed wakeup) drive a fresh Ruler turn that synthesizes " +
-            "the final report. Do NOT predict outcomes or pretend the work " +
-            "is done.",
+            `Dispatched ${dispatched.length}/${steps.length} sub-Rulers. Each runs its own ` +
+            `cycle in parallel via its own scheduler. This turn ends now. ` +
+            `Synthesize one short sentence — 'Dispatch started across ${dispatched.length} sub-Ruler${dispatched.length === 1 ? "" : "s"}.' — ` +
+            `and stop. When sub-Rulers reply via the substrate inbox (emitReplyToAsker), ` +
+            `you wake and see their progress in your snapshot.`,
+        }, null, 2));
+      },
+    },
+
+    // ─────────────────────────────────────────────────────────────────
+    // governing-ratify-plan
+    //
+    // The Ruler's delegate (typically the user-being at entry-scope)
+    // approved the pending plan. Flip the pending ledger entry to
+    // status="approved" so the lifecycle advances. The Ruler calls this
+    // when its current SUMMON came from its delegate AND the content
+    // signals approval (e.g., "yes", "approve", "looks good").
+    //
+    // Phase 1.5: this is the entry-scope ratification primitive. The
+    // sub-scope path doesn't need it — sub-Ruler plans auto-approve at
+    // emit time because the parent's dispatch is implicit ratification.
+    // ─────────────────────────────────────────────────────────────────
+    {
+      name: "governing-ratify-plan",
+      verb: "do",
+      description:
+        "Ratify a pending plan. Use when your snapshot shows " +
+        "`awaiting: \"delegate-decision\"` AND the message just received " +
+        "from your delegate (the user-being or parent Ruler at your " +
+        "rulership level) signals approval. Flips the pending plan to " +
+        "approved status; the lifecycle then advances to " +
+        "`awaiting: \"contracts\"` and you can call hire-contractor.\n\n" +
+        "Args: reason — short note for the audit trail (e.g., the " +
+        "user's exact phrasing).",
+      schema: {
+        reason: z.string().describe(
+          "Short note for the audit trail — e.g., the delegate's exact phrasing.",
+        ),
+      },
+      annotations: { readOnlyHint: false },
+      async handler(args) {
+        const { aiSessionKey, beingId, nodeId } = args;
+        const reason = typeof args.reason === "string" ? args.reason.trim() : "";
+        if (!reason) return text("governing-ratify-plan: reason is required for audit.");
+        if (reason.length > REASON_CAP) {
+          return text(`governing-ratify-plan: reason exceeds ${REASON_CAP} chars; trim.`);
+        }
+        if (!beingId) return text("governing-ratify-plan: missing beingId; substrate bug.");
+
+        const ruler = await resolveRulerScope(nodeId);
+        if (!ruler) {
+          return text("governing-ratify-plan: no Ruler scope resolvable.");
+        }
+
+        const { getExtension } = await import("../loader.js");
+        const governing = getExtension("governing")?.exports;
+        if (!governing?.readLatestPlanApproval || !governing?.appendPlanApproval) {
+          return text("governing-ratify-plan: governing.readLatestPlanApproval / appendPlanApproval unavailable; substrate bug.");
+        }
+
+        const latest = await governing.readLatestPlanApproval(ruler._id);
+        if (!latest) {
+          return text(JSON.stringify({
+            ok: false,
+            decision: "ratify-plan",
+            error: "no-plan-approval",
+            note: "No plan approval ledger entry at this Ruler scope. Nothing to ratify.",
+          }, null, 2));
+        }
+        if (latest.status === "approved") {
+          return text(JSON.stringify({
+            ok: true,
+            decision: "ratify-plan",
+            note: "Plan is already approved. No-op.",
+            planRef: latest.planRef,
+          }, null, 2));
+        }
+        if (latest.status !== "pending") {
+          return text(JSON.stringify({
+            ok: false,
+            decision: "ratify-plan",
+            error: "unexpected-status",
+            currentStatus: latest.status,
+            note: `Latest plan approval is "${latest.status}" — not in a state that ratifies.`,
+          }, null, 2));
+        }
+
+        // Parse the pending ref to recover the emission node, then
+        // append an "approved" entry that supersedes the pending one.
+        // The latest-non-superseded after this write is the new approved
+        // entry, so readActivePlanApproval / readActivePlanEmission
+        // surface it on the next snapshot read.
+        const { parsePlanRef } = await import("./state/planApprovals.js");
+        const parsed = parsePlanRef(latest.planRef);
+        if (!parsed) {
+          return text(JSON.stringify({
+            ok: false,
+            decision: "ratify-plan",
+            error: "unparseable-planRef",
+            planRef: latest.planRef,
+          }, null, 2));
+        }
+        try {
+          await governing.appendPlanApproval({
+            rulerNodeId: ruler._id,
+            planNodeId: parsed.planNodeId,
+            status: "approved",
+            supersedes: latest.planRef,
+            reason: `ratified: ${reason}`.slice(0, 500),
+            core: _core,
+          });
+        } catch (err) {
+          return text(JSON.stringify({
+            ok: false,
+            decision: "ratify-plan",
+            error: "append-failed: " + (err?.message || String(err)),
+          }, null, 2));
+        }
+
+        log.info("Governing",
+          `✅ Plan ratified at ${String(ruler._id).slice(0, 8)} ` +
+          `(reason: ${reason.slice(0, 80)})`);
+
+        return text(JSON.stringify({
+          status: "ratified",
+          decision: "ratify-plan",
+          rulerNodeId: String(ruler._id),
+          priorRef: latest.planRef,
+          reason,
+          note:
+            "Plan ratified. Lifecycle advanced to `awaiting: \"contracts\"`. " +
+            "Synthesize 'Plan approved. Drafting contracts.' and call " +
+            "governing-hire-contractor next turn.",
         }, null, 2));
       },
     },
@@ -1656,6 +1789,7 @@ export default function getRulerTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-archive-plan",
+      verb: "do",
       description:
         "Archive the active plan (and freeze any active execution as " +
         "cancelled) without immediately replacing. Use when the " +
@@ -1696,6 +1830,7 @@ export default function getRulerTools(_core) {
                 status: "archived",
                 supersedes: prior.planRef,
                 reason: `archive: ${reason}`.slice(0, 500),
+                core: _core,
               });
               archived = true;
             }
@@ -1724,6 +1859,7 @@ export default function getRulerTools(_core) {
                 await governing.freezeExecutionRecord({
                   recordNodeId: rec._recordNodeId,
                   nextStatus: "cancelled",
+                  core: _core,
                 });
                 executionCancelled = true;
               }
@@ -1741,7 +1877,6 @@ export default function getRulerTools(_core) {
 
         // 3. Audit-trail register (kept for parity with other Ruler
         // tools; the real state writes happened above).
-        setRulerDecision(args.rootSummonId || args.summonId, { kind: "archive-plan", reason });
 
         return text(JSON.stringify({
           ok: true,
@@ -1766,6 +1901,7 @@ export default function getRulerTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-pause-execution",
+      verb: "do",
       description:
         "Pause the active execution at this scope. Sub-Rulers halt; " +
         "no further branches dispatch until you call resume. Use when " +
@@ -1780,7 +1916,6 @@ export default function getRulerTools(_core) {
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-pause-execution: reason is required.");
         if (!aiSessionKey) return text("governing-pause-execution: missing aiSessionKey; substrate bug.");
-        setRulerDecision(args.rootSummonId || args.summonId, { kind: "pause-execution", reason });
         return text(JSON.stringify({ ok: true, decision: "pause-execution", reason }, null, 2));
       },
     },
@@ -1793,13 +1928,15 @@ export default function getRulerTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-resume-execution",
+      verb: "do",
       description:
-        "Resume execution after a pause. Spawns the Foreman as a " +
-        "chainstep to decide next steps given the execution-record's " +
+        "Resume execution after a pause. Emits a SUMMON to the Foreman " +
+        "(fire-and-forget) to decide next steps given the execution-record's " +
         "current state (the Foreman reads what's pending, what failed " +
         "before pause, etc., and chooses retry/freeze/escalate). The " +
-        "tool clears pause markers first, then spawns the Foreman, " +
-        "then returns the Foreman's exit text. Args: reason.",
+        "tool clears pause markers first, then SUMMONs the Foreman, " +
+        "returns 'spawned' immediately. The Foreman's reply lands in " +
+        "your inbox and wakes your next turn. Args: reason.",
       schema: {
         reason: z.string().describe("Why you're resuming."),
       },
@@ -1826,22 +1963,25 @@ export default function getRulerTools(_core) {
             const record = await governing.readActiveExecutionRecord(ruler._id);
             if (record?._recordNodeId && record.status === "paused") {
               const NodeModel = (await import("../../seed/models/node.js")).default;
-              const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
               const recNode = await NodeModel.findById(record._recordNodeId);
               if (recNode) {
                 const meta = recNode.metadata instanceof Map
                   ? recNode.metadata.get("governing")
                   : recNode.metadata?.governing;
                 const exec = meta?.execution || {};
-                await setExtMeta(recNode, "governing", {
-                  ...(meta || {}),
-                  execution: {
-                    ...exec, status: "running", completedAt: null,
-                    pausedAtStepIndex: null, pausedReason: null, pausedAt: null,
-                    pendingPauseAt: null, pendingPauseReason: null,
-                    resumedAt: new Date().toISOString(),
-                    resumeReason: reason.slice(0, 500),
+                // Phase 3 migration: verb-surface write, atomic merge.
+                await _core.do(recNode, "set-meta", {
+                  namespace: "governing",
+                  data: {
+                    execution: {
+                      ...exec, status: "running", completedAt: null,
+                      pausedAtStepIndex: null, pausedReason: null, pausedAt: null,
+                      pendingPauseAt: null, pendingPauseReason: null,
+                      resumedAt: new Date().toISOString(),
+                      resumeReason: reason.slice(0, 500),
+                    },
                   },
+                  merge: true,
                 });
               }
             }
@@ -1870,58 +2010,144 @@ export default function getRulerTools(_core) {
           ));
         }
 
-        // Fire-and-forget. Foreman wakes asynchronously; when its
-        // decision settles, governing:foremanRouted fires (resume
-        // uses the same hook as route-to-foreman — both spawn a
-        // Foreman turn and the subsequent Ruler wake is the same
-        // shape).
-        const callerSignal = await getCallerAbortSignal(aiSessionKey);
-        const callerSocket = await getCallerSocket(aiSessionKey);
-        const { spawnRoleAsChainstepAsync } = await import("../tree-orchestrator/ruling.js");
-        const spawn = spawnRoleAsChainstepAsync({
-          modeKey: "tree:governing-foreman",
-          message: `Wakeup: resume-requested\n\nReason: ${reason}\n\n` +
-                   "Read the execution-stack snapshot, decide what's next given the unpaused state.",
+        // SUMMON the Foreman via inbox. Same pattern as route-to-foreman:
+        // ensure execution node + Foreman being, build stances, append
+        // to inbox, attach handoff that releases the claim and fires
+        // `governing:foremanRouted` for dashboard SSE on settle.
+        const { ensureExecutionNode } = await import("./state/executionNode.js");
+        const executionNode = await ensureExecutionNode({
+          scopeNodeId: String(ruler._id),
           beingId,
-          username,
-          rootId: rootId || null,
-          nodeId: String(ruler._id),
-          parentSummonId: summonId || null,
-          parentSessionId: sessionId || null,
-          signal: callerSignal,
-          socket: callerSocket,
-          source: "ruler-resume-foreman",
-          kind: "resume-execution",
-          completionHookName: "governing:foremanRouted",
-          hookPayload: { wakeupReason: "resume-requested", resumeReason: reason },
-          releaseClaimKey: claim.key,
+          summonId,
+          sessionId,
+          core: _core,
         });
-        if (!spawn?.spawnId) {
+        if (!executionNode) {
           releaseSpawn(claim.key);
           return text(JSON.stringify({
             ok: false,
             decision: "resume-execution",
-            error: "spawn-failed-to-start",
+            error: "ensure-execution-failed",
           }, null, 2));
         }
+        const NodeModel = (await import("../../seed/models/node.js")).default;
+        const BeingModel = (await import("../../seed/models/being.js")).default;
+        const execNodeFull = await NodeModel.findById(executionNode._id).select("metadata").lean();
+        const execBeings = execNodeFull?.metadata instanceof Map
+          ? execNodeFull.metadata.get("beings")
+          : execNodeFull?.metadata?.beings;
+        const foremanBeingId = execBeings?.foreman?.beingId || null;
+        if (!foremanBeingId) {
+          releaseSpawn(claim.key);
+          return text(JSON.stringify({
+            ok: false,
+            decision: "resume-execution",
+            error: "foreman-being-missing",
+          }, null, 2));
+        }
+        const rulerNodeFull = await NodeModel.findById(ruler._id).select("metadata").lean();
+        const rulerBeings = rulerNodeFull?.metadata instanceof Map
+          ? rulerNodeFull.metadata.get("beings")
+          : rulerNodeFull?.metadata?.beings;
+        const rulerBeingIdAtScope = rulerBeings?.ruler?.beingId || null;
+        const rulerBeing = rulerBeingIdAtScope
+          ? await BeingModel.findById(rulerBeingIdAtScope).select("username").lean()
+          : null;
+        const rulerUsername = rulerBeing?.username || "ruler";
 
-        setRulerDecision(args.rootSummonId || args.summonId, {
-          kind: "resume-execution",
-          reason,
-          spawnId: spawn.spawnId,
+        const { getLandDomain } = await import("../../ibp/address.js");
+        const landDomain = getLandDomain();
+        const rulerStance = `${landDomain}/${ruler._id}@${rulerUsername}`;
+
+        const { randomUUID } = await import("crypto");
+        const correlation = randomUUID();
+        const rootCorrelation = args.rootSummonId || summonId || correlation;
+        const message = {
+          from:            rulerStance,
+          content:         `Wakeup: resume-requested\n\nReason: ${reason}\n\n` +
+                           "Read the execution-stack snapshot, decide what's next given the unpaused state.",
+          intent:          "chat",
+          correlation,
+          rootCorrelation,
+          activeRole:      "foreman",
+          priority:        3,
+          sentAt:          new Date().toISOString(),
+        };
+
+        const { appendToInbox } = await import("../../ibp/inbox.js");
+        const { attachHandoff, wake } = await import("../../ibp/scheduler.js");
+        const { hooks } = await import("../../seed/hooks.js");
+        const startMs = Date.now();
+        try {
+          await appendToInbox(String(ruler._id), foremanBeingId, message);
+        } catch (err) {
+          releaseSpawn(claim.key);
+          return text(JSON.stringify({
+            ok: false,
+            decision: "resume-execution",
+            error: "appendToInbox failed: " + (err?.message || String(err)),
+          }, null, 2));
+        }
+        attachHandoff(foremanBeingId, correlation, {
+          identity:   { beingId, username },
+          resolved:   { being: "foreman", nodeId: String(ruler._id), zone: "tree" },
+          onResponse: async (responseEntry) => {
+            try { releaseSpawn(claim.key); } catch {}
+            try {
+              await hooks.fire("governing:foremanRouted", {
+                spawnId:         correlation,
+                rulerNodeId:     String(ruler._id),
+                beingId,
+                username,
+                rootId:          rootId || null,
+                kind:            "resume-execution",
+                wakeupReason:    "resume-requested",
+                resumeReason:    reason,
+                exitText:        responseEntry?.content || null,
+                durationMs:      Date.now() - startMs,
+                error:           null,
+                parentSummonId:  summonId || null,
+                parentSessionId: sessionId || null,
+              });
+            } catch (err) {
+              log.warn("Governing", `foremanRouted hook fire failed: ${err.message}`);
+            }
+          },
+          onError: async (err) => {
+            try { releaseSpawn(claim.key); } catch {}
+            try {
+              await hooks.fire("governing:foremanRouted", {
+                spawnId:         correlation,
+                rulerNodeId:     String(ruler._id),
+                beingId,
+                username,
+                rootId:          rootId || null,
+                kind:            "resume-execution",
+                wakeupReason:    "resume-requested",
+                resumeReason:    reason,
+                exitText:        null,
+                durationMs:      Date.now() - startMs,
+                error:           err?.message || String(err),
+                parentSummonId:  summonId || null,
+                parentSessionId: sessionId || null,
+              });
+            } catch (hookErr) {
+              log.warn("Governing", `foremanRouted (error path) hook fire failed: ${hookErr.message}`);
+            }
+          },
         });
+        wake(foremanBeingId, String(ruler._id));
 
         return text(JSON.stringify({
           status: "spawned",
           decision: "resume-execution",
-          spawnId: spawn.spawnId,
+          spawnId: correlation,
           rulerNodeId: String(ruler._id),
           reason,
           note:
-            "Pause cleared. Foreman spawn started in the background to decide " +
-            "next steps from the unpaused state. This turn ends now. Synthesize " +
-            "one short sentence — 'Execution resumed. Foreman judging next move.' — " +
-            "and stop.",
+            "Pause cleared. Foreman SUMMON sent to decide next steps from the " +
+            "unpaused state. This turn ends now. Synthesize one short sentence — " +
+            "'Execution resumed. Foreman judging next move.' — and stop.",
         }, null, 2));
       },
     },
@@ -1936,6 +2162,7 @@ export default function getRulerTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-read-plan-detail",
+      verb: "see",
       description:
         "Read the FULL active plan emission at this scope (reasoning " +
         "+ every step including leaves and branch rationales). Use when " +
@@ -1977,6 +2204,7 @@ export default function getRulerTools(_core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-convene-court",
+      verb: "summon",
       description:
         "Convene a court hearing. Use when conditions are ambiguous " +
         "enough that judgment exceeds your own capacity — contract " +
@@ -2004,19 +2232,22 @@ export default function getRulerTools(_core) {
         // turn-level choice.
         try {
           if (nodeId) {
-            const { setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
             const node = await Node.findById(nodeId);
             if (node) {
               const meta = node.metadata instanceof Map
                 ? node.metadata.get("governing")
                 : node.metadata?.governing;
               const existingPending = Array.isArray(meta?.courtPending) ? meta.courtPending : [];
-              await setExtMeta(node, "governing", {
-                ...(meta || {}),
-                courtPending: [
-                  ...existingPending,
-                  { reason, convenedAt: new Date().toISOString(), status: "pending-pass2" },
-                ],
+              // Phase 3 migration: verb-surface merge, atomic.
+              await _core.do(node, "set-meta", {
+                namespace: "governing",
+                data: {
+                  courtPending: [
+                    ...existingPending,
+                    { reason, convenedAt: new Date().toISOString(), status: "pending-pass2" },
+                  ],
+                },
+                merge: true,
               });
             }
           }
@@ -2028,8 +2259,6 @@ export default function getRulerTools(_core) {
         } catch (err) {
           log.warn("Governing", `convene-court marker write failed: ${err.message}`);
         }
-
-        setRulerDecision(args.rootSummonId || args.summonId, { kind: "convene-court", reason });
         return text(JSON.stringify({
           ok: true,
           decision: "convene-court",

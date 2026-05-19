@@ -1,23 +1,35 @@
-// Governing role lifecycle.
+// Governing role lifecycle (substrate-as-universal-workspace shape).
 //
 // promoteToRuler is the single function that records a node taking on
-// ruler authority for a domain. Called at every depth uniformly:
+// ruler authority for a domain. After this rewrite, it ALSO spawns the
+// full governing being family at the rulership node:
 //
-//   1. Root node, on user request arrival. The orchestrator promotes the
+//   Ruler being           (parented to the requesting user-being via
+//                          parentBeingId; root Rulers have no parent)
+//   ├── Planner being     (being-tree child of Ruler, same homePositionId)
+//   ├── Contractor being  (being-tree child of Ruler, same homePositionId)
+//   └── Foreman being     (being-tree child of Ruler, same homePositionId)
+//
+// All four live at the same rulership node. The being-tree carries the
+// cognitive hierarchy; the node tree stays clean (no plan/contracts/
+// execution trio nodes anymore). Plans/contracts/executions become
+// artifacts authored by their owning beings (Planner authors plans,
+// etc.) . see [[project_substrate_as_universal_workspace]] for the
+// framing.
+//
+// promoteToRuler is called at every depth uniformly:
+//
+//   1. Root node, on user request arrival. Orchestrator promotes the
 //      root before dispatching a Planner.
-//   2. Branch node, on sub-Ruler dispatch. When swarm parses [[BRANCHES]]
-//      and creates a child node for each, that child is promoted before
-//      its own Planner runs. The branch IS a sub-Ruler, not a Worker
-//      pretending to coordinate.
-//   3. Worker mid-build, on scope undershoot. When a Worker emits
-//      [[BRANCHES]] (recognizing the work is compound), the Worker's own
-//      node promotes retroactively and its sub-branches dispatch under
-//      the new Ruler.
+//   2. Branch node, on sub-Ruler dispatch. Branch IS a sub-Ruler, not a
+//      Worker pretending to coordinate.
+//   3. Worker mid-build, on scope undershoot. Worker's own node
+//      promotes retroactively and its sub-branches dispatch under the
+//      new Ruler.
 //
-// The metadata write is idempotent. A second promote on a node already
-// marked as ruler returns the existing record without changing
-// acceptedAt; this matters for resume paths where the orchestrator
-// cannot tell whether a node has been promoted before.
+// Idempotent. A second promote on a node already marked as ruler
+// returns the existing record without changing acceptedAt or re-
+// spawning beings.
 //
 // metadata.governing has shape:
 //   {
@@ -25,16 +37,18 @@
 //     acceptedAt: ISO timestamp,
 //     reason: short string describing why,
 //     promotedFrom: "root" | "branch-dispatch" | "worker-undershoot",
+//     beings: { ruler, planner, contractor, foreman } // beingIds
 //   }
-//
-// Future court hearings (Pass 2) read acceptedAt and promotedFrom to
-// reconstruct the ruler chain. Pass 1 does not consume them; the data
-// shape is forward-compatible.
 
-import Node from "../../../seed/models/node.js";
-import log from "../../../seed/log.js";
+import Node  from "../../../seed/models/node.js";
+import Being from "../../../seed/models/being.js";
+import log   from "../../../seed/log.js";
 
 export const NS = "governing";
+
+// The four beings the rulership spawns. Add roles here when governing
+// learns to spawn additional inner beings (e.g. judge, herald).
+const INNER_ROLES = ["planner", "contractor", "foreman"];
 
 export const PROMOTED_FROM = {
   ROOT: "root",
@@ -71,15 +85,24 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, core }) {
     promotedFrom,
   };
 
-  // Write through the kernel's atomic metadata API. core.metadata is
-  // the scoped wrapper passed to init(core); if the caller didn't pass
-  // core, fall back to a direct kernel call.
-  if (core?.metadata?.setExtMeta) {
-    await core.metadata.setExtMeta(node, NS, data);
-  } else {
-    const { setExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-    await setExtMeta(node, NS, data);
+  // Delegate-to-higher-being. Only root Rulers carry this — sub-Rulers
+  // inherit their higher being through `lineage.parentRulerId`. For
+  // root, governing records the tree's `rootOwner` (the human being who
+  // spawned the tree). Field is optional, switchable, clearable. See
+  // memory `delegate-to-higher-being` for the architectural framing.
+  if (!node.parent && node.rootOwner) {
+    data.delegateToHigherBeing = { beingId: String(node.rootOwner) };
   }
+
+  // Phase 3 migration ([[project_seed_four_verbs_only]]): write through
+  // the verb surface so this lands in the audit trail (Did) and flows
+  // through one dispatcher path. Replaces the prior core.metadata
+  // wrapper / dynamic-import fallback fork.
+  await core.do(node, "set-meta", {
+    namespace: NS,
+    data,
+    merge: false, // role.js writes the full namespace shape; no merge needed
+  });
 
   // Declare the Ruler's home at this position. The Ruler's home IS
   // the existing scope node (we don't create a new child) — so
@@ -108,23 +131,28 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, core }) {
       installedBy: "governing",
       from:        data.promotedFrom,
     };
-    if (core?.metadata?.mergeExtMeta) {
-      await core.metadata.mergeExtMeta(node, "beings", { ruler: home });
-    } else {
-      const { mergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-      await mergeExtMeta(node, "beings", { ruler: home });
-    }
+    // Phase 3 migration: verb-surface merge of governing's lineage info
+    // into the existing metadata.beings.ruler entry written by
+    // createBeingWithHome.
+    await core.do(node, "set-meta", {
+      namespace: "beings",
+      data: { ruler: home },
+      merge: true,
+    });
 
     // Stamp the Ruler's open SUMMON policy: anyone — humans, citizens,
     // federated visitors — can address the Ruler at this scope. The
     // Ruler is the entry point for governance interactions; inner
     // beings (Planner, Contractor, Foreman) inside the rulership get
     // their own restrictive rules at their trio nodes.
-    const { mergeExtMeta: kernelMergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-    await kernelMergeExtMeta(node, "permissions", {
-      summon: {
-        "@ruler*": { requires: {} },
-      },
+    // Phase 3 migration: verb-surface merge into the permissions
+    // namespace. The summon rule lets anyone address @ruler at this
+    // scope; inner beings (Planner/Contractor/Foreman) get tighter
+    // rules at their trio nodes.
+    await core.do(node, "set-meta", {
+      namespace: "permissions",
+      data: { summon: { "@ruler*": { requires: {} } } },
+      merge: true,
     });
   } catch (err) {
     log.warn("Governing", `embodiments.ruler home/permissions write failed for ${String(nodeId).slice(0, 8)}: ${err.message}`);

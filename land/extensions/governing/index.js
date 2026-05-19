@@ -15,22 +15,26 @@
 // lands in Pass 2.
 
 import log from "../../seed/log.js";
-import plannerMode from "./modes/planner.js";
-import contractorMode from "./modes/contractor.js";
-import workerMode from "./modes/worker.js";
-import workerBuildMode from "./modes/workerBuild.js";
-import workerRefineMode from "./modes/workerRefine.js";
-import workerReviewMode from "./modes/workerReview.js";
-import workerIntegrateMode from "./modes/workerIntegrate.js";
-import foremanMode from "./modes/foreman.js";
-import rulerMode from "./modes/ruler.js";
+// Single-source role specs. Each role file carries BOTH dispatch
+// (summon, honoredIntents, …) AND LLM behavior (buildSystemPrompt,
+// toolNames, modeKey, …) — the modes/ folder is retired. See memories
+// `role-subsumes-mode` and `mode-registry-legacy`. registerRole below
+// mirrors the mode-shape fields into seed/modes/registry.js so legacy
+// runChat({ mode: "..." }) callers continue to work during the
+// migration to runChat({ role }).
+import { rulerRole } from "./roles/rulerRole.js";
+import { plannerRole } from "./roles/plannerRole.js";
+import { contractorRole } from "./roles/contractorRole.js";
+import { foremanRole } from "./roles/foremanRole.js";
+import { allWorkerRoles } from "./roles/workerRoles.js";
+import { registerRole } from "../../ibp/roles/registry.js";
 import {
   WORKER_TYPES,
   DEFAULT_WORKER_TYPE,
   WORKER_TYPE_MODE_KEYS,
   isValidWorkerType,
   coerceWorkerType,
-} from "./modes/workerBase.js";
+} from "./roles/workerBase.js";
 import {
   registerWorkspaceWorkerTypes,
   unregisterWorkspaceWorkerTypes,
@@ -63,16 +67,10 @@ import {
   renderArtifactEvidence,
 } from "./state/executionStack.js";
 import { classifyWorkerOutcome } from "./state/workerOutcome.js";
-import {
-  setRulerDecision,
-  getRulerDecision,
-  clearRulerDecision,
-} from "./state/rulerDecisions.js";
-import {
-  setForemanDecision,
-  getForemanDecision,
-  clearForemanDecision,
-} from "./state/foremanDecisions.js";
+// rulerDecisions / foremanDecisions per-visitor registers retired in
+// Slice 7 — the legacy orchestrator's runRulerTurn / runForemanTurn
+// were the only readers, and the new SUMMON-based dispatch is inline
+// (tools emit SUMMONs directly). Files deleted.
 import { promoteToRuler, readRole, isRuler, findRulerScope, walkRulers, PROMOTED_FROM, NS } from "./state/role.js";
 import { buildDashboardData, isTreeGoverned } from "./state/dashboardData.js";
 import { findLCA, ancestorChain, isAncestorOrSelf, validateScopeAuthority } from "./state/lca.js";
@@ -94,7 +92,9 @@ import {
   readPlanApprovalsAtRuler,
   readPlanApprovalLedger,
   readActivePlanApproval,
+  readLatestPlanApproval,
   readActivePlanEmission,
+  readPendingPlanEmission,
   buildPlanRef,
   parsePlanRef,
 } from "./state/planApprovals.js";
@@ -223,28 +223,21 @@ export {
 };
 
 export async function init(core) {
-  // Register the three coordination modes. The kernel's mode registry
-  // wants direct registerMode calls with the mode OBJECT (not a path);
-  // manifest.provides.modes is informational/declarative and does not
-  // self-register. Pattern matches code-workspace's init().
-  if (core?.modes?.registerMode) {
-    core.modes.registerMode("tree:governing-ruler", rulerMode, "governing");
-    core.modes.registerMode("tree:governing-planner", plannerMode, "governing");
-    core.modes.registerMode("tree:governing-contractor", contractorMode, "governing");
-    // Generic Worker for legacy plans without workerType.
-    core.modes.registerMode("tree:governing-worker", workerMode, "governing");
-    // Typed Workers — Build, Refine, Review, Integrate. The Planner
-    // picks the type per leaf step; dispatch routes to the matching
-    // mode key.
-    core.modes.registerMode("tree:governing-worker-build", workerBuildMode, "governing");
-    core.modes.registerMode("tree:governing-worker-refine", workerRefineMode, "governing");
-    core.modes.registerMode("tree:governing-worker-review", workerReviewMode, "governing");
-    core.modes.registerMode("tree:governing-worker-integrate", workerIntegrateMode, "governing");
-    core.modes.registerMode("tree:governing-foreman", foremanMode, "governing");
-    log.verbose("Governing", "Registered modes: tree:governing-{ruler, planner, contractor, worker, worker-build, worker-refine, worker-review, worker-integrate, foreman}");
-  } else {
-    log.warn("Governing", "core.modes.registerMode not available; modes NOT registered");
+  // Single-registration: each role spec carries dispatch + LLM
+  // behavior in one frozen object. The role registry mirrors mode-
+  // shape fields into seed/modes/registry.js for legacy
+  // runChat({ mode }) callers; new code uses runChat({ role }) once
+  // that path lands.
+  registerRole("ruler",      rulerRole,      "governing");
+  registerRole("planner",    plannerRole,    "governing");
+  registerRole("contractor", contractorRole, "governing");
+  registerRole("foreman",    foremanRole,    "governing");
+  for (const { spec, role } of allWorkerRoles) {
+    registerRole(spec.name, role, "governing");
   }
+  log.verbose("Governing",
+    "Registered roles (with mode-mirror): ruler, planner, contractor, foreman, " +
+    "worker-{build,refine,review,integrate}");
 
   // Tools: emission tools (governing-emit-plan, governing-emit-contracts),
   // Ruler decision tools (hire-planner, route-to-foreman, respond-
@@ -359,7 +352,6 @@ export async function init(core) {
     async function runGoverningBackfill() {
       try {
         const Node = (await import("../../seed/models/node.js")).default;
-        const { mergeExtMeta } = await import("../../seed/tree/extensionMetadata.js");
 
         // Backfill being homes on the four kinds of governing structural
         // nodes: Ruler, plan trio (Planner), contracts trio (Contractor),
@@ -439,12 +431,17 @@ export async function init(core) {
                 role:          beingRole,
                 homeNodeId:    String(fresh._id),
               });
-              await mergeExtMeta(fresh, "beings", {
-                [beingRole]: {
-                  installedBy:  "governing-backfill",
-                  from:         gov?.promotedFrom || null,
-                  scopeRulerId: gov?.scopeRulerId || null,
+              // Phase 3 migration: verb-surface merge into beings ns.
+              await core.do(fresh, "set-meta", {
+                namespace: "beings",
+                data: {
+                  [beingRole]: {
+                    installedBy:  "governing-backfill",
+                    from:         gov?.promotedFrom || null,
+                    scopeRulerId: gov?.scopeRulerId || null,
+                  },
                 },
+                merge: true,
               });
             }
             if (!permsPresent && typeof permissions === "function") {
@@ -454,7 +451,11 @@ export async function init(core) {
               // IS the node itself — passing the node id as scopeId
               // produces the open ruler rule (which doesn't consult it).
               const scopeId = gov?.scopeRulerId || String(fresh._id);
-              await mergeExtMeta(fresh, "permissions", permissions(scopeId));
+              await core.do(fresh, "set-meta", {
+                namespace: "permissions",
+                data: permissions(scopeId),
+                merge: true,
+              });
             }
             written++;
           }
@@ -688,159 +689,25 @@ export async function init(core) {
     log.verbose("Governing", `Dashboard SSE: subscribed to ${dashboardEvents.length} lifecycle events`);
 
     // ─────────────────────────────────────────────────────────────────
-    // Spawn-completion Ruler wakeups.
+    // Wake mechanism — substrate-based.
     //
-    // Each of the six fire-and-forget tools fires a corresponding
-    // completion hook when its background chainstep settles. The
-    // subscriber below wakes the Ruler at the spawn's scope with a
-    // synthetic empty user message and a wakeup payload carrying
-    // source="hook-wakeup" + the spawn's kind/result/error.
+    // The legacy runRulerTurn hook subscribers (six events: planner /
+    // contractor / planRevised / swarmDispatched / foremanRouted /
+    // branchRetried, each waking the Ruler through tree-orchestrator)
+    // are retired. The new wake path:
     //
-    // The Ruler's prompt reads source="hook-wakeup" and adapts its
-    // synthesis behavior: continuation-of-in-progress-work, NOT
-    // response-to-user-question. The lifecycle decision matrix is
-    // unchanged — the Ruler reads its snapshot (which now reflects
-    // the spawn's outcome) and chooses the next move.
+    //   sub-being's role.summon → emitReplyToAsker → asker's inbox →
+    //   scheduler invokes asker's role.summon
+    //
+    // For approval gates (entry-scope plan emission, etc.) the Ruler
+    // itself emits a reply-SUMMON to its chain-initial caller (the
+    // user-being or parent Ruler). The card is a SUMMON content shape,
+    // not a special hook-emitted socket event. See memory
+    // `card-is-a-summon` for the architectural lock.
+    //
+    // Dashboard SSE subscribers (above) stay — they're observation, not
+    // mechanism.
     // ─────────────────────────────────────────────────────────────────
-    const SPAWN_COMPLETION_EVENTS = {
-      "governing:plannerCompleted":    "planner-completed",
-      "governing:contractorCompleted": "contractor-completed",
-      "governing:planRevised":         "plan-revised",
-      "governing:swarmDispatched":     "swarm-dispatched",
-      "governing:foremanRouted":       "foreman-routed",
-      "governing:branchRetried":       "branch-retried",
-    };
-    // Events where a plan emission lands at the Ruler scope. At
-    // entry-scope (no parent Ruler), these need a user ratification
-    // gate — the plan card — and MUST NOT auto-advance. At sub-scope,
-    // the parent cycle implicitly ratifies and we wake the Ruler so
-    // it chains forward.
-    const PLAN_EMITTING_EVENTS = new Set([
-      "governing:plannerCompleted",
-      "governing:planRevised",
-    ]);
-    for (const [eventName, wakeReason] of Object.entries(SPAWN_COMPLETION_EVENTS)) {
-      core.hooks.register(eventName, async (payload) => {
-        try {
-          if (!payload?.rulerNodeId || !payload?.beingId) return;
-          // Don't synchronously block the hook fanout chain. Wake the
-          // Ruler in a microtask so failures inside runRulerTurn don't
-          // back-propagate into the hook caller's settle path.
-          queueMicrotask(async () => {
-            try {
-              // Entry-scope vs sub-Ruler gate. The hire-planner /
-              // revise-plan path used to call emitPlanCard inline
-              // after the Planner finished; the fire-and-forget
-              // refactor moved that responsibility here, where the
-              // settle happens. For entry-scope plan emissions we
-              // emit the card and STOP — wait for the user's "yes"
-              // / "cancel" / revise instruction to advance. For sub-
-              // scope, we wake the Ruler so it chains forward (the
-              // parent cycle is the implicit ratification).
-              if (PLAN_EMITTING_EVENTS.has(eventName) && !payload.error) {
-                try {
-                  const { readLineage } = await import("./state/lineage.js");
-                  const lineage = await readLineage(payload.rulerNodeId);
-                  const isEntryScope = !lineage?.parentRulerId;
-                  if (isEntryScope) {
-                    // Emit the plan card. Read the active emission
-                    // and the Ruler node for the card payload.
-                    const NodeModel = (await import("../../seed/models/node.js")).default;
-                    const ruler = await NodeModel.findById(payload.rulerNodeId)
-                      .select("_id name").lean();
-                    const { readActivePlanEmission } = await import("./state/planApprovals.js");
-                    const emission = await readActivePlanEmission(payload.rulerNodeId);
-                    if (ruler && emission) {
-                      // Build the same payload emitPlanCard built; do
-                      // it inline here because we don't have aiSessionKey
-                      // through getActiveRequest (the user's request
-                      // chain has already returned). Use the socket
-                      // attached to the hook payload directly.
-                      const branches = [];
-                      for (const step of (emission.steps || [])) {
-                        if (step?.type !== "branch" || !Array.isArray(step.branches)) continue;
-                        for (const b of step.branches) {
-                          if (!b?.name) continue;
-                          branches.push({
-                            name: b.name,
-                            spec: b.spec || "",
-                            path: null, files: [], slot: null, mode: null, parentBranch: null,
-                          });
-                        }
-                      }
-                      const { GOVERNING_WS_EVENTS } = await import("./wsEvents.js");
-                      const isRevision = eventName === "governing:planRevised";
-                      const cardEvent = isRevision
-                        ? GOVERNING_WS_EVENTS.PLAN_UPDATED
-                        : GOVERNING_WS_EVENTS.PLAN_PROPOSED;
-                      const cardPayload = {
-                        version: emission.ordinal || 1,
-                        projectNodeId: String(ruler._id),
-                        projectName: ruler.name || null,
-                        branches,
-                        contracts: [],
-                        emission,
-                        ...(isRevision ? { trigger: "revision" } : {}),
-                      };
-                      if (payload.socket?.emit) {
-                        payload.socket.emit(cardEvent, cardPayload);
-                        log.info("Governing",
-                          `🎴 ${isRevision ? "PLAN_UPDATED" : "PLAN_PROPOSED"} (hook-driven) ` +
-                          `emitted at entry-scope ${String(ruler._id).slice(0, 8)} ` +
-                          `(emission-${emission.ordinal}, ${branches.length} branches, ${emission.steps?.length || 0} steps)`);
-                      }
-                      // Entry-scope ratification gate: STOP here. Do
-                      // not wake the Ruler. The user reads the plan
-                      // card and replies "yes" / "cancel" / revise.
-                      // That user message becomes the next Ruler turn.
-                      return;
-                    }
-                  }
-                  // Sub-scope: fall through to wake the Ruler.
-                } catch (gateErr) {
-                  log.debug("Governing",
-                    `entry-scope plan-card gate skipped for ${eventName}: ${gateErr.message}`);
-                  // Fall through to wake (over-show on transient errors).
-                }
-              }
-
-              const { runRulerTurn } = await import("../tree-orchestrator/ruling.js");
-              await runRulerTurn({
-                aiSessionKey: payload.beingId,  // aiSessionKey reuses beingId for hook-driven wakeups
-                beingId: payload.beingId,
-                username: payload.username || null,
-                rootId: payload.rootId || null,
-                currentNodeId: payload.rulerNodeId,
-                message: "",  // synthetic empty user message
-                signal: payload.signal || null,
-                socket: payload.socket || null,
-                sessionId: payload.parentSessionId || null,
-                rootSummonId: payload.parentSummonId || null,
-                wakeup: {
-                  source: "hook-wakeup",
-                  reason: wakeReason,
-                  spawnId: payload.spawnId || null,
-                  kind: payload.kind || null,
-                  exitText: payload.exitText || null,
-                  error: payload.error || null,
-                  durationMs: payload.durationMs || null,
-                  // Per-hook extras (e.g., dispatch's branch count,
-                  // retry-branch's branchName) flow through.
-                  ...payload,
-                },
-              });
-            } catch (err) {
-              log.warn("Governing",
-                `Hook-wakeup Ruler turn failed for ${eventName} at ${String(payload.rulerNodeId).slice(0, 8)}: ${err.message}`);
-            }
-          });
-        } catch (err) {
-          log.debug("Governing", `${eventName} subscriber skipped: ${err.message}`);
-        }
-      });
-    }
-    log.verbose("Governing",
-      `Spawn-completion subscribers: ${Object.keys(SPAWN_COMPLETION_EVENTS).length} hooks wake the Ruler on settle`);
   }
 
   // Mount the plan panel route + plan read endpoint at /api/v1/governing/*.
@@ -854,6 +721,153 @@ export async function init(core) {
     resolveHtmlAuth();
   } catch (err) {
     log.debug("Governing", `htmlAuth resolution skipped: ${err.message}`);
+  }
+
+  // Phase 3 ([[project_seed_four_verbs_only]]): utility functions that
+  // write through the verb surface need `core` in scope. Wrapping them
+  // here injects core at the export boundary so external callers
+  // (tree-orchestrator/dispatch.js, rulerTools, flagTools, etc.)
+  // continue calling these helpers with their existing signatures.
+  // The helper functions inside state/* and roles/* require core to
+  // be present; the wrapper guarantees it.
+  const bindCore = (fn) => (args = {}) => fn({ ...args, core });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Phase 3c: Register governing's DO operations.
+  //
+  // Operations reachable via `core.do(target, "governing:<action>", ...)`
+  // from anywhere with `core` in scope . extension code, wire dispatch,
+  // future MCP tools that compile to DO calls. Each handler runs through
+  // the seed verb dispatcher, which auto-writes a Did and (when Phase 5
+  // adds it) gates through authorize.
+  //
+  // Proof slice: `governing:flag-issue`. The existing
+  // `governing-flag-issue` MCP tool can be migrated in a follow-up to
+  // dispatch through this operation instead of calling appendFlag
+  // directly; for now both paths reach the same handler (appendFlag).
+  // ────────────────────────────────────────────────────────────────────
+  if (typeof core.do?.registerOperation === "function") {
+    // Helper: extract a nodeId from whatever target shape arrived.
+    const idOf = (t) =>
+      (t && typeof t === "object" && (t._id || t.nodeId)) || t || null;
+
+    // Operation names are bare. The loader's scoped registerOperation
+    // wrapper auto-prepends "governing:" and stamps ownerExtension. The
+    // extension never types its own namespace . the namespace is
+    // implicit from the registration context.
+    core.do.registerOperation("flag-issue", {
+      targets: ["node"],
+      handler: async ({ target, params, identity }) => {
+        return appendFlag({
+          rulerNodeId: idOf(target),
+          payload: {
+            kind: params.kind,
+            artifactContext: params.artifactContext || {},
+            localChoice: params.localChoice || null,
+            blocking: !!params.blocking,
+            proposedResolution: params.proposedResolution || null,
+          },
+          beingId: identity?.beingId || null,
+          sourceWorkerScopeId: params.sourceWorkerScopeId || null,
+          sourceWorkerType:    params.sourceWorkerType || null,
+          core,
+        });
+      },
+    });
+
+    core.do.registerOperation("hire-planner", {
+      targets: ["node"],
+      handler: async ({ target, params, identity }) => {
+        // Materializes the plan trio child + Planner being at the
+        // Ruler scope (target). Idempotent.
+        return ensurePlanAtScope({
+          scopeNodeId: idOf(target),
+          beingId:     identity?.beingId || params.beingId || null,
+          name:        params.name || "plans",
+          systemSpec:  params.systemSpec || null,
+          summonId:    params.summonId || null,
+          sessionId:   params.sessionId || null,
+          core,
+        });
+      },
+    });
+
+    core.do.registerOperation("hire-contractor", {
+      targets: ["node"],
+      handler: async ({ target, params, identity }) => {
+        return ensureContractsNode({
+          scopeNodeId: idOf(target),
+          beingId:     identity?.beingId || params.beingId || null,
+          core,
+        });
+      },
+    });
+
+    core.do.registerOperation("route-to-foreman", {
+      targets: ["node"],
+      handler: async ({ target, params, identity }) => {
+        return ensureExecutionNode({
+          scopeNodeId: idOf(target),
+          beingId:     identity?.beingId || params.beingId || null,
+          core,
+        });
+      },
+    });
+
+    core.do.registerOperation("ratify-plan", {
+      targets: ["node"],
+      handler: async ({ target, params }) => {
+        // target is the Ruler node; params.planNodeId is the plan
+        // emission being ratified. Status defaults to "approved".
+        return appendPlanApproval({
+          rulerNodeId: idOf(target),
+          planNodeId:  params.planNodeId,
+          status:      params.status || "approved",
+          supersedes:  params.supersedes || null,
+          reason:      params.reason || null,
+          core,
+        });
+      },
+    });
+
+    core.do.registerOperation("archive-plan", {
+      targets: ["node"],
+      handler: async ({ target, params }) => {
+        // Marks the plan approval as "archived". Same primitive as
+        // ratify, different status. Optionally freezes the active
+        // execution-record as "cancelled" too (Pass 1 archive policy).
+        return appendPlanApproval({
+          rulerNodeId: idOf(target),
+          planNodeId:  params.planNodeId,
+          status:      "archived",
+          supersedes:  params.supersedes || null,
+          reason:      params.reason || null,
+          core,
+        });
+      },
+    });
+
+    core.do.registerOperation("emit-contracts", {
+      targets: ["node"],
+      handler: async ({ target, params, identity }) => {
+        return setContracts({
+          scopeNodeId:           idOf(target),
+          contracts:             params.contracts || [],
+          beingId:               identity?.beingId || null,
+          systemSpec:            params.systemSpec || null,
+          reasoning:             params.reasoning || null,
+          inheritsFrom:          params.inheritsFrom || null,
+          parentContractsApplied: params.parentContractsApplied || [],
+          core,
+        });
+      },
+    });
+
+    log.verbose("Governing",
+      "Registered DO operations (auto-namespaced): flag-issue, hire-planner, " +
+      "hire-contractor, route-to-foreman, ratify-plan, archive-plan, emit-contracts");
+  } else {
+    log.debug("Governing", "core.do.registerOperation unavailable; skipping operation registrations");
   }
 
   return {
@@ -878,7 +892,7 @@ export async function init(core) {
     // dispatch.runRulerCycle, future Pass 2 court hooks) reach for these.
     exports: {
       // Role lifecycle
-      promoteToRuler, readRole, isRuler, findRulerScope, walkRulers, PROMOTED_FROM, NS,
+      promoteToRuler: bindCore(promoteToRuler), readRole, isRuler, findRulerScope, walkRulers, PROMOTED_FROM, NS,
       // Dashboard data orchestrator + tree-governance predicate.
       // The governance page calls buildDashboardData; isTreeGoverned
       // is a cheap probe other extensions can use.
@@ -887,17 +901,19 @@ export async function init(core) {
       findLCA, ancestorChain, isAncestorOrSelf, validateScopeAuthority,
       // Contracts (trio: contracts-type node holds emissions, Ruler holds
       // approval ledger). See project_contracts_node_architecture.
-      setContracts, readContracts, readScopedContracts, readApprovalsAtRuler,
+      setContracts: bindCore(setContracts), readContracts, readScopedContracts, readApprovalsAtRuler,
+      // Trio member ensure-fns. Each scaffolds a child node + role/mode/
+      // being/permissions metadata writes through the verb surface.
       readActiveContractsEmission,
-      ensureContractsNode,
+      ensureContractsNode: bindCore(ensureContractsNode),
       // Plan trio member primitive (Phase F absorbed from the plan
       // extension). governing now owns plan-type node creation +
       // role/mode stamping directly, parallel to contracts-type and
       // execution-type. Plan-emission ring records (immutable per
       // Planner invocation) live as children; the Ruler's planApprovals
       // ledger tracks the active emission.
-      createPlanNode,
-      ensurePlanAtScope,
+      createPlanNode: bindCore(createPlanNode),
+      ensurePlanAtScope: bindCore(ensurePlanAtScope),
       readPlan,
       initPlan,
       appendLedger,
@@ -908,18 +924,20 @@ export async function init(core) {
       // Plan approval ledger, parallel to contractApprovals. The Ruler
       // appends a planApproval entry when it accepts the Planner's
       // emission, before invoking the Contractor.
-      appendPlanApproval,
+      appendPlanApproval: bindCore(appendPlanApproval),
       readPlanApprovalsAtRuler,
       readPlanApprovalLedger,
       readActivePlanApproval,
+      readLatestPlanApproval,
       readActivePlanEmission,
+      readPendingPlanEmission,
       buildPlanRef, parsePlanRef,
       // Sub-Ruler lineage. writeLineage is called at dispatch time
       // (sub-Ruler promotion); readLineage walks the upstream chain.
       // inferLineageFromParent reconstructs lineage details from the
       // parent's active plan emission when explicit dispatch params
       // weren't threaded (current branch-swarm path).
-      writeLineage, readLineage, inferLineageFromParent,
+      writeLineage: bindCore(writeLineage), readLineage, inferLineageFromParent,
       // Foreman quartet member. ensureExecutionNode materializes the
       // execution-node child of a Ruler; appendExecutionRecord creates
       // a new execution-record tied to a plan emission (with optional
@@ -928,12 +946,14 @@ export async function init(core) {
       // called by swarm (Phase B+) as branches transition through
       // pending → running → done / failed. The Foreman LLM reasoning
       // surface lands in Pass 2; Pass 1 establishes the data home.
-      ensureExecutionNode, findExecutionNode,
-      appendExecutionRecord, appendExecutionApproval,
+      ensureExecutionNode: bindCore(ensureExecutionNode), findExecutionNode,
+      appendExecutionRecord: bindCore(appendExecutionRecord),
+      appendExecutionApproval: bindCore(appendExecutionApproval),
       readExecutionApprovalsAtRuler, readActiveExecutionApproval,
       readActiveExecutionRecord,
-      updateStepStatus, updateStepStatusByBranchName,
-      freezeExecutionRecord,
+      updateStepStatus: bindCore(updateStepStatus),
+      updateStepStatusByBranchName: bindCore(updateStepStatusByBranchName),
+      freezeExecutionRecord: bindCore(freezeExecutionRecord),
       buildExecutionRef, parseExecutionRef,
       // Validator registry
       registerValidator, unregisterValidatorsForExt, runValidators, listValidators,
@@ -983,17 +1003,18 @@ export async function init(core) {
       // adjudicate via markFlagResolved.
       FLAG_KINDS,
       isValidFlagKind,
-      appendFlag,
+      appendFlag: bindCore(appendFlag),
       readPendingIssues,
-      markFlagResolved,
+      markFlagResolved: bindCore(markFlagResolved),
       summarizeFlags,
       formatFlagSummary,
       // Ruler-as-being primitive. The Ruler mode runs every turn at a
       // Ruler scope and decides what to do; rulerSnapshot assembles its
-      // per-turn state context; rulerDecisions is the per-visitor
-      // register that captures "what the Ruler chose this turn." Phase C
-      // (runRulerTurn in tree-orchestrator) reads decisions to dispatch
-      // the chosen role.
+      // per-turn state context. Slice 7 retired the rulerDecisions
+      // per-visitor register and the runRulerTurn dispatcher that read
+      // it — tools now emit SUMMONs inline. The Ruler is the addressable
+      // being; its kernel-scheduler-driven role.summon (roles/rulerRole.js)
+      // replaces the orchestrator-side dispatch loop.
       buildRulerSnapshot,
       formatRulerSnapshot,
       renderRulerSnapshot,
@@ -1019,15 +1040,6 @@ export async function init(core) {
       // adjudication calls the same function on archived turns so
       // dispatcher live + court replay agree on classification.
       classifyWorkerOutcome,
-      setRulerDecision,
-      getRulerDecision,
-      clearRulerDecision,
-      // Foreman decision register. Phase C runForemanTurn reads here
-      // after the Foreman exits and applies the action (retry, mark-
-      // failed, freeze, pause, resume, escalate, respond).
-      setForemanDecision,
-      getForemanDecision,
-      clearForemanDecision,
     },
   };
 }

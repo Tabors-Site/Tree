@@ -32,6 +32,7 @@ const NS = "governing";
  */
 export async function ensureExecutionNode({ scopeNodeId, beingId, core }) {
   if (!scopeNodeId) return null;
+  if (!core?.do) throw new Error("ensureExecutionNode requires `core` (verb surface)");
 
   // Idempotent probe.
   const existing = await Node.findOne({
@@ -40,28 +41,26 @@ export async function ensureExecutionNode({ scopeNodeId, beingId, core }) {
   }).select("_id name parent type metadata").lean();
   if (existing) return existing;
 
-  // Create lazily. core.tree.createNode fires kernel hooks; fall back
-  // to direct insert when the scoped core is absent.
+  // Phase 3b ([[project_seed_four_verbs_only]]): create lazily through
+  // core.do("create-child"). The verb-surface call fires kernel hooks
+  // and writes a Did automatically. Falls back to a direct insert only
+  // when create-child fails for an operational reason (kept for
+  // forward-compatibility; in practice should rarely trigger).
   //
   // Visible name is "runs" (parallel collection holding execution
   // records). The structural type stays "execution" because every
   // query in the codebase filters on type, not name. Renaming type
   // would be a destructive migration; renaming name is cosmetic and
-  // reads more naturally to anyone walking the tree. Sam's framing
-  // (avoid "execution" overloading with phase-4 structural remedies)
-  // is satisfied by the visible label change.
+  // reads more naturally to anyone walking the tree.
   let created = null;
   try {
-    if (core?.tree?.createNode) {
-      created = await core.tree.createNode({
-        parentId: String(scopeNodeId),
-        name: "runs",
-        type: "execution",
-        beingId,
-      });
-    }
+    created = await core.do(scopeNodeId, "create-child", {
+      name: "runs",
+      type: "execution",
+      beingId,
+    });
   } catch (err) {
-    log.debug("Governing", `core.tree.createNode failed for execution node: ${err.message}; falling back to direct insert`);
+    log.debug("Governing", `core.do(create-child) failed for execution node: ${err.message}; falling back to direct insert`);
   }
 
   if (!created) {
@@ -79,11 +78,10 @@ export async function ensureExecutionNode({ scopeNodeId, beingId, core }) {
     await NodeModel.updateOne({ _id: scopeNodeId }, { $addToSet: { children: created._id } });
   }
 
-  // Stamp role + mode. role marker makes the node structural for the
-  // kernel's beforeNodeDelete guard. mode assignment routes visits to
-  // Foreman; the actual Foreman reasoning surface lands in Pass 2.
+  // Stamp role + mode through the verb surface. Each write auto-audits
+  // as a Did. merge:true preserves siblings atomically (no read-spread-
+  // write race window).
   try {
-    const { setExtMeta: kernelSetExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
     const node = await Node.findById(created._id);
     if (node) {
       const existingMeta = node.metadata instanceof Map
@@ -92,16 +90,21 @@ export async function ensureExecutionNode({ scopeNodeId, beingId, core }) {
       const existingModes = node.metadata instanceof Map
         ? node.metadata.get("modes")
         : node.metadata?.modes;
-      await kernelSetExtMeta(node, NS, {
-        ...(existingMeta || {}),
-        role: "execution",
-        scopeRulerId: String(scopeNodeId),
-        createdAt: existingMeta?.createdAt || new Date().toISOString(),
+
+      await core.do(node, "set-meta", {
+        namespace: NS,
+        data: {
+          role: "execution",
+          scopeRulerId: String(scopeNodeId),
+          createdAt: existingMeta?.createdAt || new Date().toISOString(),
+        },
+        merge: true,
       });
       if (existingModes?.plan !== "tree:governing-foreman") {
-        await kernelSetExtMeta(node, "modes", {
-          ...(existingModes || {}),
-          plan: "tree:governing-foreman",
+        await core.do(node, "set-meta", {
+          namespace: "modes",
+          data: { plan: "tree:governing-foreman" },
+          merge: true,
         });
       }
 
@@ -120,30 +123,37 @@ export async function ensureExecutionNode({ scopeNodeId, beingId, core }) {
           role:          "foreman",
           homeNodeId:    String(created._id),
         });
-        const { mergeExtMeta: kernelMergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-        await kernelMergeExtMeta(node, "beings", {
-          foreman: {
-            installedBy:  "governing",
-            scopeRulerId: String(scopeNodeId),
+        await core.do(node, "set-meta", {
+          namespace: "beings",
+          data: {
+            foreman: {
+              installedBy:  "governing",
+              scopeRulerId: String(scopeNodeId),
+            },
           },
+          merge: true,
         });
         // Inner-being protection: only governing-role beings of THIS
         // rulership can SUMMON the Foreman. Scoped home check filters
         // other rulerships; role check filters humans / citizens.
-        await kernelMergeExtMeta(node, "permissions", {
-          summon: {
-            "@foreman*": {
-              requires: {
-                role:         ["ruler", "planner", "contractor", "foreman"],
-                homeInDomain: String(scopeNodeId),
+        await core.do(node, "set-meta", {
+          namespace: "permissions",
+          data: {
+            summon: {
+              "@foreman*": {
+                requires: {
+                  role:         ["ruler", "planner", "contractor", "foreman"],
+                  homeInDomain: String(scopeNodeId),
+                },
               },
             },
           },
+          merge: true,
         });
       }
     }
   } catch (err) {
-    log.warn("Governing", `failed to stamp execution-node role/mode/embodiments: ${err.message}`);
+    log.warn("Governing", `failed to stamp execution-node role/mode/beings: ${err.message}`);
   }
 
   return created;

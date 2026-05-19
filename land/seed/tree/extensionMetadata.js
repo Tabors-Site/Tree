@@ -27,11 +27,14 @@ import { getLandConfigValue } from "../landConfig.js";
 // hold protocol-level data referenced by the kernel itself:
 //   - tools, modes, extensions: per-node capability scope
 //   - cascade, llm: per-node behavior configuration
-//   - beings: being-home registrations (which beings live at this
-//     position, keyed by role). Multiple extensions legitimately
-//     declare beings here (governing registers Ruler/Planner/
-//     Contractor/Foreman/Worker; future extensions add their own).
-//     Renamed from "beings" in migration 0.5.0.
+//   - beings: node-hosted being registry. Which beings of which roles
+//     live at this node (beingIds bound to role names), plus any
+//     role-related config specific to this position (e.g. arrival/
+//     owner/member permission sets, scopeRulerId, etc.). Keyed by
+//     role name on the inside. Multiple extensions legitimately write
+//     here (governing registers Ruler/Planner/Contractor/Foreman/
+//     Worker; authorize reads arrival/owner/member permissions).
+//     Renamed from "embodiments" in migration 0.5.0.
 //   - permissions: per-position verb-action permission rules
 //     consumed by the authorize function (Layer 3 of stance auth).
 const CORE_NAMESPACES = new Set(["tools", "modes", "extensions", "cascade", "llm", "beings", "permissions"]);

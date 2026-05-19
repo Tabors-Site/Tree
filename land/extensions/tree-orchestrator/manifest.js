@@ -1,47 +1,39 @@
 export default {
   name: "tree-orchestrator",
-  version: "1.0.5",
+  version: "2.0.0",
   builtFor: "TreeOS",
   description:
-    "Position determines reality. Every message that enters a tree passes through this " +
-    "orchestrator. It routes to the right extension or to tree:converse. " +
+    "Routing index utility — tracks which extensions are scaffolded in " +
+    "which tree. Read by sprout, misroute, treeos-base, and go. " +
     "\n\n" +
-    "The routing index maps extensions to positions in the tree. If the current node or a " +
-    "nearby node has a mode override (modes.respond), and the extension's classifier hints " +
-    "match the message, the orchestrator routes directly to that extension's mode. One mode, " +
-    "focused tools, domain-specific system prompt. No LLM call for routing. " +
+    "The orchestration loop (chat/place/query/be dispatch, sub-Ruler " +
+    "recursion, plan execution, mode switching, classifier routing) " +
+    "was retired in 2.0 when tree-zone CHAT/PLACE/QUERY moved to " +
+    "SUMMON. The Ruler being at the tree root receives messages in " +
+    "its inbox; the per-being scheduler invokes rulerRole.summon. " +
+    "No orchestration code path remains; what's left is the routing " +
+    "index utility other extensions still consume. " +
     "\n\n" +
-    "When multiple extensions match (classifier hints from two or more extensions in the " +
-    "routing index fire on the same message), the orchestrator chains them. Each extension " +
-    "runs as a focused agent in its own mode. Results pass from one step to the next. " +
-    "Browser-bridge reads a page, KB saves the key points, gateway posts to Reddit. Each " +
-    "step has only its own tools. " +
-    "\n\n" +
-    "When no extension claims the message, tree:converse handles it. Converse reads the " +
-    "node's notes, children, and path, then talks from that position's perspective. Every " +
-    "node has a voice. No extension needed. " +
-    "\n\n" +
-    "This is the reference tree orchestrator. Replace it entirely by registering a custom " +
-    "orchestrator for bigMode tree.",
+    "Eventually replaced by extensionSeeds (scaffold primitive that " +
+    "would make `which extensions are present at this position` a " +
+    "substrate fact, not a derived index). At that point this " +
+    "extension retires entirely.",
 
   needs: {
-    services: ["llm", "session", "chat", "mcp", "websocket", "hooks", "orchestrator"],
+    services: ["hooks"],
     models: ["Node"],
-    extensions: ["treeos-base"],
+    extensions: [],
   },
 
-  optional: {
-    extensions: ["swarm", "competence", "explore", "contradiction", "purpose", "evolution", "remember", "understanding"],
-  },
+  optional: {},
 
   provides: {
     routes: false,
     tools: false,
     jobs: false,
-    orchestrator: { bigMode: "tree" },
     hooks: {
       fires: [],
-      listens: ["afterBoot", "afterMetadataWrite", "beforeNodeDelete", "afterNodeMove"],
+      listens: ["afterBoot", "afterMetadataWrite", "beforeNodeDelete", "afterScopeChange", "afterNodeMove"],
     },
   },
 };

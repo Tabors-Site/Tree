@@ -94,6 +94,14 @@ import {
 } from "../ibp/roles/registry.js";
 import { makeBridgeEmbodiment as ibpMakeBridgeRole } from "../ibp/roles/bridge.js";
 
+// The four-verb dispatcher (Phase 1: only `do` is registry-backed; the
+// other three throw with a "not yet implemented" message until later
+// phases). See [[project_seed_four_verbs_only]] memory for the plan.
+import { doVerb, seeVerb, summonVerb, beVerb } from "./verbs.js";
+// Side-effect import. Registers the kernel DO operations (create-child,
+// rename, change-status, set-meta) with the operations registry on load.
+import "./coreOperations.js";
+
 // ---------------------------------------------------------------------------
 // Auth strategy registry (extensions register additional auth methods)
 // Extensions must declare provides.authStrategies in their manifest.
@@ -134,6 +142,24 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
   const hasWebsocket = typeof emitNavigate === "function";
 
   const core = {
+    // ────────────────────────────────────────────────────────────────
+    // The four verbs (Phase 1 — Tabor 2026-05-18, [[project_seed_four_verbs_only]]).
+    //
+    // Long-term, these are the ONLY public surface for substrate
+    // operations. Today they coexist additively with the legacy
+    // per-target helpers below (core.metadata, core.tree, core.artifacts,
+    // etc.). New extension code should prefer the verbs; existing
+    // helpers retire wave by wave starting Phase 4.
+    //
+    // Only `do` is registry-backed in Phase 1. The other three throw
+    // until their phases land, so the surface is reserved and callers
+    // get clear errors if they try to use them early.
+    // ────────────────────────────────────────────────────────────────
+    see:    seeVerb,
+    do:     doVerb,
+    summon: summonVerb,
+    be:     beVerb,
+
     // --- Always-available services ---
     dids: { logDid },
     auth: {

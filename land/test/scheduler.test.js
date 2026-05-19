@@ -54,8 +54,19 @@ mock.module("../ibp/inbox.js", {
       }
       return { consumed: set.size };
     },
+    readInbox: async (nodeId, beingId, options = {}) => {
+      const bucket = fakeBucket.get(beingId) || [];
+      let entries = bucket;
+      if (options.unconsumed) entries = entries.filter((e) => !e.consumed);
+      return entries;
+    },
   },
 });
+
+// Per-being operatingMode override. Tests put a beingId in this set
+// to mark that being as human; everything else stays "agent".
+const humanBeings = new Set();
+function markHuman(beingId) { humanBeings.add(beingId); }
 
 mock.module("../seed/models/being.js", {
   defaultExport: {
@@ -64,6 +75,21 @@ mock.module("../seed/models/being.js", {
       username:    `user-${id}`,
       roles:       [fakeBeingRole],
       defaultRole: fakeBeingRole,
+      operatingMode: humanBeings.has(id) ? "human" : "ai",
+    }),
+  },
+});
+
+// Mock the dynamic getIO import so the human-cognition path can emit
+// without booting the real WS server. Tests inspect `humanEmits` to
+// verify being-room delivery.
+const humanEmits = [];
+mock.module("../seed/ws/websocket.js", {
+  namedExports: {
+    getIO: () => ({
+      to: (room) => ({
+        emit: (event, payload) => { humanEmits.push({ room, event, payload }); },
+      }),
     }),
   },
 });
@@ -72,7 +98,7 @@ mock.module("../ibp/roles/registry.js", {
   namedExports: {
     getRole: () => ({
       name: fakeBeingRole,
-      honoredIntents: ["chat"],
+      permissions: ["see", "do", "summon"],
       respondMode: "async",
       triggerOn: ["message"],
       summon: async (message, ctx) => {
@@ -91,6 +117,8 @@ beforeEach(() => {
   summonCalls = [];
   summonImpl = async (message) => ({ content: `default for ${message.correlation}` });
   fakeBeingRole = "echo";
+  humanBeings.clear();
+  humanEmits.length = 0;
 });
 afterEach(() => _resetAll());
 
@@ -300,5 +328,49 @@ describe("scheduler — stats", () => {
     assert.equal(getStats()["being-1"].currentRoot, "root-x");
     await waitUntil(() => getStats()["being-1"]?.running === false, 2000);
     assert.equal(getStats()["being-1"].currentRoot, null);
+  });
+});
+
+describe("scheduler — human cognition", () => {
+  test("human being: entry stays pending, role.summon not invoked, being-room emits", async () => {
+    markHuman("being-h");
+    freshBucket("being-h", [makeEntry("plan-approve", 1, { rootCorrelation: "root-h" })]);
+    wake("being-h", "node-h");
+
+    await waitUntil(() => humanEmits.length > 0);
+    assert.equal(humanEmits[0].room, "being:being-h");
+    assert.equal(humanEmits[0].event, "ibp:summon");
+    assert.equal(humanEmits[0].payload.correlation, "plan-approve");
+
+    // The runLoop should have exited and role.summon should never have run.
+    await waitUntil(() => getStats()["being-h"]?.running === false);
+    assert.equal(summonCalls.length, 0);
+
+    // Entry stays pending — humans consume by replying.
+    assert.equal(fakeBucket.get("being-h")[0].consumed, false);
+  });
+
+  test("human being: re-wake on same node does not re-emit already-notified entries", async () => {
+    markHuman("being-h");
+    freshBucket("being-h", [makeEntry("once", 1)]);
+    wake("being-h", "node-h");
+    await waitUntil(() => humanEmits.length === 1);
+
+    // Second wake at the same node with no new entries — should NOT re-emit.
+    wake("being-h", "node-h");
+    await waitUntil(() => getStats()["being-h"]?.running === false);
+    assert.equal(humanEmits.length, 1);
+  });
+
+  test("human being: newly appended entry emits on next wake", async () => {
+    markHuman("being-h");
+    freshBucket("being-h", [makeEntry("first", 1)]);
+    wake("being-h", "node-h");
+    await waitUntil(() => humanEmits.length === 1);
+
+    fakeBucket.get("being-h").push(makeEntry("second", 1));
+    wake("being-h", "node-h");
+    await waitUntil(() => humanEmits.length === 2);
+    assert.equal(humanEmits[1].payload.correlation, "second");
   });
 });

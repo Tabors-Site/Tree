@@ -188,7 +188,7 @@ const PROFILES = {
       // Core gateways
       "gateway", "gateway-discord", "gateway-telegram", "gateway-reddit",
       // User features
-      "instructions", "rings", "dynamic-rename", "stream", "learn", "go",
+      "instructions", "rings", "dynamic-rename", "learn", "go",
       "automate", "codebase", "api-keys", "treeos",
       // Bundle meta-extensions
       "treeos-cascade", "treeos-connect", "treeos-intelligence", "treeos-maintenance",

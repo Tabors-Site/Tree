@@ -44,9 +44,11 @@ export default {
     "validates LCA correctness, hands back to the Ruler for ratification, " +
     "exits. Foreman (tree:governing-foreman) — call-stack manager, " +
     "watches execution, decides retry vs escalate vs pause vs freeze " +
-    "vs cancel-subtree based on stack state. Worker (tree:governing-worker) — " +
-    "executes leaf work under contracts in force; workspace extensions " +
-    "extend this base for domain-specific tools and validators. " +
+    "vs cancel-subtree based on stack state. Typed Workers " +
+    "(tree:governing-worker-{build,refine,review,integrate}) — " +
+    "execute leaf work under contracts in force; the Planner picks the " +
+    "worker type per leaf, and workspace extensions can specialize the " +
+    "Worker base for domain-specific tools and validators. " +
     "\n\n" +
     "Self-promotion lifecycle. A node promotes itself to Ruler when it " +
     "takes responsibility for a domain. Three uniform call sites: root " +
@@ -102,58 +104,12 @@ export default {
     env: [],
     cli: [],
 
-    modes: [
-      {
-        key: "tree:governing-planner",
-        handler: "./modes/planner.js",
-        assignmentSlot: "governing-planner",
-      },
-      {
-        key: "tree:governing-contractor",
-        handler: "./modes/contractor.js",
-        assignmentSlot: "governing-contractor",
-      },
-      // Generic Worker stays registered for backward compatibility:
-      // older plans without a workerType field resolve here. The
-      // mode delegates to Build (the default cognitive shape).
-      {
-        key: "tree:governing-worker",
-        handler: "./modes/worker.js",
-        assignmentSlot: "governing-worker",
-      },
-      // The four typed Workers. Workers are typed by the cognitive
-      // shape of the work, not by domain — Build creates new
-      // artifacts, Refine improves existing ones, Review judges
-      // without modifying, Integrate ties sibling outputs together.
-      // Workspaces may register per-type specializations via
-      // provides.workerTypes; absent that, dispatch routes to these
-      // governing base modes directly.
-      {
-        key: "tree:governing-worker-build",
-        handler: "./modes/workerBuild.js",
-        assignmentSlot: "governing-worker-build",
-      },
-      {
-        key: "tree:governing-worker-refine",
-        handler: "./modes/workerRefine.js",
-        assignmentSlot: "governing-worker-refine",
-      },
-      {
-        key: "tree:governing-worker-review",
-        handler: "./modes/workerReview.js",
-        assignmentSlot: "governing-worker-review",
-      },
-      {
-        key: "tree:governing-worker-integrate",
-        handler: "./modes/workerIntegrate.js",
-        assignmentSlot: "governing-worker-integrate",
-      },
-      {
-        key: "tree:governing-foreman",
-        handler: "./modes/foreman.js",
-        assignmentSlot: "governing-foreman",
-      },
-    ],
+    // Modes registry retired in Slice 7 — see memories
+    // `role-subsumes-mode` and `mode-registry-legacy`. Behavior is
+    // declared on role specs at roles/*.js; registration happens via
+    // `registerRole` in init.js, which mirrors mode-shape fields to
+    // the legacy mode registry for runChat({ mode }) compat.
+    modes: [],
 
     hooks: {
       // Lifecycle events workspaces and future courts subscribe to.

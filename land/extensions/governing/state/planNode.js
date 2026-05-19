@@ -173,9 +173,13 @@ export async function createPlanNode({
   systemSpec = null,
   summonId = null,
   sessionId = null,
+  // Phase 3b ([[project_seed_four_verbs_only]]): callers thread core
+  // so node creation flows through core.do (auto-Did).
+  core,
 } = {}) {
   if (!parentNodeId) throw new Error("createPlanNode requires parentNodeId");
   if (!beingId) throw new Error("createPlanNode requires beingId");
+  if (!core?.do) throw new Error("createPlanNode requires `core` (verb surface)");
   if (!name || !String(name).trim()) throw new Error("createPlanNode requires name");
 
   const parentDoc = await Node.findById(parentNodeId).select("_id type").lean();
@@ -186,10 +190,10 @@ export async function createPlanNode({
     );
   }
 
-  const { createNode } = await import("../../../seed/tree/treeManagement.js");
-  const planNode = await createNode({
+  // Phase 3b migration: verb-surface create. Fires kernel hooks +
+  // writes a "create-child" Did automatically.
+  const planNode = await core.do(parentNodeId, "create-child", {
     name: String(name).trim(),
-    parentId: String(parentNodeId),
     type: "plan",
     beingId,
     summonId,
@@ -241,8 +245,12 @@ export async function ensurePlanAtScope({
   systemSpec = null,
   summonId = null,
   sessionId = null,
+  // Phase 3b ([[project_seed_four_verbs_only]]): callers thread core
+  // so node creation and metadata writes flow through core.do.
+  core,
 }) {
   if (!scopeNodeId) return null;
+  if (!core?.do) throw new Error("ensurePlanAtScope requires `core` (verb surface)");
 
   const scopeNode = await Node.findById(scopeNodeId).select("_id name type").lean();
   if (!scopeNode) return null;
@@ -265,6 +273,7 @@ export async function ensurePlanAtScope({
         name,
         systemSpec,
         summonId, sessionId,
+        core,
       });
     } catch (err) {
       // Race protection: unique partial index on (parent, type='plan')
@@ -295,19 +304,23 @@ export async function ensurePlanAtScope({
       ? node.metadata.get("modes")
       : node.metadata?.modes;
 
-    const { setExtMeta: kernelSetExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-
-    await kernelSetExtMeta(node, "governing", {
-      ...(existingMeta || {}),
-      role: "plan",
-      scopeRulerId: String(scopeNodeId),
-      createdAt: existingMeta?.createdAt || new Date().toISOString(),
+    // Phase 3b migration: verb-surface writes. Each set-meta is one
+    // logical operation, auto-Did, atomic merge into the namespace.
+    await core.do(node, "set-meta", {
+      namespace: "governing",
+      data: {
+        role: "plan",
+        scopeRulerId: String(scopeNodeId),
+        createdAt: existingMeta?.createdAt || new Date().toISOString(),
+      },
+      merge: true,
     });
 
     if (existingModes?.plan !== "tree:governing-planner") {
-      await kernelSetExtMeta(node, "modes", {
-        ...(existingModes || {}),
-        plan: "tree:governing-planner",
+      await core.do(node, "set-meta", {
+        namespace: "modes",
+        data: { plan: "tree:governing-planner" },
+        merge: true,
       });
     }
 
@@ -328,12 +341,15 @@ export async function ensurePlanAtScope({
         role:          "planner",
         homeNodeId:    String(planNode._id),
       });
-      const { mergeExtMeta: kernelMergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-      await kernelMergeExtMeta(node, "beings", {
-        planner: {
-          installedBy:  "governing",
-          scopeRulerId: String(scopeNodeId),
+      await core.do(node, "set-meta", {
+        namespace: "beings",
+        data: {
+          planner: {
+            installedBy:  "governing",
+            scopeRulerId: String(scopeNodeId),
+          },
         },
+        merge: true,
       });
       // Inner-being protection: SUMMON to the Planner at this trio is
       // restricted to governing-role beings of THIS rulership. The
@@ -342,19 +358,23 @@ export async function ensurePlanAtScope({
       // trio members of OTHER rulerships can't reach this Planner.
       // Humans and citizens are filtered by the role list. The Ruler
       // is how external beings interact with governance here.
-      await kernelMergeExtMeta(node, "permissions", {
-        summon: {
-          "@planner*": {
-            requires: {
-              role:         ["ruler", "planner", "contractor", "foreman"],
-              homeInDomain: String(scopeNodeId),
+      await core.do(node, "set-meta", {
+        namespace: "permissions",
+        data: {
+          summon: {
+            "@planner*": {
+              requires: {
+                role:         ["ruler", "planner", "contractor", "foreman"],
+                homeInDomain: String(scopeNodeId),
+              },
             },
           },
         },
+        merge: true,
       });
     }
   } catch (err) {
-    log.warn("Governing", `failed to stamp plan-node role/mode/embodiments: ${err.message}`);
+    log.warn("Governing", `failed to stamp plan-node role/mode/beings: ${err.message}`);
   }
 
   return planNode;

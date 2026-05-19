@@ -1,6 +1,27 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
 // modes/registry.js
-// Central mode registry: defines all modes, their tools, and switching logic
+//
+// **DEPRECATED.** This registry is legacy infrastructure being retired
+// in favor of role-as-behavior under the SUMMON architecture. Modes
+// used to be the unit of "what AI behavior happens at a given key";
+// that role now belongs to the IBP role registry
+// (../../ibp/roles/registry.js), where a single role spec carries both
+// dispatch and LLM-behavior. See memory `mode-registry-legacy`.
+//
+// What this file still provides during the migration:
+//   - `registerMode(key, modeConfig, extName)` — extension entry point
+//     for mode-as-prompt registration. `registerRole` in the role
+//     registry mirrors into this when a role spec carries mode-shape
+//     fields (buildSystemPrompt, toolNames, modeKey), so extensions
+//     migrating to single-registration don't break legacy callers.
+//   - `getMode`, `getToolsForMode`, `buildPromptForMode` — the legacy
+//     lookup chain `runChat` / `switchMode` use today. Will be
+//     replaced by role-direct invocation as `runChat` evolves to take
+//     role specs.
+//   - `resolveMode` per-node mode overrides — legacy customization;
+//     migrate to per-being-at-node config in metadata.beings.
+//
+// Don't extend this file. New behavior goes on role specs.
 
 import log from "../log.js";
 import { getLandConfigValue } from "../landConfig.js";
@@ -8,7 +29,6 @@ import { resolveTools } from "./tools.js";
 import { getNodeName } from "../tree/treeData.js";
 import { treeFallback, homeFallback } from "./fallback.js";
 import Node from "../models/node.js";
-
 
 // ─────────────────────────────────────────────────────────────────────────
 // BIG MODES
@@ -67,7 +87,7 @@ export function getSubModes(bigMode) {
       label: mode.label,
     }));
   // Hide kernel fallbacks when real modes are registered
-  if (all.length > 1) return all.filter(m => !m.key.endsWith(":fallback"));
+  if (all.length > 1) return all.filter((m) => !m.key.endsWith(":fallback"));
   return all;
 }
 
@@ -86,11 +106,17 @@ const VALID_BIG_MODES = new Set(Object.values(BIG_MODES));
 
 export function setDefaultMode(bigMode, modeKey) {
   if (!VALID_BIG_MODES.has(bigMode)) {
-    log.warn("Modes", `Cannot set default: "${bigMode}" is not a valid zone (${[...VALID_BIG_MODES].join(", ")})`);
+    log.warn(
+      "Modes",
+      `Cannot set default: "${bigMode}" is not a valid zone (${[...VALID_BIG_MODES].join(", ")})`,
+    );
     return false;
   }
   if (!ALL_MODES[modeKey]) {
-    log.warn("Modes", `Cannot set default for ${bigMode}: mode "${modeKey}" not registered`);
+    log.warn(
+      "Modes",
+      `Cannot set default for ${bigMode}: mode "${modeKey}" not registered`,
+    );
     return false;
   }
   DEFAULT_MODES[bigMode] = modeKey;
@@ -109,17 +135,27 @@ export function setDefaultMode(bigMode, modeKey) {
  *   (from ancestor chain walk). If null, falls back to node-local metadata.extensions.blocked.
  * @returns {string} resolved mode key (e.g. "tree:navigate" or "custom:smart-nav")
  */
-export function resolveMode(intent, bigMode, nodeMetadata = null, blockedExtensions = null) {
+export function resolveMode(
+  intent,
+  bigMode,
+  nodeMetadata = null,
+  blockedExtensions = null,
+) {
   // Guard against undefined/null intent or bigMode producing keys like "tree:undefined"
-  if (!intent || typeof intent !== "string") return DEFAULT_MODES[bigMode] || `${bigMode || "tree"}:fallback`;
+  if (!intent || typeof intent !== "string")
+    return DEFAULT_MODES[bigMode] || `${bigMode || "tree"}:fallback`;
   if (!bigMode || typeof bigMode !== "string") bigMode = "tree";
 
-  const meta = nodeMetadata instanceof Map ? Object.fromEntries(nodeMetadata) : (nodeMetadata || {});
+  const meta =
+    nodeMetadata instanceof Map
+      ? Object.fromEntries(nodeMetadata)
+      : nodeMetadata || {};
 
   // Spatial extension scoping: prefer the full ancestor-chain blocked set if provided.
   // Falls back to node-local metadata for backward compat with callers that don't pass it.
-  const blockedExts = blockedExtensions
-    || (meta.extensions?.blocked ? new Set(meta.extensions.blocked) : null);
+  const blockedExts =
+    blockedExtensions ||
+    (meta.extensions?.blocked ? new Set(meta.extensions.blocked) : null);
 
   // Layer 1: per-node override (skip if owning extension is blocked)
   const nodeMode = meta.modes?.[intent];
@@ -153,18 +189,31 @@ export function resolveMode(intent, bigMode, nodeMetadata = null, blockedExtensi
 export async function setNodeMode(nodeId, intent, modeKey) {
   if (!nodeId || !intent || !modeKey) return false;
   // Validate intent: safe key name, no dots/dollars/proto injection
-  if (typeof intent !== "string" || intent.length === 0 || intent.length > 50) return false;
-  if (/[.$]/.test(intent) || intent === "__proto__" || intent === "constructor" || intent === "prototype") return false;
+  if (typeof intent !== "string" || intent.length === 0 || intent.length > 50)
+    return false;
+  if (
+    /[.$]/.test(intent) ||
+    intent === "__proto__" ||
+    intent === "constructor" ||
+    intent === "prototype"
+  )
+    return false;
   // Validate modeKey: must be a registered mode
   if (typeof modeKey !== "string" || !ALL_MODES[modeKey]) return false;
   await Node.updateOne(
     { _id: String(nodeId) },
-    { $set: { [`metadata.modes.${intent}`]: modeKey } }
+    { $set: { [`metadata.modes.${intent}`]: modeKey } },
   );
   // Fire afterMetadataWrite so the routing index rebuilds
   try {
     const { hooks } = await import("../hooks.js");
-    hooks.run("afterMetadataWrite", { nodeId: String(nodeId), extName: "modes", data: { [intent]: modeKey } }).catch(() => {});
+    hooks
+      .run("afterMetadataWrite", {
+        nodeId: String(nodeId),
+        extName: "modes",
+        data: { [intent]: modeKey },
+      })
+      .catch(() => {});
   } catch {}
   return true;
 }
@@ -176,7 +225,7 @@ export async function setNodeMode(nodeId, intent, modeKey) {
  *   2. Extension-injected tools (via loader)
  *   3. Tree-specific tools (from root node metadata.tools.allowed[])
  */
-export function getToolsForMode(modeKey, treeToolConfig = null) {
+export function getToolsForMode(modeKey, treeToolConfig = null, rolePermissions = null) {
   const mode = ALL_MODES[modeKey];
   if (!mode) return [];
 
@@ -197,11 +246,15 @@ export function getToolsForMode(modeKey, treeToolConfig = null) {
     }
     if (Array.isArray(treeToolConfig.blocked)) {
       const blockedSet = new Set(treeToolConfig.blocked);
-      toolNames = toolNames.filter(t => !blockedSet.has(t));
+      toolNames = toolNames.filter((t) => !blockedSet.has(t));
     }
   }
 
-  return resolveTools(toolNames);
+  // Layer 4: role-permissions filter. When the active role declares
+  // a permission set, drop tools whose verb isn't in it. Permissions
+  // are role identity; envelopes never narrow them. See memory
+  // `role-permissions-not-envelope`.
+  return resolveTools(toolNames, rolePermissions);
 }
 
 // Extension tool injection hook. Set by the loader after initialization.
@@ -209,7 +262,9 @@ let _getExtToolsFn = () => [];
 
 // Mode registration callback. Set by loader for spatial scoping.
 let _onModeRegistered = null;
-export function setModeRegistrationHook(fn) { _onModeRegistered = fn; }
+export function setModeRegistrationHook(fn) {
+  _onModeRegistered = fn;
+}
 
 /**
  * Called by extension loader to register the tool injection function.
@@ -221,44 +276,91 @@ export function setExtensionToolResolver(fn) {
 
 /**
  * Register a custom mode from an extension.
+ *
+ * **DEPRECATED for new code.** Use `registerRole` from
+ * `ibp/roles/registry.js` instead. A role spec carrying `modeKey`,
+ * `buildSystemPrompt`, and `toolNames` is auto-mirrored into this
+ * registry, so a single role registration provides both dispatch and
+ * LLM behavior. Direct registerMode callers still work during the
+ * migration; the auto-mirror is removed after the remaining external
+ * mode-key callers (swarm/routes, executionNode default mode) migrate.
+ *
  * The mode object must have: name, bigMode, toolNames[], buildSystemPrompt(ctx)
  * Optional: emoji, label, hidden, maxMessagesBeforeLoop, preserveContextOnLoop
  */
 let MAX_REGISTERED_MODES = 200;
-export function setMaxModes(n) { MAX_REGISTERED_MODES = Math.max(10, Number(n) || 200); }
+export function setMaxModes(n) {
+  MAX_REGISTERED_MODES = Math.max(10, Number(n) || 200);
+}
 
 // modeKey format: "bigMode:subMode" where both parts are lowercase alphanumeric + hyphens
 const MODE_KEY_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
+
+// Tracks extensions that registered modes directly (not via the
+// registerRole auto-mirror). Used to warn-once on direct callers so
+// migration progress is visible in logs without spamming.
+const _directRegistrationWarned = new Set();
 
 export function registerMode(modeKey, modeConfig, extName = "unknown") {
   if (!modeKey || !modeConfig) {
     log.warn("Modes", `Invalid mode registration from ${extName}`);
     return false;
   }
+  // Deprecation surface for direct registerMode callers. The role
+  // registry's auto-mirror sets _viaRoleMirror: true; skip the warning
+  // for those (they're the migration path, not the legacy surface).
+  if (!modeConfig._viaRoleMirror && !_directRegistrationWarned.has(extName)) {
+    _directRegistrationWarned.add(extName);
+    log.warn("Modes",
+      `registerMode("${modeKey}") from "${extName}" uses the legacy mode registry. ` +
+      `Migrate to registerRole (ibp/roles/registry.js) so dispatch and LLM behavior ` +
+      `come from one spec. See memory mode-registry-legacy.`);
+  }
   if (typeof modeKey !== "string" || !MODE_KEY_RE.test(modeKey)) {
-    log.warn("Modes", `Invalid mode key format "${modeKey}" from ${extName}. Expected "bigMode:subMode" (lowercase alphanumeric + hyphens).`);
+    log.warn(
+      "Modes",
+      `Invalid mode key format "${modeKey}" from ${extName}. Expected "bigMode:subMode" (lowercase alphanumeric + hyphens).`,
+    );
     return false;
   }
   if (Object.keys(ALL_MODES).length >= MAX_REGISTERED_MODES) {
-    log.error("Modes", `Mode registry full (${MAX_REGISTERED_MODES} modes). "${modeKey}" from "${extName}" rejected.`);
+    log.error(
+      "Modes",
+      `Mode registry full (${MAX_REGISTERED_MODES} modes). "${modeKey}" from "${extName}" rejected.`,
+    );
     return false;
   }
-  if (!modeConfig.buildSystemPrompt || typeof modeConfig.buildSystemPrompt !== "function") {
-    log.warn("Modes", `Mode "${modeKey}" from ${extName} missing buildSystemPrompt(). Skipped.`);
+  if (
+    !modeConfig.buildSystemPrompt ||
+    typeof modeConfig.buildSystemPrompt !== "function"
+  ) {
+    log.warn(
+      "Modes",
+      `Mode "${modeKey}" from ${extName} missing buildSystemPrompt(). Skipped.`,
+    );
     return false;
   }
   if (!Array.isArray(modeConfig.toolNames)) {
-    log.warn("Modes", `Mode "${modeKey}" from ${extName} missing toolNames[]. Skipped.`);
+    log.warn(
+      "Modes",
+      `Mode "${modeKey}" from ${extName} missing toolNames[]. Skipped.`,
+    );
     return false;
   }
   // Validate toolNames entries are all strings
-  if (modeConfig.toolNames.some(t => typeof t !== "string")) {
-    log.warn("Modes", `Mode "${modeKey}" from ${extName} has non-string entries in toolNames[]. Skipped.`);
+  if (modeConfig.toolNames.some((t) => typeof t !== "string")) {
+    log.warn(
+      "Modes",
+      `Mode "${modeKey}" from ${extName} has non-string entries in toolNames[]. Skipped.`,
+    );
     return false;
   }
   if (ALL_MODES[modeKey]) {
     const existingOwner = ALL_MODES[modeKey]._extName || "kernel";
-    log.warn("Modes", `Mode "${modeKey}" already registered by "${existingOwner}". "${extName}" cannot override.`);
+    log.warn(
+      "Modes",
+      `Mode "${modeKey}" already registered by "${existingOwner}". "${extName}" cannot override.`,
+    );
     return false;
   }
 
@@ -293,7 +395,10 @@ export function unregisterModes(extName) {
       for (const [bigMode, defaultKey] of Object.entries(DEFAULT_MODES)) {
         if (defaultKey === key) {
           DEFAULT_MODES[bigMode] = `${bigMode}:fallback`;
-          log.verbose("Modes", `Default mode for ${bigMode} reset to fallback (${extName} unregistered)`);
+          log.verbose(
+            "Modes",
+            `Default mode for ${bigMode} reset to fallback (${extName} unregistered)`,
+          );
         }
       }
     }
@@ -331,15 +436,25 @@ export async function buildPromptForMode(modeKey, ctx) {
     // Resolve node names in parallel. Graceful fallback to ID-only on failure.
     const idsToResolve = {};
     if (rootId) idsToResolve.root = rootId;
-    if (currentNodeId && currentNodeId !== rootId) idsToResolve.current = currentNodeId;
-    if (targetNodeId && targetNodeId !== rootId && targetNodeId !== currentNodeId) idsToResolve.target = targetNodeId;
+    if (currentNodeId && currentNodeId !== rootId)
+      idsToResolve.current = currentNodeId;
+    if (
+      targetNodeId &&
+      targetNodeId !== rootId &&
+      targetNodeId !== currentNodeId
+    )
+      idsToResolve.target = targetNodeId;
 
     const names = {};
     try {
       const entries = Object.entries(idsToResolve);
       if (entries.length > 0) {
-        const resolved = await Promise.all(entries.map(([, id]) => getNodeName(id)));
-        entries.forEach(([key], i) => { names[key] = resolved[i]; });
+        const resolved = await Promise.all(
+          entries.map(([, id]) => getNodeName(id)),
+        );
+        entries.forEach(([key], i) => {
+          names[key] = resolved[i];
+        });
       }
     } catch (nameErr) {
       // DB error: degrade to ID-only. The AI still knows where it is.
@@ -348,15 +463,29 @@ export async function buildPromptForMode(modeKey, ctx) {
 
     if (rootId) {
       const rootName = names.root;
-      positionLines.push(rootName ? `Tree: ${rootName} (${rootId})` : `Tree: ${rootId}`);
+      positionLines.push(
+        rootName ? `Tree: ${rootName} (${rootId})` : `Tree: ${rootId}`,
+      );
     }
     if (currentNodeId && currentNodeId !== rootId) {
       const nodeName = names.current;
-      positionLines.push(nodeName ? `Current node: ${nodeName} (${currentNodeId})` : `Current node: ${currentNodeId}`);
+      positionLines.push(
+        nodeName
+          ? `Current node: ${nodeName} (${currentNodeId})`
+          : `Current node: ${currentNodeId}`,
+      );
     }
-    if (targetNodeId && targetNodeId !== rootId && targetNodeId !== currentNodeId) {
+    if (
+      targetNodeId &&
+      targetNodeId !== rootId &&
+      targetNodeId !== currentNodeId
+    ) {
       const targetName = names.target;
-      positionLines.push(targetName ? `Target node: ${targetName} (${targetNodeId})` : `Target node: ${targetNodeId}`);
+      positionLines.push(
+        targetName
+          ? `Target node: ${targetName} (${targetNodeId})`
+          : `Target node: ${targetNodeId}`,
+      );
     }
   } else if (bigMode === "home") {
     positionLines.push("Zone: Home");
@@ -364,9 +493,10 @@ export async function buildPromptForMode(modeKey, ctx) {
     positionLines.push("Zone: Land");
   }
 
-  const positionBlock = positionLines.length > 0
-    ? `[Position]\n${positionLines.join("\n")}\n\n`
-    : "";
+  const positionBlock =
+    positionLines.length > 0
+      ? `[Position]\n${positionLines.join("\n")}\n\n`
+      : "";
 
   // ── Mode layer: domain-specific prompt ──
   // Await in case the extension's buildSystemPrompt is async (fetching node data, etc.)
@@ -375,7 +505,10 @@ export async function buildPromptForMode(modeKey, ctx) {
   try {
     modePrompt = await Promise.resolve(mode.buildSystemPrompt(ctx));
   } catch (promptErr) {
-    log.error("Modes", `buildSystemPrompt for "${modeKey}" threw: ${promptErr.message}`);
+    log.error(
+      "Modes",
+      `buildSystemPrompt for "${modeKey}" threw: ${promptErr.message}`,
+    );
     modePrompt = `[Mode: ${modeKey}] (prompt generation failed, assist the user as best you can)`;
   }
   // Warn loudly when prompts get oversized so bloat doesn't go unnoticed,
@@ -383,17 +516,26 @@ export async function buildPromptForMode(modeKey, ctx) {
   // and from anyone trying to debug what the model actually saw. The
   // whole point of viewing the prompt is to see it. Fix the bloat at the
   // facet level instead of papering over it with a hard cap here.
-  const maxPromptChars = Number(getLandConfigValue("maxSystemPromptChars")) || 32000;
+  const maxPromptChars =
+    Number(getLandConfigValue("maxSystemPromptChars")) || 32000;
   if (typeof modePrompt === "string" && modePrompt.length > maxPromptChars) {
-    log.warn("Modes", `System prompt for "${modeKey}" is ${modePrompt.length} chars (over ${maxPromptChars} budget). Investigate which facets are bloating it.`);
+    log.warn(
+      "Modes",
+      `System prompt for "${modeKey}" is ${modePrompt.length} chars (over ${maxPromptChars} budget). Investigate which facets are bloating it.`,
+    );
   }
   if (typeof modePrompt !== "string") {
-    log.error("Modes", `buildSystemPrompt for "${modeKey}" returned ${typeof modePrompt}, expected string`);
+    log.error(
+      "Modes",
+      `buildSystemPrompt for "${modeKey}" returned ${typeof modePrompt}, expected string`,
+    );
     modePrompt = `[Mode: ${modeKey}]`;
   }
 
   // ── Time layer: land timezone ──
-  const tz = getLandConfigValue("timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const tz =
+    getLandConfigValue("timezone") ||
+    Intl.DateTimeFormat().resolvedOptions().timeZone;
   let timeStr;
   try {
     timeStr = new Date().toLocaleString("en-US", {
@@ -463,4 +605,6 @@ export function getAllToolNamesForBigMode(bigMode) {
  * Number of recent messages to carry across a mode switch.
  */
 export let CARRY_MESSAGES = 4;
-export function setCarryMessages(n) { CARRY_MESSAGES = Math.max(0, Math.min(20, Number(n) || 4)); }
+export function setCarryMessages(n) {
+  CARRY_MESSAGES = Math.max(0, Math.min(20, Number(n) || 4));
+}

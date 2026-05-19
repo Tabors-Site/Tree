@@ -91,18 +91,16 @@ async function createContractsEmission({ contractsNodeId, ordinal, payload, bein
   const { slugifyEmission } = await import("./slugifyEmission.js");
   const name = slugifyEmission(payload?.reasoning, ordinal);
 
+  // Phase 3 migration: verb-surface create. Fires kernel hooks + Did.
   let created = null;
   try {
-    if (core?.tree?.createNode) {
-      created = await core.tree.createNode({
-        parentId: String(contractsNodeId),
-        name,
-        type: "contracts-emission",
-        beingId,
-      });
-    }
+    created = await core.do(contractsNodeId, "create-child", {
+      name,
+      type: "contracts-emission",
+      beingId,
+    });
   } catch (err) {
-    log.debug("Governing", `core.tree.createNode failed for contracts-emission: ${err.message}; falling back`);
+    log.debug("Governing", `core.do(create-child) failed for contracts-emission: ${err.message}; falling back`);
   }
 
   if (!created) {
@@ -121,18 +119,19 @@ async function createContractsEmission({ contractsNodeId, ordinal, payload, bein
   }
 
   try {
-    const { setExtMeta: kernelSetExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
+    // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
+    // write. merge:true preserves NS atomically.
     const node = await Node.findById(created._id);
     if (node) {
-      const existingMeta = node.metadata instanceof Map
-        ? node.metadata.get(NS)
-        : node.metadata?.[NS];
-      await kernelSetExtMeta(node, NS, {
-        ...(existingMeta || {}),
-        role: "contracts-emission",
-        emission: payload,
-        ordinal: payload.ordinal,
-        emittedAt: payload.emittedAt,
+      await core.do(node, "set-meta", {
+        namespace: NS,
+        data: {
+          role: "contracts-emission",
+          emission: payload,
+          ordinal: payload.ordinal,
+          emittedAt: payload.emittedAt,
+        },
+        merge: true,
       });
     }
   } catch (err) {
@@ -161,6 +160,9 @@ async function appendApproval({
   // emission ratification; Pass 2 courts read both the same way.
   inheritedFrom = null,
   parentContractsApplied = [],
+  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread `core`
+  // so the metadata write goes through core.do (auto-Did).
+  core,
 }) {
   if (!rulerNodeId || !contractsEmissionNodeId) return null;
   const node = await Node.findById(rulerNodeId);
@@ -187,13 +189,13 @@ async function appendApproval({
     } : {}),
   };
 
-  const next = {
-    ...(meta || {}),
-    contractApprovals: [...existing, entry],
-  };
-
-  const { setExtMeta: kernelSetExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-  await kernelSetExtMeta(node, NS, next);
+  // Phase 3 migration: verb-surface write. merge:true preserves NS atomically.
+  if (!core?.do) throw new Error("appendApproval requires `core` (verb surface)");
+  await core.do(node, "set-meta", {
+    namespace: NS,
+    data: { contractApprovals: [...existing, entry] },
+    merge: true,
+  });
   return entry;
 }
 
@@ -406,6 +408,7 @@ export async function setContracts({
     supersedes: priorActive?._approvalId || null,
     inheritedFrom: isInheritance ? inheritsFrom : null,
     parentContractsApplied: isInheritance ? parentContractsApplied : [],
+    core,
   });
 
   log.info("Governing",

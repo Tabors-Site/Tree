@@ -31,7 +31,7 @@ const state = {
   descriptor: null,
   // Whichever non-auth being currently has the talk panel open.
   currentTalkBeing: null,
-  // Correlation id -> being, for routing async ibp:summon-reply
+  // Correlation id -> being, for routing async ibp:summon
   // events back to the being whose bubble should be updated.
   pendingSummons: new Map(),
   // Navigation history. Linear; back/forward step through it without
@@ -94,7 +94,7 @@ async function connectAnonymous(landUrl, useProxy) {
     token: null,
     useProxy,
     onConnectionChange: (status) => setHud(`socket: ${status}`),
-    onSummonReply: handleSummonReply,
+    onSummon: handleSummon,
     onDescriptorEvent: handleDescriptorEvent,
   });
   state.client.connect();
@@ -108,7 +108,7 @@ async function connectAndLand(session) {
     token: session.token,
     useProxy: session.landIsProxied,
     onConnectionChange: (status) => setHud(`${session.username} | ${status}`),
-    onSummonReply: handleSummonReply,
+    onSummon: handleSummon,
     onDescriptorEvent: handleDescriptorEvent,
   });
   state.client.connect();
@@ -138,10 +138,10 @@ function handleDescriptorEvent(_event) {
   }, 100); // debounce a touch so a flurry of patches collapses into one render
 }
 
-// Async SUMMON reply arrives via `ibp:summon-reply`. Look up which being
+// Async SUMMON reply arrives via `ibp:summon`. Look up which being
 // the reply belongs to (by correlation id) and swap the thinking bubble
 // for the real content.
-function handleSummonReply(entry) {
+function handleSummon(entry) {
   const correlation = entry?.inReplyTo;
   if (!correlation) return;
   const being = state.pendingSummons.get(correlation);
@@ -306,7 +306,7 @@ function openTalkPanel(b) {
 
 // Build the SUMMON envelope and dispatch via ibp:summon. Sync beings
 // return their response on the ack; async beings ACK accepted and
-// later push a `ibp:summon-reply` event handled by handleSummonReply().
+// later push a `ibp:summon` event handled by handleSummon().
 // While we wait for an async reply, we show an animated thinking bubble
 // above the being's head.
 async function sendSummon(b, text) {
@@ -336,7 +336,7 @@ async function sendSummon(b, text) {
     const reply = await state.client.summon(stance, message);
     if (reply?.status === "accepted") {
       // Async path: server kicked off summoning; show thinking dots and
-      // wait for `ibp:summon-reply` to swap them for real content.
+      // wait for `ibp:summon` to swap them for real content.
       state.pendingSummons.set(correlation, b.being);
       state.scene.showBeingThinking(b.being);
       return;

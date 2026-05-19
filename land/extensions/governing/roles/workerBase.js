@@ -20,7 +20,7 @@ Each turn does ONE concrete thing. Either:
   (c) end with [[NO-WRITE: short reason]] — this turn legitimately
       needs no write.
 
-Reading without writing is a failed turn. The orchestrator re-invokes
+Reading without writing is a failed turn. The Foreman re-summons
 you until you emit [[DONE]] or [[NO-WRITE]]. Describing future work
 without doing it just loops you. Just call the tool.
 

@@ -42,6 +42,20 @@ const DidSchema = new mongoose.Schema({
   updateParent: { type: { oldParentId: { type: String, ref: "Node" }, newParentId: { type: String, ref: "Node" }, _id: false } },
   branchLifecycle: { type: { action: { type: String, enum: ["retired", "revived", "revivedAsRoot"] }, fromParentId: { type: String, ref: "Node" }, toParentId: { type: String, ref: "Node" }, _id: false } },
 
+  // Tool call invocation — one Did per MCP tool the responder ran during
+  // a Summon. action="tool-call". args/result capped (see appendToolCall).
+  toolCall: { type: {
+    name:     { type: String, required: true },
+    args:     { type: mongoose.Schema.Types.Mixed, default: null },
+    argsFull: { type: mongoose.Schema.Types.Mixed, default: null },
+    result:   { type: String, default: null },
+    truncated:{ type: Boolean, default: false },
+    success:  { type: Boolean, default: true },
+    error:    { type: String, default: null },
+    ms:       { type: Number, default: 0 },
+    _id: false,
+  } },
+
   // Canopy federation
   wasRemote: { type: Boolean, default: false },
   homeLand: { type: String },

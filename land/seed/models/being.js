@@ -85,6 +85,22 @@ const BeingSchema = new mongoose.Schema({
   roles:       { type: [String], default: [] },
   defaultRole: { type: String, default: null },
 
+  // ── Being tree ──
+  // Beings form a tree the same way nodes do. A composite being (e.g. a
+  // Ruler) is the parent of its inner beings (Planner, Contractor,
+  // Foreman, Worker). Sub-Rulers parent up to the Ruler that dispatched
+  // them. Top-level beings (humans, auth-being, root Rulers) have
+  // parentBeingId null . they're roots of the being tree.
+  //
+  // The being tree captures the cognitive hierarchy at a position.
+  // Multiple beings can share the same homePositionId (Ruler + Planner +
+  // Contractor + Foreman all live at the rulership node); the being-tree
+  // parent/child relationship is independent of where they live.
+  //
+  // See [[project_substrate_as_universal_workspace]] for the framing.
+  parentBeingId: { type: String, ref: "Being", default: null, index: true },
+  children:      [{ type: String, ref: "Being" }],
+
   // homePositionId: the Node where this being lives. Required for every
   // being once created. Humans get a home territory Node granted at
   // registration; AI beings have their home set by the extension that
@@ -141,6 +157,8 @@ const BeingSchema = new mongoose.Schema({
 // Compound index: query "every chat ending with this being" and
 // "every being at a given home position" cheaply.
 BeingSchema.index({ homePositionId: 1, operatingMode: 1 });
+// Being-tree walk: find a parent's children quickly.
+BeingSchema.index({ parentBeingId: 1, _id: 1 });
 // Role indexes: `roles` is multikey (Mongo indexes each array element)
 // so `Being.find({ roles: "ruler" })` covers any being carrying ruler.
 // `defaultRole` is single-value, indexed for the common "find beings

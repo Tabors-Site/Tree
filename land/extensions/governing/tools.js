@@ -23,7 +23,7 @@ import {
   DEFAULT_WORKER_TYPE,
   isValidWorkerType,
   coerceWorkerType,
-} from "./modes/workerBase.js";
+} from "./roles/workerBase.js";
 
 // Caps are sanity bounds, not formatting rules. The prompt asks the
 // model to be concise; these only catch runaway emissions (a 50KB
@@ -207,18 +207,17 @@ async function createPlanEmission({ planNodeId, ordinal, payload, beingId, core 
   const { slugifyEmission } = await import("./state/slugifyEmission.js");
   const name = slugifyEmission(payload?.reasoning, ordinal);
 
+  // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
+  // create. Fires kernel hooks + writes a "create-child" Did.
   let created = null;
   try {
-    if (core?.tree?.createNode) {
-      created = await core.tree.createNode({
-        parentId: String(planNodeId),
-        name,
-        type: "plan-emission",
-        beingId,
-      });
-    }
+    created = await core.do(planNodeId, "create-child", {
+      name,
+      type: "plan-emission",
+      beingId,
+    });
   } catch (err) {
-    log.debug("Governing", `core.tree.createNode failed for plan-emission: ${err.message}; falling back to direct insert`);
+    log.debug("Governing", `core.do(create-child) failed for plan-emission: ${err.message}; falling back to direct insert`);
   }
 
   if (!created) {
@@ -245,19 +244,20 @@ async function createPlanEmission({ planNodeId, ordinal, payload, beingId, core 
   // steps[] → step → branches[] → branch); kernel default depth cap
   // is 8 to accommodate this and similar coordination shapes.
   try {
-    const { setExtMeta: kernelSetExtMeta } = await import("../../seed/tree/extensionMetadata.js");
+    // Phase 3 migration: verb-surface write. merge:true keeps siblings
+    // atomically; no manual read-spread-write needed.
     const node = await Node.findById(created._id);
     if (node) {
-      const existingMeta = node.metadata instanceof Map
-        ? node.metadata.get("governing")
-        : node.metadata?.governing;
-      await kernelSetExtMeta(node, "governing", {
-        ...(existingMeta || {}),
-        role: "plan-emission",
-        emission: payload,
-        ordinal: payload.ordinal,
-        emittedAt: payload.emittedAt,
-        stepsCount: payload.steps.length,
+      await core.do(node, "set-meta", {
+        namespace: "governing",
+        data: {
+          role: "plan-emission",
+          emission: payload,
+          ordinal: payload.ordinal,
+          emittedAt: payload.emittedAt,
+          stepsCount: payload.steps.length,
+        },
+        merge: true,
       });
     }
   } catch (err) {
@@ -416,6 +416,7 @@ export default function getGoverningTools(core) {
   return [
     {
       name: "governing-emit-plan",
+      verb: "do",
       description:
         "Emit the structured plan for this Ruler scope. Use ONCE per Planner invocation. " +
         "Args carry the full plan: a top-level `reasoning` field explaining why this " +
@@ -595,34 +596,56 @@ export default function getGoverningTools(core) {
 
         // Append planApproval on the Ruler with the new emissionId-
         // shaped planRef. Supersedes the prior active approval if any.
+        //
+        // Status semantics (Slice 7):
+        //   - Entry-scope Ruler (no parent Ruler): status="pending".
+        //     The Ruler's delegateToHigherBeing (the user) ratifies via
+        //     `governing-ratify-plan` after seeing the plan card. The
+        //     Ruler does not auto-advance to hire-contractor at this
+        //     scope until the ratification flips status to "approved."
+        //   - Sub-scope Ruler (parent Ruler above): status="approved".
+        //     The parent's dispatch act is implicit ratification — the
+        //     parent already decided this sub-Ruler should plan/do work
+        //     at its scope, so the plan emission immediately enters the
+        //     ratified state and the sub-Ruler can chain forward to
+        //     contracts/execution without round-tripping to its parent
+        //     for every approval.
+        //
+        // See memory `card-is-a-summon` for the architectural framing.
         let planRef = `${planNode._id}:${emissionNode._id}`;
+        let approvalStatus = "approved";
+        try {
+          const { readLineage } = await import("./state/lineage.js");
+          const lineage = await readLineage(ruler._id);
+          const isEntryScope = !lineage?.parentRulerId;
+          if (isEntryScope) approvalStatus = "pending";
+        } catch (lineErr) {
+          log.debug("Governing",
+            `governing-emit-plan: lineage check skipped, defaulting to approved status: ${lineErr.message}`);
+        }
         try {
           const { getExtension } = await import("../loader.js");
           const governing = getExtension("governing")?.exports;
           if (governing?.appendPlanApproval) {
-            const prior = governing.readActivePlanApproval
-              ? await governing.readActivePlanApproval(ruler._id)
-              : null;
-            // Override the Phase 1 buildPlanRef shape (which reads
-            // _writeSeq) with the emissionId-shaped ref. Done by
-            // writing the ref directly via a small post-write update;
-            // simpler to extend appendPlanApproval to accept an
-            // override but for the prototype the inline shape works.
+            // Read the latest non-superseded approval to chain supersedes
+            // correctly across pending and approved transitions.
+            const prior = governing.readLatestPlanApproval
+              ? await governing.readLatestPlanApproval(ruler._id)
+              : (governing.readActivePlanApproval
+                  ? await governing.readActivePlanApproval(ruler._id)
+                  : null);
             await governing.appendPlanApproval({
               rulerNodeId: ruler._id,
-              planNodeId: emissionNode._id,  // ref points at the emission child, not the workspace
-              status: "approved",
+              planNodeId: emissionNode._id,
+              status: approvalStatus,
               supersedes: prior?.planRef || null,
-              reason: prior ? "re-plan supersedes prior emission" : null,
+              reason: prior ? `re-plan supersedes prior emission (${prior.status})` : null,
+              core,
             });
-            // Re-read the just-written entry to surface the actual ref
-            // the kernel built (writeSeq-shaped) so the response stays
-            // accurate. Phase 2 main will swap appendPlanApproval to
-            // accept an explicit ref.
-            const active = governing.readActivePlanApproval
-              ? await governing.readActivePlanApproval(ruler._id)
+            const fresh = governing.readLatestPlanApproval
+              ? await governing.readLatestPlanApproval(ruler._id)
               : null;
-            if (active?.planRef) planRef = active.planRef;
+            if (fresh?.planRef) planRef = fresh.planRef;
           }
         } catch (err) {
           log.warn("Governing", `governing-emit-plan: planApproval append failed: ${err.message}`);
@@ -661,6 +684,7 @@ export default function getGoverningTools(core) {
     // ─────────────────────────────────────────────────────────────────
     {
       name: "governing-emit-contracts",
+      verb: "do",
       description:
         "Emit the contract set for this Ruler scope. Use ONCE per Contractor invocation. " +
         "Two valid shapes:\n\n" +

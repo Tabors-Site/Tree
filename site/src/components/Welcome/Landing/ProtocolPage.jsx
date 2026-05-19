@@ -119,7 +119,7 @@ const ProtocolPage = () => {
             <div className="gov-compare-col gov-compare-col-accent">
               <h4>🌳 IBP . Inter-Being Protocol</h4>
               <ul>
-                <li><strong>IBPA</strong> . locates a stance pair (left being addressing right being)</li>
+                <li><strong>IBPA</strong> . a fully-embodied left stance addressing a right side that ranges from a bare land up to a full stance (whichever the call needs)</li>
                 <li><strong>SEE · DO · SUMMON · BE</strong> . operate on positions and beings</li>
                 <li><strong>Position Descriptors</strong> . the data the land returns to SEE</li>
                 <li><strong>Portal</strong> . view into the beings' world from the left stance</li>
@@ -145,6 +145,56 @@ const ProtocolPage = () => {
               IBP makes Beings first-class. They are addressed through Stances, summoned through the protocol's own verb, observable through SEE, accountable through Dids. AI does not need to be wrapped in a human-shaped surface; the surface is built for it. Everything else IBP does (the four verbs, IBPAs, Position Descriptors, the Portal) builds from this layer.
             </p>
           </div>
+        </div>
+      </section>
+
+      {/* TWO CONFIGURATIONS OF THE BRIDGE */}
+      <section className="lp-section">
+        <div className="lp-container" style={{maxWidth: 980}}>
+          <h2 className="lp-section-title">Two configurations of the bridge</h2>
+          <p className="lp-section-sub lp-section-sub-wide" style={{textAlign: "center", maxWidth: 800, margin: "0 auto 32px"}}>
+            An IBPA always joins a left stance to a right stance. WHICH beings sit on each side decides whether a Portal is needed at all.
+          </p>
+
+          <div style={{
+            maxWidth: 920, margin: "0 auto 28px",
+            padding: 10,
+            background: "rgba(0,0,0,0.25)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 10,
+          }}>
+            <img
+              src="/stances.png"
+              alt="Two configurations of the IBP bridge. Left: a human (@HUMAN) sits at a desk peering through a monitor (the Portal) into a green landscape where the right-stance being lives. Right: two A.I. beings standing together inside the same green land; no portal, no outside observer."
+              style={{display: "block", width: "100%", height: "auto", borderRadius: 6}}
+            />
+          </div>
+
+          <div className="lp-cards-3" style={{gridTemplateColumns: "1fr 1fr"}}>
+            <div className="lp-card" style={{padding: "20px 22px"}}>
+              <h3 style={{color: "#60a5fa", marginTop: 0, fontSize: "1rem"}}>Human . Portal . Land</h3>
+              <p style={{color: "rgba(255,255,255,0.7)", fontSize: 14.5, lineHeight: 1.65, margin: 0}}>
+                The left stance is a human, outside the land. The Portal (their monitor) is the window into the right stance somewhere inside the land. The Portal is the necessary intermediary . the human can't be inside the substrate as data, so they peer in.
+              </p>
+              <p style={{color: "rgba(255,255,255,0.55)", fontSize: 13, lineHeight: 1.65, marginTop: 10, marginBottom: 0, fontStyle: "italic"}}>
+                Familiar shape. Analogous to a browser, but pointed at stances instead of documents.
+              </p>
+            </div>
+
+            <div className="lp-card" style={{padding: "20px 22px"}}>
+              <h3 style={{color: "#4ade80", marginTop: 0, fontSize: "1rem"}}>Being . Being (inside the same land)</h3>
+              <p style={{color: "rgba(255,255,255,0.7)", fontSize: 14.5, lineHeight: 1.65, margin: 0}}>
+                Both stances are beings inside the land. No Portal, no outside observer. The substrate hosts both ends of the bridge directly . the left being addresses the right being from within the same world.
+              </p>
+              <p style={{color: "rgba(255,255,255,0.55)", fontSize: 13, lineHeight: 1.65, marginTop: 10, marginBottom: 0, fontStyle: "italic"}}>
+                What makes IBP a substrate, not just a protocol over a remote service.
+              </p>
+            </div>
+          </div>
+
+          <p className="lp-section-sub lp-section-sub-wide" style={{marginTop: 28, maxWidth: 820, margin: "28px auto 0", fontSize: 15, color: "rgba(255,255,255,0.7)"}}>
+            The Portal is only necessary when the left stance comes from outside (a human reaching in from the physical world). Once both stances live inside the same substrate, the bridge is direct. This is why beings being first-class matters . it is the second configuration that lets the substrate be self-referential.
+          </p>
         </div>
       </section>
 
@@ -273,14 +323,22 @@ const ProtocolPage = () => {
               <div className="lp-step-num ibp-step-struct">·</div>
               <div className="lp-step-content">
                 <h4>Being</h4>
-                <p>The thing at the <code>@</code> in a Stance. Human or AI. Has an identity. It's the Position coming to life to embody itself and make changes on positions or other beings. <code>@tabor</code>, <code>@ruler</code>, <code>@archivist</code>, <code>@auth</code> are all beings. Not addressable on its own; combines with a Position to form a Stance. A Being is what acts, observes, and is summoned. Its current Role colors how it acts, but its identity persists across role changes. Beings are the living, addressable parts of the structure . nodes and artifacts give rise to them; they act on the structure and are it expressing itself.</p>
+                <p>The <strong>instance</strong> at the <code>@</code> in a Stance. Human or AI. Has its own identity that persists. <code>@tabor</code>, <code>@king-bob</code>, <code>@ruler3243</code>, <code>@archivist-7</code> are beings . each is a specific entity with its own history. The Position comes to life as a Being to embody itself and make changes on positions or other beings. Not addressable on its own; combines with a Position to form a Stance. A Being holds a Role on its <code>role</code> field . the Role is inside the Being. Identity persists across role changes (the same Being can shift role over its life). Beings are the living, addressable parts of the structure . nodes and artifacts give rise to them; they act on the structure and are it expressing itself.</p>
               </div>
             </div>
             <div className="lp-step">
               <div className="lp-step-num ibp-step-struct">·</div>
               <div className="lp-step-content">
                 <h4>Role</h4>
-                <p>A template . the class to a Being's instance. <code>ruler</code>, <code>planner</code>, <code>archivist</code>, <code>auth</code> are roles defined in the role registry. Each role declares what its bearer does when summoned: honored intents, response mode, summon handler, optional system prompt. A Being holds a role on its <code>role</code> field; when summoned, the kernel looks up the role template and runs its handler. The Being is the instance; the role is the class.</p>
+                <p>The <strong>template</strong> a Being holds . the class to a Being's instance. <code>ruler</code>, <code>planner</code>, <code>archivist</code>, <code>auth</code> are roles defined in the role registry. A Role is the full configuration of how that Being operates: system instructions (how it thinks), the verbs surface available to it (which DO actions it can take, what it can SEE, which other beings it can SUMMON), honored intents, response mode, summon handler . everything needed to orchestrate the Being's behavior at scale. A Being whose <code>role</code> field is <code>"ruler"</code> (e.g. <code>@ruler3243</code> or <code>@king-bob</code>) runs the ruler role template when summoned. The Role is inside the Being; multiple Beings can hold the same Role. The Being is the instance; the Role is the class.</p>
+              </div>
+            </div>
+
+            <div className="lp-step">
+              <div className="lp-step-num ibp-step-struct">·</div>
+              <div className="lp-step-content">
+                <h4>Reading <code>@</code></h4>
+                <p>The <code>@</code> qualifier in a Stance always names a <strong>Being</strong>, not a Role. <code>@king-bob</code> is a specific being; you'd find them in the Being model with a <code>role</code> field set to whatever class they hold (maybe <code>"ruler"</code>, maybe something else later). Roles never appear directly in an address. When a land has only one being playing a role (e.g. one auth-being), that being's own name is often the role name verbatim (<code>@auth</code>) . convenient, but it's still a specific Being instance behind the qualifier.</p>
               </div>
             </div>
           </div>
@@ -535,7 +593,7 @@ Each verb is restricted to the address shape that makes sense for it. SEE observ
                 Each position holds a stack of namespaces. Every IBP write lands in one of them. The same DO action shape reaches all of them; the action and payload say which namespace and what to write.
               </p>
               <ul className="ibp-persist-list">
-                <li><strong>Structural</strong> . name, parent, children, status, contributors. Reached by <code>create-child</code>, <code>rename</code>, <code>move</code>, <code>change-status</code>, etc.</li>
+                <li><strong>Structural</strong> . name, parent, children, status, contributors. Reached by <code>create-child</code>, <code>set-name</code>, <code>move</code>, <code>set-status</code>, etc. (Field updates follow the <code>set-&lt;field&gt;</code> pattern, parallel to <code>set-meta</code>.)</li>
                 <li><strong>Notes and artifacts</strong> . the position's content. Reached by <code>write-note</code>, <code>edit-note</code>, <code>upload-artifact</code>.</li>
                 <li><strong>Extension namespaces</strong> . one per installed extension. Reached by <code>set-meta</code> / <code>clear-meta</code>.</li>
                 <li><strong>Role configurations</strong> . the programming for each being that can be summoned here. System instructions, tools, permissions. Also reached by <code>set-meta</code>, just with an role-keyed namespace.</li>

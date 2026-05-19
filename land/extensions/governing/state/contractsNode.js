@@ -27,6 +27,7 @@ const NS = "governing";
  */
 export async function ensureContractsNode({ scopeNodeId, beingId, core }) {
   if (!scopeNodeId) return null;
+  if (!core?.do) throw new Error("ensureContractsNode requires `core` (verb surface)");
 
   // Direct probe for an existing contracts-type child.
   const existing = await Node.findOne({
@@ -35,26 +36,21 @@ export async function ensureContractsNode({ scopeNodeId, beingId, core }) {
   }).select("_id name parent type metadata").lean();
   if (existing) return existing;
 
-  // Create lazily. Use core.tree.createNode if available so the kernel's
-  // hooks (afterNodeCreate, contribution log) fire; fall back to a
-  // direct insert otherwise (e.g. background contexts without core).
+  // Phase 3b ([[project_seed_four_verbs_only]]): create lazily through
+  // core.do("create-child"). Fires kernel hooks + auto-writes a Did.
+  // Falls back to direct insert only on operational failure.
   let created = null;
   try {
-    if (core?.tree?.createNode) {
-      created = await core.tree.createNode({
-        parentId: String(scopeNodeId),
-        name: "contracts",
-        type: "contracts",
-        beingId,
-      });
-    }
+    created = await core.do(scopeNodeId, "create-child", {
+      name: "contracts",
+      type: "contracts",
+      beingId,
+    });
   } catch (err) {
-    log.debug("Governing", `core.tree.createNode failed for contracts node: ${err.message}; falling back to direct insert`);
+    log.debug("Governing", `core.do(create-child) failed for contracts node: ${err.message}; falling back to direct insert`);
   }
 
   if (!created) {
-    // Fallback: direct insert. Mirrors plan extension's createPlanNode
-    // pattern when the scoped core is absent.
     const { default: NodeModel } = await import("../../../seed/models/node.js");
     const { v4: uuid } = await import("uuid");
     created = await NodeModel.create({
@@ -76,10 +72,9 @@ export async function ensureContractsNode({ scopeNodeId, beingId, core }) {
   // nodes."
   //
   // Also assign the per-node Contractor mode so anyone visiting the
-  // contracts node chats with Contractor by default. Phase 1 sets the
-  // field; phase 2 will route emission through it.
+  // contracts node chats with Contractor by default. All metadata
+  // writes flow through core.do for auto-Did + atomic merge.
   try {
-    const { setExtMeta: kernelSetExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
     const node = await Node.findById(created._id);
     if (node) {
       const existingMeta = node.metadata instanceof Map
@@ -88,16 +83,21 @@ export async function ensureContractsNode({ scopeNodeId, beingId, core }) {
       const existingModes = node.metadata instanceof Map
         ? node.metadata.get("modes")
         : node.metadata?.modes;
-      await kernelSetExtMeta(node, NS, {
-        ...(existingMeta || {}),
-        role: "contracts",
-        scopeRulerId: String(scopeNodeId),
-        createdAt: existingMeta?.createdAt || new Date().toISOString(),
+
+      await core.do(node, "set-meta", {
+        namespace: NS,
+        data: {
+          role: "contracts",
+          scopeRulerId: String(scopeNodeId),
+          createdAt: existingMeta?.createdAt || new Date().toISOString(),
+        },
+        merge: true,
       });
       if (existingModes?.plan !== "tree:governing-contractor") {
-        await kernelSetExtMeta(node, "modes", {
-          ...(existingModes || {}),
-          plan: "tree:governing-contractor",
+        await core.do(node, "set-meta", {
+          namespace: "modes",
+          data: { plan: "tree:governing-contractor" },
+          merge: true,
         });
       }
 
@@ -116,31 +116,38 @@ export async function ensureContractsNode({ scopeNodeId, beingId, core }) {
           role:          "contractor",
           homeNodeId:    String(created._id),
         });
-        const { mergeExtMeta: kernelMergeExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-        await kernelMergeExtMeta(node, "beings", {
-          contractor: {
-            installedBy:  "governing",
-            scopeRulerId: String(scopeNodeId),
+        await core.do(node, "set-meta", {
+          namespace: "beings",
+          data: {
+            contractor: {
+              installedBy:  "governing",
+              scopeRulerId: String(scopeNodeId),
+            },
           },
+          merge: true,
         });
         // Inner-being protection: only governing-role beings of THIS
         // rulership can SUMMON the Contractor. The scoped
         // `homeInDomain` keeps other rulerships' beings out; the role
         // list keeps humans / citizens out.
-        await kernelMergeExtMeta(node, "permissions", {
-          summon: {
-            "@contractor*": {
-              requires: {
-                role:         ["ruler", "planner", "contractor", "foreman"],
-                homeInDomain: String(scopeNodeId),
+        await core.do(node, "set-meta", {
+          namespace: "permissions",
+          data: {
+            summon: {
+              "@contractor*": {
+                requires: {
+                  role:         ["ruler", "planner", "contractor", "foreman"],
+                  homeInDomain: String(scopeNodeId),
+                },
               },
             },
           },
+          merge: true,
         });
       }
     }
   } catch (err) {
-    log.warn("Governing", `failed to stamp contracts-node role/mode/embodiments: ${err.message}`);
+    log.warn("Governing", `failed to stamp contracts-node role/mode/beings: ${err.message}`);
   }
 
   return created;

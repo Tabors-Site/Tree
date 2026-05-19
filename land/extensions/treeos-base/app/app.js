@@ -1968,6 +1968,35 @@ function buildIframeUrl(raw) {
       }
     });
 
+    // SUMMON reply listener — Slice 7 entry-path switch.
+    //
+    // Tree-zone chat messages are now dispatched as SUMMONs to the
+    // Ruler being at the tree root (see seed/ws/websocket.js). The
+    // Ruler's role.summon eventually calls emitReplyToStance, which
+    // appends a SUMMON to the user-being's inbox and wakes the
+    // cognition-aware scheduler. For human beings, wake() broadcasts
+    // `ibp:summon` to `being:<userBeingId>` — every socket the
+    // user has open receives it.
+    //
+    // Render the reply content as a chat bubble. The content shape may
+    // be a plain string (standard reply) or a structured object (plan
+    // card, etc. — rendered as JSON for now; richer rendering lands
+    // alongside the card UI work).
+    socket.on("ibp:summon", (entry) => {
+      if (!entry || entry.content === undefined || entry.content === null) return;
+      removeTypingIndicator();
+      const text = typeof entry.content === "string"
+        ? entry.content
+        : (entry.content && typeof entry.content === "object" && entry.content.exit)
+          ? String(entry.content.exit)
+          : JSON.stringify(entry.content, null, 2);
+      addMessage(text, "assistant");
+      isSending = false;
+      updateSendButtons();
+      lockModeBar(false);
+      try { iframe.contentWindow?.location.reload(); } catch(e) {}
+    });
+
     // Lifecycle activity signal — fire-and-forget governance spawns
     // emit active=true on start and active=false on settle. Chat panel
     // renders a persistent "Ruler active — <phase>" chip while any

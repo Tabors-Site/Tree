@@ -243,7 +243,10 @@ function emitNavigatorStatus(socket) {
 // the pre-refactor inline code.
 // ============================================================================
 
-const SAFE_CHAT_MODES = new Set(["chat", "place", "query", "be"]);
+// "be" retired 2026-05-18 — extension territory shortcut, not a verb. The
+// three survivors are tool-permission overlays on one SUMMON loop (see
+// memory `intents-are-tool-permissions`).
+const SAFE_CHAT_MODES = new Set(["chat", "place", "query"]);
 
 // Reject chat payloads that don't carry the minimum required fields.
 // Returns null on success or a string error to emit back to the client.
@@ -409,7 +412,6 @@ function endChatTurn(socket, abort, aiSessionKey) {
     socket._inFlightZone = null;
     socket._inFlightRootId = null;
   }
-  try { socket._onStreamTurnEnd?.(); } catch {}
 }
 
 // Emit a chat error matching the seed's HTTP error contract. Carries
@@ -435,14 +437,15 @@ function emitChatError(socket, code, message, generation, detail) {
   socket.emit(WS.CHAT_ERROR, payload);
 }
 
-// Map a chat mode to the orchestrator's source-type tag. Defaults to
-// "tree-chat" so an unrecognized mode still routes correctly.
+// Map a chat mode to the orchestrator's source-type tag. Tree-zone
+// chat/place/query route through SUMMON before reaching this function,
+// so this only fires for home/land zones now. Kept for the
+// runOrchestration fallback path until home/land also migrate to IBP.
 function chatSourceTypeFor(safeChatMode) {
   switch (safeChatMode) {
-    case "place": return "ws-tree-place";
-    case "query": return "ws-tree-query";
-    case "be":    return "ws-tree-be";
-    default:      return "tree-chat";
+    case "place": return "ws-place";
+    case "query": return "ws-query";
+    default:      return "chat";
   }
 }
 
@@ -1138,28 +1141,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
         return emitChatError(socket, ERR.INTERNAL, err.message, generation);
       }
 
-      // 8. Stream extension routing. Two modes:
-      //    in-flight (processing) → merge into the running turn,
-      //    idle → debounce callback may swallow the message.
-      if (socket._onStreamMessage) {
-        if (socket._chatAbort) {
-          log.info("WS",
-            `↺ chat merged into running turn: vid=${aiSessionKey} gen=${generation ?? "-"} · ${JSON.stringify(msgSnippet)}`);
-          socket._onStreamMessage(message, safeChatMode, generation);
-          return;
-        }
-        if (socket._onStreamIdle) {
-          const handled = socket._onStreamIdle(message, safeChatMode, generation, {
-            rootId: payloadRootId,
-            currentNodeId: payloadNodeId,
-            zone: payloadZone,
-            sessionHandle: payloadHandle,
-          });
-          if (handled) return;
-        }
-      }
-
-      // 9. Serialize per aiSessionKey. Previous message must finish first.
+      // 8. Serialize per aiSessionKey. Previous message must finish first.
       await enqueue(aiSessionKey, async () => {
         // Resolve bigMode once at the top of the turn. Used by both
         // beginChatTurn (in-flight registry zone stamp) and the
@@ -1176,6 +1158,106 @@ export function initWebSocketServer(httpServer, originPolicy) {
         ensureSession(socket);
         syncRegistrySession(socket);
         const sessionId = socket._registrySessionId;
+
+        // ─────────────────────────────────────────────────────────────
+        // Tree-zone chat/place/query: route via SUMMON. The Ruler being
+        // at the tree's root receives the user's message in its inbox;
+        // the per-being scheduler invokes rulerRole.summon; the reply
+        // routes back via emitReplyToStance to the user-being's inbox,
+        // and the cognition-aware wake() broadcasts `ibp:summon`
+        // to `being:<userBeingId>` so the user's browser observers
+        // render it. No orchestrator in the path.
+        //
+        // intent carries the chat-mode flavor (chat | place | query).
+        // chat/place/query are tool-permission overlays on the same
+        // loop, not separate dispatch paths (see memory
+        // `intents-are-tool-permissions`). "be" retired entirely.
+        if (bigMode === "tree") {
+          try {
+            const summonRootId = getRootId(socket.beingId);
+            if (!summonRootId) {
+              throw new Error("Tree-zone chat requires a rootId on the socket session.");
+            }
+            const NodeModel = (await import("../models/node.js")).default;
+            const BeingModel = (await import("../models/being.js")).default;
+            const { appendToInbox } = await import("../../ibp/inbox.js");
+            const { wake } = await import("../../ibp/scheduler.js");
+            const { getLandDomain } = await import("../../ibp/address.js");
+
+            // Resolve the Ruler being at the tree root. The flip
+            // depends on governing having promoted root → Ruler at
+            // tree creation / extension boot (afterBoot backfill).
+            const rootNode = await NodeModel.findById(summonRootId)
+              .select("metadata").lean();
+            const rootBeings = rootNode?.metadata instanceof Map
+              ? rootNode.metadata.get("beings")
+              : rootNode?.metadata?.beings;
+            const rulerBeingId = rootBeings?.ruler?.beingId || null;
+            if (!rulerBeingId) {
+              throw new Error(
+                `Tree root ${String(summonRootId).slice(0, 8)} has no Ruler being. ` +
+                `Governance not initialized at this scope.`,
+              );
+            }
+            const rulerBeing = await BeingModel.findById(rulerBeingId)
+              .select("username defaultRole").lean();
+            const rulerUsername = rulerBeing?.username || "ruler";
+
+            // Resolve the user-being's home stance for the SUMMON
+            // `from` field. Used by rulerRole.summon's chain-initial-
+            // caller resolution to route the reply back here.
+            const userBeing = await BeingModel.findById(socket.beingId)
+              .select("username homePositionId").lean();
+            const userHomeId = userBeing?.homePositionId
+              ? String(userBeing.homePositionId)
+              : String(socket.beingId); // fallback so the stance parses
+            const userUsername = userBeing?.username || username || "user";
+
+            const landDomain = getLandDomain() || "land";
+            const userStance = `${landDomain}/${userHomeId}@${userUsername}`;
+
+            const { randomUUID } = await import("crypto");
+            const correlation = randomUUID();
+            // intent field retired as permission overlay (see memory
+            // `role-permissions-not-envelope`). The Ruler's role.permissions
+            // gates tool surface; envelope just carries content.
+            const envelope = {
+              from:            userStance,
+              content:         message,
+              correlation,
+              rootCorrelation: correlation,  // chain origin
+              activeRole:      "ruler",
+              priority:        1,            // HUMAN
+              sentAt:          new Date().toISOString(),
+            };
+
+            await appendToInbox(String(summonRootId), String(rulerBeingId), envelope);
+            wake(String(rulerBeingId), String(summonRootId));
+
+            log.info("WS",
+              `📨→SUMMON tree-zone chat: vid=${aiSessionKey} ` +
+              `user=${userUsername} → ruler=${rulerUsername} ` +
+              `at ${String(summonRootId).slice(0, 8)} ` +
+              `(correlation=${correlation.slice(0, 8)})`);
+
+            // No immediate CHAT_RESPONSE — the Ruler's reply will
+            // arrive asynchronously via `ibp:summon` on the
+            // user-being's room. Clear in-flight tracking so the
+            // socket isn't stuck in a "still running" state; the
+            // scheduler runs independently from here.
+            clearActiveSummon(socket);
+            return;
+          } catch (err) {
+            log.error("WS", `Tree-zone SUMMON dispatch failed: ${err.message}`);
+            teeEmit(WS.CHAT_ERROR, {
+              code: ERR.INTERNAL,
+              error: err.message,
+              generation,
+            });
+            clearActiveSummon(socket);
+            return;
+          }
+        }
 
         try {
           const { runOrchestration } = await import("../llm/conversation.js");
@@ -1197,17 +1279,15 @@ export function initWebSocketServer(httpServer, originPolicy) {
             orchestrateFlags: {
               skipRespond: safeChatMode === "place",
               forceQueryOnly: safeChatMode === "query",
-              behavioral: safeChatMode === "be",
             },
             onChatCreated: (chat) => {
-              setActiveSummon(socket, chat._id, chat.startMessage.time);
+              setActiveSummon(socket, chat._id);
             },
             onToolResults: (results) => {
               for (const r of results) teeEmit(WS.TOOL_RESULT, r);
             },
             onToolCalled: (call) => { teeEmit(WS.TOOL_CALLED, call); },
             onThinking:   (thought) => { teeEmit(WS.THINKING,    thought); },
-            onToolLoopCheckpoint: socket._streamCheckpoint || null,
           });
 
           if (abort.signal.aborted) {
@@ -1258,18 +1338,80 @@ export function initWebSocketServer(httpServer, originPolicy) {
     socket._chatHandler = _chatHandler;
 
     // ── CANCEL REQUEST ────────────────────────────────────────────────
-    socket.on("cancelRequest", () => {
+    socket.on("cancelRequest", async () => {
       if (socket._chatAbort) {
         log.debug("WS", `Cancel request: ${socket.aiSessionKey}`);
         socket._chatAbort.abort();
         socket._chatAbort = null;
       }
-      // Fire `request:cancelled` so extensions that own background
-      // spawn-and-await chains (governing's planner/contractor/
-      // dispatch, etc.) can drain their per-user abort registries.
-      // The kernel can't import extension state directly (seed never
-      // reaches into extensions); the hook is the contracted surface.
+
+      // SUMMON-era cascade cancel. Every chain the user originated is
+      // identified by a rootCorrelation; the scheduler holds an abort
+      // controller per being currently running a Summon in that chain.
+      // Sweep both: abort the in-flight Summons and cancel pending
+      // inbox entries downstream.
       if (socket.beingId) {
+        try {
+          const beingId = String(socket.beingId);
+          const Summon = (await import("../models/summon.js")).default;
+          const { abortByRootCorrelations } = await import("../../ibp/scheduler.js");
+          const { cancelByRootCorrelation } = await import("../../ibp/inbox.js");
+
+          // 1. Find every active root chain originated by this user.
+          const openRoots = await Summon.distinct("rootCorrelation", {
+            beingIn: beingId,
+            "endMessage.time": null,
+          });
+
+          if (openRoots.length) {
+            // 2. Abort in-flight Summons whose currentRoot matches.
+            const aborted = abortByRootCorrelations(openRoots, "user-cancel");
+
+            // 3. Walk every Summon under those roots to find the
+            // downstream beings + positions, then cancel pending
+            // inbox entries for each chain. This drops queued work
+            // before any wake fires.
+            const downstream = await Summon.find({
+              rootCorrelation: { $in: openRoots },
+            }).select("beingOut ibpAddress rootCorrelation").lean();
+            const seen = new Set();
+            for (const s of downstream) {
+              if (!s.beingOut) continue;
+              // ibpAddress encodes the position; cancel sweep is
+              // (nodeId, beingId, rootCorrelation). We don't trivially
+              // recover the nodeId from ibpAddress here, but the
+              // inbox-side cancelByRootCorrelation walks by
+              // (nodeId, beingId) — see follow-up issue: derive nodeId
+              // from the addressee stance or store it on Summon.
+              const key = `${s.beingOut}:${s.rootCorrelation}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              // Best-effort: try the being's homePositionId as the
+              // inbox node (most non-tree Summons land there).
+              try {
+                const Being = (await import("../models/being.js")).default;
+                const b = await Being.findById(s.beingOut).select("homePositionId").lean();
+                if (b?.homePositionId) {
+                  cancelByRootCorrelation(
+                    String(b.homePositionId), String(s.beingOut), s.rootCorrelation,
+                  ).catch(() => {});
+                }
+              } catch {}
+            }
+
+            if (aborted > 0 || downstream.length > 0) {
+              log.info("WS",
+                `🛑 user-cancel: ${aborted} Summon${aborted === 1 ? "" : "s"} aborted, ` +
+                `${openRoots.length} chain${openRoots.length === 1 ? "" : "s"} swept (${beingId.slice(0, 8)})`);
+            }
+          }
+        } catch (err) {
+          log.debug("WS", `SUMMON cancel sweep skipped: ${err.message}`);
+        }
+
+        // Fire `request:cancelled` for any extension that still wants to
+        // hook the cancel event (gateway cleanup, custom abort registries).
+        // The SUMMON sweep above covers governance/inbox cancellation.
         try {
           hooks.run("request:cancelled", {
             beingId: String(socket.beingId),

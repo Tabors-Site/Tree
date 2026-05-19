@@ -94,6 +94,12 @@ mock.module("../ibp/inbox.js", {
       }
       return { consumed: set.size };
     },
+    readInbox: async (_nodeId, beingId, options = {}) => {
+      const bucket = fakeBucket.get(beingId) || [];
+      let entries = bucket;
+      if (options.unconsumed) entries = entries.filter((e) => !e.consumed);
+      return entries;
+    },
   },
 });
 

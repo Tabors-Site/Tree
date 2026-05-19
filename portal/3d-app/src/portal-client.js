@@ -11,7 +11,7 @@
 import { io } from "socket.io-client";
 
 export class PortalClient {
-  constructor({ landUrl, token, useProxy, onConnectionChange, onSummonReply, onDescriptorEvent }) {
+  constructor({ landUrl, token, useProxy, onConnectionChange, onSummon, onDescriptorEvent }) {
     this.landUrl = landUrl;
     this.token = token;
     this.useProxy = !!useProxy; // dev: use Vite proxy (relative URLs, same-origin)
@@ -19,14 +19,14 @@ export class PortalClient {
     this.connected = false;
     this._reqCounter = 0;
     this._onConnectionChange = onConnectionChange || (() => {});
-    this._onSummonReply = onSummonReply || (() => {});
+    this._onSummon = onSummon || (() => {});
     this._onDescriptorEvent = onDescriptorEvent || (() => {});
   }
 
-  // Listener for async SUMMON responses. The server emits `ibp:summon-reply`
+  // Listener for async SUMMON responses. The server emits `ibp:summon`
   // with a response envelope when an async being completes summoning.
-  setSummonReplyHandler(handler) {
-    this._onSummonReply = handler || (() => {});
+  setSummonHandler(handler) {
+    this._onSummon = handler || (() => {});
   }
 
   // Listener for live SEE updates. The server emits `descriptor:patch`,
@@ -92,9 +92,9 @@ export class PortalClient {
       this._onConnectionChange("error", err?.message);
     });
 
-    this.socket.on("ibp:summon-reply", (entry) => {
-      try { this._onSummonReply(entry); } catch (err) {
-        console.warn("[3D] summon-reply handler threw:", err);
+    this.socket.on("ibp:summon", (entry) => {
+      try { this._onSummon(entry); } catch (err) {
+        console.warn("[3D] summon handler threw:", err);
       }
     });
 

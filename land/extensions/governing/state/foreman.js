@@ -205,6 +205,7 @@ export async function appendExecutionRecord({
       await freezeExecutionRecord({
         recordNodeId: priorActive._recordNodeId,
         nextStatus: "superseded",
+        core,
       });
     } catch (err) {
       log.debug("Governing", `appendExecutionRecord: prior freeze skipped: ${err.message}`);
@@ -224,19 +225,16 @@ export async function appendExecutionRecord({
     : planSlug;
   const startedAt = new Date().toISOString();
 
-  // Create the execution-record node.
+  // Phase 3 migration: verb-surface create. Fires kernel hooks + Did.
   let recordNode = null;
   try {
-    if (core?.tree?.createNode) {
-      recordNode = await core.tree.createNode({
-        parentId: String(executionNode._id),
-        name: recordName,
-        type: "execution-record",
-        beingId,
-      });
-    }
+    recordNode = await core.do(executionNode._id, "create-child", {
+      name: recordName,
+      type: "execution-record",
+      beingId,
+    });
   } catch (err) {
-    log.debug("Governing", `core.tree.createNode failed for execution-record: ${err.message}; falling back to direct insert`);
+    log.debug("Governing", `core.do(create-child) failed for execution-record: ${err.message}; falling back to direct insert`);
   }
 
   if (!recordNode) {
@@ -272,18 +270,20 @@ export async function appendExecutionRecord({
   };
 
   try {
-    const { setExtMeta: kernelSetExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
+    // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
+    // write. merge:true preserves other NS keys atomically; no manual
+    // read-spread-write.
     const node = await Node.findById(recordNode._id);
     if (node) {
-      const existingMeta = node.metadata instanceof Map
-        ? node.metadata.get(NS)
-        : node.metadata?.[NS];
-      await kernelSetExtMeta(node, NS, {
-        ...(existingMeta || {}),
-        role: "execution-record",
-        execution: payload,
-        ordinal,
-        startedAt,
+      await core.do(node, "set-meta", {
+        namespace: NS,
+        data: {
+          role: "execution-record",
+          execution: payload,
+          ordinal,
+          startedAt,
+        },
+        merge: true,
       });
     }
   } catch (err) {
@@ -299,6 +299,7 @@ export async function appendExecutionRecord({
       executionRef,
       supersedes: priorApprovalRef || null,
       reason: priorActive ? "supersedes prior execution-record" : null,
+      core,
     });
   } catch (err) {
     log.warn("Governing", `appendExecutionRecord: approval write failed: ${err.message}`);
@@ -328,8 +329,11 @@ export async function appendExecutionApproval({
   status = "approved",
   supersedes = null,
   reason = null,
+  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
+  core,
 }) {
   if (!rulerNodeId || !executionRef) return null;
+  if (!core?.do) throw new Error("appendExecutionApproval requires `core` (verb surface)");
   const node = await Node.findById(rulerNodeId);
   if (!node) return null;
 
@@ -349,13 +353,13 @@ export async function appendExecutionApproval({
     reason: reason || null,
   };
 
-  const next = {
-    ...(meta || {}),
-    executionApprovals: [...existing, entry],
-  };
-
-  const { setExtMeta: kernelSetExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-  await kernelSetExtMeta(node, NS, next);
+  // Phase 3 migration: verb-surface write. merge:true atomically adds
+  // executionApprovals without clobbering other NS keys.
+  await core.do(node, "set-meta", {
+    namespace: NS,
+    data: { executionApprovals: [...existing, entry] },
+    merge: true,
+  });
 
   // Fire the ratification hook for Pass 2 court listeners and the
   // dashboard. Mirrors governing:planRatified / contractRatified.
@@ -456,8 +460,11 @@ export async function updateStepStatus({
   stepIndex,
   branchName = null,
   updates,
+  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
+  core,
 }) {
   if (!recordNodeId || typeof stepIndex !== "number" || !updates) return null;
+  if (!core?.do) throw new Error("updateStepStatus requires `core` (verb surface)");
   const node = await Node.findById(recordNodeId);
   if (!node) return null;
 
@@ -491,10 +498,11 @@ export async function updateStepStatus({
 
   execution.stepStatuses = stepStatuses;
 
-  const { setExtMeta: kernelSetExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-  await kernelSetExtMeta(node, NS, {
-    ...(meta || {}),
-    execution,
+  // Phase 3 migration: verb-surface write with atomic merge.
+  await core.do(node, "set-meta", {
+    namespace: NS,
+    data: { execution },
+    merge: true,
   });
   return execution;
 }
@@ -519,6 +527,8 @@ export async function updateStepStatusByBranchName({
   rulerNodeId,
   branchName,
   updates,
+  // Phase 3: thread core through to the underlying updateStepStatus.
+  core,
 }) {
   if (!rulerNodeId || !branchName || !updates) return null;
   const active = await readActiveExecutionRecord(rulerNodeId);
@@ -534,6 +544,7 @@ export async function updateStepStatusByBranchName({
         stepIndex: step.stepIndex,
         branchName,
         updates,
+        core,
       });
     }
   }
@@ -562,8 +573,11 @@ export async function updateStepStatusByBranchName({
 export async function freezeExecutionRecord({
   recordNodeId,
   nextStatus = "completed",
+  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
+  core,
 }) {
   if (!recordNodeId) return null;
+  if (!core?.do) throw new Error("freezeExecutionRecord requires `core` (verb surface)");
   const node = await Node.findById(recordNodeId);
   if (!node) return null;
 
@@ -579,10 +593,12 @@ export async function freezeExecutionRecord({
     completedAt: meta.execution.completedAt || new Date().toISOString(),
   };
 
-  const { setExtMeta: kernelSetExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-  await kernelSetExtMeta(node, NS, {
-    ...(meta || {}),
-    execution,
+  // Phase 3 migration: verb-surface write of the terminal execution
+  // status. merge:true preserves siblings atomically.
+  await core.do(node, "set-meta", {
+    namespace: NS,
+    data: { execution },
+    merge: true,
   });
 
   // Per-terminal-status hook fires. Fire only on actual transition

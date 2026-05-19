@@ -8,7 +8,7 @@ Read [protocol.md](protocol.md) first.
 
 Everything in TreeOS reduces to: positions have data. The data has namespaces. DO mutates position data through one of these channels:
 
-- **Structural fields** of the Node schema: `name`, `parent`, `status`, `visibility`, `contributors`. These are kernel-known and changed through named actions (`rename`, `move`, `change-status`, etc.).
+- **Structural fields** of the Node schema: `name`, `parent`, `status`, `visibility`, `contributors`. These are kernel-known and changed through named actions (`set-name`, `move`, `set-status`, etc.).
 - **Position-level content**: notes, file artifacts. Changed through named actions (`write-note`, `edit-note`, `upload-artifact`).
 - **Namespaced metadata** in `metadata.<namespace>`. Many kinds:
   - extension namespaces (`metadata.values`, `metadata.codebook`, ...) carry extension-specific data.
@@ -60,12 +60,12 @@ Creates a child node under the address position.
 
 Returns: `{ nodeId, name, position }` for the new child.
 
-#### rename
+#### set-name
 
 Renames the node at the address. Writes `Node.name`.
 
 ```
-{ verb: "do", action: "rename", position: "<position>", identity, payload: { name } }
+{ verb: "do", action: "set-name", position: "<position>", identity, payload: { name } }
 ```
 
 Returns: `{ nodeId, name }`.
@@ -92,12 +92,12 @@ Marks the node at the address as deleted.
 
 Returns: `{ deleted: true }`.
 
-#### change-status
+#### set-status
 
 Writes `Node.status`. Value must be a registered status (kernel: `active`, `completed`, `trimmed`; extensions may register more via the status registry).
 
 ```
-{ verb: "do", action: "change-status", position: "<position>", identity, payload: { status, isInherited?: boolean } }
+{ verb: "do", action: "set-status", position: "<position>", identity, payload: { status, isInherited?: boolean } }
 ```
 
 Returns: `{ nodeId, status }`.
@@ -359,7 +359,7 @@ See [protocol.md](protocol.md) for the full error vocabulary. The codes DO most 
 | Code | When |
 |---|---|
 | `INVALID_INPUT` | action payload does not match schema (missing field, wrong type, etc.) |
-| `INVALID_STATUS` | change-status with an unrecognized value |
+| `INVALID_STATUS` | set-status with an unrecognized value |
 | `INVALID_TYPE` | create-child with an unrecognized node type |
 | `ACTION_NOT_SUPPORTED` | unknown action name, or action not permitted at this position |
 | `ADDRESS_PARSE_ERROR` | the address field could not be parsed |

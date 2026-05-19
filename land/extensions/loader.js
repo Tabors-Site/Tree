@@ -557,6 +557,52 @@ function buildScopedCore(manifest, fullCore) {
     };
   }
 
+  // DO verb binding: auto-namespace operation registrations.
+  // Same principle as modes/orchestrators above. Extensions write
+  //   core.do.registerOperation("hire-planner", { ... })
+  // and the kernel records as "governing:hire-planner" with
+  // ownerExtension: "governing" automatically. Extensions never type
+  // their own namespace — the namespace is implicit from the
+  // registration context.
+  //
+  // Fully-qualified names (with a colon) are accepted only when the
+  // prefix matches the extension's own name; mismatches are rejected
+  // to make namespace-impersonation a structural impossibility.
+  //
+  // The verb function itself (`core.do(...)`) is passed through; only
+  // the registerOperation method gets scoped.
+  if (typeof scoped.do === "function" && typeof scoped.do.registerOperation === "function") {
+    const extName = manifest.name;
+    const origDo = scoped.do;
+    const origRegister = scoped.do.registerOperation;
+    const scopedDo = (...args) => origDo(...args);
+    scopedDo.registerOperation = (name, spec) => {
+      if (typeof name !== "string" || name.length === 0) {
+        return origRegister(name, spec); // let the registry surface the error
+      }
+      let fullName;
+      if (name.includes(":")) {
+        const prefix = name.split(":")[0];
+        if (prefix !== extName) {
+          throw new Error(
+            `registerOperation("${name}"): extension "${extName}" cannot register under prefix "${prefix}". ` +
+            `Use the bare name ("${name.split(":").slice(1).join(":")}") — namespacing is automatic.`,
+          );
+        }
+        fullName = name;
+      } else {
+        fullName = `${extName}:${name}`;
+      }
+      return origRegister(fullName, { ...(spec || {}), ownerExtension: extName });
+    };
+    // Forward the rest of the registry surface unchanged.
+    scopedDo.unregisterOperation = origDo.unregisterOperation;
+    scopedDo.unregisterOperationsFromExtension = origDo.unregisterOperationsFromExtension;
+    scopedDo.getOperation = origDo.getOperation;
+    scopedDo.listOperations = origDo.listOperations;
+    scoped.do = scopedDo;
+  }
+
   // Metadata binding: enforce namespace ownership.
   // Extensions can only write to their own namespace (matching manifest name)
   // or core namespaces (cascade, extensions, tools, modes).
@@ -922,7 +968,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
               description: tool.description,
               parameters: jsonSchema,
             },
-          });
+          }, { verb: tool.verb });
         }
       }
 

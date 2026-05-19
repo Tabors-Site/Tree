@@ -17,7 +17,6 @@ import Node from "../../seed/models/node.js";
 import log from "../../seed/log.js";
 import {
   FLAG_KINDS,
-  appendFlag,
   readPendingIssues,
 } from "./state/flagQueue.js";
 
@@ -88,6 +87,7 @@ export default function getFlagTools(_core) {
     // ───────────────────────────────────────────────────────────────
     {
       name: "governing-flag-issue",
+      verb: "do",
       description:
         "Flag a contract issue you encountered during your work. Use when " +
         "you hit ambiguity, missing vocabulary, conflict, a needed sibling " +
@@ -200,22 +200,25 @@ export default function getFlagTools(_core) {
         }
 
         const workerType = inferWorkerTypeFromMode(modeKey);
-        const flag = await appendFlag({
-          rulerNodeId: ruler._id,
-          payload: {
-            kind: args.kind,
-            artifactContext: {
-              file: ac.file || null,
-              function: ac.function || null,
-              scope: ac.scope || ruler.name || null,
-            },
-            localChoice,
-            blocking: !!args.blocking,
-            proposedResolution: proposedResolution || null,
+        // Phase 3c ([[project_seed_four_verbs_only]]): dispatch through
+        // the registered DO operation. Same handler runs; auto-Did fires.
+        // This proves the wire-verb-surface round-trip: extension code
+        // and external callers (e.g. another extension, future MCP-over-
+        // IBP) reach the same operation through the same dispatcher.
+        const flag = await _core.do(ruler._id, "governing:flag-issue", {
+          kind: args.kind,
+          artifactContext: {
+            file: ac.file || null,
+            function: ac.function || null,
+            scope: ac.scope || ruler.name || null,
           },
-          beingId: beingId || null,
+          localChoice,
+          blocking: !!args.blocking,
+          proposedResolution: proposedResolution || null,
           sourceWorkerScopeId: nodeId,
           sourceWorkerType: workerType,
+        }, {
+          identity: beingId ? { beingId } : null,
         });
 
         if (!flag) {
@@ -253,6 +256,7 @@ export default function getFlagTools(_core) {
     // ───────────────────────────────────────────────────────────────
     {
       name: "governing-read-pending-issues",
+      verb: "see",
       description:
         "Read the full pending-flags queue at this Ruler scope. Returns every " +
         "unresolved flag with its kind, artifactContext, localChoice, blocking " +

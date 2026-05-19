@@ -45,6 +45,27 @@ const ArtifactSchema = new mongoose.Schema({
     ref: "Being",
     required: true,
   },
+  // ── Name ──
+  // Human-readable identifier for this artifact. Used by set-name and
+  // for filesystem-origin/etc. mirroring. Optional . pure-metadata
+  // artifacts may not need a name. Capped at the same length the kernel
+  // applies to Node.name.
+  name: {
+    type: String,
+    default: null,
+  },
+  // ── Artifact tree ──
+  // Artifacts form a recursive tree (the third tree in the substrate,
+  // alongside positions and beings). A root artifact at a node carries
+  // parentArtifactId: null; descendants chain through parentArtifactId.
+  // Enables filesystem-origin folder-and-file structures, recursive
+  // emission/step hierarchies for governing, etc.
+  //
+  // See [[project_substrate_as_universal_workspace]] for the framing
+  // (recursive artifacts with origin tags = the universal-workspace
+  // bridge to external hierarchical systems).
+  parentArtifactId: { type: String, ref: "Artifact", default: null, index: true },
+  children:         [{ type: String, ref: "Artifact" }],
   // What system the underlying representation comes from. See protocol.js
   // ARTIFACT_ORIGIN. Defaults to ibp because that is the common case
   // (TreeOS native content). Origin is required so callers cannot create

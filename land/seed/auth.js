@@ -115,6 +115,10 @@ export async function createBeing(username, password, opts = {}) {
     isAdmin: opts.isAdmin || false,
     roles:       rolesList,
     defaultRole,
+    // Being-tree parent. null = top-level being (humans, root Rulers,
+    // auth-being). When set, the dispatcher (or caller) is responsible
+    // for $addToSet on parent.children atomically.
+    parentBeingId: opts.parentBeingId || null,
     homePositionId: opts.homePositionId || null,
     // Every being starts "at home" — current position defaults to their
     // home unless the caller explicitly overrides. Navigation events
@@ -276,6 +280,11 @@ export async function createBeingWithHome(opts) {
     isAdmin      = false,
     isRemote     = false,
     homeLand     = null,
+    // Being-tree parent ([[project_substrate_as_universal_workspace]]).
+    // When set, the new being is placed as a being-tree child of this
+    // parent. Atomic update of parent.children handled by the caller
+    // (the core.do dispatcher or direct caller).
+    parentBeingId = null,
   } = opts || {};
   let { username, password } = opts || {};
 
@@ -349,6 +358,7 @@ export async function createBeingWithHome(opts) {
       isAdmin,
       isRemote,
       homeLand,
+      parentBeingId,
     });
   } catch (err) {
     if (createdNewHome) {

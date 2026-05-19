@@ -51,7 +51,10 @@ export async function writeLineage({
   parentBranchEntryName = null,
   expandingFromSpec = null,
   force = false,
+  // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
+  core,
 }) {
+  if (!core?.do) throw new Error("writeLineage requires `core` (verb surface)");
   if (!subRulerNodeId || !parentRulerId) return null;
 
   const node = await Node.findById(subRulerNodeId);
@@ -74,10 +77,12 @@ export async function writeLineage({
   };
 
   try {
-    const { setExtMeta: kernelSetExtMeta } = await import("../../../seed/tree/extensionMetadata.js");
-    await kernelSetExtMeta(node, NS, {
-      ...(existingMeta || {}),
-      lineage,
+    // Phase 3 migration ([[project_seed_four_verbs_only]]): verb-surface
+    // write. merge:true preserves other governing keys at NS atomically.
+    await core.do(node, "set-meta", {
+      namespace: NS,
+      data: { lineage },
+      merge: true,
     });
   } catch (err) {
     log.warn("Governing", `writeLineage at ${String(subRulerNodeId).slice(0, 8)} failed: ${err.message}`);

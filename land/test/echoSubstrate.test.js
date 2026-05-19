@@ -54,6 +54,12 @@ mock.module("../ibp/inbox.js", {
       }
       return { consumed: set.size };
     },
+    readInbox: async (_nodeId, beingId, options = {}) => {
+      const bucket = fakeBucket.get(beingId) || [];
+      let entries = bucket;
+      if (options.unconsumed) entries = entries.filter((e) => !e.consumed);
+      return entries;
+    },
   },
 });
 
@@ -159,21 +165,10 @@ describe("echo through substrate — happy path", () => {
   });
 });
 
-describe("echo through substrate — place intent", () => {
-  test("place produces no response but the entry is still consumed", async () => {
-    fakeBucket.set("echo-1", [makeEntry({ correlation: "p1", intent: "place" })]);
-    let received = null;
-    attachHandoff("echo-1", "p1", {
-      responseFromStance: "treeos.ai/@echo",
-      onResponse: (entry) => { received = entry; },
-    });
-    wake("echo-1", "node-1");
-    // The scheduler should mark consumed even when summon returns null.
-    await waitUntil(() => fakeBucket.get("echo-1")[0].consumed);
-    assert.equal(received, null);
-    assert.equal(fakeBucket.get("echo-1")[0].consumed, true);
-  });
-});
+// `place intent` retired 2026-05-18 — intents are no longer permission
+// overlays at the envelope level; role.permissions handles that. Echo
+// always produces a response now regardless of any intent string
+// the sender attaches (intent is a free-form wake-source label only).
 
 describe("echo through substrate — queue ordering", () => {
   test("priority ordering applies with the real being", async () => {

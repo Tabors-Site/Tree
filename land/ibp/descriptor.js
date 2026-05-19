@@ -19,7 +19,8 @@ import { resolveTreeAccess } from "../seed/tree/treeAccess.js";
 import { getInboxSummary } from "./inbox.js";
 import { getRole, listRoles } from "./roles/registry.js";
 import { getExtension } from "../extensions/loader.js";
-import { getLatestActiveChainstep, getLatestActiveChainstepForBeing } from "../seed/llm/summonTracker.js";
+import { getLatestActiveChainstepForBeing } from "../seed/llm/summonTracker.js";
+import Did from "../seed/models/did.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Place-bundle readers
@@ -162,7 +163,7 @@ const BEING_PRESENTATION = {
   planner:    { label: "Planner",    description: "Drafts plans for this scope.",                modeKey: "tree:governing-planner", icon: "\u{1F4DD}", invocableBy: "owner"  },
   contractor: { label: "Contractor", description: "Issues contracts for this scope.",            modeKey: "tree:governing-contractor", icon: "\u{1F4DC}", invocableBy: "owner" },
   foreman:    { label: "Foreman",    description: "Dispatches execution for this scope.",        modeKey: "tree:governing-foreman", icon: "\u{1F4CB}", invocableBy: "owner" },
-  worker:     { label: "Worker",     description: "Produces artifacts.",                         modeKey: "tree:governing-worker", icon: "\u{1F528}", invocableBy: "owner" },
+  worker:     { label: "Worker",     description: "Produces artifacts.",                         modeKey: "tree:governing-worker-build", icon: "\u{1F528}", invocableBy: "owner" },
   archivist:  { label: "Archivist",  description: "Read-only inspection of artifacts.",          modeKey: "tree:archivist",        icon: "\u{1F4DA}", invocableBy: "anyone" },
 };
 
@@ -239,77 +240,67 @@ function truncate(s, n) {
   return s.length > n ? s.slice(0, n) + "..." : s;
 }
 
-async function deriveActivity(nodeId, modeKey) {
-  if (!nodeId || !modeKey) return null;
-  let chat;
+// Convert a Summon document into an activity object the descriptor
+// surfaces for the being whose Summon it is. Returns null when no
+// Summon is given. Tool-call surface reads Dids keyed by summonId.
+async function summonToActivity(summon) {
+  if (!summon) return null;
+  let lastCall = null;
   try {
-    chat = await getLatestActiveChainstep(nodeId, modeKey);
+    const lastDid = await Did.findOne({ summonId: summon._id, action: "tool-call" })
+      .sort({ date: -1 })
+      .select("toolCall date")
+      .lean();
+    if (lastDid?.toolCall) lastCall = lastDid;
   } catch {
-    return null;
+    // skip — descriptor never blocks on tool-call lookup
   }
-  return summonToActivity(chat);
-}
+  const target = await inferActivityTarget(summon);
 
-// Convert a Chat document into an activity object the descriptor surfaces
-// for the being whose chainstep it is. Returns null when no chat is given.
-async function summonToActivity(chat) {
-  if (!chat) return null;
-  const toolCalls = Array.isArray(chat.toolCalls) ? chat.toolCalls : [];
-  const lastCall = toolCalls.length ? toolCalls[toolCalls.length - 1] : null;
-  const target = await inferActivityTarget(chat);
-
-  // Tool-call-bearing activity wins over the bare summoned state.
   if (lastCall) {
+    const tc = lastCall.toolCall;
     return {
-      kind:        lastCall.success === false ? "tool-result" : "tool-called",
-      content:     truncate(`${lastCall.tool}(${summarizeArgs(lastCall.args)})`, ACTIVITY_CONTENT_CAP),
-      chainstepId: String(chat._id),
+      kind:        tc.success === false ? "tool-result" : "tool-called",
+      content:     truncate(`${tc.name}(${summarizeArgs(tc.args)})`, ACTIVITY_CONTENT_CAP),
+      chainstepId: String(summon._id),
       target,
-      ts:          lastCall.at,
+      ts:          lastCall.date,
     };
   }
 
-  // No tools yet → being is freshly summoned, processing the start message.
   return {
     kind:        "summoned",
-    content:     truncate(chat.startMessage?.content || "", ACTIVITY_CONTENT_CAP),
-    chainstepId: String(chat._id),
+    content:     truncate(summon.startMessage?.content || "", ACTIVITY_CONTENT_CAP),
+    chainstepId: String(summon._id),
     target,
-    ts:          chat.startMessage?.time || new Date(),
+    ts:          summon.summonedAt || new Date(),
   };
 }
 
-// Infer what a chainstep is acting on. The Chat schema does not (yet)
-// carry an explicit `target` field, but the chainstep linkage tells us:
-//   - When parentSummonId is set, the chainstep was spawned by another
-//     being. Treat the parent's stance as the target — sub-beings walk
-//     up to their spawner.
-//   - When parentSummonId is null, the chainstep was initiated by a SUMMON
-//     directly from a sender. No animation target.
-async function inferActivityTarget(chat) {
-  if (!chat?.parentSummonId) return null;
+// Infer what a Summon is acting on. The Summon schema doesn't carry an
+// explicit target field, but the reply linkage tells us: when inReplyTo
+// is set, the Summon was spawned by another being. Treat the parent's
+// activeRole/position as the target so sub-beings animate walking toward
+// their spawner.
+async function inferActivityTarget(summon) {
+  if (!summon?.inReplyTo) return null;
   let parent;
   try {
     const Summon = (await import("../seed/models/summon.js")).default;
-    parent = await Summon.findById(chat.parentSummonId)
-      .select("aiContext treeContext")
+    parent = await Summon.findById(summon.inReplyTo)
+      .select("activeRole beingOut")
       .lean();
   } catch {
     return null;
   }
-  if (!parent) return null;
-  const zone = parent.aiContext?.zone;
-  const mode = parent.aiContext?.mode;
-  const nodeId = parent.treeContext?.targetNodeId;
-  if (!zone || !mode || !nodeId) return null;
-  // Map the parent's mode key back to a likely being. We can't get
-  // a perfect mapping without a registry, so we fall through with the
-  // mode key — the renderer can resolve "which mesh corresponds to this
-  // mode" via the being entries it already has in the descriptor.
+  if (!parent || !parent.activeRole || !parent.beingOut) return null;
+  // Without aiContext/treeContext we no longer have a (nodeId, modeKey)
+  // tuple to hand the renderer. Surface the parent being + role so the
+  // 3D portal can map "which mesh is this being" via its descriptor entry.
   return {
     kind:    "being",
-    nodeId:  String(nodeId),
-    modeKey: `${zone}:${mode}`,
+    beingId: String(parent.beingOut),
+    role:    parent.activeRole,
   };
 }
 
@@ -796,27 +787,15 @@ async function buildBeings(nodeId, entries) {
     const parent = await Node.findById(nodeId).select("metadata").lean();
     parentMetadata = parent?.metadata || null;
   }
-  // Look up the live chainstep for each being in parallel. Three paths
-  // in priority order:
-  //   1. _chainstepLookupBeingId — the canonical home-record beingId.
-  //      When governing/etc. write beings.<role>.beingId, this is
-  //      a direct lookup by beingOut on the Chat collection.
-  //   2. Activity bound directly to (this nodeId, modeKey).
-  //   3. Activity bound to the home's scopeRulerId (legacy: governing's
-  //      sub-Rulers had chainsteps bound to the parent Ruler's nodeId).
+  // Look up the live Summon for each being in parallel. The slim Summon
+  // shape carries beingOut directly, so _chainstepLookupBeingId is the
+  // only working path. (The legacy nodeId+modeKey fallbacks queried
+  // aiContext/treeContext, which no longer exist on Summon.)
   const activities = await Promise.all(
     entries.map(async (e) => {
-      if (e._chainstepLookupBeingId) {
-        const chat = await getLatestActiveChainstepForBeing(e._chainstepLookupBeingId);
-        const fromChat = await summonToActivity(chat);
-        if (fromChat) return fromChat;
-      }
-      const direct = await deriveActivity(nodeId, e.modeKey);
-      if (direct) return direct;
-      if (e._chainstepLookupNodeId) {
-        return deriveActivity(e._chainstepLookupNodeId, e.modeKey);
-      }
-      return null;
+      if (!e._chainstepLookupBeingId) return null;
+      const summon = await getLatestActiveChainstepForBeing(e._chainstepLookupBeingId);
+      return summonToActivity(summon);
     }),
   );
   return entries.map((entry, i) => {
@@ -836,7 +815,7 @@ async function buildBeings(nodeId, entries) {
     const { _chainstepLookupNodeId, _chainstepLookupBeingId, ...wireEntry } = entry;
     return {
       ...wireEntry,
-      honoredIntents: def ? def.honoredIntents : null,
+      permissions:    def ? def.permissions : null,
       respondMode:    def ? def.respondMode : null,
       triggerOn:      def ? def.triggerOn : null,
       inbox:          inb,

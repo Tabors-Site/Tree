@@ -12,10 +12,14 @@
 
 import { runChat } from "../../seed/llm/conversation.js";
 
-export function makeBridgeEmbodiment({ name, modeKey, zone, honoredIntents = ["chat", "query"] }) {
+export function makeBridgeEmbodiment({ name, modeKey, zone, permissions = ["see", "do", "summon"] }) {
   return Object.freeze({
     name,
-    honoredIntents,
+    // Bridge beings carry the legacy mode-key path; permissions are
+    // permissive by default since each bridged mode's old tool set
+    // could include any verb. Specific roles override this with their
+    // declared permissions.
+    permissions,
     // Async: the underlying runChat() can take many minutes. SUMMON ACKs
     // immediately; the protocol layer pushes the response to the sender
     // when summoning completes.

@@ -21,26 +21,19 @@ import Node from "../../../seed/models/node.js";
 import log from "../../../seed/log.js";
 import { findRulerScope, NS as ROLE_NS } from "./role.js";
 
-// Cross-extension import for instrumentation. The Map lives in
-// tree-orchestrator/turnInstrumentation.js. Loaded lazily (rather
-// than eagerly at module top) to avoid loader-order coupling
-// between governing and tree-orchestrator: governing may load first.
-// Read-only — we don't need to write to instrumentation, only to
-// surface its data into the snapshot when present.
-let _getRecentLatency = null;
+// Decision latency was previously surfaced into the snapshot from
+// tree-orchestrator/turnInstrumentation. Slice 7 retired that
+// instrumentation path; the snapshot now skips latency until a new
+// SUMMON-substrate-based instrumentation lands (Phase 2 work). The
+// reputation block's `recentDecisionLatency` stays in shape; it's
+// just null for now.
 async function getLatencyFn() {
-  if (_getRecentLatency) return _getRecentLatency;
-  try {
-    const mod = await import("../../tree-orchestrator/turnInstrumentation.js");
-    _getRecentLatency = mod.getRecentLatency;
-    return _getRecentLatency;
-  } catch {
-    return null;
-  }
+  return null;
 }
 import {
   readActivePlanApproval,
   readActivePlanEmission,
+  readPendingPlanEmission,
   readPlanApprovalsAtRuler,
 } from "./planApprovals.js";
 import { slugifyEmission } from "./slugifyEmission.js";
@@ -164,9 +157,22 @@ export async function buildRulerSnapshot(rulerNodeId) {
     log.debug("Governing/Snapshot", `lineage read skipped: ${err.message}`);
   }
 
-  // Active plan emission (summary).
+  // Active plan emission (summary). When no approved plan exists,
+  // try the pending-emission read — at entry-scope, the Planner's
+  // emit produces status="pending" awaiting the Ruler's delegate to
+  // ratify. The snapshot surfaces both shapes so the Ruler's prompt
+  // can distinguish "plan ready to advance" from "plan awaiting
+  // delegate decision." See memory `card-is-a-summon`.
+  let planPending = false;
   try {
-    const emission = await readActivePlanEmission(rulerNodeId);
+    let emission = await readActivePlanEmission(rulerNodeId);
+    if (!emission) {
+      const pending = await readPendingPlanEmission(rulerNodeId);
+      if (pending) {
+        emission = pending;
+        planPending = true;
+      }
+    }
     if (emission) {
       const steps = Array.isArray(emission.steps) ? emission.steps : [];
       const leafCount = steps.filter((s) => s?.type === "leaf").length;
@@ -183,6 +189,7 @@ export async function buildRulerSnapshot(rulerNodeId) {
         branchCount,
         branchNames,
         emissionNodeId: emission._emissionNodeId || null,
+        pending: planPending,
       };
     }
   } catch (err) {
@@ -413,15 +420,21 @@ export async function buildRulerSnapshot(rulerNodeId) {
  * lifecycle logic lives here in one place; the Ruler reads
  * lifecycle.awaiting to pick its next move.
  *
- * Rules (Stage 1):
- *   no plan                            → awaiting null   (Ruler decides from user message)
- *   plan + no contracts                → awaiting "contracts"
- *   plan + contracts + no execution    → awaiting "dispatch"
- *   plan + contracts + execution paused → awaiting "user-resume"
- *   execution running / completed      → awaiting null
+ * Rules:
+ *   no plan                                   → awaiting null   (Ruler decides from user message)
+ *   pending plan (entry-scope, not ratified)  → awaiting "delegate-decision"
+ *   plan + no contracts                       → awaiting "contracts"
+ *   plan + contracts + no execution           → awaiting "dispatch"
+ *   plan + contracts + execution paused       → awaiting "user-resume"
+ *   execution running / completed             → awaiting null
  *
- * Stage 2 will add "user-approval" handling for the pending plan
- * card flow.
+ * `delegate-decision` is the entry-scope user-ratification gate. The
+ * Ruler's Planner emitted a plan, but at root-scope the plan stays
+ * status="pending" until the Ruler's delegate (the user-being recorded
+ * in `delegateToHigherBeing.beingId`) approves. See memory
+ * `card-is-a-summon`. Sub-scope plan emissions auto-approve (parent
+ * Ruler's dispatch is implicit ratification), so they never enter
+ * this state.
  */
 function deriveLifecycle(snapshot) {
   // Each emission/run carries its slug (computed in the assembly
@@ -431,6 +444,7 @@ function deriveLifecycle(snapshot) {
   // labels.
   const plan = {
     present: !!snapshot.plan,
+    pending: !!snapshot.plan?.pending,
     ordinal: snapshot.plan?.ordinal || null,
     slug: snapshot.plan?.slug || null,
     emissionId: snapshot.plan?.emissionNodeId || null,
@@ -451,6 +465,8 @@ function deriveLifecycle(snapshot) {
   let awaiting = null;
   if (!plan.present) {
     awaiting = null;
+  } else if (plan.pending) {
+    awaiting = "delegate-decision";
   } else if (!contracts.present) {
     awaiting = "contracts";
   } else if (execution.status === "absent") {
@@ -458,9 +474,6 @@ function deriveLifecycle(snapshot) {
   } else if (execution.status === "paused") {
     awaiting = "user-resume";
   } else {
-    // running / completed / failed / cancelled / superseded — nothing
-    // the Ruler advances directly. running → user status questions
-    // route to Foreman; terminal → Ruler responds with summary.
     awaiting = null;
   }
 
