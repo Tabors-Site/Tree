@@ -17,6 +17,53 @@ import { SYSTEM_ROLE } from "./seed/core/protocol.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Register an array of kernel-shipped tool definitions with both the
+ * MCP server (so handlers can be invoked) and the tool registry (so
+ * the LLM can list them). Mirrors the dual registration the extension
+ * loader does for extension tools.
+ */
+async function registerKernelTools(tools) {
+  if (!Array.isArray(tools) || tools.length === 0) return;
+  const { mcpServerInstance } = await import("./protocols/mcp/server.js");
+  const { registerToolDef } = await import("./seed/core/tools.js");
+  const { z }               = await import("zod");
+  const { zodToJsonSchema } = await import("zod-to-json-schema");
+
+  for (const tool of tools) {
+    try {
+      // MCP handler — passthrough so beingId/name injected by the
+      // middleware survive zod's strip step.
+      const inputSchema = z.object(tool.schema).passthrough();
+      mcpServerInstance.registerTool(
+        tool.name,
+        {
+          description: tool.description,
+          inputSchema,
+          annotations: tool.annotations || undefined,
+        },
+        tool.handler,
+      );
+
+      // Tool registry def for the LLM's tool listing.
+      const jsonSchema = zodToJsonSchema(z.object(tool.schema));
+      delete jsonSchema.$schema;
+      registerToolDef(tool.name, {
+        type: "function",
+        function: {
+          name:        tool.name,
+          description: tool.description,
+          parameters:  jsonSchema,
+        },
+      }, { verb: tool.verb });
+
+      log.verbose("KernelTools", `registered "${tool.name}" (${tool.verb})`);
+    } catch (err) {
+      log.error("KernelTools", `failed to register "${tool.name}": ${err.message}`);
+    }
+  }
+}
+
 export function onListen() {
   const land = getLandIdentity();
   log.info("Land", "Initializing Tree Land Node...");
@@ -53,13 +100,26 @@ export function onListen() {
     const { runSeedMigrations } = await import("./seed/migrations/runner.js");
     await runSeedMigrations();
 
-    // Ensure the land's system beings (auth, land-manager, citizen)
-    // exist as real Being rows at the land root. Idempotent — runs
-    // every boot, creates only what's missing. Must come after the
-    // 0.3.0 migration so the Being model is populated before we add to it.
+    // Ensure the land's system beings (auth, llm-assigner, land-manager,
+    // citizen) exist as real Being rows at the land root. Idempotent —
+    // runs every boot, creates only what's missing. Must come after
+    // the 0.3.0 migration so the Being model is populated before we
+    // add to it.
     const { ensureSystemBeings } = await import("./seed/core/systemBeings.js");
     const { getLandRootId } = await import("./seed/landRoot.js");
     await ensureSystemBeings(getLandRootId());
+
+    // Register kernel-shipped role specs into the role registry so
+    // SUMMON can dispatch to them. Auth and llm-assigner are BE-only
+    // and routed via LAND_BEINGS in seed/core/verbs.js — they don't
+    // need a role registration. Land-manager IS summonable (LLM-driven
+    // operator dialog), so its role spec enters the registry here,
+    // along with its two generic tools (land-see, land-do).
+    const { registerRole } = await import("./seed/roles/registry.js");
+    const { landManagerRole } = await import("./seed/roles/landManager.js");
+    const { landManagerTools } = await import("./seed/roles/landManagerTools.js");
+    registerRole("land-manager", landManagerRole, "kernel");
+    await registerKernelTools(landManagerTools);
 
     // Tree integrity check (before extensions load, after migrations)
     const { checkIntegrity } = await import("./seed/tree/integrityCheck.js");
@@ -86,9 +146,9 @@ export function onListen() {
         treeSummaryMaxNodes:     { load: () => import("./seed/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(null, v)) },
         carryMessages:           { load: () => import("./seed/llm/runChat.js").then(m => m.setCarryMessages) },
         maxRegisteredTools:      { load: () => import("./seed/core/tools.js").then(m => m.setMaxTools) },
-        sessionTTL:              { load: () => import("./transports/ws/sessionRegistry.js").then(m => (v) => m.setSessionTTL(v * 1000)) },
-        staleSessionTimeout:     { load: () => import("./transports/ws/sessionRegistry.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
-        maxSessions:             { load: () => import("./transports/ws/sessionRegistry.js").then(m => m.setMaxSessions) },
+        sessionTTL:              { load: () => import("./seed/session/registry.js").then(m => (v) => m.setSessionTTL(v * 1000)) },
+        staleSessionTimeout:     { load: () => import("./seed/session/registry.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
+        maxSessions:             { load: () => import("./seed/session/registry.js").then(m => m.setMaxSessions) },
         llmClientCacheTtl:       { load: () => import("./seed/llm/llmClient.js").then(m => (v) => m.setClientCacheTtl(v * 1000)) },
         maxConnectionsPerUser:   { load: () => import("./seed/llm/connections.js").then(m => m.setMaxConnectionsPerUser) },
       };

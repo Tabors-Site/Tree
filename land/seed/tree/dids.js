@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 // Did read and write. The audit trail of IBP DO emissions.
 //
 // Replaces the older contributions.js. `logDid` is now `logDid`;

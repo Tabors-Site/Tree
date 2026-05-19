@@ -5,6 +5,9 @@
 
 import { PortalClient } from "./portal-client.js";
 import { Scene } from "./scene.js";
+import { mountIbpConsole } from "./ibp-console.js";
+import { initHotbar } from "./hotbar.js";
+import { promptForName, plantSeed as runPlantSeed, isPlanterOpen, closePrompt } from "./planter.js";
 import {
   setHud,
   initAddressBar,
@@ -19,6 +22,8 @@ import {
   resetTalkState,
   setHistoryButtonsEnabled,
   isAnyPanelOpen,
+  showLlmAssignerPanel,
+  hideLlmAssignerPanel,
 } from "./ui.js";
 
 const SESSION_KEY = "treeos-portal-3d-session";
@@ -38,6 +43,8 @@ const state = {
   // re-visiting via see() until the user actually clicks back/forward.
   history: [],
   historyIndex: -1,
+  // Hotbar API (returned by initHotbar). Holds plantable seeds.
+  hotbar: null,
 };
 
 main().catch((err) => {
@@ -86,6 +93,45 @@ async function main() {
   } else {
     await connectAnonymous(landUrl, useProxy);
   }
+
+  // Mount the IBP console (toggle with backtick). Reuses the live
+  // PortalClient — calls go over the same socket as the scene.
+  mountIbpConsole({
+    root:    document.getElementById("overlays") || document.body,
+    client:  state.client,
+    getLand: () => state.discovery?.land || "treeos.ai",
+  });
+
+  // Mount the hotbar. Populated from the land's discovery payload
+  // (refreshed on every connect — see refreshSeedCatalog).
+  state.hotbar = initHotbar(document.getElementById("hud") || document.body);
+  await refreshSeedCatalog();
+}
+
+// Pull `<land>/.discovery` over the live IBP socket and hand the seed
+// catalog to the hotbar. The HTTP bootstrap is intentionally minimal
+// (just enough to open the socket); the full capability surface lives
+// on the socket-side discovery.
+async function refreshSeedCatalog() {
+  if (!state.client || !state.discovery?.land) return;
+  try {
+    const full = await state.client.see(`${state.discovery.land}/.discovery`);
+    // Merge into state.discovery so other consumers see the rich form too.
+    state.discovery = { ...state.discovery, ...full };
+    const seeds = Array.isArray(full?.seeds) ? full.seeds : [];
+    console.log(`[3D] discovery: ${seeds.length} seed(s)`, seeds.map((s) => s.name));
+    state.hotbar?.setSlots(seeds.map((s) => ({
+      kind:        "seed",
+      name:        s.name,
+      label:       s.name.split(":").pop(),
+      description: s.description,
+    })));
+    if (seeds.length === 0) {
+      setHud("no plantable seeds registered on this land");
+    }
+  } catch (err) {
+    console.warn("[3D] discovery fetch failed:", err?.message || err);
+  }
 }
 
 async function connectAnonymous(landUrl, useProxy) {
@@ -113,7 +159,38 @@ async function connectAndLand(session) {
   });
   state.client.connect();
   await waitForConnect(state.client);
+
+  // The token may be stale (expired, signed under a previous JWT_SECRET,
+  // or for a being that no longer exists). The socket accepts the
+  // connection regardless; auth-only happens at verb dispatch. Verify
+  // explicitly with one SEE on the being's own stance. If the server
+  // refuses, drop the local session and reconnect anonymously rather
+  // than lie to the user with a stale "tabor" chip.
+  const beingAddress = session.beingAddress
+    || (session.username && state.discovery?.land
+        ? `${state.discovery.land}/@${session.username}`
+        : null);
+  if (beingAddress) {
+    try {
+      await state.client.see(beingAddress);
+    } catch (err) {
+      if (err?.code === "UNAUTHORIZED" || err?.code === "NODE_NOT_FOUND") {
+        console.warn("[3D] stored session is no longer valid; dropping it.");
+        clearSession();
+        state.session = null;
+        state.client.disconnect();
+        const landUrl = session.landUrl || defaultLandUrl();
+        await connectAnonymous(landUrl, shouldUseProxy(landUrl));
+        return;
+      }
+      // Other errors (network, TIMEOUT) — let navigation surface them.
+    }
+  }
+
   await navigate("/");
+  // The hotbar may have mounted before the socket reconnected (auth flow
+  // disconnects + reconnects). Refresh the seed list against the new socket.
+  if (state.hotbar) await refreshSeedCatalog();
 }
 
 // Live SEE events. For now we use a coarse path: any descriptor change
@@ -154,12 +231,13 @@ function handleSummon(entry) {
 async function navigate(address, { fromHistory = false } = {}) {
   if (!state.client) return;
   try {
+    const resolved = expandHomeShorthand(address);
     // Subscribe live: every change to this position (placements, beings
     // appearing/disappearing, queue state, activity) lands as a
     // descriptor event we can refetch on.
-    const desc = await state.client.see(address, { live: true });
+    const desc = await state.client.see(resolved, { live: true });
     state.descriptor = desc;
-    state.currentAddress = address;
+    state.currentAddress = resolved;
     state.scene.renderDescriptor(desc, {
       isAuthenticated: !!state.session?.token,
     });
@@ -230,9 +308,8 @@ function onGaze(_target, _info) {
 // proximity+gaze state flips. Auth-being opens sign-in/logout; every
 // other being opens the talk panel.
 function onBeingProximity(b, inRange, _distance) {
-  if (b.being === "auth") {
-    return onAuthProximity(inRange);
-  }
+  if (b.being === "auth")         return onAuthProximity(inRange);
+  if (b.being === "llm-assigner") return onLlmAssignerProximity(inRange);
   return onChatBeingProximity(b, inRange);
 }
 
@@ -244,6 +321,12 @@ function onAuthProximity(inRange) {
     hideAuthActions();
     hideAuthSignInPanel();
   }
+}
+
+function onLlmAssignerProximity(inRange) {
+  // The form state (typed values) is preserved across re-opens by the
+  // panel module, so dropping the DOM on look-away is non-destructive.
+  if (!inRange) hideLlmAssignerPanel();
 }
 
 function onChatBeingProximity(b, inRange) {
@@ -260,9 +343,30 @@ function onChatBeingProximity(b, inRange) {
 function onBeingActivate(b) {
   if (b.being === "auth") {
     openAuthPanel();
+  } else if (b.being === "llm-assigner") {
+    openLlmAssignerPanel();
   } else {
     openTalkPanel(b);
   }
+}
+
+function openLlmAssignerPanel() {
+  // Requires an authenticated being (the server enforces this on every
+  // op). If unauthenticated, bounce the user to the auth flow first.
+  if (!state.session?.token) {
+    openAuthPanel();
+    return;
+  }
+  // The Node tab needs a concrete nodeId. We pull it from the live
+  // descriptor — when the user is at a tree position, descriptor.address.nodeId
+  // is set. Land-root / arrival has nodeId: null and the panel disables
+  // the Node tab.
+  showLlmAssignerPanel({
+    client:        state.client,
+    land:          state.discovery.land,
+    currentNodeId: state.descriptor?.address?.nodeId || null,
+    onClose:       () => {},
+  });
 }
 
 function openAuthPanel() {
@@ -277,8 +381,12 @@ function openAuthPanel() {
     showAuthSignInPanel({
       land: state.discovery.land,
       onSubmit: async (mode, username, password) => {
+        // `name` is the canonical wire field; the server accepts
+        // `username` as a legacy alias. Pass directly — `client.be`
+        // already wraps these into the BE envelope's payload.
         const result = await state.client.be(mode, state.discovery.land, {
-          payload: { username, password },
+          name: username,
+          password,
         });
         const newSession = {
           landUrl: state.session?.landUrl || defaultLandUrl(),
@@ -366,17 +474,66 @@ addEventListener("keydown", (e) => {
       hideTalkPanel();
       state.currentTalkBeing = null;
     }
+    if (isPlanterOpen()) closePrompt();
     return;
   }
   if (isGameplayInputBlocked()) return;
   if (e.code === "KeyB") { e.preventDefault(); historyBack();    return; }
   if (e.code === "KeyN") { e.preventDefault(); historyForward(); return; }
+  if (e.code === "KeyE") { e.preventDefault(); attemptPlant();   return; }
 });
 
+// Try to plant whatever's in the selected hotbar slot at the current
+// position. Bounces the user to auth if unauthenticated (the kernel
+// would reject anyway; better to ask before the round-trip).
+async function attemptPlant() {
+  const item = state.hotbar?.getSelected();
+  if (!item) {
+    setHud("hotbar slot is empty. select a seed (1-9).");
+    return;
+  }
+  if (!state.session?.token) {
+    setHud("sign in first to plant.");
+    openAuthPanel();
+    return;
+  }
+  if (!state.descriptor || !state.client) return;
+
+  const land = state.discovery.land;
+  const path = state.descriptor.address?.pathByNames || "/";
+  const parentAddress = `${land}${path}`.replace(/\/+$/, "") || land;
+
+  let answer;
+  try {
+    answer = await promptForName({
+      item,
+      parentLabel: parentAddress,
+    });
+  } catch {
+    return; // user cancelled
+  }
+
+  setHud(`planting ${item.name}...`);
+  try {
+    const result = await runPlantSeed({
+      client:        state.client,
+      parentAddress,
+      seedName:      item.name,
+      newNodeName:   answer.name,
+    });
+    setHud(`planted ${item.name} at ${result.newNodeAddress}`);
+    // Navigate into the new tree so the operator sees what grew.
+    await navigate(result.newNodeAddress);
+  } catch (err) {
+    setHud(`plant failed: ${err.code || ""} ${err.message || ""}`);
+  }
+}
+
 // True while the user is typing in a UI input OR a modal panel is open.
-// Single source of truth for whether gameplay keys (WASD/B/N) fire.
+// Single source of truth for whether gameplay keys (WASD/B/N/E) fire.
 function isGameplayInputBlocked() {
   if (isAnyPanelOpen()) return true;
+  if (isPlanterOpen())  return true;
   const el = document.activeElement;
   if (!el || el === document.body) return false;
   const tag = el.tagName;
@@ -426,6 +583,19 @@ function saveSession(s) {
 
 function clearSession() {
   localStorage.removeItem(SESSION_KEY);
+}
+
+// "~" and "/~" are home shorthands the server resolves with the
+// authenticated socket's `currentUser`. Clicking "home" without a live
+// auth on the socket triggers a parse error. Substitute locally when
+// we know the username; the server's parser stops needing context.
+function expandHomeShorthand(address) {
+  if (typeof address !== "string") return address;
+  const username = state.session?.username;
+  if (!username) return address;
+  if (address === "~" || address === "/~") return `/~${username}`;
+  if (address.startsWith("/~/")) return `/~${username}${address.slice(2)}`;
+  return address;
 }
 
 function defaultLandUrl() {

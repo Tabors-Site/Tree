@@ -1939,7 +1939,7 @@ export default function getRulerTools(_core) {
                     },
                   },
                   merge: true,
-                });
+                }, { identity: { beingId, name: username } });
               }
             }
           }
@@ -2177,7 +2177,7 @@ export default function getRulerTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { nodeId } = args;
+        const { nodeId, beingId, username } = args;
         const reason = typeof args.reason === "string" ? args.reason.trim() : "";
         if (!reason) return text("governing-convene-court: reason is required.");
 
@@ -2203,7 +2203,7 @@ export default function getRulerTools(_core) {
                   ],
                 },
                 merge: true,
-              });
+              }, { identity: { beingId, name: username } });
             }
           }
           const { hooks } = await import("../../seed/core/hooks.js");

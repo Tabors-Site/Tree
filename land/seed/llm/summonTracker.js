@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // summonTracker.js — write surface for the slim Summon model.
 //
@@ -17,7 +17,7 @@ import { getLandConfigValue } from "../landConfig.js";
 import { v4 as uuidv4 } from "uuid";
 import Summon from "../models/summon.js";
 import Did from "../models/did.js";
-import { createSession, SESSION_TYPES } from "../../transports/ws/sessionRegistry.js";
+import { createSession, SESSION_TYPES } from "../session/registry.js";
 import { computeIbpAddressForSummon, invalidateStanceCache } from "./ibpAddress.js";
 
 export { invalidateStanceCache };

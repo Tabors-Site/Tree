@@ -433,6 +433,423 @@ export function hideSkyClock() {
   if (_skyClockEl) _skyClockEl.style.display = "none";
 }
 
+// ────────────────────────────────────────────────────────────────────
+// LLM Assigner panel
+// ────────────────────────────────────────────────────────────────────
+//
+// Shown when the user activates the llm-assigner being. It is the
+// land's LLM-configuration character — purely programmatic (no LLM
+// cognition), so the interaction is a form, not a chat.
+//
+// Three scope tabs:
+//
+//   My Being   — add/list/delete connections on the caller's being,
+//                pick which one is "main".
+//   This Node  — bind one of the caller's connections to a slot on a
+//                specific node. Only enabled when the user is on a
+//                node (currentNodeId provided).
+//   Land       — set the land-level default. Server gates with
+//                root-operator check; non-operators get FORBIDDEN.
+//
+// The shared "connections" fetch is reused across all three tabs.
+// Form state (typed values) and the active tab are preserved across
+// look-away/look-back via `_llmPanelState`.
+
+let _llmAssignerPanelEl = null;
+let _llmPanelState = {
+  tab:      "being",          // "being" | "node" | "land"
+  add:      { name: "", baseUrl: "", model: "", apiKey: "" },
+  nodeSlot: "main",
+  error:    "",
+};
+
+export function showLlmAssignerPanel({ client, land, currentNodeId, onClose }) {
+  if (_llmAssignerPanelEl) return;
+  document.exitPointerLock?.();
+
+  // Shared state for one open panel session.
+  let connections = [];
+  let mainConnId  = null;
+
+  const el = document.createElement("div");
+  el.className = "llm-assigner";
+  el.style.cssText = `
+    position: fixed; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(10, 13, 12, 0.94);
+    border: 1px solid #2c3a32; border-radius: 6px;
+    padding: 16px 20px; min-width: 420px; max-width: 520px;
+    pointer-events: auto; z-index: 12;
+    font-family: ui-monospace, monospace; color: #c8d3cb;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+    max-height: 86vh; overflow-y: auto;
+  `;
+  el.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center;
+      margin-bottom: 10px;">
+      <div style="font-size: 12px; color: #c8d3cb;">
+        \u{1F9E0} LLM Assigner
+        <span style="color:#6b7d72; font-weight: normal;"> @${escapeHtml(land)}</span>
+      </div>
+      <button class="llm-close" type="button" style="background:transparent;
+        color:#6b7d72; border:none; font-size:18px; line-height:1;
+        cursor:pointer; padding:0 4px;">×</button>
+    </div>
+
+    <div class="llm-tabs" style="display:flex; gap:4px; margin-bottom:12px;
+      border-bottom:1px solid #2c3a32;">
+      <button class="llm-tab" data-tab="being" type="button">My Being</button>
+      <button class="llm-tab" data-tab="node"  type="button" ${currentNodeId ? "" : "disabled"}>This Node</button>
+      <button class="llm-tab" data-tab="land"  type="button">Land Default</button>
+    </div>
+
+    <div class="llm-body" style="font-size:11px;"></div>
+    <div class="llm-error" style="color:#d97a7a; font-size:11px;
+      margin-top:8px; display:none;"></div>
+  `;
+  document.body.appendChild(el);
+  _llmAssignerPanelEl = el;
+
+  // Inline styles for tab buttons (simpler than CSS classes here).
+  el.querySelectorAll(".llm-tab").forEach(b => {
+    b.style.cssText = `
+      background: transparent; color: #6b7d72; border: none;
+      padding: 6px 12px; font-family: inherit; font-size: 11px;
+      cursor: pointer; border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    `;
+    if (b.disabled) { b.style.opacity = "0.4"; b.style.cursor = "not-allowed"; }
+  });
+
+  const bodyEl  = el.querySelector(".llm-body");
+  const errEl   = el.querySelector(".llm-error");
+  const closeBtn= el.querySelector(".llm-close");
+  const tabBtns = [...el.querySelectorAll(".llm-tab")];
+
+  function showError(msg) {
+    _llmPanelState.error = msg;
+    errEl.style.display = "block";
+    errEl.textContent   = msg;
+  }
+  function clearError() {
+    _llmPanelState.error = "";
+    errEl.style.display = "none";
+  }
+
+  function activateTab(tab) {
+    if (tab === "node" && !currentNodeId) return;
+    _llmPanelState.tab = tab;
+    tabBtns.forEach(b => {
+      const active = b.dataset.tab === tab;
+      b.style.color           = active ? "#c8d3cb" : "#6b7d72";
+      b.style.borderBottom    = `2px solid ${active ? "#8fbf9f" : "transparent"}`;
+    });
+    renderActiveTab();
+  }
+
+  function renderActiveTab() {
+    clearError();
+    if (_llmPanelState.tab === "being") return renderBeingTab();
+    if (_llmPanelState.tab === "node")  return renderNodeTab();
+    if (_llmPanelState.tab === "land")  return renderLandTab();
+  }
+
+  // ── My Being tab ───────────────────────────────────────────────
+  function renderBeingTab() {
+    const listHtml = connections.length === 0
+      ? `<div style="color:#6b7d72; padding:8px 0;">
+           No connections yet. Add one below to give your being LLM access.
+         </div>`
+      : connections.map(c => {
+          const isMain = String(c.connectionId) === String(mainConnId);
+          return `
+            <div style="display:flex; align-items:center; gap:6px;
+              padding:6px 8px; border:1px solid #2c3a32; border-radius:3px;
+              background:#0e1311; margin-bottom:4px;">
+              <div style="flex:1; min-width:0;">
+                <div style="color:#c8d3cb;">
+                  ${escapeHtml(c.name || c.model)}
+                  ${isMain ? `<span style="color:#8fbf9f; font-size:10px; margin-left:6px;">[main]</span>` : ""}
+                </div>
+                <div style="color:#6b7d72; font-size:10px;">
+                  ${escapeHtml(c.model)} · ${escapeHtml(c.baseUrl)}
+                </div>
+              </div>
+              ${isMain ? "" : `
+                <button data-act="main" data-id="${escapeHtml(c.connectionId)}" type="button"
+                  style="background:transparent; color:#8fbf9f; border:1px solid #2c3a32;
+                  border-radius:3px; padding:3px 8px; font-family:inherit; font-size:10px;
+                  cursor:pointer;">set main</button>
+              `}
+              <button data-act="del" data-id="${escapeHtml(c.connectionId)}" type="button"
+                style="background:transparent; color:#6b7d72; border:1px solid #2c3a32;
+                border-radius:3px; padding:3px 8px; font-family:inherit; font-size:10px;
+                cursor:pointer;">delete</button>
+            </div>
+          `;
+        }).join("");
+
+    bodyEl.innerHTML = `
+      <div style="margin-bottom: 12px;">${listHtml}</div>
+
+      <div style="font-size:10px; color:#6b7d72; text-transform:uppercase;
+        letter-spacing:.05em; margin-bottom:6px;">add new connection</div>
+      <form class="llm-add-form">
+        <input name="name" type="text" placeholder="name (optional, e.g. 'my-openai')"
+          style="${INPUT}" /><div style="height:4px"></div>
+        <input name="baseUrl" type="text" placeholder="baseUrl  (e.g. https://api.openai.com/v1)"
+          style="${INPUT}" /><div style="height:4px"></div>
+        <input name="model" type="text" placeholder="model  (e.g. gpt-4o)"
+          style="${INPUT}" /><div style="height:4px"></div>
+        <input name="apiKey" type="password" placeholder="apiKey (leave blank for local LLMs)"
+          style="${INPUT}" /><div style="height:6px"></div>
+        <button type="submit" class="btn-add" style="${BTN_PRIMARY}">
+          add connection
+        </button>
+        <div style="margin-top:8px; font-size:10px; color:#6b7d72; line-height:1.4;">
+          Private network URLs (e.g. <code style="color:#9ab0a3;">10.x</code>,
+          <code style="color:#9ab0a3;">192.168.x</code>, <code style="color:#9ab0a3;">localhost</code>)
+          are blocked by default. The root operator can opt in to specific hosts by setting
+          <code style="color:#9ab0a3;">allowedLlmDomains</code> in land config.
+        </div>
+      </form>
+    `;
+
+    const form = bodyEl.querySelector(".llm-add-form");
+    const nameI = form.querySelector("input[name=name]");
+    const urlI  = form.querySelector("input[name=baseUrl]");
+    const modI  = form.querySelector("input[name=model]");
+    const keyI  = form.querySelector("input[name=apiKey]");
+    const addBt = form.querySelector(".btn-add");
+
+    nameI.value = _llmPanelState.add.name;
+    urlI.value  = _llmPanelState.add.baseUrl;
+    modI.value  = _llmPanelState.add.model;
+    keyI.value  = _llmPanelState.add.apiKey;
+    nameI.addEventListener("input", () => { _llmPanelState.add.name    = nameI.value; });
+    urlI .addEventListener("input", () => { _llmPanelState.add.baseUrl = urlI.value; });
+    modI .addEventListener("input", () => { _llmPanelState.add.model   = modI.value; });
+    keyI .addEventListener("input", () => { _llmPanelState.add.apiKey  = keyI.value; });
+
+    bodyEl.querySelectorAll("button[data-act=del]").forEach(b => {
+      b.addEventListener("click", async () => {
+        try {
+          await client.be("delete-llm", `${land}/@llm-assigner`, { connectionId: b.dataset.id });
+          await refreshConnections(); renderActiveTab();
+        } catch (err) { showError(fmtErr(err, "delete failed")); }
+      });
+    });
+    bodyEl.querySelectorAll("button[data-act=main]").forEach(b => {
+      b.addEventListener("click", async () => {
+        try {
+          await client.be("assign-slot", `${land}/@llm-assigner`,
+            { slot: "main", connectionId: b.dataset.id });
+          await refreshConnections(); renderActiveTab();
+        } catch (err) { showError(fmtErr(err, "set-main failed")); }
+      });
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearError();
+      const baseUrl = urlI.value.trim();
+      const model   = modI.value.trim();
+      const apiKey  = keyI.value || null;
+      if (!baseUrl) return showError("baseUrl is required");
+      if (!model)   return showError("model is required");
+      // apiKey is optional — local LLMs (Ollama, llama.cpp) need none.
+      addBt.disabled = true; addBt.textContent = "adding...";
+      try {
+        await client.be("add-llm", `${land}/@llm-assigner`, {
+          name: nameI.value.trim() || null, baseUrl, model, apiKey,
+        });
+        _llmPanelState.add = { name: "", baseUrl: "", model: "", apiKey: "" };
+        await refreshConnections(); renderActiveTab();
+      } catch (err) {
+        showError(fmtErr(err, "add failed"));
+      } finally {
+        addBt.disabled = false; addBt.textContent = "add connection";
+      }
+    });
+  }
+
+  // ── This Node tab ──────────────────────────────────────────────
+  function renderNodeTab() {
+    if (!currentNodeId) {
+      bodyEl.innerHTML = `<div style="color:#6b7d72; padding:8px 0;">
+        Navigate to a tree node first. The node tab assigns an LLM to a
+        specific position you own.
+      </div>`;
+      return;
+    }
+    if (connections.length === 0) {
+      bodyEl.innerHTML = `<div style="color:#6b7d72; padding:8px 0;">
+        Add a connection on the <b style="color:#c8d3cb;">My Being</b> tab first,
+        then come back here to bind it to this node.
+      </div>`;
+      return;
+    }
+    bodyEl.innerHTML = `
+      <div style="color:#6b7d72; margin-bottom:8px;">
+        Setting LLM slot on node
+        <code style="color:#c8d3cb;">${escapeHtml(currentNodeId)}</code>.
+        Caller must own the tree.
+      </div>
+      <form class="llm-node-form">
+        <label style="${LABEL}">slot</label>
+        <input name="slot" type="text" value="${escapeHtml(_llmPanelState.nodeSlot)}"
+          style="${INPUT}" /><div style="height:6px"></div>
+        <label style="${LABEL}">connection</label>
+        ${connDropdown("connectionId")}
+        <div style="height:8px"></div>
+        <div style="display:flex; gap:6px;">
+          <button type="submit" data-act="apply" style="${BTN_PRIMARY}; flex:1;">apply</button>
+          <button type="button" data-act="clear" style="${BTN_GHOST}; flex:1;">clear slot</button>
+        </div>
+      </form>
+    `;
+    const form = bodyEl.querySelector(".llm-node-form");
+    const slotI = form.querySelector("input[name=slot]");
+    const connI = form.querySelector("select[name=connectionId]");
+    slotI.addEventListener("input", () => { _llmPanelState.nodeSlot = slotI.value; });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearError();
+      try {
+        await client.be("set-node-llm", `${land}/@llm-assigner`, {
+          nodeId:       currentNodeId,
+          slot:         slotI.value.trim() || "main",
+          connectionId: connI.value || null,
+        });
+        showError("");  // clear
+        renderActiveTab();
+      } catch (err) { showError(fmtErr(err, "set-node-llm failed")); }
+    });
+    form.querySelector("button[data-act=clear]").addEventListener("click", async () => {
+      clearError();
+      try {
+        await client.be("set-node-llm", `${land}/@llm-assigner`, {
+          nodeId: currentNodeId, slot: slotI.value.trim() || "main", connectionId: null,
+        });
+      } catch (err) { showError(fmtErr(err, "clear failed")); }
+    });
+  }
+
+  // ── Land Default tab ───────────────────────────────────────────
+  function renderLandTab() {
+    if (connections.length === 0) {
+      bodyEl.innerHTML = `<div style="color:#6b7d72; padding:8px 0;">
+        Add a connection on the <b style="color:#c8d3cb;">My Being</b> tab first,
+        then come back here to set it as the land default.
+      </div>`;
+      return;
+    }
+    bodyEl.innerHTML = `
+      <div style="color:#6b7d72; margin-bottom:8px;">
+        Setting the land-level default LLM. Restricted to the root
+        operator (the first registered human). Non-operators get
+        <code style="color:#d97a7a;">FORBIDDEN</code>.
+      </div>
+      <form class="llm-land-form">
+        <label style="${LABEL}">connection</label>
+        ${connDropdown("connectionId")}
+        <div style="height:8px"></div>
+        <div style="display:flex; gap:6px;">
+          <button type="submit" data-act="apply" style="${BTN_PRIMARY}; flex:1;">apply</button>
+          <button type="button" data-act="clear" style="${BTN_GHOST}; flex:1;">clear default</button>
+        </div>
+      </form>
+    `;
+    const form = bodyEl.querySelector(".llm-land-form");
+    const connI = form.querySelector("select[name=connectionId]");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearError();
+      try {
+        await client.be("set-land-llm", `${land}/@llm-assigner`, {
+          connectionId: connI.value || null,
+        });
+      } catch (err) { showError(fmtErr(err, "set-land-llm failed")); }
+    });
+    form.querySelector("button[data-act=clear]").addEventListener("click", async () => {
+      clearError();
+      try {
+        await client.be("set-land-llm", `${land}/@llm-assigner`, { connectionId: null });
+      } catch (err) { showError(fmtErr(err, "clear failed")); }
+    });
+  }
+
+  function connDropdown(fieldName) {
+    return `<select name="${fieldName}" style="${INPUT}">
+      ${connections.map(c => `
+        <option value="${escapeHtml(c.connectionId)}">
+          ${escapeHtml(c.name || c.model)} — ${escapeHtml(c.model)}
+        </option>
+      `).join("")}
+    </select>`;
+  }
+
+  async function refreshConnections() {
+    try {
+      const data = await client.be("list-llms", `${land}/@llm-assigner`, {});
+      connections = data?.connections || [];
+      mainConnId  = data?.slots?.main || null;
+    } catch (err) {
+      showError(fmtErr(err, "list failed"));
+    }
+  }
+
+  function fmtErr(err, fallback) {
+    return `${err.code || "error"}: ${err.message || fallback}`;
+  }
+
+  tabBtns.forEach(b => {
+    b.addEventListener("click", () => activateTab(b.dataset.tab));
+  });
+  closeBtn.addEventListener("click", () => {
+    hideLlmAssignerPanel();
+    if (typeof onClose === "function") onClose();
+  });
+
+  // Initial mount.
+  (async () => {
+    await refreshConnections();
+    // Restore last-active tab; fall back to "being" if node was active
+    // but we no longer have a current node.
+    const startTab = (_llmPanelState.tab === "node" && !currentNodeId) ? "being" : _llmPanelState.tab;
+    activateTab(startTab);
+    if (_llmPanelState.error) showError(_llmPanelState.error);
+  })();
+}
+
+export function hideLlmAssignerPanel() {
+  _llmAssignerPanelEl?.remove();
+  _llmAssignerPanelEl = null;
+}
+
+// Reusable inline styles for the panel form controls.
+const INPUT = `
+  width:100%; box-sizing:border-box; padding:5px 8px;
+  background:#0a0d0c; color:#c8d3cb; border:1px solid #2c3a32;
+  border-radius:3px; font-family:ui-monospace, monospace; font-size:11px;
+`;
+const LABEL = `
+  display:block; font-size:10px; color:#6b7d72;
+  text-transform:uppercase; letter-spacing:.05em; margin-bottom:3px;
+`;
+const BTN_PRIMARY = `
+  padding:7px 10px; background:#1a3424; color:#c8d3cb;
+  border:1px solid #2f6b48; border-radius:3px;
+  font-family:ui-monospace, monospace; font-size:12px; cursor:pointer;
+`;
+const BTN_GHOST = `
+  padding:7px 10px; background:transparent; color:#6b7d72;
+  border:1px solid #2c3a32; border-radius:3px;
+  font-family:ui-monospace, monospace; font-size:12px; cursor:pointer;
+`;
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",

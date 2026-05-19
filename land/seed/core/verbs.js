@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // The four-verb dispatcher. core.see / core.do / core.summon / core.be.
 //
@@ -19,14 +19,14 @@ import { isSourceNodeId } from "./source.js";
 import { parseWithContext, expand, getLandDomain } from "../addressing/address.js";
 import { resolveStance } from "../addressing/resolver.js";
 import { buildDescriptor } from "../addressing/descriptor.js";
-import { buildDiscovery } from "../../protocols/ibp/discovery.js";
-import { PortalError, PORTAL_ERR } from "../../protocols/ibp/errors.js";
+import { buildDiscovery } from "../addressing/discovery.js";
+import { IbpError, IBP_ERR } from "./errors.js";
 import { authorize, getAuthConfig } from "./authorize.js";
 import { appendToInbox, markInboxConsumed } from "../scheduler/inbox.js";
 import { getRole } from "../roles/registry.js";
 import { authBeing } from "../roles/auth.js";
+import { llmAssignerBeing } from "../roles/llmAssigner.js";
 import { attachHandoff, wake } from "../scheduler/scheduler.js";
-import { subscribePosition } from "../../protocols/ibp/live.js";
 
 /**
  * DO verb. Looks up the registered operation, runs its handler, writes
@@ -94,8 +94,8 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       namespace,
     });
     if (!decision.ok) {
-      throw new PortalError(
-        identity ? PORTAL_ERR.FORBIDDEN : PORTAL_ERR.UNAUTHORIZED,
+      throw new IbpError(
+        identity ? IBP_ERR.FORBIDDEN : IBP_ERR.UNAUTHORIZED,
         `DO denied for stance "${decision.stance}": ${decision.reason}`,
         { stance: decision.stance, action: operation },
       );
@@ -154,18 +154,21 @@ doVerb.listOperations = listOperations;
 // SEE verb. Returns a Position Descriptor for `target`.
 //
 // `target` may be:
-//   - a stance / position / land string ("<land>/<path>@<being>", "<land>/<path>", "<land>")
+//   - a stance / position / land string
+//     ("<land>/<path>@<being>", "<land>/<path>", "<land>")
 //   - a pre-parsed `{ kind: "position"|"stance"|"land", value }` envelope
 //
 // `opts`:
 //   identity      — { beingId, name } | null (for stance-auth gating)
-//   addressKind   — explicit "stance" | "position" | "land" hint (defaults from target shape)
-//   currentUser   — name to use for pronoun resolution (defaults from identity.name)
-//   currentLand   — land domain to use for relative addresses (defaults to this land)
-//   live          — bool; when true and `opts.socket` is provided, subscribe the socket to position updates
-//   socket        — optional socket.io socket for live-subscription delivery
+//   addressKind   — explicit "stance" | "position" | "land" hint
+//                   (defaults to inference from the target shape)
+//   currentUser   — name to use for pronoun resolution (defaults to identity.name)
+//   currentLand   — land domain for relative addresses (defaults to this land)
 //
 // Returns the descriptor (or the discovery payload for `<land>/.discovery`).
+// Live subscription is the wire layer's responsibility — it reads
+// `descriptor.address.nodeId` after the call and subscribes the socket
+// when `payload.live` is set. See protocols/ibp/verbs/see.js.
 // ────────────────────────────────────────────────────────────────────
 
 export async function seeVerb(target, opts = {}) {
@@ -173,26 +176,24 @@ export async function seeVerb(target, opts = {}) {
     throw new ProtocolError(400, ERR.INVALID_INPUT, "core.see requires a target");
   }
 
-  // Discovery short-circuit. <land>/.discovery is read by every client
+  // Discovery short-circuit. `<land>/.discovery` is read by every client
   // right after socket open to learn capabilities.
   const addrString = typeof target === "string" ? target : (target.value || target.address || null);
   if (typeof addrString === "string" && /\/\.discovery$/i.test(addrString)) {
     return buildDiscovery();
   }
 
-  const { identity = null, currentUser = null, currentLand = null, live = false, socket = null } = opts;
+  const { identity = null, currentUser = null, currentLand = null } = opts;
   const addressKind = opts.addressKind
     || (target && typeof target === "object" && target.kind)
     || inferAddressKind(addrString);
 
-  const parsed = parseWithContext(addrString, {
+  const parseCtx = {
     currentLand: currentLand || getLandDomain(),
     currentUser: currentUser || identity?.name || null,
-  });
-  const expanded = expand(parsed, {
-    currentLand: currentLand || getLandDomain(),
-    currentUser: currentUser || identity?.name || null,
-  });
+  };
+  const parsed   = parseWithContext(addrString, parseCtx);
+  const expanded = expand(parsed, parseCtx);
   const resolved = await resolveStance(expanded.right);
 
   // Stance Authorization gate.
@@ -200,29 +201,21 @@ export async function seeVerb(target, opts = {}) {
     identity,
     verb: "see",
     target: {
-      kind:         addressKind === "stance" ? "stance" : "position",
-      nodeId:       resolved.nodeId,
-      visibility:   resolved.leafNode?.visibility,
-      isDiscovery:  false,
+      kind:        addressKind === "stance" ? "stance" : "position",
+      nodeId:      resolved.nodeId,
+      visibility:  resolved.leafNode?.visibility,
+      isDiscovery: false,
     },
   });
   if (!decision.ok) {
-    throw new PortalError(
-      identity ? PORTAL_ERR.FORBIDDEN : PORTAL_ERR.UNAUTHORIZED,
+    throw new IbpError(
+      identity ? IBP_ERR.FORBIDDEN : IBP_ERR.UNAUTHORIZED,
       `SEE denied for stance "${decision.stance}": ${decision.reason}`,
       { stance: decision.stance },
     );
   }
 
-  const descriptor = await buildDescriptor(resolved, { identity });
-
-  // Live subscription. Only meaningful when the caller provides a socket
-  // (in-process callers without a socket get the snapshot only).
-  if (live && socket && resolved.nodeId) {
-    subscribePosition(socket, resolved.nodeId);
-  }
-
-  return descriptor;
+  return buildDescriptor(resolved, { identity });
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -264,10 +257,10 @@ export async function summonVerb(stance, message, opts = {}) {
 
   const qualifier = resolved.being;
   if (!qualifier) {
-    throw new PortalError(PORTAL_ERR.ROLE_UNAVAILABLE, "SUMMON requires a stance with an @qualifier");
+    throw new IbpError(IBP_ERR.ROLE_UNAVAILABLE, "SUMMON requires a stance with an @qualifier");
   }
   if (!resolved.nodeId) {
-    throw new PortalError(PORTAL_ERR.NODE_NOT_FOUND, "Stance does not resolve to a known node");
+    throw new IbpError(IBP_ERR.NODE_NOT_FOUND, "Stance does not resolve to a known node");
   }
 
   // Resolve the qualifier to a specific Being:
@@ -285,8 +278,8 @@ export async function summonVerb(stance, message, opts = {}) {
     if (homeBeingId) toBeing = await Being.findById(homeBeingId);
   }
   if (!toBeing) {
-    throw new PortalError(
-      PORTAL_ERR.ROLE_UNAVAILABLE,
+    throw new IbpError(
+      IBP_ERR.ROLE_UNAVAILABLE,
       `No being addressable as "@${qualifier}" at this position`,
     );
   }
@@ -298,8 +291,8 @@ export async function summonVerb(stance, message, opts = {}) {
   if (envelopeRole) {
     const carriedRoles = Array.isArray(toBeing.roles) ? toBeing.roles : [];
     if (!carriedRoles.includes(envelopeRole)) {
-      throw new PortalError(
-        PORTAL_ERR.ROLE_UNAVAILABLE,
+      throw new IbpError(
+        IBP_ERR.ROLE_UNAVAILABLE,
         `Being @${toBeing.name} does not carry role "${envelopeRole}" ` +
         `(roles: ${carriedRoles.length ? carriedRoles.join(", ") : "none"})`,
       );
@@ -311,8 +304,8 @@ export async function summonVerb(stance, message, opts = {}) {
 
   const role = getRole(activeRole);
   if (!role) {
-    throw new PortalError(
-      PORTAL_ERR.ROLE_UNAVAILABLE,
+    throw new IbpError(
+      IBP_ERR.ROLE_UNAVAILABLE,
       `Role template "${activeRole}" for being @${toBeing.name} is not registered`,
     );
   }
@@ -325,8 +318,8 @@ export async function summonVerb(stance, message, opts = {}) {
     intent: validatedMessage.intent,
   });
   if (!decision.ok) {
-    throw new PortalError(
-      identity ? PORTAL_ERR.FORBIDDEN : PORTAL_ERR.UNAUTHORIZED,
+    throw new IbpError(
+      identity ? IBP_ERR.FORBIDDEN : IBP_ERR.UNAUTHORIZED,
       `SUMMON denied for stance "${decision.stance}": ${decision.reason}`,
       { stance: decision.stance },
     );
@@ -335,8 +328,8 @@ export async function summonVerb(stance, message, opts = {}) {
   // Resolve inbox-attach node.
   const inboxNodeId = resolved.nodeId || toBeing.homePositionId || null;
   if (!inboxNodeId) {
-    throw new PortalError(
-      PORTAL_ERR.VERB_NOT_SUPPORTED,
+    throw new IbpError(
+      IBP_ERR.VERB_NOT_SUPPORTED,
       "SUMMON at this stance is not yet wired (no inbox target)",
     );
   }
@@ -430,58 +423,43 @@ export async function summonVerb(stance, message, opts = {}) {
 // Returns the auth-being's operation result (typically { identityToken, beingAddress, ... }).
 // ────────────────────────────────────────────────────────────────────
 
-const VALID_BE_OPERATIONS = new Set(["register", "claim", "release", "switch"]);
+// Canonical land-system beings reachable via BE. Each declares its own
+// `honoredOperations`; the dispatcher below routes by the address's
+// @being qualifier (bare-land addresses default to @auth).
+const LAND_BEINGS = Object.freeze({
+  "auth":         authBeing,
+  "llm-assigner": llmAssignerBeing,
+});
 
 export async function beVerb(operation, payload = {}, opts = {}) {
-  if (typeof operation !== "string" || !VALID_BE_OPERATIONS.has(operation)) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
-      `core.be operation must be one of: ${[...VALID_BE_OPERATIONS].join(", ")}`,
-    );
+  if (typeof operation !== "string" || !operation.length) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "core.be requires an operation");
   }
 
   const {
-    address = null,
+    address     = null,
     addressKind = null,
-    identity = null,
-    socket = null,
-    req = null,
+    identity    = null,
+    socket      = null,
+    req         = null,
     currentLand = null,
   } = opts;
 
   const land = currentLand || getLandDomain();
 
-  // Verify the address points at THIS land.
+  // Address must point at this land.
   const targetLand = extractLandFromAddress(address, addressKind);
   if (targetLand && targetLand !== land) {
-    throw new PortalError(
-      PORTAL_ERR.NODE_NOT_FOUND,
+    throw new IbpError(
+      IBP_ERR.NODE_NOT_FOUND,
       `Land "${targetLand}" is not served by this server`,
       { targetLand, serverLand: land },
     );
   }
 
-  // Land-level BE config gates for register/claim.
-  if (operation === "register" || operation === "claim") {
-    const authConfig = await getAuthConfig();
-    if (operation === "register" && !authConfig.register_enabled) {
-      throw new PortalError(PORTAL_ERR.FORBIDDEN, "Registration is disabled on this land", { operation: "register" });
-    }
-    if (operation === "claim" && !authConfig.claim_enabled) {
-      throw new PortalError(PORTAL_ERR.FORBIDDEN, "Claim is disabled on this land", { operation: "claim" });
-    }
-  }
-
-  // Identity requirements per operation.
-  if ((operation === "release" || operation === "switch") && !identity) {
-    throw new PortalError(
-      PORTAL_ERR.UNAUTHORIZED,
-      `BE ${operation} requires an authenticated identity`,
-    );
-  }
-
-  // Stance Authorization gate. register/claim from arrival is the
-  // bootstrap exception (authorize permits it inherently).
+  // Stance Authorization gate (uniform across all BE operations).
+  // register/claim from arrival is the bootstrap exception — authorize
+  // permits it inherently.
   const decision = await authorize({
     identity,
     verb: "be",
@@ -489,8 +467,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     operation,
   });
   if (!decision.ok) {
-    throw new PortalError(
-      PORTAL_ERR.FORBIDDEN,
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
       `BE denied for stance "${decision.stance}": ${decision.reason}`,
       { stance: decision.stance, operation },
     );
@@ -498,19 +476,58 @@ export async function beVerb(operation, payload = {}, opts = {}) {
 
   const ctx = { socket, address: { kind: addressKind, value: address }, identity, req };
 
-  switch (operation) {
-    case "register":
-      return authBeing.register(payload, ctx);
-    case "claim":
-      return runClaim({ kind: addressKind, value: address }, payload, ctx);
-    case "release":
-      return authBeing.release(payload, ctx);
-    case "switch": {
-      const from = payload.from;
-      const to = addressKind === "stance" ? address : null;
-      return authBeing.switch({ from, to }, ctx);
+  // register + claim are identity-bind operations, not being-method
+  // dispatches — the address carries which identity is being bound,
+  // not which being to talk to. They always run through auth-being.
+  // Auth-config toggles gate them at the land level.
+  if (operation === "register" || operation === "claim") {
+    const authConfig = await getAuthConfig();
+    if (operation === "register" && !authConfig.register_enabled) {
+      throw new IbpError(IBP_ERR.FORBIDDEN, "Registration is disabled on this land", { operation });
     }
+    if (operation === "claim" && !authConfig.claim_enabled) {
+      throw new IbpError(IBP_ERR.FORBIDDEN, "Claim is disabled on this land", { operation });
+    }
+    if (operation === "register") return authBeing.register(payload, ctx);
+    return runClaim({ kind: addressKind, value: address }, payload, ctx);
   }
+
+  // Everything else dispatches to the addressed being. Bare-land
+  // addresses default to @auth (the welcome character).
+  const beingName = extractBeingFromAddress(address, addressKind) || "auth";
+  const role = LAND_BEINGS[beingName];
+  if (!role) {
+    throw new IbpError(
+      IBP_ERR.ROLE_UNAVAILABLE,
+      `No being @${beingName} at this land`,
+      { beingName },
+    );
+  }
+  if (!role.honoredOperations.includes(operation)) {
+    throw new IbpError(
+      IBP_ERR.ACTION_NOT_SUPPORTED,
+      `Being @${beingName} does not honor BE ${operation}`,
+      { beingName, operation, honoredOperations: role.honoredOperations },
+    );
+  }
+
+  // Auth-being's switch derives `from` / `to` from the address.
+  if (beingName === "auth" && operation === "switch") {
+    const from = payload.from;
+    const to   = addressKind === "stance" ? address : null;
+    return role.switch({ from, to }, ctx);
+  }
+
+  // Default dispatch: kebab-case op name → camelCase method.
+  const methodName = kebabToCamel(operation);
+  const method = role[methodName];
+  if (typeof method !== "function") {
+    throw new IbpError(
+      IBP_ERR.INTERNAL,
+      `Being @${beingName} declares BE "${operation}" but has no ${methodName}() handler`,
+    );
+  }
+  return method.call(role, payload, ctx);
 }
 
 // Two claim modes:
@@ -526,15 +543,15 @@ async function runClaim(address, opPayload, ctx) {
   }
 
   if (!ctx.identity) {
-    throw new PortalError(
-      PORTAL_ERR.UNAUTHORIZED,
+    throw new IbpError(
+      IBP_ERR.UNAUTHORIZED,
       "Token re-claim requires a still-valid identity token",
     );
   }
   const expectedStance = `${getLandDomain()}/@${ctx.identity.name}`;
   if (address.value !== expectedStance) {
-    throw new PortalError(
-      PORTAL_ERR.FORBIDDEN,
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
       "Cannot re-claim a stance the session does not hold",
       { held: expectedStance, requested: address.value },
     );
@@ -565,21 +582,31 @@ function extractLandFromAddress(address, addressKind) {
   return address.slice(0, slashIndex);
 }
 
+function extractBeingFromAddress(address, addressKind) {
+  if (addressKind !== "stance" || typeof address !== "string") return null;
+  const m = address.match(/@([a-z][a-z0-9-]*)$/i);
+  return m ? m[1].toLowerCase() : null;
+}
+
+function kebabToCamel(s) {
+  return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+}
+
 function validateSummonMessage(message) {
   if (!message || typeof message !== "object") {
-    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "core.summon requires a `message` object");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "core.summon requires a `message` object");
   }
   if (typeof message.from !== "string" || !message.from.length) {
-    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`message.from` is required");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "`message.from` is required");
   }
   if (!/@[a-z][a-z0-9-]*$/i.test(message.from)) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
       "`message.from` must be a qualified stance (position@being)",
     );
   }
   if (message.content === undefined || message.content === null) {
-    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`message.content` is required");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "`message.content` is required");
   }
   return message;
 }
@@ -590,7 +617,7 @@ async function runSummoning(role, ctx) {
     result = await role.summon(ctx.message, ctx);
   } catch (err) {
     log.error("Verbs", `being "${ctx.being}" summoning errored: ${err.message}`);
-    throw new PortalError(PORTAL_ERR.LLM_FAILED, `Summoning failed: ${err.message}`);
+    throw new IbpError(IBP_ERR.LLM_FAILED, `Summoning failed: ${err.message}`);
   }
   if (!result || typeof result !== "object") {
     return null; // no-response or place-intent

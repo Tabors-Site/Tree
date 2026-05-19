@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // Artifact: a thing that lives inside a node.
 //

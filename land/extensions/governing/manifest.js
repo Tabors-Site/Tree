@@ -84,7 +84,7 @@ export default {
   territory: "coordination roles plans contracts rulers planners workers",
 
   needs: {
-    services: ["hooks", "metadata", "tree", "modes"],
+    services: ["hooks", "metadata", "tree"],
     models: ["Node"],
     extensions: [],
   },

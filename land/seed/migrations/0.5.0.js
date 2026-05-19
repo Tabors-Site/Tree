@@ -1,4 +1,4 @@
-// TreeOS Seed — AGPL-3.0 — https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 /**
  * Seed Migration 0.5.0 — rename metadata.beings → metadata.beings.
  *

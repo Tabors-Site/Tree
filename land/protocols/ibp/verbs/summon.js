@@ -17,7 +17,7 @@
 // [[project_protocol_transport_separation]].
 
 import log from "../../../seed/core/log.js";
-import { PortalError, PORTAL_ERR, isPortalError } from "../errors.js";
+import { IbpError, IBP_ERR, isIbpError } from "../../../seed/core/errors.js";
 import { ackOk, ackError } from "../envelope.js";
 import { summonVerb } from "../../../seed/core/verbs.js";
 import { getIO } from "../../../transports/ws/websocket.js";
@@ -57,7 +57,7 @@ export async function handleSummon(socket, env, ack) {
   try {
     const { address, payload } = env;
     if (!payload?.message || typeof payload.message !== "object") {
-      throw new PortalError(PORTAL_ERR.INVALID_INPUT, "SUMMON payload must include a `message` object");
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "SUMMON payload must include a `message` object");
     }
 
     // Normalize threading: activeRole may live at payload.activeRole or
@@ -77,10 +77,10 @@ export async function handleSummon(socket, env, ack) {
 
     return ackOk(ack, id, result);
   } catch (err) {
-    if (isPortalError(err)) {
+    if (isIbpError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("IBP", `ibp SUMMON failed: ${err.message}`);
-    return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
+    log.error("IBP", `SUMMON failed: ${err.message}`);
+    return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }

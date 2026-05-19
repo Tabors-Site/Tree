@@ -1,4 +1,6 @@
-// TreeOS Seed — registry mirror.
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Registry mirror.
 //
 // Bridges in-memory runtime registries (tool defs, role specs, DO
 // operations) into the substrate by syncing their contents as children

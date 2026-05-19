@@ -1,4 +1,6 @@
-// TreeOS IBP — echo being (substrate smoke test).
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// echo being (substrate smoke test).
 //
 // The simplest possible async-respond being. Proves the SUMMON
 // round-trip through the queue substrate without requiring an LLM.

@@ -1,4 +1,4 @@
-// TreeOS Seed — AGPL-3.0 — https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 /**
  * Seed Migration 0.3.0 — Users → Beings unification + home territories.
  *
@@ -8,14 +8,14 @@
  *    `operatingMode = "human"`. All existing fields carry forward
  *    unchanged (password stays bcrypt-hashed, llmDefault preserved,
  *    isAdmin/isRemote/homeLand/metadata preserved). AI beings are
- *    created lazily by their extensions in later slices and are NOT
- *    part of this migration.
+ *    created lazily by their extensions and are NOT part of this
+ *    migration.
  *
  * 2. Every migrated being also gets a home territory Node: a real Node
  *    owned by the being, parented under the land root, that becomes
  *    their home in the world. `Being.homePositionId` points at it.
  *    The address shorthand `/~<username>` resolves through this Node
- *    once the address grammar updates (Slice 5).
+ *    once the address grammar updates.
  *
  *    Existing user-owned tree roots stay where they are (children of
  *    the land root). They remain accessible by direct path; the home

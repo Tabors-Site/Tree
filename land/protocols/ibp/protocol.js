@@ -1,22 +1,31 @@
-// IBP (Inter-Being Protocol): WebSocket dispatch.
+// IBP — the single dispatcher.
 //
-// Per [[project_ibp_wire_shape]] + [[project_protocol_transport_separation]],
-// the canonical wire shape is ONE event carrying a unified envelope:
+// One function handles every IBP call regardless of transport (WS, HTTP,
+// CLI, or in-process). Transports translate their shape into a unified
+// envelope and call dispatchIbp; the response comes back via the ack
+// callback the transport supplies.
 //
-//   socket.emit("ibp", { id, verb, address, payload, identity? }, ackCallback)
+// Wire shape ([[project_ibp_wire_shape]]):
 //
-// `verb`     one of "see", "do", "summon", "be"
-// `address`  the canonical position / stance / land string
-// `payload`  operation-specific data (action+args for DO, op+credentials
-//            for BE, message+threading for SUMMON, options for SEE)
+//   { id, verb, address, payload, identity? }
 //
-// The synchronous response is delivered via the socket.io ack callback.
-// Async out-of-band updates (SUMMON replies, live SEE patches) arrive
-// via the `ibp:update` event keyed by correlation id.
+//   verb     "see" | "do" | "summon" | "be"
+//   address  position / stance / land string
+//   payload  per-verb: { live? } for SEE, { action, args } for DO,
+//            { op, credentials } for BE, { message, ... } for SUMMON
+//   identity caller's JWT-decoded { beingId, name } when applicable
 //
-// The same dispatcher serves WebSocket and HTTP transports — see
-// dispatchIbp() in this file; the HTTP adapter (../routes/api/ibp.js)
-// wraps it for express req/res.
+// Sync response: returned through the ack callback as
+// { id, status: "ok", data } or { id, status: "error", error: {...} }.
+// Async updates (SUMMON replies, live SEE patches) arrive on the
+// `ibp:update` event keyed by correlation id.
+//
+// Cross-domain calls flow through canopy: dispatchIbp detects a foreign
+// target land, signs the envelope with this land's private key, and
+// POSTs to the peer's `/ibp/<verb>/<addr>` endpoint. The peer's
+// verifyIncoming middleware authenticates against the LandPeer registry
+// before re-entering dispatchIbp on the receiving side. See
+// [[project_canopy_folds_into_ibp]].
 
 import log from "../../seed/core/log.js";
 import { handleSee } from "./verbs/see.js";
@@ -24,7 +33,7 @@ import { handleDo } from "./verbs/do.js";
 import { handleSummon } from "./verbs/summon.js";
 import { handleBe } from "./verbs/be.js";
 import { parseUnifiedEnvelope, ackError } from "./envelope.js";
-import { PORTAL_ERR, isPortalError } from "./errors.js";
+import { IBP_ERR, isIbpError } from "../../seed/core/errors.js";
 import { getForeignTargetDomain, forwardToPeer } from "./canopy/dispatch.js";
 
 const VERB_HANDLERS = {
@@ -35,36 +44,35 @@ const VERB_HANDLERS = {
 };
 
 /**
- * Core IBP dispatcher. Used by every transport (WS + HTTP + CLI).
+ * The IBP dispatcher. Every transport ends here.
  *
- * Validates the envelope, looks up the verb handler, and runs it. The
- * handler receives the parsed envelope and the optional `socket`
- * (present for WS; the HTTP adapter constructs a minimal socket-shaped
- * carrier with `beingId` + `username` from the JWT).
- *
- * The ack callback is the transport's response sink: socket.io ack for
- * WS, an HTTP-response-translating function for HTTP. Either way the
- * handler calls it with the same `{ id, status, data | error }` shape.
+ * @param {object} carrier  socket-shaped object carrying caller context
+ *                          (beingId, name, canopyVerifiedSender, etc.).
+ *                          Real socket on WS; minimal stub on HTTP/CLI.
+ * @param {object} msg      raw envelope from the transport
+ * @param {Function} ack    response sink: socket.io ack on WS,
+ *                          response-translating fn on HTTP
  */
-export async function dispatchIbp(socket, msg, ack) {
+export async function dispatchIbp(carrier, msg, ack) {
   const id = msg?.id || null;
+
+  // 1. Parse + validate the envelope against the per-verb address contract.
   let env;
   try {
     env = parseUnifiedEnvelope(msg);
   } catch (err) {
-    if (isPortalError(err)) {
+    if (isIbpError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
     log.error("IBP", `envelope parse failed: ${err.message}`);
-    return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
+    return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal IBP error");
   }
 
-  // Cross-domain dispatch: if the target address resolves to a foreign
-  // land AND this request didn't itself arrive verified from canopy
-  // (i.e. it's an outbound from us, not an inbound being re-forwarded),
-  // canopy-sign and forward to the peer. See
-  // [[project_canopy_folds_into_ibp]].
-  if (!socket?.canopyVerifiedSender) {
+  // 2. Cross-domain check. If the target lives on another land AND this
+  //    call didn't already arrive verified from canopy (which would mean
+  //    we're the receiving land, not the sender), canopy-sign and forward
+  //    to the peer. The local verb handler is skipped.
+  if (!carrier?.canopyVerifiedSender) {
     const foreign = getForeignTargetDomain(env.address);
     if (foreign) {
       const peerAck = await forwardToPeer(env);
@@ -73,21 +81,19 @@ export async function dispatchIbp(socket, msg, ack) {
     }
   }
 
+  // 3. Local verb handler. Calls into seed primitives (resolver,
+  //    descriptor, authorize, scheduler, operations registry) and acks.
   const handler = VERB_HANDLERS[env.verb];
-  return handler(socket, env, ack);
-}
-
-function registerSocketHandlers(socket) {
-  socket.on("ibp", (msg, ack) => dispatchIbp(socket, msg, ack));
+  return handler(carrier, env, ack);
 }
 
 /**
- * Hook the IBP handler onto every new socket connection.
- * Called by initIBPWS in index.js.
+ * Wire dispatchIbp onto every new socket.io connection. Called once
+ * by initIBPWS in index.js.
  */
-export function attachPortalHandlers(io) {
+export function attachIbpHandlers(io) {
   io.on("connection", (socket) => {
-    registerSocketHandlers(socket);
+    socket.on("ibp", (msg, ack) => dispatchIbp(socket, msg, ack));
   });
-  log.info("IBP", "IBP attached (unified `ibp` event)");
+  log.info("IBP", "WebSocket dispatcher attached");
 }

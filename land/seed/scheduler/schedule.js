@@ -1,4 +1,6 @@
-// TreeOS IBP — scheduled-wake registry.
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Scheduled-wake registry.
 //
 // Beings declare a wake cadence ("wake me every N ms"); a single tick
 // loop walks the registry and emits SUMMONs (intent="scheduled-wake")

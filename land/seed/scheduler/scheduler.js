@@ -1,4 +1,6 @@
-// TreeOS IBP — per-being summon scheduler.
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Per-being summon scheduler.
 //
 // The scheduler is the consumer side of the inbox queue. Async beings
 // don't fire-and-forget anymore; they hand their summoning to this
@@ -26,8 +28,8 @@
 //
 // **State.** Per-being runtime state lives in memory; on crash it is
 // lost but the inbox persists, so re-wakes catch up. A boot-time
-// recovery pass (Slice 6 work, when external summon sources land) will
-// scan inboxes for unsummoned pending entries and resume them.
+// recovery pass that scans inboxes for unsummoned pending entries and
+// resumes them is on the roadmap.
 
 import { randomUUID } from "crypto";
 import log from "../core/log.js";

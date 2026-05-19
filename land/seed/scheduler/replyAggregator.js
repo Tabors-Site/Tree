@@ -1,4 +1,6 @@
-// TreeOS IBP — reply aggregation helper.
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Reply aggregation helper.
 //
 // Pattern: a being SUMMONs N other beings in parallel, then needs to act
 // once all (or k-of-N) replies have landed in its inbox. The Foreman →

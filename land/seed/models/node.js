@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 import { SYSTEM_ROLE, DELETED } from "../core/protocol.js";

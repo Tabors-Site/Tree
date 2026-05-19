@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 /**
  * Pure data query functions for tree nodes.
  * No req/res. No route handlers. Just data in, data out.

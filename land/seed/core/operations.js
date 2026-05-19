@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // DO operation registry.
 //
@@ -8,11 +8,7 @@
 // audit run once at one gate.
 //
 // See [[project_seed_four_verbs_only]] memory for the architectural
-// commitment and the seven-phase migration plan.
-//
-// Phase 1: this registry coexists with the existing per-target helpers
-// (setExtMeta, createNode, etc.). New extension code SHOULD use
-// core.do(...); existing helpers retire wave by wave starting Phase 4.
+// commitment.
 
 import log from "./log.js";
 
@@ -37,7 +33,7 @@ const VALID_TARGETS = new Set(["node", "being", "artifact", "land", "stance", "p
  * @param {object} spec
  * @param {string[]} spec.targets - target kinds the op accepts: node|being|artifact|land|stance|position
  * @param {Function} spec.handler - async ({ target, params, identity, summonCtx }) => result
- * @param {object} [spec.schema] - payload validation (Zod / JSON schema). Phase 1 stores only; enforcement comes later.
+ * @param {object} [spec.schema] - payload validation (Zod / JSON schema). Currently stored only; enforcement is on the roadmap.
  * @param {string} [spec.didAction] - name written into the Did. Defaults to operation name.
  * @param {boolean} [spec.skipAudit] - if true, no Did is written. Reserve for ops where audit adds nothing.
  * @param {string} [spec.ownerExtension] - registering extension name (default "kernel")

@@ -1,19 +1,16 @@
-// TreeOS IBP — SEE verb (wire adapter).
+// IBP SEE — wire adapter.
 //
-// Consumes the unified envelope per [[project_ibp_wire_shape]]:
+// Envelope: { id, verb: "see", address, payload: { live?: boolean }, identity? }
 //
-//   { id, verb: "see", address, payload: { live?: boolean }, identity? }
-//
-// Thin wire adapter: extracts envelope fields, delegates to `seeVerb`
-// in seed/core/verbs.js for execution, returns the descriptor as the
-// ack body. Address resolution, stance authorization, descriptor
-// construction, discovery short-circuit, and live subscription all
-// happen inside seeVerb. See [[project_four_verbs_one_execution]].
+// Thin glue: delegates to `seeVerb` in seed/core/verbs.js for the
+// descriptor, then subscribes the socket to live updates when the
+// payload asks for them. See [[project_four_verbs_one_execution]].
 
 import log from "../../../seed/core/log.js";
-import { PortalError, PORTAL_ERR, isPortalError } from "../errors.js";
+import { IbpError, IBP_ERR, isIbpError } from "../../../seed/core/errors.js";
 import { ackOk, ackError } from "../envelope.js";
 import { seeVerb } from "../../../seed/core/verbs.js";
+import { subscribePosition } from "../live.js";
 
 export async function handleSee(socket, env, ack) {
   const id = env?.id || null;
@@ -25,16 +22,21 @@ export async function handleSee(socket, env, ack) {
       identity,
       addressKind,
       currentUser: socket.name,
-      live:        payload?.live === true,
-      socket,
     });
+
+    // Wire-layer concern: live updates need a socket to push patches
+    // through. In-process callers of seeVerb don't have one, so the
+    // subscription stays here rather than in the seed verb.
+    if (payload?.live === true && socket?.id && descriptor?.address?.nodeId) {
+      subscribePosition(socket, descriptor.address.nodeId);
+    }
 
     return ackOk(ack, id, descriptor);
   } catch (err) {
-    if (isPortalError(err)) {
+    if (isIbpError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("IBP", `ibp SEE failed: ${err.message}`);
-    return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
+    log.error("IBP", `SEE failed: ${err.message}`);
+    return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal IBP error");
   }
 }

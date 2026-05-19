@@ -966,7 +966,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Register session types
       if (manifest.provides?.sessionTypes) {
-        const { registerSessionType } = await import("../transports/ws/sessionRegistry.js");
+        const { registerSessionType } = await import("../seed/session/registry.js");
         for (const [key, value] of Object.entries(manifest.provides.sessionTypes)) {
           registerSessionType(key, value);
         }

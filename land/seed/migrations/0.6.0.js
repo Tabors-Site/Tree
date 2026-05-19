@@ -1,11 +1,11 @@
-// TreeOS Seed — AGPL-3.0 — https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 /**
  * Seed Migration 0.6.0 — Chat.ibpAddress introduction.
  *
  * 0.6.0 introduces `ibpAddress` on Chat as the canonical identifier
  * for "the conversation context this chat belongs to." The shape is
  * `<stance> :: <stance>` (canonical sorted), matching the protocol's
- * IBP Address grammar (see /portal/lib/ibp-address.js and
+ * IBP Address grammar (see /land/seed/addressing/address.js and
  * seed/llm/ibpAddress.js). New chats compute and write it at
  * creation time.
  *

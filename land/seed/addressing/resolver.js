@@ -1,202 +1,202 @@
-// IBP Address → stance resolution.
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Given a parsed Stance, resolve what the Land server needs to ACT on:
-//   - zone:        "land" | "home" | "tree"
-//   - beingId:      owning user (for home zone)
-//   - rootId:      tree root (for tree zone)
-//   - nodeId:      target node (for tree zone)
-//   - chain:       [{ name, id }] top-down (land root → leaf)
-//   - leafName:    convenience: chain[last].name
-//   - leafId:      convenience: chain[last].id
-//   - being:  the @label from the stance (unchanged)
+// IBP Address resolves to stance.
 //
-// Pass 1 Slice 1 implemented ONLY the land-zone case (path === "/").
-// Home and tree zones are now wired through; the rest of the verbs
-// (DO/SUMMON/BE) will consume this resolver next.
+// Resolution turns a parsed stance into the concrete substrate facts a
+// verb handler needs: which Node is being addressed, which tree contains
+// it, which being (if any) is invoked, and the top-down path the client
+// can use for breadcrumb-style rendering. Positions are flat node-IDs;
+// flags on the result describe what kind of position the leaf is
+// (land root, a being's home, or a plain node).
+//
+// Result shape:
+//   {
+//     isLandRoot, isHomeRoot — flags describing leaf semantics
+//     nodeId, rootId         — substrate handles (rootId = enclosing tree)
+//     chain                  — [{ name, id }] top-down (land root → leaf)
+//     leafName, leafId       — convenience: last entry of chain
+//     beingId, name          — populated when the address names a being
+//                              (the @being qualifier or a "/~user" home)
+//     being                  — the raw @label from the stance
+//     leafNode               — optional pass-through Node doc (descriptor
+//                              builders use it to avoid a refetch)
+//   }
+//
+// Per [[project_zones_retired]] the "zone" concept is gone; every
+// address resolves to a node and callers branch on positional flags.
 
-import { PortalError, PORTAL_ERR } from "../../protocols/ibp/errors.js";
+import { IbpError, IBP_ERR } from "../core/errors.js";
 import { getLandDomain } from "./address.js";
 import Being from "../models/being.js";
 import Node from "../models/node.js";
 import { getLandRootId } from "../landRoot.js";
 import { resolveRootNode } from "../tree/treeFetch.js";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * @param {{ land: string|null, path: string|null, being: string|null }} stance
  * @param {object} [opts]
- * @param {boolean} [opts.requireLandMatch=true] — when true, reject stances whose land doesn't match this server
- * @returns {Promise<{
- *   zone: "land"|"home"|"tree",
- *   beingId: string|null,
- *   rootId: string|null,
- *   nodeId: string|null,
- *   chain: Array<{name: string, id: string}>,
- *   leafName: string|null,
- *   leafId: string|null,
- *   being: string|null,
- * }>}
+ * @param {boolean} [opts.requireLandMatch=true]
+ *   reject stances whose land doesn't match this server (only false for
+ *   cross-land previews that intentionally inspect remote paths).
  */
 export async function resolveStance(stance, opts = {}) {
   const { requireLandMatch = true } = opts;
   if (!stance) {
-    throw new PortalError(PORTAL_ERR.ADDRESS_PARSE_ERROR, "Stance is required");
+    throw new IbpError(IBP_ERR.ADDRESS_PARSE_ERROR, "Stance is required");
   }
 
-  // Land must match this server (Pass 1: no federated lookup yet).
-  const stanceLand = stance.land || getLandDomain();
-  if (requireLandMatch && stanceLand !== getLandDomain()) {
-    throw new PortalError(
-      PORTAL_ERR.NODE_NOT_FOUND,
+  const localLand = getLandDomain();
+  const stanceLand = stance.land || localLand;
+  if (requireLandMatch && stanceLand !== localLand) {
+    throw new IbpError(
+      IBP_ERR.NODE_NOT_FOUND,
       `Land "${stanceLand}" is not served by this server`,
-      { stanceLand, serverLand: getLandDomain() },
+      { stanceLand, serverLand: localLand },
     );
   }
 
   const path = stance.path || "/";
+  const being = stance.being || null;
 
-  // Land zone: path === "/"
+  // Land root: path is "/". The land root IS a Node (the systemRole:
+  // LAND_ROOT row created by ensureLandRoot), so we surface its id as
+  // nodeId. That makes beings whose home is the land root —
+  // land-manager, llm-assigner, auth, citizen — summonable: the inbox
+  // sits on the land-root node like any other position.
   if (path === "/") {
-    return {
-      zone: "land",
-      beingId: null,
-      rootId: null,
-      nodeId: null,
-      chain: [],
-      leafName: null,
-      leafId: null,
-      being: stance.being || null,
-    };
-  }
-
-  // Home zone: path starts with "/~"
-  if (path.startsWith("/~")) {
-    // Parse the user slug + any sub-path beneath it.
-    // "/~tabor"          → user = tabor, subPath = []
-    // "/~tabor/notes"    → user = tabor, subPath = ["notes"]
-    // "/~tabor/notes/x"  → user = tabor, subPath = ["notes", "x"]
-    const rest = path.slice(2); // strip "/~"
-    const segments = rest.split("/").filter(Boolean);
-    const username = segments[0];
-    const subPath = segments.slice(1);
-
-    if (!username) {
-      throw new PortalError(
-        PORTAL_ERR.ADDRESS_PARSE_ERROR,
-        `Invalid home path: "${path}" (missing username after ~)`,
-      );
-    }
-
-    const user = await Being.findOne({ username }).select("_id name").lean();
-    if (!user) {
-      throw new PortalError(
-        PORTAL_ERR.USER_NOT_FOUND,
-        `No user "${username}" on this land`,
-        { username },
-      );
-    }
-
-    // Empty subPath = the home root itself.
-    if (subPath.length === 0) {
-      return {
-        zone: "home",
-        beingId: user._id,
-        name: user.name,
-        rootId: null,
-        nodeId: null,
-        chain: [{ name: `~${user.name}`, id: user._id }],
-        leafName: `~${user.name}`,
-        leafId: user._id,
-        being: stance.being || null,
-      };
-    }
-
-    // Sub-path inside the user's home is a tree-zone resolution.
-    // First segment is a tree-root owned by the user. Walk from there.
     const landRootId = getLandRootId();
-    return resolveNodePath({
-      startUnderParent: landRootId,
-      segments: subPath,
-      ownerFilter: { rootOwner: user._id },
-      stance,
-      contextUser: user,
+    return base({
+      isLandRoot: true,
+      nodeId:     landRootId,
+      leafId:     landRootId,
+      being,
     });
   }
 
-  // Node zone: path starts with "/" (but not "/~"). First segment is a
-  // tree-root directly under the land root.
+  // Being home: path starts with "/~". First segment after ~ names the
+  // being; remaining segments walk into their home tree.
+  if (path.startsWith("/~")) {
+    const segments = path.slice(2).split("/").filter(Boolean);
+    const name = segments[0];
+    if (!name) {
+      throw new IbpError(
+        IBP_ERR.ADDRESS_PARSE_ERROR,
+        `Invalid home path "${path}" (missing being name after ~)`,
+      );
+    }
+
+    const beingDoc = await Being.findOne({ name }).select("_id name").lean();
+    if (!beingDoc) {
+      throw new IbpError(
+        IBP_ERR.USER_NOT_FOUND,
+        `No being named "${name}" on this land`,
+        { name },
+      );
+    }
+
+    const subPath = segments.slice(1);
+    // Bare "/~name" → the home position itself.
+    if (subPath.length === 0) {
+      return base({
+        isHomeRoot: true,
+        beingId:    beingDoc._id,
+        name:       beingDoc.name,
+        chain:      [{ name: `~${beingDoc.name}`, id: beingDoc._id }],
+        leafName:   `~${beingDoc.name}`,
+        leafId:     beingDoc._id,
+        being,
+      });
+    }
+
+    // "/~name/<segments>" → walk the being's home tree.
+    return walkNodePath({
+      segments:    subPath,
+      ownerFilter: { rootOwner: beingDoc._id },
+      contextBeing: beingDoc,
+      being,
+    });
+  }
+
+  // Plain position: "/<segments>". First segment is a tree root under
+  // the land root.
   const segments = path.slice(1).split("/").filter(Boolean);
   if (segments.length === 0) {
-    // Shouldn't happen: "/" is handled above. Defensive return.
-    throw new PortalError(PORTAL_ERR.ADDRESS_PARSE_ERROR, `Invalid path "${path}"`);
+    throw new IbpError(IBP_ERR.ADDRESS_PARSE_ERROR, `Invalid path "${path}"`);
   }
-  const landRootId = getLandRootId();
-  return resolveNodePath({
-    startUnderParent: landRootId,
+  return walkNodePath({
     segments,
-    ownerFilter: {},
-    stance,
-    contextUser: null,
+    ownerFilter:  {},
+    contextBeing: null,
+    being,
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Node-path walker
-// ─────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// Internals
+// ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Walk a path of segments starting from a given parent, matching each
- * segment either by name OR by node-id (uuid). Builds the chain
- * [{name, id}] and returns the leaf as the resolved node.
- *
- * @param {object} args
- * @param {string} args.startUnderParent — parent node id to start from (typically landRootId)
- * @param {string[]} args.segments — path segments (already split by "/")
- * @param {object} args.ownerFilter — extra filter on the FIRST segment (e.g. rootOwner)
- * @param {object} args.stance — the original parsed stance (for being)
- * @param {object|null} args.contextUser — user owning a home zone, if any
+ * Base resolved-stance shape. All fields present (most null) so callers
+ * can destructure without optional chaining and `Array.isArray(chain)`
+ * is a reliable resolved-stance discriminator.
  */
-async function resolveNodePath({ startUnderParent, segments, ownerFilter, stance, contextUser }) {
-  if (!startUnderParent) {
-    throw new PortalError(
-      PORTAL_ERR.INTERNAL,
-      "Land root not initialized yet",
-    );
+function base(over = {}) {
+  return {
+    isLandRoot: false,
+    isHomeRoot: false,
+    beingId:    null,
+    name:       null,
+    rootId:     null,
+    nodeId:     null,
+    chain:      [],
+    leafName:   null,
+    leafId:     null,
+    being:      null,
+    leafNode:   null,
+    ...over,
+  };
+}
+
+/**
+ * Walk a sequence of path segments under the land root, matching each
+ * segment by UUID (preferred) or by name. Returns the resolved-stance
+ * shape pointing at the final leaf.
+ */
+async function walkNodePath({ segments, ownerFilter, contextBeing, being }) {
+  const landRootId = getLandRootId();
+  if (!landRootId) {
+    throw new IbpError(IBP_ERR.INTERNAL, "Land root not initialized yet");
   }
 
-  const chain = [];
-  // For home zones the chain starts with the ~user marker.
-  if (contextUser) {
-    chain.push({ name: `~${contextUser.name}`, id: contextUser._id });
-  }
+  const chain = contextBeing
+    ? [{ name: `~${contextBeing.name}`, id: contextBeing._id }]
+    : [];
 
-  let currentParent = startUnderParent;
+  let currentParent = landRootId;
   let leafNode = null;
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
     const isFirst = i === 0;
     const baseQuery = {
-      parent: currentParent,
+      parent:     currentParent,
       systemRole: null,
       ...(isFirst ? ownerFilter : {}),
     };
 
-    // Try id match first (UUID-shaped), then name match. Either form is valid.
-    const isUuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg);
+    const fields = "_id name type status parent rootOwner contributors visibility metadata";
     let node = null;
-    if (isUuidLike) {
-      node = await Node.findOne({ ...baseQuery, _id: seg })
-        .select("_id name type status parent rootOwner contributors visibility metadata")
-        .lean();
+    if (UUID_RE.test(seg)) {
+      node = await Node.findOne({ ...baseQuery, _id: seg }).select(fields).lean();
     }
     if (!node) {
-      node = await Node.findOne({ ...baseQuery, name: seg })
-        .select("_id name type status parent rootOwner contributors visibility metadata")
-        .lean();
+      node = await Node.findOne({ ...baseQuery, name: seg }).select(fields).lean();
     }
     if (!node) {
-      throw new PortalError(
-        PORTAL_ERR.NODE_NOT_FOUND,
+      throw new IbpError(
+        IBP_ERR.NODE_NOT_FOUND,
         `Segment "${seg}" not found at depth ${i} of path`,
         { segment: seg, depth: i, parent: currentParent },
       );
@@ -207,27 +207,25 @@ async function resolveNodePath({ startUnderParent, segments, ownerFilter, stance
     leafNode = node;
   }
 
-  // Determine the tree root (rootId) for this node. Walk up via existing
-  // primitive — finds the first ancestor with rootOwner set.
+  // The enclosing tree root. Walk up to the nearest node with rootOwner;
+  // a node may itself be a root.
   let rootId = null;
   try {
     const treeRoot = await resolveRootNode(leafNode._id);
     rootId = treeRoot?._id || null;
   } catch {
-    // If we can't determine a tree root, the node may itself be a tree root.
     rootId = leafNode.rootOwner ? leafNode._id : null;
   }
 
-  return {
-    zone: "tree",
-    beingId: contextUser?._id || null,
-    name: contextUser?.name || null,
+  return base({
+    beingId:  contextBeing?._id || null,
+    name:     contextBeing?.name || null,
     rootId,
-    nodeId: leafNode._id,
+    nodeId:   leafNode._id,
     chain,
     leafName: leafNode.name,
-    leafId: leafNode._id,
-    being: stance.being || null,
-    leafNode, // pass-through for the descriptor builder to avoid re-fetching
-  };
+    leafId:   leafNode._id,
+    being,
+    leafNode,
+  });
 }

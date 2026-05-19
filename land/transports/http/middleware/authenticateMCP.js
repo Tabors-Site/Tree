@@ -1,35 +1,33 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
+//
+// MCP authentication middleware.
+//
+// MCP tool calls arrive with an `x-internal-token` header carrying a
+// JWT signed by this land (generated when the conversation runtime
+// spawns a tool round). Verification is decode-only — the token's
+// existence/revocation gates already ran when the originating session
+// was authenticated; re-checking the being on every tool call would
+// be redundant and slow.
+
 import log from "../../../seed/core/log.js";
-import jwt from "jsonwebtoken";
+import { decodeToken } from "../../../seed/core/identity.js";
 import { sendError, ERR } from "../../../seed/core/protocol.js";
 
-if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
-const JWT_SECRET = process.env.JWT_SECRET;
-
 export default function authenticateMCP(req, res, next) {
-  try {
-    const token =
-      req.headers["x-internal-token"];
+  const token = req.headers["x-internal-token"];
+  if (!token) return sendError(res, 401, ERR.UNAUTHORIZED, "Missing token");
 
-    if (!token) {
-      return sendError(res, 401, ERR.UNAUTHORIZED, "Missing token");
-    }
-
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    req.beingId =
-      decoded.beingId || decoded.id || decoded._id;
-
-    req.name = decoded.name;
-    // Forward the client session id when JWTs carry one. Honored as
-    // a trace label so MCP tool calls correlate back to the reach
-    // that initiated them. Optional — current signers don't stamp it,
-    // but the field is kept for callers that want correlation.
-    req.clientSessionId = decoded.clientSessionId || null;
-
-    next();
-  } catch (err) {
-    log.error("MCP", "invalid token:", err.message);
+  const decoded = decodeToken(token);
+  if (!decoded) {
+    log.error("MCP", "invalid token");
     return sendError(res, 401, ERR.UNAUTHORIZED, "Invalid token");
   }
+
+  req.beingId         = decoded.beingId;
+  req.name            = decoded.name;
+  // Reserved. MCP token signers may stamp a clientSessionId so tool
+  // calls correlate back to the reach that initiated them; current
+  // signers don't, but the field is kept so callers can add it.
+  req.clientSessionId = null;
+  return next();
 }

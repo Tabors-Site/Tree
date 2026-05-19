@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // Kernel DO operations.
 //
@@ -18,7 +18,7 @@
 //   add-llm-connection      (being)
 //   update-llm-connection   (being)
 //   delete-llm-connection   (being)
-//   assign-llm-slot         (being)
+//   assign-llm-slot         (polymorphic over being/node)
 //   install-extension       (write files; reload-required)
 //   uninstall-extension     (remove files; reload-required)
 //   enable-extension        (toggle disabledExtensions list)
@@ -30,13 +30,13 @@
 // [[project_everything_is_substrate]].
 
 import { registerOperation } from "./operations.js";
-import { createChild as ibpNodeCreateChild } from "../../protocols/ibp/actions/create-child.js";
-import { rename       as ibpNodeRename }     from "../../protocols/ibp/actions/rename.js";
-import { setMeta      as ibpNodeSetMeta }    from "../../protocols/ibp/actions/set-meta.js";
 import { setExtMeta, mergeExtMeta }            from "../tree/extensionMetadata.js";
 import { setBeingMeta, mergeBeingMeta }        from "../tree/beingMetadata.js";
 import { setArtifactMeta, mergeArtifactMeta }  from "../tree/artifactMetadata.js";
-import { editNodeName, editNodeType, deleteNodeBranch, updateParentRelationship } from "../tree/treeManagement.js";
+import { createNode, editNodeName, editNodeType, deleteNodeBranch, updateParentRelationship } from "../tree/treeManagement.js";
+import { resolveTreeAccess } from "../tree/treeAccess.js";
+import { getLandDomain } from "../addressing/address.js";
+import { IbpError, IBP_ERR, mapPatternsToIbpError } from "./errors.js";
 import Being    from "../models/being.js";
 import Artifact from "../models/artifact.js";
 import Node     from "../models/node.js";
@@ -74,12 +74,7 @@ export function registerKernelOperations() {
       const kind = detectTargetKind(target);
       if (kind === "being")    return createBeingChild({ parentBeing: target, params, identity });
       if (kind === "artifact") return createArtifactChild({ parentArtifact: target, params, identity });
-      // Node or resolved-stance path: existing IBP create-child handler.
-      return ibpNodeCreateChild({
-        beingId:  identity?.beingId || null,
-        resolved: target,
-        payload:  params,
-      });
+      return createNodeChild({ target, params, identity, kind });
     },
   });
 
@@ -162,14 +157,7 @@ export function registerKernelOperations() {
         return { artifactId: String(target._id), name };
       }
 
-      if (kind === "stance") {
-        // IBP wire path: defer to existing rename handler.
-        return ibpNodeRename({
-          beingId:  identity?.beingId || null,
-          resolved: target,
-          payload:  params,
-        });
-      }
+      if (kind === "stance") return renameAtStance({ resolved: target, name, identity });
 
       // Mongoose Node doc path: call the seed primitive directly.
       await editNodeName({
@@ -241,9 +229,9 @@ export function registerKernelOperations() {
   });
 
   // Unified set-meta. Accepts a Mongoose Node / Being / Artifact doc,
-  // or (from the IBP wire path) a resolved stance that carries
-  // `.zone === "tree"` + `.nodeId`. Detects which and routes to the
-  // appropriate seed primitive.
+  // or (from the IBP wire path) a resolved stance that carries `.chain`
+  // and `.nodeId`. Detects which and routes to the appropriate seed
+  // primitive.
   //
   // The merge flag is the safe default (true): partial writes don't
   // wipe sibling keys. merge:false replaces the whole namespace; that
@@ -277,16 +265,7 @@ export function registerKernelOperations() {
         await op(target, namespace, data);
         return { written: true, artifactId: String(target._id), namespace, kind: "artifact" };
       }
-      if (kind === "stance") {
-        // IBP wire path: target is a resolved stance with zone + nodeId.
-        // Defer to the existing IBP set-meta action which does zone
-        // check + resolveTreeAccess + load-by-id + write.
-        return ibpNodeSetMeta({
-          beingId:  identity?.beingId || null,
-          resolved: target,
-          payload:  params,
-        });
-      }
+      if (kind === "stance") return setMetaAtStance({ resolved: target, namespace, data, merge, identity });
       // kind === "node": Mongoose Node doc passed directly (extension path).
       const op = merge !== false ? mergeExtMeta : setExtMeta;
       await op(target, namespace, data);
@@ -411,16 +390,30 @@ export function registerKernelOperations() {
     },
   });
 
-  // Bind a Being's LLM slot to a connection (or unbind by passing null).
+  // Bind an LLM slot to a connection (or unbind by passing null).
+  // Polymorphic across Being and Node targets — the resolution chain
+  // walks both, so slot assignment lives at both:
+  //
+  //   Being target → Being.llmDefault (slot="main") or
+  //                  Being.metadata.userLlm.slots.<slot>
+  //   Node  target → Node.llmDefault  (slot="main") or
+  //                  Node.metadata.llm.slots.<slot>
   registerOperation("assign-llm-slot", {
-    targets: ["being"],
+    targets: ["being", "node"],
     ownerExtension: "kernel",
-    handler: async ({ target, params }) => {
+    handler: async ({ target, params, identity }) => {
       const { slot, connectionId } = params || {};
       if (!slot) throw new Error("assign-llm-slot: `slot` is required");
-      const { assignConnection } = await import("../llm/connections.js");
-      const result = await assignConnection(String(target._id), slot, connectionId || null);
-      return result;
+      const kind = detectTargetKind(target);
+      const { assignConnection, assignNodeConnection } = await import("../llm/connections.js");
+      if (kind === "being") {
+        return assignConnection(String(target._id), slot, connectionId || null);
+      }
+      const nodeId = targetIdOf(target);
+      if (!nodeId) throw new Error("assign-llm-slot: target must resolve to a node id");
+      return assignNodeConnection(nodeId, slot, connectionId || null, {
+        ownerBeingId: identity?.beingId || null,
+      });
     },
   });
 
@@ -573,19 +566,21 @@ const RESERVED_SET_META_NS = new Set([
 
 /**
  * Detect what the target argument is. Returns one of:
- *   "stance"   — resolved stance from the IBP wire (has `.zone`)
+ *   "stance"   — resolved stance from the IBP wire (carries `.chain`)
  *   "being"    — Mongoose Being doc
  *   "artifact" — Mongoose Artifact doc
- *   "node"     — Mongoose Node doc OR anything else (default)
+ *   "node"     — Mongoose Node doc OR anything else (default; covers
+ *                plain `{ _id }` shapes and raw string ids that the
+ *                node primitives already handle)
  *
  * Detection priority:
- *   1. `.zone` field present → resolved stance (IBP wire shape)
+ *   1. `.chain` is an array → resolver output (every resolved stance
+ *      carries a top-down chain, including `[]` for bare land root)
  *   2. Mongoose `.constructor.modelName` → model-typed doc
- *   3. Default → "node" (covers plain `{ _id }` shapes and string ids,
- *      which the node primitives already handle)
+ *   3. Default → "node"
  */
 function detectTargetKind(target) {
-  if (target && typeof target === "object" && target.zone !== undefined) return "stance";
+  if (target && typeof target === "object" && Array.isArray(target.chain)) return "stance";
   const modelName = target?.constructor?.modelName;
   if (modelName === "Being")    return "being";
   if (modelName === "Artifact") return "artifact";
@@ -604,6 +599,147 @@ function targetIdOf(target) {
   if (target.nodeId) return String(target.nodeId);
   if (target.id) return String(target.id);
   return null;
+}
+
+// ────────────────────────────────────────────────────────────────
+// Stance-arrival handlers
+// ────────────────────────────────────────────────────────────────
+//
+// When an op's target arrives from the IBP wire, it's a resolved stance
+// (carries `.chain`, `.nodeId`, `.isLandRoot`, `.isHomeRoot`, etc.). The
+// inline node/being/artifact branches above handle Mongoose-doc shapes
+// that internal callers pass; these helpers handle the wire shape.
+//
+// They do three things the inline paths don't:
+//   1. Stance-specific gating (can't create-child at the land root;
+//      home roots only by the home's being).
+//   2. Tree-ownership + circuit-breaker check via resolveTreeAccess.
+//   3. Map kernel-internal Error messages to IBP error codes so the
+//      wire ack carries a precise code instead of generic INTERNAL.
+//
+// Note: the verb-level Stance Authorization gate in seed/core/verbs.js
+// runs before these — they're the second layer covering tree-ownership
+// (which authorize() doesn't know about) and shape-conversion (kernel
+// helper Errors → IbpError on the wire).
+
+const KERNEL_ERROR_PATTERNS = {
+  createChild: [
+    [/cancelled by extension/i,        IBP_ERR.FORBIDDEN],
+    [/system nodes|reserved|invalid/i, IBP_ERR.INVALID_INPUT],
+    [/not found/i,                     IBP_ERR.NODE_NOT_FOUND],
+  ],
+  rename: [
+    [/system nodes/i,                              IBP_ERR.FORBIDDEN],
+    [/not found/i,                                 IBP_ERR.NODE_NOT_FOUND],
+    [/cannot|reserved|invalid|characters|empty/i,  IBP_ERR.INVALID_INPUT],
+  ],
+  setMeta: [
+    [/blocked/i,                                                  IBP_ERR.EXTENSION_BLOCKED],
+    [/Namespace violation|reserved/i,                             IBP_ERR.FORBIDDEN],
+    [/Invalid extension name|reserved key|nested too|too large/i, IBP_ERR.INVALID_INPUT],
+    [/document size/i,                                            IBP_ERR.DOCUMENT_SIZE_EXCEEDED],
+  ],
+};
+
+async function createNodeChild({ target, params, identity, kind }) {
+  const beingId = identity?.beingId || null;
+  const { name, type = null } = params || {};
+  if (!name || typeof name !== "string") {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
+  }
+
+  // Mongoose Node doc path: trust the caller, parent is the doc itself.
+  if (kind !== "stance") {
+    try {
+      const newNode = await createNode({
+        name,
+        type,
+        parentId: target?._id ? String(target._id) : null,
+        beingId,
+      });
+      return shapeNewNode(newNode);
+    } catch (err) {
+      throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
+    }
+  }
+
+  // Stance-arrival path.
+  if (target.isLandRoot) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "Cannot create-child at the land root. Create the tree under your home (~) instead.",
+    );
+  }
+  if (target.isHomeRoot) {
+    if (String(target.beingId) !== String(beingId)) {
+      throw new IbpError(IBP_ERR.FORBIDDEN, "Cannot create a tree root in another being's home");
+    }
+    try {
+      const newNode = await createNode({ name, type, isRoot: true, beingId });
+      return shapeNewNode(newNode);
+    } catch (err) {
+      throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
+    }
+  }
+  if (!target.nodeId) {
+    throw new IbpError(IBP_ERR.NODE_NOT_FOUND, "Resolved position has no nodeId");
+  }
+  try {
+    const newNode = await createNode({ name, type, parentId: target.nodeId, beingId });
+    return shapeNewNode(newNode);
+  } catch (err) {
+    throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.createChild);
+  }
+}
+
+function shapeNewNode(newNode) {
+  return {
+    nodeId:   String(newNode._id),
+    name:     newNode.name,
+    position: `${getLandDomain()}/${String(newNode._id)}`,
+  };
+}
+
+async function renameAtStance({ resolved, name, identity }) {
+  const beingId = identity?.beingId || null;
+  if (!resolved.nodeId) {
+    throw new IbpError(IBP_ERR.NODE_NOT_FOUND, "Resolved address has no nodeId");
+  }
+  const access = await resolveTreeAccess(resolved.nodeId, beingId);
+  if (!access?.ok || access.write !== true) {
+    throw new IbpError(IBP_ERR.FORBIDDEN, "Not authorized to rename at this place");
+  }
+  try {
+    await editNodeName({ nodeId: resolved.nodeId, newName: name, beingId });
+    return { nodeId: String(resolved.nodeId), name };
+  } catch (err) {
+    throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.rename);
+  }
+}
+
+async function setMetaAtStance({ resolved, namespace, data, merge, identity }) {
+  const beingId = identity?.beingId || null;
+  if (!resolved.nodeId) {
+    throw new IbpError(IBP_ERR.NODE_NOT_FOUND, "Resolved address has no nodeId");
+  }
+  const access = await resolveTreeAccess(resolved.nodeId, beingId);
+  if (!access?.ok || access.write !== true) {
+    throw new IbpError(IBP_ERR.FORBIDDEN, "Not authorized to write metadata at this place");
+  }
+  const node = await Node.findById(resolved.nodeId);
+  if (!node) {
+    throw new IbpError(IBP_ERR.NODE_NOT_FOUND, "Node disappeared between resolve and write");
+  }
+  try {
+    if (merge === false) {
+      await setExtMeta(node, namespace, data);
+    } else {
+      await mergeExtMeta(node, namespace, data);
+    }
+    return { written: true, nodeId: String(node._id), namespace, kind: "node" };
+  } catch (err) {
+    throw mapPatternsToIbpError(err, KERNEL_ERROR_PATTERNS.setMeta);
+  }
 }
 
 // Auto-register on import so the registry is populated whether the caller

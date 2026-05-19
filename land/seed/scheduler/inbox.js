@@ -1,4 +1,6 @@
-// TreeOS IBP — inbox primitives.
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Inbox primitives.
 //
 // The inbox is per-being-per-position metadata, stored under
 // `metadata.inbox.<beingId>` on the Node document. The kernel treats

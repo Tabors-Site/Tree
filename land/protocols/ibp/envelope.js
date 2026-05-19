@@ -23,7 +23,7 @@
 // `identity` is the caller's auth token (when applicable). Verb handlers
 // read it from the parsed envelope, no per-verb-field destructuring.
 
-import { PortalError, PORTAL_ERR } from "./errors.js";
+import { IbpError, IBP_ERR } from "../../seed/core/errors.js";
 
 const EMBODIMENT_SUFFIX = /@[a-z][a-z0-9-]*$/i;
 const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
@@ -58,7 +58,7 @@ export function stripBeingQualifier(address) {
  * Returns `{ id, verb, address, addressKind, payload, identity }`. The
  * verb handlers consume this directly; no per-verb-field extraction.
  *
- * Throws PortalError(INVALID_INPUT) when:
+ * Throws IbpError(INVALID_INPUT) when:
  *   - envelope is not an object
  *   - verb is missing or not one of see/do/summon/be
  *   - address is missing or empty
@@ -66,42 +66,62 @@ export function stripBeingQualifier(address) {
  */
 export function parseUnifiedEnvelope(msg) {
   if (!msg || typeof msg !== "object") {
-    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp envelope must be an object");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "ibp envelope must be an object");
   }
   const verb = typeof msg.verb === "string" ? msg.verb.toLowerCase() : null;
   if (!verb || !VALID_VERBS.has(verb)) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
       `ibp envelope must include verb (one of: ${[...VALID_VERBS].join(", ")})`,
     );
   }
   const address = typeof msg.address === "string" ? msg.address : null;
   if (!address || address.length === 0) {
-    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp envelope must include a non-empty `address`");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "ibp envelope must include a non-empty `address`");
   }
   const addressKind = classifyAddress(address);
 
-  // Per-verb address-kind contract.
+  // Per-verb address-kind contract. Bare-land addresses (no slash) are
+  // only valid for BE; every other verb needs at least the land-root
+  // marker — `<land>/` — to name a position. SUMMON additionally needs
+  // an @being qualifier.
   switch (verb) {
     case "see":
       if (addressKind !== "position" && addressKind !== "stance") {
-        throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp SEE address must be a position or stance");
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `ibp SEE address must be a position or stance, e.g. "${address}/" for the land root or "${address}/<nodeId>" for a node. ` +
+          `Got bare-land "${address}".`,
+        );
       }
       break;
     case "do":
       // Accept stance shape (informational) but normalize to position.
       if (addressKind !== "position" && addressKind !== "stance") {
-        throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp DO address must be a position (or stance; @being is stripped)");
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `ibp DO address must be a position. Use "${address}/" to target the land root ` +
+          `(e.g. for set-config / install-extension), or "${address}/<nodeId>" for a specific node. ` +
+          `Got bare-land "${address}".`,
+        );
       }
       break;
     case "summon":
       if (addressKind !== "stance") {
-        throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp SUMMON address must be a stance (position@being)");
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `ibp SUMMON address must be a stance (position@being), e.g. "${address}/@land-manager". ` +
+          `Got "${addressKind}" shape.`,
+        );
       }
       break;
     case "be":
       if (addressKind !== "stance" && addressKind !== "land") {
-        throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp BE address must be a stance or bare land");
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `ibp BE address must be a stance (e.g. "${address}@auth") or a bare land (e.g. "${address.split("/")[0]}"). ` +
+          `Got "${addressKind}" shape.`,
+        );
       }
       break;
   }

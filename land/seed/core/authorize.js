@@ -1,4 +1,6 @@
-// TreeOS IBP — Stance Authorization (Layer 4).
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Stance Authorization (Layer 4).
 //
 // One function gates every IBP verb call. The flow:
 //
@@ -36,7 +38,7 @@ import { getLandRootId } from "../landRoot.js";
 import { getAncestorChain } from "../tree/ancestorCache.js";
 import { deriveStanceProperties } from "../addressing/stanceProperties.js";
 import { lookupDefault } from "./defaultPermissions.js";
-import { PORTAL_ERR } from "../../protocols/ibp/errors.js";
+import { IBP_ERR } from "./errors.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Legacy defaults (kept for startup's seedDefaultStancePermissions).
@@ -479,4 +481,4 @@ export async function getAuthConfig() {
 }
 
 // Re-export for use in verb handlers.
-export { PORTAL_ERR };
+export { IBP_ERR };

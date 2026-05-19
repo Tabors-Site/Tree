@@ -18,7 +18,7 @@ What's locked:
 - Server protocol wire-level rules ([server-protocol.md](server-protocol.md)).
 - Identity-first session model ([identity.md](identity.md)).
 - Zone types and surfaces ([zones.md](zones.md), [surfaces.md](surfaces.md)).
-- IBPA parser ([../lib/ibp-address.js](../lib/ibp-address.js)).
+- IBPA parser ([../../land/seed/addressing/address.js](../../land/seed/addressing/address.js)). The substrate owns the grammar; Portal consumes it via `@ibp-address`.
 
 Done means anyone joining can read these docs before writing the first new line of code. The format contracts (IBPA + Position Description + four-verb envelope + SUMMON message + inbox shape) are the load-bearing pieces.
 

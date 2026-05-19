@@ -11,7 +11,6 @@ const ALGORITHM = "Ed25519";
 const TOKEN_EXPIRY = "5m";
 
 let landIdentity = null;
-let cachedLandUrl = null;
 
 /**
  * Strip protocol, port, and trailing slashes from a domain string.
@@ -23,26 +22,10 @@ function cleanDomain(raw) {
   return d;
 }
 
-/**
- * Get the full base URL for this land (e.g. "http://localhost:3000" or "https://treeos.ai").
- * Derived from LAND_DOMAIN + PORT. Falls back to TREE_FRONTEND_DOMAIN for backward compat.
- */
-export function getLandUrl() {
-  if (cachedLandUrl) return cachedLandUrl;
-  // Backward compat: if TREE_FRONTEND_DOMAIN is set explicitly, use it
-  if (process.env.TREE_FRONTEND_DOMAIN) {
-    cachedLandUrl = process.env.TREE_FRONTEND_DOMAIN.replace(/\/+$/, "");
-    return cachedLandUrl;
-  }
-  const domain = cleanDomain(process.env.LAND_DOMAIN || "localhost");
-  const port = process.env.PORT || 80;
-  const isLocal = domain === "localhost" || domain.startsWith("localhost") || domain.startsWith("127.") || domain.startsWith("192.168.") || domain.startsWith("10.") || domain.endsWith(".lan") || domain.endsWith(".local") || !domain.includes(".");
-  const protocol = isLocal ? "http" : "https";
-  // Only append port for local domains. Public domains are behind reverse proxies.
-  const portSuffix = isLocal && port != 80 && port != 443 ? `:${port}` : "";
-  cachedLandUrl = `${protocol}://${domain}${portSuffix}`;
-  return cachedLandUrl;
-}
+// getLandUrl moved to seed/landConfig.js (it's a seed-level fact about
+// this land, not a canopy concern). Re-exported here so existing callers
+// continue to import it from this module.
+export { getLandUrl } from "../../../seed/landConfig.js";
 
 /**
  * Get or create the land identity (keypair + metadata).

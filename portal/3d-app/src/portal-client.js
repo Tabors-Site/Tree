@@ -1,45 +1,48 @@
 // TreeOS Portal client. Speaks IBP (Inter-Being Protocol).
 //
-// Wraps a Socket.IO connection and exposes typed methods for IBP's four
-// verbs (see / do / summon / be). The client speaks only IBP, never raw HTTP
-// routes (except the single /.well-known/treeos-portal bootstrap before
-// a socket is open).
+// Wraps a Socket.IO connection and exposes typed methods for the four
+// IBP verbs (see / do / summon / be). Speaks only IBP, never raw HTTP
+// (except the single /.well-known/treeos-portal bootstrap before a
+// socket is open).
 //
-// See ../../docs/protocol.md for the conceptual model and
-// ../../docs/server-protocol.md for the wire contract.
+// Wire shape per [[project_ibp_wire_shape]] +
+// [[project_protocol_transport_separation]]:
+//
+//   socket.emit("ibp", { id, verb, address, payload, identity? }, ack)
+//
+// Async updates the server pushes back:
+//   "ibp:update"           SUMMON replies, keyed by correlation id
+//   "descriptor:patch"     live SEE patches  ─┐
+//   "descriptor:replace"   full re-render    ├ (will fold into ibp:update
+//   "descriptor:invalidate" tear down        ─┘  when live.js unifies)
 
 import { io } from "socket.io-client";
 
 export class PortalClient {
   constructor({ landUrl, token, useProxy, onConnectionChange, onSummon, onDescriptorEvent }) {
-    this.landUrl = landUrl;
-    this.token = token;
-    this.useProxy = !!useProxy; // dev: use Vite proxy (relative URLs, same-origin)
-    this.socket = null;
-    this.connected = false;
-    this._reqCounter = 0;
-    this._onConnectionChange = onConnectionChange || (() => {});
-    this._onSummon = onSummon || (() => {});
-    this._onDescriptorEvent = onDescriptorEvent || (() => {});
+    this.landUrl              = landUrl;
+    this.token                = token;
+    this.useProxy             = !!useProxy;
+    this.socket               = null;
+    this.connected            = false;
+    this._reqCounter          = 0;
+    this._onConnectionChange  = onConnectionChange  || (() => {});
+    this._onSummon            = onSummon            || (() => {});
+    this._onDescriptorEvent   = onDescriptorEvent   || (() => {});
   }
 
-  // Listener for async SUMMON responses. The server emits `ibp:summon`
-  // with a response envelope when an async being completes summoning.
-  setSummonHandler(handler) {
-    this._onSummon = handler || (() => {});
-  }
+  /** Async SUMMON updates (server emits `ibp:update`). */
+  setSummonHandler(handler) { this._onSummon = handler || (() => {}); }
 
-  // Listener for live SEE updates. The server emits `descriptor:patch`,
-  // `descriptor:replace`, or `descriptor:invalidate` for any position
-  // the socket has subscribed to via `see(address, { live: true })`.
-  // The handler receives { kind: "patch"|"replace"|"invalidate", payload }.
-  setDescriptorEventHandler(handler) {
-    this._onDescriptorEvent = handler || (() => {});
-  }
+  /**
+   * Live SEE updates. Handler receives `{ kind, payload }` where kind is
+   * "patch" | "replace" | "invalidate".
+   */
+  setDescriptorEventHandler(handler) { this._onDescriptorEvent = handler || (() => {}); }
 
   // ────────────────────────────────────────────────────────────────
-  // Bootstrap: the one HTTP call before WS opens.
-  // GET /.well-known/treeos-portal returns { ws, protocolVersion, land }.
+  // Bootstrap (one HTTP call before WS opens).
+  // GET /.well-known/treeos-portal → { ws, protocolVersion, land }
   // ────────────────────────────────────────────────────────────────
 
   static async bootstrap(landUrl, { useProxy } = {}) {
@@ -50,9 +53,7 @@ export class PortalClient {
     const timeout = setTimeout(() => controller.abort(), 10000);
     try {
       const res = await fetch(url, { signal: controller.signal });
-      if (!res.ok) {
-        throw new Error(`Portal bootstrap failed: HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Portal bootstrap failed: HTTP ${res.status}`);
       return await res.json();
     } catch (err) {
       if (err.name === "AbortError") {
@@ -72,46 +73,26 @@ export class PortalClient {
     if (this.socket) return;
     const target = this.useProxy ? undefined : this.landUrl;
     this.socket = io(target, {
-      auth: { token: this.token, client: "portal", instance: "main" },
-      transports: ["websocket"],
+      auth:            { token: this.token, client: "portal", instance: "main" },
+      transports:      ["websocket"],
       withCredentials: false,
     });
 
-    this.socket.on("connect", () => {
-      this.connected = true;
-      this._onConnectionChange("connected");
+    this.socket.on("connect",       () => { this.connected = true;  this._onConnectionChange("connected"); });
+    this.socket.on("disconnect",    (reason) => { this.connected = false; this._onConnectionChange("disconnected", reason); });
+    this.socket.on("connect_error", (err)    => { this.connected = false; this._onConnectionChange("error", err?.message); });
+
+    // Async SUMMON updates. Payload shape: { correlation, content, ... }.
+    this.socket.on("ibp:update", (update) => {
+      try { this._onSummon(update); }
+      catch (err) { console.warn("[portal] ibp:update handler threw:", err); }
     });
 
-    this.socket.on("disconnect", (reason) => {
-      this.connected = false;
-      this._onConnectionChange("disconnected", reason);
-    });
-
-    this.socket.on("connect_error", (err) => {
-      this.connected = false;
-      this._onConnectionChange("error", err?.message);
-    });
-
-    this.socket.on("ibp:summon", (entry) => {
-      try { this._onSummon(entry); } catch (err) {
-        console.warn("[3D] summon handler threw:", err);
-      }
-    });
-
-    // Live SEE events. The server emits these for any position the
-    // socket has subscribed to via see(addr, { live: true }).
-    this.socket.on("descriptor:patch", (payload) => {
-      try { this._onDescriptorEvent({ kind: "patch", payload }); }
-      catch (err) { console.warn("[3D] descriptor:patch handler threw:", err); }
-    });
-    this.socket.on("descriptor:replace", (payload) => {
-      try { this._onDescriptorEvent({ kind: "replace", payload }); }
-      catch (err) { console.warn("[3D] descriptor:replace handler threw:", err); }
-    });
-    this.socket.on("descriptor:invalidate", (payload) => {
-      try { this._onDescriptorEvent({ kind: "invalidate", payload }); }
-      catch (err) { console.warn("[3D] descriptor:invalidate handler threw:", err); }
-    });
+    // Live SEE updates. Still on the per-event names until live.js
+    // unifies into ibp:update.
+    this.socket.on("descriptor:patch",      (payload) => safeCall(this._onDescriptorEvent, { kind: "patch",      payload }));
+    this.socket.on("descriptor:replace",    (payload) => safeCall(this._onDescriptorEvent, { kind: "replace",    payload }));
+    this.socket.on("descriptor:invalidate", (payload) => safeCall(this._onDescriptorEvent, { kind: "invalidate", payload }));
   }
 
   disconnect() {
@@ -123,111 +104,103 @@ export class PortalClient {
   }
 
   // ────────────────────────────────────────────────────────────────
-  // Verb methods (stubbed; wired in subsequent phases)
-  //
-  // Each verb's address field is named explicitly. See ../../docs/protocol.md.
+  // Verbs — every one ships through the unified `ibp` event.
   // ────────────────────────────────────────────────────────────────
 
   /**
-   * SEE: observe a place. Returns a Position Description.
+   * SEE: observe a place. Returns a Position Descriptor (or the
+   * discovery payload for `<land>/.discovery`).
    *
-   * Pass `address` as a string and the client decides whether to send it as
-   * `position` or `stance` based on whether it contains an being
-   * qualifier (`@<name>`). Use the explicit form to force one or the other.
-   *
-   * @param {string|object} address  position string, stance string, or { position }/{ stance }
-   * @param {object} [options]  { live: boolean }
-   * @returns {Promise<object>} Position Description (one-shot) or initial descriptor (live)
+   * @param {string} address  position or stance ("<land>/<path>", "<land>/<path>@<being>", "<land>")
+   * @param {object} [options] { live?: boolean }
    */
-  async see(address, options = {}) {
-    const field = _toAddressField(address);
-    return this._emitWithAck("ibp:see", { ...field, ...options });
+  async see(address, { live = false } = {}) {
+    return this._call("see", normalize(address), live ? { live: true } : {});
   }
 
   /**
-   * DO: mutate the world at a position.
+   * DO: mutate at a position. Stance addresses are accepted; the server
+   * strips the @being qualifier internally.
    *
-   * Accepts a position string. If a string with a trailing @being
-   * qualifier is passed, the qualifier is stripped before sending; DO
-   * always targets a position.
-   *
-   * @param {string} position  the position address (qualifier stripped if present)
-   * @param {string} action    named action (create-child, rename, ...) or set-meta
-   * @param {object} payload   action-specific
+   * @param {string} address  position (or stance; @being is stripped server-side)
+   * @param {string} action   registered op name ("create-child", "set-meta", "food:log-meal", ...)
+   * @param {object} [args]   op-specific arguments
    */
-  async do(position, action, payload = {}) {
-    if (typeof position !== "string" || position.length === 0) {
-      throw new Error("DO requires a position address (string)");
+  async do(address, action, args = {}) {
+    if (typeof action !== "string" || !action) {
+      throw new Error("DO requires an action (string)");
     }
-    const stripped = position.replace(/@[a-z][a-z0-9-]*$/i, "");
-    return this._emitWithAck("ibp:do", { position: stripped, action, payload });
+    return this._call("do", normalize(address), { action, args });
   }
 
   /**
    * SUMMON: deliver a message to a being's inbox and wake them.
    *
-   * Requires a stance (being qualifier mandatory).
-   *
-   * @param {string} stance   position@being
-   * @param {object} message  { from, content, intent, correlation, inReplyTo?, attachments? }
+   * @param {string} stance   "<land>/<path>@<being>" — being qualifier mandatory
+   * @param {object} message  { from, content, intent?, correlation?, inReplyTo?, attachments? }
+   * @param {object} [threading]  optional { rootCorrelation?, priority?, activeRole? }
    */
-  async summon(stance, message) {
-    // SUMMON can route through runChat() on the server (the bridge for
-    // non-native beings), which means a full LLM round-trip. Give
-    // it room — 90s — instead of the default 15s used by SEE/DO/BE.
-    return this._emitWithAck("ibp:summon", { stance, message }, { timeoutMs: 90000 });
+  async summon(stance, message, threading = {}) {
+    if (!message || typeof message !== "object") {
+      throw new Error("SUMMON requires a message object");
+    }
+    const payload = { message, ...threading };
+    // SUMMON can route through runChat() (LLM round-trip); give it 90s.
+    return this._call("summon", normalize(stance), payload, { timeoutMs: 90000 });
   }
 
   /**
-   * BE: manage be-er identity.
+   * BE: identity operations on a stance / land.
    *
-   * Accepts either a stance (full form, e.g. `<land>/@auth` or a held
-   * stance like `<land>/@<username>`) or a bare land domain (shorthand
-   * for register and credential-based claim). For release and switch,
-   * use the held stance.
-   *
-   * @param {string} operation              register | claim | release | switch
-   * @param {string|object} addressOrField  bare land like "treeos.ai",
-   *                                        a stance like "treeos.ai/@auth",
-   *                                        or { stance } / { land }
-   * @param {object} [extra]                operation-specific fields (payload, from, ...)
+   * @param {string} op           "register" | "claim" | "release" | "switch"
+   * @param {string} address      stance ("<land>/@auth", "<land>/@<name>") or bare land ("<land>")
+   * @param {object} [credentials] op-specific fields ({ name, password, ... })
    */
-  async be(operation, addressOrField, extra = {}) {
-    const addressField = _toBeAddressField(addressOrField);
-    return this._emitWithAck("ibp:be", { operation, ...addressField, ...extra });
+  async be(op, address, credentials = {}) {
+    if (typeof op !== "string" || !op) {
+      throw new Error("BE requires an op (string)");
+    }
+    return this._call("be", normalize(address), { op, ...credentials });
   }
 
   // ────────────────────────────────────────────────────────────────
   // Internals
   // ────────────────────────────────────────────────────────────────
 
-  _nextId() {
-    return `r-${++this._reqCounter}`;
-  }
+  _nextId() { return `r-${++this._reqCounter}`; }
 
-  _emitWithAck(op, payload, { timeoutMs = 15000 } = {}) {
+  /**
+   * The single emit path. Every verb composes the unified envelope and
+   * waits for the socket.io ack. The server's ack shape is uniform:
+   *
+   *   { id, status: "ok", data }            on success
+   *   { id, status: "error", error: {...} } on failure
+   */
+  _call(verb, address, payload, { timeoutMs = 15000 } = {}) {
     return new Promise((resolve, reject) => {
       if (!this.socket || !this.connected) {
         reject(new Error("Portal socket not connected"));
         return;
       }
       const id = this._nextId();
-      const timeout = setTimeout(() => {
-        const err = new Error(`${op} timed out (or not wired on this land)`);
-        err.code = "VERB_NOT_WIRED";
+      const timer = setTimeout(() => {
+        const err = new Error(`ibp:${verb} timed out`);
+        err.code = "TIMEOUT";
         reject(err);
       }, timeoutMs);
-      this.socket.emit(op, { id, ...payload }, (response) => {
-        clearTimeout(timeout);
+
+      const envelope = { id, verb, address, payload };
+      this.socket.emit("ibp", envelope, (response) => {
+        clearTimeout(timer);
         if (!response) {
-          const err = new Error(`${op} returned no response`);
-          err.code = "VERB_NOT_WIRED";
+          const err = new Error(`ibp:${verb} returned no response`);
+          err.code = "NO_RESPONSE";
           reject(err);
           return;
         }
         if (response.status === "error") {
-          const err = new Error(response.error?.message || `${op} failed`);
-          err.code = response.error?.code;
+          const err = new Error(response.error?.message || `ibp:${verb} failed`);
+          err.code   = response.error?.code;
           err.detail = response.error?.detail;
           reject(err);
           return;
@@ -243,40 +216,19 @@ export class PortalClient {
 // ────────────────────────────────────────────────────────────────
 
 /**
- * Route a string address to its protocol field name. A string ending in
- * `@<being>` becomes `{ stance }`; without it becomes `{ position }`.
- * Callers may pass an explicit object to force one or the other.
+ * Coerce an address into a string. Accepts a string directly, or an
+ * object with a `.position`, `.stance`, `.land`, or `.value` field
+ * (legacy callers).
  */
-function _toAddressField(address) {
-  if (typeof address === "string") {
-    const hasEmbodiment = /@[a-z][a-z0-9-]*$/i.test(address);
-    return hasEmbodiment ? { stance: address } : { position: address };
-  }
+function normalize(address) {
+  if (typeof address === "string") return address;
   if (address && typeof address === "object") {
-    if ("position" in address) return { position: address.position };
-    if ("stance" in address) return { stance: address.stance };
+    return address.position || address.stance || address.land || address.value || null;
   }
-  throw new Error("Portal verb requires a position or stance address");
+  return null;
 }
 
-/**
- * Route a BE address to its protocol field name. A bare domain (no
- * slash, no @) becomes `{ land }`; anything with `@` becomes `{ stance }`.
- * Callers may pass an explicit object to force one or the other.
- */
-function _toBeAddressField(address) {
-  if (typeof address === "string") {
-    const hasEmbodiment = /@[a-z][a-z0-9-]*$/i.test(address);
-    const looksLikeBareDomain = !address.includes("/") && !address.includes("@");
-    if (hasEmbodiment) return { stance: address };
-    if (looksLikeBareDomain) return { land: address };
-    throw new Error(
-      `BE requires either a bare land domain ("treeos.ai") or a stance with @being ("treeos.ai/@auth"). Got: ${address}`,
-    );
-  }
-  if (address && typeof address === "object") {
-    if ("stance" in address) return { stance: address.stance };
-    if ("land" in address) return { land: address.land };
-  }
-  throw new Error("BE requires a stance or land address");
+function safeCall(fn, arg) {
+  try { fn(arg); }
+  catch (err) { console.warn("[portal] handler threw:", err); }
 }

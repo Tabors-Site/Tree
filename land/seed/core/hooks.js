@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 import log from "./log.js";
 import { getLandConfigValue } from "../landConfig.js";
 /**

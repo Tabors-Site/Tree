@@ -1,4 +1,6 @@
-// TreeOS IBP — role registry.
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Role registry.
 //
 // A **role** is the unit of behavior a being carries when summoned.
 // One concept, one registration. The role definition combines:
@@ -7,7 +9,7 @@
 //     - honoredIntents: SUMMON intents accepted ("chat" | "place" |
 //       "query" | "be"). Mismatched intents → INVALID_INTENT.
 //     - respondMode: "sync" | "async" | "none".
-//     - triggerOn: ["message"] (Phase 4); "hook" / "schedule" later.
+//     - triggerOn: ["message"]; "hook" / "schedule" on the roadmap.
 //     - summon(message, ctx): the function the kernel invokes.
 //
 //   **Behavior contract** (what the LLM does when the role runs an

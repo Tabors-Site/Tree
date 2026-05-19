@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 // Database connection. Every query in the system flows through this.
 // Connection state is monitored. Transitions are logged. isDbHealthy()
 // is the single source of truth for DB availability across the kernel.

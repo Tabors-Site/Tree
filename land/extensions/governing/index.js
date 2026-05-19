@@ -427,6 +427,8 @@ export async function init(core) {
                 homeNodeId:    String(fresh._id),
               });
               // Phase 3 migration: verb-surface merge into beings ns.
+              // Backfill runs at boot with no caller identity; pass
+              // internal:true to bypass stance-auth (kernel-trusted).
               await core.do(fresh, "set-meta", {
                 namespace: "beings",
                 data: {
@@ -437,7 +439,7 @@ export async function init(core) {
                   },
                 },
                 merge: true,
-              });
+              }, { internal: true });
             }
             if (!permsPresent && typeof permissions === "function") {
               // The trio backfills want scopeRulerId; ruler backfills
@@ -450,7 +452,7 @@ export async function init(core) {
                 namespace: "permissions",
                 data: permissions(scopeId),
                 merge: true,
-              });
+              }, { internal: true });
             }
             written++;
           }

@@ -22,7 +22,7 @@
 // runs there. See [[project_four_verbs_one_execution]].
 
 import log from "../../../seed/core/log.js";
-import { PortalError, PORTAL_ERR, isPortalError } from "../errors.js";
+import { IbpError, IBP_ERR, isIbpError } from "../../../seed/core/errors.js";
 import { ackOk, ackError } from "../envelope.js";
 import { beVerb } from "../../../seed/core/verbs.js";
 
@@ -48,10 +48,10 @@ export async function handleBe(socket, env, ack) {
 
     return ackOk(ack, id, result);
   } catch (err) {
-    if (isPortalError(err)) {
+    if (isIbpError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("IBP", `ibp BE failed: ${err.message}`);
-    return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
+    log.error("IBP", `BE failed: ${err.message}`);
+    return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }

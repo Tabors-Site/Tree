@@ -27,38 +27,26 @@
 // per-extension route file needed.
 
 import express from "express";
-import jwt from "jsonwebtoken";
 import { dispatchIbp } from "../../../protocols/ibp/protocol.js";
 import { verifyIncoming } from "../../../protocols/ibp/canopy/dispatch.js";
-
-if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required");
-const JWT_SECRET = process.env.JWT_SECRET;
+import { decodeToken } from "../../../seed/core/identity.js";
 
 const router = express.Router();
 
 /**
  * Optionally extract identity from the request. Returns
- * { beingId, username, jwt? } or null. Never throws on bad/missing tokens.
+ * `{ beingId, name, jwt }` or `null` for missing / invalid tokens.
+ * Never throws.
  */
 function extractIdentity(req) {
-  let token = null;
   const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith("Bearer ")) {
-    token = authHeader.slice(7).trim();
-  } else if (req.cookies?.token) {
-    token = req.cookies.token;
-  }
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7).trim()
+    : (req.cookies?.token || null);
   if (!token) return null;
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    return {
-      beingId: decoded.beingId,
-      name:    decoded.name,
-      jwt:     token,
-    };
-  } catch {
-    return null;
-  }
+  const decoded = decodeToken(token);
+  if (!decoded) return null;
+  return { beingId: decoded.beingId, name: decoded.name, jwt: token };
 }
 
 /**

@@ -1,4 +1,6 @@
-// TreeOS IBP — auth-being.
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// auth-being.
 //
 // The auth-being is the land's welcome character. It is the only stance
 // that accepts requests from unestablished requesters. It processes
@@ -34,7 +36,7 @@ import {
   generateToken,
 } from "../core/identity.js";
 import { getLandRootId } from "../landRoot.js";
-import { PortalError, PORTAL_ERR } from "../../protocols/ibp/errors.js";
+import { IbpError, IBP_ERR } from "../core/errors.js";
 import { getLandDomain } from "../addressing/address.js";
 
 const TREEOS_AUTH_WELCOME =
@@ -56,10 +58,10 @@ export const authBeing = Object.freeze({
     const name = payload?.name ?? payload?.username;
     const { password } = payload || {};
     if (!name || typeof name !== "string") {
-      throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`name` is required");
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
     }
     if (!password || typeof password !== "string") {
-      throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`password` is required");
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "`password` is required");
     }
 
     // ── First-being bootstrap ──
@@ -111,8 +113,8 @@ export const authBeing = Object.freeze({
     const hookData = { name, password, req: ctx?.req, handled: false };
     const hookResult = await hooks.run("beforeRegister", hookData);
     if (hookResult?.cancelled) {
-      const code = hookResult.timedOut ? PORTAL_ERR.INTERNAL : PORTAL_ERR.FORBIDDEN;
-      throw new PortalError(code, hookResult.reason || "Registration blocked");
+      const code = hookResult.timedOut ? IBP_ERR.INTERNAL : IBP_ERR.FORBIDDEN;
+      throw new IbpError(code, hookResult.reason || "Registration blocked");
     }
 
     // Subsequent humans register via the auth-being's flow: they
@@ -163,10 +165,10 @@ export const authBeing = Object.freeze({
     const name = payload?.name ?? payload?.username;
     const { password } = payload || {};
     if (!name || typeof name !== "string") {
-      throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`name` is required");
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
     }
     if (!password || typeof password !== "string") {
-      throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`password` is required");
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "`password` is required");
     }
     const user = await findBeingByName(name);
 
@@ -178,7 +180,7 @@ export const authBeing = Object.freeze({
       password,
     );
     if (!user || user.isRemote || !ok) {
-      throw new PortalError(PORTAL_ERR.UNAUTHORIZED, "Invalid credentials");
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "Invalid credentials");
     }
 
     const identityToken = generateToken(user);
@@ -191,38 +193,38 @@ export const authBeing = Object.freeze({
   },
 
   async release(_payload, _ctx) {
-    // Tokens are stateless JWTs in Pass 1; release is client-side
-    // (drop the token, clear the cookie). A later phase may add a
-    // server-side revocation list keyed by jti. The protocol-level
-    // contract is honored: a released token should not be used again
-    // by the client.
+    // Tokens are stateless JWTs; release is client-side (drop the
+    // token, clear the cookie). A server-side revocation list keyed
+    // by jti is on the roadmap. The protocol-level contract is
+    // honored: a released token should not be used again by the
+    // client.
     return { released: true };
   },
 
   async switch(payload, _ctx) {
     const { from, to } = payload || {};
     if (!from || typeof from !== "string") {
-      throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`from` (current stance) is required");
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "`from` (current stance) is required");
     }
     if (!to || typeof to !== "string") {
-      throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`to` (target stance) is required");
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "`to` (target stance) is required");
     }
-    // Switch is purely a client-coordination signal in Pass 1. The
-    // server has no per-session state to update.
+    // Switch is purely a client-coordination signal. The server has
+    // no per-session state to update.
     return { active: to, from };
   },
 });
 
 function mapKernelError(err) {
   if (err && err.name === "ProtocolError" && err.errCode) {
-    return new PortalError(err.errCode, err.message || "auth operation failed");
+    return new IbpError(err.errCode, err.message || "auth operation failed");
   }
   const msg = err?.message || "auth operation failed";
   if (/already taken|conflict/i.test(msg)) {
-    return new PortalError(PORTAL_ERR.RESOURCE_CONFLICT, msg, { field: "username" });
+    return new IbpError(IBP_ERR.RESOURCE_CONFLICT, msg, { field: "username" });
   }
   if (/Invalid username|Invalid password|Username|Password/i.test(msg)) {
-    return new PortalError(PORTAL_ERR.INVALID_INPUT, msg);
+    return new IbpError(IBP_ERR.INVALID_INPUT, msg);
   }
-  return new PortalError(PORTAL_ERR.INTERNAL, msg);
+  return new IbpError(IBP_ERR.INTERNAL, msg);
 }

@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 // Land configuration. Single source of truth for all runtime settings.
 // Stored in the .config system node's metadata Map.
 // Every getLandConfigValue and setLandConfigValue in the entire system
@@ -10,6 +10,43 @@ import { SYSTEM_ROLE } from "./core/protocol.js";
 
 let configCache = null;
 let initialized = false;
+let cachedLandUrl = null;
+
+// ─────────────────────────────────────────────────────────────────────────
+// LAND URL
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Full base URL for this land — e.g. "http://localhost:3000" or
+ * "https://treeos.ai". Derived from LAND_DOMAIN + PORT, with
+ * TREE_FRONTEND_DOMAIN as an explicit override.
+ *
+ * The port suffix is only appended for local domains; public domains
+ * sit behind reverse proxies that handle ports.
+ */
+export function getLandUrl() {
+  if (cachedLandUrl) return cachedLandUrl;
+  if (process.env.TREE_FRONTEND_DOMAIN) {
+    cachedLandUrl = process.env.TREE_FRONTEND_DOMAIN.replace(/\/+$/, "");
+    return cachedLandUrl;
+  }
+  const raw = process.env.LAND_DOMAIN || "localhost";
+  const domain = raw.replace(/^https?:\/\//, "").replace(/\/+$/, "").replace(/:\d+$/, "");
+  const port = process.env.PORT || 80;
+  const isLocal =
+    domain === "localhost"          ||
+    domain.startsWith("localhost")  ||
+    domain.startsWith("127.")       ||
+    domain.startsWith("192.168.")   ||
+    domain.startsWith("10.")        ||
+    domain.endsWith(".lan")         ||
+    domain.endsWith(".local")       ||
+    !domain.includes(".");
+  const protocol = isLocal ? "http" : "https";
+  const portSuffix = isLocal && port != 80 && port != 443 ? `:${port}` : "";
+  cachedLandUrl = `${protocol}://${domain}${portSuffix}`;
+  return cachedLandUrl;
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // PROTECTED KEYS

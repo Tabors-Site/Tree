@@ -71,6 +71,7 @@ export async function appendPlanApproval({
   status = "approved",
   supersedes = null,
   reason = null,
+  identity = null,
   // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
   core,
 }) {
@@ -104,7 +105,7 @@ export async function appendPlanApproval({
     namespace: NS,
     data: { planApprovals: [...existing, entry] },
     merge: true,
-  });
+  }, { identity });
 
   // Fire ratification hook so Pass 2 courts and dashboard listeners
   // can observe plan approvals the same way they observe contract

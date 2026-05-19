@@ -82,7 +82,7 @@ export default {
             },
           },
           merge: true,
-        });
+        }, { identity });
       }
       log.info("Coders",
         `✨ materialized coder being ${coderBeingId.slice(0, 8)} ` +

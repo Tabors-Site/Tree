@@ -1,11 +1,19 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
-import log from "../../seed/core/log.js";
-import { hooks } from "../../seed/core/hooks.js";
-import { getLandConfigValue } from "../../seed/landConfig.js";
-// ws/sessionRegistry.js
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Session registry.
+//
 // Tracks all active sessions per being and gates iframe navigation so only
 // the designated "active navigator" session can redirect the user's view.
 // All session creation should go through createSession().
+//
+// Lives in seed because a session is a "being-reach into the land" — the
+// concept is transport-agnostic. A web tab, a CLI process, and a future
+// CLI carrier all create sessions through the same API; transports just
+// register their session-type strings via registerSessionType.
+
+import log from "../core/log.js";
+import { hooks } from "../core/hooks.js";
+import { getLandConfigValue } from "../landConfig.js";
 
 import { v4 as uuidv4 } from "uuid";
 

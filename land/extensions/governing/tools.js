@@ -199,7 +199,8 @@ async function nextEmissionOrdinal(planNodeId) {
  * Carries the structured emission in metadata.governing.emission.
  * Returns the created node.
  */
-async function createPlanEmission({ planNodeId, ordinal, payload, beingId, core }) {
+async function createPlanEmission({ planNodeId, ordinal, payload, beingId, identity = null, core }) {
+  const authIdentity = identity || (beingId ? { beingId } : null);
   // Slug derived from the Planner's reasoning headline. Walking the
   // tree page tells you what each emission is about without
   // expanding it. Falls back to "emission-N" when reasoning is empty
@@ -215,7 +216,7 @@ async function createPlanEmission({ planNodeId, ordinal, payload, beingId, core 
       name,
       type: "plan-emission",
       beingId,
-    });
+    }, { identity: authIdentity });
   } catch (err) {
     log.debug("Governing", `core.do(create-child) failed for plan-emission: ${err.message}; falling back to direct insert`);
   }
@@ -258,7 +259,7 @@ async function createPlanEmission({ planNodeId, ordinal, payload, beingId, core 
           stepsCount: payload.steps.length,
         },
         merge: true,
-      });
+      }, { identity: authIdentity });
     }
   } catch (err) {
     log.warn("Governing", `failed to stamp plan-emission metadata: ${err.message}`);

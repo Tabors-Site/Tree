@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 import Node from "../models/node.js";
 import Artifact from "../models/artifact.js";
 import { hooks } from "../core/hooks.js";

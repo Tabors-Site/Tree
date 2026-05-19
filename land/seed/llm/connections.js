@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 /**
  * LLM Connection Management
  *
@@ -127,9 +127,11 @@ async function resolveAndValidateHost(hostname) {
  * Validate and sanitize a base URL. Returns the cleaned URL.
  *
  * Admin-bypass retired 2026-05-18. The SSRF + private-host gate applies
- * to every connection now. Local-LLM-style usage (Ollama, etc.) requires
- * adding the host to the land's `allowedLlmDomains` config; stance
- * authorization will eventually grant per-stance exceptions.
+ * to every connection now. Local-LLM-style usage (Ollama, internal API
+ * gateways, etc.) requires the operator to opt in by adding the host
+ * to `allowedLlmDomains` land config. Hosts in that list bypass the
+ * private-IP block — that's the explicit opt-in. Without the list,
+ * private/internal addresses are always rejected.
  */
 function validateBaseUrl(baseUrl) {
   let parsed;
@@ -142,30 +144,48 @@ function validateBaseUrl(baseUrl) {
   if (!["http:", "https:"].includes(parsed.protocol)) {
     throw new Error("Only http and https URLs are allowed");
   }
-
   if (parsed.username || parsed.password) {
     throw new Error("URLs with credentials are not allowed");
   }
 
   const hostname = parsed.hostname.toLowerCase();
 
+  // The operator's allowlist wins. If the hostname is explicitly
+  // listed, accept it regardless of whether it's a private IP or
+  // internal host — they've opted into that target.
+  if (hostInAllowedLlmDomains(hostname)) {
+    return parsed.href.replace(/\/+$/, "");
+  }
+
+  // Otherwise apply the SSRF gate.
   if (BLOCKED_HOSTS.has(hostname)) {
     throw new Error("This base URL is not allowed");
   }
   if (isBlockedIp(hostname)) {
-    throw new Error("Local/private network URLs are not allowed");
+    throw new Error(
+      "Local/private network URLs are not allowed. Add the host to " +
+      "`allowedLlmDomains` in land config to opt in (e.g. for Ollama " +
+      "or a LAN-hosted LLM).",
+    );
   }
 
-  // Operator whitelist: when set, only listed domains are allowed.
+  // When a non-empty allowlist exists and the host isn't on it, reject.
+  // (Empty/missing allowlist means no restriction beyond the SSRF gate.)
   const allowed = getLandConfigValue("allowedLlmDomains");
   if (Array.isArray(allowed) && allowed.length > 0) {
-    const match = allowed.some(d => hostname === d.toLowerCase() || hostname.endsWith("." + d.toLowerCase()));
-    if (!match) {
-      throw new Error(`LLM domain "${hostname}" is not in this land's allowed list.`);
-    }
+    throw new Error(`LLM domain "${hostname}" is not in this land's allowed list.`);
   }
 
   return parsed.href.replace(/\/+$/, "");
+}
+
+function hostInAllowedLlmDomains(hostname) {
+  const allowed = getLandConfigValue("allowedLlmDomains");
+  if (!Array.isArray(allowed) || allowed.length === 0) return false;
+  return allowed.some(d => {
+    const low = d.toLowerCase();
+    return hostname === low || hostname.endsWith("." + low);
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -272,18 +292,24 @@ export async function addLlmConnection(beingId, { name, baseUrl, apiKey, model }
 
   const safeName = validateName(name);
   const safeModel = validateModel(model);
-  validateApiKey(apiKey, true);
+  // apiKey is optional — local LLMs (Ollama, llama.cpp, etc.) commonly
+  // accept no auth. Validation still enforces length and string type.
+  validateApiKey(apiKey, false);
   const safeBaseUrl = validateBaseUrl(baseUrl);
 
   // SSRF protection — every connection validated against the allowlist.
+  // resolveAndValidateHost respects allowedLlmDomains the same way
+  // validateBaseUrl does (hosts on the allowlist bypass the IP block).
   const hostname = new URL(safeBaseUrl).hostname;
-  await resolveAndValidateHost(hostname);
+  if (!hostInAllowedLlmDomains(hostname)) {
+    await resolveAndValidateHost(hostname);
+  }
 
   const conn = await LlmConnection.create({
     beingId,
     name: safeName,
     baseUrl: safeBaseUrl,
-    encryptedApiKey: encrypt(apiKey),
+    encryptedApiKey: apiKey ? encrypt(apiKey) : null,
     model: safeModel,
   });
 
@@ -308,7 +334,9 @@ export async function updateLlmConnection(beingId, connectionId, { name, baseUrl
   if (baseUrl !== undefined) {
     const safeBaseUrl = validateBaseUrl(baseUrl);
     const hostname = new URL(safeBaseUrl).hostname;
-    await resolveAndValidateHost(hostname);
+    if (!hostInAllowedLlmDomains(hostname)) {
+      await resolveAndValidateHost(hostname);
+    }
     update.baseUrl = safeBaseUrl;
   }
 
@@ -423,8 +451,53 @@ export async function assignConnection(beingId, slot, connectionId) {
   return { slot, connectionId: safeConnId };
 }
 
+/**
+ * Node-scope counterpart to `assignConnection`. Writes the tree-level
+ * step of the LLM resolution chain (see [[project_node_being_llm_chain]]
+ * and seed/llm/llmClient.js).
+ *
+ * "main" goes to `node.llmDefault`; every other slot writes to
+ * `node.metadata.llm.slots.<slot>`. Pass `connectionId: null` to clear.
+ *
+ * Connection ownership is verified through the caller's identity: the
+ * connection must belong to a being the caller can resolve. The caller
+ * (the DO operation handler) is responsible for owner-of-tree checks
+ * via stance authorization before reaching this function.
+ */
+export async function assignNodeConnection(nodeId, slot, connectionId, { ownerBeingId } = {}) {
+  if (!isValidUserSlot(slot)) {
+    throw new Error("Invalid assignment slot: " + slot);
+  }
+  const safeConnId = validateConnectionId(connectionId);
+
+  if (safeConnId) {
+    const query = ownerBeingId
+      ? { _id: safeConnId, beingId: ownerBeingId }
+      : { _id: safeConnId };
+    const conn = await LlmConnection.findOne(query).lean();
+    if (!conn) throw new Error("Connection not found");
+  }
+
+  if (slot === "main") {
+    if (safeConnId) {
+      await Node.updateOne({ _id: nodeId }, { $set: { llmDefault: safeConnId } });
+    } else {
+      await Node.updateOne({ _id: nodeId }, { $set: { llmDefault: null } });
+    }
+  } else {
+    const path = `metadata.llm.slots.${slot}`;
+    if (safeConnId) {
+      await Node.updateOne({ _id: nodeId }, { $set: { [path]: safeConnId } });
+    } else {
+      await Node.updateOne({ _id: nodeId }, { $unset: { [path]: "" } });
+    }
+  }
+
+  return { nodeId: String(nodeId), slot, connectionId: safeConnId };
+}
+
 // ─────────────────────────────────────────────────────────────────────────
-// DNS VALIDATION FOR REQUEST TIME (export for use in conversation.js)
+// DNS VALIDATION FOR REQUEST TIME (used by the LLM client + auth layer)
 // ─────────────────────────────────────────────────────────────────────────
 
-export { resolveAndValidateHost };
+export { resolveAndValidateHost, hostInAllowedLlmDomains };

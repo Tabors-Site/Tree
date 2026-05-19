@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 // seed/services.js
 // Assembles the shared services bundle that extensions receive via init(core).
 // Services the host land doesn't have get no-op stubs so extensions always
@@ -26,7 +26,7 @@ import {
   getSession, getSessionsForBeing,
   setSessionAbort, abortSession, clearSessionAbort,
   SESSION_TYPES, registerSessionType,
-} from "../../transports/ws/sessionRegistry.js";
+} from "../session/registry.js";
 
 import {
   startSummon, finalizeSummon,
@@ -44,7 +44,7 @@ import {
 import {
   setRootId, getRootId, setCurrentNodeId, getCurrentNodeId,
 } from "../being/position.js";
-import { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } from "../../transports/ws/mcp.js";
+import { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } from "../llm/mcpClient.js";
 import { registerRootLlmSlot, registerBeingLlmSlot } from "../llm/connections.js";
 import { emitNavigate, emitToBeing, registerSocketHandler, unregisterSocketHandler, getIO, getHttpServer } from "../../transports/ws/websocket.js";
 import { ok, error, sendOk, sendError, ERR, WS, CASCADE } from "./protocol.js";
@@ -98,9 +98,8 @@ import {
 // of behavior, every summonable being declares its own role spec via
 // registerRole. See [[project_role_subsumes_mode]].
 
-// The four-verb dispatcher (Phase 1: only `do` is registry-backed; the
-// other three throw with a "not yet implemented" message until later
-// phases). See [[project_seed_four_verbs_only]] memory for the plan.
+// The four-verb dispatcher. See [[project_seed_four_verbs_only]] memory
+// for the architectural commitment.
 import { doVerb, seeVerb, summonVerb, beVerb } from "./verbs.js";
 // Side-effect import. Registers kernel DO operations with the
 // registry on load. See seed/coreOperations.js for the current set.
@@ -157,17 +156,17 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
 
   const core = {
     // ────────────────────────────────────────────────────────────────
-    // The four verbs (Phase 1 — Tabor 2026-05-18, [[project_seed_four_verbs_only]]).
+    // The four verbs. See [[project_seed_four_verbs_only]].
     //
     // Long-term, these are the ONLY public surface for substrate
     // operations. Today they coexist additively with the legacy
     // per-target helpers below (core.metadata, core.tree, core.artifacts,
     // etc.). New extension code should prefer the verbs; existing
-    // helpers retire wave by wave starting Phase 4.
+    // helpers retire as callers migrate.
     //
-    // Only `do` is registry-backed in Phase 1. The other three throw
-    // until their phases land, so the surface is reserved and callers
-    // get clear errors if they try to use them early.
+    // Only `do` is registry-backed today. The other three throw until
+    // their handlers land, so the surface is reserved and callers get
+    // clear errors if they try to use them early.
     // ────────────────────────────────────────────────────────────────
     see:    seeVerb,
     do:     doVerb,
@@ -302,14 +301,14 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       aggregate: ibpAggregate,
       // DO-trigger subscriptions. Extensions register interest on
       // behalf of their beings; substrate hooks fan out matching
-      // events as do-trigger SUMMONs. Slice 6a.
+      // events as do-trigger SUMMONs.
       subscribe:              ibpSubscribe,
       unsubscribe:            ibpUnsubscribe,
       unsubscribeAllForBeing: ibpUnsubscribeAllForBeing,
       // Scheduled-wake registry. Beings declare wake cadences; the
       // tick loop emits scheduled-wake SUMMONs on their intervals.
       // Mode 2 (code-emitter) is the default; the embodied scheduler-
-      // being flavor swaps in via setScheduleEmitter. Slice 6b.
+      // being flavor swaps in via setScheduleEmitter.
       schedule:               ibpSchedule,
       unschedule:             ibpUnschedule,
       unscheduleAllForBeing:  ibpUnscheduleAllForBeing,

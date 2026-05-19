@@ -20,7 +20,7 @@
 
 import cors from "cors";
 import { getLandDomain } from "../../seed/addressing/address.js";
-import { PORTAL_PROTOCOL_VERSION } from "./discovery.js";
+import { IBP_PROTOCOL_VERSION } from "../../seed/addressing/discovery.js";
 import { getLandUrl } from "./canopy/identity.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
 
@@ -37,14 +37,14 @@ const bootstrapCors = cors({
  * Register the bootstrap HTTP route on the Express app.
  * MUST be called BEFORE the catch-all 404 handler in server.js.
  */
-export function registerPortalBootstrap(app) {
+export function registerIbpBootstrap(app) {
   app.options("/.well-known/treeos-portal", bootstrapCors);
   app.get("/.well-known/treeos-portal", bootstrapCors, (_req, res) => {
     const landUrl = getLandUrl();
     const wsUrl = landUrl.replace(/^http/, "ws");
     res.json({
       ws: wsUrl,
-      protocolVersion: PORTAL_PROTOCOL_VERSION,
+      protocolVersion: IBP_PROTOCOL_VERSION,
       land: getLandDomain(),
       timezone: getLandConfigValue("timezone") || null,
     });

@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node boot.js",
-    "test": "node --test seed/**/*.test.js"
+    "test": "node --test --experimental-test-module-mocks test/*.test.js"
   },
   "keywords": ["treeos", "ai", "agents", "kernel", "tree", "federation"],
   "author": "Tabor Holly",

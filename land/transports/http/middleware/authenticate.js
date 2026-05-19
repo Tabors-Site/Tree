@@ -1,72 +1,56 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
+//
+// HTTP authentication middleware.
+//
+// Order of precedence:
+//   1. JWT (Bearer header or cookie) — verified strictly (existence + revocation).
+//   2. Extension auth strategies (api-keys, custom schemes).
+//   3. Reject (or pass through for `authenticateOptional`).
+//
+// JWT verification lives in seed/core/identity.js so every transport
+// (HTTP middleware, WS, IBP adapter, MCP) shares one source of truth.
+
 import log from "../../../seed/core/log.js";
-import jwt from "jsonwebtoken";
-import Being from "../../../seed/models/being.js";
+import { verifyTokenStrict } from "../../../seed/core/identity.js";
 import { resolveTreeAccess } from "../../../seed/tree/treeAccess.js";
 import { authStrategies } from "../../../seed/core/services.js";
 import { sendError, ERR } from "../../../seed/core/protocol.js";
 
-if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required. Run the setup wizard or add it to .env");
-const JWT_SECRET = process.env.JWT_SECRET;
+function extractToken(req) {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) return authHeader.slice(7).trim();
+  if (req.cookies?.token)                 return req.cookies.token;
+  return null;
+}
 
 export default async function authenticate(req, res, next) {
   try {
-    const authHeader = req.headers.authorization;
+    const token = extractToken(req);
 
-    /* ===========================
-        1. JWT AUTH (preferred)
-    ============================ */
-    let token = null;
-
-    if (authHeader?.startsWith("Bearer ")) {
-      token = authHeader.slice(7).trim();
-    }
-
-    if (!token && req.cookies?.token) {
-      token = req.cookies.token;
-    }
-
+    // ── 1. JWT auth (strict) ────────────────────────────────────────
     if (token) {
-      const decoded = jwt.verify(token, JWT_SECRET);
-
-      // Verify user still exists and token hasn't been revoked
-      const user = await Being.findById(decoded.beingId).lean();
-      if (!user) {
-        return sendError(res, 401, ERR.UNAUTHORIZED, "User no longer exists");
+      const result = await verifyTokenStrict(token);
+      if (!result) {
+        return sendError(res, 401, ERR.UNAUTHORIZED, "Invalid or expired credentials");
       }
-
-      // Check token revocation (password change invalidates all prior tokens)
-      const authMeta = user.metadata instanceof Map
-        ? user.metadata.get("auth")
-        : user.metadata?.auth;
-      if (authMeta?.tokensInvalidBefore) {
-        const invalidBefore = new Date(authMeta.tokensInvalidBefore).getTime() / 1000;
-        if (decoded.iat && decoded.iat < invalidBefore) {
-          return sendError(res, 403, ERR.SESSION_EXPIRED, "Token has been revoked");
-        }
-      }
-
-      req.beingId = decoded.beingId;
-      req.name = decoded.name;
+      req.beingId  = result.beingId;
+      req.name     = result.name;
       req.authType = "jwt";
-
       if (!await attachTreeAccess(req, res)) return;
       return next();
     }
 
-    /* ===========================
-        2. EXTENSION AUTH STRATEGIES (api-keys, etc.)
-    ============================ */
+    // ── 2. Extension auth strategies (api-keys, etc.) ───────────────
     for (const { name, handler } of authStrategies) {
       try {
         const result = await handler(req);
         if (result) {
-          req.beingId = result.beingId;
-          req.name = result.name;
+          req.beingId  = result.beingId;
+          req.name     = result.name;
           req.authType = name;
-          // Extension strategies can attach extra context under a namespaced key.
-          // Never assign directly onto req to prevent overwriting Express internals
-          // or core auth fields (isAdmin, rootId, treeAccess, etc.).
+          // Strategies can attach extra context under a namespaced key.
+          // Never assign directly onto req — that could overwrite Express
+          // internals or core auth fields.
           if (result.extra && typeof result.extra === "object") {
             req.strategyExtra = Object.freeze({ ...result.extra });
           }
@@ -74,7 +58,6 @@ export default async function authenticate(req, res, next) {
           return next();
         }
       } catch (strategyErr) {
-        // Strategy-specific errors (rate limit, etc.)
         if (strategyErr.status) {
           return sendError(res, strategyErr.status, ERR.UNAUTHORIZED, strategyErr.message);
         }
@@ -89,48 +72,29 @@ export default async function authenticate(req, res, next) {
 }
 
 /**
- * Optional auth: same pipeline as authenticate but doesn't reject.
- * If no credentials match, req.beingId stays null and the request continues.
- * Use for routes that serve both authenticated users and anonymous/public access.
+ * Optional auth: same pipeline as authenticate but doesn't reject when
+ * credentials are missing or invalid. Use for routes that serve both
+ * authenticated users and anonymous/public access.
  */
 export async function authenticateOptional(req, res, next) {
   try {
-    const authHeader = req.headers.authorization;
-
-    // JWT
-    let token = null;
-    if (authHeader?.startsWith("Bearer ")) token = authHeader.slice(7).trim();
-    if (!token && req.cookies?.token) token = req.cookies.token;
-
+    const token = extractToken(req);
     if (token) {
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const user = await Being.findById(decoded.beingId).lean();
-        if (user) {
-          const authMeta = user.metadata instanceof Map
-            ? user.metadata.get("auth")
-            : user.metadata?.auth;
-          const invalidBefore = authMeta?.tokensInvalidBefore
-            ? new Date(authMeta.tokensInvalidBefore).getTime() / 1000 : 0;
-          if (!decoded.iat || decoded.iat >= invalidBefore) {
-            req.beingId = decoded.beingId;
-            req.name = decoded.name;
-            req.authType = "jwt";
-            return next();
-          }
-        }
-      } catch (jwtErr) {
-        log.debug("Auth", `Optional JWT failed: ${jwtErr.message}`);
+      const result = await verifyTokenStrict(token);
+      if (result) {
+        req.beingId  = result.beingId;
+        req.name     = result.name;
+        req.authType = "jwt";
+        return next();
       }
     }
 
-    // Extension strategies
     for (const { name, handler } of authStrategies) {
       try {
         const result = await handler(req);
         if (result) {
-          req.beingId = result.beingId;
-          req.name = result.name;
+          req.beingId  = result.beingId;
+          req.name     = result.name;
           req.authType = name;
           if (result.extra && typeof result.extra === "object") {
             req.strategyExtra = Object.freeze({ ...result.extra });
@@ -142,7 +106,6 @@ export async function authenticateOptional(req, res, next) {
       }
     }
 
-    // No auth matched. Continue anonymously.
     return next();
   } catch (outerErr) {
     log.debug("Auth", `Optional auth pipeline error: ${outerErr.message}`);
@@ -150,11 +113,10 @@ export async function authenticateOptional(req, res, next) {
   }
 }
 
-/* ===========================
-    TREE ACCESS HELPER
-=========================== */
+// ────────────────────────────────────────────────────────────────────
+// Tree-access helper
+// ────────────────────────────────────────────────────────────────────
 
-// Map resolveTreeAccess error strings to protocol codes and HTTP statuses
 const TREE_ACCESS_ERRORS = {
   [ERR.NODE_NOT_FOUND]: { http: 404, code: ERR.NODE_NOT_FOUND },
   [ERR.INVALID_INPUT]:  { http: 400, code: ERR.INVALID_INPUT },
@@ -162,30 +124,25 @@ const TREE_ACCESS_ERRORS = {
 };
 
 /**
- * Resolve tree access for the request. Sends error response and returns false
- * if access is denied or the node doesn't exist. Returns true on success or
- * when no nodeId is present (nothing to check).
+ * Resolve tree access for the request. Sends error response and returns
+ * `false` if access is denied or the node doesn't exist. Returns `true`
+ * on success or when no nodeId is present (nothing to check).
  */
 async function attachTreeAccess(req, res) {
   const nodeId = req.body?.nodeId || req.params?.nodeId || req.query?.nodeId;
-
   if (!nodeId) return true;
 
   const access = await resolveTreeAccess(nodeId, req.beingId);
-
   if (!access.ok) {
     const mapped = TREE_ACCESS_ERRORS[access.error] || { http: 500, code: ERR.INTERNAL };
     sendError(res, mapped.http, mapped.code, access.message);
     return false;
   }
-
   if (!access.canWrite) {
     sendError(res, 403, ERR.FORBIDDEN, "You do not have write access to this tree");
     return false;
   }
-
-  req.rootId = access.rootId;
+  req.rootId     = access.rootId;
   req.treeAccess = access;
   return true;
 }
-

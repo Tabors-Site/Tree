@@ -1,4 +1,6 @@
-// TreeOS Seed — Being model. AGPL-3.0 — https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Being model.
 //
 // A being is the unified identity type in TreeOS. Replaces the older
 // User model. Every entity that holds identity, registers in a land,
@@ -132,7 +134,7 @@ const BeingSchema = new mongoose.Schema({
   // during work is render-state derived from active chainsteps; the
   // home record stays stable.
   //
-  // Future (Pass 5 economy): home territories grow, can be granted,
+  // Future direction: home territories grow, can be granted,
   // transferred, leased. The infrastructure is here; the economy
   // semantics layer on later.
   homePositionId: { type: String, ref: "Node", default: null, index: true },

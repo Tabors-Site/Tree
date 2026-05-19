@@ -1,4 +1,6 @@
-// TreeOS IBP — default permission registry.
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Default permission registry.
 //
 // Layer 3 fallback: when no explicit metadata.permissions rule matches
 // at the target position or any ancestor, the authorize function checks

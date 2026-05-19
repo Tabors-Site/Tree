@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // LLM connection resolution + per-being client cache.
 //
@@ -27,7 +27,9 @@ import Being from "../models/being.js";
 import Node from "../models/node.js";
 import LlmConnection from "../models/llmConnection.js";
 import { getLandConfigValue } from "../landConfig.js";
-import { resolveAndValidateHost, getEncryptionKey } from "./connections.js";
+import { getAncestorChain } from "../tree/ancestorCache.js";
+import { getNodeLlmAssignments, getBeingLlmAssignments } from "./assignments.js";
+import { resolveAndValidateHost, hostInAllowedLlmDomains, getEncryptionKey } from "./connections.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG
@@ -103,17 +105,23 @@ export function clearBeingClientCache(beingId) {
  */
 async function resolveConnection(connectionId, cacheKey) {
   const conn = await LlmConnection.findById(connectionId).lean();
-  if (!conn || !conn.baseUrl || !conn.encryptedApiKey) return null;
+  // baseUrl is required; encryptedApiKey is optional (local LLMs like
+  // Ollama / llama.cpp commonly need no auth).
+  if (!conn || !conn.baseUrl) return null;
 
   try {
     const hostname = new URL(conn.baseUrl).hostname;
-    await resolveAndValidateHost(hostname);
+    if (!hostInAllowedLlmDomains(hostname)) {
+      await resolveAndValidateHost(hostname);
+    }
   } catch (err) {
     log.error("LLM", `Blocked custom LLM connection ${connectionId}: ${err.message}`);
     return null;
   }
 
-  const apiKey = decrypt(conn.encryptedApiKey);
+  // Empty/missing key → empty string. The OpenAI SDK accepts this for
+  // local LLMs that don't authenticate.
+  const apiKey = conn.encryptedApiKey ? decrypt(conn.encryptedApiKey) : "";
   let baseURL = conn.baseUrl.replace(/\/+$/, "");
   if (baseURL.endsWith("/chat/completions")) {
     baseURL = baseURL.replace(/\/chat\/completions$/, "");
@@ -254,44 +262,189 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// ROLE → TREE LLM SLOT
+// LLM CONNECTION RESOLVER (the single authoritative chain)
 // ─────────────────────────────────────────────────────────────────────────
 //
-// Roles declare which LLM slot they want via `role.llmSlot` on the role
-// spec. The runtime walks: role.llmSlot → tree default → null. The role
-// IS the source of truth for what tools, prompt, AND llm slot it uses.
-// See [[project_ibp_universal_grammar]].
+// Resolution philosophy: position-first, identity-last. *Where* you are
+// shapes your tools more than *who* you are — until you say otherwise.
+//
+// Four layers of authority, evaluated top-down:
+//
+//   Layer 1 — Lockout (sovereign over everything):
+//     ANY ancestor in the node walk has `llmDefault === "none"`, OR
+//     ANY ancestor in the being walk has `userLlm.locked === true`
+//     → returns null. "No LLM under this scope, period."
+//
+//   Layer 2 — Enforcement (sovereign over preferOwn):
+//     ANY ancestor in the node walk has `metadata.llm.enforced === true`
+//     → use that node's connection. Position locks the LLM in.
+//
+//     ANY ancestor in the being walk has `userLlm.enforced === true`
+//     → use that being's connection. Parent being locks descendants in.
+//
+//     When both apply, node enforcement wins (position > identity).
+//
+//   Layer 3 — Default chain (substrate model; the common case):
+//     1. node.metadata.llm.slots[slot]   ← role-LLM at this exact position
+//     2. node.llmDefault                  ← default LLM at this position
+//     3. walk to parent, repeat 1+2
+//     4. ... up to land root ...
+//     5. land config: landLlmConnection  ← operator fallback for the land
+//     6. being.metadata.userLlm.slots[slot] ← being's role-specific LLM
+//     7. being.llmDefault                 ← being's "personal" default
+//
+//   Layer 3′ — Being-preferred chain (user opts in):
+//     When `being.metadata.userLlm.preferOwn === true` AND no
+//     enforcement was found, the order inverts: being's LLM ranks
+//     above position. Lockout still applies; enforcement still wins
+//     over preferOwn.
+//
+//   Layer 4 — Per-call override (programmatic):
+//     Caller passes a connectionId directly into `getClientForBeing`
+//     instead of letting it resolve. Tests, special-case dispatch.
+//
+// Every level is data: set/unset any field to participate. Setting
+// overrides; unsetting falls through. The node ancestor walk uses the
+// per-request ancestor cache; the being walk follows parentBeingId.
+//
+// See [[project_seed_four_verbs_only]] (single named function, all
+// callers route through it) and [[project_ibp_universal_grammar]].
+
+const BEING_CHAIN_MAX_DEPTH = 20;
+const LOCKDOWN = Symbol("LOCKDOWN");
+
+// Walk `being.parentBeingId` up to root, collecting beings as we go.
+// Cycle-guarded + depth-capped. Returns an array starting with the
+// passed-in being and ending at the chain root.
+async function walkBeingChain(rootBeing) {
+  if (!rootBeing) return [];
+  const chain = [rootBeing];
+  const seen = new Set([String(rootBeing._id)]);
+  let curId = rootBeing.parentBeingId || null;
+  let depth = 0;
+  while (curId && depth < BEING_CHAIN_MAX_DEPTH) {
+    const id = String(curId);
+    if (seen.has(id)) break;
+    seen.add(id);
+    const parent = await Being.findById(id)
+      .select("llmDefault metadata parentBeingId")
+      .lean()
+      .catch(() => null);
+    if (!parent) break;
+    chain.push(parent);
+    curId = parent.parentBeingId || null;
+    depth++;
+  }
+  return chain;
+}
+
+// Walk the node ancestor chain looking for: a lockout, an enforced
+// connection, or a normal hit. Returns:
+//   - LOCKDOWN sentinel if any ancestor locks out
+//   - { connectionId, enforced } at the first hit
+//   - null if no node in the chain assigns anything
+async function nodeChainResolve(nodeId, slot) {
+  if (!nodeId) return null;
+  let chain;
+  try {
+    chain = await getAncestorChain(nodeId);
+  } catch {
+    const single = await Node.findById(nodeId).select("llmDefault metadata").lean();
+    chain = single ? [single] : [];
+  }
+  let firstHit = null;
+  for (const node of chain) {
+    const a = getNodeLlmAssignments(node);
+    if (a.default === "none") return LOCKDOWN;
+    if (a.enforced) {
+      const hit = a[slot] || a.default;
+      if (hit) return { connectionId: hit, enforced: true };
+    }
+    if (!firstHit) {
+      const hit = a[slot] || a.default;
+      if (hit) firstHit = { connectionId: hit, enforced: false };
+    }
+  }
+  return firstHit;
+}
+
+// Walk the being ancestor chain (pre-loaded) looking for lockout,
+// enforcement, or a normal hit. Same return contract as nodeChainResolve.
+function beingChainResolve(beingChain, slot) {
+  if (!beingChain.length) return null;
+  let firstHit = null;
+  for (const being of beingChain) {
+    const a = getBeingLlmAssignments(being);
+    if (a.locked) return LOCKDOWN;
+    if (a.enforced) {
+      const hit = a[slot] || a.main;
+      if (hit) return { connectionId: hit, enforced: true };
+    }
+    if (!firstHit) {
+      const hit = a[slot] || a.main;
+      if (hit) firstHit = { connectionId: hit, enforced: false };
+    }
+  }
+  return firstHit;
+}
 
 /**
- * Resolve the LLM connectionId for a role's call on a tree.
- *   1. role.llmSlot (when set) → llmAssignments[that slot]
- *   2. tree default (llmAssignments.default)
- *   3. null
- * If the tree's default is "none", LLM is explicitly disabled here.
+ * Resolve the LLM connectionId for a call at a specific position by a
+ * specific being. Walks the four-layer chain above.
+ *
+ * @param {object} opts
+ * @param {string} [opts.beingId]  the being making the call
+ * @param {string} [opts.nodeId]   the position (current node)
+ * @param {string} [opts.slot]     role-slot name (defaults to "main")
+ * @returns {Promise<string|null>} connectionId, or null for noLlm
+ */
+export async function resolveLlmConnection({ beingId = null, nodeId = null, slot = "main" } = {}) {
+  // Load the being and its ancestor chain together.
+  const being = beingId
+    ? await Being.findById(beingId)
+        .select("llmDefault metadata parentBeingId")
+        .lean()
+        .catch(() => null)
+    : null;
+  const beingChain = await walkBeingChain(being);
+
+  // Walk both trees collecting lockout / enforcement / first-hit.
+  const nodeHit  = await nodeChainResolve(nodeId, slot);
+  const beingHit = beingChainResolve(beingChain, slot);
+
+  // Layer 1: Lockout wins over everything.
+  if (nodeHit === LOCKDOWN || beingHit === LOCKDOWN) return null;
+
+  // Layer 2: Enforcement wins over preferOwn. Node enforcement beats
+  // being enforcement when both apply (position-first philosophy).
+  if (nodeHit?.enforced)  return nodeHit.connectionId;
+  if (beingHit?.enforced) return beingHit.connectionId;
+
+  // Layer 3 / 3′: normal chain. preferOwn (set on the calling being's
+  // own metadata) inverts the order.
+  const preferOwn = being?.metadata?.userLlm?.preferOwn === true;
+  const landConnId = getLandConfigValue("landLlmConnection") || null;
+  const candidates = preferOwn
+    ? [beingHit?.connectionId, nodeHit?.connectionId, landConnId]
+    : [nodeHit?.connectionId, landConnId, beingHit?.connectionId];
+
+  for (const c of candidates) if (c) return c;
+  return null;
+}
+
+/**
+ * @deprecated Use `resolveLlmConnection({ beingId, nodeId, slot })` instead.
+ * Kept as a thin shim for legacy callers that pass a `role` spec and only
+ * have the tree root. Routes through `resolveLlmConnection` without a
+ * beingId so the being-step is skipped — preserves the original
+ * "position-only" intent of the old function.
  */
 export async function resolveRootLlmForRole(rootId, role) {
   if (!rootId) return null;
-  try {
-    const rootNode = await Node.findById(rootId)
-      .select("llmDefault metadata")
-      .lean();
-    if (!rootNode) return null;
-
-    const { getLlmAssignments } = await import("./assignments.js");
-    const assignments = getLlmAssignments(rootNode);
-
-    // "none" means LLM is explicitly off for this tree
-    if (assignments.default === "none") return null;
-
-    if (role?.llmSlot) {
-      const slotOverride = assignments[role.llmSlot];
-      if (slotOverride) return slotOverride;
-    }
-
-    return assignments.default || null;
-  } catch {
-    return null;
-  }
+  return resolveLlmConnection({
+    nodeId: rootId,
+    slot:   role?.llmSlot || "main",
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────

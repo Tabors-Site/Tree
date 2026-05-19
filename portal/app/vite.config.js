@@ -24,9 +24,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      // The IBP Address parser lives one level up at /portal/lib/
-      // and is the single source of truth shared with the Land server.
-      "@ibp-address": path.resolve(__dirname, "../lib/ibp-address.js"),
+      // The IBP Address parser is the substrate's addressing grammar
+      // and lives in the Land seed as the single source of truth.
+      // Portal consumes it via this alias.
+      "@ibp-address": path.resolve(__dirname, "../../land/seed/addressing/address.js"),
     },
   },
 });

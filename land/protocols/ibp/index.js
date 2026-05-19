@@ -13,8 +13,8 @@
 // Both must be called for IBP to be fully alive on a Land.
 
 import log from "../../seed/core/log.js";
-import { registerPortalBootstrap } from "./bootstrap-route.js";
-import { attachPortalHandlers } from "./protocol.js";
+import { registerIbpBootstrap } from "./bootstrap-route.js";
+import { attachIbpHandlers } from "./protocol.js";
 import { hooks } from "../../seed/core/hooks.js";
 import Node from "../../seed/models/node.js";
 import { emitPositionInvalidate } from "./live.js";
@@ -84,7 +84,7 @@ function wireLiveHooks() {
  * Call from server.js after registerURLRoutes(app), before the 404 catch-all.
  */
 export function initIBPHttp(app) {
-  registerPortalBootstrap(app);
+  registerIbpBootstrap(app);
   log.info("IBP", "IBP HTTP bootstrap registered at /.well-known/treeos-portal");
 }
 
@@ -98,7 +98,7 @@ export function initIBPWS(io) {
     return;
   }
   wireLiveHooks();
-  attachPortalHandlers(io);
+  attachIbpHandlers(io);
   // Start the schedule tick loop. Beings that have declared a wake
   // cadence get scheduled-wake SUMMONs emitted on their interval.
   // The loop is process-singleton and unref'd; nothing to do at
@@ -112,8 +112,9 @@ export function initIBPWS(io) {
 export { parseFromSocket, parseWithContext, format, canonical, getLandDomain } from "../../seed/addressing/address.js";
 export { resolveStance } from "../../seed/addressing/resolver.js";
 export { buildDescriptor } from "../../seed/addressing/descriptor.js";
-export { buildDiscovery, PORTAL_PROTOCOL_VERSION, DESCRIPTOR_VERSION } from "./discovery.js";
-export { PortalError, PORTAL_ERR, isPortalError } from "./errors.js";
+export { buildDiscovery, IBP_PROTOCOL_VERSION } from "../../seed/addressing/discovery.js";
+export { DESCRIPTOR_VERSION } from "../../seed/addressing/descriptor.js";
+export { IbpError, IBP_ERR, isIbpError } from "../../seed/core/errors.js";
 // Inbox primitives that role templates need (cancel sweeps, etc.). Append
 // and read are deliberately not re-exported — only SUMMON should write
 // the inbox; role templates either let the scheduler consume entries or

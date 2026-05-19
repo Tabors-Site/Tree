@@ -18,7 +18,7 @@ export default {
     "with origin=filesystem, the artifact IS the file.",
 
   needs: {
-    services: ["hooks", "tree", "modes"],
+    services: ["hooks", "tree"],
     models: ["Node", "Being", "Artifact"],
     extensions: ["governing"],
   },

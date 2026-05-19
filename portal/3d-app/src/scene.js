@@ -138,8 +138,8 @@ export class Scene {
   //     Movement unlocked.
   renderDescriptor(desc, { isAuthenticated } = {}) {
     this._clearWorld();
-    const isLandZone = desc?.zone === "land";
-    const arrival = isLandZone && !isAuthenticated;
+    const isLandRoot = !!desc?.isLandRoot;
+    const arrival    = isLandRoot && !isAuthenticated;
 
     // Pick the visual mode. Arrival overrides everything. Otherwise the
     // descriptor's resolved scene.sceneType picks a preset; unknown or
@@ -204,9 +204,9 @@ export class Scene {
       });
     }
 
-    // In the land zone, when authenticated, drop the signed-in being's
+    // At the land root, when authenticated, drop the signed-in being's
     // home as a small house object you can walk up to and enter.
-    if (isLandZone && isAuthenticated) {
+    if (isLandRoot && isAuthenticated) {
       const home = this._makeHomeMesh();
       home.position.set(-8, 0, 6);
       home.userData = {

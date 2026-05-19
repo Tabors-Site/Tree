@@ -17,7 +17,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@ibp-address": path.resolve(__dirname, "../lib/ibp-address.js"),
+      "@ibp-address": path.resolve(__dirname, "../../land/seed/addressing/address.js"),
     },
   },
 });

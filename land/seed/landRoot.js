@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 // Land root bootstrap. Creates the land root and all system nodes on first boot.
 // Idempotent: runs every boot but only creates what's missing.
 // This is the foundation. If this fails, nothing works.

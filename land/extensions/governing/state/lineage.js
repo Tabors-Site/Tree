@@ -51,6 +51,7 @@ export async function writeLineage({
   parentBranchEntryName = null,
   expandingFromSpec = null,
   force = false,
+  identity = null,
   // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
   core,
 }) {
@@ -83,7 +84,7 @@ export async function writeLineage({
       namespace: NS,
       data: { lineage },
       merge: true,
-    });
+    }, { identity });
   } catch (err) {
     log.warn("Governing", `writeLineage at ${String(subRulerNodeId).slice(0, 8)} failed: ${err.message}`);
     return null;

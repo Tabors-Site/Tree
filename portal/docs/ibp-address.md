@@ -304,7 +304,7 @@ The `lib/ibp-address.js` parser:
 - round-trips: `format(parsed) === normalized canonical form`
 - rejects malformed input with structured errors so the address bar can highlight the bad segment
 
-See [`../lib/ibp-address.js`](../lib/ibp-address.js) for the implementation.
+See [`../../land/seed/addressing/address.js`](../../land/seed/addressing/address.js) for the implementation. The substrate owns the grammar; Portal consumes it via the `@ibp-address` Vite alias.
 
 ## What this is NOT
 

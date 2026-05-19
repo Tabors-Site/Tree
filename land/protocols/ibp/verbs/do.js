@@ -22,7 +22,7 @@
 import log from "../../../seed/core/log.js";
 import { parseFromSocket, expand, getLandDomain } from "../../../seed/addressing/address.js";
 import { resolveStance } from "../../../seed/addressing/resolver.js";
-import { PortalError, PORTAL_ERR, isPortalError } from "../errors.js";
+import { IbpError, IBP_ERR, isIbpError } from "../../../seed/core/errors.js";
 import { ackOk, ackError, stripBeingQualifier } from "../envelope.js";
 import { doVerb } from "../../../seed/core/verbs.js";
 import { getOperation, listOperations } from "../../../seed/core/operations.js";
@@ -33,11 +33,11 @@ export async function handleDo(socket, env, ack) {
     const { address, payload } = env;
     const action = typeof payload?.action === "string" ? payload.action : null;
     if (!action) {
-      throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp DO payload must include `action`");
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "ibp DO payload must include `action`");
     }
     if (!getOperation(action)) {
-      throw new PortalError(
-        PORTAL_ERR.ACTION_NOT_SUPPORTED,
+      throw new IbpError(
+        IBP_ERR.ACTION_NOT_SUPPORTED,
         `Unknown DO action: "${action}"`,
         { action, available: listOperations().map(op => op.name) },
       );
@@ -67,10 +67,10 @@ export async function handleDo(socket, env, ack) {
     const data = await doVerb(resolved, action, args, { identity });
     return ackOk(ack, id, data);
   } catch (err) {
-    if (isPortalError(err)) {
+    if (isIbpError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("IBP", `ibp DO failed: ${err.message}`);
-    return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
+    log.error("IBP", `DO failed: ${err.message}`);
+    return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }

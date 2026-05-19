@@ -1,4 +1,6 @@
-// TreeOS IBP — Stance property derivation.
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// Stance property derivation.
 //
 // Given an acting being and a target position, compute the derived facts
 // the authorize function compares against permission-rule `requires`.

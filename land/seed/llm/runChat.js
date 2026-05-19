@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 // llm/runChat.js
 // Conversation state, LLM resolution, tool loop, session management
 import log from "../core/log.js";
@@ -11,7 +11,7 @@ import { snapshotAncestors, resolveExtensionScopeFromChain, getAncestorChain } f
 import { isDbHealthy } from "../core/dbConfig.js";
 import { resolveTools } from "../core/tools.js";
 import { getNodeName } from "../tree/treeData.js";
-import { mcpClients, connectToMCP, MCP_SERVER_URL } from "../../transports/ws/mcp.js";
+import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcpClient.js";
 
 // How many recent messages to carry across role switches when the new
 // role doesn't request a full reset. Used to give continuity to the
@@ -21,6 +21,7 @@ export function setCarryMessages(n) { CARRY_MESSAGES = Math.max(0, Number(n) || 
 import { getLandConfigValue } from "../landConfig.js";
 import { SYSTEM_OWNER } from "../core/protocol.js";
 import { appendToolCall } from "./summonTracker.js";
+import { signInternalToken } from "../core/identity.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // ROLE-DRIVEN PROMPT + TOOL RESOLUTION
@@ -769,12 +770,7 @@ async function resolveLLMClient(ctx, session, clientSessionId) {
   const mcpCacheKey = ctx?.mcpCacheKey || clientSessionId;
   let client = mcpClients.get(mcpCacheKey);
   if (!client) {
-    const jwt = (await import("jsonwebtoken")).default;
-    const mcpJwt = jwt.sign(
-      { beingId: String(ctx.beingId), username: ctx.name },
-      process.env.JWT_SECRET,
-      { expiresIn: "24h" },
-    );
+    const mcpJwt = signInternalToken({ beingId: ctx.beingId, name: ctx.name });
     client = await connectToMCP(MCP_SERVER_URL, mcpCacheKey, mcpJwt);
   }
 
@@ -2115,15 +2111,11 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   const llmPriority    = envelope.priority || null;
   const parentSummonId = envelope.inReplyTo || null;
 
-  const jwt = (await import("jsonwebtoken")).default;
-  const { connectToMCP, getMCPClient, MCP_SERVER_URL } = await import("../../transports/ws/mcp.js");
+  const { connectToMCP, getMCPClient, MCP_SERVER_URL } = await import("./mcpClient.js");
   const { startSummon, finalizeSummon } = await import("./summonTracker.js");
-  const { setSessionAbort, clearSessionAbort } = await import("../../transports/ws/sessionRegistry.js");
+  const { setSessionAbort, clearSessionAbort } = await import("../session/registry.js");
   const { resolvePipelineKey } = await import("./sessionKeys.js");
   const { computeIbpAddressForSummon } = await import("./ibpAddress.js");
-
-  const JWT_SECRET = process.env.JWT_SECRET;
-  if (!JWT_SECRET) throw new Error("JWT_SECRET not configured");
 
   // Eagerly compute the IBP Address for being-to-being conversations
   // so it can serve as the MCP client cache key. When beingOut is set
@@ -2158,11 +2150,7 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
   // mcpCacheKey — IBP Address for being-to-being, internal session
   // key otherwise. Skip if a client already exists under this key.
   if (!getMCPClient(mcpCacheKey)) {
-    const internalJwt = jwt.sign(
-      { beingId: beingId.toString(), username: username || "unknown" },
-      JWT_SECRET,
-      { expiresIn: "24h" }
-    );
+    const internalJwt = signInternalToken({ beingId, name: username });
     try {
       await connectToMCP(MCP_SERVER_URL, mcpCacheKey, internalJwt);
     } catch (err) {

@@ -1,4 +1,6 @@
-// TreeOS IBP — DO-trigger subscription registry.
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// DO-trigger subscription registry.
 //
 // One of two coexisting paths that wake beings (the other being direct
 // being-to-being SUMMONs). When a DO action lands at a position — an
@@ -38,11 +40,11 @@
 //                                             // content carries content.events: [...]
 //   }
 //
-// **Storage.** In-memory registry — subscriptions are re-registered
-// at boot by each extension that wires them. Slice 6c will introduce
-// a metadata-backed registry on each being's home node so boot can
-// rebuild without re-running extension code; for now the in-memory
-// registry plus extension-init re-registration is enough.
+// **Storage.** In-memory registry; subscriptions are re-registered at
+// boot by each extension that wires them. A metadata-backed registry
+// on each being's home node is on the roadmap so boot can rebuild
+// without re-running extension code; for now the in-memory registry
+// plus extension-init re-registration is enough.
 
 import { randomUUID } from "crypto";
 import log from "../core/log.js";

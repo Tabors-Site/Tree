@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 /**
  * Periodic cleanup of orphaned upload files.
  * Scans the uploads directory for files not referenced by any artifact

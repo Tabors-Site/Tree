@@ -1,16 +1,23 @@
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
 // Position Description builder.
 //
-// Given a resolved stance (from resolver.js), produce the Position Description
-// JSON the Portal client will render. The descriptor shape is specified in
-// /portal/docs/position-description.md.
+// Given a resolved stance (from resolver.js), produce the Position
+// Description JSON the Portal client will render. The descriptor shape
+// is specified in /portal/docs/position-description.md.
 //
-// Pass 1 Slice 1 implements ONLY the land-zone descriptor with empty children
-// and artifacts. Subsequent slices populate children (public trees) and add
-// home / tree zone branches.
+// Three builder paths, picked by the resolved stance's flags:
+//   - buildLandDescriptor — `<land>` (land root)
+//   - buildHomeDescriptor — `<land>/~<being>` (a being's home view)
+//   - buildTreeDescriptor — any other position (tree node)
 
 import { getLandDomain } from "./address.js";
-import { DESCRIPTOR_VERSION } from "../../protocols/ibp/discovery.js";
 import { getLandConfigValue } from "../landConfig.js";
+
+// Wire-shape version. Bumped when the Position Description shape changes
+// in a way that clients must opt into. The IBP discovery payload lists
+// this in `descriptorVersionSupported`.
+export const DESCRIPTOR_VERSION = "1.0";
 import Node from "../models/node.js";
 import { getLandRootId } from "../landRoot.js";
 // NODE_STATUS retired 2026-05-18 — status is domain-specific extension
@@ -315,16 +322,9 @@ async function inferActivityTarget(summon) {
  * @returns {object} Position Description
  */
 export async function buildDescriptor(resolved, opts = {}) {
-  if (resolved.zone === "land") {
-    return buildLandDescriptor(resolved, opts);
-  }
-  if (resolved.zone === "home") {
-    return buildHomeDescriptor(resolved, opts);
-  }
-  if (resolved.zone === "tree") {
-    return buildTreeDescriptor(resolved, opts);
-  }
-  throw new Error(`Unknown zone: ${resolved.zone}`);
+  if (resolved.isLandRoot) return buildLandDescriptor(resolved, opts);
+  if (resolved.isHomeRoot) return buildHomeDescriptor(resolved, opts);
+  return buildTreeDescriptor(resolved, opts);
 }
 
 async function buildLandDescriptor(resolved, { identity } = {}) {
@@ -347,40 +347,55 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
       leafName: null,
       leafId: null,
     },
-    zone: "land",
-    // Beings invocable at the land root. The auth-being is always present
-    // and is the entry point for unestablished requesters; the others are
-    // contextually invocable per the land's permissions.
+    isLandRoot: true,
+    isHomeRoot: false,
+    // Beings whose home is the land root. All four are real Being rows
+    // (created by ensureSystemBeings). With the resolver now exposing
+    // landRootId as the nodeId for land-root stances, the SUMMON inbox
+    // sits on the land-root node like any other position — so these
+    // beings are addressable via both BE (auth, llm-assigner — code
+    // cognition) and SUMMON (land-manager, citizen — LLM-driven once
+    // their role specs are registered).
     beings: [
       {
-        being: "auth",
-        label: "Auth",
+        being:       "auth",
+        label:       "Auth",
         description: "The land's welcome character. Processes register, claim, release, switch.",
         invocableBy: "anyone",
-        available: isRegistered("auth"),
-        modeKey: "land:auth",
-        kind: "ai",
-        icon: "\u{1F511}",
+        available:   isRegistered("auth"),
+        modeKey:     "land:auth",
+        kind:        "ai",
+        icon:        "\u{1F511}",
       },
       {
-        being: "land-manager",
-        label: "Land Manager",
-        description: "Land-level governance: extensions, config, peers. God-tier only.",
+        being:       "llm-assigner",
+        label:       "LLM Assigner",
+        description: "Configure LLM connections on your being, on a tree you own, or on the land (root operator).",
+        invocableBy: "authenticated",
+        available:   isRegistered("llm-assigner"),
+        modeKey:     "land:llm-assigner",
+        kind:        "ai",
+        icon:        "\u{1F9E0}",
+      },
+      {
+        being:       "land-manager",
+        label:       "Land Manager",
+        description: "Land-level governance: extensions, config, peers. Root-operator only.",
         invocableBy: "owner",
-        available: isRegistered("land-manager"),
-        modeKey: "land:manager",
-        kind: "ai",
-        icon: "\u{1F3DB}\u{FE0F}",
+        available:   isRegistered("land-manager"),
+        modeKey:     "land:manager",
+        kind:        "ai",
+        icon:        "\u{1F3DB}\u{FE0F}",
       },
       {
-        being: "citizen",
-        label: "Citizen",
+        being:       "citizen",
+        label:       "Citizen",
         description: "Read-only browsing of the land's public surface.",
         invocableBy: "anyone",
-        available: isRegistered("citizen"),
-        modeKey: "land:citizen",
-        kind: "ai",
-        icon: "\u{1F464}",
+        available:   isRegistered("citizen"),
+        modeKey:     "land:citizen",
+        kind:        "ai",
+        icon:        "\u{1F464}",
       },
     ],
     // Public trees at land scope. Populated from the user-root nodes
@@ -433,34 +448,21 @@ async function buildHomeDescriptor(resolved, { identity } = {}) {
       leafName: resolved.leafName,
       leafId: resolved.leafId,
     },
-    zone: "home",
+    isLandRoot: false,
+    isHomeRoot: true,
+    // The owning being is the only being at their home by default.
+    // Extensions (or the operator) can place additional beings here
+    // by writing metadata.beings.<name> on the home node; they will
+    // surface through the regular being-home reader.
     beings: [
       {
-        being: resolved.name, // human-being label = the user's username
-        label: resolved.name,
-        description: `${resolved.name} at their home zone.`,
+        being:       resolved.name,
+        label:       resolved.name,
+        description: `${resolved.name} at their home position.`,
         invocableBy: "owner",
-        available: isOwner === true,
-        modeKey: "home:human",
-        kind: "human",
-      },
-      {
-        being: "dreamer",
-        label: "Dreamer",
-        description: "Creative / generative cognition at the home zone.",
-        invocableBy: "owner",
-        available: isOwner === true && !!getRole("dreamer"),
-        modeKey: "home:dreamer",
-        kind: "ai",
-      },
-      {
-        being: "archivist",
-        label: "Archivist",
-        description: "Read-only browsing of the user's tree history.",
-        invocableBy: "owner",
-        available: isOwner === true && !!getRole("archivist"),
-        modeKey: "home:archivist",
-        kind: "ai",
+        available:   isOwner === true,
+        modeKey:     "home:human",
+        kind:        "human",
       },
     ],
     children,
@@ -510,8 +512,8 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
   // Lineage walk: parent chain back up to and including the tree root.
   // The chain we already have is the path-segments chain; lineage may
   // include ancestor nodes that weren't named explicitly (intermediate
-  // segments). For Slice 4 we use the chain we already have, plus a
-  // synthetic "land root" entry at index 0.
+  // segments). Today we use the chain we already have plus a synthetic
+  // "land root" entry at index 0.
   const lineage = buildLineage(resolved);
 
   // Siblings: other children of the parent. Backfill paths from the
@@ -552,7 +554,8 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
       leafName: resolved.leafName,
       leafId: resolved.leafId,
     },
-    zone: "tree",
+    isLandRoot: false,
+    isHomeRoot: false,
     // Beings invocable at this node. Only beings that are actually
     // configured here appear — placeholder defaults (worker/archivist/
     // echo on every node) were causing phantom figures in fresh trees.
@@ -567,11 +570,6 @@ async function buildTreeDescriptor(resolved, { identity } = {}) {
     lineage,
     siblings,
     scene,
-    // Governance block: populated in Slice 4b when we wire to the
-    // governing extension's buildDashboardData. For now, declare the
-    // shape with empty/null placeholders so portal clients can render
-    // a consistent surface.
-    governance: null,
     identity: identity
       ? {
           beingId: identity.beingId,
@@ -606,12 +604,11 @@ async function listChildren(parentId, { exclude } = {}) {
     .limit(500)
     .lean();
   return nodes.map((n) => ({
-    name: n.name,
-    nodeId: n._id,
-    type: n.type || null,
-    summary: null,
+    name:      n.name,
+    nodeId:    n._id,
+    type:      n.type || null,
+    summary:   null,
     noteCount: 0,
-    lifecycle: deriveLifecycle(n.status),
     ...childPlacement(n.metadata),
   }));
 }
@@ -649,7 +646,7 @@ function buildLineage(resolved) {
   // Top-down: each entry shows what to display in a breadcrumb.
   const landDomain = getLandDomain();
   const lineage = [
-    { path: "/", name: landDomain, kind: "land" },
+    { path: "/", name: landDomain, nodeId: null },
   ];
   // The chain already walks from the first segment to the leaf. Each
   // intermediate entry becomes a breadcrumb step. We accumulate the path
@@ -659,10 +656,9 @@ function buildLineage(resolved) {
     const seg = resolved.chain[i];
     prefix += "/" + seg.name;
     lineage.push({
-      path: prefix,
-      name: seg.name,
+      path:   prefix,
+      name:   seg.name,
       nodeId: seg.id,
-      kind: seg.name.startsWith("~") ? "home" : "tree",
     });
   }
   return lineage;
@@ -673,23 +669,18 @@ function buildLineage(resolved) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * List public trees rooted at the Land root.
+ * List public sections of the land.
  *
- * A "public tree" is a node where:
- *   - parent === landRootId (it's a tree-root directly under the land)
- *   - rootOwner is set (it's a user tree, not a system node)
- *   - systemRole is null
- *   - visibility === "public"
- *   - status !== DELETED
+ * A "public tree" is any node marked `visibility: "public"` — it can
+ * sit at any depth, not just under the land root. Any section of any
+ * tree can be made public; the section's root is whatever node carries
+ * the `public` marker. System nodes (`.extensions`, `.flow`, etc.) are
+ * filtered out.
  *
  * Returned in the Position Description `children` shape.
  */
 async function listPublicTrees() {
-  const landRootId = getLandRootId();
-  if (!landRootId) return [];
   const trees = await Node.find({
-    parent: landRootId,
-    rootOwner: { $ne: null },
     systemRole: null,
     visibility: "public",
   })
@@ -699,28 +690,25 @@ async function listPublicTrees() {
     .lean();
 
   return trees.map((t) => ({
-    name: t.name,
-    path: `/${t.name}`, // human-readable path; ids form is `/${t._id}`
-    nodeId: t._id,
-    type: t.type || null,
-    summary: null, // future: pull from notes/metadata
-    noteCount: 0,  // future: count via notes index
-    lifecycle: deriveLifecycle(t.status),
+    name:      t.name,
+    path:      `/${t.name}`, // human-readable path; ids form is `/${t._id}`
+    nodeId:    t._id,
+    type:      t.type || null,
+    summary:   null, // future: pull from artifacts/metadata
+    noteCount: 0,    // future: count via artifacts index
     ...childPlacement(t.metadata),
   }));
 }
 
 /**
- * List the user's tree-root nodes. A user-tree-root is a node where:
+ * List the being's tree-root nodes. A being-tree-root is a node where:
  *   - parent === landRootId
  *   - rootOwner === beingId
  *   - systemRole is null
- *   - status !== DELETED
  *
- * Visibility is NOT filtered here — the home zone shows the owner all their
- * trees (public and private). When another identity browses someone else's
- * home, the resolver/authorization step would gate access (Slice 3 doesn't
- * gate yet; that's a future-pass authorization concern).
+ * Visibility is NOT filtered here — a being's home view shows all of
+ * their trees (public and private). When another identity browses
+ * someone else's home, stance authorization gates access.
  */
 async function listUserTrees(beingId, username) {
   const landRootId = getLandRootId();
@@ -737,30 +725,18 @@ async function listUserTrees(beingId, username) {
 
   return trees.map((t) => ({
     name: t.name,
-    // Canonical land-level path. A user-owned root tree lives at the
+    // Canonical land-level path. A being-owned root tree lives at the
     // land root (parent === landRootId), so its address is /<name>.
-    // The home zone is a listing surface; entering a tree takes you
+    // The home view is a listing surface; entering a tree takes you
     // to the tree's own address, not to a home-prefixed sub-path.
-    path: `/${t.name}`,
-    nodeId: t._id,
-    type: t.type || null,
+    path:       `/${t.name}`,
+    nodeId:     t._id,
+    type:       t.type || null,
     visibility: t.visibility || "private",
-    summary: null,
-    noteCount: 0,
-    lifecycle: deriveLifecycle(t.status),
+    summary:    null,
+    noteCount:  0,
     ...childPlacement(t.metadata),
   }));
-}
-
-function deriveLifecycle(status) {
-  // Map the existing NODE_STATUS values onto Position Description lifecycle.
-  // Conservative mapping; can be refined as governing-extension status
-  // becomes the source of truth in later slices.
-  if (!status) return "idle";
-  if (status === "running" || status === "active") return "running";
-  if (status === "completed" || status === "done") return "completed";
-  if (status === "blocked" || status === "stalled") return "stalled";
-  return "idle";
 }
 
 // ─────────────────────────────────────────────────────────────────────

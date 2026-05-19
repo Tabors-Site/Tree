@@ -1,4 +1,6 @@
-// TreeOS Seed — system beings.
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// System beings.
 //
 // Every land has a small set of AI beings that live at the land root
 // itself, not at any tree: the auth-being (handles BE register/claim/
@@ -31,11 +33,17 @@ import Node from "../models/node.js";
 import { createBeingWithHome } from "./identity.js";
 
 /**
- * Find the land's root being — the first admin human who registered.
- * Returns null if no human has registered yet (fresh land, deferred setup).
+ * Find the land's root being — the first human who registered. Identified
+ * by `parentBeingId: null` (the root being is the only one with no
+ * being-tree parent; every other being chains back to it). Returns null
+ * if no human has registered yet (fresh land, deferred setup).
+ *
+ * Note: `isAdmin` and the "admin" role retired 2026-05-18 — permissions
+ * come from stance authorization + role permissions, not a per-being
+ * boolean. The root being is identified structurally, not by a flag.
  */
 export async function findRootBeing() {
-  return Being.findOne({ operatingMode: "human", roles: "admin" })
+  return Being.findOne({ operatingMode: "human", parentBeingId: null })
     .sort({ _id: 1 })
     .select("_id name")
     .lean();
@@ -46,6 +54,11 @@ const SYSTEM_BEINGS = [
     name: "auth",
     role: "auth",
     description: "Welcome character; processes BE register/claim/release/switch.",
+  },
+  {
+    name: "llm-assigner",
+    role: "llm-assigner",
+    description: "Configures LLM connections — caller's being, owned nodes, or land default (root operator only for land scope).",
   },
   {
     name: "land-manager",
@@ -61,8 +74,9 @@ const SYSTEM_BEINGS = [
 
 /**
  * Ensure each system being exists as a Being row, has the land root
- * as its home, is parented to the root being (the first admin human)
- * in the being-tree, and is registered in metadata.beings at the
+ * as its home, is parented to the root being (the first registered
+ * human, identified by parentBeingId: null) in the being-tree, and
+ * is registered in metadata.beings at the
  * land root. Returns a summary { created, existing, deferred }.
  *
  * Deferred when the root being does not yet exist (fresh land before

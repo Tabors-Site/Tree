@@ -1,4 +1,4 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 import Being from "../models/being.js";
 import Node from "../models/node.js";
 import bcrypt from "bcrypt";
@@ -189,9 +189,12 @@ export async function verifyPassword(being, password) {
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Generate a JWT for a being.
- * Includes a unique jti for per-token revocation if needed.
- * Expiry is configurable via land config (default 30 days).
+ * Generate a session JWT for a being. Issued when the being claims an
+ * identity (login / register / token re-claim); shipped to the client
+ * as the session token (cookie or bearer header).
+ *
+ * Carries a unique `jti` so individual tokens can be revoked. Expiry
+ * is configurable via land config (default 30 days).
  */
 export function generateToken(being) {
   const expiresIn = getLandConfigValue("jwtExpiryDays")
@@ -207,6 +210,95 @@ export function generateToken(being) {
     JWT_SECRET,
     { expiresIn },
   );
+}
+
+/**
+ * Sign an internal server-to-server JWT. Used by the conversation
+ * runtime to authorize tool calls against the local MCP server — the
+ * token forwards the originating being's identity so the MCP layer
+ * knows who the call is for.
+ *
+ * Distinct from `generateToken` (which issues session credentials to
+ * clients): internal tokens are short-lived (24h default), have no
+ * `jti`, and never leave the server. The MCP middleware
+ * ([transports/http/middleware/authenticateMCP.js]) decodes them with
+ * `decodeToken` and reads beingId + name.
+ *
+ * @param {object} args
+ * @param {string} args.beingId
+ * @param {string} args.name
+ * @param {string} [args.clientSessionId]  optional correlation tag
+ * @param {string} [args.expiresIn]        default "24h"
+ */
+export function signInternalToken({ beingId, name, clientSessionId, expiresIn = "24h" }) {
+  if (!beingId) throw new Error("signInternalToken: `beingId` is required");
+  const payload = {
+    beingId: String(beingId),
+    name:    name || null,
+  };
+  if (clientSessionId) payload.clientSessionId = clientSessionId;
+  return jwt.sign(payload, JWT_SECRET, { expiresIn });
+}
+
+/**
+ * Cheap JWT decode. Returns `{ beingId, name, iat, jti }` on success,
+ * `null` for missing or invalid tokens. Never throws.
+ *
+ * Use this when you only need to extract identity from a token (WS
+ * connect, IBP HTTP adapter, MCP middleware). It does NOT verify the
+ * being still exists or check token revocation — those are concerns
+ * of `verifyTokenStrict` and the HTTP auth pipeline.
+ */
+export function decodeToken(token) {
+  if (typeof token !== "string" || !token) return null;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return {
+      beingId: decoded.beingId,
+      name:    decoded.name,
+      iat:     decoded.iat,
+      jti:     decoded.jti,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Strict JWT verification. Decodes the token, looks up the Being to
+ * confirm it still exists, and checks `metadata.auth.tokensInvalidBefore`
+ * to reject tokens issued before the being's last revoke (e.g. after a
+ * password change).
+ *
+ * Returns `{ beingId, name, jwt, being }` on success or `null` on any
+ * failure (missing/invalid token, being deleted, token revoked). The
+ * returned `being` is a lean Mongoose doc for callers that need it
+ * (avoids a second lookup); pass `{ loadBeing: false }` to skip the
+ * extra fetch (only the existence/revocation check still happens).
+ */
+export async function verifyTokenStrict(token, { loadBeing = true } = {}) {
+  const decoded = decodeToken(token);
+  if (!decoded) return null;
+
+  const being = await Being.findById(decoded.beingId)
+    .select(loadBeing ? undefined : "_id metadata")
+    .lean();
+  if (!being) return null;
+
+  const authMeta = being.metadata instanceof Map
+    ? being.metadata.get("auth")
+    : being.metadata?.auth;
+  if (authMeta?.tokensInvalidBefore) {
+    const invalidBefore = new Date(authMeta.tokensInvalidBefore).getTime() / 1000;
+    if (decoded.iat && decoded.iat < invalidBefore) return null;
+  }
+
+  return {
+    beingId: decoded.beingId,
+    name:    decoded.name,
+    jwt:     token,
+    being:   loadBeing ? being : null,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
