@@ -208,6 +208,32 @@ export function registerKernelOperations() {
     },
   });
 
+  // delete-artifact: remove an artifact (and its child artifacts via
+  // the seed primitive's cascade). The target is the Artifact doc (or
+  // a `{ _id }` envelope). The kernel primitive enforces the ownership
+  // gate — caller must be the artifact's author or the containing
+  // tree's rootOwner — so passing internal:true is only safe for
+  // kernel-internal callers acting on substrate they manage.
+  registerOperation("delete-artifact", {
+    targets: ["artifact"],
+    ownerExtension: "kernel",
+    handler: async ({ target, params: _params, identity, summonCtx }) => {
+      const artifactId = String(target?._id || target?.artifactId || target);
+      if (!artifactId) throw new Error("delete-artifact: artifactId required");
+      const { deleteArtifactAndFile } = await import("../tree/artifacts.js");
+      const beingId = identity?.beingId
+        || (await Artifact.findById(artifactId).select("beingId").lean())?.beingId;
+      await deleteArtifactAndFile({
+        artifactId,
+        beingId:   String(beingId || ""),
+        summonId:  summonCtx?.summonId || null,
+        sessionId: summonCtx?.sessionId || null,
+      });
+      return { removed: true, artifactId };
+    },
+  });
+
+
   // set-parent: reparent a node. The target IS the node being moved;
   // params.parentId names the new parent.
   registerOperation("set-parent", {

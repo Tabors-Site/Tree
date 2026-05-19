@@ -6,6 +6,7 @@
 // on the addressed Position's descriptor.
 
 import * as THREE from "three";
+import { CSS3DRenderer, CSS3DObject } from "three/addons/renderers/CSS3DRenderer.js";
 import { showLabel, hideLabel, setSkyClock, hideSkyClock } from "./ui.js";
 
 const MOVE_SPEED = 6.0;       // units / second
@@ -63,11 +64,12 @@ const VISUAL_PYRAMID = {
 };
 
 export class Scene {
-  constructor({ onGaze, onEnter, onBeingProximity, onBeingActivate, isInputBlocked } = {}) {
+  constructor({ onGaze, onEnter, onBeingProximity, onBeingActivate, onArtifactEnded, isInputBlocked } = {}) {
     this.onGaze = onGaze || (() => {});
     this.onEnter = onEnter || (() => {});
     this.onBeingProximity = onBeingProximity || (() => {});
     this.onBeingActivate = onBeingActivate || (() => {});
+    this.onArtifactEnded = onArtifactEnded || (() => {});
     this.isInputBlocked = isInputBlocked || isTypingInUI;
     // Every being mesh by being. Proximity fires per-being; speech
     // bubbles anchor to the mesh for that being.
@@ -81,6 +83,21 @@ export class Scene {
     });
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // CSS3DRenderer sits behind the WebGL canvas (pointer-events:none
+    // so it doesn't block the 3D gaze raycast) and renders DOM elements
+    // — iframes for video artifacts, anchors for web pages — at real
+    // 3D positions. Two renderers, one scene/camera. The CSS renderer's
+    // DOM elements (CSS3DObject) live in the scene tree alongside
+    // meshes; we resize + render them in lockstep.
+    this.cssRenderer = new CSS3DRenderer();
+    this.cssRenderer.setSize(window.innerWidth, window.innerHeight);
+    const cssEl = this.cssRenderer.domElement;
+    cssEl.style.position      = "fixed";
+    cssEl.style.inset         = "0";
+    cssEl.style.pointerEvents = "none";
+    cssEl.style.zIndex        = "1"; // behind the HUD (10) and the canvas (auto)
+    document.body.appendChild(cssEl);
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(COLOR_BG);
@@ -119,15 +136,28 @@ export class Scene {
     this._bindInput();
 
     this.clock = new THREE.Clock();
+    this._ytApiReady = null;     // lazy-loaded promise
+    this._ytPlayers  = new Map(); // iframe-id → YT.Player
   }
 
   start() {
     const loop = () => {
       this._tick(this.clock.getDelta());
       this.renderer.render(this.scene, this.camera);
+      this.cssRenderer.render(this.scene, this.camera);
       requestAnimationFrame(loop);
     };
     loop();
+    window.addEventListener("resize", () => this._onResize());
+  }
+
+  _onResize() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w, h);
+    this.cssRenderer.setSize(w, h);
   }
 
   // Replace the world with what's described by the given descriptor.
@@ -256,31 +286,47 @@ export class Scene {
     // userData carries a preview the gaze label can show on hover.
     this._artifactMeshes = new Map();
     const artifacts = desc?.artifacts || [];
+    console.log("[scene] renderDescriptor:",
+      { isLandRoot, isAuthenticated, arrival, artifacts: artifacts.length });
     if (!arrival) {
       artifacts.forEach((art, i) => {
-        const id = art.noteId || `art-${i}`;
+        const id = art.artifactId || art.noteId || `art-${i}`;
+        const isVideo = art?.content?.contentType === "video/youtube";
         let x, z;
         const serverCoords = art.position?.coords;
         if (serverCoords && typeof serverCoords.x === "number") {
           x = serverCoords.x;
           z = serverCoords.y;
+        } else if (isVideo) {
+          // Video screens get a stable, prominent spot in front of the
+          // arrival camera — close enough to read, far enough to walk
+          // around. Z is negative so the screen faces -Z (camera looks
+          // toward -Z at arrival).
+          x = 0;
+          z = -6;
         } else {
           const h = hashKey(id);
           const angle = (h % 360) * (Math.PI / 180);
-          const radius = 5 + ((h >> 9) % 80) * 0.08; // 5..11.4 (close to player)
+          const radius = 5 + ((h >> 9) % 80) * 0.08;
           x = Math.cos(angle) * radius;
           z = Math.sin(angle) * radius;
         }
         const mesh = this._makeArtifactMesh(art);
-        mesh.position.set(x, mesh.position.y, z);
-        mesh.userData = {
+        mesh.position.set(x, 0, z);
+        // Video screens face the +Z direction (toward the player who
+        // starts at z=8 looking toward -Z). Rotate 180° so the iframe
+        // faces the camera.
+        if (isVideo) mesh.rotation.y = Math.PI;
+        // Preserve existing userData (the video mesh has iframe + ids).
+        mesh.userData = Object.assign({
           kind: "artifact",
-          artifactKind: art.kind || "note",
+          artifactKind: isVideo ? "video" : (art.kind || "note"),
           ref: id,
+          artifactId: id,
           label: artifactLabel(art),
           preview: art.preview || "",
           fullContentRef: art.fullContentRef || null,
-        };
+        }, mesh.userData || {});
         this.world.add(mesh);
         this._artifactMeshes.set(id, mesh);
       });
@@ -731,11 +777,15 @@ export class Scene {
     return group;
   }
 
-  // Small glowing cube floating above the ground. Acts as a placeholder
-  // for any artifact attached to this position (notes today; podiums /
-  // scrolls later when the models extension layers in visuals). Gaze
-  // hover shows the artifact's preview content.
-  _makeArtifactMesh(_artifact) {
+  // Dispatch on artifact content type. Web/video artifacts get a real
+  // 3D screen (CSS3DObject wrapping an iframe); everything else falls
+  // back to the default glowing cube. Gaze hover shows the artifact's
+  // preview / label.
+  _makeArtifactMesh(artifact) {
+    const contentType = artifact?.content?.contentType || null;
+    if (contentType === "video/youtube" && artifact?.content?.videoId) {
+      return this._makeVideoScreenMesh(artifact);
+    }
     const color = 0xb0e0c0;
     const cube = new THREE.Mesh(
       new THREE.BoxGeometry(0.5, 0.5, 0.5),
@@ -743,8 +793,108 @@ export class Scene {
         color, emissive: color, emissiveIntensity: 0.35, roughness: 0.55,
       }),
     );
-    cube.position.y = 0.9; // float a bit above the ground
+    cube.position.y = 0.9;
     return cube;
+  }
+
+  // A free-standing video screen — flat WebGL backing + a CSS3D iframe
+  // running the YouTube IFrame Player API. Sized in world units; sits
+  // on a thin frame so it reads as "a thing sitting on the ground".
+  _makeVideoScreenMesh(artifact) {
+    const W = 6.4; // ~16:9 at 6.4 × 3.6 world units
+    const H = 3.6;
+
+    const group = new THREE.Group();
+
+    // WebGL backing plane — silhouette behind the iframe.
+    const backing = new THREE.Mesh(
+      new THREE.PlaneGeometry(W, H),
+      new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide }),
+    );
+    backing.position.y = H / 2 + 0.4;
+    group.add(backing);
+
+    // Stand frame so the screen reads as grounded.
+    const frame = new THREE.Mesh(
+      new THREE.BoxGeometry(W + 0.4, 0.4, 0.4),
+      new THREE.MeshStandardMaterial({ color: 0x1a3424, emissive: 0x0e1f15, roughness: 0.6 }),
+    );
+    frame.position.y = 0.2;
+    group.add(frame);
+
+    // The iframe wrapped in CSS3DObject. The Player API attaches to it
+    // after the API script loads — we mount the iframe with the right
+    // src (enablejsapi=1) so YT.Player(id) wraps it cleanly.
+    const iframeId = `yt-${artifact.artifactId || Math.random().toString(36).slice(2)}`;
+    const iframe = document.createElement("iframe");
+    iframe.id     = iframeId;
+    iframe.width  = "640";
+    iframe.height = "360";
+    iframe.allow  = "autoplay; encrypted-media";
+    iframe.allowFullscreen = true;
+    iframe.style.border        = "0";
+    iframe.style.pointerEvents = "auto";
+    iframe.src =
+      `https://www.youtube.com/embed/${encodeURIComponent(artifact.content.videoId)}` +
+      `?enablejsapi=1&autoplay=1&mute=1&modestbranding=1&rel=0`;
+
+    const css = new CSS3DObject(iframe);
+    const scale = W / 640;
+    css.scale.set(scale, scale, scale);
+    css.position.y = H / 2 + 0.4;
+    css.position.z = 0.01;
+    group.add(css);
+
+    group.userData.iframe      = iframe;
+    group.userData.iframeId    = iframeId;
+    group.userData.videoId     = artifact.content.videoId;
+    group.userData.artifactId  = artifact.artifactId;
+    group.userData.isVideoMesh = true;
+
+    // Attach the Player API once it's ready so we can listen for
+    // ENDED. Onstart of EVERY new video mesh we (lazy-)load the
+    // script and create a YT.Player.
+    this._loadYouTubeApi().then(() => {
+      // eslint-disable-next-line no-undef
+      const player = new YT.Player(iframeId, {
+        events: {
+          onStateChange: (e) => {
+            // eslint-disable-next-line no-undef
+            if (e.data === YT.PlayerState.ENDED) {
+              try {
+                this.onArtifactEnded({
+                  artifactId: group.userData.artifactId,
+                  videoId:    group.userData.videoId,
+                });
+              } catch (err) {
+                console.warn("[3D] onArtifactEnded handler threw:", err);
+              }
+            }
+          },
+        },
+      });
+      this._ytPlayers.set(iframeId, player);
+    }).catch((err) => {
+      console.warn("[3D] YouTube IFrame API failed to load:", err);
+    });
+
+    return group;
+  }
+
+  _loadYouTubeApi() {
+    if (this._ytApiReady) return this._ytApiReady;
+    this._ytApiReady = new Promise((resolve) => {
+      if (window.YT && window.YT.Player) return resolve();
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(tag);
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        if (typeof prev === "function") { try { prev(); } catch {} }
+        resolve();
+      };
+    });
+    return this._ytApiReady;
   }
 
   _makeChildMesh(child, sizeHint = 1) {

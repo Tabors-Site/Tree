@@ -68,6 +68,7 @@ async function main() {
     onEnter: (target) => onEnter(target),
     onBeingProximity: (being, inRange, distance) => onBeingProximity(being, inRange, distance),
     onBeingActivate: (being) => onBeingActivate(being),
+    onArtifactEnded: (info) => onArtifactEnded(info),
     isInputBlocked: isGameplayInputBlocked,
   });
   state.scene.setLandTimezone(state.discovery.timezone || null);
@@ -228,6 +229,67 @@ function handleSummon(entry) {
   state.scene.showBeingMessage(being, text);
 }
 
+// An in-world video artifact reached its end. Fire the role-owned
+// consume op; the descriptor refetch will drop the mesh. Currently
+// only the llm-assigner tutorial uses this — the op verifies the
+// artifact carries its marker before deleting.
+async function onArtifactEnded({ artifactId }) {
+  if (!state.client || !artifactId) return;
+  const land = state.discovery?.land;
+  if (!land) return;
+  try {
+    await state.client.do(`${land}/`, "llm-assigner:complete-tutorial", { artifactId });
+  } catch (err) {
+    console.warn("[3D] llm-assigner:complete-tutorial failed:", err?.code || err?.message || err);
+  }
+}
+
+// Spawn the llm-assigner intro tutorial artifact at the land root.
+// The DO op is idempotent server-side (marker on metadata.tutorial.purpose)
+// so calling it twice returns the existing artifact instead of creating
+// a duplicate. We ALWAYS re-render after the call — even when `created`
+// is false, the descriptor needs to refresh so the mesh shows for the
+// current session (a fresh tab won't have rendered it yet).
+async function spawnLlmAssignerTutorial() {
+  console.log("[3D] spawnLlmAssignerTutorial:",
+    { hasClient: !!state.client, hasToken: !!state.session?.token,
+      connected: !!state.client?.connected, land: state.discovery?.land });
+  if (!state.client) throw new Error("Not connected");
+  if (!state.session?.token) throw new Error("Not authenticated. Sign in via @auth first.");
+  const land = state.discovery?.land;
+  if (!land) throw new Error("No land");
+
+  // After an HMR reload (or any transient disconnect) the panel may
+  // open before the socket is back. Give it a short window to reconnect
+  // before failing the click.
+  if (!state.client.connected) {
+    console.log("[3D] socket not connected — waiting up to 3s for reconnect");
+    const deadline = Date.now() + 3000;
+    while (!state.client.connected && Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+    if (!state.client.connected) throw new Error("Portal socket not connected (after 3s)");
+  }
+
+  const addr = `${land}/`;
+  console.log(`[3D] DO ${addr} llm-assigner:start-tutorial`);
+  const result = await state.client.do(addr, "llm-assigner:start-tutorial", {});
+  console.log("[3D] start-tutorial result:", result);
+
+  // Always re-fetch — even when created:false, the live descriptor
+  // for this client may not have the artifact yet.
+  if (state.currentAddress) {
+    const desc = await state.client.see(state.currentAddress);
+    state.descriptor = desc;
+    console.log("[3D] descriptor.artifacts:", desc?.artifacts?.length || 0,
+      "isLandRoot:", desc?.isLandRoot);
+    state.scene.renderDescriptor(desc, {
+      isAuthenticated: !!state.session?.token,
+    });
+  }
+  return result;
+}
+
 async function navigate(address, { fromHistory = false } = {}) {
   if (!state.client) return;
   try {
@@ -351,9 +413,14 @@ function onBeingActivate(b) {
 }
 
 function openLlmAssignerPanel() {
+  console.log("[3D] openLlmAssignerPanel:",
+    { hasToken: !!state.session?.token,
+      land: state.discovery?.land,
+      currentAddress: state.currentAddress });
   // Requires an authenticated being (the server enforces this on every
   // op). If unauthenticated, bounce the user to the auth flow first.
   if (!state.session?.token) {
+    console.log("[3D] llm-assigner: not authenticated, opening auth instead");
     openAuthPanel();
     return;
   }
@@ -366,6 +433,11 @@ function openLlmAssignerPanel() {
     land:          state.discovery.land,
     currentNodeId: state.descriptor?.address?.nodeId || null,
     onClose:       () => {},
+    // Link in the panel: fires the llm-assigner:start-tutorial DO,
+    // then re-fetches the descriptor so the new artifact's 3D video
+    // screen appears in the scene. Server-side marker enforces
+    // one-at-a-time (idempotent).
+    onSpawnTutorial: spawnLlmAssignerTutorial,
   });
 }
 

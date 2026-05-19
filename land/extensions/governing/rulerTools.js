@@ -170,7 +170,7 @@ async function resolveRulerScope(nodeId) {
 // via its own being-room broadcast (`io.to('being:'+beingId)`), not via
 // the caller's socket. Hook payloads no longer carry `socket`/`signal`.
 
-export default function getRulerTools(_core) {
+export default function getRulerTools(core) {
   return [
     // ─────────────────────────────────────────────────────────────────
     // governing-hire-planner
@@ -1418,9 +1418,11 @@ export default function getRulerTools(_core) {
         // chain reaches the parent).
         if (beingId) {
           try {
-            const { emitToBeing } = await import("../../transports/ws/websocket.js");
-            const { WS } = await import("../../seed/core/protocol.js");
-            emitToBeing(String(beingId), WS.LIFECYCLE_ACTIVE, {
+            // `core.websocket.emitToBeing` auto-namespaces the event
+            // name to "governing:lifecycleActive" via the loader's
+            // scoped-core binding — extensions never type their own
+            // prefix.
+            core.websocket.emitToBeing(String(beingId), "lifecycleActive", {
               active: true,
               rulerNodeId: String(ruler._id),
               rootId: rootId || null,

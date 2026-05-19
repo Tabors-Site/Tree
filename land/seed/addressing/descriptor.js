@@ -334,6 +334,10 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
   // When the backing extension is missing, the entry stays in the
   // descriptor (so 3D clients still see the slot) but is non-invocable.
   const isRegistered = (beingName) => !!getRole(beingName);
+  // Artifacts at the land root. The llm-assigner intro tutorial is the
+  // seeded example (web-origin, points at a YouTube URL).
+  const landRootId = getLandRootId();
+  const artifacts = landRootId ? await readLandRootArtifacts(landRootId) : [];
   return {
     address: {
       land: landDomain,
@@ -401,7 +405,7 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
     // Public trees at land scope. Populated from the user-root nodes
     // directly under the land root with visibility === "public".
     children,
-    artifacts: [],
+    artifacts,
     land: {
       name: getLandConfigValue("LAND_NAME") || "Unnamed Land",
       operator: null,
@@ -698,6 +702,28 @@ async function listPublicTrees() {
     noteCount: 0,    // future: count via artifacts index
     ...childPlacement(t.metadata),
   }));
+}
+
+// Read artifacts attached to the land root. Slim shape the 3D portal
+// renders directly: id, name, beingId (so clients can filter by which
+// being authored it), origin (so they know whether to embed an iframe,
+// fetch a file, etc.), and the content blob.
+async function readLandRootArtifacts(landRootId) {
+  try {
+    const list = await getArtifacts({ nodeId: String(landRootId), limit: 50 });
+    return list.map((a) => ({
+      artifactId: String(a._id),
+      name:       a.name || null,
+      beingId:    a.beingId ? String(a.beingId) : null,
+      origin:     a.origin || "ibp",
+      content:    a.content || null,
+      metadata:   a.metadata instanceof Map
+        ? Object.fromEntries(a.metadata)
+        : (a.metadata || {}),
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /**

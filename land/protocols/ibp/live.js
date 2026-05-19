@@ -11,6 +11,7 @@
 // `disconnect` event.
 
 import log from "../../seed/core/log.js";
+import { IBP_EVENT, SEE_PUSH } from "./events.js";
 
 // nodeId -> Set<socket>
 const _subscribers = new Map();
@@ -78,14 +79,19 @@ function cleanupSocket(socket) {
 // ─────────────────────────────────────────────────────────────────────
 // Emitters
 // ─────────────────────────────────────────────────────────────────────
+//
+// All three live-SEE pushes ride the unified `ibp` event with
+// `{ verb: "see", payload: { kind, nodeId, data } }`. The kind tag
+// distinguishes patch vs replace vs invalidate; the client routes by
+// envelope.verb and payload.kind.
 
 /**
  * Emit an RFC 6902 patch to all subscribers of a position. Patches are
- * an optimization; today's path uses descriptor:invalidate to let the
- * client re-fetch via see, which keeps the substrate simple.
+ * an optimization; today's path uses an invalidate to let the client
+ * re-fetch via SEE, which keeps the substrate simple.
  */
 export function emitPositionPatch(nodeId, patch) {
-  emitToSubscribers(nodeId, "descriptor:patch", patch);
+  _pushSee(nodeId, SEE_PUSH.PATCH, patch);
 }
 
 /**
@@ -93,7 +99,7 @@ export function emitPositionPatch(nodeId, patch) {
  * a precise patch; heavier on the wire.
  */
 export function emitPositionReplace(nodeId, descriptor) {
-  emitToSubscribers(nodeId, "descriptor:replace", descriptor);
+  _pushSee(nodeId, SEE_PUSH.REPLACE, descriptor);
 }
 
 /**
@@ -101,18 +107,22 @@ export function emitPositionReplace(nodeId, descriptor) {
  * are too expensive or state has changed too much to diff.
  */
 export function emitPositionInvalidate(nodeId, reason) {
-  emitToSubscribers(nodeId, "descriptor:invalidate", { nodeId: String(nodeId), reason });
+  _pushSee(nodeId, SEE_PUSH.INVALIDATE, { reason });
 }
 
-function emitToSubscribers(nodeId, event, payload) {
+function _pushSee(nodeId, kind, data) {
   if (!nodeId) return;
   const bucket = _subscribers.get(String(nodeId));
   if (!bucket || bucket.size === 0) return;
+  const envelope = {
+    verb:    "see",
+    payload: { kind, nodeId: String(nodeId), data },
+  };
   for (const socket of bucket) {
     try {
-      if (socket.connected) socket.emit(event, payload);
+      if (socket.connected) socket.emit(IBP_EVENT, envelope);
     } catch (err) {
-      log.warn("Live", `emit ${event} to socket ${socket.id} failed: ${err.message}`);
+      log.warn("Live", `push see/${kind} to socket ${socket.id} failed: ${err.message}`);
     }
   }
 }

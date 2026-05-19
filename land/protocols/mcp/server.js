@@ -248,7 +248,7 @@ async function handleMcpRequest(req, res) {
       // but the default is always the current position.
       if (req.beingId) {
         try {
-          const { getCurrentNodeId, getRootId } = await import("../../seed/being/position.js");
+          const { getCurrentNodeId, getRootId } = await import("../../seed/beingPosition.js");
           const beingRootId = getRootId(req.beingId);
           const beingNodeId = getCurrentNodeId(req.beingId);
           if (!requestArgs.rootId && beingRootId) requestArgs.rootId = beingRootId;

@@ -117,9 +117,16 @@ export function onListen() {
     // along with its two generic tools (land-see, land-do).
     const { registerRole } = await import("./seed/roles/registry.js");
     const { landManagerRole } = await import("./seed/roles/landManager.js");
-    const { landManagerTools } = await import("./seed/roles/landManagerTools.js");
+    const { landManagerTools } = await import("./seed/roles/tools/landManagerTools.js");
     registerRole("land-manager", landManagerRole, "kernel");
     await registerKernelTools(landManagerTools);
+
+    // llm-assigner ships its own DO ops (`llm-assigner:start-tutorial`
+    // and `llm-assigner:complete-tutorial`) — they live with the role,
+    // not in the kernel ops registry. Same shape an extension would
+    // use; just shipped in seed.
+    const { registerLlmAssignerOps } = await import("./seed/roles/llmAssignerOps.js");
+    registerLlmAssignerOps();
 
     // Tree integrity check (before extensions load, after migrations)
     const { checkIntegrity } = await import("./seed/tree/integrityCheck.js");

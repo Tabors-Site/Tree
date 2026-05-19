@@ -159,49 +159,28 @@ export const ERR = Object.freeze({
 });
 
 // ============================================================================
-// WEBSOCKET EVENT TYPES (kernel-emitted only)
+// WIRE EVENTS
 // ============================================================================
-
-export const WS = Object.freeze({
-  CHAT_RESPONSE:        "chatResponse",
-  CHAT_ERROR:           "chatError",
-  CHAT_CANCELLED:       "chatCancelled",
-  TOOL_CALLED:          "toolCalled",
-  TOOL_RESULT:          "toolResult",
-  THINKING:             "thinking",
-  PLACE_RESULT:         "placeResult",
-  MODE_SWITCHED:        "modeSwitched",
-  EXECUTION_STATUS:     "executionStatus",
-  ORCHESTRATOR_STEP:    "orchestratorStep",
-  BRANCH_STARTED:       "branchStarted",
-  BRANCH_COMPLETED:     "branchCompleted",
-  // Emitted when a sub-role (Planner, Contractor, Foreman) spawned
-  // as a chainstep child of a Ruler turn finishes. Carries the
-  // sub-role's exit text so the chat UI can render it as an inline
-  // sub-bubble between the user's message and the Ruler's final
-  // synthesis — exposing the internal dialogue between Ruler and
-  // its hired roles. Payload: { role, modeKey, exitText, parentSummonId, source }.
-  CHAINSTEP_COMPLETED:  "chainstepCompleted",
-  // Lifecycle activity signal — fired when a fire-and-forget spawn
-  // begins at a Ruler scope (planner/contractor/dispatch/etc.) and
-  // again when the lifecycle reaches a terminal state. The chat
-  // panel renders this as a persistent "Ruler active — phase: X"
-  // header chip that stays visible across hook-wakeup turns. Without
-  // this signal, the chat panel's per-message typing indicator goes
-  // silent between turns even though work continues in the background,
-  // making the conversation appear "stuck" when it's actually
-  // progressing. Payload: { rulerNodeId, rootId, phase, spawnId,
-  // active: true|false, terminalStatus?: "completed"|"failed"|... }.
-  LIFECYCLE_ACTIVE:     "lifecycleActive",
-  SWARM_DISPATCH:       "swarmDispatch",
-  TREE_CHANGED:         "treeChanged",
-  REGISTERED:           "registered",
-  NAVIGATOR_SESSION:    "navigatorSession",
-  AVAILABLE_MODES:      "availableModes",
-  CONVERSATION_CLEARED: "conversationCleared",
-  NAVIGATE:             "navigate",
-  RELOAD:               "reload",
-});
+//
+// The kernel doesn't own wire-event constants. The wire is the IBP
+// protocol's surface:
+//
+//   IBP wire event (both directions)
+//     → defined in seed/core/pushChannel.js (IBP_EVENT = "ibp")
+//     → SEE push payload kinds in protocols/ibp/events.js
+//
+//   Transport-private socket events (socket.io handshake + UI signals)
+//     → defined inside transports/ws/websocket.js (WS_REGISTERED,
+//       WS_NAVIGATE). They are NOT protocol surface; the kernel doesn't
+//       know about them.
+//
+//   Extension-private events
+//     → defined inside the owning extension (e.g. governing's
+//       GOVERNING_EVENT.LIFECYCLE_ACTIVE).
+//
+// The previous `WS` constant block here conflated all three layers; it
+// retired with the orchestrator deletion (2026-05-18) and the
+// principle-aligned event sweep that followed.
 
 // ============================================================================
 // CASCADE STATUSES

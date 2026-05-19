@@ -463,7 +463,7 @@ let _llmPanelState = {
   error:    "",
 };
 
-export function showLlmAssignerPanel({ client, land, currentNodeId, onClose }) {
+export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onSpawnTutorial }) {
   if (_llmAssignerPanelEl) return;
   document.exitPointerLock?.();
 
@@ -494,6 +494,14 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose }) {
       <button class="llm-close" type="button" style="background:transparent;
         color:#6b7d72; border:none; font-size:18px; line-height:1;
         cursor:pointer; padding:0 4px;">×</button>
+    </div>
+
+    <div style="margin-bottom:10px; font-size:11px;">
+      <button class="llm-spawn-tutorial" type="button"
+        style="background:transparent; border:none; padding:0;
+          color:#8fbf9f; cursor:pointer; font:inherit; text-align:left;">
+        \u{25B6} Spawn the LLM setup video in the land
+      </button>
     </div>
 
     <div class="llm-tabs" style="display:flex; gap:4px; margin-bottom:12px;
@@ -813,7 +821,38 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose }) {
     if (typeof onClose === "function") onClose();
   });
 
-  // Initial mount.
+  // Spawn link: fires the llm-assigner:start-tutorial DO. The op is
+  // idempotent server-side (marker on metadata.tutorial.purpose), so
+  // only one is ever active at a time. On success the panel closes
+  // and the caller's onSpawnTutorial refetches the descriptor — the
+  // new artifact's video screen mounts in the 3D scene.
+  const spawnLink = el.querySelector(".llm-spawn-tutorial");
+  console.log("[ui] llm-assigner panel mounted, spawn button bound:", !!spawnLink);
+  spawnLink.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("[ui] spawn click");
+    const original = spawnLink.textContent;
+    spawnLink.style.opacity = "0.5";
+    spawnLink.textContent   = "spawning...";
+    try {
+      if (typeof onSpawnTutorial === "function") {
+        await onSpawnTutorial();
+      } else {
+        await client.do(`${land}/`, "llm-assigner:start-tutorial", {});
+      }
+      hideLlmAssignerPanel();
+      if (typeof onClose === "function") onClose();
+    } catch (err) {
+      showError(fmtErr(err, "spawn failed"));
+      spawnLink.style.opacity = "1";
+      spawnLink.textContent   = original;
+    }
+  });
+
+  // Initial mount. The intro YouTube tutorial used to live here as
+  // a popup; it's now a 3D placed artifact (see scene.js video-screen
+  // mesh). The panel is back to its CRUD-only role.
   (async () => {
     await refreshConnections();
     // Restore last-active tab; fall back to "being" if node was active

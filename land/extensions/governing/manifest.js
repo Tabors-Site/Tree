@@ -90,7 +90,7 @@ export default {
   },
 
   optional: {
-    services: ["llm"],
+    services: ["llm", "websocket"],
     extensions: ["swarm"],
   },
 

@@ -10,11 +10,12 @@
 //
 //   socket.emit("ibp", { id, verb, address, payload, identity? }, ack)
 //
-// Async updates the server pushes back:
-//   "ibp:update"           SUMMON replies, keyed by correlation id
-//   "descriptor:patch"     live SEE patches  ─┐
-//   "descriptor:replace"   full re-render    ├ (will fold into ibp:update
-//   "descriptor:invalidate" tear down        ─┘  when live.js unifies)
+// Async updates the server pushes back ride the SAME `ibp` event with
+// a server→client envelope:
+//   { verb: "summon", payload: <inbox entry> }
+//   { verb: "see",    payload: { kind: "patch"|"replace"|"invalidate",
+//                                nodeId, data } }
+// One event, both directions, envelope-discriminated.
 
 import { io } from "socket.io-client";
 
@@ -82,17 +83,22 @@ export class PortalClient {
     this.socket.on("disconnect",    (reason) => { this.connected = false; this._onConnectionChange("disconnected", reason); });
     this.socket.on("connect_error", (err)    => { this.connected = false; this._onConnectionChange("error", err?.message); });
 
-    // Async SUMMON updates. Payload shape: { correlation, content, ... }.
-    this.socket.on("ibp:update", (update) => {
-      try { this._onSummon(update); }
-      catch (err) { console.warn("[portal] ibp:update handler threw:", err); }
+    // Single IBP wire event — one listener, route by envelope.verb.
+    // Server-push envelopes:
+    //   { verb: "summon", payload: <inbox entry> }
+    //   { verb: "see",    payload: { kind, nodeId, data } }
+    this.socket.on("ibp", (envelope) => {
+      if (!envelope || typeof envelope !== "object") return;
+      if (envelope.verb === "summon") {
+        safeCall(this._onSummon, envelope.payload);
+        return;
+      }
+      if (envelope.verb === "see") {
+        const p = envelope.payload || {};
+        safeCall(this._onDescriptorEvent, { kind: p.kind, payload: p.data, nodeId: p.nodeId });
+        return;
+      }
     });
-
-    // Live SEE updates. Still on the per-event names until live.js
-    // unifies into ibp:update.
-    this.socket.on("descriptor:patch",      (payload) => safeCall(this._onDescriptorEvent, { kind: "patch",      payload }));
-    this.socket.on("descriptor:replace",    (payload) => safeCall(this._onDescriptorEvent, { kind: "replace",    payload }));
-    this.socket.on("descriptor:invalidate", (payload) => safeCall(this._onDescriptorEvent, { kind: "invalidate", payload }));
   }
 
   disconnect() {

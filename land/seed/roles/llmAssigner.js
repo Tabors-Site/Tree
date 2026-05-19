@@ -39,12 +39,12 @@ export const llmAssignerBeing = Object.freeze({
   name: "llm-assigner",
   description: "Configures LLM connections — on the caller's being, on a node they own, or on the land itself (root operator only).",
   honoredOperations: [
-    "add-llm",       // caller adds a connection to their own being
-    "assign-slot",   // caller binds one of their connections to a slot
-    "list-llms",     // caller lists their connections + slot assignments
-    "delete-llm",    // caller removes one of their connections
-    "set-land-llm",  // root operator sets the land-level default
-    "set-node-llm",  // tree owner sets a slot on a specific node
+    "add-llm",      // caller adds a connection to their own being
+    "assign-slot",  // caller binds one of their connections to a slot
+    "list-llms",    // caller lists their connections + slot assignments
+    "delete-llm",   // caller removes one of their connections
+    "set-land-llm", // root operator sets the land-level default
+    "set-node-llm", // tree owner sets a slot on a specific node
   ],
 
   // ────────────────────────────────────────────────────────────────

@@ -12,11 +12,19 @@
 // era ([[project_tree_orchestrator_deleted]]).
 
 import log from "../../seed/core/log.js";
-import { WS } from "../../seed/core/protocol.js";
 import { Server } from "socket.io";
 import { decodeToken } from "../../seed/core/identity.js";
 import { hooks as _hooks } from "../../seed/core/hooks.js";  // reserved for future
 import { getLandConfigValue } from "../../seed/landConfig.js";
+import { setPushChannel, IBP_EVENT } from "../../seed/core/pushChannel.js";
+
+// Transport-private socket events. These are NOT protocol surface —
+// they're socket.io handshake / UI-side coordination that lives at the
+// transport layer. The kernel doesn't know about them. The IBP wire
+// surface is a single event (`IBP_EVENT = "ibp"`); these sit alongside it
+// for socket.io housekeeping only.
+const WS_REGISTERED = "registered"; // post-connect ack to clients
+const WS_NAVIGATE   = "navigate";   // tell a client's iframe to navigate
 
 let io;
 let _httpServerRef = null;
@@ -64,7 +72,7 @@ const _socketHandlers = new Map();
 
 const RESERVED_SOCKET_EVENTS = new Set([
   "connect", "disconnect", "error", "connecting", "reconnect",
-  "ibp", "ibp:update", "navigate",
+  IBP_EVENT, WS_REGISTERED, WS_NAVIGATE,
 ]);
 
 export function registerSocketHandler(event, handler) {
@@ -93,6 +101,22 @@ export function unregisterSocketHandler(event) {
 
 export function initWebSocketServer(httpServer, originPolicy) {
   _httpServerRef = httpServer;
+
+  // Register this transport as the land's push channel. Seed callers
+  // (services bundle, IBP verbs, async SUMMON reply path) reach the
+  // socket layer through seed/core/pushChannel.js rather than importing
+  // from this file — that keeps the dependency direction
+  // transports → seed and lets a no-WS run (CLI-only, tests) no-op
+  // cleanly.
+  setPushChannel({
+    emitToBeing,
+    emitToBeingRoom,
+    emitNavigate,
+    getIO,
+    getHttpServer,
+    registerSocketHandler,
+    unregisterSocketHandler,
+  });
 
   // originPolicy: function `(origin, cb) => cb(null, ok)` OR array of
   // allowed origin strings. Chrome extensions and no-origin (CLI /
@@ -180,11 +204,11 @@ export function initWebSocketServer(httpServer, originPolicy) {
       userSockets.set(clientSessionId, socket.id);
       socket.clientSessionId = clientSessionId;
       socket.join(`being:${String(beingId)}`);
-      socket.emit(WS.REGISTERED, { success: true, clientSessionId });
+      socket.emit(WS_REGISTERED, { success: true, clientSessionId });
     } else {
       // Anonymous arrival socket. Clients can register / claim via
       // `ibp:be` and then reconnect with the new cookie to bind.
-      socket.emit(WS.REGISTERED, { success: false, error: "Unauthorized" });
+      socket.emit(WS_REGISTERED, { success: false, error: "Unauthorized" });
     }
 
     // Extension-registered socket handlers
@@ -225,7 +249,7 @@ export function emitNavigate({ beingId, url, replace = false }) {
   const socketIds = getAuthSocketIds(beingId);
   if (socketIds.length === 0) return;
   for (const id of socketIds) {
-    io.to(id).emit(WS.NAVIGATE, { url, replace });
+    io.to(id).emit(WS_NAVIGATE, { url, replace });
   }
 }
 
@@ -239,4 +263,16 @@ export function emitToBeing(beingId, event, data) {
   for (const id of getAuthSocketIds(beingId)) {
     io.to(id).emit(event, data);
   }
+}
+
+/**
+ * Broadcast to the being-room — every socket that has joined the
+ * `being:<id>` room receives the event. Use for SUMMON replies and
+ * other being-scoped fanouts where socket.io's room semantics are
+ * the canonical fanout (joined on register, automatic disconnect
+ * cleanup).
+ */
+export function emitToBeingRoom(beingId, event, data) {
+  if (!io || !beingId) return;
+  io.to(`being:${String(beingId)}`).emit(event, data);
 }

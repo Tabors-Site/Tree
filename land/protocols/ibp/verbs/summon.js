@@ -20,34 +20,34 @@ import log from "../../../seed/core/log.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/core/errors.js";
 import { ackOk, ackError } from "../envelope.js";
 import { summonVerb } from "../../../seed/core/verbs.js";
-import { getIO } from "../../../transports/ws/websocket.js";
+import { emitToBeingRoom } from "../../../seed/core/pushChannel.js";
+import { IBP_EVENT } from "../events.js";
 
 /**
- * Broadcast an out-of-band IBP update (the async SUMMON reply) to
- * every socket the asker being has connected. Falls back to the
- * originating socket when beingId or io aren't available.
+ * Broadcast an out-of-band SUMMON push (async reply or unsolicited
+ * inbox arrival) to every socket the recipient being has connected.
+ * Falls back to the originating socket when beingId isn't tracked.
  *
- * Wire shape: `{ correlation, content }` per
- * [[project_protocol_transport_separation]]. `content` carries the
- * inbox entry; `correlation` matches what the client routes against
- * (rootCorrelation or inReplyTo, whichever the client tracked).
+ * The push rides the unified `ibp` event:
+ *
+ *   { verb: "summon", payload: <inbox entry> }
+ *
+ * Direction (server → client) is implicit. The client routes by
+ * envelope.verb and uses `payload.inReplyTo` / `payload.correlation`
+ * to match against whatever it's awaiting.
  */
 function emitUpdateForSocket(socket) {
   return (entry) => {
-    const update = {
-      correlation: entry?.inReplyTo || entry?.correlation || null,
-      content:     entry,
-    };
+    const envelope = { verb: "summon", payload: entry };
     const beingId = socket?.beingId;
-    const io = getIO();
-    if (beingId && io) {
+    if (beingId) {
       try {
-        io.to(`being:${String(beingId)}`).emit("ibp:update", update);
+        emitToBeingRoom(beingId, IBP_EVENT, envelope);
         return;
       } catch {}
     }
     try {
-      if (socket?.connected) socket.emit("ibp:update", update);
+      if (socket?.connected) socket.emit(IBP_EVENT, envelope);
     } catch {}
   };
 }

@@ -42,12 +42,12 @@ import {
   getClientForBeing, resolveRootLlmForRole, beingHasLlm,
 } from "../llm/llmClient.js";
 import {
-  setRootId, getRootId, setCurrentNodeId, getCurrentNodeId,
-} from "../being/position.js";
+  getRootId, setCurrentNodeId, getCurrentNodeId,
+} from "../beingPosition.js";
 import { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } from "../llm/mcpClient.js";
 import { registerRootLlmSlot, registerBeingLlmSlot } from "../llm/connections.js";
-import { emitNavigate, emitToBeing, registerSocketHandler, unregisterSocketHandler, getIO, getHttpServer } from "../../transports/ws/websocket.js";
-import { ok, error, sendOk, sendError, ERR, WS, CASCADE } from "./protocol.js";
+import { emitNavigate, emitToBeing, emitToBeingRoom, registerSocketHandler, unregisterSocketHandler, getIO, getHttpServer } from "./pushChannel.js";
+import { ok, error, sendOk, sendError, ERR, CASCADE } from "./protocol.js";
 import { getExtMeta, readNs, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, addToExtMetaSet, batchSetExtMeta, unsetExtMeta } from "../tree/extensionMetadata.js";
 import { getBeingMeta, readBeingNs, setBeingMeta, mergeBeingMeta, incBeingMeta, pushBeingMeta, addToBeingMetaSet, batchSetBeingMeta, unsetBeingMeta } from "../tree/beingMetadata.js";
 import { getArtifactMeta, readArtifactNs, setArtifactMeta, mergeArtifactMeta, incArtifactMeta, pushArtifactMeta, addToArtifactMetaSet, batchSetArtifactMeta, unsetArtifactMeta } from "../tree/artifactMetadata.js";
@@ -115,23 +115,14 @@ const authStrategies = [];
 const _allowedStrategyExtensions = new Set();
 
 // ---------------------------------------------------------------------------
-// No-op stubs for optional services
-// Extensions that declare a service as optional get these if the host land
-// doesn't have the real implementation loaded.
-// ---------------------------------------------------------------------------
-
-const NOOP_WEBSOCKET = {
-  emitNavigate: () => {},
-  emitToBeing: () => {},
-  registerSocketHandler: () => {},
-  unregisterSocketHandler: () => {},
-  getIO: () => null,
-  getHttpServer: () => null,
-};
-
-// ---------------------------------------------------------------------------
 // Builder
 // ---------------------------------------------------------------------------
+//
+// The push-channel proxies imported from ./pushChannel.js no-op when no
+// transport has registered. The previous NOOP_WEBSOCKET fallback was
+// only there to guard against an unloaded transport — that case is now
+// handled inside the proxy module itself. The bundle just always
+// exposes the proxy functions.
 
 /**
  * Build the core services bundle.
@@ -152,8 +143,6 @@ export function getCoreServices() {
 }
 
 export function buildCoreServices({ loadedExtensions = new Map(), overrides = {} } = {}) {
-  const hasWebsocket = typeof emitNavigate === "function";
-
   const core = {
     // ────────────────────────────────────────────────────────────────
     // The four verbs. See [[project_seed_four_verbs_only]].
@@ -207,7 +196,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
 
     llm: {
       getClientForBeing, resolveRootLlmForRole, beingHasLlm,
-      processMessage, switchRole, setRootId, getRootId, runChat,
+      processMessage, switchRole, getRootId, runChat,
       setCurrentNodeId, getCurrentNodeId, getCurrentRole,
       registerRootLlmSlot, registerBeingLlmSlot, registerFailoverResolver,
       LLM_PRIORITY,
@@ -215,9 +204,12 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
 
     mcp: { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL },
 
-    websocket: hasWebsocket
-      ? { emitNavigate, emitToBeing, registerSocketHandler, unregisterSocketHandler, getIO, getHttpServer }
-      : NOOP_WEBSOCKET,
+    // Push channel — proxies from seed/core/pushChannel.js that route to
+    // the registered transport (today: WebSocket via initWebSocketServer).
+    // No-op when no transport has registered. Named `websocket` for
+    // back-compat with extension callers; the channel itself is
+    // transport-agnostic.
+    websocket: { emitNavigate, emitToBeing, emitToBeingRoom, registerSocketHandler, unregisterSocketHandler, getIO, getHttpServer },
 
     // The `orchestrator` and `orchestrators` service surfaces retired
     // 2026-05-18 with the substrate-driven SUMMON model. Pipelines and
@@ -323,7 +315,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     },
 
     // --- Response protocol (shapes, error codes, event types) ---
-    protocol: { ok, error, sendOk, sendError, ERR, WS, CASCADE },
+    protocol: { ok, error, sendOk, sendError, ERR, CASCADE },
   };
 
   // Apply overrides (lands can swap any service)
@@ -339,4 +331,4 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
   return core;
 }
 
-export { NOOP_WEBSOCKET, authStrategies };
+export { authStrategies };

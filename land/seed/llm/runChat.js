@@ -501,21 +501,22 @@ import {
 // Each session holds: { messages[], role, _lastActive }.
 //
 // Position state (rootId, currentNodeId) lives separately in
-// seed/being/position.js, keyed by beingId, because under the
+// seed/beingPosition.js, keyed by beingId, because under the
 // single-context being model a being has one position regardless of
 // which reach (web + CLI) they connect through. Background AI pipelines
 // run AS a specific being and write to THAT being's position.
 const sessions = new Map();
 let MAX_CONVERSATION_SESSIONS = 50000; // hard cap to prevent OOM from leaked sessions
 
-// Position state lives in seed/being/position.js. Used internally
+// Position state lives in seed/beingPosition.js. Used internally
 // by the runChat tool loop and prepareConversation/enrichContext.
+// rootId is derived from currentNodeId on every setCurrentNodeId,
+// so callers only ever set the current node; rootId follows.
 import {
-  setRootId,
   getRootId,
   setCurrentNodeId,
   getCurrentNodeId,
-} from "../being/position.js";
+} from "../beingPosition.js";
 
 /**
  * Get or create the conversation session.
@@ -639,7 +640,7 @@ export async function switchRole(clientSessionId, newRole, ctx) {
     ...carriedContext,
   ];
   session.role = newRole;
-  if (ctx.currentNodeId) setCurrentNodeId(beingId, ctx.currentNodeId);
+  if (ctx.currentNodeId) await setCurrentNodeId(beingId, ctx.currentNodeId);
 
   log.debug("LLM",
     `🔄 Role switch for ${clientSessionId}: ${oldRole?.name || "none"} → ${newRole.name} (carried ${recentMessages.length} messages)`,
@@ -672,20 +673,23 @@ async function ensureSession(clientSessionId, ctx) {
 
   // Self-healing: detect rootId mismatch. If the caller says we're in a
   // different tree than the being thinks, clear messages and re-init.
+  // The position update below (setCurrentNodeId) re-derives rootId from
+  // the incoming node, so rootId catches up automatically.
   const incomingRootId = ctx.rootId || null;
   const knownRootId = getRootId(beingId);
   if (knownRootId && incomingRootId && knownRootId !== incomingRootId) {
     log.debug("LLM", `Root mismatch for ${clientSessionId}: being=${knownRootId}, ctx=${incomingRootId}. Clearing.`);
     session.messages = [];
     session.role = null;
-    setRootId(beingId, incomingRootId);
   }
 
-  if (!getRootId(beingId) && incomingRootId) {
-    setRootId(beingId, incomingRootId);
-  }
-  if (ctx.currentNodeId) {
-    setCurrentNodeId(beingId, ctx.currentNodeId);
+  // Position update. setCurrentNodeId derives rootId from the chain
+  // and updates both fields atomically. When the caller has only
+  // rootId (no specific currentNodeId), the tree-root itself is the
+  // position — the being "is at the tree root."
+  const targetNodeId = ctx.currentNodeId || incomingRootId;
+  if (targetNodeId) {
+    await setCurrentNodeId(beingId, targetNodeId);
   }
 
   // Role MUST be present. runChat thread it through ctx.role (set
@@ -2158,9 +2162,11 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
     }
   }
 
-  // 2. Set root/node if provided
-  if (rootId) setRootId(beingId, rootId);
-  if (nodeId) setCurrentNodeId(beingId, nodeId);
+  // 2. Set position. rootId is derived from the current node, so
+  // callers only set the node; the tree-root follows. When only
+  // rootId is known, treat it as the position itself.
+  const targetNodeId = nodeId || rootId;
+  if (targetNodeId) await setCurrentNodeId(beingId, targetNodeId);
 
   // 3. Switch role only if different. Role state lives on the
   // conversation entry (keyed by mcpCacheKey: IBP Address or
@@ -2183,7 +2189,7 @@ export async function runChat({ being, envelope, role, signal = null } = {}) {
       beingIn:       beingId,                                       // asker
       beingOut,                                                     // responder
       // Asker stance position: the asker's CURRENT navigated position
-      // (per Being.currentPositionId / seed/being/position.js cache),
+      // (per Being.currentPositionId / seed/beingPosition.js cache),
       // with rootId as fallback. The Summon's IBP Address is computed
       // from this stance plus the addressee's stance.
       askerPosition: getCurrentNodeId(beingId) || rootId || null,

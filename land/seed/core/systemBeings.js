@@ -170,3 +170,11 @@ export async function ensureSystemBeings(landRootId) {
   }
   return { created, existing, deferred: false };
 }
+
+// Marker for the llm-assigner intro tutorial artifact. Used by the
+// being's start-tutorial / complete-tutorial BE ops to find + verify
+// its own artifacts. Kept here next to the SYSTEM_BEINGS definition so
+// system-being conventions live in one place.
+export const LLM_ASSIGNER_TUTORIAL_MARK = "llm-assigner-intro";
+export const LLM_ASSIGNER_TUTORIAL_URL  = "https://www.youtube.com/watch?v=_cXGZXdiVgw";
+export const LLM_ASSIGNER_TUTORIAL_VIDEO_ID = "_cXGZXdiVgw";

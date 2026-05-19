@@ -80,17 +80,26 @@ mock.module("../seed/models/being.js", {
   },
 });
 
-// Mock the dynamic getIO import so the human-cognition path can emit
-// without booting the real WS server. Tests inspect `humanEmits` to
-// verify being-room delivery.
+// Mock the push channel so the human-cognition path can emit without
+// booting the real WS server. Tests inspect `humanEmits` to verify
+// being-room delivery.
 const humanEmits = [];
-mock.module("../transports/ws/websocket.js", {
+mock.module("../seed/core/pushChannel.js", {
   namedExports: {
-    getIO: () => ({
-      to: (room) => ({
-        emit: (event, payload) => { humanEmits.push({ room, event, payload }); },
-      }),
-    }),
+    IBP_EVENT: "ibp",
+    pushIbp: (beingId, envelope) => {
+      humanEmits.push({ room: `being:${beingId}`, event: "ibp", payload: envelope });
+    },
+    emitToBeing:             () => {},
+    emitToBeingRoom:         () => {},
+    emitNavigate:            () => {},
+    getIO:                   () => null,
+    getHttpServer:           () => null,
+    registerSocketHandler:   () => {},
+    unregisterSocketHandler: () => {},
+    setPushChannel:          () => {},
+    resetPushChannel:        () => {},
+    hasPushChannel:          () => false,
   },
 });
 
@@ -339,10 +348,10 @@ describe("scheduler — human cognition", () => {
 
     await waitUntil(() => humanEmits.length > 0);
     assert.equal(humanEmits[0].room, "being:being-h");
-    assert.equal(humanEmits[0].event, "ibp:update");
-    // ibp:update wire shape: { correlation, content } where content is the entry.
-    assert.equal(humanEmits[0].payload.correlation, "plan-approve");
-    assert.equal(humanEmits[0].payload.content.correlation, "plan-approve");
+    assert.equal(humanEmits[0].event, "ibp");
+    // Unified `ibp` envelope: { verb: "summon", payload: <inbox entry> }.
+    assert.equal(humanEmits[0].payload.verb, "summon");
+    assert.equal(humanEmits[0].payload.payload.correlation, "plan-approve");
 
     // The runLoop should have exited and role.summon should never have run.
     await waitUntil(() => getStats()["being-h"]?.running === false);
@@ -373,6 +382,6 @@ describe("scheduler — human cognition", () => {
     fakeBucket.get("being-h").push(makeEntry("second", 1));
     wake("being-h", "node-h");
     await waitUntil(() => humanEmits.length === 2);
-    assert.equal(humanEmits[1].payload.correlation, "second");
+    assert.equal(humanEmits[1].payload.payload.correlation, "second");
   });
 });

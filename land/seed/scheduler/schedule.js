@@ -163,10 +163,9 @@ export function startTickLoop({ tickMs } = {}) {
   log.info("Schedule", `tick loop started (every ${_tickMs}ms)`);
 }
 
-/**
- * Stop the tick loop. Idempotent.
- */
-export function stopTickLoop() {
+// Stop the tick loop. Idempotent. Module-private — used by _resetAll
+// during test teardown; not part of the public surface.
+function stopTickLoop() {
   if (!_tickHandle) return;
   clearInterval(_tickHandle);
   _tickHandle = null;

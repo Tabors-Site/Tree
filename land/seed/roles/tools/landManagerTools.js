@@ -26,9 +26,9 @@
 // install an extension or write config get FORBIDDEN.
 
 import { z } from "zod";
-import { seeVerb, doVerb } from "../core/verbs.js";
-import { getLandDomain } from "../addressing/address.js";
-import { getLandRootId } from "../landRoot.js";
+import { seeVerb, doVerb } from "../../core/verbs.js";
+import { getLandDomain } from "../../addressing/address.js";
+import { getLandRootId } from "../../landRoot.js";
 
 export const landManagerTools = [
   {

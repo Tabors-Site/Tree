@@ -290,13 +290,6 @@ export async function markSummoned(nodeId, beingId, index) {
 }
 
 /**
- * Get the full per-being inbox bucket. Used by descriptor builders.
- */
-export async function getInboxBucket(nodeId, beingId) {
-  return readInbox(nodeId, beingId, {});
-}
-
-/**
  * Inbox summary across every being at this position. Used for the Position
  * Description when SEE is on a position (no qualifier). Returned object is
  * keyed by beingId; the descriptor joins this with Being lookups when it

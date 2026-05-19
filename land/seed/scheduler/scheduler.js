@@ -36,6 +36,7 @@ import log from "../core/log.js";
 import Being from "../models/being.js";
 import { pickNextEntry, markSummoned, markInboxConsumed, readInbox } from "./inbox.js";
 import { getRole } from "../roles/registry.js";
+import { pushIbp } from "../core/pushChannel.js";
 
 // Per-being scheduler state.
 //
@@ -443,23 +444,18 @@ export function attachHandoff(beingId, correlation, handoff) {
 
 /**
  * Notify a human being's connected browser observers that pending
- * inbox entries arrived at this position. Emits `ibp:update` to the
- * being's socket room for each unconsumed entry that hasn't been
+ * inbox entries arrived at this position. Pushes an IBP envelope to
+ * the being's socket room for each unconsumed entry that hasn't been
  * notified yet (tracked in `state.humanNotified`). Entries stay
  * pending — humans consume by replying (new SUMMON with `inReplyTo`),
  * not by scheduler processing.
  *
- * The `ibp:update` wire shape per [[project_protocol_transport_separation]]
- * is `{ correlation, content }` — correlation matches whatever the
- * client routes against (here, the inbox entry's own correlation since
- * this is the FIRST delivery, not a reply); content carries the entry.
- *
- * `getIO` is imported dynamically to avoid an ESM cycle through the
- * verb handler (websocket.js → verbs/summon.js → scheduler.js).
+ * The push rides the unified `ibp` event with `{ verb: "summon",
+ * payload: <inbox entry> }` per [[project_ibp_summon_unified_event]].
+ * Direction (server → client) is implicit. The client routes on
+ * envelope.verb and uses payload.correlation / payload.inReplyTo.
  */
 async function _notifyHumanObservers(beingId, nodeId, state) {
-  const { getIO } = await import("../../transports/ws/websocket.js");
-  const io = getIO();
   const entries = await readInbox(nodeId, beingId, { unconsumed: true });
   if (!entries.length) return;
   if (!state.humanNotified) state.humanNotified = new Set();
@@ -467,14 +463,9 @@ async function _notifyHumanObservers(beingId, nodeId, state) {
     if (!entry?.correlation) continue;
     if (state.humanNotified.has(entry.correlation)) continue;
     state.humanNotified.add(entry.correlation);
-    if (io) {
-      try {
-        io.to(`being:${String(beingId)}`).emit("ibp:update", {
-          correlation: entry.correlation,
-          content:     entry,
-        });
-      } catch {}
-    }
+    try {
+      pushIbp(beingId, { verb: "summon", payload: entry });
+    } catch {}
   }
 }
 

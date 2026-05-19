@@ -1,6 +1,10 @@
-// TreeOS Seed . AGPL-3.0 . https://treeos.ai
-// ws/mcp.js
-// MCP client lifecycle management.
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// MCP client lifecycle.
+//
+// Outbound MCP connections — what the AI runtime uses when an LLM tool
+// call resolves to an MCP server. Lives in seed/llm/ because the
+// connection cache is per-conversation LLM-stack state.
 //
 // Each conversation gets one MCP client. The cache key — `cacheKey` —
 // identifies the conversation:
@@ -28,7 +32,7 @@
 // MCP clients live until the stale sweep reaps them or a pipeline
 // owner calls closeMCPClient explicitly.
 
-import log from "../../seed/core/log.js";
+import log from "../core/log.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
@@ -47,7 +51,7 @@ const clientTokens = new Map();
 // cacheKey -> timestamp of last use
 const clientLastUsed = new Map();
 
-import { getLandConfigValue } from "../../seed/landConfig.js";
+import { getLandConfigValue } from "../landConfig.js";
 
 function MAX_MCP_CLIENTS() { return Math.max(100, Math.min(Number(getLandConfigValue("maxMcpClients")) || 5000, 50000)); }
 const MCP_CLOSE_TIMEOUT_MS = 5000; // safety ceiling, not configurable

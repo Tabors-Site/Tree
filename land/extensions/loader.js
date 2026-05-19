@@ -573,6 +573,52 @@ function buildScopedCore(manifest, fullCore) {
     scoped.do = scopedDo;
   }
 
+  // Push-channel event binding: auto-namespace event names.
+  // Same principle as registerOperation above — extensions write the
+  // local event name; the kernel prefixes their extension name on the
+  // way to the wire. Bare:
+  //
+  //   core.websocket.emitToBeing(beingId, "lifecycleActive", payload)
+  //
+  // Wire receives: "governing:lifecycleActive".
+  //
+  // Fully-qualified `<ext>:<name>` is accepted only when the prefix
+  // matches the calling extension's name; mismatches throw so
+  // namespace-impersonation is a structural impossibility.
+  //
+  // The kernel events `IBP_EVENT` ("ibp") and transport-private
+  // events (WS_REGISTERED, WS_NAVIGATE) are reserved and rejected
+  // entirely — extensions can never emit them through this surface.
+  if (scoped.websocket) {
+    const extName = manifest.name;
+    const RESERVED = new Set(["ibp", "registered", "navigate"]);
+    const namespaceEvent = (event) => {
+      if (typeof event !== "string" || !event) {
+        throw new Error(`emitToBeing: event name must be a non-empty string`);
+      }
+      if (RESERVED.has(event)) {
+        throw new Error(`emitToBeing: "${event}" is reserved by the kernel`);
+      }
+      if (event.includes(":")) {
+        const prefix = event.split(":")[0];
+        if (prefix !== extName) {
+          throw new Error(
+            `emitToBeing("${event}"): extension "${extName}" cannot emit under prefix "${prefix}". ` +
+            `Use the bare name ("${event.split(":").slice(1).join(":")}") — namespacing is automatic.`,
+          );
+        }
+        return event;
+      }
+      return `${extName}:${event}`;
+    };
+    const wsRaw = scoped.websocket;
+    scoped.websocket = {
+      ...wsRaw,
+      emitToBeing:     (beingId, event, data) => wsRaw.emitToBeing(beingId, namespaceEvent(event), data),
+      emitToBeingRoom: (beingId, event, data) => wsRaw.emitToBeingRoom(beingId, namespaceEvent(event), data),
+    };
+  }
+
   // Metadata binding: enforce namespace ownership.
   // Extensions can only write to their own namespace (matching manifest name)
   // or core namespaces (cascade, extensions, tools, modes).
