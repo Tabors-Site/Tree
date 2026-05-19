@@ -1,5 +1,5 @@
 import mongoose from "./seed/core/dbConfig.js";
-import { getLandIdentity, getLandUrl } from "./protocols/canopy/identity.js";
+import { getLandIdentity, getLandUrl } from "./protocols/ibp/canopy/identity.js";
 import { ensureLandRoot } from "./seed/landRoot.js";
 import { initLandConfig, getLandConfigValue } from "./seed/landConfig.js";
 import { startExtensionJobs, getLoadedManifests, runExtensionMigrations, getLoadedExtensionNames, getBootReport } from "./extensions/loader.js";
@@ -8,10 +8,6 @@ import { startRetentionJob } from "./seed/tree/dataRetention.js";
 import { getBlockedExtensionsAtNode } from "./seed/tree/extensionScope.js";
 import { hooks } from "./seed/core/hooks.js";
 import { syncExtensionsToTree } from "./seed/landRoot.js";
-import { registerCanopyAuth } from "./protocols/canopy/auth.js";
-import { startHeartbeatJob } from "./protocols/canopy/peers.js";
-import { startOutboxJob, startCanopyRetentionJob } from "./protocols/canopy/events.js";
-import { startHorizonRegistration } from "./protocols/canopy/horizon.js";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -50,7 +46,7 @@ export function onListen() {
     // Seed default stance permissions (arrival, owner) and BE config flags
     // on the land root if not already present. Idempotent; does not
     // overwrite operator configuration.
-    const { seedDefaultStancePermissions } = await import("./protocols/ibp/authorize.js");
+    const { seedDefaultStancePermissions } = await import("./seed/core/authorize.js");
     await seedDefaultStancePermissions();
 
     // Run seed migrations (after config is loaded, before extensions)
@@ -94,7 +90,6 @@ export function onListen() {
         staleSessionTimeout:     { load: () => import("./transports/ws/sessionRegistry.js").then(m => (v) => m.setStaleTimeout(v * 1000)) },
         maxSessions:             { load: () => import("./transports/ws/sessionRegistry.js").then(m => m.setMaxSessions) },
         llmClientCacheTtl:       { load: () => import("./seed/llm/llmClient.js").then(m => (v) => m.setClientCacheTtl(v * 1000)) },
-        canopyProxyCacheTtl:     { load: () => import("./seed/llm/llmClient.js").then(m => (v) => m.setProxyCacheTtl(v * 1000)) },
         maxConnectionsPerUser:   { load: () => import("./seed/llm/connections.js").then(m => m.setMaxConnectionsPerUser) },
       };
 
@@ -204,13 +199,10 @@ export function onListen() {
 
     log.verbose("Land", "Background jobs started (includes daily data retention)");
 
-    const { authStrategies } = await import("./seed/core/services.js");
-    registerCanopyAuth(authStrategies);
-    startHeartbeatJob();
-    startOutboxJob();
-    startCanopyRetentionJob();
-    startHorizonRegistration();
-    log.verbose("Canopy", "Peering, outbox, Horizon, retention ready");
+    // Canopy is now just the cross-land auth scheme (signing keys + peer
+    // registry); the parallel federation protocol retired 2026-05-19. See
+    // [[project_canopy_folds_into_ibp]]. Wire-protocol federation (signed
+    // IBP envelopes between lands) lands as a follow-up slice.
 
     // Sync runtime registries into their `.tools`, `.roles`,
     // `.operations` mirror nodes. SEE on those addresses now reflects
@@ -220,7 +212,7 @@ export function onListen() {
     (async () => {
       try {
         const { syncToolsToSubstrate }      = await import("./seed/core/tools.js");
-        const { syncRolesToSubstrate }      = await import("./protocols/ibp/roles/registry.js");
+        const { syncRolesToSubstrate }      = await import("./seed/roles/registry.js");
         const { syncOperationsToSubstrate } = await import("./seed/core/operations.js");
         const [t, r, o] = await Promise.all([
           syncToolsToSubstrate(),

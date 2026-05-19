@@ -15,7 +15,7 @@ import log from "../../seed/core/log.js";
 import { sendOk, sendError, ERR } from "../../seed/core/protocol.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
 import { dispatchIbp } from "../../protocols/ibp/protocol.js";
-import { getLandDomain } from "../../protocols/ibp/address.js";
+import { getLandDomain } from "../../seed/addressing/address.js";
 
 function cookieDomain(req) {
   const host = (req.hostname || req.headers?.host || "").replace(/:\d+$/, "");

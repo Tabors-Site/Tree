@@ -336,7 +336,7 @@ export default function getRulerTools(_core) {
         const rulerUsername = rulerBeing?.name || "ruler";
 
         // 4. Build stances. Path uses UUID for stability across renames.
-        const { getLandDomain } = await import("../../protocols/ibp/address.js");
+        const { getLandDomain } = await import("../../seed/addressing/address.js");
         const landDomain = getLandDomain();
         const stancePath = `${landDomain}/${ruler._id}`;
         const rulerStance = `${stancePath}@${rulerUsername}`;
@@ -364,8 +364,8 @@ export default function getRulerTools(_core) {
         //    is the Planner stance for the reply's `from` field. The
         //    response handler re-fires the existing governing hook so
         //    the Ruler wakeup path stays unchanged.
-        const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
-        const { attachHandoff, wake } = await import("../../protocols/ibp/scheduler.js");
+        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/scheduler/scheduler.js");
         const { hooks } = await import("../../seed/core/hooks.js");
         const startMs = Date.now();
 
@@ -653,7 +653,7 @@ export default function getRulerTools(_core) {
         const rulerUsername = rulerBeing?.name || "ruler";
 
         // 4. Build stances + SUMMON envelope.
-        const { getLandDomain } = await import("../../protocols/ibp/address.js");
+        const { getLandDomain } = await import("../../seed/addressing/address.js");
         const landDomain = getLandDomain();
         const stancePath = `${landDomain}/${ruler._id}`;
         const rulerStance = `${stancePath}@${rulerUsername}`;
@@ -675,8 +675,8 @@ export default function getRulerTools(_core) {
         // 5. Append + handoff + wake. Handoff onResponse re-fires the
         //    existing governing:contractorCompleted hook so the Ruler
         //    wake-up path stays unchanged.
-        const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
-        const { attachHandoff, wake } = await import("../../protocols/ibp/scheduler.js");
+        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/scheduler/scheduler.js");
         const { hooks } = await import("../../seed/core/hooks.js");
         const startMs = Date.now();
 
@@ -883,7 +883,7 @@ export default function getRulerTools(_core) {
         const rulerUsername = rulerBeing?.name || "ruler";
 
         // 4. Build stances + SUMMON envelope.
-        const { getLandDomain } = await import("../../protocols/ibp/address.js");
+        const { getLandDomain } = await import("../../seed/addressing/address.js");
         const landDomain = getLandDomain();
         const stancePath = `${landDomain}/${ruler._id}`;
         const rulerStance = `${stancePath}@${rulerUsername}`;
@@ -908,8 +908,8 @@ export default function getRulerTools(_core) {
         // 5. Append + handoff + wake. Handoff onResponse re-fires the
         //    existing governing:foremanRouted hook so the Ruler wake-up
         //    path stays unchanged.
-        const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
-        const { attachHandoff, wake } = await import("../../protocols/ibp/scheduler.js");
+        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/scheduler/scheduler.js");
         const { hooks } = await import("../../seed/core/hooks.js");
         const startMs = Date.now();
 
@@ -1188,7 +1188,7 @@ export default function getRulerTools(_core) {
           : null;
         const rulerUsername = rulerBeing?.name || "ruler";
 
-        const { getLandDomain } = await import("../../protocols/ibp/address.js");
+        const { getLandDomain } = await import("../../seed/addressing/address.js");
         const landDomain = getLandDomain();
         const stancePath = `${landDomain}/${ruler._id}`;
         const rulerStance = `${stancePath}@${rulerUsername}`;
@@ -1207,8 +1207,8 @@ export default function getRulerTools(_core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
-        const { attachHandoff, wake } = await import("../../protocols/ibp/scheduler.js");
+        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/scheduler/scheduler.js");
         const { hooks } = await import("../../seed/core/hooks.js");
         const startMs = Date.now();
         try {
@@ -1448,7 +1448,7 @@ export default function getRulerTools(_core) {
           ? await BeingModel.findById(rulerBeingIdAtScope).select("name").lean()
           : null;
         const rulerUsername = rulerBeing?.name || "ruler";
-        const { getLandDomain } = await import("../../protocols/ibp/address.js");
+        const { getLandDomain } = await import("../../seed/addressing/address.js");
         const landDomain = getLandDomain();
         const rulerStance = `${landDomain}/${ruler._id}@${rulerUsername}`;
 
@@ -1459,8 +1459,8 @@ export default function getRulerTools(_core) {
         // is automatic via the parent-walk substrate reads; no
         // explicit pass needed.
         const { promoteToRuler, PROMOTED_FROM } = await import("./state/role.js");
-        const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
-        const { wake } = await import("../../protocols/ibp/scheduler.js");
+        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
+        const { wake } = await import("../../seed/scheduler/scheduler.js");
         const { writeLineage } = await import("./state/lineage.js");
         const { randomUUID } = await import("crypto");
         const rootCorrelation = args.rootSummonId || summonId || `${spawnId}-root`;
@@ -2011,7 +2011,7 @@ export default function getRulerTools(_core) {
           : null;
         const rulerUsername = rulerBeing?.name || "ruler";
 
-        const { getLandDomain } = await import("../../protocols/ibp/address.js");
+        const { getLandDomain } = await import("../../seed/addressing/address.js");
         const landDomain = getLandDomain();
         const rulerStance = `${landDomain}/${ruler._id}@${rulerUsername}`;
 
@@ -2030,8 +2030,8 @@ export default function getRulerTools(_core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
-        const { attachHandoff, wake } = await import("../../protocols/ibp/scheduler.js");
+        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/scheduler/scheduler.js");
         const { hooks } = await import("../../seed/core/hooks.js");
         const startMs = Date.now();
         try {

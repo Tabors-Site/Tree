@@ -177,7 +177,7 @@ export default function getForemanTools(_core) {
 
         // Build the Foreman's stance (who's sending the retry SUMMON).
         // Foreman lives at the parent Ruler's execution scope; use that.
-        const { getLandDomain } = await import("../../protocols/ibp/address.js");
+        const { getLandDomain } = await import("../../seed/addressing/address.js");
         const landDomain = getLandDomain();
         const foremanStance = `${landDomain}/${branchScopeId}@foreman`;
 
@@ -195,8 +195,8 @@ export default function getForemanTools(_core) {
           sentAt:          new Date().toISOString(),
         };
 
-        const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
-        const { attachHandoff, wake } = await import("../../protocols/ibp/scheduler.js");
+        const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
+        const { attachHandoff, wake } = await import("../../seed/scheduler/scheduler.js");
         const { hooks } = await import("../../seed/core/hooks.js");
         const startMs = Date.now();
         try {

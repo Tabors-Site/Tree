@@ -1,6 +1,6 @@
-import log from "../../seed/core/log.js";
-import { getLandConfigValue } from "../../seed/landConfig.js";
-import { SEED_VERSION } from "../../seed/core/version.js";
+import log from "../../../seed/core/log.js";
+import { getLandConfigValue } from "../../../seed/landConfig.js";
+import { SEED_VERSION } from "../../../seed/core/version.js";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";

@@ -14,7 +14,7 @@ import { mock } from "node:test";
 const appendCalls = [];
 const wakeCalls = [];
 
-mock.module("../protocols/ibp/inbox.js", {
+mock.module("../seed/scheduler/inbox.js", {
   namedExports: {
     appendToInbox: async (nodeId, beingId, message) => {
       appendCalls.push({ nodeId, beingId, message });
@@ -23,13 +23,13 @@ mock.module("../protocols/ibp/inbox.js", {
   },
 });
 
-mock.module("../protocols/ibp/scheduler.js", {
+mock.module("../seed/scheduler/scheduler.js", {
   namedExports: {
     wake: (beingId, nodeId) => { wakeCalls.push({ beingId, nodeId }); },
   },
 });
 
-mock.module("../protocols/ibp/address.js", {
+mock.module("../seed/addressing/address.js", {
   namedExports: { getLandDomain: () => "treeos.ai" },
 });
 
@@ -46,7 +46,7 @@ const {
   resetEmitter,
   getStats,
   _resetAll,
-} = await import("../protocols/ibp/schedule.js");
+} = await import("../seed/scheduler/schedule.js");
 
 beforeEach(() => {
   _resetAll();

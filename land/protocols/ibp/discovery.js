@@ -7,9 +7,9 @@
 // The Position Description for the land zone MAY embed a discovery summary
 // under _meta for clients that have already opened a land-zone SEE.
 
-import { getLandDomain } from "./address.js";
+import { getLandDomain } from "../../seed/addressing/address.js";
 import { getLandConfigValue } from "../../seed/landConfig.js";
-import { getLandUrl } from "../canopy/identity.js";
+import { getLandUrl } from "./canopy/identity.js";
 
 const PORTAL_PROTOCOL_VERSION = "1.0";
 const DESCRIPTOR_VERSION = "1.0";

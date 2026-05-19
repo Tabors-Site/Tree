@@ -38,10 +38,10 @@ import log from "../../../seed/core/log.js";
 import { runChat } from "../../../seed/llm/runChat.js";
 import Node from "../../../seed/models/node.js";
 import Being from "../../../seed/models/being.js";
-import { appendToInbox } from "../../../protocols/ibp/inbox.js";
-import { wake, attachHandoff } from "../../../protocols/ibp/scheduler.js";
-import { aggregate } from "../../../protocols/ibp/replyAggregator.js";
-import { getLandDomain } from "../../../protocols/ibp/address.js";
+import { appendToInbox } from "../../../seed/scheduler/inbox.js";
+import { wake, attachHandoff } from "../../../seed/scheduler/scheduler.js";
+import { aggregate } from "../../../seed/scheduler/replyAggregator.js";
+import { getLandDomain } from "../../../seed/addressing/address.js";
 import { emitReplyToAsker, readMetaPath } from "./_shared.js";
 import { renderExecutionStack } from "../state/executionStack.js";
 
@@ -713,7 +713,7 @@ async function ensureWorkerBeing({ executionNodeId, workerRoleName }) {
   // same node carrying different roles; multi-being-at-one-node is
   // exactly this pattern (see project-multi-being-domain-node).
   try {
-    const { createBeingWithHome } = await import("../../../seed/core/auth.js");
+    const { createBeingWithHome } = await import("../../../seed/core/identity.js");
     const { being } = await createBeingWithHome({
       operatingMode: "ai",
       role:          workerRoleName,

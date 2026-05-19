@@ -17,7 +17,7 @@ import Artifact from "../models/artifact.js";
 
 import { logDid } from "../tree/dids.js";
 import { resolveTreeAccess } from "../tree/treeAccess.js";
-import { createBeing, createFirstBeing, verifyPassword, generateToken, isFirstBeing, findBeingByUsername } from "./auth.js";
+import { createBeing, createFirstBeing, verifyPassword, generateToken, isFirstBeing, findBeingByName } from "./identity.js";
 
 import {
   createSession, endSession, registerSession,
@@ -74,25 +74,25 @@ import {
 // IBP substrate (sibling layer to seed/, peer of canopy/ and routes/).
 // Re-exposed through core.ibp so extensions reach SUMMON/inbox/scheduler
 // primitives without importing from ibp/* directly.
-import { wake, abortCurrent, attachHandoff, getCurrentRootCorrelation } from "../../protocols/ibp/scheduler.js";
-import { cancelByRootCorrelation as inboxCancelByRootCorrelation } from "../../protocols/ibp/inbox.js";
-import { aggregate as ibpAggregate } from "../../protocols/ibp/replyAggregator.js";
+import { wake, abortCurrent, attachHandoff, getCurrentRootCorrelation } from "../scheduler/scheduler.js";
+import { cancelByRootCorrelation as inboxCancelByRootCorrelation } from "../scheduler/inbox.js";
+import { aggregate as ibpAggregate } from "../scheduler/replyAggregator.js";
 import {
   subscribe as ibpSubscribe,
   unsubscribe as ibpUnsubscribe,
   unsubscribeAllForBeing as ibpUnsubscribeAllForBeing,
-} from "../../protocols/ibp/subscriptions.js";
+} from "../scheduler/subscriptions.js";
 import {
   schedule as ibpSchedule,
   unschedule as ibpUnschedule,
   unscheduleAllForBeing as ibpUnscheduleAllForBeing,
   setEmitter as ibpSetScheduleEmitter,
   resetEmitter as ibpResetScheduleEmitter,
-} from "../../protocols/ibp/schedule.js";
+} from "../scheduler/schedule.js";
 import {
   registerRole as ibpRegisterRole,
   unregisterRole as ibpUnregisterRole,
-} from "../../protocols/ibp/roles/registry.js";
+} from "../roles/registry.js";
 // Bridge-being factory retired 2026-05-18. Bridge beings were the
 // stopgap that routed SUMMONs to old mode keys. With roles as the unit
 // of behavior, every summonable being declares its own role spec via
@@ -178,7 +178,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     dids: { logDid },
     auth: {
       resolveTreeAccess,
-      createBeing, verifyPassword, generateToken, isFirstBeing, findBeingByUsername,
+      createBeing, verifyPassword, generateToken, isFirstBeing, findBeingByName,
       registerStrategy: (name, handler, extName = "unknown") => {
         if (!_allowedStrategyExtensions.has(extName)) {
           log.warn("Auth", `Strategy "${name}" from "${extName}" rejected: extension must declare provides.authStrategies in manifest`);

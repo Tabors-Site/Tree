@@ -60,7 +60,7 @@ export default {
     //    registered in metadata.beings.
     let coderBeingId = beingsMeta?.coder?.beingId || null;
     if (!coderBeingId) {
-      const { createBeingWithHome } = await import("../../../seed/core/auth.js");
+      const { createBeingWithHome } = await import("../../../seed/core/identity.js");
       const { being: coder } = await createBeingWithHome({
         operatingMode: "ai",
         role:          "coder",

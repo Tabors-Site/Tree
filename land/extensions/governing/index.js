@@ -25,7 +25,7 @@ import { plannerRole } from "./roles/plannerRole.js";
 import { contractorRole } from "./roles/contractorRole.js";
 import { foremanRole } from "./roles/foremanRole.js";
 import { allWorkerRoles } from "./roles/workerRoles.js";
-import { registerRole } from "../../protocols/ibp/roles/registry.js";
+import { registerRole } from "../../seed/roles/registry.js";
 import {
   WORKER_TYPES,
   DEFAULT_WORKER_TYPE,
@@ -399,7 +399,7 @@ export async function init(core) {
             } } }),
           },
         ];
-        const { createBeingWithHome } = await import("../../seed/core/auth.js");
+        const { createBeingWithHome } = await import("../../seed/core/identity.js");
         const counts = {};
         for (const { nodeType, beingRole, permissions } of BACKFILLS) {
           const nodes = await Node.find({ "metadata.governing.role": nodeType })

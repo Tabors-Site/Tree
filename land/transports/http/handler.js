@@ -19,7 +19,6 @@ import ibp from "./api/ibp.js";
 //   /api/v1/user/*/llm-assign   → ibp:do assign-llm-slot
 //   /api/v1/land/extensions/*   → ibp:do install/uninstall/enable/disable-extension
 import landConfig from "./api/config.js";
-import canopy from "./canopy.js";
 
 import { handleMcpRequest, mcpServerInstance, connectMcpTransport } from "../../protocols/mcp/server.js";
 import authenticateMCP from "./middleware/authenticateMCP.js";
@@ -125,7 +124,9 @@ export default async function registerURLRoutes(app, opts = {}) {
   // operation (kernel or extension) is automatically callable here.
   app.use("/", ibp);
 
-  // Canopy protocol stays at /canopy (not versioned with API)
-  app.use("/", canopy);
+  // The parallel /canopy/* federation surface retired 2026-05-19. Canopy
+  // is now the cross-land auth scheme only (signing keys + peer registry).
+  // Cross-land calls flow through /ibp/<verb>/<addr> with canopy-signed
+  // envelopes. See [[project_canopy_folds_into_ibp]].
 
 }

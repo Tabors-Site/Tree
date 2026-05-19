@@ -45,12 +45,12 @@
 // registry plus extension-init re-registration is enough.
 
 import { randomUUID } from "crypto";
-import log from "../../seed/core/log.js";
-import { getAncestorChain } from "../../seed/tree/ancestorCache.js";
+import log from "../core/log.js";
+import { getAncestorChain } from "../tree/ancestorCache.js";
 import { appendToInbox } from "./inbox.js";
 import { wake } from "./scheduler.js";
-import { getLandDomain } from "./address.js";
-import { getLandRootId } from "../../seed/landRoot.js";
+import { getLandDomain } from "../addressing/address.js";
+import { getLandRootId } from "../landRoot.js";
 
 // beingId -> Map<subscriptionId, subscription>
 const _byBeing = new Map();

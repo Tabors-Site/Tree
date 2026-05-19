@@ -2,17 +2,31 @@
 //
 // The four-verb dispatcher. core.see / core.do / core.summon / core.be.
 //
-// Phase 1: only `do` is implemented as a registry-backed dispatcher.
-// see/summon/be land in their own phases. Until then, extensions
-// continue to call the existing namespaces (core.tree.*, core.summon.*,
-// core.auth.*). See [[project_seed_four_verbs_only]] memory for the
-// commitment and migration plan.
+// Each verb has exactly one execution implementation here. The IBP wire
+// handlers (protocols/ibp/verbs/) parse the envelope, resolve the
+// stance, and delegate to the matching core verb. In-process callers
+// (extensions, kernel internals) reach the same execution by calling
+// core.see / core.do / core.summon / core.be directly. See
+// [[project_four_verbs_one_execution]] and [[project_seed_four_verbs_only]]
+// for the architectural commitment.
 
+import { randomUUID } from "crypto";
 import log from "./log.js";
 import { getOperation, registerOperation, unregisterOperation, unregisterOperationsFromExtension, listOperations } from "./operations.js";
 import { logDid } from "../tree/dids.js";
 import { ARTIFACT_ORIGIN, ERR, ProtocolError } from "./protocol.js";
 import { isSourceNodeId } from "./source.js";
+import { parseWithContext, expand, getLandDomain } from "../addressing/address.js";
+import { resolveStance } from "../addressing/resolver.js";
+import { buildDescriptor } from "../addressing/descriptor.js";
+import { buildDiscovery } from "../../protocols/ibp/discovery.js";
+import { PortalError, PORTAL_ERR } from "../../protocols/ibp/errors.js";
+import { authorize, getAuthConfig } from "./authorize.js";
+import { appendToInbox, markInboxConsumed } from "../scheduler/inbox.js";
+import { getRole } from "../roles/registry.js";
+import { authBeing } from "../roles/auth.js";
+import { attachHandoff, wake } from "../scheduler/scheduler.js";
+import { subscribePosition } from "../../protocols/ibp/live.js";
 
 /**
  * DO verb. Looks up the registered operation, runs its handler, writes
@@ -25,9 +39,13 @@ import { isSourceNodeId } from "./source.js";
  * @param {string} operation - operation name ("create-child" or "food:log-meal")
  * @param {object} [params] - operation-specific payload
  * @param {object} [opts]
- * @param {object} [opts.identity] - { beingId, username } when called from a being context
+ * @param {object} [opts.identity] - { beingId, name } when called from a being context
  * @param {object} [opts.summonCtx] - summon context for correlation / audit attribution
  * @param {boolean} [opts.skipAudit] - skip Did write. Reserve for kernel-internal use.
+ * @param {boolean} [opts.internal] - skip stance authorization. Reserve for kernel-trusted
+ *                                    batch operations (boot, migrations, system writes).
+ *                                    Extension code should pass `identity` instead so the
+ *                                    gate evaluates that being's stance permissions.
  * @returns the handler's return value
  */
 export async function doVerb(target, operation, params = {}, opts = {}) {
@@ -55,9 +73,35 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     throw new ProtocolError(403, ERR.ORIGIN_READ_ONLY, denial);
   }
 
-  // Phase 1 dispatcher is intentionally thin. Operations handle their own
-  // target resolution and validation. Phase 2 adds an authorize() gate
-  // and target-kind validation against op.targets here.
+  // Stance Authorization gate. One execution per verb means one auth gate
+  // per verb; wire-side and in-process callers both pass here. The
+  // `internal:true` opt skips the gate for kernel-trusted batch operations
+  // (boot, migrations, system writes) where there's no caller identity to
+  // evaluate. Extension code should pass `identity` so the gate evaluates
+  // that being's stance permissions at the target node. See
+  // [[project_four_verbs_one_execution]] and [[project_stance_authorization]].
+  if (!opts.internal) {
+    const identity = opts.identity || null;
+    const nodeIdForAuth = resolveNodeIdForAudit(target, null);
+    const namespace = (operation === "set-meta" || operation === "clear-meta")
+      ? params?.namespace
+      : undefined;
+    const decision = await authorize({
+      identity,
+      verb:   "do",
+      target: { kind: "position", nodeId: nodeIdForAuth },
+      action: operation,
+      namespace,
+    });
+    if (!decision.ok) {
+      throw new PortalError(
+        identity ? PORTAL_ERR.FORBIDDEN : PORTAL_ERR.UNAUTHORIZED,
+        `DO denied for stance "${decision.stance}": ${decision.reason}`,
+        { stance: decision.stance, action: operation },
+      );
+    }
+  }
+
   const ctx = {
     target,
     params: params || {},
@@ -105,27 +149,467 @@ doVerb.unregisterOperationsFromExtension = unregisterOperationsFromExtension;
 doVerb.getOperation = getOperation;
 doVerb.listOperations = listOperations;
 
+
 // ────────────────────────────────────────────────────────────────────
-// Phase 1 placeholders for the other three verbs. They throw so callers
-// know not to depend on them yet, but the slots exist on `core` so
-// future phases land additively.
+// SEE verb. Returns a Position Descriptor for `target`.
+//
+// `target` may be:
+//   - a stance / position / land string ("<land>/<path>@<being>", "<land>/<path>", "<land>")
+//   - a pre-parsed `{ kind: "position"|"stance"|"land", value }` envelope
+//
+// `opts`:
+//   identity      — { beingId, name } | null (for stance-auth gating)
+//   addressKind   — explicit "stance" | "position" | "land" hint (defaults from target shape)
+//   currentUser   — name to use for pronoun resolution (defaults from identity.name)
+//   currentLand   — land domain to use for relative addresses (defaults to this land)
+//   live          — bool; when true and `opts.socket` is provided, subscribe the socket to position updates
+//   socket        — optional socket.io socket for live-subscription delivery
+//
+// Returns the descriptor (or the discovery payload for `<land>/.discovery`).
 // ────────────────────────────────────────────────────────────────────
 
-export async function seeVerb(_target, _options = {}) {
-  throw new Error("core.see not yet implemented. Phase 1 covers core.do only. Use existing read helpers for now.");
+export async function seeVerb(target, opts = {}) {
+  if (target == null) {
+    throw new ProtocolError(400, ERR.INVALID_INPUT, "core.see requires a target");
+  }
+
+  // Discovery short-circuit. <land>/.discovery is read by every client
+  // right after socket open to learn capabilities.
+  const addrString = typeof target === "string" ? target : (target.value || target.address || null);
+  if (typeof addrString === "string" && /\/\.discovery$/i.test(addrString)) {
+    return buildDiscovery();
+  }
+
+  const { identity = null, currentUser = null, currentLand = null, live = false, socket = null } = opts;
+  const addressKind = opts.addressKind
+    || (target && typeof target === "object" && target.kind)
+    || inferAddressKind(addrString);
+
+  const parsed = parseWithContext(addrString, {
+    currentLand: currentLand || getLandDomain(),
+    currentUser: currentUser || identity?.name || null,
+  });
+  const expanded = expand(parsed, {
+    currentLand: currentLand || getLandDomain(),
+    currentUser: currentUser || identity?.name || null,
+  });
+  const resolved = await resolveStance(expanded.right);
+
+  // Stance Authorization gate.
+  const decision = await authorize({
+    identity,
+    verb: "see",
+    target: {
+      kind:         addressKind === "stance" ? "stance" : "position",
+      nodeId:       resolved.nodeId,
+      visibility:   resolved.leafNode?.visibility,
+      isDiscovery:  false,
+    },
+  });
+  if (!decision.ok) {
+    throw new PortalError(
+      identity ? PORTAL_ERR.FORBIDDEN : PORTAL_ERR.UNAUTHORIZED,
+      `SEE denied for stance "${decision.stance}": ${decision.reason}`,
+      { stance: decision.stance },
+    );
+  }
+
+  const descriptor = await buildDescriptor(resolved, { identity });
+
+  // Live subscription. Only meaningful when the caller provides a socket
+  // (in-process callers without a socket get the snapshot only).
+  if (live && socket && resolved.nodeId) {
+    subscribePosition(socket, resolved.nodeId);
+  }
+
+  return descriptor;
 }
 
-export async function summonVerb(_stance, _message, _opts = {}) {
-  throw new Error("core.summon not yet implemented. Use core.ibp.wake() for now.");
+// ────────────────────────────────────────────────────────────────────
+// SUMMON verb. Delivers `message` to the being addressed by `stance`,
+// then wakes the per-being scheduler to run the role's summoning.
+//
+// `stance` is a stance string with @qualifier ("<land>/<path>@<being>").
+//
+// `message` is the inbox payload: { from, content, intent?, correlation?,
+// inReplyTo?, attachments?, sentAt?, activeRole? }.
+//
+// `opts`:
+//   identity         — { beingId, name } | null
+//   currentUser      — name for pronoun resolution (defaults from identity.name)
+//   currentLand      — land domain (defaults to this land)
+//   onResponse       — callback(responseEntry) for async-mode replies; the wire
+//                      layer composes one that emits via the being-room.
+//                      In-process callers can pass their own or omit (drop on the floor).
+//   onError          — callback(err) for async-mode errors; same shape as onResponse.
+//
+// Returns shape depends on the receiving role's respondMode:
+//   sync   — { messageId, status: "accepted" } or the full response entry
+//   async  — { messageId, status: "accepted" }; reply later via onResponse
+//   none   — { messageId, status: "accepted" }
+// ────────────────────────────────────────────────────────────────────
+
+export async function summonVerb(stance, message, opts = {}) {
+  const validatedMessage = validateSummonMessage(message);
+
+  const { identity = null, currentUser = null, currentLand = null, onResponse = null, onError = null } = opts;
+  const land = currentLand || getLandDomain();
+
+  const parsed = parseWithContext(stance, {
+    currentLand: land,
+    currentUser: currentUser || identity?.name || null,
+  });
+  const expanded = expand(parsed, { currentLand: land, currentUser: currentUser || identity?.name || null });
+  const resolved = await resolveStance(expanded.right);
+
+  const qualifier = resolved.being;
+  if (!qualifier) {
+    throw new PortalError(PORTAL_ERR.ROLE_UNAVAILABLE, "SUMMON requires a stance with an @qualifier");
+  }
+  if (!resolved.nodeId) {
+    throw new PortalError(PORTAL_ERR.NODE_NOT_FOUND, "Stance does not resolve to a known node");
+  }
+
+  // Resolve the qualifier to a specific Being:
+  //   1. Direct name lookup (canonical: @ruler435, @auth)
+  //   2. Role shorthand at the resolved position via metadata.beings.<role>.beingId
+  const Being = (await import("../models/being.js")).default;
+  let toBeing = await Being.findOne({ name: qualifier });
+  if (!toBeing && resolved.nodeId) {
+    const Node = (await import("../models/node.js")).default;
+    const targetNode = await Node.findById(resolved.nodeId).select("metadata").lean();
+    const emb = targetNode?.metadata instanceof Map
+      ? targetNode.metadata.get("beings")
+      : targetNode?.metadata?.beings;
+    const homeBeingId = emb?.[qualifier]?.beingId || null;
+    if (homeBeingId) toBeing = await Being.findById(homeBeingId);
+  }
+  if (!toBeing) {
+    throw new PortalError(
+      PORTAL_ERR.ROLE_UNAVAILABLE,
+      `No being addressable as "@${qualifier}" at this position`,
+    );
+  }
+
+  // Resolve activeRole: envelope > toBeing.defaultRole > qualifier.
+  // Strict membership check on envelope-specified role.
+  let activeRole;
+  const envelopeRole = validatedMessage.activeRole || null;
+  if (envelopeRole) {
+    const carriedRoles = Array.isArray(toBeing.roles) ? toBeing.roles : [];
+    if (!carriedRoles.includes(envelopeRole)) {
+      throw new PortalError(
+        PORTAL_ERR.ROLE_UNAVAILABLE,
+        `Being @${toBeing.name} does not carry role "${envelopeRole}" ` +
+        `(roles: ${carriedRoles.length ? carriedRoles.join(", ") : "none"})`,
+      );
+    }
+    activeRole = envelopeRole;
+  } else {
+    activeRole = toBeing.defaultRole || qualifier;
+  }
+
+  const role = getRole(activeRole);
+  if (!role) {
+    throw new PortalError(
+      PORTAL_ERR.ROLE_UNAVAILABLE,
+      `Role template "${activeRole}" for being @${toBeing.name} is not registered`,
+    );
+  }
+
+  // Stance Authorization gate.
+  const decision = await authorize({
+    identity,
+    verb:   "summon",
+    target: { kind: "stance", nodeId: resolved.nodeId, being: activeRole, activeRole },
+    intent: validatedMessage.intent,
+  });
+  if (!decision.ok) {
+    throw new PortalError(
+      identity ? PORTAL_ERR.FORBIDDEN : PORTAL_ERR.UNAUTHORIZED,
+      `SUMMON denied for stance "${decision.stance}": ${decision.reason}`,
+      { stance: decision.stance },
+    );
+  }
+
+  // Resolve inbox-attach node.
+  const inboxNodeId = resolved.nodeId || toBeing.homePositionId || null;
+  if (!inboxNodeId) {
+    throw new PortalError(
+      PORTAL_ERR.VERB_NOT_SUPPORTED,
+      "SUMMON at this stance is not yet wired (no inbox target)",
+    );
+  }
+
+  const recipientBeingId = String(toBeing._id);
+  const { messageId, sentAt } = await appendToInbox(inboxNodeId, recipientBeingId, validatedMessage);
+
+  const summonCtx = {
+    nodeId:     inboxNodeId,
+    being:      activeRole,                  // legacy field name; carries the active role
+    activeRole,                              // canonical
+    toBeing,                                 // resolved being instance (receiver)
+    message:    { ...validatedMessage, correlation: messageId, sentAt, activeRole },
+    resolved,
+    identity,
+  };
+
+  // Sync respond-mode: run summoning inline, return the response.
+  if (role.respondMode === "sync") {
+    let responseEntry = null;
+    if (role.triggerOn.includes("message")) {
+      responseEntry = await runSummoning(role, summonCtx);
+    }
+    await markInboxConsumed(
+      inboxNodeId,
+      recipientBeingId,
+      [messageId],
+      {
+        responseId: responseEntry?.correlation || null,
+        summonId:   responseEntry?.summonId || null,
+      },
+    );
+    if (!responseEntry) return { status: "accepted", messageId };
+    return responseEntry;
+  }
+
+  // Async respond-mode: register handoff (scheduler calls onResponse/onError
+  // when summoning completes), wake, return accepted.
+  if (role.respondMode === "async") {
+    const responseFromStance = `${pathOfResolved(resolved)}@${toBeing.name}`;
+    attachHandoff(recipientBeingId, messageId, {
+      identity,
+      resolved,
+      responseFromStance,
+      onResponse: typeof onResponse === "function" ? onResponse : () => {},
+      onError: typeof onError === "function"
+        ? onError
+        : (err) => {
+            if (typeof onResponse === "function") {
+              onResponse({
+                from:        responseFromStance,
+                content:     `[${err.code || "error"}] ${err.message || "summoning failed"}`,
+                intent:      "chat",
+                correlation: randomUUID(),
+                inReplyTo:   messageId,
+                sentAt:      new Date().toISOString(),
+                error:       true,
+              });
+            }
+          },
+    });
+    wake(recipientBeingId, inboxNodeId);
+    return { status: "accepted", messageId };
+  }
+
+  // none: ack accepted; nothing else to do.
+  await markInboxConsumed(inboxNodeId, recipientBeingId, [messageId]);
+  return { status: "accepted", messageId };
 }
 
-export async function beVerb(_operation, _params = {}, _opts = {}) {
-  throw new Error("core.be not yet implemented. Use core.auth.* helpers for now.");
+// ────────────────────────────────────────────────────────────────────
+// BE verb. Identity operations: register / claim / release / switch.
+//
+// `operation` is one of "register" | "claim" | "release" | "switch".
+//
+// `payload` is operation-specific:
+//   register  { name, password, ... }
+//   claim     { name, password }              (against the land's auth-being)
+//   claim     { }                              (re-claim a held stance)
+//   release   { }
+//   switch    { from }                         (target stance lives in opts.address)
+//
+// `opts`:
+//   address       — stance or land string the BE call addresses (auth-being land for register/claim)
+//   addressKind   — "stance" | "land"
+//   identity      — currently authenticated identity (required for release/switch)
+//   socket        — optional socket (passed through to auth-being hooks)
+//   req           — optional Express req (passed through; used by HTTP-arrival flows)
+//   currentLand   — defaults to this land
+//
+// Returns the auth-being's operation result (typically { identityToken, beingAddress, ... }).
+// ────────────────────────────────────────────────────────────────────
+
+const VALID_BE_OPERATIONS = new Set(["register", "claim", "release", "switch"]);
+
+export async function beVerb(operation, payload = {}, opts = {}) {
+  if (typeof operation !== "string" || !VALID_BE_OPERATIONS.has(operation)) {
+    throw new PortalError(
+      PORTAL_ERR.INVALID_INPUT,
+      `core.be operation must be one of: ${[...VALID_BE_OPERATIONS].join(", ")}`,
+    );
+  }
+
+  const {
+    address = null,
+    addressKind = null,
+    identity = null,
+    socket = null,
+    req = null,
+    currentLand = null,
+  } = opts;
+
+  const land = currentLand || getLandDomain();
+
+  // Verify the address points at THIS land.
+  const targetLand = extractLandFromAddress(address, addressKind);
+  if (targetLand && targetLand !== land) {
+    throw new PortalError(
+      PORTAL_ERR.NODE_NOT_FOUND,
+      `Land "${targetLand}" is not served by this server`,
+      { targetLand, serverLand: land },
+    );
+  }
+
+  // Land-level BE config gates for register/claim.
+  if (operation === "register" || operation === "claim") {
+    const authConfig = await getAuthConfig();
+    if (operation === "register" && !authConfig.register_enabled) {
+      throw new PortalError(PORTAL_ERR.FORBIDDEN, "Registration is disabled on this land", { operation: "register" });
+    }
+    if (operation === "claim" && !authConfig.claim_enabled) {
+      throw new PortalError(PORTAL_ERR.FORBIDDEN, "Claim is disabled on this land", { operation: "claim" });
+    }
+  }
+
+  // Identity requirements per operation.
+  if ((operation === "release" || operation === "switch") && !identity) {
+    throw new PortalError(
+      PORTAL_ERR.UNAUTHORIZED,
+      `BE ${operation} requires an authenticated identity`,
+    );
+  }
+
+  // Stance Authorization gate. register/claim from arrival is the
+  // bootstrap exception (authorize permits it inherently).
+  const decision = await authorize({
+    identity,
+    verb: "be",
+    target: { kind: addressKind, value: address },
+    operation,
+  });
+  if (!decision.ok) {
+    throw new PortalError(
+      PORTAL_ERR.FORBIDDEN,
+      `BE denied for stance "${decision.stance}": ${decision.reason}`,
+      { stance: decision.stance, operation },
+    );
+  }
+
+  const ctx = { socket, address: { kind: addressKind, value: address }, identity, req };
+
+  switch (operation) {
+    case "register":
+      return authBeing.register(payload, ctx);
+    case "claim":
+      return runClaim({ kind: addressKind, value: address }, payload, ctx);
+    case "release":
+      return authBeing.release(payload, ctx);
+    case "switch": {
+      const from = payload.from;
+      const to = addressKind === "stance" ? address : null;
+      return authBeing.switch({ from, to }, ctx);
+    }
+  }
+}
+
+// Two claim modes:
+//   - credentials (address is land or <land>/@auth, payload has name+password)
+//   - token re-claim (address is a held stance, identity carries a valid token)
+async function runClaim(address, opPayload, ctx) {
+  const isAuthBeingAddress =
+    address.kind === "land" ||
+    (address.kind === "stance" && /\/@auth$/.test(address.value));
+
+  if (isAuthBeingAddress) {
+    return authBeing.claim(opPayload, ctx);
+  }
+
+  if (!ctx.identity) {
+    throw new PortalError(
+      PORTAL_ERR.UNAUTHORIZED,
+      "Token re-claim requires a still-valid identity token",
+    );
+  }
+  const expectedStance = `${getLandDomain()}/@${ctx.identity.name}`;
+  if (address.value !== expectedStance) {
+    throw new PortalError(
+      PORTAL_ERR.FORBIDDEN,
+      "Cannot re-claim a stance the session does not hold",
+      { held: expectedStance, requested: address.value },
+    );
+  }
+  return {
+    identityToken: null,
+    beingAddress:  expectedStance,
+    note:          "already held",
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────
 // Internals
 // ────────────────────────────────────────────────────────────────────
+
+function inferAddressKind(addrString) {
+  if (typeof addrString !== "string" || !addrString.length) return "land";
+  if (addrString.includes("@")) return "stance";
+  if (addrString.includes("/")) return "position";
+  return "land";
+}
+
+function extractLandFromAddress(address, addressKind) {
+  if (typeof address !== "string" || !address.length) return null;
+  if (addressKind === "land") return address;
+  const slashIndex = address.indexOf("/");
+  if (slashIndex === -1) return address;
+  return address.slice(0, slashIndex);
+}
+
+function validateSummonMessage(message) {
+  if (!message || typeof message !== "object") {
+    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "core.summon requires a `message` object");
+  }
+  if (typeof message.from !== "string" || !message.from.length) {
+    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`message.from` is required");
+  }
+  if (!/@[a-z][a-z0-9-]*$/i.test(message.from)) {
+    throw new PortalError(
+      PORTAL_ERR.INVALID_INPUT,
+      "`message.from` must be a qualified stance (position@being)",
+    );
+  }
+  if (message.content === undefined || message.content === null) {
+    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`message.content` is required");
+  }
+  return message;
+}
+
+async function runSummoning(role, ctx) {
+  let result;
+  try {
+    result = await role.summon(ctx.message, ctx);
+  } catch (err) {
+    log.error("Verbs", `being "${ctx.being}" summoning errored: ${err.message}`);
+    throw new PortalError(PORTAL_ERR.LLM_FAILED, `Summoning failed: ${err.message}`);
+  }
+  if (!result || typeof result !== "object") {
+    return null; // no-response or place-intent
+  }
+  return {
+    from:        `${pathOfResolved(ctx.resolved)}@${ctx.toBeing.name}`,
+    content:     result.content,
+    intent:      result.intent || ctx.message.intent,
+    correlation: randomUUID(),
+    inReplyTo:   ctx.message.correlation,
+    sentAt:      new Date().toISOString(),
+    summonId:    result.summonId || null,
+  };
+}
+
+function pathOfResolved(resolved) {
+  if (resolved?.pathByNames) return `${getLandDomain()}${resolved.pathByNames}`;
+  return `${getLandDomain()}/`;
+}
 
 /**
  * Inspect the DO target and decide whether the dispatcher should reject

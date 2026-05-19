@@ -35,7 +35,7 @@
 // also stores an `_extName` so an uninstall can remove only the
 // affected entries.
 
-import log from "../../seed/core/log.js";
+import log from "./log.js";
 
 const _registry = new Map();
 

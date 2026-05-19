@@ -29,6 +29,7 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import { dispatchIbp } from "../../../protocols/ibp/protocol.js";
+import { verifyIncoming } from "../../../protocols/ibp/canopy/dispatch.js";
 
 if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET is required");
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -77,6 +78,11 @@ function makeHttpCarrier(req, identity) {
     beingId: identity?.beingId || null,
     name:    identity?.name    || null,
     jwt:     identity?.jwt     || null,
+    // Set by the verifyIncoming canopy middleware when a verified
+    // cross-land request arrives. Empty for local calls. dispatchIbp
+    // reads this to skip re-forwarding an already-verified inbound
+    // envelope back to its sender. See [[project_canopy_folds_into_ibp]].
+    canopyVerifiedSender: req.canopySender || null,
     handshake: { headers: req.headers, address: req.ip },
     connected: false,
     emit:    () => {},
@@ -182,12 +188,21 @@ async function ibpHttpHandler(req, res) {
   }
 }
 
-// POST handles every verb. Body carries the payload.
-router.post("/ibp/:verb/*", express.json({ limit: "1mb" }), ibpHttpHandler);
+// Capture raw body bytes so the canopy verifier can check the signature
+// over what the sender actually signed (not the JSON-roundtripped shape).
+const parseJsonCaptureRaw = express.json({
+  limit: "1mb",
+  verify: (req, _res, buf) => { req.rawBody = buf.toString("utf8"); },
+});
+
+// POST handles every verb. Body carries the payload. Cross-land
+// requests carry X-Canopy-Sender + X-Canopy-Signature; verifyIncoming
+// authenticates them, then dispatchIbp runs the verb locally.
+router.post("/ibp/:verb/*", parseJsonCaptureRaw, verifyIncoming, ibpHttpHandler);
 
 // GET convenience for SEE only — payload from query params. Reads
 // should be idempotent and cacheable per HTTP semantics; for the
 // other three verbs (DO, SUMMON, BE) clients use POST.
-router.get("/ibp/see/*", ibpHttpHandler);
+router.get("/ibp/see/*", verifyIncoming, ibpHttpHandler);
 
 export default router;

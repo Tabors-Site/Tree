@@ -22,9 +22,9 @@
 // On every other land, a different auth-being can be installed by an
 // extension. The contract above is what the protocol layer expects.
 
-import log from "../../../seed/core/log.js";
-import { hooks } from "../../../seed/core/hooks.js";
-import Being from "../../../seed/models/being.js";
+import log from "../core/log.js";
+import { hooks } from "../core/hooks.js";
+import Being from "../models/being.js";
 import {
   createBeingWithHome,
   createFirstBeing,
@@ -32,10 +32,10 @@ import {
   findBeingByName,
   verifyPassword,
   generateToken,
-} from "../../../seed/core/auth.js";
-import { getLandRootId } from "../../../seed/landRoot.js";
-import { PortalError, PORTAL_ERR } from "../errors.js";
-import { getLandDomain } from "../address.js";
+} from "../core/identity.js";
+import { getLandRootId } from "../landRoot.js";
+import { PortalError, PORTAL_ERR } from "../../protocols/ibp/errors.js";
+import { getLandDomain } from "../addressing/address.js";
 
 const TREEOS_AUTH_WELCOME =
   "Welcome to TreeOS. This land is open to anyone who wants to inhabit it. Pick a username and password; you will receive an identity token immediately and start at your home.";
@@ -87,7 +87,7 @@ export const authBeing = Object.freeze({
       // not block on these writes.
       (async () => {
         try {
-          const { ensureSystemBeings } = await import("../../../seed/core/systemBeings.js");
+          const { ensureSystemBeings } = await import("../core/systemBeings.js");
           await ensureSystemBeings(getLandRootId());
         } catch (err) {
           log.warn("auth-being", `post-first-register system-being setup failed: ${err.message}`);

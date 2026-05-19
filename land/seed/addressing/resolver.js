@@ -14,12 +14,12 @@
 // Home and tree zones are now wired through; the rest of the verbs
 // (DO/SUMMON/BE) will consume this resolver next.
 
-import { PortalError, PORTAL_ERR } from "./errors.js";
+import { PortalError, PORTAL_ERR } from "../../protocols/ibp/errors.js";
 import { getLandDomain } from "./address.js";
-import Being from "../../seed/models/being.js";
-import Node from "../../seed/models/node.js";
-import { getLandRootId } from "../../seed/landRoot.js";
-import { resolveRootNode } from "../../seed/tree/treeFetch.js";
+import Being from "../models/being.js";
+import Node from "../models/node.js";
+import { getLandRootId } from "../landRoot.js";
+import { resolveRootNode } from "../tree/treeFetch.js";
 
 /**
  * @param {{ land: string|null, path: string|null, being: string|null }} stance

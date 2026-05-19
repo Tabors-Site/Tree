@@ -9,20 +9,20 @@
 // home / tree zone branches.
 
 import { getLandDomain } from "./address.js";
-import { DESCRIPTOR_VERSION } from "./discovery.js";
-import { getLandConfigValue } from "../../seed/landConfig.js";
-import Node from "../../seed/models/node.js";
-import { getLandRootId } from "../../seed/landRoot.js";
+import { DESCRIPTOR_VERSION } from "../../protocols/ibp/discovery.js";
+import { getLandConfigValue } from "../landConfig.js";
+import Node from "../models/node.js";
+import { getLandRootId } from "../landRoot.js";
 // NODE_STATUS retired 2026-05-18 — status is domain-specific extension
 // metadata, not a universal kernel field. Descriptor queries no longer
 // filter on a node-level status.
-import { getArtifacts } from "../../seed/tree/artifacts.js";
-import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
-import { getInboxSummary } from "./inbox.js";
-import { getRole, listRoles } from "./roles/registry.js";
+import { getArtifacts } from "../tree/artifacts.js";
+import { resolveTreeAccess } from "../tree/treeAccess.js";
+import { getInboxSummary } from "../scheduler/inbox.js";
+import { getRole, listRoles } from "../roles/registry.js";
 import { getExtension } from "../../extensions/loader.js";
-import { getActiveSummonForBeing } from "../../seed/llm/summonTracker.js";
-import Did from "../../seed/models/did.js";
+import { getActiveSummonForBeing } from "../llm/summonTracker.js";
+import Did from "../models/did.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Place-bundle readers
@@ -288,7 +288,7 @@ async function inferActivityTarget(summon) {
   if (!summon?.inReplyTo) return null;
   let parent;
   try {
-    const Summon = (await import("../../seed/models/summon.js")).default;
+    const Summon = (await import("../models/summon.js")).default;
     parent = await Summon.findById(summon.inReplyTo)
       .select("activeRole beingOut")
       .lean();

@@ -31,12 +31,12 @@
 // member). That fallback gets removed once governing's lifecycle has
 // stamped the new-shape rules everywhere.
 
-import Node from "../../seed/models/node.js";
-import { getLandRootId } from "../../seed/landRoot.js";
-import { getAncestorChain } from "../../seed/tree/ancestorCache.js";
-import { deriveStanceProperties } from "./stanceProperties.js";
+import Node from "../models/node.js";
+import { getLandRootId } from "../landRoot.js";
+import { getAncestorChain } from "../tree/ancestorCache.js";
+import { deriveStanceProperties } from "../addressing/stanceProperties.js";
 import { lookupDefault } from "./defaultPermissions.js";
-import { PORTAL_ERR } from "./errors.js";
+import { PORTAL_ERR } from "../../protocols/ibp/errors.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Legacy defaults (kept for startup's seedDefaultStancePermissions).

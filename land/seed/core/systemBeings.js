@@ -28,7 +28,7 @@
 import log from "./log.js";
 import Being from "../models/being.js";
 import Node from "../models/node.js";
-import { createBeingWithHome } from "./auth.js";
+import { createBeingWithHome } from "./identity.js";
 
 /**
  * Find the land's root being — the first admin human who registered.

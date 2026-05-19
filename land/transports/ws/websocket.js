@@ -656,9 +656,9 @@ export function initWebSocketServer(httpServer, originPolicy) {
           }
           const NodeModel = (await import("../../seed/models/node.js")).default;
           const BeingModel = (await import("../../seed/models/being.js")).default;
-          const { appendToInbox } = await import("../../protocols/ibp/inbox.js");
-          const { wake } = await import("../../protocols/ibp/scheduler.js");
-          const { getLandDomain } = await import("../../protocols/ibp/address.js");
+          const { appendToInbox } = await import("../../seed/scheduler/inbox.js");
+          const { wake } = await import("../../seed/scheduler/scheduler.js");
+          const { getLandDomain } = await import("../../seed/addressing/address.js");
 
           // Resolve the Ruler being at this position. Planted by a
           // seed such as coder:governing-coder. If no ruler-role
@@ -735,8 +735,8 @@ export function initWebSocketServer(httpServer, originPolicy) {
         try {
           const beingId = String(socket.beingId);
           const Summon = (await import("../../seed/models/summon.js")).default;
-          const { abortByRootCorrelations } = await import("../../protocols/ibp/scheduler.js");
-          const { cancelByRootCorrelation } = await import("../../protocols/ibp/inbox.js");
+          const { abortByRootCorrelations } = await import("../../seed/scheduler/scheduler.js");
+          const { cancelByRootCorrelation } = await import("../../seed/scheduler/inbox.js");
 
           // 1. Find every active root chain originated by this user.
           const openRoots = await Summon.distinct("rootCorrelation", {

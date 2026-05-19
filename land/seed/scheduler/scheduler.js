@@ -30,10 +30,10 @@
 // scan inboxes for unsummoned pending entries and resume them.
 
 import { randomUUID } from "crypto";
-import log from "../../seed/core/log.js";
-import Being from "../../seed/models/being.js";
+import log from "../core/log.js";
+import Being from "../models/being.js";
 import { pickNextEntry, markSummoned, markInboxConsumed, readInbox } from "./inbox.js";
-import { getRole } from "./roles/registry.js";
+import { getRole } from "../roles/registry.js";
 
 // Per-being scheduler state.
 //

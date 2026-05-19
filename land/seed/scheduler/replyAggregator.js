@@ -29,7 +29,7 @@
 // elapsed timeout settles the aggregator with `timedOut: true` and the
 // partial replies it had collected so far.
 
-import log from "../../seed/core/log.js";
+import log from "../core/log.js";
 
 // ────────────────────────────────────────────────────────────────
 // Public API

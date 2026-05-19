@@ -84,7 +84,8 @@ async function nextEmissionOrdinal(contractsNodeId) {
  * Create a contracts-emission-N child node under the contracts trio
  * member. Stamps role + the structured emission payload.
  */
-async function createContractsEmission({ contractsNodeId, ordinal, payload, beingId, core }) {
+async function createContractsEmission({ contractsNodeId, ordinal, payload, beingId, identity = null, core }) {
+  const authIdentity = identity || (beingId ? { beingId } : null);
   // Slug derived from the Contractor's reasoning headline. Same
   // approach as plan-emission naming: descriptive at-a-glance, with
   // the numeric ordinal preserved in metadata for ordering.
@@ -98,7 +99,7 @@ async function createContractsEmission({ contractsNodeId, ordinal, payload, bein
       name,
       type: "contracts-emission",
       beingId,
-    });
+    }, { identity: authIdentity });
   } catch (err) {
     log.debug("Governing", `core.do(create-child) failed for contracts-emission: ${err.message}; falling back`);
   }
@@ -132,7 +133,7 @@ async function createContractsEmission({ contractsNodeId, ordinal, payload, bein
           emittedAt: payload.emittedAt,
         },
         merge: true,
-      });
+      }, { identity: authIdentity });
     }
   } catch (err) {
     log.warn("Governing", `failed to stamp contracts-emission metadata: ${err.message}`);
@@ -160,6 +161,7 @@ async function appendApproval({
   // emission ratification; Pass 2 courts read both the same way.
   inheritedFrom = null,
   parentContractsApplied = [],
+  identity = null,
   // Phase 3 ([[project_seed_four_verbs_only]]): callers thread `core`
   // so the metadata write goes through core.do (auto-Did).
   core,
@@ -195,7 +197,7 @@ async function appendApproval({
     namespace: NS,
     data: { contractApprovals: [...existing, entry] },
     merge: true,
-  });
+  }, { identity });
   return entry;
 }
 

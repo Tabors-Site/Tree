@@ -118,7 +118,7 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, parentBeing
     namespace: NS,
     data,
     merge: false,
-  });
+  }, { identity });
 
   // 2. Spawn the Ruler being at this node. Parent chain prefers explicit
   //    parentBeingId (sub-Ruler dispatch), then the requesting being
@@ -133,7 +133,7 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, parentBeing
   // createBeingWithHome handles both the parentBeingId stamp on the
   // new being AND the $addToSet into the parent's children list, so
   // no separate link write is needed here.
-  const { createBeingWithHome } = await import("../../../seed/core/auth.js");
+  const { createBeingWithHome } = await import("../../../seed/core/identity.js");
   const rulerCreated = await createBeingWithHome({
     operatingMode: "ai",
     role:          "ruler",
@@ -170,7 +170,7 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, parentBeing
     namespace: "beings",
     data: beingsRegistry,
     merge: true,
-  });
+  }, { identity });
 
   // 5. Stance permissions at the rulership node.
   //
@@ -189,7 +189,7 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, parentBeing
       },
     },
     merge: true,
-  });
+  }, { identity });
 
   log.info("Governing",
     `🤴 Node ${String(nodeId).slice(0, 8)} ("${node.name || "?"}") promoted to Ruler ` +

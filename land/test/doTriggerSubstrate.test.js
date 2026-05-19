@@ -30,14 +30,14 @@
 import { test, describe, beforeEach, afterEach } from "node:test";
 import { strict as assert } from "node:assert";
 import { mock } from "node:test";
-import { echoEmbodiment } from "../protocols/ibp/roles/echo.js";
+import { echoEmbodiment } from "../seed/roles/echo.js";
 
 // In-memory inbox bucket: beingId -> entries[]. The subscription
 // registry's appendToInbox writes here; the scheduler's pickNextEntry
 // reads from here.
 const fakeBucket = new Map();
 
-mock.module("../protocols/ibp/inbox.js", {
+mock.module("../seed/scheduler/inbox.js", {
   namedExports: {
     appendToInbox: async (nodeId, beingId, message) => {
       const sentAt = message.sentAt || new Date().toISOString();
@@ -114,13 +114,13 @@ mock.module("../seed/models/being.js", {
   },
 });
 
-mock.module("../protocols/ibp/roles/registry.js", {
+mock.module("../seed/roles/registry.js", {
   namedExports: {
     getRole: (name) => name === "echo" ? echoEmbodiment : null,
   },
 });
 
-mock.module("../protocols/ibp/address.js", {
+mock.module("../seed/addressing/address.js", {
   namedExports: { getLandDomain: () => "treeos.ai" },
 });
 
@@ -134,8 +134,8 @@ mock.module("../seed/tree/ancestorCache.js", {
   },
 });
 
-const { subscribe, emitToSubscribers, _resetAll: resetSubscriptions } = await import("../protocols/ibp/subscriptions.js");
-const { attachHandoff, _resetAll: resetScheduler } = await import("../protocols/ibp/scheduler.js");
+const { subscribe, emitToSubscribers, _resetAll: resetSubscriptions } = await import("../seed/scheduler/subscriptions.js");
+const { attachHandoff, _resetAll: resetScheduler } = await import("../seed/scheduler/scheduler.js");
 
 beforeEach(() => {
   resetSubscriptions();

@@ -1027,7 +1027,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Idempotent — re-registering replaces this extension's prior rules.
       if (manifest.provides?.defaultPermissions) {
         try {
-          const { registerDefaultPermissions } = await import("../protocols/ibp/defaultPermissions.js");
+          const { registerDefaultPermissions } = await import("../seed/core/defaultPermissions.js");
           registerDefaultPermissions(manifest.name, manifest.provides.defaultPermissions);
         } catch (err) {
           log.warn("Extensions", `default-permissions registration failed for "${manifest.name}": ${err.message}`);
@@ -1054,9 +1054,11 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   // Wire the mode tool injection resolver now that all extensions are loaded
   setExtensionToolResolver(getExtensionToolsForMode);
 
-  // Register extension names provider for canopy /info endpoint
+  // Register extension names provider so the land's identity payload
+  // includes the installed extension list (used by `.well-known/treeos-portal`
+  // discovery + future cross-land introspection).
   try {
-    const { setExtensionNamesProvider } = await import("../protocols/canopy/identity.js");
+    const { setExtensionNamesProvider } = await import("../protocols/ibp/canopy/identity.js");
     setExtensionNamesProvider(getLoadedExtensionNames);
   } catch {}
 
@@ -1640,7 +1642,7 @@ export async function uninstallExtension(name) {
     // Drop this extension's default permission rules from the registry
     // so authorize stops consulting them post-uninstall.
     try {
-      const { unregisterDefaultPermissions } = await import("../protocols/ibp/defaultPermissions.js");
+      const { unregisterDefaultPermissions } = await import("../seed/core/defaultPermissions.js");
       unregisterDefaultPermissions(name);
     } catch {}
   }

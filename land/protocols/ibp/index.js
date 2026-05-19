@@ -18,8 +18,8 @@ import { attachPortalHandlers } from "./protocol.js";
 import { hooks } from "../../seed/core/hooks.js";
 import Node from "../../seed/models/node.js";
 import { emitPositionInvalidate } from "./live.js";
-import { emitToSubscribers } from "./subscriptions.js";
-import { startTickLoop as startScheduleTick } from "./schedule.js";
+import { emitToSubscribers } from "../../seed/scheduler/subscriptions.js";
+import { startTickLoop as startScheduleTick } from "../../seed/scheduler/schedule.js";
 
 // Kernel-signal-to-live-emit bridge. When kernel events touch data that
 // the Position Description reads, invalidate subscribers so they refetch.
@@ -109,21 +109,21 @@ export function initIBPWS(io) {
 // Re-exports for convenience — anything that wants to USE the Portal
 // primitives (e.g. eventually emit portal:event frames from within a Speak
 // handler) can import them through this module.
-export { parseFromSocket, parseWithContext, format, canonical, getLandDomain } from "./address.js";
-export { resolveStance } from "./resolver.js";
-export { buildDescriptor } from "./descriptor.js";
+export { parseFromSocket, parseWithContext, format, canonical, getLandDomain } from "../../seed/addressing/address.js";
+export { resolveStance } from "../../seed/addressing/resolver.js";
+export { buildDescriptor } from "../../seed/addressing/descriptor.js";
 export { buildDiscovery, PORTAL_PROTOCOL_VERSION, DESCRIPTOR_VERSION } from "./discovery.js";
 export { PortalError, PORTAL_ERR, isPortalError } from "./errors.js";
 // Inbox primitives that role templates need (cancel sweeps, etc.). Append
 // and read are deliberately not re-exported — only SUMMON should write
 // the inbox; role templates either let the scheduler consume entries or
 // emit follow-up SUMMONs.
-export { cancelByRootCorrelation, pickNextEntry } from "./inbox.js";
+export { cancelByRootCorrelation, pickNextEntry } from "../../seed/scheduler/inbox.js";
 // Scheduler controls that role templates may invoke when interpreting
 // cancel SUMMONs or when coordinating with other beings.
-export { wake, abortCurrent, getCurrentRootCorrelation, getStats as getSchedulerStats } from "./scheduler.js";
+export { wake, abortCurrent, getCurrentRootCorrelation, getStats as getSchedulerStats } from "../../seed/scheduler/scheduler.js";
 // Reply aggregation pattern for fanout (Foreman → Workers, etc.).
-export { aggregate } from "./replyAggregator.js";
+export { aggregate } from "../../seed/scheduler/replyAggregator.js";
 // Subscription registry — extensions declare DO-trigger interest so
 // their beings get summoned when matching substrate writes happen.
 export {
@@ -133,7 +133,7 @@ export {
   getMatchingSubscribers,
   emitToSubscribers,
   getStats as getSubscriptionStats,
-} from "./subscriptions.js";
+} from "../../seed/scheduler/subscriptions.js";
 // Schedule registry — extensions declare wake cadences so their
 // beings get scheduled-wake SUMMONs on intervals. Default emitter is
 // Mode 2 (@system sender); embodied flavor swaps via setEmitter.
@@ -144,4 +144,4 @@ export {
   setEmitter as setScheduleEmitter,
   resetEmitter as resetScheduleEmitter,
   getStats as getScheduleStats,
-} from "./schedule.js";
+} from "../../seed/scheduler/schedule.js";

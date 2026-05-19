@@ -5,7 +5,7 @@
 // governing-coder rulership at the target node.
 
 import log from "../../seed/core/log.js";
-import { registerRole } from "../../protocols/ibp/roles/registry.js";
+import { registerRole } from "../../seed/roles/registry.js";
 import { coderRole } from "./roles/coderRole.js";
 
 export async function init(_core) {

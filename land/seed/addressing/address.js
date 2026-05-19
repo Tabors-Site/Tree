@@ -20,7 +20,7 @@ import {
   isValidBeing,
 } from "../../../portal/lib/ibp-address.js";
 
-import { PortalError, PORTAL_ERR } from "./errors.js";
+import { PortalError, PORTAL_ERR } from "../../protocols/ibp/errors.js";
 
 // Cache the land's bare domain. Derived from process.env.LAND_DOMAIN with a
 // localhost fallback (matches canopy/identity.js). Stripped of protocol/port

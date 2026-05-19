@@ -116,7 +116,7 @@ export function registerKernelOperations() {
     ownerExtension: "kernel",
     handler: async ({ target, params, identity: _identity }) => {
       const nodeId = targetIdOf(target);
-      const { createBeingWithHome } = await import("./auth.js");
+      const { createBeingWithHome } = await import("./identity.js");
       const { being } = await createBeingWithHome({
         operatingMode: params.operatingMode || "ai",
         role:          params.role || null,

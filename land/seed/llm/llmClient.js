@@ -5,7 +5,8 @@
 // Given a being and (optionally) a role + tree, returns the OpenAI-shape
 // client configured for the right model + API key + base URL. The
 // resolution chain walks: override → being slot → being default →
-// canopy proxy (for remote beings) → land default → no-LLM.
+// land default → no-LLM. A fifth step ("summoner's home being") is
+// reserved for cross-land fallback — see [[project_llm_on_being_retires_proxy]].
 //
 // The cache is keyed by (beingId, slot) for normal resolution and by
 // ("conn:" + connectionId) for override paths, with TTL-based expiry.
@@ -39,9 +40,7 @@ export function setLlmTimeout(ms) { LLM_TIMEOUT_MS = ms; }
 export function getLlmTimeout() { return LLM_TIMEOUT_MS; }
 
 let CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 min
-let PROXY_CACHE_TTL = 60 * 1000; // 1 min for canopy proxy clients
 export function setClientCacheTtl(ms) { CLIENT_CACHE_TTL = ms; }
-export function setProxyCacheTtl(ms) { PROXY_CACHE_TTL = ms; }
 
 // ─────────────────────────────────────────────────────────────────────────
 // API KEY DECRYPTION
@@ -80,8 +79,7 @@ const beingClientCache = new Map();
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of beingClientCache) {
-    const ttl = entry.isCanopyProxy ? PROXY_CACHE_TTL : CLIENT_CACHE_TTL;
-    if (now - entry.fetchedAt > ttl * 2) beingClientCache.delete(key);
+    if (now - entry.fetchedAt > CLIENT_CACHE_TTL * 2) beingClientCache.delete(key);
   }
 }, 10 * 60 * 1000).unref();
 
@@ -162,11 +160,13 @@ async function resolveConnection(connectionId, cacheKey) {
  *   1. overrideConnectionId (from a tree's role-slot resolution)
  *   2. being slot assignment (metadata.userLlm.slots[slot])
  *   3. being default (Being.llmDefault), if slot wasn't "main"
- *   4. canopy proxy (for remote beings whose home land has the LLM)
- *   5. land-level default (landLlmConnection)
- *   6. noLlm sentinel
+ *   4. land-level default (landLlmConnection)
+ *   5. noLlm sentinel
  *
- * Returns `{ client, model, isCustom, connectionId, noLlm?, isCanopyProxy?, fetchedAt }`.
+ * A future cross-land step ("summoner's home being") slots between 4
+ * and 5; see [[project_llm_on_being_retires_proxy]].
+ *
+ * Returns `{ client, model, isCustom, connectionId, noLlm?, fetchedAt }`.
  */
 export async function getClientForBeing(beingId, slot, overrideConnectionId) {
   if (!beingId) {
@@ -201,8 +201,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
   // 2 + 3. Slot-based resolution from being's llmDefault + metadata.userLlm.
   const cacheKey = beingId + ":" + slot;
   const cached = beingClientCache.get(cacheKey);
-  const ttl = cached?.isCanopyProxy ? PROXY_CACHE_TTL : CLIENT_CACHE_TTL;
-  if (cached && Date.now() - cached.fetchedAt < ttl) {
+  if (cached && Date.now() - cached.fetchedAt < CLIENT_CACHE_TTL) {
     return cached;
   }
 
@@ -225,28 +224,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
     log.error("LLM", `Failed to load custom LLM for being ${beingId}: ${err.message}`);
   }
 
-  // 4. Canopy proxy for remote beings whose LLM lives on their home land.
-  try {
-    const remoteCheck = await Being.findById(beingId).select("isRemote homeLand").lean();
-    if (remoteCheck?.isRemote && remoteCheck.homeLand) {
-      const { createCanopyLlmProxyClient } = await import("../../protocols/canopy/llmProxy.js");
-      const proxyClient = createCanopyLlmProxyClient({ beingId, homeLand: remoteCheck.homeLand, slot });
-      const proxyEntry = {
-        client:        proxyClient,
-        model:         null,
-        isCustom:      true,
-        connectionId:  null,
-        isCanopyProxy: true,
-        fetchedAt:     Date.now(),
-      };
-      beingClientCache.set(cacheKey, proxyEntry);
-      return proxyEntry;
-    }
-  } catch (err) {
-    log.error("LLM", `Failed to create canopy LLM proxy for being ${beingId}: ${err.message}`);
-  }
-
-  // 5. Land-level default (operator-configured fallback).
+  // 4. Land-level default (operator-configured fallback).
   try {
     const landLlmId = getLandConfigValue("landLlmConnection");
     if (landLlmId) {
@@ -262,7 +240,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId) {
     log.error("LLM", `Failed to resolve land default LLM: ${err.message}`);
   }
 
-  // 6. No LLM available. Cache the sentinel so we don't re-walk.
+  // 5. No LLM available. Cache the sentinel so we don't re-walk.
   const noLlmEntry = {
     client:       null,
     model:        null,

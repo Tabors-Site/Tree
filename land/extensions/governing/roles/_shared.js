@@ -24,9 +24,9 @@
 import { randomUUID } from "crypto";
 import log from "../../../seed/core/log.js";
 import Being from "../../../seed/models/being.js";
-import { appendToInbox, readInbox } from "../../../protocols/ibp/inbox.js";
-import { wake } from "../../../protocols/ibp/scheduler.js";
-import { getLandDomain } from "../../../protocols/ibp/address.js";
+import { appendToInbox, readInbox } from "../../../seed/scheduler/inbox.js";
+import { wake } from "../../../seed/scheduler/scheduler.js";
+import { getLandDomain } from "../../../seed/addressing/address.js";
 
 // Mongoose lean() returns metadata as a plain object whose entries may
 // be nested Maps depending on driver version. Walk a path against both

@@ -25,6 +25,7 @@ import { handleSummon } from "./verbs/summon.js";
 import { handleBe } from "./verbs/be.js";
 import { parseUnifiedEnvelope, ackError } from "./envelope.js";
 import { PORTAL_ERR, isPortalError } from "./errors.js";
+import { getForeignTargetDomain, forwardToPeer } from "./canopy/dispatch.js";
 
 const VERB_HANDLERS = {
   see:    handleSee,
@@ -56,6 +57,20 @@ export async function dispatchIbp(socket, msg, ack) {
     }
     log.error("IBP", `envelope parse failed: ${err.message}`);
     return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
+  }
+
+  // Cross-domain dispatch: if the target address resolves to a foreign
+  // land AND this request didn't itself arrive verified from canopy
+  // (i.e. it's an outbound from us, not an inbound being re-forwarded),
+  // canopy-sign and forward to the peer. See
+  // [[project_canopy_folds_into_ibp]].
+  if (!socket?.canopyVerifiedSender) {
+    const foreign = getForeignTargetDomain(env.address);
+    if (foreign) {
+      const peerAck = await forwardToPeer(env);
+      if (typeof ack === "function") ack(peerAck);
+      return;
+    }
   }
 
   const handler = VERB_HANDLERS[env.verb];

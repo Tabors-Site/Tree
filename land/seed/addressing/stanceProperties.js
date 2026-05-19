@@ -34,9 +34,9 @@
 // Pure: no side effects, no throws on missing data. Defensive against
 // stale beingIds (returns arrival shape).
 
-import Being from "../../seed/models/being.js";
-import { resolveTreeAccess } from "../../seed/tree/treeAccess.js";
-import { getAncestorChain } from "../../seed/tree/ancestorCache.js";
+import Being from "../models/being.js";
+import { resolveTreeAccess } from "../tree/treeAccess.js";
+import { getAncestorChain } from "../tree/ancestorCache.js";
 
 const ARRIVAL_PROPS = Object.freeze({
   beingId:              null,

@@ -45,7 +45,7 @@
 // have separate inboxes; the role name doesn't unique-identify a being.
 
 import { randomUUID } from "crypto";
-import Node from "../../seed/models/node.js";
+import Node from "../models/node.js";
 
 const INBOX_NS = "inbox";
 

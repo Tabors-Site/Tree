@@ -178,11 +178,15 @@ function buildInitialStepStatuses(planEmission) {
 export async function appendExecutionRecord({
   rulerNodeId,
   beingId,
+  identity = null,
   core,
   planEmissionRef,
   planEmission,
   contractsEmissionRef = null,
 }) {
+  // For stance auth: prefer explicit identity, fall back to {beingId}.
+  // Legacy callers passing only beingId get authed as that being.
+  const authIdentity = identity || (beingId ? { beingId } : null);
   if (!rulerNodeId || !planEmissionRef) return null;
 
   // Ensure the execution-node parent exists.
@@ -205,6 +209,7 @@ export async function appendExecutionRecord({
       await freezeExecutionRecord({
         recordNodeId: priorActive._recordNodeId,
         nextStatus: "superseded",
+        identity: authIdentity,
         core,
       });
     } catch (err) {
@@ -232,7 +237,7 @@ export async function appendExecutionRecord({
       name: recordName,
       type: "execution-record",
       beingId,
-    });
+    }, { identity: authIdentity });
   } catch (err) {
     log.debug("Governing", `core.do(create-child) failed for execution-record: ${err.message}; falling back to direct insert`);
   }
@@ -284,7 +289,7 @@ export async function appendExecutionRecord({
           startedAt,
         },
         merge: true,
-      });
+      }, { identity: authIdentity });
     }
   } catch (err) {
     log.warn("Governing", `failed to stamp execution-record metadata at ${String(recordNode._id).slice(0, 8)}: ${err.message}`);
@@ -329,6 +334,7 @@ export async function appendExecutionApproval({
   status = "approved",
   supersedes = null,
   reason = null,
+  identity = null,
   // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
   core,
 }) {
@@ -359,7 +365,7 @@ export async function appendExecutionApproval({
     namespace: NS,
     data: { executionApprovals: [...existing, entry] },
     merge: true,
-  });
+  }, { identity });
 
   // Fire the ratification hook for Pass 2 court listeners and the
   // dashboard. Mirrors governing:planRatified / contractRatified.
@@ -460,6 +466,7 @@ export async function updateStepStatus({
   stepIndex,
   branchName = null,
   updates,
+  identity = null,
   // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
   core,
 }) {
@@ -503,7 +510,7 @@ export async function updateStepStatus({
     namespace: NS,
     data: { execution },
     merge: true,
-  });
+  }, { identity });
   return execution;
 }
 
@@ -527,6 +534,7 @@ export async function updateStepStatusByBranchName({
   rulerNodeId,
   branchName,
   updates,
+  identity = null,
   // Phase 3: thread core through to the underlying updateStepStatus.
   core,
 }) {
@@ -544,6 +552,7 @@ export async function updateStepStatusByBranchName({
         stepIndex: step.stepIndex,
         branchName,
         updates,
+        identity,
         core,
       });
     }
@@ -573,6 +582,7 @@ export async function updateStepStatusByBranchName({
 export async function freezeExecutionRecord({
   recordNodeId,
   nextStatus = "completed",
+  identity = null,
   // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core.
   core,
 }) {
@@ -599,7 +609,7 @@ export async function freezeExecutionRecord({
     namespace: NS,
     data: { execution },
     merge: true,
-  });
+  }, { identity });
 
   // Per-terminal-status hook fires. Fire only on actual transition
   // to a terminal state (idempotent re-freezes don't re-fire).

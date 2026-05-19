@@ -11,7 +11,7 @@ import { sendOk, sendError, ERR } from "./seed/core/protocol.js";
 import { getExtension } from "./extensions/loader.js";
 import securityHeaders from "./transports/http/middleware/securityHeaders.js";
 import { onListen } from "./startup.js";
-import { getLandUrl } from "./protocols/canopy/identity.js";
+import { getLandUrl } from "./protocols/ibp/canopy/identity.js";
 import log from "./seed/core/log.js";
 
 function notFoundPage(req, res, message = "This page doesn't exist or may have been moved.") {

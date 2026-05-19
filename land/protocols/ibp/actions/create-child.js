@@ -14,7 +14,7 @@
 // Returns { nodeId, position } pointing at the new child.
 
 import { createNode } from "../../../seed/tree/treeManagement.js";
-import { getLandDomain } from "../address.js";
+import { getLandDomain } from "../../../seed/addressing/address.js";
 import { PortalError, PORTAL_ERR } from "../errors.js";
 
 export async function createChild(ctx) {

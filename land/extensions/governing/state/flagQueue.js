@@ -105,12 +105,14 @@ export async function appendFlag({
   beingId = null,
   sourceWorkerScopeId = null,
   sourceWorkerType = null,
+  identity = null,
   // Phase 3 ([[project_seed_four_verbs_only]]): callers thread core
   // so the write goes through core.do (auto-Did, one dispatcher).
   core,
 }) {
   if (!rulerNodeId || !payload) return null;
   if (!core?.do) throw new Error("appendFlag requires `core` (verb surface)");
+  const authIdentity = identity || (beingId ? { beingId } : null);
   if (!isValidFlagKind(payload.kind)) {
     log.warn("Governing/Flags", `appendFlag rejected: invalid kind=${payload.kind}`);
     return null;
@@ -169,7 +171,7 @@ export async function appendFlag({
     namespace: NS,
     data: { pendingContractIssues: queue },
     merge: true,
-  });
+  }, { identity: authIdentity });
 
   log.info("Governing/Flags",
     `🚩 Flag appended at Ruler ${String(rulerNodeId).slice(0, 8)}: ` +
@@ -219,7 +221,7 @@ export async function readPendingIssues(rulerNodeId) {
  * has no caller for this yet, but the primitive lands here so the
  * mark-resolved code path exists when courts arrive).
  */
-export async function markFlagResolved({ rulerNodeId, flagId, resolution, core }) {
+export async function markFlagResolved({ rulerNodeId, flagId, resolution, identity = null, core }) {
   if (!core?.do) throw new Error("markFlagResolved requires `core` (verb surface)");
   if (!rulerNodeId || !flagId) return null;
   const node = await Node.findById(rulerNodeId);
@@ -253,7 +255,7 @@ export async function markFlagResolved({ rulerNodeId, flagId, resolution, core }
     namespace: NS,
     data: { pendingContractIssues: next },
     merge: true,
-  });
+  }, { identity });
   return next.find((f) => f?.id === flagId) || null;
 }
 

@@ -25,7 +25,7 @@ let summonImpl = async (message, ctx) => ({ content: `default for ${message.corr
 function freshBucket(beingId, entries) { fakeBucket.set(beingId, entries); }
 function setSummonImpl(fn) { summonImpl = fn; summonCalls = []; }
 
-mock.module("../protocols/ibp/inbox.js", {
+mock.module("../seed/scheduler/inbox.js", {
   namedExports: {
     pickNextEntry: async (nodeId, beingId) => {
       const bucket = fakeBucket.get(beingId) || [];
@@ -94,7 +94,7 @@ mock.module("../transports/ws/websocket.js", {
   },
 });
 
-mock.module("../protocols/ibp/roles/registry.js", {
+mock.module("../seed/roles/registry.js", {
   namedExports: {
     getRole: () => ({
       name: fakeBeingRole,
@@ -109,7 +109,7 @@ mock.module("../protocols/ibp/roles/registry.js", {
   },
 });
 
-const { wake, abortCurrent, getCurrentRootCorrelation, attachHandoff, _resetAll, getStats } = await import("../protocols/ibp/scheduler.js");
+const { wake, abortCurrent, getCurrentRootCorrelation, attachHandoff, _resetAll, getStats } = await import("../seed/scheduler/scheduler.js");
 
 beforeEach(() => {
   _resetAll();

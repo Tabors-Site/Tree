@@ -24,7 +24,7 @@
 // and [[project_ibp_universal_grammar]] for the architectural lock.
 
 import { echoEmbodiment } from "./echo.js";
-import log from "../../../seed/core/log.js";
+import log from "../core/log.js";
 
 // The role registry seeded with kernel-default roles. Extensions add
 // their own via registerRole. governing's promoteToRuler is the
@@ -114,8 +114,8 @@ export function unregisterRole(name) {
  * idempotent.
  */
 export async function syncRolesToSubstrate() {
-  const { SYSTEM_ROLE } = await import("../../../seed/core/protocol.js");
-  const { syncRegistryToSubstrate } = await import("../../../seed/tree/registryMirror.js");
+  const { SYSTEM_ROLE } = await import("../core/protocol.js");
+  const { syncRegistryToSubstrate } = await import("../tree/registryMirror.js");
   const items = [];
   for (const [name, role] of REGISTRY) {
     items.push({

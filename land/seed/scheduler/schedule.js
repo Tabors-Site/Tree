@@ -37,11 +37,11 @@
 // compress, peer-review, etc. — all interval-based).
 
 import { randomUUID } from "crypto";
-import log from "../../seed/core/log.js";
+import log from "../core/log.js";
 import { appendToInbox } from "./inbox.js";
 import { wake } from "./scheduler.js";
-import { getLandDomain } from "./address.js";
-import { getLandRootId } from "../../seed/landRoot.js";
+import { getLandDomain } from "../addressing/address.js";
+import { getLandRootId } from "../landRoot.js";
 
 const MIN_INTERVAL_MS = 250;
 const DEFAULT_TICK_MS = 1000;
