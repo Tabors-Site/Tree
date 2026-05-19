@@ -165,7 +165,7 @@ export function getLandRootId() {
  * A tree root is: parent is land root, has rootOwner that isn't SYSTEM, no systemRole.
  * This is the single source of truth. Use it everywhere.
  */
-export function isUserRoot(node) {
+export function isBeingRoot(node) {
   if (!node) return false;
   if (node.systemRole) return false;
   if (!node.rootOwner || String(node.rootOwner) === SYSTEM_OWNER) return false;

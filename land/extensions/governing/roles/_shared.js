@@ -303,16 +303,7 @@ export async function findChainInitialCaller(rulerNodeId, rulerBeingId, rootCorr
   }
 }
 
-/**
- * Convenience: extract `(beingId, username)` from the role.summon
- * context, falling back gracefully when one or the other is missing.
- * Used by every role.summon when building the `runChat` arguments.
- */
-export function resolveBeingInOut(ctx) {
-  const beingIn  = ctx?.identity?.beingId || ctx?.toBeing?._id || null;
-  const beingOut = ctx?.toBeing?._id ? String(ctx.toBeing._id) : null;
-  const username = ctx?.identity?.username
-                || ctx?.toBeing?.username
-                || "(unknown)";
-  return { beingIn, beingOut, username };
-}
+// resolveBeingInOut retired 2026-05-18 — role.summon callers no longer
+// build flat (beingIn, beingOut, username) tuples for runChat. The
+// summonContext shape (being, envelope, role, signal) reads what it
+// needs from the structured inputs directly.

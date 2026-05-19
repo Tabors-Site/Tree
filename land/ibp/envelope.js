@@ -1,174 +1,127 @@
 // TreeOS IBP envelope helpers.
 //
-// The four IBP verbs have distinct address rules:
-//   SEE     accepts position OR stance (observation works at either tier).
-//   DO      accepts position only (mutations always land at a position).
-//   SUMMON  accepts stance only (inboxes are per-being-per-position).
-//   BE      accepts stance only (self-identity targets stances; for fresh
-//           registration, the stance is the land's auth-being).
+// Canonical wire shape per [[project_ibp_wire_shape]]:
 //
-// These helpers validate that the envelope matches its verb's contract
-// and extract the canonical address string for downstream parsing.
+//   { id, verb, address, payload, identity? }
+//
+// `verb` is one of "see" | "do" | "summon" | "be". `address` is the
+// canonical string; the verb determines which address shapes are valid:
+//
+//   SEE     position OR stance (observation works at either tier)
+//   DO      position only      (mutations always land at a position;
+//                               a stance address has its @being stripped)
+//   SUMMON  stance only        (inboxes are per-being-per-position)
+//   BE      stance OR land     (auth-being stance, or bare-land shorthand)
+//
+// `payload` carries operation-specific data per verb:
+//   SEE     { live?: boolean, ... }
+//   DO      { action: string, args?: object, ... }
+//   SUMMON  { message, from?, inReplyTo?, rootCorrelation?, priority?,
+//             intent?, activeRole?, correlation? }
+//   BE      { op: "register"|"claim"|"release"|"switch", ...credentials }
+//
+// `identity` is the caller's auth token (when applicable). Verb handlers
+// read it from the parsed envelope, no per-verb-field destructuring.
 
 import { PortalError, PORTAL_ERR } from "./errors.js";
 
 const EMBODIMENT_SUFFIX = /@[a-z][a-z0-9-]*$/i;
+const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
 
 /**
- * SEE and DO: extract the position-or-stance string from the envelope.
+ * Classify an address string into its kind:
+ *   "land"     bare domain, no slash, no @being (e.g. "treeos.ai")
+ *   "stance"   has @being qualifier (e.g. "treeos.ai/abc-123@auth")
+ *   "position" has slash, no @being (e.g. "treeos.ai/abc-123")
+ */
+export function classifyAddress(address) {
+  if (typeof address !== "string" || !address) return null;
+  const hasAt = EMBODIMENT_SUFFIX.test(address);
+  const hasSlash = address.includes("/");
+  if (hasAt) return "stance";
+  if (hasSlash) return "position";
+  return "land";
+}
+
+/**
+ * Strip the trailing `@being` qualifier from an address. Used by DO,
+ * which targets positions only — a stance address with an @being is
+ * accepted but the qualifier is informational, not load-bearing.
+ */
+export function stripBeingQualifier(address) {
+  return typeof address === "string" ? address.replace(EMBODIMENT_SUFFIX, "") : address;
+}
+
+/**
+ * Parse + validate a unified IBP envelope.
  *
- * Returns { addressString, isStance } so handlers can choose which path to
- * walk for being-aware logic (DO authorization, descriptor augmentation).
+ * Returns `{ id, verb, address, addressKind, payload, identity }`. The
+ * verb handlers consume this directly; no per-verb-field extraction.
  *
- * Throws PortalError with INVALID_INPUT when:
- *   - neither `position` nor `stance` is present
- *   - both are present
- *   - `position` contains an @being qualifier
- *   - `stance` lacks an @being qualifier
+ * Throws PortalError(INVALID_INPUT) when:
+ *   - envelope is not an object
+ *   - verb is missing or not one of see/do/summon/be
+ *   - address is missing or empty
+ *   - address shape violates the verb's address-kind contract
  */
-export function extractPositionOrStance(msg, verbName) {
+export function parseUnifiedEnvelope(msg) {
   if (!msg || typeof msg !== "object") {
-    throw new PortalError(PORTAL_ERR.INVALID_INPUT, `${verbName} requires an envelope object`);
+    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp envelope must be an object");
   }
-  const hasPosition = typeof msg.position === "string" && msg.position.length > 0;
-  const hasStance = typeof msg.stance === "string" && msg.stance.length > 0;
-
-  if (hasPosition && hasStance) {
+  const verb = typeof msg.verb === "string" ? msg.verb.toLowerCase() : null;
+  if (!verb || !VALID_VERBS.has(verb)) {
     throw new PortalError(
       PORTAL_ERR.INVALID_INPUT,
-      `${verbName} envelope must have exactly one of \`position\` or \`stance\`, not both`,
+      `ibp envelope must include verb (one of: ${[...VALID_VERBS].join(", ")})`,
     );
   }
-  if (!hasPosition && !hasStance) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
-      `${verbName} envelope must include either \`position\` or \`stance\``,
-    );
+  const address = typeof msg.address === "string" ? msg.address : null;
+  if (!address || address.length === 0) {
+    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp envelope must include a non-empty `address`");
+  }
+  const addressKind = classifyAddress(address);
+
+  // Per-verb address-kind contract.
+  switch (verb) {
+    case "see":
+      if (addressKind !== "position" && addressKind !== "stance") {
+        throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp SEE address must be a position or stance");
+      }
+      break;
+    case "do":
+      // Accept stance shape (informational) but normalize to position.
+      if (addressKind !== "position" && addressKind !== "stance") {
+        throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp DO address must be a position (or stance; @being is stripped)");
+      }
+      break;
+    case "summon":
+      if (addressKind !== "stance") {
+        throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp SUMMON address must be a stance (position@being)");
+      }
+      break;
+    case "be":
+      if (addressKind !== "stance" && addressKind !== "land") {
+        throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp BE address must be a stance or bare land");
+      }
+      break;
   }
 
-  const value = hasPosition ? msg.position : msg.stance;
-  const looksLikeStance = EMBODIMENT_SUFFIX.test(value);
+  const payload = (msg.payload && typeof msg.payload === "object") ? msg.payload : {};
+  const identity = msg.identity !== undefined ? msg.identity : (payload.identity !== undefined ? payload.identity : null);
 
-  if (hasPosition && looksLikeStance) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
-      "`position` field must not include an @being qualifier; use `stance` instead",
-    );
-  }
-  if (hasStance && !looksLikeStance) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
-      "`stance` field must include an @being qualifier; use `position` instead",
-    );
-  }
-
-  return { addressString: value, isStance: hasStance };
-}
-
-/**
- * DO: extract a required position string. The `stance` field is not
- * accepted (mutations target positions only; beings are summoned
- * moments, not storage). If a client sends `position` with a trailing
- * `@<being>` qualifier, the qualifier is stripped (informational,
- * not load-bearing for DO).
- */
-export function extractPosition(msg, verbName) {
-  if (!msg || typeof msg !== "object") {
-    throw new PortalError(PORTAL_ERR.INVALID_INPUT, `${verbName} requires an envelope object`);
-  }
-  if (typeof msg.stance === "string" && msg.stance.length > 0) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
-      `${verbName} does not accept a \`stance\` field; use \`position\` (mutations always land at a position; beings are summoned moments, not storage)`,
-    );
-  }
-  if (typeof msg.position !== "string" || msg.position.length === 0) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
-      `${verbName} requires a \`position\` field`,
-    );
-  }
-  return stripBeingQualifier(msg.position);
-}
-
-function stripBeingQualifier(addressString) {
-  return addressString.replace(EMBODIMENT_SUFFIX, "");
-}
-
-/**
- * SUMMON: extract a required stance string. Stance must be qualified.
- */
-export function extractStance(msg, verbName) {
-  if (!msg || typeof msg !== "object") {
-    throw new PortalError(PORTAL_ERR.INVALID_INPUT, `${verbName} requires an envelope object`);
-  }
-  if (typeof msg.stance !== "string" || msg.stance.length === 0) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
-      `${verbName} requires a \`stance\` field (qualified position@being)`,
-    );
-  }
-  if (!EMBODIMENT_SUFFIX.test(msg.stance)) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
-      `${verbName} \`stance\` must include an @being qualifier`,
-    );
-  }
-  return msg.stance;
-}
-
-/**
- * BE: extract exactly one of `stance` or `land`. Both are accepted because
- * BE has two address forms:
- *   - `land: "<land>"` (bare domain, no slash, no qualifier) is the
- *     shorthand for register and credential-based claim. Equivalent to
- *     `stance: "<land>/@auth"`.
- *   - `stance: "<land>/@auth"` is the explicit auth-being form.
- *   - `stance: "<held stance>"` is for release, switch, and token re-claim.
- *
- * Returns { kind: "stance"|"land", value }.
- */
-export function extractStanceOrLand(msg, verbName) {
-  if (!msg || typeof msg !== "object") {
-    throw new PortalError(PORTAL_ERR.INVALID_INPUT, `${verbName} requires an envelope object`);
-  }
-  const hasStance = typeof msg.stance === "string" && msg.stance.length > 0;
-  const hasLand = typeof msg.land === "string" && msg.land.length > 0;
-
-  if (hasStance && hasLand) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
-      `${verbName} must have exactly one of \`stance\` or \`land\`, not both`,
-    );
-  }
-  if (!hasStance && !hasLand) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
-      `${verbName} must include either \`stance\` or \`land\``,
-    );
-  }
-
-  if (hasStance) {
-    if (!EMBODIMENT_SUFFIX.test(msg.stance)) {
-      throw new PortalError(
-        PORTAL_ERR.INVALID_INPUT,
-        `${verbName} \`stance\` must include an @being qualifier`,
-      );
-    }
-    return { kind: "stance", value: msg.stance };
-  }
-
-  if (msg.land.includes("/") || msg.land.includes("@")) {
-    throw new PortalError(
-      PORTAL_ERR.INVALID_INPUT,
-      `${verbName} \`land\` must be a bare domain with no path or @being`,
-    );
-  }
-  return { kind: "land", value: msg.land };
+  return {
+    id:          msg.id || null,
+    verb,
+    address,
+    addressKind,
+    payload,
+    identity,
+  };
 }
 
 /**
  * Ack helpers — uniform { id, status, data | error } shape.
+ * Used by socket.io callback acks; HTTP adapter also reuses the shape.
  */
 export function ackOk(ack, id, data) {
   if (typeof ack !== "function") return;

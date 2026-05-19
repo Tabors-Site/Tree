@@ -17,11 +17,9 @@
 import log from "../../seed/log.js";
 // Single-source role specs. Each role file carries BOTH dispatch
 // (summon, honoredIntents, …) AND LLM behavior (buildSystemPrompt,
-// toolNames, modeKey, …) — the modes/ folder is retired. See memories
-// `role-subsumes-mode` and `mode-registry-legacy`. registerRole below
-// mirrors the mode-shape fields into seed/modes/registry.js so legacy
-// runChat({ mode: "..." }) callers continue to work during the
-// migration to runChat({ role }).
+// toolNames, permissions, …) in one frozen spec. Roles are the unit
+// of behavior; mode is retired entirely. See
+// [[project_role_subsumes_mode]] and [[project_ibp_universal_grammar]].
 import { rulerRole } from "./roles/rulerRole.js";
 import { plannerRole } from "./roles/plannerRole.js";
 import { contractorRole } from "./roles/contractorRole.js";
@@ -31,14 +29,14 @@ import { registerRole } from "../../ibp/roles/registry.js";
 import {
   WORKER_TYPES,
   DEFAULT_WORKER_TYPE,
-  WORKER_TYPE_MODE_KEYS,
+  WORKER_TYPE_ROLE_NAMES,
   isValidWorkerType,
   coerceWorkerType,
 } from "./roles/workerBase.js";
 import {
   registerWorkspaceWorkerTypes,
   unregisterWorkspaceWorkerTypes,
-  lookupWorkerMode,
+  lookupWorkerRole,
   listWorkerTypeRegistrations,
   shouldGovernAtScope,
   findActiveWorkspaceAtScope,
@@ -223,11 +221,8 @@ export {
 };
 
 export async function init(core) {
-  // Single-registration: each role spec carries dispatch + LLM
-  // behavior in one frozen object. The role registry mirrors mode-
-  // shape fields into seed/modes/registry.js for legacy
-  // runChat({ mode }) callers; new code uses runChat({ role }) once
-  // that path lands.
+  // Each role spec carries dispatch + LLM behavior in one frozen
+  // object. runChat consumes role specs directly; no mode registry.
   registerRole("ruler",      rulerRole,      "governing");
   registerRole("planner",    plannerRole,    "governing");
   registerRole("contractor", contractorRole, "governing");
@@ -547,7 +542,7 @@ export async function init(core) {
               : []) || [];
             const typedWorkers = registrations
               .filter((r) => r.workspace === ws)
-              .map((r) => `${r.workerType} → ${r.modeKey}`)
+              .map((r) => `${r.workerType} → ${r.roleName}`)
               .join(", ");
 
             // Static fallback (in case a workspace hasn't declared
@@ -958,42 +953,36 @@ export async function init(core) {
       // Validator registry
       registerValidator, unregisterValidatorsForExt, runValidators, listValidators,
       // Worker-type taxonomy. Planner validates against WORKER_TYPES;
-      // dispatch resolves leaf-step type → mode key via
-      // WORKER_TYPE_MODE_KEYS, falling back to coerceWorkerType for
+      // dispatch resolves leaf-step type → role name via
+      // WORKER_TYPE_ROLE_NAMES, falling back to coerceWorkerType for
       // missing or malformed entries. Workspaces may override per
       // type via manifest.provides.workerTypes; the dispatcher
       // consults workspace registrations before falling back to the
-      // governing base modes here.
+      // governing base worker roles here.
       WORKER_TYPES,
       DEFAULT_WORKER_TYPE,
-      WORKER_TYPE_MODE_KEYS,
+      WORKER_TYPE_ROLE_NAMES,
       isValidWorkerType,
       coerceWorkerType,
       // Workspace worker-type registry — workspaces call
       // registerWorkspaceWorkerTypes() from their init() after their
-      // typed modes are registered. dispatch reads the registry via
-      // lookupWorkerMode(); the listWorkerTypeRegistrations() helper
-      // is for diagnostics and the dashboard.
+      // typed worker roles are registered. Dispatch reads the registry
+      // via lookupWorkerRole(); listWorkerTypeRegistrations() is for
+      // diagnostics and the dashboard.
       registerWorkspaceWorkerTypes,
       unregisterWorkspaceWorkerTypes,
-      lookupWorkerMode,
+      lookupWorkerRole,
       listWorkerTypeRegistrations,
       getWorkspaceDecompositionHints,
       // shouldGovernAtScope tells dispatch whether to route a tree-
-      // zone message through the Ruler instead of running the
-      // classifier's mode pick directly. Returns true at any scope
-      // where a workspace is ext-allow'd (workspaces bundle governing
-      // as a dep) OR when no workspaces are installed at all
-      // (governing-alone land). Replaces the legacy
-      // isWorkspacePlanMode mode-key check.
+      // zone message through the Ruler. Returns true at any scope
+      // where a workspace is ext-allow'd OR when no workspaces are
+      // installed at all (governing-alone land).
       shouldGovernAtScope,
       // findActiveWorkspaceAtScope returns the workspace name
-      // currently ext-allow'd at a scope (code-workspace,
-      // book-workspace, etc.). Dispatch passes it to lookupWorkerMode
-      // as preferWorkspace so code projects get code Workers and
-      // book projects get book Workers — without it the registry's
-      // insertion-order first-match picks whichever workspace loaded
-      // first, regardless of where dispatch is happening.
+      // currently ext-allow'd at a scope. Dispatch passes it to
+      // lookupWorkerRole as preferWorkspace so code projects get
+      // code Workers and book projects get book Workers.
       findActiveWorkspaceAtScope,
       // Worker flag queue. Workers call appendFlag (via the
       // governing-flag-issue tool) when they encounter a contract

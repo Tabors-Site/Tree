@@ -184,15 +184,15 @@ export const WORKER_TYPES = ["build", "refine", "review", "integrate"];
 
 export const DEFAULT_WORKER_TYPE = "build";
 
-// Map worker type → governing mode key. Workspaces can override per
+// Map worker type → governing role name. Workspaces can override per
 // type via their manifest's provides.workerTypes; the dispatcher
 // consults the workspace registration first, then falls back to
-// these governing base modes.
-export const WORKER_TYPE_MODE_KEYS = {
-  build: "tree:governing-worker-build",
-  refine: "tree:governing-worker-refine",
-  review: "tree:governing-worker-review",
-  integrate: "tree:governing-worker-integrate",
+// these governing base roles.
+export const WORKER_TYPE_ROLE_NAMES = {
+  build: "worker-build",
+  refine: "worker-refine",
+  review: "worker-review",
+  integrate: "worker-integrate",
 };
 
 export function isValidWorkerType(t) {

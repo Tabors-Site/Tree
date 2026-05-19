@@ -1,27 +1,30 @@
 // TreeOS IBP — SUMMON verb handler.
 //
-// Envelope:
-//   { id, stance: "<stance>", identity, message: { from, content,
-//     intent, correlation, inReplyTo?, attachments?, sentAt? } }
+// Consumes the unified envelope per [[project_ibp_wire_shape]]:
 //
-// SUMMON delivers a message to the inbox of the being at the addressed
-// stance and wakes them. The protocol layer:
+//   { id, verb: "summon", address (stance), payload: { message, ...threading }, identity? }
 //
-//   1. validates the envelope (stance qualified, message shape sane)
-//   2. resolves the stance to a (nodeId, being)
-//   3. looks up the being in the registry; rejects INVALID_INTENT
-//      if the being does not honor the message's intent
+// `payload.message` is the inbox payload: `{ from, content, intent?,
+// correlation?, inReplyTo?, attachments?, sentAt? }`. Threading fields
+// (`from`, `inReplyTo`, `rootCorrelation`, `priority`, `activeRole`) may
+// live at the top level of payload OR inside payload.message.
+//
+// The handler:
+//   1. validates the envelope (stance shape, message shape)
+//   2. resolves the stance to (nodeId, being)
+//   3. looks up the receiving being + active role
 //   4. atomically appends to the inbox
 //   5. fires the being's summoning per its triggerOn declaration
-//   6. for respondMode=sync, holds the ack open until the summoning
-//      returns; ACKs immediately for respondMode=async or none
+//   6. for respondMode=sync, holds the ack open until summoning returns;
+//      for async, ACKs immediately and emits the reply later via
+//      `ibp:update` on the sender's being-room.
 
 import { randomUUID } from "crypto";
 import log from "../../seed/log.js";
 import { parseFromSocket, expand, getLandDomain } from "../address.js";
 import { resolveStance } from "../resolver.js";
 import { PortalError, PORTAL_ERR, isPortalError } from "../errors.js";
-import { extractStance, ackOk, ackError } from "../envelope.js";
+import { ackOk, ackError } from "../envelope.js";
 import { appendToInbox, markInboxConsumed } from "../inbox.js";
 import { getRole } from "../roles/registry.js";
 import { authorize } from "../authorize.js";
@@ -29,39 +32,42 @@ import { getLandRootId } from "../../seed/landRoot.js";
 import { getIO } from "../../seed/ws/websocket.js";
 import { attachHandoff, wake } from "../scheduler.js";
 
-// intent field retired 2026-05-18. Permissions belong to role identity
-// (see memory `role-permissions-not-envelope`); envelopes no longer
-// declare chat/place/query/be. Legacy senders may still pass `intent`
-// strings — the field is accepted but ignored.
-
 /**
- * Broadcast a SUMMON reply to every socket the asker being has
- * connected. The originating socket may have disconnected during async
- * summoning — other sockets for the same being still see the reply.
- * Falls back to the originating socket when beingId or the io server
- * isn't reachable.
+ * Broadcast an out-of-band IBP update (e.g. a SUMMON reply) to every
+ * socket the asker being has connected. Falls back to the originating
+ * socket when beingId or io aren't available.
+ *
+ * The wire shape is `{ correlation, content }` per
+ * [[project_protocol_transport_separation]]. `content` carries the
+ * inbox entry that was just delivered (full reply); `correlation`
+ * matches whatever the client routes against (the rootCorrelation or
+ * the inReplyTo, whichever the client tracked).
  */
-function emitSummon(socket, entry) {
+function emitUpdate(socket, entry) {
+  const update = {
+    correlation: entry?.inReplyTo || entry?.correlation || null,
+    content:     entry,
+  };
   const beingId = socket?.beingId;
   const io = getIO();
   if (beingId && io) {
     try {
-      io.to(`being:${String(beingId)}`).emit("ibp:summon", entry);
+      io.to(`being:${String(beingId)}`).emit("ibp:update", update);
       return;
     } catch {}
   }
   try {
-    if (socket?.connected) socket.emit("ibp:summon", entry);
+    if (socket?.connected) socket.emit("ibp:update", update);
   } catch {}
 }
 
-export async function handleSummon(socket, msg, ack) {
-  const id = msg?.id || null;
+export async function handleSummon(socket, env, ack) {
+  const id = env?.id || null;
   try {
-    const stanceString = extractStance(msg, "ibp:summon");
-    const message = validateMessage(msg.message);
+    const { address, payload } = env;
+    const message = validateMessage(payload?.message);
 
-    const parsed = parseFromSocket(socket, stanceString);
+    const parsed = parseFromSocket(socket, address);
     const expanded = expand(parsed, {
       currentLand: getLandDomain(),
       currentUser: socket.username,
@@ -80,12 +86,8 @@ export async function handleSummon(socket, msg, ack) {
     }
 
     // Resolve the qualifier to a specific Being:
-    //   1. Try a direct username lookup (the canonical addressing form,
-    //      e.g. @ruler435 or @auth).
-    //   2. If not found, treat the qualifier as a role shorthand and
-    //      look in metadata.beings.<role>.beingId at the resolved
-    //      position — accepts shorthand like @ruler when exactly one
-    //      ruler-role being lives at that node.
+    //   1. Direct username lookup (canonical: @ruler435, @auth)
+    //   2. Role shorthand at the resolved position via metadata.beings.<role>.beingId
     const Being = (await import("../../seed/models/being.js")).default;
     let toBeing = await Being.findOne({ username: qualifier });
     if (!toBeing && resolved.nodeId) {
@@ -104,29 +106,25 @@ export async function handleSummon(socket, msg, ack) {
       );
     }
 
-    // Resolve the active role for this summon. Three sources, in order:
-    //   1. `message.activeRole` from the envelope (caller specifies the
-    //      role they want this summon processed in).
-    //   2. `toBeing.defaultRole` (the being's default capacity).
-    //   3. `qualifier` as a last-resort fallback (useful for role-named
-    //      addressing when the being instance hasn't yet had its
-    //      defaultRole stamped — e.g. very-early-boot system beings).
+    // Resolve activeRole. Three sources, in order:
+    //   1. message.activeRole or payload.activeRole (envelope-specified)
+    //   2. toBeing.defaultRole
+    //   3. qualifier (last-resort fallback)
     //
-    // Strict membership check: if the envelope specifies an activeRole,
-    // it MUST be in the being's `roles[]`. Otherwise reject — the
-    // sender either knows what they're addressing or they don't; silent
-    // fallback hides bugs.
+    // Strict membership check: envelope-specified activeRole MUST be in
+    // the being's roles[]. Silent fallback hides bugs.
     let activeRole;
-    if (message.activeRole) {
+    const envelopeRole = message.activeRole || payload.activeRole || null;
+    if (envelopeRole) {
       const carriedRoles = Array.isArray(toBeing.roles) ? toBeing.roles : [];
-      if (!carriedRoles.includes(message.activeRole)) {
+      if (!carriedRoles.includes(envelopeRole)) {
         throw new PortalError(
           PORTAL_ERR.ROLE_UNAVAILABLE,
-          `Being @${toBeing.username} does not carry role "${message.activeRole}" ` +
+          `Being @${toBeing.username} does not carry role "${envelopeRole}" ` +
           `(roles: ${carriedRoles.length ? carriedRoles.join(", ") : "none"})`,
         );
       }
-      activeRole = message.activeRole;
+      activeRole = envelopeRole;
     } else {
       activeRole = toBeing.defaultRole || qualifier;
     }
@@ -139,8 +137,7 @@ export async function handleSummon(socket, msg, ack) {
       );
     }
 
-    // Stance Authorization gate. Passes `activeRole` so permission
-    // rules can vary per role even on the same being.
+    // Stance Authorization gate.
     const identity = socket.beingId ? { beingId: socket.beingId, username: socket.username } : null;
     const decision = await authorize({
       identity,
@@ -156,14 +153,7 @@ export async function handleSummon(socket, msg, ack) {
       );
     }
 
-    // Intent-honoring check retired with intent field. Role permissions
-    // (declared on the role spec) handle tool-level capability scoping
-    // inside the role's summon → runChat call.
-
-    // Inbox writes attach to a real Node. Priority:
-    //   1. The resolved position's nodeId (tree zone or specific node)
-    //   2. The receiving being's home Node (every being has one)
-    //   3. The land root as final fallback for land-zone targets
+    // Resolve inbox-attach node.
     const inboxNodeId =
       resolved.nodeId
       || toBeing.homePositionId
@@ -175,10 +165,6 @@ export async function handleSummon(socket, msg, ack) {
       );
     }
 
-    // Append to inbox atomically; the receiving being's summoning will
-    // read it. Inbox is keyed by the receiver's beingId, not by role
-    // type, so multiple beings of the same role at one position get
-    // their own delivery queues.
     const recipientBeingId = String(toBeing._id);
     const { messageId, sentAt } = await appendToInbox(inboxNodeId, recipientBeingId, message);
 
@@ -204,7 +190,7 @@ export async function handleSummon(socket, msg, ack) {
         [messageId],
         {
           responseId: responseEntry?.correlation || null,
-          summonId:     responseEntry?.summonId || null,
+          summonId:   responseEntry?.summonId || null,
         },
       );
       if (!responseEntry) {
@@ -213,34 +199,26 @@ export async function handleSummon(socket, msg, ack) {
       return ackOk(ack, id, responseEntry);
     }
 
-    // Async respond-mode: ACK accepted immediately, hand the summoning
-    // off to the per-being scheduler. The scheduler serializes Summons
-    // for this being (no two run concurrently), enforces priority order
-    // on each pull, and exposes an AbortController so role templates
-    // can interrupt. The response is pushed to the sender's socket via
-    // `ibp:summon` when summoning completes — and errors land on
-    // the same channel so the client can render an inline error bubble.
+    // Async respond-mode: ACK accepted immediately; per-being scheduler
+    // serializes summonings. Reply arrives later via `ibp:update` on the
+    // sender's being-room.
     if (role.respondMode === "async") {
       ackOk(ack, id, { status: "accepted", messageId });
-      const responseFromStance = `${pathOfResolved(resolved)}@${beingName}`;
+      const responseFromStance = `${pathOfResolved(resolved)}@${toBeing.username}`;
       attachHandoff(recipientBeingId, messageId, {
         identity:           summonCtx.identity,
         resolved,
         responseFromStance,
-        onResponse: (responseEntry) => {
-          emitSummon(socket, responseEntry);
-        },
-        onError: (err) => {
-          emitSummon(socket, {
-            from:        responseFromStance,
-            content:     `[${err.code || "error"}] ${err.message || "summoning failed"}`,
-            intent:      "chat",
-            correlation: randomUUID(),
-            inReplyTo:   messageId,
-            sentAt:      new Date().toISOString(),
-            error:       true,
-          });
-        },
+        onResponse: (responseEntry) => emitUpdate(socket, responseEntry),
+        onError: (err) => emitUpdate(socket, {
+          from:        responseFromStance,
+          content:     `[${err.code || "error"}] ${err.message || "summoning failed"}`,
+          intent:      "chat",
+          correlation: randomUUID(),
+          inReplyTo:   messageId,
+          sentAt:      new Date().toISOString(),
+          error:       true,
+        }),
       });
       wake(recipientBeingId, inboxNodeId);
       return;
@@ -253,7 +231,7 @@ export async function handleSummon(socket, msg, ack) {
     if (isPortalError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("IBP", `ibp:summon failed: ${err.message}`);
+    log.error("IBP", `ibp SUMMON failed: ${err.message}`);
     return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }
@@ -264,7 +242,7 @@ export async function handleSummon(socket, msg, ack) {
 
 function validateMessage(message) {
   if (!message || typeof message !== "object") {
-    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "SUMMON requires a `message` object");
+    throw new PortalError(PORTAL_ERR.INVALID_INPUT, "SUMMON payload must include a `message` object");
   }
   if (typeof message.from !== "string" || !message.from.length) {
     throw new PortalError(PORTAL_ERR.INVALID_INPUT, "`message.from` is required");
@@ -292,20 +270,15 @@ async function runSummoning(role, ctx) {
   if (!result || typeof result !== "object") {
     return null; // no-response or place-intent
   }
-  // The being returned a response. Build a response envelope, write
-  // it to the sender's inbox-equivalent, and return it for sync delivery.
-  // `summonId` (when the being routed through runChat) propagates so
-  // the caller's markInboxConsumed can stamp the consumed inbox entry
-  // with a pointer to the Chat record this message became.
   const responseCorrelation = randomUUID();
   return {
-    from:        `${ctx.resolved.being ? `${pathOfResolved(ctx.resolved)}@${ctx.being}` : ctx.being}`,
+    from:        `${ctx.resolved.being ? `${pathOfResolved(ctx.resolved)}@${ctx.toBeing.username}` : ctx.being}`,
     content:     result.content,
     intent:      result.intent || ctx.message.intent,
     correlation: responseCorrelation,
     inReplyTo:   ctx.message.correlation,
     sentAt:      new Date().toISOString(),
-    summonId:      result.summonId || null,
+    summonId:    result.summonId || null,
   };
 }
 

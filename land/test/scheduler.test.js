@@ -339,8 +339,10 @@ describe("scheduler — human cognition", () => {
 
     await waitUntil(() => humanEmits.length > 0);
     assert.equal(humanEmits[0].room, "being:being-h");
-    assert.equal(humanEmits[0].event, "ibp:summon");
+    assert.equal(humanEmits[0].event, "ibp:update");
+    // ibp:update wire shape: { correlation, content } where content is the entry.
     assert.equal(humanEmits[0].payload.correlation, "plan-approve");
+    assert.equal(humanEmits[0].payload.content.correlation, "plan-approve");
 
     // The runLoop should have exited and role.summon should never have run.
     await waitUntil(() => getStats()["being-h"]?.running === false);

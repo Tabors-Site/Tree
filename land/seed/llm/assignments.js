@@ -64,7 +64,7 @@ export function getLlmAssignments(node) {
  *
  * Returns { main: connectionId|null, [slotName]: connectionId|null }
  */
-export function getUserLlmAssignments(being) {
+export function getBeingLlmAssignments(being) {
   if (!being) return { main: null };
 
   const meta = being.metadata instanceof Map ? being.metadata.get("userLlm") : being.metadata?.userLlm;

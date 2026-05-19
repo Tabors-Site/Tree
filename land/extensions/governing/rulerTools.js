@@ -1334,7 +1334,7 @@ export default function getRulerTools(_core) {
     //   - Foreman primitives create the execution-record.
     //   - Typed Workers (build/refine/review/integrate) write the
     //     Ruler's own leaf steps at this scope. Dispatch picks the
-    //     mode per leaf via governing.lookupWorkerMode.
+    //     role per leaf via governing.lookupWorkerRole.
     //   - swarm.runBranchSwarm dispatches sub-Ruler turns recursively.
     //   - On completion, Foreman wakes for the swarm-completed
     //     judgment (freeze record terminal status).
@@ -1461,9 +1461,9 @@ export default function getRulerTools(_core) {
         // chain reaches the parent).
         if (beingId) {
           try {
-            const { emitToUser } = await import("../../seed/ws/websocket.js");
+            const { emitToBeing } = await import("../../seed/ws/websocket.js");
             const { WS } = await import("../../seed/protocol.js");
-            emitToUser(String(beingId), WS.LIFECYCLE_ACTIVE, {
+            emitToBeing(String(beingId), WS.LIFECYCLE_ACTIVE, {
               active: true,
               rulerNodeId: String(ruler._id),
               rootId: rootId || null,
@@ -1528,6 +1528,10 @@ export default function getRulerTools(_core) {
               nodeId: String(childNode._id),
               promotedFrom: PROMOTED_FROM.BRANCH_DISPATCH,
               reason: `dispatched by ${rulerUsername} for: ${stepName}`,
+              // Sub-Ruler is a being-child of THIS Ruler. parentBeingId
+              // here pins the being-tree edge; without it the promote
+              // would fall back to identity or the tree's rootOwner.
+              parentBeingId: rulerBeingIdAtScope,
               core: _core,
             });
 

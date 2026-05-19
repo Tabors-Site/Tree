@@ -415,8 +415,8 @@ router.post("/canopy/llm/proxy", authenticateCanopy, async (req, res) => {
     }
 
     // Resolve LLM connection
-    const { getClientForUser } = await import("../seed/llm/conversation.js");
-    const clientEntry = await getClientForUser(user._id.toString(), slot || "main");
+    const { getClientForBeing } = await import("../seed/llm/conversation.js");
+    const clientEntry = await getClientForBeing(user._id.toString(), slot || "main");
 
     if (clientEntry.noLlm) {
       return sendError(res, 503, ERR.LLM_NOT_CONFIGURED, "No LLM connection configured on home land");

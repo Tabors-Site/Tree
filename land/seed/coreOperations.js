@@ -224,6 +224,33 @@ export function registerKernelOperations() {
       return { written: true, nodeId: String(target._id), namespace, kind: "node" };
     },
   });
+
+  // plant-seed: invoke a registered seed recipe at the target node. The
+  // recipe scaffolds the structure (Ruler beings, sub-domain nodes,
+  // starter artifacts, metadata) on the target. See seed/seeds.js and
+  // memory `extension-seeds`. params: { name } — the seed to plant.
+  registerOperation("plant-seed", {
+    targets: ["node"],
+    ownerExtension: "kernel",
+    handler: async ({ target, params, identity }) => {
+      const { name } = params || {};
+      if (!name || typeof name !== "string") {
+        throw new Error("plant-seed: `name` is required (the seed's registered name)");
+      }
+      const nodeId = targetIdOf(target);
+      if (!nodeId) throw new Error("plant-seed: target must resolve to a node id");
+      const { plantSeed } = await import("./seeds.js");
+      const { getCoreServices } = await import("./services.js");
+      const core = getCoreServices();
+      const { plantedSeedId, plantedThings } = await plantSeed({
+        name,
+        atNodeId: nodeId,
+        identity,
+        core,
+      });
+      return { planted: true, plantedSeedId, name, nodeId, plantedThings };
+    },
+  });
 }
 
 // Namespaces NOT writable through set-meta (each has its own verb).

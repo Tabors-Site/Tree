@@ -441,18 +441,19 @@ export function attachHandoff(beingId, correlation, handoff) {
 
 /**
  * Notify a human being's connected browser observers that pending
- * inbox entries arrived at this position. Emits `ibp:summon` to
- * the being's socket room for each unconsumed entry that hasn't been
+ * inbox entries arrived at this position. Emits `ibp:update` to the
+ * being's socket room for each unconsumed entry that hasn't been
  * notified yet (tracked in `state.humanNotified`). Entries stay
  * pending — humans consume by replying (new SUMMON with `inReplyTo`),
  * not by scheduler processing.
  *
+ * The `ibp:update` wire shape per [[project_protocol_transport_separation]]
+ * is `{ correlation, content }` — correlation matches whatever the
+ * client routes against (here, the inbox entry's own correlation since
+ * this is the FIRST delivery, not a reply); content carries the entry.
+ *
  * `getIO` is imported dynamically to avoid an ESM cycle through the
  * verb handler (websocket.js → verbs/summon.js → scheduler.js).
- *
- * The notified set is in-memory; on crash the browser refetches the
- * full inbox over HTTP and renders pending entries that way, so
- * persistent dedup isn't needed.
  */
 async function _notifyHumanObservers(beingId, nodeId, state) {
   const { getIO } = await import("../seed/ws/websocket.js");
@@ -465,7 +466,12 @@ async function _notifyHumanObservers(beingId, nodeId, state) {
     if (state.humanNotified.has(entry.correlation)) continue;
     state.humanNotified.add(entry.correlation);
     if (io) {
-      try { io.to(`being:${String(beingId)}`).emit("ibp:summon", entry); } catch {}
+      try {
+        io.to(`being:${String(beingId)}`).emit("ibp:update", {
+          correlation: entry.correlation,
+          content:     entry,
+        });
+      } catch {}
     }
   }
 }

@@ -56,14 +56,13 @@ async function resolveRulerForFlag(nodeId) {
   return meta?.governing?.role === "ruler" ? direct : null;
 }
 
-// Infer the workerType from the active mode at this scope. Mode keys
-// follow the convention tree:<workspace>-worker-<type> or
-// tree:governing-worker-<type>; the type tail is what we want. Best-
-// effort — if the mode doesn't fit the pattern, we return null and
-// the flag's sourceWorker.workerType stays null.
-function inferWorkerTypeFromMode(modeKey) {
-  if (typeof modeKey !== "string") return null;
-  const m = modeKey.match(/-worker-([a-z]+)$/);
+// Infer the workerType from the active role name at this scope. Worker
+// roles follow the convention "worker-<type>" (build/refine/review/integrate)
+// or "<workspace>-worker-<type>". Best-effort — if the role name doesn't
+// fit the pattern, we return null and sourceWorker.workerType stays null.
+function inferWorkerTypeFromRole(roleName) {
+  if (typeof roleName !== "string") return null;
+  const m = roleName.match(/worker-([a-z]+)$/);
   return m ? m[1] : null;
 }
 
@@ -151,7 +150,7 @@ export default function getFlagTools(_core) {
       },
       annotations: { readOnlyHint: false },
       async handler(args) {
-        const { beingId, nodeId, modeKey } = args;
+        const { beingId, nodeId, role: roleName } = args;
         if (!nodeId) {
           return text("governing-flag-issue: no nodeId in context; substrate bug.");
         }
@@ -199,7 +198,7 @@ export default function getFlagTools(_core) {
           );
         }
 
-        const workerType = inferWorkerTypeFromMode(modeKey);
+        const workerType = inferWorkerTypeFromRole(roleName);
         // Phase 3c ([[project_seed_four_verbs_only]]): dispatch through
         // the registered DO operation. Same handler runs; auto-Did fires.
         // This proves the wire-verb-surface round-trip: extension code

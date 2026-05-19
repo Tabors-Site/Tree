@@ -328,6 +328,10 @@ export async function buildDescriptor(resolved, opts = {}) {
 async function buildLandDescriptor(resolved, { identity } = {}) {
   const landDomain = getLandDomain();
   const children = await listPublicTrees();
+  // `available` reflects whether the being's role is actually registered.
+  // When the backing extension is missing, the entry stays in the
+  // descriptor (so 3D clients still see the slot) but is non-invocable.
+  const isRegistered = (beingName) => !!getRole(beingName);
   return {
     address: {
       land: landDomain,
@@ -351,7 +355,7 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
         label: "Auth",
         description: "The land's welcome character. Processes register, claim, release, switch.",
         invocableBy: "anyone",
-        available: true,
+        available: isRegistered("auth"),
         modeKey: "land:auth",
         kind: "ai",
         icon: "\u{1F511}",
@@ -361,7 +365,7 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
         label: "Land Manager",
         description: "Land-level governance: extensions, config, peers. God-tier only.",
         invocableBy: "owner",
-        available: true,
+        available: isRegistered("land-manager"),
         modeKey: "land:manager",
         kind: "ai",
         icon: "\u{1F3DB}\u{FE0F}",
@@ -371,7 +375,7 @@ async function buildLandDescriptor(resolved, { identity } = {}) {
         label: "Citizen",
         description: "Read-only browsing of the land's public surface.",
         invocableBy: "anyone",
-        available: true,
+        available: isRegistered("citizen"),
         modeKey: "land:citizen",
         kind: "ai",
         icon: "\u{1F464}",
@@ -443,7 +447,7 @@ async function buildHomeDescriptor(resolved, { identity } = {}) {
         label: "Dreamer",
         description: "Creative / generative cognition at the home zone.",
         invocableBy: "owner",
-        available: isOwner === true,
+        available: isOwner === true && !!getRole("dreamer"),
         modeKey: "home:dreamer",
         kind: "ai",
       },
@@ -452,7 +456,7 @@ async function buildHomeDescriptor(resolved, { identity } = {}) {
         label: "Archivist",
         description: "Read-only browsing of the user's tree history.",
         invocableBy: "owner",
-        available: isOwner === true,
+        available: isOwner === true && !!getRole("archivist"),
         modeKey: "home:archivist",
         kind: "ai",
       },

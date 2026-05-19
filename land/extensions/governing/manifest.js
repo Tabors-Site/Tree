@@ -111,6 +111,14 @@ export default {
     // the legacy mode registry for runChat({ mode }) compat.
     modes: [],
 
+    // No seeds declared on governing itself. Governance is a substrate
+    // primitive that domain extensions compose into their own seeds —
+    // the `coders` extension plants `coder:governing-coder` (rulership
+    // + coder workers) rather than governing planting a bare
+    // rulership that does nothing useful on its own. Governing exposes
+    // `promoteToRuler` via exports so other seeds can build on it.
+    seeds: {},
+
     hooks: {
       // Lifecycle events workspaces and future courts subscribe to.
       // governing:rulerPromoted fires when a node self-promotes via

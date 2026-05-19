@@ -501,11 +501,9 @@ export const rulerRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  // LLM behavior contract (mirrored to mode registry via registerRole)
-  modeKey: "tree:governing-ruler",
+  // LLM behavior contract — role.name ("ruler") is the identity.
   emoji: "👑",
   label: "Ruler",
-  bigMode: "tree",
   // Top-level Rulers typically pick one tool per turn; sub-Rulers may
   // chain through the entire lifecycle in one turn.
   maxMessagesBeforeLoop: 20,
@@ -564,7 +562,7 @@ export const rulerRole = Object.freeze({
     const scopeNodeId = ctx.nodeId || ctx.resolved?.nodeId;
     if (!scopeNodeId) {
       log.warn("Ruler", "summon without scopeNodeId; returning empty");
-      return { content: "Internal error: no scope.", intent: "chat" };
+      return { content: "Internal error: no scope." };
     }
 
     // Detect fresh turn vs reply from sub-being. Informational for
@@ -581,22 +579,12 @@ export const rulerRole = Object.freeze({
       ? buildReplyContextMessage(message)
       : String(message.content || "");
 
-    const beingId = ctx.identity?.beingId || ctx.toBeing?._id;
-    const username = ctx.identity?.username
-                  || ctx.toBeing?.username
-                  || "(unknown)";
-
     let result;
     try {
       result = await runChat({
-        beingId,
-        beingIn:  beingId,
-        beingOut: String(ctx.toBeing?._id),
-        username,
-        message:  messageBody,
+        being:    ctx.toBeing,
+        envelope: { ...message, content: messageBody },
         role:     rulerRole,
-        rootId:   ctx.resolved?.rootId || null,
-        nodeId:   scopeNodeId,
         signal:   ctx.signal,
       });
     } catch (err) {
@@ -605,7 +593,7 @@ export const rulerRole = Object.freeze({
         return null;
       }
       log.warn("Ruler", `LLM call failed: ${err.message}`);
-      return { content: `Ruler error: ${err.message}`, intent: "chat" };
+      return { content: `Ruler error: ${err.message}` };
     }
 
     const durationMs = Date.now() - startMs;

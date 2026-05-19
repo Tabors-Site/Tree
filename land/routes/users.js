@@ -25,7 +25,12 @@ const register = async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // First user bootstraps the land as admin.
+    // First user bootstraps the land as admin AND becomes the root
+    // being: parentBeingId null, all subsequent beings chain back to
+    // them. Right after creation, ensureSystemBeings spawns auth +
+    // land-manager as the root's children — so the being-tree exists
+    // before any other registration flows through.
+    //
     // Bypasses beforeRegister hook intentionally: no extensions loaded yet,
     // no email to verify, no invite to check. The land needs an operator.
     const first = await isFirstBeing();
@@ -33,6 +38,18 @@ const register = async (req, res) => {
     if (first) {
       const user = await createFirstBeing(username, password);
       hooks.run("afterRegister", { user, req }).catch(() => {});
+      // Spawn system beings (auth, land-manager, citizen) as children
+      // of the just-created root being. Detached so the response is
+      // not blocked on the system-being writes.
+      (async () => {
+        try {
+          const { ensureSystemBeings } = await import("../seed/systemBeings.js");
+          const { getLandRootId }       = await import("../seed/landRoot.js");
+          await ensureSystemBeings(getLandRootId());
+        } catch (err) {
+          log.warn("Auth", `post-first-register system-being setup failed: ${err.message}`);
+        }
+      })();
       const token = generateToken(user);
       return sendOk(res, {
         firstUser: true, token,
@@ -52,7 +69,28 @@ const register = async (req, res) => {
     }
     if (hookData.handled) return;
 
-    const user = await createBeing(username, password);
+    // Subsequent humans register via the auth-being's flow: they
+    // become being-tree children of the auth-being. The auth-being
+    // is itself a child of the root being, so the chain walks
+    // human → auth → root → null.
+    const Being = (await import("../seed/models/being.js")).default;
+    const authBeing = await Being.findOne({ username: "auth", operatingMode: "ai" })
+      .select("_id").lean();
+    const parentBeingId = authBeing ? String(authBeing._id) : null;
+
+    const user = await createBeing(username, password, { parentBeingId });
+
+    if (parentBeingId) {
+      await Being.updateOne(
+        { _id: parentBeingId },
+        { $addToSet: { children: String(user._id) } },
+      );
+    } else {
+      // No auth-being available — log once, the human stays orphaned
+      // until the operator runs `ensureSystemBeings` or restarts.
+      log.warn("Auth", `human "${username}" registered without auth-being parent; system beings may be missing`);
+    }
+
     hooks.run("afterRegister", { user, req }).catch(() => {});
     const token = generateToken(user);
 

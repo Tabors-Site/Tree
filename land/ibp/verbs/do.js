@@ -1,51 +1,44 @@
-// TreeOS IBP . DO verb handler.
+// TreeOS IBP — DO verb handler.
 //
-// Envelope:
-//   { id, action, position: "<position>", identity, payload }
+// Consumes the unified envelope per [[project_ibp_wire_shape]]:
 //
-// DO accepts `position` only. The world is data at positions; beings
-// are not data targets. The requester's role, when relevant for
-// authorization, lives in the identity token.
+//   { id, verb: "do", address, payload: { action, args?, ... }, identity? }
 //
-// This wire handler is now a thin envelope adapter. It does the
-// protocol-level work (parse address, expand, resolve, authorize)
+// `address` is a position; a stance shape is accepted but its @being
+// qualifier is informational (stripped). The world is data at positions;
+// beings are not data targets.
+//
+// `payload.action` names the registered DO operation (e.g. "create-child",
+// "set-meta", or extension ops like "governing:flag-issue"). `payload.args`
+// (canonical) carries the operation's arguments. For backward-compat the
+// rest of payload (minus `action` + `identity`) is also accepted as args.
+//
+// This handler does protocol-level work (parse, expand, resolve, authorize)
 // then dispatches through `core.do` (seed/verbs.js) which:
 //   - looks up the registered operation from seed/operations.js
 //   - runs the handler
 //   - auto-writes a Did
-//   - returns the handler's result
+//   - returns the result
 //
-// Action catalog (registered in seed/coreOperations.js):
-//   - create-child     (structural: add a new child node)
-//   - set-name         (field update: rename a node)
-//   - set-status       (field update: change a node's status)
-//   - set-meta         (metadata update: write to namespace, accepts
-//                       node/being/artifact targets)
-//
-// Extensions can register additional operations through
-// `core.do.registerOperation(...)` and they become reachable here
-// automatically; no change to this dispatcher needed.
-//
-// See [[project_seed_four_verbs_only]] for the architectural framing.
+// See [[project_seed_four_verbs_only]] + [[project_ibp_universal_grammar]].
 
 import log from "../../seed/log.js";
 import { parseFromSocket, expand, getLandDomain } from "../address.js";
 import { resolveStance } from "../resolver.js";
 import { PortalError, PORTAL_ERR, isPortalError } from "../errors.js";
-import { extractPosition, ackOk, ackError } from "../envelope.js";
+import { ackOk, ackError, stripBeingQualifier } from "../envelope.js";
 import { authorize } from "../authorize.js";
 import { doVerb } from "../../seed/verbs.js";
 import { getOperation, listOperations } from "../../seed/operations.js";
 
-export async function handleDo(socket, msg, ack) {
-  const id = msg?.id || null;
+export async function handleDo(socket, env, ack) {
+  const id = env?.id || null;
   try {
-    const action = typeof msg?.action === "string" ? msg.action : null;
+    const { address, payload } = env;
+    const action = typeof payload?.action === "string" ? payload.action : null;
     if (!action) {
-      throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp:do requires an `action` field");
+      throw new PortalError(PORTAL_ERR.INVALID_INPUT, "ibp DO payload must include `action`");
     }
-    // Look up against the registry. Operations registered by extensions
-    // are reachable here without this dispatcher knowing about them.
     if (!getOperation(action)) {
       throw new PortalError(
         PORTAL_ERR.ACTION_NOT_SUPPORTED,
@@ -54,7 +47,8 @@ export async function handleDo(socket, msg, ack) {
       );
     }
 
-    const positionString = extractPosition(msg, "ibp:do");
+    // DO targets positions; strip any @being qualifier on stance addresses.
+    const positionString = stripBeingQualifier(address);
 
     const parsed = parseFromSocket(socket, positionString);
     const expanded = expand(parsed, {
@@ -63,12 +57,19 @@ export async function handleDo(socket, msg, ack) {
     });
     const resolved = await resolveStance(expanded.right);
 
-    // Stance Authorization gate. This runs at the wire layer; core.do
-    // is called with { internal: true } to skip a second authorize when
-    // Phase 2+ adds auth inside the dispatcher.
+    // Resolve operation args. Canonical: payload.args. Fallback: every
+    // payload field except `action` + `identity`.
+    const args = payload.args !== undefined
+      ? payload.args
+      : (() => {
+          const { action: _a, identity: _i, ...rest } = payload;
+          return rest;
+        })();
+
+    // Stance Authorization gate.
     const identity = socket.beingId ? { beingId: socket.beingId, username: socket.username } : null;
-    const namespace = action === "set-meta" || action === "clear-meta"
-      ? msg?.payload?.namespace
+    const namespace = (action === "set-meta" || action === "clear-meta")
+      ? args?.namespace
       : undefined;
     const decision = await authorize({
       identity,
@@ -86,11 +87,8 @@ export async function handleDo(socket, msg, ack) {
     }
 
     // Dispatch through the seed verb. The registered handler runs and
-    // an audit Did is written automatically. `internal: true` reserves
-    // the future-auth-skip flag for when the dispatcher learns to gate
-    // calls itself; today both wire and extension callers are equally
-    // unauthorized at the dispatcher layer.
-    const data = await doVerb(resolved, action, msg.payload || {}, {
+    // an audit Did is written automatically.
+    const data = await doVerb(resolved, action, args, {
       identity,
       internal: true,
     });
@@ -99,7 +97,7 @@ export async function handleDo(socket, msg, ack) {
     if (isPortalError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("IBP", `ibp:do failed: ${err.message}`);
+    log.error("IBP", `ibp DO failed: ${err.message}`);
     return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }

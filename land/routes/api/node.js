@@ -158,68 +158,9 @@ router.post("/node/:nodeId/updateParent", authenticate, async (req, res) => {
     sendError(res, 400, ERR.INVALID_INPUT, err.message);
   }
 });
-// ── Per-node mode overrides ──
-// Must be before /node/:nodeId/:version to avoid :version capturing "modes"
-router.get("/node/:nodeId/modes", authenticate, async (req, res) => {
-  try {
-    const { nodeId } = req.params;
-    const node = await Node.findById(nodeId).select("name metadata").lean();
-    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
-    const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
-    const modes = meta.modes || {};
-
-    // List available modes from registry
-    let availableModes = [];
-    try {
-      const { getSubModes } = await import("../../seed/modes/registry.js");
-      availableModes = getSubModes("tree").map(m => m.key);
-    } catch {}
-
-    sendOk(res, { nodeId, name: node.name, modes, availableModes });
-  } catch (err) {
-    sendError(res, 500, ERR.INTERNAL, err.message);
-  }
-});
-
-router.post("/node/:nodeId/modes", authenticate, async (req, res) => {
-  try {
-    const { nodeId } = req.params;
-    const { intent, modeKey, clear } = req.body;
-
-    const node = await Node.findById(nodeId);
-    if (!node) return sendError(res, 404, ERR.NODE_NOT_FOUND, "Node not found");
-    if (node.systemRole) return sendError(res, 400, ERR.INVALID_INPUT, "Cannot modify system nodes");
-
-    const { getExtMeta, setExtMeta } = await import("../../seed/tree/extensionMetadata.js");
-
-    if (clear) {
-      // Clear all mode overrides or a specific one
-      const modes = getExtMeta(node, "modes") || {};
-      if (intent) {
-        delete modes[intent];
-      }
-      await setExtMeta(node, "modes", Object.keys(modes).length > 0 ? modes : null);
-    } else {
-      if (!intent || !modeKey) return sendError(res, 400, ERR.INVALID_INPUT, "intent and modeKey required");
-
-      // Validate mode exists
-      try {
-        const { getMode } = await import("../../seed/modes/registry.js");
-        if (!getMode(modeKey)) return sendError(res, 400, ERR.INVALID_INPUT, `Mode "${modeKey}" not registered`);
-      } catch {}
-
-      const modes = getExtMeta(node, "modes") || {};
-      modes[intent] = modeKey;
-      await setExtMeta(node, "modes", modes);
-    }
-
-    await node.save();
-    sendOk(res, { modes: getExtMeta(node, "modes") || {} });
-  } catch (err) {
-    log.error("API", "editModes error:", err.message);
-    sendError(res, 400, ERR.INVALID_INPUT, err.message);
-  }
-});
+// Per-node mode override endpoints retired 2026-05-18 with the mode
+// registry. Role-driven behavior is bound at SUMMON time via the
+// envelope's activeRole; there is no per-node mode override anymore.
 
 // ── Per-node tool configuration ──
 // Must be before /node/:nodeId/:version to avoid :version capturing "tools"
@@ -248,8 +189,8 @@ router.get("/node/:nodeId/tools", authenticate, async (req, res) => {
 
     let baseTools = [];
     try {
-      const { getAllToolNamesForBigMode } = await import("../../seed/modes/registry.js");
-      baseTools = getAllToolNamesForBigMode("tree");
+      const { listToolNames } = await import("../../seed/tools.js");
+      baseTools = listToolNames();
     } catch {}
 
     const effective = [...new Set([...baseTools, ...allAllowed])].filter(t => !allBlocked.has(t)).sort();

@@ -53,19 +53,31 @@ export async function isFirstBeing() {
 }
 
 /**
+ * Predicate: does this being carry admin permissions? Admin is a role,
+ * not a flag (see `project_admin_is_a_role`). A being is admin iff
+ * `"admin"` is in `being.roles`.
+ *
+ * @param {object} being - Being doc OR lean object with a roles[] field
+ * @returns {boolean}
+ */
+export function isAdmin(being) {
+  return Array.isArray(being?.roles) && being.roles.includes("admin");
+}
+
+/**
  * Create the first being (admin) on a fresh land. Race-resilient: if
  * two concurrent registrations both pass the isFirstBeing() check,
- * only the earliest insertion stays admin.
+ * only the earliest insertion keeps the admin role.
  */
 export async function createFirstBeing(username, password) {
-  const being = await createBeing(username, password, { isAdmin: true });
+  const being = await createBeing(username, password, { roles: ["admin"] });
 
-  const adminCount = await Being.countDocuments({ isAdmin: true, operatingMode: "human" });
+  const adminCount = await Being.countDocuments({ roles: "admin", operatingMode: "human" });
   if (adminCount > 1) {
-    const earliest = await Being.findOne({ isAdmin: true, operatingMode: "human" }).sort({ _id: 1 }).select("_id").lean();
+    const earliest = await Being.findOne({ roles: "admin", operatingMode: "human" }).sort({ _id: 1 }).select("_id").lean();
     if (earliest && earliest._id.toString() !== being._id.toString()) {
-      await Being.updateOne({ _id: being._id }, { $set: { isAdmin: false } });
-      being.isAdmin = false;
+      await Being.updateOne({ _id: being._id }, { $pull: { roles: "admin" } });
+      being.roles = (being.roles || []).filter((r) => r !== "admin");
     }
   }
 
@@ -112,12 +124,21 @@ export async function createBeing(username, password, opts = {}) {
     username,
     password,
     operatingMode: opts.operatingMode || "human",
-    isAdmin: opts.isAdmin || false,
     roles:       rolesList,
     defaultRole,
-    // Being-tree parent. null = top-level being (humans, root Rulers,
-    // auth-being). When set, the dispatcher (or caller) is responsible
-    // for $addToSet on parent.children atomically.
+    // Being-tree parent. null is reserved for the land's single root
+    // being (the first human who registers during setup). Every other
+    // being chains back to that root through parentBeingId: auth and
+    // land-manager are root's children, subsequent humans register
+    // under the auth-being, Rulers are children of the being that
+    // promoted them, and inner beings (Planner/Contractor/Foreman)
+    // are children of their Ruler.
+    //
+    // The caller is responsible for $addToSet on parent.children
+    // (atomic) right after this insert; createBeingWithHome does this
+    // automatically for its callers, the routes/users register flow
+    // does it inline for human registrations, and governing's
+    // promoteToRuler does it for Ruler / inner-being spawns.
     parentBeingId: opts.parentBeingId || null,
     homePositionId: opts.homePositionId || null,
     // Every being starts "at home" — current position defaults to their
@@ -261,7 +282,6 @@ export async function findBeingByUsername(username) {
  * @param {string} [opts.homeType]            type for the new home (defaults derived)
  * @param {object} [opts.homeMetadata]        initial metadata for the new home Node
  * @param {function} [opts.scaffolding]       async ({being, home}) => {} for extra structure
- * @param {boolean} [opts.isAdmin=false]
  * @param {boolean} [opts.isRemote=false]
  * @param {string} [opts.homeLand=null]
  * @returns {Promise<{being: object, home: object}>}
@@ -277,7 +297,6 @@ export async function createBeingWithHome(opts) {
     homeType     = null,
     homeMetadata = null,
     scaffolding  = null,
-    isAdmin      = false,
     isRemote     = false,
     homeLand     = null,
     // Being-tree parent ([[project_substrate_as_universal_workspace]]).
@@ -337,7 +356,6 @@ export async function createBeingWithHome(opts) {
       parent:       homeParent,
       rootOwner:    null,                  // set below for humans only
       contributors: [],
-      status:       "active",
       ...(homeMetadata ? { metadata: homeMetadata } : {}),
     });
     await Node.updateOne(
@@ -355,7 +373,6 @@ export async function createBeingWithHome(opts) {
       role,
       homePositionId: String(homeNode._id),
       llmDefault,
-      isAdmin,
       isRemote,
       homeLand,
       parentBeingId,
@@ -385,6 +402,16 @@ export async function createBeingWithHome(opts) {
       { $set: { rootOwner: being._id } },
     );
     homeNode.rootOwner = being._id;
+  }
+
+  // ── Link into the being-tree parent's children list ──
+  // The being itself carries parentBeingId; the parent also needs its
+  // `children` array updated for fast downward walks. Atomic, idempotent.
+  if (parentBeingId) {
+    await Being.updateOne(
+      { _id: parentBeingId },
+      { $addToSet: { children: String(being._id) } },
+    );
   }
 
   // ── Register the being home on the home Node ──

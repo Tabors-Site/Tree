@@ -40,7 +40,11 @@ const BeingSchema = new mongoose.Schema({
 
   // How this being is operated.
   //   "human" — a real person, authenticated by credentials.
-  //   "ai"    — driven by an LLM through chainsteps when summoned.
+  //   "ai"    — driven by an LLM each time they're summoned. The
+  //             scheduler picks up an inbox entry, invokes the role's
+  //             summon function, the function makes one atomic LLM
+  //             call via runChat, and the response emits as a
+  //             reply-SUMMON.
   operatingMode: {
     type: String,
     enum: ["human", "ai"],
@@ -57,7 +61,12 @@ const BeingSchema = new mongoose.Schema({
   // through it and acting on its behalf. Hard by default; possible
   // when the operator wants to.
   password: { type: String, select: false, required: true },
-  isAdmin:  { type: Boolean, default: false },
+
+  // Admin-ness is a ROLE, not a flag. The first being created at
+  // first-run gets `"admin"` in roles[]; permission checks consult
+  // role membership (see seed/auth.js helpers). isAdmin: Boolean
+  // retired 2026-05-18 — two sources of truth (boolean flag + role
+  // set) had to disagree somewhere; collapsed to one.
 
   // ── Roles ──
   //
@@ -86,11 +95,24 @@ const BeingSchema = new mongoose.Schema({
   defaultRole: { type: String, default: null },
 
   // ── Being tree ──
-  // Beings form a tree the same way nodes do. A composite being (e.g. a
-  // Ruler) is the parent of its inner beings (Planner, Contractor,
-  // Foreman, Worker). Sub-Rulers parent up to the Ruler that dispatched
-  // them. Top-level beings (humans, auth-being, root Rulers) have
-  // parentBeingId null . they're roots of the being tree.
+  // Beings form a tree the same way nodes do. Every land has exactly
+  // ONE root being . the human who created the land. The first-run
+  // setup prompts the operator to create themselves; that being has
+  // parentBeingId null. Every other being chains back to that root:
+  //
+  //   - auth-being and land-manager are spawned as children of the
+  //     root being during boot.
+  //   - Humans signing in later through the auth-being are spawned as
+  //     children of the auth-being.
+  //   - When the operator (or any being) promotes a node to Ruler, the
+  //     Ruler being is their child (parentBeingId = invoking being).
+  //   - The Ruler then spawns Planner / Contractor / Foreman as its
+  //     own children. Walking parentBeingId from any of those reaches
+  //     the Ruler, then the operator, then null at the root.
+  //
+  // Result: every being's lineage chains back to the land's root being.
+  // null parent is reserved for the root only. All create-being /
+  // create-child calls expect a parent.
   //
   // The being tree captures the cognitive hierarchy at a position.
   // Multiple beings can share the same homePositionId (Ruler + Planner +

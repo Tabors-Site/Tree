@@ -1,17 +1,16 @@
 // TreeOS IBP — SEE verb handler.
 //
-// Envelope:
-//   { id, position: "<position>", identity?, live?: boolean }
-//   { id, stance:   "<stance>",   identity?, live?: boolean }
+// Consumes the unified envelope per [[project_ibp_wire_shape]]:
 //
-// Exactly one of `position` or `stance` is present. A position has no
-// being qualifier; a stance has one. The handler returns a Position
-// Description (see portal/docs/position-description.md) describing what is at
-// the addressed place, optionally augmented with being-specific
-// fields when the address is a stance.
+//   { id, verb: "see", address, payload: { live?: boolean }, identity? }
 //
-// One-shot is wired below. Live mode (live: true) returns VERB_NOT_SUPPORTED
-// until the subscription substrate is built.
+// `address` is a position (no @being) or a stance (with @being). A stance
+// resolves to its position for descriptor building, augmented with
+// being-specific fields when an @being qualifier is present.
+//
+// Returns a Position Description (see portal/docs/position-description.md).
+// `payload.live: true` subscribes the socket to subsequent descriptor
+// changes for this position; cleanup fires automatically on disconnect.
 
 import log from "../../seed/log.js";
 import { parseFromSocket, expand, getLandDomain } from "../address.js";
@@ -19,23 +18,23 @@ import { resolveStance } from "../resolver.js";
 import { buildDescriptor } from "../descriptor.js";
 import { buildDiscovery } from "../discovery.js";
 import { PortalError, PORTAL_ERR, isPortalError } from "../errors.js";
-import { extractPositionOrStance, ackOk, ackError } from "../envelope.js";
+import { ackOk, ackError } from "../envelope.js";
 import { authorize } from "../authorize.js";
 import { subscribePosition } from "../live.js";
 
-export async function handleSee(socket, msg, ack) {
-  const id = msg?.id || null;
+export async function handleSee(socket, env, ack) {
+  const id = env?.id || null;
   try {
-    const { addressString } = extractPositionOrStance(msg, "ibp:see");
+    const { address, addressKind, payload } = env;
 
     // Discovery short-circuit. `<land>/.discovery` is read by every client
-    // right after socket open to learn capabilities and is implicitly
-    // visible to arrivals (the bootstrap exception).
-    if (isDiscoveryAddress(addressString)) {
+    // right after socket open to learn capabilities; the bootstrap
+    // exception permits unauthenticated readers.
+    if (isDiscoveryAddress(address)) {
       return ackOk(ack, id, buildDiscovery());
     }
 
-    const parsed = parseFromSocket(socket, addressString);
+    const parsed = parseFromSocket(socket, address);
     const expanded = expand(parsed, {
       currentLand: getLandDomain(),
       currentUser: socket.username,
@@ -49,7 +48,7 @@ export async function handleSee(socket, msg, ack) {
       identity,
       verb: "see",
       target: {
-        kind: expanded.right.being ? "stance" : "position",
+        kind: addressKind === "stance" ? "stance" : "position",
         nodeId: resolved.nodeId,
         visibility: resolved.leafNode?.visibility,
         isDiscovery: false,
@@ -63,13 +62,11 @@ export async function handleSee(socket, msg, ack) {
       );
     }
 
-    const descriptor = await buildDescriptor(resolved, {
-      identity,
-    });
+    const descriptor = await buildDescriptor(resolved, { identity });
 
-    // Live mode: subscribe the socket to subsequent descriptor changes
-    // for this position. Cleanup happens automatically on disconnect.
-    if (msg.live === true && resolved.nodeId) {
+    // Live subscription. The socket receives subsequent ibp:update events
+    // for this position while subscribed.
+    if (payload?.live === true && resolved.nodeId) {
       subscribePosition(socket, resolved.nodeId);
     }
 
@@ -78,7 +75,7 @@ export async function handleSee(socket, msg, ack) {
     if (isPortalError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("IBP", `ibp:see failed: ${err.message}`);
+    log.error("IBP", `ibp SEE failed: ${err.message}`);
     return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }

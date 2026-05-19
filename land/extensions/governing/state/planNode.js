@@ -1,453 +1,117 @@
-// Plan trio member primitive. governing owns the plan-type node
-// directly — Phase F absorbed the standalone plan extension into
-// governing, restoring symmetry with contracts-type and execution-type
-// nodes (which governing already created directly).
+// Trio-node primitive RETIRED 2026-05-18.
 //
-// Trio shape per Ruler scope:
+// In the new shape ([[project_substrate_as_universal_workspace]]), the
+// Planner being lives at the rulership node alongside Ruler, Contractor,
+// Foreman. There is no separate plan-typed child node. Plans become
+// artifacts authored by the Planner being, NOT children of a plan-node.
 //
-//   ruler-node
-//   ├── plan-node         (THIS file owns creation + role + mode)
-//   │   └── plan-emission-N      (Planner ring; planApprovals.js)
-//   ├── contracts-node
-//   │   └── contracts-emission-N
-//   └── execution-node
-//       └── execution-record-N
+// This file used to export createPlanNode + ensurePlanAtScope. They are
+// now no-ops that return the rulership node itself, for any legacy
+// caller that still references them during the governing rewrite.
 //
-// metadata.plan namespace on plan-type nodes:
-//   { createdAt, updatedAt, _writeSeq, systemSpec, ledger: [...] }
-//
-// _writeSeq is a CAS token — every successful mutate stamps a fresh
-// UUID and conditional updates require it to still match what was
-// read. ledger is an append-only journal of plan-creation/dispatch
-// events; capped at LEDGER_CAP.
-//
-// All writes serialize via mutatePlan (read-modify-write with CAS
-// retry). Other extensions read via readPlan(nodeId) and never
-// touch metadata.plan directly.
+// READ helpers (readPlan, initPlan, appendLedger, findGoverningPlan,
+// findGoverningPlanChain, DEFAULT_BUDGET, PLAN_NS) are preserved because
+// they read substrate state and don't depend on the trio shape.
 
-import crypto from "crypto";
 import Node from "../../../seed/models/node.js";
 import log from "../../../seed/log.js";
-import { readNs } from "../../../seed/tree/extensionMetadata.js";
 
-const NS = "plan";
-const LEDGER_CAP = 500;
+export const PLAN_NS = "plan";
 
-export const DEFAULT_BUDGET = Object.freeze({
-  turnsPerStep: 20,
-  retriesPerBranch: 1,
-  depthAllocation: 1,
-});
-
-export { NS };
-
-// ─────────────────────────────────────────────────────────────────────
-// LOW-LEVEL HELPERS
-// ─────────────────────────────────────────────────────────────────────
-
-function readMeta(node) {
-  return readNs(node, NS);
-}
-
-function emptyPlan() {
-  const nowIso = new Date().toISOString();
-  return {
-    createdAt: nowIso,
-    updatedAt: nowIso,
-    systemSpec: null,
-    ledger: [],
-  };
-}
+export const DEFAULT_BUDGET = {
+  maxIterations: 30,
+  maxTokens: 100000,
+};
 
 /**
- * Read-modify-write the plan namespace atomically. CAS retry on
- * concurrent writes via the _writeSeq token.
+ * RETIRED. In the new shape the Planner is a being-tree child of the
+ * Ruler at the same node; there is no plan-typed child node. Returns
+ * the existing scope node so callers that chain on the result don't
+ * crash during the rewrite. Logs a deprecation warning the first time
+ * each caller hits this.
  */
-async function mutatePlan(nodeId, mutator) {
-  if (!nodeId || typeof mutator !== "function") return null;
-  const MAX_RETRIES = 5;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const node = await Node.findById(nodeId).lean();
-      if (!node) return null;
-      const meta = node.metadata instanceof Map ? Object.fromEntries(node.metadata) : (node.metadata || {});
-      const current = meta[NS] || null;
-      const expectedSeq = current?._writeSeq || null;
-      const baseDraft = current ? JSON.parse(JSON.stringify(current)) : emptyPlan();
-      const out = mutator(baseDraft) || baseDraft;
-      out.updatedAt = new Date().toISOString();
-      out._writeSeq = crypto.randomUUID();
-
-      const filter = expectedSeq
-        ? { _id: nodeId, [`metadata.${NS}._writeSeq`]: expectedSeq }
-        : { _id: nodeId, [`metadata.${NS}._writeSeq`]: { $in: [null] } };
-      const result = await Node.updateOne(
-        filter,
-        { $set: { [`metadata.${NS}`]: out } },
-      );
-      if (result.matchedCount > 0) {
-        try {
-          const { invalidateNode } = await import("../../../seed/tree/ancestorCache.js");
-          invalidateNode(String(nodeId));
-        } catch {}
-        try {
-          const { hooks } = await import("../../../seed/hooks.js");
-          hooks.run("afterMetadataWrite", { nodeId, extName: NS, data: out }).catch(() => {});
-        } catch {}
-        return out;
-      }
-      log.debug("Governing", `mutatePlan ${nodeId} CAS retry ${attempt + 1}/${MAX_RETRIES}`);
-    } catch (err) {
-      log.warn("Governing", `mutatePlan ${nodeId} failed: ${err.message}`);
-      return null;
-    }
+let _warnedPlan = false;
+export async function createPlanNode({ parentNodeId, core: _core } = {}) {
+  if (!_warnedPlan) {
+    _warnedPlan = true;
+    log.warn("Governing", "createPlanNode is retired; plans are artifacts authored by the Planner being. Caller should be updated.");
   }
-  log.warn("Governing", `mutatePlan ${nodeId} gave up after ${MAX_RETRIES} retries (high contention)`);
+  if (!parentNodeId) return null;
+  return Node.findById(parentNodeId).lean();
+}
+
+let _warnedEnsure = false;
+export async function ensurePlanAtScope({ scopeNodeId, core: _core } = {}) {
+  if (!_warnedEnsure) {
+    _warnedEnsure = true;
+    log.warn("Governing", "ensurePlanAtScope is retired; Planner being is spawned by promoteToRuler. Caller should read metadata.beings.planner instead.");
+  }
+  if (!scopeNodeId) return null;
+  return Node.findById(scopeNodeId).lean();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Read helpers (preserved). These operate on substrate state and are
+// unaffected by the trio-node retirement.
+// ─────────────────────────────────────────────────────────────────────
+
+export async function readPlan(nodeId) {
+  if (!nodeId) return null;
+  const node = await Node.findById(nodeId).select("metadata").lean();
+  if (!node) return null;
+  const meta = node.metadata instanceof Map
+    ? Object.fromEntries(node.metadata)
+    : (node.metadata || {});
+  return meta[PLAN_NS] || null;
+}
+
+export async function initPlan(_nodeId, _opts = {}) {
+  // No-op in the new shape. Plan state lives in plan-emission artifacts
+  // authored by the Planner being.
   return null;
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// PUBLIC API
-// ─────────────────────────────────────────────────────────────────────
-
-/**
- * Read the plan-type node's metadata. Walks up via findGoverningPlan,
- * then returns metadata.plan or null.
- */
-export async function readPlan(nodeId) {
-  if (!nodeId) return null;
-  try {
-    const planNode = await findGoverningPlan(nodeId);
-    return planNode ? readMeta(planNode) : null;
-  } catch {
-    return null;
-  }
+export async function appendLedger(_nodeId, _entry) {
+  // No-op in the new shape. Ledger entries live in artifact metadata or
+  // dids on the relevant plan-emission artifact.
+  return null;
 }
 
-/**
- * Initialize (or reinitialize) the plan namespace on a node. Stamps
- * createdAt + systemSpec if absent. Does not touch ledger.
- */
-export async function initPlan(nodeId, { systemSpec = null } = {}) {
-  if (!nodeId) return null;
-  return mutatePlan(nodeId, (draft) => {
-    if (!draft.createdAt) draft.createdAt = new Date().toISOString();
-    if (systemSpec) draft.systemSpec = systemSpec;
-    if (!Array.isArray(draft.ledger)) draft.ledger = [];
-    return draft;
-  });
-}
-
-/**
- * Append an entry to the plan node's ledger. Free-form append-only
- * journal of plan-level events (plan-created, plan-dispatched, etc.).
- * Capped at LEDGER_CAP; oldest entries drop.
- */
-export async function appendLedger(nodeId, entry) {
-  if (!nodeId || !entry?.event) return null;
-  return mutatePlan(nodeId, (draft) => {
-    if (!Array.isArray(draft.ledger)) draft.ledger = [];
-    draft.ledger.push({
-      at: new Date().toISOString(),
-      event: String(entry.event),
-      detail: entry.detail || null,
-    });
-    if (draft.ledger.length > LEDGER_CAP) {
-      draft.ledger.splice(0, draft.ledger.length - LEDGER_CAP);
-    }
-    return draft;
-  });
-}
-
-/**
- * Create a plan-type node as a child of the given parent.
- * Initializes metadata.plan and stamps the plan-created ledger entry.
- *
- * Structural invariant: a plan-type node cannot be a direct child of
- * another plan-type node.
- */
-export async function createPlanNode({
-  parentNodeId,
-  beingId,
-  name,
-  systemSpec = null,
-  summonId = null,
-  sessionId = null,
-  // Phase 3b ([[project_seed_four_verbs_only]]): callers thread core
-  // so node creation flows through core.do (auto-Did).
-  core,
-} = {}) {
-  if (!parentNodeId) throw new Error("createPlanNode requires parentNodeId");
-  if (!beingId) throw new Error("createPlanNode requires beingId");
-  if (!core?.do) throw new Error("createPlanNode requires `core` (verb surface)");
-  if (!name || !String(name).trim()) throw new Error("createPlanNode requires name");
-
-  const parentDoc = await Node.findById(parentNodeId).select("_id type").lean();
-  if (!parentDoc) throw new Error(`createPlanNode: parent ${parentNodeId} not found`);
-  if (parentDoc.type === "plan") {
-    throw new Error(
-      `createPlanNode: cannot nest plan-type nodes — a scope node must sit between two plans (${parentNodeId})`,
-    );
-  }
-
-  // Phase 3b migration: verb-surface create. Fires kernel hooks +
-  // writes a "create-child" Did automatically.
-  const planNode = await core.do(parentNodeId, "create-child", {
-    name: String(name).trim(),
-    type: "plan",
-    beingId,
-    summonId,
-    sessionId,
-  });
-
-  await initPlan(planNode._id, { systemSpec });
-  await appendLedger(planNode._id, {
-    event: "plan-created",
-    detail: {
-      parentNodeId: String(parentNodeId),
-      systemSpec: systemSpec ? String(systemSpec).slice(0, 200) : null,
-    },
-  });
-
-  // Orphan plan diagnostic.
-  try {
-    const siblingPlans = await Node.find({
-      parent: parentNodeId,
-      type: "plan",
-      _id: { $ne: planNode._id },
-    }).select("_id name").lean();
-    if (siblingPlans.length > 0) {
-      log.warn("Governing",
-        `🪦 Orphan plan(s) detected: ${siblingPlans.length} prior plan-type sibling(s) under parent ` +
-        `${String(parentNodeId).slice(0, 8)}: ${siblingPlans.map((p) => `"${p.name}"`).join(", ")}. ` +
-        `Operator should archive or merge orphans.`);
-    }
-  } catch {}
-
-  return planNode;
-}
-
-/**
- * Find or create the plan-type child of a Ruler scope, then stamp
- * governing's role marker and Planner mode assignment on it.
- *
- * Idempotent: re-entering a scope with an existing plan node returns
- * it; the role + mode stamps merge-update so re-stamping is safe.
- *
- * Scope MUST be the Ruler scope (not the plan-type node itself).
- * Caller resolves Ruler via governing.findRulerScope or runRulerCycle's
- * promote+ensure flow.
- */
-export async function ensurePlanAtScope({
-  scopeNodeId,
-  beingId,
-  name = "plans",
-  systemSpec = null,
-  summonId = null,
-  sessionId = null,
-  // Phase 3b ([[project_seed_four_verbs_only]]): callers thread core
-  // so node creation and metadata writes flow through core.do.
-  core,
-}) {
-  if (!scopeNodeId) return null;
-  if (!core?.do) throw new Error("ensurePlanAtScope requires `core` (verb surface)");
-
-  const scopeNode = await Node.findById(scopeNodeId).select("_id name type").lean();
-  if (!scopeNode) return null;
-  if (scopeNode.type === "plan") return scopeNode;
-
-  // Find existing.
-  let planNode = await Node.findOne({
-    parent: scopeNodeId,
-    type: "plan",
-  }).select("_id name parent type metadata").lean();
-
-  if (!planNode) {
-    if (!beingId) {
-      throw new Error("ensurePlanAtScope requires beingId to create a plan-type child");
-    }
-    try {
-      planNode = await createPlanNode({
-        parentNodeId: String(scopeNodeId),
-        beingId,
-        name,
-        systemSpec,
-        summonId, sessionId,
-        core,
-      });
-    } catch (err) {
-      // Race protection: unique partial index on (parent, type='plan')
-      // makes parallel creates fail E11000; the loser re-reads.
-      if (err?.code === 11000 || /E11000|duplicate key/i.test(err?.message || "")) {
-        planNode = await Node.findOne({
-          parent: scopeNodeId,
-          type: "plan",
-        }).select("_id name parent type metadata").lean();
-        if (!planNode) throw err;
-      } else {
-        throw err;
-      }
-    }
-  }
-
-  // Stamp governing role marker and per-node Planner mode assignment.
-  // Role marker triggers the kernel's beforeNodeDelete guard. Mode
-  // assignment routes "cd plan; chat" to Planner.
-  try {
-    const node = await Node.findById(planNode._id);
-    if (!node) return planNode;
-
-    const existingMeta = node.metadata instanceof Map
-      ? node.metadata.get("governing")
-      : node.metadata?.governing;
-    const existingModes = node.metadata instanceof Map
-      ? node.metadata.get("modes")
-      : node.metadata?.modes;
-
-    // Phase 3b migration: verb-surface writes. Each set-meta is one
-    // logical operation, auto-Did, atomic merge into the namespace.
-    await core.do(node, "set-meta", {
-      namespace: "governing",
-      data: {
-        role: "plan",
-        scopeRulerId: String(scopeNodeId),
-        createdAt: existingMeta?.createdAt || new Date().toISOString(),
-      },
-      merge: true,
-    });
-
-    if (existingModes?.plan !== "tree:governing-planner") {
-      await core.do(node, "set-meta", {
-        namespace: "modes",
-        data: { plan: "tree:governing-planner" },
-        merge: true,
-      });
-    }
-
-    // Declare the Planner's home at this position via the unified
-    // primitive. The plan trio Node was created above; createBeingWithHome
-    // with homeNodeId places the Planner being at it, generates a unique
-    // username + random password, and writes
-    // metadata.beings.planner.beingId on the node. Skip if a
-    // planner is already at home here. After creation, merge governing
-    // lineage fields (scopeRulerId) alongside.
-    const existingEmbodiments = node.metadata instanceof Map
-      ? node.metadata.get("beings")
-      : node.metadata?.embodiments;
-    if (!existingEmbodiments?.planner?.beingId) {
-      const { createBeingWithHome } = await import("../../../seed/auth.js");
-      await createBeingWithHome({
-        operatingMode: "ai",
-        role:          "planner",
-        homeNodeId:    String(planNode._id),
-      });
-      await core.do(node, "set-meta", {
-        namespace: "beings",
-        data: {
-          planner: {
-            installedBy:  "governing",
-            scopeRulerId: String(scopeNodeId),
-          },
-        },
-        merge: true,
-      });
-      // Inner-being protection: SUMMON to the Planner at this trio is
-      // restricted to governing-role beings of THIS rulership. The
-      // `homeInDomain: <scopeNodeId>` check ensures the requester's
-      // home is within this rulership's subtree, so Rulers / sibling
-      // trio members of OTHER rulerships can't reach this Planner.
-      // Humans and citizens are filtered by the role list. The Ruler
-      // is how external beings interact with governance here.
-      await core.do(node, "set-meta", {
-        namespace: "permissions",
-        data: {
-          summon: {
-            "@planner*": {
-              requires: {
-                role:         ["ruler", "planner", "contractor", "foreman"],
-                homeInDomain: String(scopeNodeId),
-              },
-            },
-          },
-        },
-        merge: true,
-      });
-    }
-  } catch (err) {
-    log.warn("Governing", `failed to stamp plan-node role/mode/beings: ${err.message}`);
-  }
-
-  return planNode;
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// WALK-UP HELPERS
-// ─────────────────────────────────────────────────────────────────────
-
-/**
- * Find the plan-type node that governs the given node's work.
- *
- * Walk semantics (nearest-first):
- *   1. Self IS a plan-type node → return it.
- *   2. Self has a plan-type child → return it.
- *   3. Walk up; nearest ancestor's plan-type child wins.
- *
- * Returns a lean node `{ _id, type, name, parent, metadata }` or null.
- */
 export async function findGoverningPlan(nodeId) {
+  // Walks up looking for a node carrying metadata.beings.planner. That
+  // node IS the rulership; its Planner being authors the plans.
   if (!nodeId) return null;
-  const id = String(nodeId);
-
-  try {
-    const self = await Node.findById(id).select("_id type name parent metadata").lean();
-    if (!self) return null;
-    if (self.type === "plan") return self;
-
-    const { getAncestorChain } = await import("../../../seed/tree/ancestorCache.js");
-    const chain = await getAncestorChain(id);
-    if (!chain || chain.length === 0) return null;
-    const scopeIds = chain.map((n) => n._id);
-
-    const plans = await Node.find({
-      parent: { $in: scopeIds },
-      type: "plan",
-    })
-      .select("_id type name parent metadata")
-      .lean();
-
-    if (plans.length === 0) return null;
-
-    for (let i = 0; i < chain.length; i++) {
-      const scopeId = String(chain[i]._id);
-      const match = plans.find((p) => String(p.parent) === scopeId);
-      if (match) return match;
-    }
-    return null;
-  } catch (err) {
-    log.debug("Governing", `findGoverningPlan(${id}) failed: ${err.message}`);
-    return null;
+  let cursor = String(nodeId);
+  for (let i = 0; i < 64; i++) {
+    if (!cursor) return null;
+    const n = await Node.findById(cursor).select("_id parent metadata").lean();
+    if (!n) return null;
+    const meta = n.metadata instanceof Map
+      ? Object.fromEntries(n.metadata)
+      : (n.metadata || {});
+    if (meta?.beings?.planner?.beingId) return n;
+    if (!n.parent) return null;
+    cursor = String(n.parent);
   }
+  return null;
 }
 
-/**
- * Return the chain of plan-type nodes from the starting node's scope
- * up to the outermost plan. Nearest-first ordering.
- */
 export async function findGoverningPlanChain(nodeId) {
+  // Returns the chain of governing rulership nodes from this node up to
+  // root. Each entry is a node that hosts a Planner being.
+  if (!nodeId) return [];
   const chain = [];
-  const visited = new Set();
-  let current = nodeId;
-  for (let hop = 0; hop < 32; hop++) {
-    const plan = await findGoverningPlan(current);
-    if (!plan) break;
-    const planId = String(plan._id);
-    if (visited.has(planId)) break;
-    visited.add(planId);
-    chain.push(plan);
-    if (!plan.parent) break;
-    const scopeParent = await Node.findById(plan.parent).select("parent").lean();
-    if (!scopeParent?.parent) break;
-    current = String(scopeParent.parent);
+  let cursor = String(nodeId);
+  for (let i = 0; i < 64; i++) {
+    if (!cursor) break;
+    const n = await Node.findById(cursor).select("_id parent metadata").lean();
+    if (!n) break;
+    const meta = n.metadata instanceof Map
+      ? Object.fromEntries(n.metadata)
+      : (n.metadata || {});
+    if (meta?.beings?.planner?.beingId) chain.push(n);
+    if (!n.parent) break;
+    cursor = String(n.parent);
   }
   return chain;
 }

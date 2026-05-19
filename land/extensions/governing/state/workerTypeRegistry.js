@@ -2,26 +2,26 @@
 //
 // Workspaces (code-workspace, book-workspace, design-workspace, ...)
 // register their typed Worker specializations here so dispatch can
-// look up the right mode key per workerType without having to probe
+// look up the right role name per workerType without having to probe
 // hardcoded extension names. The registry is a process-wide singleton
-// because mode registration happens at boot and workspace activation
+// because role registration happens at boot and workspace activation
 // is decided per-scope at runtime — dispatch needs O(1) lookup, not
 // a per-call extension scan.
 //
 // Shape:
-//   workspaceName → { build?: { modeKey }, refine?: ..., review?: ..., integrate?: ... }
+//   workspaceName → { build?: { roleName }, refine?: ..., review?: ..., integrate?: ... }
 //
 // The keys mirror governing's WORKER_TYPES list; an unknown key is
 // silently ignored (a workspace declaring "wargame" type doesn't
 // poison the registry — the type just won't resolve and dispatch
-// falls back to the governing base mode for the canonical type).
+// falls back to the governing base worker role for the canonical type).
 //
 // Reads are tolerant: a workspace that registered but isn't active at
 // the current scope is still returned (the dispatch caller is what
 // decides whether to use the entry, e.g. by reading spatial scope).
 //
 // This is the substrate that makes "the typing is real at the leaves"
-// — without the registry, dispatch can't find the typed worker mode
+// — without the registry, dispatch can't find the typed worker role
 // the workspace specialized.
 
 import { WORKER_TYPES } from "../roles/workerBase.js";
@@ -31,17 +31,17 @@ const REGISTRY = new Map();
 /**
  * Register a workspace's typed-Worker specializations. Idempotent —
  * calling again replaces the entry. Called from workspace init()
- * (typically after registerMode for the typed modes themselves).
+ * (typically after registerRole for the typed worker roles themselves).
  *
  * @param {string} workspaceName — e.g. "code-workspace"
- * @param {object} types — { build?: { modeKey }, refine?: {...}, ... }
+ * @param {object} types — { build?: { roleName }, refine?: {...}, ... }
  */
 export function registerWorkspaceWorkerTypes(workspaceName, types) {
   if (!workspaceName || !types || typeof types !== "object") return;
   const sanitized = {};
   for (const t of WORKER_TYPES) {
-    if (types[t] && typeof types[t].modeKey === "string") {
-      sanitized[t] = { modeKey: types[t].modeKey };
+    if (types[t] && typeof types[t].roleName === "string") {
+      sanitized[t] = { roleName: types[t].roleName };
     }
   }
   // Pass-through for workspace-declared decomposition hints. The
@@ -91,7 +91,7 @@ export function unregisterWorkspaceWorkerTypes(workspaceName) {
 }
 
 /**
- * Look up a mode key by workerType across all registered workspaces.
+ * Look up a role name by workerType across all registered workspaces.
  * Returns the first match in registry-insertion order — adequate for
  * Pass 1 where one workspace is active per land in practice. If two
  * workspaces both register typed workers and both are allowed at the
@@ -101,19 +101,19 @@ export function unregisterWorkspaceWorkerTypes(workspaceName) {
  * @param {string} workerType — one of WORKER_TYPES
  * @param {object} [opts]
  * @param {string} [opts.preferWorkspace] — workspace name to consult first
- * @returns {{ workspaceName, modeKey } | null}
+ * @returns {{ workspaceName, roleName } | null}
  */
-export function lookupWorkerMode(workerType, { preferWorkspace } = {}) {
+export function lookupWorkerRole(workerType, { preferWorkspace } = {}) {
   if (!workerType) return null;
   if (preferWorkspace) {
     const entry = REGISTRY.get(preferWorkspace);
-    if (entry?.[workerType]?.modeKey) {
-      return { workspaceName: preferWorkspace, modeKey: entry[workerType].modeKey };
+    if (entry?.[workerType]?.roleName) {
+      return { workspaceName: preferWorkspace, roleName: entry[workerType].roleName };
     }
   }
   for (const [name, entry] of REGISTRY.entries()) {
-    if (entry?.[workerType]?.modeKey) {
-      return { workspaceName: name, modeKey: entry[workerType].modeKey };
+    if (entry?.[workerType]?.roleName) {
+      return { workspaceName: name, roleName: entry[workerType].roleName };
     }
   }
   return null;
@@ -128,8 +128,8 @@ export function listWorkerTypeRegistrations() {
   for (const [name, entry] of REGISTRY.entries()) {
     out.push({
       workspaceName: name,
-      types: Object.keys(entry).filter((k) => entry[k]?.modeKey),
-      modeKeys: { ...entry },
+      types: Object.keys(entry).filter((k) => entry[k]?.roleName),
+      roles: { ...entry },
     });
   }
   return out;

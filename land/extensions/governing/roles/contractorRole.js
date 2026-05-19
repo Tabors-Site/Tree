@@ -16,7 +16,7 @@
 
 import log from "../../../seed/log.js";
 import { runChat } from "../../../seed/llm/conversation.js";
-import { emitReplyToAsker, resolveBeingInOut } from "./_shared.js";
+import { emitReplyToAsker } from "./_shared.js";
 
 const CONTRACTOR_PROMPT_BODY = `You are a Contractor. The Ruler at this scope has
 ratified a plan and hired you to draft the contracts that will govern
@@ -254,11 +254,9 @@ export const contractorRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  // LLM behavior contract (mirrored to mode registry via registerRole)
-  modeKey: "tree:governing-contractor",
+  // LLM behavior contract — role.name ("contractor") is the identity.
   emoji: "📜",
   label: "Contractor",
-  bigMode: "tree",
   maxMessagesBeforeLoop: 6,
   preserveContextOnLoop: false,
   maxToolCallsPerStep: 1,
@@ -286,26 +284,19 @@ export const contractorRole = Object.freeze({
     const contractsNodeId = ctx.nodeId || ctx.resolved?.nodeId;
     if (!contractsNodeId) {
       log.warn("Contractor", "summon without nodeId; returning empty");
-      return { content: "Internal error: no contracts node.", intent: "chat" };
+      return { content: "Internal error: no contracts node." };
     }
     log.info("Contractor",
       `📜 summons at ${String(contractsNodeId).slice(0, 8)} ` +
       `(from=${message.from || "?"}, correlation=${message.correlation?.slice(0, 8) || "?"})`);
 
-    const { beingIn, beingOut, username } = resolveBeingInOut(ctx);
-
     let result;
     try {
       result = await runChat({
-        beingId: beingIn,
-        beingIn,
-        beingOut,
-        username,
-        message: String(message.content || ""),
-        role:    contractorRole,
-        rootId:  ctx.resolved?.rootId || null,
-        nodeId:  contractsNodeId,
-        signal:  ctx.signal,
+        being:    ctx.toBeing,
+        envelope: message,
+        role:     contractorRole,
+        signal:   ctx.signal,
       });
     } catch (err) {
       if (ctx.signal?.aborted) {
@@ -320,7 +311,7 @@ export const contractorRole = Object.freeze({
         originalMessage: message,
         exitText:        `Contractor error: ${err.message}`,
       });
-      return { content: `Contractor error: ${err.message}`, intent: "chat" };
+      return { content: `Contractor error: ${err.message}` };
     }
 
     const exitText = result?.answer || "(contracts emitted)";

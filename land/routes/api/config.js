@@ -541,29 +541,20 @@ router.get("/land/orchestrators", authenticate, (req, res) => {
 
 /**
  * GET /api/v1/land/tools
- * Lists all MCP tools available in tree mode, with source info.
+ * Lists all MCP tools registered in the kernel tool registry. Each
+ * tool's verb tag (see/do/summon/be) names which IBP verb it fires;
+ * roles narrow this set by declared permissions at SUMMON time.
  */
 router.get("/land/tools", authenticate, async (req, res) => {
   try {
-    const { getAllToolNamesForBigMode, getSubModes } = await import("../../seed/modes/registry.js");
-    const allTools = getAllToolNamesForBigMode("tree");
-
-    // Build tool-to-mode mapping
-    const modes = getSubModes("tree");
-    const toolSources = {};
-    for (const t of allTools) toolSources[t] = [];
-    for (const m of modes) {
-      if (!m.toolNames) continue;
-      for (const t of m.toolNames) {
-        if (toolSources[t]) toolSources[t].push(m.key);
-      }
-    }
+    const { listToolNames, getToolVerb } = await import("../../seed/tools.js");
+    const allTools = listToolNames();
 
     sendOk(res, {
       count: allTools.length,
       tools: allTools.sort().map(name => ({
         name,
-        modes: toolSources[name] || [],
+        verb: getToolVerb(name) || null,
       })),
     });
   } catch (err) {
@@ -572,27 +563,27 @@ router.get("/land/tools", authenticate, async (req, res) => {
 });
 
 /**
- * GET /api/v1/land/modes
- * Lists all registered AI modes with their tools and metadata.
+ * GET /api/v1/land/roles
+ * Lists all registered roles. Replaces the legacy /land/modes endpoint;
+ * roles subsumed modes 2026-05-18. Each role declares its own behavior
+ * (buildSystemPrompt, toolNames, permissions); the runtime no longer
+ * maintains a parallel mode registry.
  */
-router.get("/land/modes", authenticate, async (req, res) => {
+router.get("/land/roles", authenticate, async (req, res) => {
   try {
-    const { getSubModes } = await import("../../seed/modes/registry.js");
-    const bigModes = ["tree", "home", "land"];
-    const result = {};
-
-    for (const bm of bigModes) {
-      const modes = getSubModes(bm);
-      result[bm] = modes.map(m => ({
-        key: m.key,
-        label: m.label || m.key,
-        emoji: m.emoji || null,
-        tools: m.toolNames || [],
-        assignmentSlot: m.assignmentSlot || null,
-      }));
-    }
-
-    sendOk(res, result);
+    const { listRoles, getRole } = await import("../../ibp/roles/registry.js");
+    const names = listRoles();
+    const roles = names.map((name) => {
+      const r = getRole(name);
+      return {
+        name,
+        label:       r?.label || name,
+        emoji:       r?.emoji || null,
+        permissions: r?.permissions || [],
+        toolNames:   r?.toolNames || [],
+      };
+    });
+    sendOk(res, { count: roles.length, roles });
   } catch (err) {
     sendError(res, 500, ERR.INTERNAL, err.message);
   }

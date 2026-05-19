@@ -15,7 +15,6 @@
 
 import log from "../../../seed/log.js";
 import { runChat } from "../../../seed/llm/conversation.js";
-import { resolveBeingInOut } from "./_shared.js";
 import { buildWorkerPrompt, WORKER_BASE_CONFIG } from "./workerBase.js";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -177,16 +176,15 @@ Rules of Integrate:
 // Typed-worker registry
 // ─────────────────────────────────────────────────────────────────────
 const TYPED_WORKERS = [
-  { name: "worker-build",     modeKey: "tree:governing-worker-build",     emoji: "🔨", label: "Build Worker",     body: BUILD_BODY     },
-  { name: "worker-refine",    modeKey: "tree:governing-worker-refine",    emoji: "🪓", label: "Refine Worker",    body: REFINE_BODY    },
-  { name: "worker-review",    modeKey: "tree:governing-worker-review",    emoji: "🔍", label: "Review Worker",    body: REVIEW_BODY    },
-  { name: "worker-integrate", modeKey: "tree:governing-worker-integrate", emoji: "🧵", label: "Integrate Worker", body: INTEGRATE_BODY },
+  { name: "worker-build",     emoji: "🔨", label: "Build Worker",     body: BUILD_BODY     },
+  { name: "worker-refine",    emoji: "🪓", label: "Refine Worker",    body: REFINE_BODY    },
+  { name: "worker-review",    emoji: "🔍", label: "Review Worker",    body: REVIEW_BODY    },
+  { name: "worker-integrate", emoji: "🧵", label: "Integrate Worker", body: INTEGRATE_BODY },
 ];
 
-function makeWorkerRole({ name, modeKey, emoji, label, body }) {
+function makeWorkerRole({ name, emoji, label, body }) {
   // Self-reference closed over by summon so runChat receives the role
-  // spec directly (the new path). `role` is fully assigned and frozen
-  // by the time summon executes.
+  // spec directly. `role` is fully assigned by the time summon executes.
   const role = {
     // Dispatch contract
     name,
@@ -197,12 +195,10 @@ function makeWorkerRole({ name, modeKey, emoji, label, body }) {
     respondMode: "async",
     triggerOn: ["message"],
 
-    // LLM behavior contract (mirrored to mode registry via registerRole)
+    // LLM behavior contract — role.name is the identity.
     ...WORKER_BASE_CONFIG,
-    modeKey,
     emoji,
     label,
-    bigMode: "tree",
     buildSystemPrompt(ctx) {
       return buildWorkerPrompt(ctx, { typeLabel: label, body });
     },
@@ -213,29 +209,19 @@ function makeWorkerRole({ name, modeKey, emoji, label, body }) {
       const workNodeId = ctx.nodeId || ctx.resolved?.nodeId;
       if (!workNodeId) {
         log.warn(`Worker/${name}`, "summon without nodeId; returning empty");
-        return { content: `Internal error: no work node.`, intent: "chat" };
+        return { content: `Internal error: no work node.` };
       }
       log.info(`Worker/${name}`,
         `${emoji} summons at ${String(workNodeId).slice(0, 8)} ` +
         `(from=${message.from || "?"}, correlation=${message.correlation?.slice(0, 8) || "?"})`);
 
-      const { beingIn, beingOut, username } = resolveBeingInOut(ctx);
-      const messageBody = typeof message.content === "string"
-        ? message.content
-        : JSON.stringify(message.content);
-
       let result;
       try {
         result = await runChat({
-          beingId: beingIn,
-          beingIn,
-          beingOut,
-          username,
-          message: messageBody,
+          being:    ctx.toBeing,
+          envelope: message,
           role,
-          rootId:  ctx.resolved?.rootId || null,
-          nodeId:  workNodeId,
-          signal:  ctx.signal,
+          signal:   ctx.signal,
         });
       } catch (err) {
         if (ctx.signal?.aborted) {
@@ -243,7 +229,7 @@ function makeWorkerRole({ name, modeKey, emoji, label, body }) {
           return null;
         }
         log.warn(`Worker/${name}`, `LLM call failed: ${err.message}`);
-        return { content: `${name} error: ${err.message}`, intent: "chat" };
+        return { content: `${name} error: ${err.message}` };
       }
 
       const exitText = result?.answer || `(${name} done)`;

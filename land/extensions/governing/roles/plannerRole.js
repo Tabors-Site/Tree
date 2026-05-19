@@ -17,7 +17,7 @@
 
 import log from "../../../seed/log.js";
 import { runChat } from "../../../seed/llm/conversation.js";
-import { emitReplyToAsker, resolveBeingInOut } from "./_shared.js";
+import { emitReplyToAsker } from "./_shared.js";
 
 const PLANNER_PROMPT_BODY = `You are a Planner. The Ruler at this scope has
 hired you to draft a plan for the work the Ruler is taking on.
@@ -561,11 +561,9 @@ export const plannerRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  // LLM behavior contract (mirrored to mode registry via registerRole)
-  modeKey: "tree:governing-planner",
+  // LLM behavior contract — role.name ("planner") is the identity.
   emoji: "🧭",
   label: "Planner",
-  bigMode: "tree",
   maxMessagesBeforeLoop: 12,
   preserveContextOnLoop: true,
   maxToolCallsPerStep: 2,
@@ -599,26 +597,19 @@ export const plannerRole = Object.freeze({
     const planNodeId = ctx.nodeId || ctx.resolved?.nodeId;
     if (!planNodeId) {
       log.warn("Planner", "summon without nodeId; returning empty");
-      return { content: "Internal error: no plan node.", intent: "chat" };
+      return { content: "Internal error: no plan node." };
     }
     log.info("Planner",
       `📐 summons at ${String(planNodeId).slice(0, 8)} ` +
       `(from=${message.from || "?"}, correlation=${message.correlation?.slice(0, 8) || "?"})`);
 
-    const { beingIn, beingOut, username } = resolveBeingInOut(ctx);
-
     let result;
     try {
       result = await runChat({
-        beingId: beingIn,
-        beingIn,
-        beingOut,
-        username,
-        message: String(message.content || ""),
-        role:    plannerRole,
-        rootId:  ctx.resolved?.rootId || null,
-        nodeId:  planNodeId,
-        signal:  ctx.signal,
+        being:    ctx.toBeing,
+        envelope: message,
+        role:     plannerRole,
+        signal:   ctx.signal,
       });
     } catch (err) {
       if (ctx.signal?.aborted) {
@@ -633,7 +624,7 @@ export const plannerRole = Object.freeze({
         originalMessage: message,
         exitText:        `Planner error: ${err.message}`,
       });
-      return { content: `Planner error: ${err.message}`, intent: "chat" };
+      return { content: `Planner error: ${err.message}` };
     }
 
     const exitText = result?.answer || "(plan emitted)";

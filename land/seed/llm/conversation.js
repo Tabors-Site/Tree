@@ -11,19 +11,149 @@ import Node from "../models/node.js";
 import { snapshotAncestors, resolveExtensionScopeFromChain, getAncestorChain } from "../tree/ancestorCache.js";
 import { isDbHealthy } from "../dbConfig.js";
 import LlmConnection from "../models/llmConnection.js";
-import {
-  getMode,
-  getDefaultMode,
-  getToolsForMode,
-  buildPromptForMode,
-  CARRY_MESSAGES,
-} from "../modes/registry.js";
+import { resolveTools } from "../tools.js";
+import { getNodeName } from "../tree/treeData.js";
 import { mcpClients, connectToMCP, MCP_SERVER_URL } from "../ws/mcp.js";
+
+// How many recent messages to carry across role switches when the new
+// role doesn't request a full reset. Used to give continuity to the
+// next role's context window.
+let CARRY_MESSAGES = 4;
+export function setCarryMessages(n) { CARRY_MESSAGES = Math.max(0, Number(n) || 4); }
 import { getLandConfigValue } from "../landConfig.js";
 import { SYSTEM_OWNER } from "../protocol.js";
 import { appendToolCall } from "./summonTracker.js";
 
 import { resolveAndValidateHost, getEncryptionKey } from "./connections.js";
+
+// ─────────────────────────────────────────────────────────────────────────
+// ROLE-DRIVEN PROMPT + TOOL RESOLUTION
+//
+// Roles are the unit of LLM behavior. A role spec carries:
+//   - buildSystemPrompt(ctx)  → async function returning the domain prompt
+//   - toolNames              → string[] of tool names the LLM may call
+//   - permissions            → ("see"|"do"|"summon"|"be")[] verb filter
+//   - timeoutMs / maxRetries → optional LLM call budget
+//   - llmSlot                → optional slot name for tree LLM resolution
+//   - maxMessagesBeforeLoop / maxToolCallsPerStep → optional loop config
+//
+// These helpers wrap the role's prompt + tools with the kernel's
+// universal scaffolding (position context, time block, extension/tree
+// tool overlays). No mode lookup, no registry indirection — the role
+// IS the spec. See [[project_ibp_universal_grammar]].
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Build the system prompt for a role at a position. Three layers:
+ *   1. [Position] block (always present)
+ *   2. role.buildSystemPrompt(ctx) — the domain prompt
+ *   3. [Time] block (land timezone)
+ */
+async function buildSystemPromptForRole(role, ctx) {
+  if (!role || typeof role.buildSystemPrompt !== "function") {
+    throw new Error(`buildSystemPromptForRole: role "${role?.name || "(unnamed)"}" has no buildSystemPrompt`);
+  }
+
+  // ── Layer 1: position block ──
+  const positionLines = [];
+  if (ctx.username) positionLines.push(`User: ${ctx.username}`);
+  const rootId = ctx.rootId || null;
+  const currentNodeId = ctx.currentNodeId || ctx.targetNodeId || null;
+  const targetNodeId = ctx.targetNodeId || null;
+
+  const idsToResolve = {};
+  if (rootId) idsToResolve.root = rootId;
+  if (currentNodeId && currentNodeId !== rootId) idsToResolve.current = currentNodeId;
+  if (targetNodeId && targetNodeId !== rootId && targetNodeId !== currentNodeId) {
+    idsToResolve.target = targetNodeId;
+  }
+
+  const names = {};
+  try {
+    const entries = Object.entries(idsToResolve);
+    if (entries.length > 0) {
+      const resolved = await Promise.all(entries.map(([, id]) => getNodeName(id)));
+      entries.forEach(([key], i) => { names[key] = resolved[i]; });
+    }
+  } catch (nameErr) {
+    log.debug("Role", `Node name resolution failed: ${nameErr.message}`);
+  }
+  if (rootId) {
+    positionLines.push(names.root ? `Tree: ${names.root} (${rootId})` : `Tree: ${rootId}`);
+  }
+  if (currentNodeId && currentNodeId !== rootId) {
+    positionLines.push(names.current
+      ? `Current node: ${names.current} (${currentNodeId})`
+      : `Current node: ${currentNodeId}`);
+  }
+  if (targetNodeId && targetNodeId !== rootId && targetNodeId !== currentNodeId) {
+    positionLines.push(names.target
+      ? `Target node: ${names.target} (${targetNodeId})`
+      : `Target node: ${targetNodeId}`);
+  }
+  const positionBlock = positionLines.length > 0
+    ? `[Position]\n${positionLines.join("\n")}\n\n`
+    : "";
+
+  // ── Layer 2: role prompt ──
+  let rolePrompt;
+  try {
+    rolePrompt = await Promise.resolve(role.buildSystemPrompt(ctx));
+  } catch (promptErr) {
+    log.error("Role", `role "${role.name}" buildSystemPrompt failed: ${promptErr.message}`);
+    rolePrompt = `[Role prompt error: ${promptErr.message}]`;
+  }
+
+  // ── Layer 3: time block ──
+  const timeBlock = `\n\n[Time] ${new Date().toISOString()}`;
+
+  return `${positionBlock}${rolePrompt}${timeBlock}`;
+}
+
+/**
+ * Resolve the OpenAI-compatible tools array for a role.
+ *   1. role.toolNames (base)
+ *   2. extension-injected tools (via _getExtToolsFn, keyed by role name)
+ *   3. tree-specific overlays (metadata.tools.allowed / blocked)
+ *   4. permission filter (drop tools whose verb isn't in role.permissions)
+ */
+function resolveToolsForRole(role, treeToolConfig = null, rolePermissions = null) {
+  if (!role) return [];
+
+  // Layer 1: role base tools
+  let toolNames = Array.isArray(role.toolNames) ? [...role.toolNames] : [];
+
+  // Layer 2: extension-injected tools keyed by role name
+  const extTools = _getExtToolsFn(role.name);
+  if (extTools.length > 0) {
+    toolNames = [...new Set([...toolNames, ...extTools])];
+  }
+
+  // Layer 3: tree overlays
+  if (treeToolConfig) {
+    if (Array.isArray(treeToolConfig.allowed)) {
+      toolNames = [...new Set([...toolNames, ...treeToolConfig.allowed])];
+    }
+    if (Array.isArray(treeToolConfig.blocked)) {
+      const blockedSet = new Set(treeToolConfig.blocked);
+      toolNames = toolNames.filter((t) => !blockedSet.has(t));
+    }
+  }
+
+  // Layer 4: role-permissions filter (verb tag ∩ role.permissions).
+  // Permissions are role identity ([[project_role_permissions_not_envelope]]);
+  // envelopes never widen them.
+  const permsForFilter = Array.isArray(rolePermissions) ? rolePermissions
+                       : (Array.isArray(role.permissions) ? role.permissions : null);
+  return resolveTools(toolNames, permsForFilter);
+}
+
+// Extension tool injection hook. Set by the loader after init via
+// setExtensionToolResolver. Keyed by role name (the role IS the unit).
+let _getExtToolsFn = () => [];
+export function setExtensionToolResolver(fn) {
+  _getExtToolsFn = typeof fn === "function" ? fn : () => [];
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // LLM DEFAULTS
@@ -33,7 +163,6 @@ let MAX_MESSAGES = 30;
 let MAX_TOOL_ITERATIONS = 15;
 let LLM_TIMEOUT_MS = 15 * 60 * 1000;
 let LLM_MAX_RETRIES = 3;
-const MODE_TIMEOUTS = {};
 function MAX_MESSAGE_CONTENT_BYTES() { return Math.max(4096, Math.min(Number(getLandConfigValue("maxMessageContentBytes")) || 32768, 131072)); }
 
 // ── Kernel config setters (called from startup.js after land config loads) ──
@@ -329,18 +458,22 @@ async function callWithFailover(callFn, primaryClient, beingId, rootId) {
   throw new Error(`All LLM connections failed (primary + ${stack.length} failover). Check your connections.`);
 }
 export function setLlmMaxRetries(n) { LLM_MAX_RETRIES = n; }
-const MODE_RETRIES = {};
-export function registerModeTimeout(modeKey, ms) { MODE_TIMEOUTS[modeKey] = ms; }
-export function registerModeRetries(modeKey, n) { MODE_RETRIES[modeKey] = n; }
-function getRetriesForMode(modeKey) { return MODE_RETRIES[modeKey] ?? LLM_MAX_RETRIES; }
-function getTimeoutForMode(modeKey, nodeMetadata = null) {
-  // Per-node override
+
+// Retries / timeout resolution for a role-driven LLM call.
+//   - Role spec may declare `timeoutMs` and `maxRetries`. Per-role values
+//     win because the role knows its own budget (a Planner with a giant
+//     prompt expects longer than a one-shot Worker).
+//   - Per-node override via metadata.timeouts.<roleName> still wins
+//     (operator escape hatch for slow specific scopes).
+//   - Land default is the floor.
+function getRetriesForRole(role) {
+  return role?.maxRetries ?? LLM_MAX_RETRIES;
+}
+function getTimeoutForRole(role, nodeMetadata = null) {
   const meta = nodeMetadata instanceof Map ? Object.fromEntries(nodeMetadata) : (nodeMetadata || {});
-  const nodeTimeout = meta.timeouts?.[modeKey];
+  const nodeTimeout = role?.name ? meta.timeouts?.[role.name] : null;
   if (nodeTimeout && Number.isFinite(nodeTimeout)) return nodeTimeout;
-  // Per-mode (extension registered)
-  if (MODE_TIMEOUTS[modeKey]) return MODE_TIMEOUTS[modeKey];
-  // Land default
+  if (role?.timeoutMs && Number.isFinite(role.timeoutMs)) return role.timeoutMs;
   return LLM_TIMEOUT_MS;
 }
 
@@ -456,7 +589,7 @@ async function resolveConnection(connectionId, cacheKey) {
   return entry;
 }
 
-export async function getClientForUser(beingId, slot, overrideConnectionId) {
+export async function getClientForBeing(beingId, slot, overrideConnectionId) {
   if (!beingId)
     return {
       client: null,
@@ -562,32 +695,20 @@ export async function getClientForUser(beingId, slot, overrideConnectionId) {
   return noLlmEntry;
 }
 
-// ── Mode → llmAssignments key mapping ────────────────────────────────────
-// Groups related modes under a single assignment key.
-// Resolution: mode-specific → placement fallback → user default
-// Extensions can register additional mappings via registerModeAssignment().
-// Mode → LLM slot mapping. Starts empty. Extensions register their mappings
-// during init via registerModeAssignment(). The kernel provides the registry.
-// The kernel does not know what modes exist. That's extension territory.
-const MODE_TO_ASSIGNMENT = {};
+// ── Role → llmAssignments slot mapping ──────────────────────────────────
+// Roles can declare which LLM slot they want via `role.llmSlot` directly
+// on the role spec. The runtime walks: role.llmSlot → tree default → null.
+// No separate registration table — the role IS the source of truth for
+// what tools, prompt, AND llm slot it uses. See [[project_ibp_universal_grammar]].
 
 /**
- * Register a mode-to-LLM-slot mapping. Extensions call this during init
- * to assign their custom modes to LLM slots.
- * @param {string} modeKey - e.g. "custom:formal"
- * @param {string} slotName - e.g. "respond" or a custom slot name
+ * Resolve the LLM connectionId for a role's call on a tree.
+ *   1. role.llmSlot (when set) → llmAssignments[that slot]
+ *   2. tree default (llmAssignments.default)
+ *   3. null
+ * If the tree's default is "none", LLM is explicitly disabled here.
  */
-export function registerModeAssignment(modeKey, slotName) {
-  MODE_TO_ASSIGNMENT[modeKey] = slotName;
-}
-
-/**
- * Resolve the LLM connectionId for a given mode on a tree.
- * Priority: llmAssignments[modeGroup] → llmAssignments.default → null
- * If default is "none", LLM is explicitly disabled for this tree.
- * Returns the connectionId string, or null.
- */
-export async function resolveRootLlmForMode(rootId, modeKey) {
+export async function resolveRootLlmForRole(rootId, role) {
   if (!rootId) return null;
   try {
     const rootNode = await Node.findById(rootId)
@@ -601,10 +722,9 @@ export async function resolveRootLlmForMode(rootId, modeKey) {
     // "none" means LLM is explicitly off for this tree
     if (assignments.default === "none") return null;
 
-    const assignmentKey = MODE_TO_ASSIGNMENT[modeKey];
-    if (assignmentKey) {
-      const modeOverride = assignments[assignmentKey];
-      if (modeOverride) return modeOverride;
+    if (role?.llmSlot) {
+      const slotOverride = assignments[role.llmSlot];
+      if (slotOverride) return slotOverride;
     }
 
     // Fallback to tree default
@@ -630,7 +750,7 @@ export function clearUserClientCache(beingId) {
  * Quick check: does this user have any custom LLM connection available?
  * Returns true if user.llmAssignments.main is set OR they have at least one connection.
  */
-export async function userHasLlm(beingId) {
+export async function beingHasLlm(beingId) {
   if (!beingId) return false;
   const user = await Being.findById(beingId).select("metadata").lean();
   const userMeta = user?.metadata || {};
@@ -798,8 +918,10 @@ function getSession(conversationKey) {
       if (oldestKey) sessions.delete(oldestKey);
     }
     sessions.set(conversationKey, {
-      modeKey: null,
-      bigMode: null,
+      // The role spec the LLM is currently driving. Null until first
+      // switchRole. Replaces the old modeKey/bigMode pair; the role IS
+      // the unit of behavior.
+      role: null,
       messages: [],
       _lastActive: Date.now(),
     });
@@ -838,87 +960,69 @@ setInterval(
 ).unref();
 
 // ─────────────────────────────────────────────────────────────────────────
-// MODE SWITCHING
+// ROLE SWITCHING
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Switch to a new mode. Resets conversation but carries recent messages.
- * Returns { modeKey, alert } for the frontend.
+ * Switch the session to a new role. Resets the conversation but carries
+ * recent messages (unless ctx.clearHistory is set). Returns
+ * { role, carriedMessages } for the caller.
  */
-export async function switchMode(aiSessionKey, newModeKey, ctx) {
+export async function switchRole(aiSessionKey, newRole, ctx) {
+  if (!newRole || typeof newRole !== "object" || !newRole.name) {
+    throw new Error("switchRole requires a role spec with at least a `name` field");
+  }
   ctx = ctx || {};
   const beingId = ctx.beingId || null;
   const session = getSession(_convKey(ctx, aiSessionKey));
-  const mode = getMode(newModeKey);
-  if (!mode) throw new Error(`Unknown mode: ${newModeKey}`);
-
-  const oldModeKey = session.modeKey;
+  const oldRole = session.role;
   const oldMessages = session.messages;
 
   let recentMessages = [];
   let carriedContext = [];
 
-  // Skip carry when doing a full reset (big mode switch)
   if (!ctx.clearHistory) {
-    // Determine how many messages to carry over
     let carryCount = CARRY_MESSAGES;
-
-    // Reflect modes get extra context carry for plan formation
-    const oldMode = oldModeKey ? getMode(oldModeKey) : null;
-    if (oldMode?.preserveContextOnSwitch) {
+    if (oldRole?.preserveContextOnSwitch) {
       carryCount = Math.min(oldMessages.length, 8);
     }
-
     recentMessages = oldMessages
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(-carryCount);
 
-    carriedContext =
-      recentMessages.length > 0
-        ? [
-            {
-              role: "system",
-              content: `[Mode Switch] Switched from ${oldModeKey || "none"} to ${newModeKey}. Here is recent conversation context for continuity:`,
-            },
-            ...recentMessages,
-          ]
-        : [];
+    carriedContext = recentMessages.length > 0
+      ? [
+          {
+            role: "system",
+            content: `[Role Switch] Switched from ${oldRole?.name || "none"} to ${newRole.name}. Recent conversation context preserved.`,
+          },
+          ...recentMessages,
+        ]
+      : [];
   }
 
-  // Build new system prompt. Pass aiSessionKey in ctx so extension
-  // modes can resolve per-visitor side-channels (e.g. governing's
-  // Ruler/Foreman wakeup carriers) from inside buildSystemPrompt.
-  // The kernel doesn't read these side-channels; it just plumbs the
-  // identifier through.
-  const systemPrompt = await buildPromptForMode(newModeKey, {
+  const systemPrompt = await buildSystemPromptForRole(newRole, {
     ...ctx,
     aiSessionKey,
     rootId: getRootId(beingId) || ctx.rootId,
     currentNodeId: ctx.currentNodeId || getCurrentNodeId(beingId),
-    enrichedContext: session._lastEnrichedContext || null,
-    isFirstTurn: !session._hasHadFirstTurn,
-    editsByFile: session._editsByFile || {},
   });
 
-  // Reset conversation with new system prompt + carried context
   session.messages = [
     { role: "system", content: systemPrompt },
     ...carriedContext,
   ];
-  session.modeKey = newModeKey;
-  session.bigMode = mode.bigMode;
-  // Persist currentNodeId so position hold works on the next request
+  session.role = newRole;
   if (ctx.currentNodeId) setCurrentNodeId(beingId, ctx.currentNodeId);
 
   log.debug("LLM",
-    `🔄 Mode switch for ${aiSessionKey}: ${oldModeKey || "none"} → ${newModeKey} (carried ${recentMessages.length} messages)`,
+    `🔄 Role switch for ${aiSessionKey}: ${oldRole?.name || "none"} → ${newRole.name} (carried ${recentMessages.length} messages)`,
   );
 
   return {
-    modeKey: newModeKey,
-    emoji: mode.emoji,
-    label: mode.label,
-    alert: `${mode.emoji} ${mode.label}`,
+    role: newRole.name,
+    emoji: newRole.emoji,
+    label: newRole.label,
     carriedMessages: recentMessages.map((m) => ({
       role: m.role,
       content: m.content,
@@ -926,65 +1030,56 @@ export async function switchMode(aiSessionKey, newModeKey, ctx) {
   };
 }
 
-/**
- * Switch to a big mode's default sub-mode.
- */
-export async function switchBigMode(aiSessionKey, bigMode, ctx) {
-  const defaultModeKey = getDefaultMode(bigMode);
-  if (!defaultModeKey) throw new Error(`No default mode for: ${bigMode}`);
-  return await switchMode(aiSessionKey, defaultModeKey, { ...ctx, clearHistory: true });
-}
-
 // ─────────────────────────────────────────────────────────────────────────
 // CHAT PROCESSING HELPERS (private, called by processMessage)
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Get session, ensure a mode exists, snapshot ancestor chain.
- * Returns { session, mode }.
+ * Get session, ensure a role is set, snapshot ancestor chain.
+ * Returns { session, role }. Throws if no role is set on the session
+ * AND no role spec was threaded through ctx — every LLM call must be
+ * driven by a role.
  */
 async function ensureSession(aiSessionKey, ctx) {
   const beingId = ctx?.beingId || null;
   const session = getSession(_convKey(ctx, aiSessionKey));
 
-  // Self-healing: detect rootId mismatch. If the caller says we're in a different
-  // tree than the being thinks, clear messages and re-init. This catches race
-  // conditions where setRootId and switchMode happen out of order, and protects
-  // against stale context when callers forget to clear on tree transitions.
+  // Self-healing: detect rootId mismatch. If the caller says we're in a
+  // different tree than the being thinks, clear messages and re-init.
   const incomingRootId = ctx.rootId || null;
   const knownRootId = getRootId(beingId);
   if (knownRootId && incomingRootId && knownRootId !== incomingRootId) {
     log.debug("LLM", `Root mismatch for ${aiSessionKey}: being=${knownRootId}, ctx=${incomingRootId}. Clearing.`);
     session.messages = [];
-    session.modeKey = null;
+    session.role = null;
     setRootId(beingId, incomingRootId);
   }
 
-  // Sync rootId from context if being doesn't have one yet
   if (!getRootId(beingId) && incomingRootId) {
     setRootId(beingId, incomingRootId);
   }
-
-  // Sync currentNodeId from context
   if (ctx.currentNodeId) {
     setCurrentNodeId(beingId, ctx.currentNodeId);
   }
 
-  // Ensure we have a mode - default to home:default
-  if (!session.modeKey) {
-    await switchMode(aiSessionKey, "home:default", ctx);
+  // Role MUST be present. runChat thread it through ctx.role (set
+  // before calling processMessage). No default-role fallback — the
+  // caller decides which role this being is acting in.
+  if (!session.role && ctx.role) {
+    await switchRole(aiSessionKey, ctx.role, ctx);
+  }
+  if (!session.role) {
+    throw new Error("ensureSession: no role on session and no ctx.role; every LLM call needs a role");
   }
 
-  const mode = getMode(session.modeKey);
-
   // Snapshot ancestor chain for consistent resolution within this message.
-  // All resolution chains (scope, tools, mode, LLM, config) read from this snapshot.
+  // All resolution chains (scope, tools, LLM, config) read from this snapshot.
   const snapshotNodeId = getCurrentNodeId(beingId) || getRootId(beingId) || ctx.rootId;
   if (snapshotNodeId) {
     session._ancestorSnapshot = await snapshotAncestors(snapshotNodeId);
   }
 
-  return { session, mode };
+  return { session, role: session.role };
 }
 
 /**
@@ -998,7 +1093,7 @@ function checkTreeCircuit(session) {
     if (rootAncestor?.metadata?.circuit?.tripped) {
       return {
         content: "This tree is dormant. It exceeded health thresholds and its circuit breaker tripped. Contact the land operator or wait for an extension to revive it.",
-        modeKey: session.modeKey,
+        role: session.role?.name || null,
         _internal: { tripped: true, rootId: rootAncestor._id },
       };
     }
@@ -1012,25 +1107,24 @@ function checkTreeCircuit(session) {
  * or returns a noLlm response object (has .noLlmResponse).
  */
 async function resolveLLMClient(ctx, session, aiSessionKey) {
-  // Resolve LLM client for this user (custom or default, with root override)
-  // Auto-resolve per-mode LLM override from the tree's llmAssignments
+  // Resolve LLM client for this user. Role-driven slot override: when
+  // role.llmSlot is set and the tree has llmAssignments for it, use that.
   const rootId = getRootId(ctx?.beingId) || ctx.rootId;
-  const modeConnectionId =
+  const roleConnectionId =
     ctx.rootLlmConnectionId ||
-    (rootId ? await resolveRootLlmForMode(rootId, session.modeKey) : null);
+    (rootId ? await resolveRootLlmForRole(rootId, session.role) : null);
 
-  const clientEntry = await getClientForUser(
+  const clientEntry = await getClientForBeing(
     ctx.beingId,
     ctx.slot,
-    modeConnectionId,
+    roleConnectionId,
   );
   if (clientEntry.noLlm) {
-    // Metering handled by extension hooks (beforeLLMCall/afterLLMCall) if installed
     return {
       noLlmResponse: {
         content:
           "No LLM connection configured. Set one up at /setup to use AI features.",
-        modeKey: session.modeKey,
+        role: session.role?.name || null,
       },
     };
   }
@@ -1063,33 +1157,30 @@ async function resolveLLMClient(ctx, session, aiSessionKey) {
 }
 
 /**
- * Handle conversation loop trimming, fresh mode init, max message trim, add user message.
- * @param {object} session - Conversation session state
+ * Handle conversation loop trimming, fresh role init, max message trim, add user message.
+ * @param {object} session - Conversation session state (carries session.role)
  * @param {object} ctx - Request context (username, beingId, rootId, etc.)
  * @param {string} message - The user's message to add
- * @param {object} mode - The resolved mode object
  * @param {string} aiSessionKey - Session visitor identifier (for logging)
  */
-async function prepareConversation(session, ctx, message, mode, aiSessionKey) {
-  // Check for conversation length - loop if needed (BE mode)
+async function prepareConversation(session, ctx, message, aiSessionKey) {
+  const role = session.role;
+  // Check for conversation length - loop if needed (long-running roles)
   if (
-    mode.maxMessagesBeforeLoop &&
-    session.messages.length > mode.maxMessagesBeforeLoop
+    role.maxMessagesBeforeLoop &&
+    session.messages.length > role.maxMessagesBeforeLoop
   ) {
-    log.debug("LLM", `🔁 Conversation loop for ${aiSessionKey} in ${session.modeKey}`);
+    log.debug("LLM", `🔁 Conversation loop for ${aiSessionKey} in role ${role.name}`);
     const recentMessages = session.messages
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(-(CARRY_MESSAGES * 2)); // carry more on loop
 
-    const systemPrompt = await buildPromptForMode(session.modeKey, {
+    const systemPrompt = await buildSystemPromptForRole(role, {
       username: ctx.username,
       beingId: ctx.beingId,
       aiSessionKey,
       rootId: getRootId(ctx.beingId),
       currentNodeId: getCurrentNodeId(ctx.beingId),
-      enrichedContext: session._lastEnrichedContext || null,
-      isFirstTurn: !session._hasHadFirstTurn,
-      editsByFile: session._editsByFile || {},
     });
 
     session.messages = [
@@ -1131,22 +1222,19 @@ async function prepareConversation(session, ctx, message, mode, aiSessionKey) {
             message: message || null,
             dumpMode: true,
           });
-          session._lastEnrichedContext = enrichedContext;
         }
       }
     } catch (err) {
       log.debug("LLM", `enrichContext gather skipped: ${err.message}`);
     }
 
-    const systemPrompt = await buildPromptForMode(session.modeKey, {
+    const systemPrompt = await buildSystemPromptForRole(role, {
       username: ctx.username,
       beingId: ctx.beingId,
       aiSessionKey,
       rootId: getRootId(ctx.beingId),
       currentNodeId: getCurrentNodeId(ctx.beingId),
-      enrichedContext: enrichedContext || session._lastEnrichedContext || null,
-      isFirstTurn: !session._hasHadFirstTurn,
-      editsByFile: session._editsByFile || {},
+      enrichedContext: enrichedContext || null,
     });
     if (session.messages.length === 0) {
       session.messages = [{ role: "system", content: systemPrompt }];
@@ -1318,7 +1406,7 @@ const LLM_CONFIG_KEYS = {
   compressionKeep: 20,           // messages to preserve at the end
 };
 
-function resolveLlmConfig(ancestors, mode) {
+function resolveLlmConfig(ancestors, role) {
   const config = {};
 
   // Layer 1: node config (walk ancestor chain, closest wins)
@@ -1338,13 +1426,14 @@ function resolveLlmConfig(ancestors, mode) {
     }
   }
 
-  // Layer 2: mode config (fills gaps not set by node)
-  if (mode) {
+  // Layer 2: role config (fills gaps not set by node). Roles can declare
+  // LLM-loop knobs directly (maxToolIterations, compressionThreshold, ...).
+  if (role) {
     for (const [key, maxVal] of Object.entries(LLM_CONFIG_KEYS)) {
       if (config[key] !== undefined) continue;
-      const val = mode[key];
+      const val = role[key];
       if (typeof val === "number" && isFinite(val) && val > 0) {
-        if (val > maxVal) log.verbose("LLM", `Mode LLM config ${key}=${val} clamped to max ${maxVal}`);
+        if (val > maxVal) log.verbose("LLM", `Role LLM config ${key}=${val} clamped to max ${maxVal}`);
         config[key] = Math.min(val, maxVal);
       }
     }
@@ -1398,11 +1487,10 @@ async function resolveToolsForPosition(session, beingId, rolePermissions = null)
       log.warn("LLM", `Tool scope resolution failed for node ${currentNodeId}: ${scopeErr.message}`);
     }
   }
-  // Mode-based tool resolution: each mode declares its own tools.
-  // Extensions chain via the orchestrator when a message needs multiple extensions.
+  // Role-based tool resolution: each role declares its own tools.
   // rolePermissions (when present) filters tools to those whose verb tag is in
-  // the role's declared permission set. See memory `role-permissions-not-envelope`.
-  let tools = getToolsForMode(session.modeKey, treeToolConfig, rolePermissions);
+  // the role's declared permission set. See [[project_role_permissions_not_envelope]].
+  let tools = resolveToolsForRole(session.role, treeToolConfig, rolePermissions);
   // Filter tools by spatial extension scope (blocked + restricted)
   if (blockedExtensions || restrictedExtensions) {
     const { filterToolsByScope } = await import("../tree/extensionScope.js");
@@ -1450,7 +1538,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, aiSessio
     } catch {}
   }
   const llmHookData = {
-    beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
+    beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
     model: MODEL, messageCount: session.messages.length, hasTools: tools.length > 0,
     messages: session.messages, nodeId: getCurrentNodeId(ctx.beingId) || ctx.rootId || null,
     summonId: _llmChatId,
@@ -1470,7 +1558,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, aiSessio
     const sys = session.messages[0].content;
     const blocks = sys.split("\n").filter(l => l.startsWith("[")).map(l => l.split("]")[0] + "]").slice(0, 10);
     if (blocks.length > 0) {
-      log.verbose("Grammar", `[${session.modeKey}] modifiers: ${blocks.join(" ")}`);
+      log.verbose("Grammar", `[role:${session.role?.name}] modifiers: ${blocks.join(" ")}`);
     }
   }
 
@@ -1495,7 +1583,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, aiSessio
     // Includes the full responseText so the AI forensics capture in
     // treeos-base gets "what the AI said" without a second hook.
     hooks.run("afterLLMCall", {
-      beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
+      beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
       model: failoverResult.usedClient?.model || MODEL,
       usage: response?.usage || null,
       hasToolCalls: !!response?.choices?.[0]?.message?.tool_calls?.length,
@@ -1546,7 +1634,7 @@ async function callLLM(openai, MODEL, session, tools, ctx, clientEntry, aiSessio
 
         // Fire afterLLMCall so extension metering still tracks the call
         hooks.run("afterLLMCall", {
-          beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
+          beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
           model: clientEntry?.model || MODEL,
           usage: null, // No usage data available from the error
           hasToolCalls: false,
@@ -1920,7 +2008,7 @@ async function executeTool(toolCall, session, ctx, client, aiSessionKey) {
   const _toolSessionId = ctx?.sessionId || null;
   const hookData = {
     toolName, args,
-    beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
+    beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
     summonId: _toolChatId,
     sessionId: _toolSessionId,
     nodeId: getCurrentNodeId(ctx.beingId) || ctx.rootId || null,
@@ -1938,7 +2026,7 @@ async function executeTool(toolCall, session, ctx, client, aiSessionKey) {
   args = hookData.args;
   const resolvedToolName = hookData.toolName || toolName;
 
-  log.debug("LLM", `🔧 [${session.modeKey}] ${resolvedToolName}`, args);
+  log.debug("LLM", `🔧 [role:${session.role?.name}] ${resolvedToolName}`, args);
 
   // Announce tool call BEFORE it runs. Gives live consumers (CLI, web) a
   // chance to show "running <tool>..." status before the result lands.
@@ -2009,7 +2097,7 @@ async function executeTool(toolCall, session, ctx, client, aiSessionKey) {
     // afterToolCall (success): fire-and-forget
     hooks.run("afterToolCall", {
       toolName: resolvedToolName, args, result: resultText, success: true,
-      beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
+      beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
       summonId: _toolChatId,
       sessionId: _toolSessionId,
       nodeId: getCurrentNodeId(ctx.beingId) || ctx.rootId || null,
@@ -2042,7 +2130,7 @@ async function executeTool(toolCall, session, ctx, client, aiSessionKey) {
     // afterToolCall (failure): fire-and-forget
     hooks.run("afterToolCall", {
       toolName: resolvedToolName, args, error: err.message, success: false,
-      beingId: ctx.beingId, rootId: ctx.rootId, mode: session.modeKey,
+      beingId: ctx.beingId, rootId: ctx.rootId, role: session.role?.name,
       summonId: _toolChatId,
       sessionId: _toolSessionId,
       nodeId: getCurrentNodeId(ctx.beingId) || ctx.rootId || null,
@@ -2088,7 +2176,7 @@ async function finalizeResponse(session, openai, MODEL, response, isInternal, is
 
   // Internal tracking (for Chat finalization, never sent to client)
   const _internal = {
-    modeKey: session.modeKey,
+    role: session.role?.name,
     rootId: getRootId(ctx.beingId),
     isCustom,
     model: MODEL,
@@ -2108,13 +2196,14 @@ async function finalizeResponse(session, openai, MODEL, response, isInternal, is
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Process a chat message within the current mode.
+ * Process a chat message under the session's current role.
  */
 export async function processMessage(aiSessionKey, message, ctx) {
   const isInternal = ctx?.meta?.internal === true;
 
-  // Phase 1: Session + ancestor snapshot
-  const { session, mode } = await ensureSession(aiSessionKey, ctx);
+  // Phase 1: Session + ancestor snapshot. Role MUST already be on session
+  // (set by ensureSession from ctx.role, which runChat threads through).
+  const { session, role } = await ensureSession(aiSessionKey, ctx);
 
   // Phase 2: Circuit breaker check
   const tripped = checkTreeCircuit(session);
@@ -2126,14 +2215,13 @@ export async function processMessage(aiSessionKey, message, ctx) {
   const { openai, MODEL, isCustom, resolvedConnectionId, client, clientEntry } = llmResult;
 
   // Phase 4: Prepare conversation (trim, init, add user message)
-  await prepareConversation(session, ctx, message, mode, aiSessionKey);
+  await prepareConversation(session, ctx, message, aiSessionKey);
 
   // Phase 5: Resolve tools for current position
   let { tools } = await resolveToolsForPosition(session, ctx.beingId, ctx.rolePermissions);
 
   // Query constraint: when readOnly is set, only tools registered with readOnlyHint
-  // are available. Write tools are filtered before the mode fires. The AI cannot
-  // mutate the tree during a query interaction.
+  // are available. Write tools are filtered before the role's LLM fires.
   if (ctx.readOnly) {
     const { isToolReadOnly } = await import("../tree/extensionScope.js");
     tools = tools.filter(t => {
@@ -2142,25 +2230,23 @@ export async function processMessage(aiSessionKey, message, ctx) {
     });
   }
 
-  // Phase 5b: Resolve LLM config. Three layers: node > mode > land globals.
-  // Node config walks metadata.llm.config on ancestors. Mode declares its own needs.
+  // Phase 5b: Resolve LLM config. Three layers: node > role > land globals.
+  // Node config walks metadata.llm.config on ancestors. Role declares its own needs.
   // Stored on session so callLLM and executeTool can read overrides.
-  session._nodeLlmConfig = resolveLlmConfig(session._ancestorSnapshot, mode);
+  session._nodeLlmConfig = resolveLlmConfig(session._ancestorSnapshot, role);
 
   // Phase 6: Tool calling loop
   let response;
   let iterations = 0;
   const maxIterations = session._nodeLlmConfig.maxToolIterations ?? MAX_TOOL_ITERATIONS;
 
-  // Bounded per-step tool-call budget. When a mode declares maxToolCallsPerStep
+  // Bounded per-step tool-call budget. When a role declares maxToolCallsPerStep
   // (or ctx forces one), break out after that many tool calls and signal the
   // caller with _continue: true so an orchestrator can open a new chainIndex
-  // step and re-enter this loop on the same session. This keeps each LLM
-  // generation short, prevents 5-minute freezes on 27B local models, and turns
-  // a fat single-shot tool loop into a readable chain of phases.
+  // step and re-enter this loop on the same session.
   const maxToolCallsPerStep =
     ctx?.maxToolCallsPerStep ??
-    mode.maxToolCallsPerStep ??
+    role.maxToolCallsPerStep ??
     null;
   let toolCallsThisStep = 0;
   let continueReason = null;
@@ -2195,7 +2281,7 @@ export async function processMessage(aiSessionKey, message, ctx) {
       typeof assistantMessage.content === "string" &&
       assistantMessage.content.trim().length > 0
     ) {
-      try { ctx.onThinking({ text: assistantMessage.content, modeKey: session.modeKey }); }
+      try { ctx.onThinking({ text: assistantMessage.content, role: session.role?.name }); }
       catch { /* never let a listener break the loop */ }
     }
 
@@ -2238,17 +2324,6 @@ export async function processMessage(aiSessionKey, message, ctx) {
         }
       } catch {}
 
-      // Track edits-per-file so the rewriteOverEdits facet can inject
-      // a whole-file-rewrite warning after the 2nd edit to the same file.
-      if (toolResult.tool === "workspace-edit-file" && toolResult.success) {
-        try {
-          const filePath = toolResult.args?.filePath || toolResult.args?.path || null;
-          if (filePath) {
-            if (!session._editsByFile) session._editsByFile = {};
-            session._editsByFile[filePath] = (session._editsByFile[filePath] || 0) + 1;
-          }
-        } catch {}
-      }
     }
 
     // Bounded step: if the mode wants step-bounded tool calls, break the
@@ -2299,13 +2374,12 @@ export async function processMessage(aiSessionKey, message, ctx) {
   // LLM turn just to generate text we'll discard.
   if (continueReason === "tool-cap" || continueReason === "place-done") {
     const _internal = {
-      modeKey: session.modeKey,
+      role: session.role?.name,
       rootId: getRootId(ctx.beingId),
       isCustom,
       model: MODEL,
       connectionId: resolvedConnectionId || null,
     };
-    session._hasHadFirstTurn = true;
     return {
       success: true,
       content: "",
@@ -2316,7 +2390,6 @@ export async function processMessage(aiSessionKey, message, ctx) {
     };
   }
 
-  session._hasHadFirstTurn = true;
   return finalizeResponse(session, openai, MODEL, response, isInternal, isCustom, resolvedConnectionId, ctx);
 }
 
@@ -2404,8 +2477,8 @@ export function getCurrentNodeId(beingId) {
   return p.currentNodeId || p.rootId || null;
 }
 
-export function getCurrentMode(aiSessionKey) {
-  return getSession(aiSessionKey).modeKey;
+export function getCurrentRole(aiSessionKey) {
+  return getSession(aiSessionKey).role;
 }
 
 
@@ -2447,27 +2520,24 @@ export function resetVisitorSession(aiSessionKey, reason = "aborted") {
 }
 
 /**
- * Reset conversation messages but keep mode and rootId intact.
- * Rebuilds system prompt for the current mode.
+ * Reset conversation messages but keep the role and rootId intact.
+ * Rebuilds system prompt for the current role.
  */
 export async function resetConversation(aiSessionKey, ctx) {
   const session = getSession(_convKey(ctx, aiSessionKey));
-  if (!session.modeKey) return;
+  if (!session.role) return;
 
-  const systemPrompt = await buildPromptForMode(session.modeKey, {
+  const systemPrompt = await buildSystemPromptForRole(session.role, {
     username: ctx.username,
     beingId: ctx.beingId,
     aiSessionKey,
     rootId: getRootId(ctx.beingId),
     currentNodeId: getCurrentNodeId(ctx.beingId),
-    enrichedContext: session._lastEnrichedContext || null,
-    isFirstTurn: !session._hasHadFirstTurn,
-    editsByFile: session._editsByFile || {},
   });
 
   session.messages = [{ role: "system", content: systemPrompt }];
   log.debug("LLM",
-    `🔄 Reset conversation for ${aiSessionKey} (mode: ${session.modeKey}, root: ${getRootId(ctx.beingId)})`,
+    `🔄 Reset conversation for ${aiSessionKey} (role: ${session.role.name}, root: ${getRootId(ctx.beingId)})`,
   );
 }
 
@@ -2507,76 +2577,75 @@ export function sessionCount() {
  *   // Join an upstream user session
  *   await runChat({ ..., aiSessionKey: userKeyFromCaller });
  */
-export async function runChat({
-  // Identity: the canonical name is `beingIn` (the asker). `beingId` is
-  // accepted as a legacy alias for callers that haven't migrated. The
-  // `beingOut` field names the responding being (an AI being summoned
-  // through this chat); it stamps the Chat row so chainstep-by-being
-  // lookups work.
-  beingIn, beingId, beingOut = null,
-  username, message,
-  // Behavior selector. Two surfaces:
-  //   role  — a role spec from ibp/roles/registry.js (the new way).
-  //           role.modeKey identifies its mode-registry mirror; the
-  //           kernel reads the mirror to build the system prompt and
-  //           resolve tools. Passing `role` is sugar for `mode: role.modeKey`.
-  //   mode  — legacy mode key string ("tree:governing-ruler", "home:default").
-  //           Still accepted while external callers migrate.
-  // Exactly one of role / mode must be present.
-  role = null,
-  mode,
-  rootId = null, nodeId = null,
-  signal = null, res = null, llmPriority = null,
-  onToolResults = null, onToolCalled = null, onThinking = null,
-  treeContext = null,
-
-  // AI-chat session routing — three paths:
-  //   aiSessionKey    explicit pass-through (extension joining upstream session)
-  //   scope+purpose   declared internal lane (tree/home/land + optional extra)
-  //   neither         fresh ephemeral key (default)
-  aiSessionKey = null,
-  scope = null,
-  purpose = null,
-  extra = null,
-  source = null,
-
-  // Chain linkage. When runChat is invoked from inside another LLM
-  // call's tool handler (e.g., the Ruler's hire-planner tool spawning
-  // a Planner chainstep), pass the calling chat's summonId here. The
-  // spawned chat's parentSummonId is set in chatTracker so audit walks
-  // and Pass 2 court hearings can reconstruct the chain hierarchy
-  // (user message → Ruler chat → Planner chat → ...).
-  parentSummonId = null,
-
-  // Explicit sessionId override. When set, the chat record this
-  // runChat creates will use this sessionId instead of deriving one.
-  // Used by spawn-and-await tools so the spawned chat shares the
-  // caller's sessionId — the chats UI groups by sessionId and the
-  // renderer's nesting logic only nests children that are in the
-  // same session group as their parent. Without this, ephemeral
-  // spawns appear as orphan top-level chats. The in-memory
-  // `sessions` Map is keyed by aiSessionKey (NOT sessionId), so the
-  // spawned role still gets its own context window — what's shared
-  // is purely the chat-record-level sessionId for UI grouping.
-  parentSessionId = null,
-}) {
-  // Accept either beingIn (canonical) or beingId (legacy alias) as
-  // the asker. Internal code below uses beingId for cache/session keys
-  // (most names predate the rename).
-  beingId = beingIn || beingId;
-  // Role → mode bridge. `role` is the new public surface; internally
-  // the kernel still routes via mode keys (mode-registry mirror), so a
-  // role spec is normalized to its modeKey here. `role` and `mode` are
-  // mutually exclusive at the API; `role` wins if both are provided.
-  if (role) {
-    if (typeof role.modeKey !== "string" || !role.modeKey) {
-      throw new Error(`runChat: role "${role.name || "(unnamed)"}" has no modeKey`);
-    }
-    mode = role.modeKey;
+/**
+ * runChat — canonical entry for one LLM call on behalf of a summoned
+ * being. Four structured inputs cover everything:
+ *
+ *   being    — the Being doc of the responder. Carries _id, username,
+ *              currentPositionId, homePositionId, llmDefault.
+ *   envelope — the SUMMON envelope that woke this summon. Carries
+ *              from (asker stance), content, ibpAddress, correlation,
+ *              inReplyTo, rootCorrelation, priority, intent.
+ *   role     — the active role spec from ibp/roles/registry.js
+ *              (buildSystemPrompt, toolNames, permissions, name).
+ *   signal   — AbortController.signal from the scheduler.
+ *
+ * Internally derives legacy locals (beingId, beingOut, username,
+ * message, nodeId, llmPriority, parentSummonId) from the structured
+ * inputs so the existing LLM-call body keeps working unchanged. The
+ * remaining legacy params (treeContext, scope, purpose, extra, etc.)
+ * default to null — under the queue model they're no longer caller-
+ * controllable; what they expressed lives on envelope or role.
+ *
+ * See [[project_ibp_universal_grammar]] for the architectural lock.
+ */
+export async function runChat({ being, envelope, role, signal = null } = {}) {
+  // Validate structured inputs
+  if (!being?._id) {
+    throw new Error("runChat requires being with _id");
   }
-  if (!beingId || !message || !mode) {
-    throw new Error("runChat requires beingId/beingIn, message, and role or mode");
+  if (!envelope || (envelope.content === undefined && envelope.content !== "")) {
+    throw new Error("runChat requires envelope with content");
   }
+  if (!role || typeof role !== "object" || !role.name) {
+    throw new Error("runChat requires a role spec from ibp/roles/registry.js");
+  }
+
+  // Derive legacy locals the body still references. The structured
+  // inputs are the source of truth; these are read-only views the body
+  // may reassign for its own bookkeeping (session keys, etc.).
+  const beingOut = String(being._id);
+  let askerUsername = null;
+  if (typeof envelope.from === "string") {
+    const m = envelope.from.match(/@([a-z][a-z0-9-]*)$/i);
+    if (m) askerUsername = m[1];
+  }
+  const beingIn  = envelope.fromBeingId || String(being._id);
+  let   beingId  = beingIn;
+  const username = askerUsername || being.username || null;
+  const message  = typeof envelope.content === "string"
+    ? envelope.content
+    : JSON.stringify(envelope.content);
+  const nodeId   = being.currentPositionId || being.homePositionId || null;
+  let   rootId   = null;
+  const llmPriority    = envelope.priority || null;
+  const parentSummonId = envelope.inReplyTo || null;
+
+  // Hooks the legacy flat shape exposed but the structured shape doesn't.
+  // The role's summon function carries everything the kernel needs;
+  // these defaults keep the existing body happy until each call site
+  // stops referencing them.
+  const res = null;
+  const onToolResults = null;
+  const onToolCalled  = null;
+  const onThinking    = null;
+  const treeContext   = null;
+  let   aiSessionKey  = null;
+  const scope         = null;
+  const purpose       = null;
+  const extra         = null;
+  const source        = null;
+  const parentSessionId = null;
 
   // Auto-abort on client disconnect if Express res object is provided
   let _autoAbort = null;
@@ -2673,23 +2742,23 @@ export async function runChat({
   if (rootId) setRootId(beingId, rootId);
   if (nodeId) setCurrentNodeId(beingId, nodeId);
 
-  // 3. Switch mode only if different. Mode state lives on the
+  // 3. Switch role only if different. Role state lives on the
   // conversation entry (keyed by mcpCacheKey: IBP Address or
   // pipelineKey), so two tabs at the same conversation see the same
-  // current mode and don't re-switch redundantly.
-  const currentMode = getCurrentMode(mcpCacheKey);
-  if (currentMode !== mode) {
+  // current role and don't re-switch redundantly.
+  const currentRole = getCurrentRole(mcpCacheKey);
+  if (currentRole?.name !== role.name) {
     try {
-      await switchMode(aiSessionKey, mode, { username, beingId, mcpCacheKey, currentNodeId: getCurrentNodeId(beingId) });
+      await switchRole(aiSessionKey, role, { username, beingId, mcpCacheKey, currentNodeId: getCurrentNodeId(beingId) });
     } catch (err) {
-      log.warn("RunChat", `Mode switch to ${mode} failed: ${err.message}`);
+      log.warn("RunChat", `Role switch to ${role.name} failed: ${err.message}`);
     }
   }
 
   // 4. Create Chat record
   let chat;
   try {
-    const clientInfo = await getClientForUser(beingId, aiSessionKey) || {};
+    const clientInfo = await getClientForBeing(beingId, aiSessionKey) || {};
     // runChat callers can provide a `treeContext` (room-agent delivery
     // passes { targetNodeId, roomNodeId, roomSubId } so the chat shows
     // up on the tree's chats page AND carries the room link). Default
@@ -2705,7 +2774,7 @@ export async function runChat({
       askerPosition: getCurrentNodeId(beingId) || rootId || null,
       sessionId,
       message,
-      modeKey: mode,
+      role: role.name,
       ...(source ? { source } : {}),
       llmProvider: {
         isCustom: clientInfo.isCustom || false,
@@ -2745,9 +2814,12 @@ export async function runChat({
       onThinking,
       // Role permissions ∩ tool verbs — narrows the LLM's tool surface
       // to what the role declares. Permissions are role identity; no
-      // envelope or caller may widen them. Untagged tools default to
-      // "do" (see modes/tools.js).
-      rolePermissions: Array.isArray(role?.permissions) ? role.permissions : null,
+      // envelope or caller may widen them. Untagged tools are rejected
+      // at registration (see seed/tools.js).
+      rolePermissions: Array.isArray(role.permissions) ? role.permissions : null,
+      // Role spec flows through ctx so ensureSession can apply it when
+      // the session has none yet (first message on a fresh key).
+      role,
     });
   } catch (err) {
     if (chat) {
@@ -2762,11 +2834,9 @@ export async function runChat({
   let answer = stopped ? null : (result?.content || result?.answer || "No response.");
 
   // 6. beforeResponse hook: extensions clean/modify the response before delivery.
-  // Centralized here so every caller (CLI /home/chat, websocket, scheduled jobs)
-  // gets the same treatment without each route having to remember to fire it.
   if (answer && !stopped) {
     try {
-      const hookData = { content: answer, beingId, rootId, mode };
+      const hookData = { content: answer, beingId, rootId, role: role.name };
       await hooks.run("beforeResponse", hookData);
       answer = hookData.content;
     } catch {}
@@ -2776,534 +2846,20 @@ export async function runChat({
   if (chat) {
     try {
       const internal = result?._internal || {};
-      await finalizeSummon({ summonId: chat._id, content: stopped ? null : answer, stopped, modeKey: internal.modeKey || mode });
+      await finalizeSummon({ summonId: chat._id, content: stopped ? null : answer, stopped, role: internal.role || role.name });
     } catch {}
   }
 
-  // 8. Clear abort (keep session + MCP alive for next message in same mode)
-  // Only clear if we created our own abort controller
+  // 8. Clear abort (keep session + MCP alive for next message in same role)
   if (abort) clearSessionAbort(aiSessionKey);
 
   return {
     answer,
     summonId: chat?._id || null,
-    modeKey: mode,
+    role: role.name,
     aiSessionKey,
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// runOrchestration: universal entry point for user-facing chat flows.
-//
-// This is the canonical orchestration primitive. Every user-facing entry
-// point (HTTP routes, websocket, gateway extensions) calls this. It handles:
-//   - Transport session lifecycle (sessionRegistry create/end)
-//   - Conversation aiSessionKey building (zone+rootId+beingId pattern)
-//   - MCP connection
-//   - Chat record create/finalize
-//   - Request enqueue serialization
-//   - Abort handling (caller signal, res.close, timeout)
-//   - Orchestrator dispatch via registry, with fallback to processMessage
-//   - beforeResponse hook firing (exactly once, except in place mode)
-//   - Cleanup in all paths
-//
-// Use runChat() for background single-LLM-call work in extensions.
-// Use runOrchestration() for anything where a real user is waiting.
-// ─────────────────────────────────────────────────────────────────────────
-export async function runOrchestration({
-  zone,                                  // "tree" | "home" | "land" - required
-  beingId,                                // required
-  username = null,
-  message,                               // required
-  rootId = null,                         // required for tree zone
-  currentNodeId = null,
-  device = null,                         // "dashboard" | "cli" | "http" | `${gateway}:${extId}` - per-reach decoupler
-  handle = null,                         // overrides device when present (explicit merge or side-thread)
-  sessionId: providedSessionId = null,   // Websocket passes its existing transport session
-  aiSessionKey: providedAiSessionKey = null,  // explicit key pass-through (websocket's _pvId)
-  socket = null,                         // Websocket passes the socket for tool emit
-  signal = null,                         // Caller-provided abort signal
-  res = null,                            // For HTTP auto-abort on disconnect
-  llmPriority = null,
-  orchestrateFlags = {},                 // { skipRespond, forceQueryOnly, behavioral }
-  sourceType = null,                     // For Chat record source field (legacy alias)
-  chatSource = "api",                    // Chat record source: "user" | "api" | "public-query" | "background"
-  isPublicQuery = false,
-  clientOverride = null,                 // For canopy proxy public queries
-  onChatCreated = null,                  // Callback fired right after Chat record exists
-  onToolResults = null,
-  onToolCalled = null,                   // Announce tool calls BEFORE they run
-  onThinking = null,                     // Mid-turn assistant prose (reasoning)
-}) {
-  if (!beingId || !message || !zone) {
-    throw new Error("runOrchestration requires zone, beingId, and message");
-  }
-  if (zone === "tree" && !rootId) {
-    throw new Error("runOrchestration tree zone requires rootId");
-  }
-
-  // Lazy imports (avoid circular deps and keep boot light)
-  const jwtMod = (await import("jsonwebtoken")).default;
-  const { closeMCPClient, getMCPClient } = await import("../ws/mcp.js");
-  const { startSummon, finalizeSummon } = await import("./summonTracker.js");
-  const {
-    createSession,
-    endSession,
-    setSessionAbort,
-    clearSessionAbort,
-    SESSION_TYPES,
-    registerSessionType,
-  } = await import("../ws/sessionRegistry.js");
-  const { enqueue } = await import("../ws/requestQueue.js");
-  const { getOrchestrator } = await import("../orchestrators/registry.js");
-  const { nullSocket } = await import("../orchestrators/helpers.js");
-  const { ProtocolError, ERR } = await import("../protocol.js");
-  const { buildUserAiSessionKey } = await import("./sessionKeys.js");
-
-  // Phantom-rootId guard. Browser localStorage / session caches can
-  // pin a rootId that points to a deleted (or never-completed) tree.
-  // Subsequent chats then ship that ghost id, the orchestrator stores
-  // it in memory via setRootId, and downstream code paths chew through
-  // null lookups across walks, classifiers, and prompt builders —
-  // observed to allocate without bound and crash a 4GB heap before any
-  // routing log fires. Reject early with a clean error so the client
-  // can clear its cached state instead of pinning the server in a
-  // broken loop. Cheap: one indexed _id lookup per tree-zone request.
-  if (zone === "tree" && rootId) {
-    const rootDoc = await Node.findById(rootId).select("_id").lean();
-    if (!rootDoc) {
-      throw new ProtocolError(
-        404,
-        ERR.TREE_NOT_FOUND,
-        `Tree root ${String(rootId).slice(0, 8)} does not exist. ` +
-        `Your client likely has a stale rootId cached from a deleted ` +
-        `tree — clear browser localStorage / session storage and reconnect.`,
-      );
-    }
-  }
-
-  const JWT_SECRET = process.env.JWT_SECRET;
-  if (!JWT_SECRET) throw new Error("JWT_SECRET not configured");
-
-  // Ensure session types are registered for fallback zones
-  if (!SESSION_TYPES.API_HOME_CHAT) registerSessionType("API_HOME_CHAT", "api-home-chat");
-  if (!SESSION_TYPES.API_LAND_CHAT) registerSessionType("API_LAND_CHAT", "api-land-chat");
-
-  // ── Build ai-chat session key for transport-session continuity ────────
-  // Canonical shape: user:${beingId}:${anchor}:${suffix}
-  // where anchor is rootId (tree) or "home"/"land", and suffix is
-  // `handle` (explicit override) or `device` (default, per-reach split).
-  //
-  // aiSessionKey is now strictly transport-session identity — it keys
-  // the per-tab LLM-conversation buffer and serves as a JWT/log trace
-  // label. Position, threading, and async-event broadcast all live
-  // under first-class identifiers (Being.currentPositionId,
-  // ibpAddress, being-room). See sessionKeys.js header for the
-  // after-refactor map.
-  //
-  // Priority: providedAiSessionKey (pass-through) > minted from pieces.
-  let aiSessionKey = providedAiSessionKey || null;
-  if (!aiSessionKey) {
-    aiSessionKey = buildUserAiSessionKey({ beingId, zone, rootId, device, handle });
-  }
-
-  // ── Resolve the zone addressee + IBP Address eagerly ───────────────
-  // The zone implies who the user is talking to:
-  //   tree  → the Ruler at rootId (via metadata.beings.ruler.beingId)
-  //   land  → the land-manager at the land root
-  //   home  → null addressee (chat with one's own assistant; no being
-  //           pair to grouP). Falls through to aiSessionKey for MCP cache.
-  //
-  // Resolving here means runOrchestration joins the same MCP-client
-  // cache entry as IBP SUMMON to the same being. One conversation, one
-  // client, regardless of which entry path the user came in through.
-  let resolvedBeingOut = null;
-  let resolvedAddresseePosition = null;
-  try {
-    if (zone === "tree" && rootId) {
-      const Node = (await import("../models/node.js")).default;
-      const rootNode = await Node.findById(rootId).select("metadata").lean();
-      const beings = rootNode?.metadata instanceof Map
-        ? rootNode.metadata.get("beings")
-        : rootNode?.metadata?.beings;
-      const rulerBeingId = beings?.ruler?.beingId || null;
-      if (rulerBeingId) {
-        resolvedBeingOut = String(rulerBeingId);
-        resolvedAddresseePosition = String(rootId);
-        log.debug("Orchestration",
-          `tree zone: resolved Ruler beingId=${rulerBeingId.slice(0, 8)} at root=${String(rootId).slice(0, 8)}`);
-      } else {
-        log.debug("Orchestration",
-          `tree zone: no Ruler at root=${String(rootId).slice(0, 8)} ` +
-          `(metadata.beings.ruler.beingId missing). MCP cache will use aiSessionKey fallback. ` +
-          `Next message after Ruler promotion will rekey to IBP Address.`);
-      }
-    } else if (zone === "land") {
-      const Node = (await import("../models/node.js")).default;
-      const { getLandRootId } = await import("../landRoot.js");
-      const landRootId = getLandRootId();
-      if (landRootId) {
-        const landRoot = await Node.findById(landRootId).select("metadata").lean();
-        const beings = landRoot?.metadata instanceof Map
-          ? landRoot.metadata.get("beings")
-          : landRoot?.metadata?.beings;
-        const lmBeingId = beings?.["land-manager"]?.beingId || null;
-        if (lmBeingId) {
-          resolvedBeingOut = String(lmBeingId);
-          resolvedAddresseePosition = String(landRootId);
-        }
-      }
-    }
-    // zone === "home": leave addressee null. Home chat is self-directed.
-  } catch (err) {
-    log.debug("Orchestration", `zone-addressee resolution skipped: ${err.message}`);
-  }
-
-  // Build the eager IBP Address when we resolved an addressee. Same
-  // path runChat takes — sender + receiver stances canonicalized.
-  let eagerIbpAddress = null;
-  if (resolvedBeingOut) {
-    try {
-      const { computeIbpAddressForSummon } = await import("./ibpAddress.js");
-      eagerIbpAddress = await computeIbpAddressForSummon({
-        askerBeingId:    beingId,
-        askerPosition:   currentNodeId || getCurrentNodeId(beingId) || rootId || null,
-        addresseeBeingId: resolvedBeingOut,
-        addresseePosition: resolvedAddresseePosition,
-      });
-    } catch (err) {
-      log.debug("Orchestration", `IBP Address compute skipped: ${err.message}`);
-    }
-  }
-  const mcpCacheKey = eagerIbpAddress || aiSessionKey;
-
-  // ── Build sessionRegistry session for transport tracking ──────────────
-  // If caller provided sessionId (websocket has its own), reuse it.
-  // Otherwise create one via sessionRegistry. scopeKey enables idle reuse
-  // so back-to-back HTTP calls from the same browser tab share a session.
-  let sessionId = providedSessionId;
-  let weCreatedSession = false;
-
-  if (!sessionId) {
-    // scopeKey drives idle transport-session reuse. aiSessionKey already
-    // encodes (user, zone, rootId, device/handle) so it's the natural
-    // scope. Two different devices at the same tree get different
-    // aiSessionKeys → different scopeKeys → no crossover.
-    const scopeKey = aiSessionKey;
-
-    const sessionType =
-      zone === "tree"
-        ? (orchestrateFlags.skipRespond
-            ? SESSION_TYPES.API_TREE_PLACE
-            : orchestrateFlags.forceQueryOnly
-              ? SESSION_TYPES.API_TREE_QUERY
-              : SESSION_TYPES.API_TREE_CHAT)
-        : (zone === "home" ? SESSION_TYPES.API_HOME_CHAT : SESSION_TYPES.API_LAND_CHAT);
-
-    const tag = handle || device || null;
-    const description = zone === "tree"
-      ? `${zone} ${orchestrateFlags.skipRespond ? "place" : orchestrateFlags.forceQueryOnly ? "query" : "chat"} on root ${rootId}${tag ? ` [${tag}]` : ""}${isPublicQuery ? " (public)" : ""}`
-      : `${zone} chat${tag ? ` [${tag}]` : ""}`;
-
-    const created = createSession({
-      beingId,
-      type: sessionType,
-      scopeKey,
-      description,
-      meta: { rootId, aiSessionKey, isPublicQuery, handle, device, zone },
-    });
-    sessionId = created.sessionId;
-    weCreatedSession = true;
-  }
-
-  // ── Setup abort controller ────────────────────────────────────────────
-  const abort = new AbortController();
-  if (signal) {
-    if (signal.aborted) abort.abort();
-    else signal.addEventListener("abort", () => abort.abort(), { once: true });
-  }
-  if (res) {
-    res.on("close", () => { if (!res.writableEnded) abort.abort(); });
-  }
-  setSessionAbort(sessionId, abort);
-
-  // ── Timeout ────────────────────────────────────────────────────────────
-  const TIMEOUT_MS = Number(getLandConfigValue("apiOrchestrationTimeout")) || (45 * 60 * 1000);
-  let timedOut = false;
-  let chat = null;
-
-  const timer = setTimeout(() => {
-    timedOut = true;
-    log.error("Orchestration", `Zone ${zone} timed out after ${TIMEOUT_MS / 1000}s: ${aiSessionKey}`);
-    abort.abort();
-  }, TIMEOUT_MS);
-
-  // ── Create Chat record ────────────────────────────────────────────────
-  // Use the existing conversation mode if set (preserves websocket behavior
-  // where the Chat is tagged with the actual current mode), otherwise fall
-  // back to a zone+flags default.
-  try {
-    const clientInfo = clientOverride || (await getClientForUser(beingId, aiSessionKey)) || {};
-    const existingMode = getCurrentMode(aiSessionKey);
-    const defaultModeKey = zone === "tree"
-      ? `tree:${orchestrateFlags.skipRespond ? "place" : orchestrateFlags.forceQueryOnly ? "query" : "chat"}`
-      : `${zone}:default`;
-    const modeKeyForChat = existingMode || defaultModeKey;
-    const resolvedSource = isPublicQuery ? "public-query" : (chatSource || "api");
-    chat = await startSummon({
-      beingIn: beingId,
-      // beingOut + addresseePosition come from the zone resolution
-      // above so the Chat row stamps the canonical IBP Address.
-      // null for zones where no specific addressee resolves (home,
-      // or tree without a Ruler promoted yet).
-      beingOut: resolvedBeingOut,
-      askerPosition: currentNodeId || getCurrentNodeId(beingId) || rootId || null,
-      addresseePosition: resolvedAddresseePosition,
-      sessionId,
-      message: message.slice(0, 5000),
-      source: resolvedSource,
-      modeKey: modeKeyForChat,
-      llmProvider: {
-        isCustom: clientInfo.isCustom || false,
-        model: clientInfo.model || "unknown",
-        connectionId: clientInfo.connectionId || null,
-      },
-      ...(rootId ? { treeContext: { targetNodeId: rootId } } : {}),
-    });
-    if (chat) {
-      if (typeof onChatCreated === "function") {
-        try { onChatCreated(chat); } catch (e) { log.warn("Orchestration", `onChatCreated failed: ${e.message}`); }
-      }
-    }
-  } catch (err) {
-    log.warn("Orchestration", `Failed to create Chat: ${err.message}`);
-  }
-
-  // ── Centralized cleanup, runs in all exit paths ───────────────────────
-  let cleanedUp = false;
-  const cleanup = () => {
-    if (cleanedUp) return;
-    cleanedUp = true;
-    clearTimeout(timer);
-    clearSessionAbort(sessionId);
-    if (weCreatedSession) {
-      try { endSession(sessionId); } catch {}
-    }
-  };
-
-  // ── Main orchestration body, serialized per session ───────────────────
-  let result = null;
-  let executionError = null;
-
-  try {
-    await enqueue(sessionId, async () => {
-      try {
-        // Connect MCP for this visitor (skip if already connected)
-        if (!getMCPClient(mcpCacheKey)) {
-          const internalJwt = jwtMod.sign(
-            { beingId: beingId.toString(), username: username || "unknown", aiSessionKey },
-            JWT_SECRET,
-            { expiresIn: "1h" },
-          );
-          try {
-            // connectToMCP and MCP_SERVER_URL imported at top of file
-            await connectToMCP(MCP_SERVER_URL, mcpCacheKey, internalJwt);
-          } catch (err) {
-            log.warn("Orchestration", `MCP connect failed: ${err.message}`);
-          }
-        }
-
-        // Set rootId/currentNodeId in the being's position state
-        if (rootId) setRootId(beingId, rootId);
-        if (currentNodeId) {
-          const previousNodeId = getCurrentNodeId(beingId);
-          const backToRoot = String(currentNodeId) === String(rootId)
-            && previousNodeId && String(previousNodeId) !== String(rootId);
-          if (backToRoot) {
-            // User navigated back to tree root. Fresh conversation.
-            clearSession(aiSessionKey);
-            if (rootId) setRootId(beingId, rootId);
-          }
-          setCurrentNodeId(beingId, currentNodeId);
-        }
-
-        // Dispatch: orchestrator if registered for the zone, else processMessage
-        const orch = getOrchestrator(zone);
-
-        if (orch) {
-          result = await orch.handle({
-            aiSessionKey,
-            mcpCacheKey,
-            message: message.trim(),
-            socket: socket || nullSocket,
-            username,
-            beingId,
-            beingOut: resolvedBeingOut,
-            signal: abort.signal,
-            sessionId,
-            rootId,
-            rootSummonId: chat?._id || null,
-            ibpAddress: eagerIbpAddress,
-            sourceType: sourceType || `${zone}-chat`,
-            onToolResults,
-            onToolCalled,
-            onThinking,
-            ...orchestrateFlags,
-          });
-        } else {
-          // No orchestrator: single-mode fallback (home, land currently)
-          const defaultMode = `${zone}:default`;
-          const currentMode = getCurrentMode(aiSessionKey);
-          if (currentMode !== defaultMode) {
-            try {
-              await switchMode(aiSessionKey, defaultMode, {
-                username, beingId, currentNodeId: getCurrentNodeId(beingId),
-              });
-            } catch (err) {
-              log.warn("Orchestration", `Mode switch to ${defaultMode} failed: ${err.message}`);
-            }
-          }
-          result = await processMessage(aiSessionKey, message, {
-            username,
-            beingId,
-            rootId,
-            currentNodeId: getCurrentNodeId(beingId),
-            summonId: chat?._id || null,
-            rootSummonId: chat?._id || null,
-            sessionId: sessionId || null,
-            // mcpCacheKey is the IBP Address when the zone resolves
-            // to a specific addressee (tree → Ruler, land → land-manager),
-            // otherwise the legacy aiSessionKey transport fallback (home
-            // zone or a tree without a promoted Ruler). Same cache entry
-            // an IBP SUMMON to the same being would use.
-            mcpCacheKey,
-            signal: abort.signal,
-            llmPriority,
-            onToolResults,
-            onToolCalled,
-            onThinking,
-          });
-        }
-      } catch (err) {
-        executionError = err;
-      }
-    });
-  } catch (err) {
-    executionError = executionError || err;
-  }
-
-  clearTimeout(timer);
-
-  // ── Timeout takes precedence ──────────────────────────────────────────
-  if (timedOut) {
-    // Close under the same key we connected with — IBP Address when
-    // the zone resolved an addressee, aiSessionKey fallback otherwise.
-    closeMCPClient(mcpCacheKey);
-    if (chat) {
-      finalizeSummon({
-        summonId: chat._id,
-        content: "Error: Request timed out",
-        stopped: false,
-      }).catch(() => {});
-    }
-    // Reset in-memory session so the next message starts clean. Tree
-    // state persists; only the LLM conversation history gets wiped.
-    resetVisitorSession(aiSessionKey, "timeout");
-    cleanup();
-    throw new ProtocolError(500, ERR.TIMEOUT, "Request timed out");
-  }
-
-  // ── Execution error from inside the enqueue body ──────────────────────
-  if (executionError) {
-    if (chat) {
-      const stopped = abort.signal.aborted;
-      finalizeSummon({
-        summonId: chat._id,
-        content: stopped ? null : `Error: ${executionError.message}`,
-        stopped,
-      }).catch(() => {});
-    }
-    // Reset session state on any execution error (aborted or otherwise).
-    // Tree state survives; conversation history does not.
-    resetVisitorSession(aiSessionKey, abort.signal.aborted ? "aborted" : "error");
-    cleanup();
-    throw executionError;
-  }
-
-  // ── Normalize result shape ────────────────────────────────────────────
-  const stopped = abort.signal.aborted;
-  let answer = null;
-  let success = true;
-  let stepSummaries = [];
-  let lastTargetPath = null;
-  let targetNodeId = null;
-  let lastTargetNodeId = null;
-  let modeKey = null;
-  let reason = null;
-
-  if (result) {
-    answer = stopped ? null : (result.answer ?? result.content ?? null);
-    success = result.success !== false;
-    stepSummaries = result.stepSummaries || [];
-    lastTargetPath = result.lastTargetPath || null;
-    targetNodeId = result.targetNodeId || null;
-    lastTargetNodeId = result.lastTargetNodeId || null;
-    modeKey = result.modeKey || (result._internal && result._internal.modeKey) || null;
-    reason = result.reason || null;
-  }
-
-  // ── beforeResponse hook (skip for place mode) ─────────────────────────
-  if (answer && !stopped && !orchestrateFlags.skipRespond) {
-    try {
-      const hookData = {
-        content: answer,
-        beingId,
-        rootId,
-        mode: modeKey || `${zone}:default`,
-      };
-      await hooks.run("beforeResponse", hookData);
-      answer = hookData.content;
-    } catch {}
-  }
-
-  // ── Finalize Chat ─────────────────────────────────────────────────────
-  if (chat) {
-    try {
-      const summary = orchestrateFlags.skipRespond
-        ? (stepSummaries.length ? `Placed: ${stepSummaries.length} step(s)` : null)
-        : (answer || reason || null);
-      finalizeSummon({
-        summonId: chat._id,
-        content: stopped ? null : summary,
-        stopped,
-        modeKey: modeKey || (zone === "tree" ? "tree:orchestrator" : `${zone}:default`),
-      }).catch((err) => log.error("Orchestration", `Chat finalize failed: ${err.message}`));
-    } catch {}
-  }
-
-  // If the request was aborted mid-flight (CLI disconnect, explicit
-  // signal), wipe the in-memory session so the next message starts
-  // clean. Tree state survives; only conversation history is cleared.
-  if (stopped) {
-    resetVisitorSession(aiSessionKey, "aborted");
-  }
-
-  cleanup();
-
-  return {
-    answer,
-    success,
-    stepSummaries,
-    lastTargetPath,
-    targetNodeId,
-    lastTargetNodeId,
-    modeKey,
-    reason,
-    summonId: chat?._id || null,
-    aiSessionKey,
-    sessionId,
-    stopped,
-  };
-}
 
 // runPipeline moved to seed/orchestrators/pipeline.js

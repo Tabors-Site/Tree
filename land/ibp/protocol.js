@@ -1,43 +1,78 @@
-// IBP (Inter-Being Protocol): WebSocket op registration.
+// IBP (Inter-Being Protocol): WebSocket dispatch.
 //
-// IBP exposes four ops on the Socket.IO instance:
+// Per [[project_ibp_wire_shape]] + [[project_protocol_transport_separation]],
+// the canonical wire shape is ONE event carrying a unified envelope:
 //
-//   ibp:see     observe an address (one-shot or live)
-//   ibp:do      mutate the world at an address
-//   ibp:summon  deliver a message to a being's inbox and wake them
-//   ibp:be      manage be-er identity
+//   socket.emit("ibp", { id, verb, address, payload, identity? }, ackCallback)
 //
-// See portal/docs/protocol.md for the conceptual model and
-// portal/docs/server-protocol.md for wire-level rules.
+// `verb`     one of "see", "do", "summon", "be"
+// `address`  the canonical position / stance / land string
+// `payload`  operation-specific data (action+args for DO, op+credentials
+//            for BE, message+threading for SUMMON, options for SEE)
 //
-// Envelope address field is named per verb:
-//   ibp:see     { id, position OR stance, identity?, live? }
-//   ibp:do      { id, position OR stance, action, payload, identity }
-//   ibp:summon  { id, stance, message, identity }
-//   ibp:be      { id, operation, land, payload?, identity? }
+// The synchronous response is delivered via the socket.io ack callback.
+// Async out-of-band updates (SUMMON replies, live SEE patches) arrive
+// via the `ibp:update` event keyed by correlation id.
 //
-// All four IBP verbs are wired: SEE, DO, SUMMON, BE.
+// The same dispatcher serves WebSocket and HTTP transports — see
+// dispatchIbp() in this file; the HTTP adapter (../routes/api/ibp.js)
+// wraps it for express req/res.
 
 import log from "../seed/log.js";
 import { handleSee } from "./verbs/see.js";
 import { handleDo } from "./verbs/do.js";
 import { handleSummon } from "./verbs/summon.js";
 import { handleBe } from "./verbs/be.js";
+import { parseUnifiedEnvelope, ackError } from "./envelope.js";
+import { PORTAL_ERR, isPortalError } from "./errors.js";
+
+const VERB_HANDLERS = {
+  see:    handleSee,
+  do:     handleDo,
+  summon: handleSummon,
+  be:     handleBe,
+};
+
+/**
+ * Core IBP dispatcher. Used by every transport (WS + HTTP + CLI).
+ *
+ * Validates the envelope, looks up the verb handler, and runs it. The
+ * handler receives the parsed envelope and the optional `socket`
+ * (present for WS; the HTTP adapter constructs a minimal socket-shaped
+ * carrier with `beingId` + `username` from the JWT).
+ *
+ * The ack callback is the transport's response sink: socket.io ack for
+ * WS, an HTTP-response-translating function for HTTP. Either way the
+ * handler calls it with the same `{ id, status, data | error }` shape.
+ */
+export async function dispatchIbp(socket, msg, ack) {
+  const id = msg?.id || null;
+  let env;
+  try {
+    env = parseUnifiedEnvelope(msg);
+  } catch (err) {
+    if (isPortalError(err)) {
+      return ackError(ack, id, err.code, err.message, err.detail);
+    }
+    log.error("IBP", `envelope parse failed: ${err.message}`);
+    return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
+  }
+
+  const handler = VERB_HANDLERS[env.verb];
+  return handler(socket, env, ack);
+}
 
 function registerSocketHandlers(socket) {
-  socket.on("ibp:see",    (msg, ack) => handleSee(socket, msg, ack));
-  socket.on("ibp:do",     (msg, ack) => handleDo(socket, msg, ack));
-  socket.on("ibp:summon", (msg, ack) => handleSummon(socket, msg, ack));
-  socket.on("ibp:be",     (msg, ack) => handleBe(socket, msg, ack));
+  socket.on("ibp", (msg, ack) => dispatchIbp(socket, msg, ack));
 }
 
 /**
- * Hook portal handlers onto every new socket connection.
+ * Hook the IBP handler onto every new socket connection.
  * Called by initIBPWS in index.js.
  */
 export function attachPortalHandlers(io) {
   io.on("connection", (socket) => {
     registerSocketHandlers(socket);
   });
-  log.info("IBP", "IBP attached (ibp:see, ibp:do, ibp:summon, ibp:be wired)");
+  log.info("IBP", "IBP attached (unified `ibp` event)");
 }

@@ -42,7 +42,7 @@ import { appendToInbox } from "../../../ibp/inbox.js";
 import { wake, attachHandoff } from "../../../ibp/scheduler.js";
 import { aggregate } from "../../../ibp/replyAggregator.js";
 import { getLandDomain } from "../../../ibp/address.js";
-import { emitReplyToAsker, resolveBeingInOut, readMetaPath } from "./_shared.js";
+import { emitReplyToAsker, readMetaPath } from "./_shared.js";
 import { renderExecutionStack } from "../state/executionStack.js";
 
 // ────────────────────────────────────────────────────────────────
@@ -321,11 +321,9 @@ export const foremanRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  // LLM behavior contract (mirrored to mode registry via registerRole)
-  modeKey: "tree:governing-foreman",
+  // LLM behavior contract — role.name ("foreman") is the identity.
   emoji: "🔧",
   label: "Foreman",
-  bigMode: "tree",
   maxMessagesBeforeLoop: 6,
   preserveContextOnLoop: true,
   // 2-3 calls so foreman-read-branch-detail can run before the
@@ -383,7 +381,7 @@ export const foremanRole = Object.freeze({
     const executionNodeId = ctx.nodeId || ctx.resolved?.nodeId;
     if (!executionNodeId) {
       log.warn("Foreman", "summon without nodeId; returning empty");
-      return { content: "Internal error: no execution node.", intent: "chat" };
+      return { content: "Internal error: no execution node." };
     }
 
     // Route by content shape. Dispatch requests carry a structured
@@ -411,23 +409,13 @@ async function runJudgment(message, ctx, executionNodeId) {
     `🔧 judgment summons at ${String(executionNodeId).slice(0, 8)} ` +
     `(from=${message.from || "?"}, correlation=${message.correlation?.slice(0, 8) || "?"})`);
 
-  const { beingIn, beingOut, username } = resolveBeingInOut(ctx);
-  const messageBody = typeof message.content === "string"
-    ? message.content
-    : JSON.stringify(message.content);
-
   let result;
   try {
     result = await runChat({
-      beingId: beingIn,
-      beingIn,
-      beingOut,
-      username,
-      message: messageBody,
-      role:    foremanRole,
-      rootId:  ctx.resolved?.rootId || null,
-      nodeId:  executionNodeId,
-      signal:  ctx.signal,
+      being:    ctx.toBeing,
+      envelope: message,
+      role:     foremanRole,
+      signal:   ctx.signal,
     });
   } catch (err) {
     if (ctx.signal?.aborted) {
@@ -442,7 +430,7 @@ async function runJudgment(message, ctx, executionNodeId) {
       originalMessage: message,
       exitText:        `Foreman error: ${err.message}`,
     });
-    return { content: `Foreman error: ${err.message}`, intent: "chat" };
+    return { content: `Foreman error: ${err.message}` };
   }
 
   const exitText = result?.answer || "(judgment recorded)";
@@ -484,14 +472,14 @@ async function runDispatch(message, ctx, executionNodeId) {
     log.warn("Foreman",
       `dispatch: execution node ${String(executionNodeId).slice(0, 8)} ` +
       `has no scopeRulerId; cannot resolve plan`);
-    return { content: "dispatch failed: no ruler scope", intent: "chat" };
+    return { content: "dispatch failed: no ruler scope" };
   }
 
   // ── Read the active plan emission from substrate.
   const govExt = await loadGoverningExports();
   if (!govExt?.readActivePlanEmission) {
     log.warn("Foreman", "dispatch: governing.readActivePlanEmission unavailable");
-    return { content: "dispatch failed: governing helpers missing", intent: "chat" };
+    return { content: "dispatch failed: governing helpers missing" };
   }
   const planEmission = await govExt.readActivePlanEmission(rulerNodeId);
   if (!planEmission?.steps?.length) {
@@ -501,7 +489,7 @@ async function runDispatch(message, ctx, executionNodeId) {
       ok: false,
       reason: "no plan emission",
     });
-    return { content: "no plan emission to dispatch", intent: "chat" };
+    return { content: "no plan emission to dispatch" };
   }
 
   // Hydrate stepIndex onto each step (1-based) — matches legacy.

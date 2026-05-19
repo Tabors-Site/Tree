@@ -40,9 +40,8 @@
 //     beings: { ruler, planner, contractor, foreman } // beingIds
 //   }
 
-import Node  from "../../../seed/models/node.js";
-import Being from "../../../seed/models/being.js";
-import log   from "../../../seed/log.js";
+import Node from "../../../seed/models/node.js";
+import log  from "../../../seed/log.js";
 
 export const NS = "governing";
 
@@ -57,11 +56,31 @@ export const PROMOTED_FROM = {
 };
 
 /**
- * Promote a node to Ruler. Idempotent. Returns the governing metadata
- * record after the write (or the existing one if already promoted).
+ * Promote a node to Ruler AND spawn the inner-being family at the same
+ * node parented to the Ruler being. Idempotent: a second call on an
+ * already-promoted node returns the existing record without re-spawning.
+ *
+ * Returns the governing metadata record after the write (including the
+ * beings map with the four governing beingIds).
+ *
+ * Requires `core` with the verb surface available . the helpers chain
+ * through `core.do` for all writes.
+ *
+ * Ruler parent resolution (preferred order):
+ *   1. explicit `parentBeingId` arg — sub-Ruler dispatch threads the
+ *      parent Ruler's beingId here so the sub-Ruler is its child.
+ *   2. `identity.beingId` — when called through core.do, this is the
+ *      requesting being; the Ruler becomes its child. Matches "if I
+ *      promote a node, the Ruler is my child."
+ *   3. `delegateToHigherBeing.beingId` — root Ruler fallback to the
+ *      tree's rootOwner (the human who spawned the tree).
+ *
+ * Null parent is reserved for the very root being of the land only;
+ * Rulers should always have a parent in the resolved chain.
  */
-export async function promoteToRuler({ nodeId, reason, promotedFrom, core }) {
+export async function promoteToRuler({ nodeId, reason, promotedFrom, parentBeingId = null, identity = null, core }) {
   if (!nodeId) return null;
+  if (!core?.do) throw new Error("promoteToRuler requires `core` (verb surface)");
   if (!Object.values(PROMOTED_FROM).includes(promotedFrom)) {
     promotedFrom = PROMOTED_FROM.ROOT;
   }
@@ -78,104 +97,116 @@ export async function promoteToRuler({ nodeId, reason, promotedFrom, core }) {
     return existing;
   }
 
+  const acceptedAt = new Date().toISOString();
   const data = {
     role: "ruler",
-    acceptedAt: new Date().toISOString(),
+    acceptedAt,
     reason: typeof reason === "string" ? reason.slice(0, 200) : null,
     promotedFrom,
   };
 
   // Delegate-to-higher-being. Only root Rulers carry this — sub-Rulers
-  // inherit their higher being through `lineage.parentRulerId`. For
-  // root, governing records the tree's `rootOwner` (the human being who
-  // spawned the tree). Field is optional, switchable, clearable. See
-  // memory `delegate-to-higher-being` for the architectural framing.
+  // inherit their higher being through their parentBeingId / the
+  // parent Ruler. For root, governing records the tree's `rootOwner`
+  // (the human being who spawned the tree).
   if (!node.parent && node.rootOwner) {
     data.delegateToHigherBeing = { beingId: String(node.rootOwner) };
   }
 
-  // Phase 3 migration ([[project_seed_four_verbs_only]]): write through
-  // the verb surface so this lands in the audit trail (Did) and flows
-  // through one dispatcher path. Replaces the prior core.metadata
-  // wrapper / dynamic-import fallback fork.
+  // 1. Stamp governing role on the node.
   await core.do(node, "set-meta", {
     namespace: NS,
     data,
-    merge: false, // role.js writes the full namespace shape; no merge needed
+    merge: false,
   });
 
-  // Declare the Ruler's home at this position. The Ruler's home IS
-  // the existing scope node (we don't create a new child) — so
-  // createBeingWithHome is called with homeNodeId pointing at it.
-  // The primitive handles being creation, password generation,
-  // metadata.beings.ruler registration with beingId, and rollback
-  // on failure. Idempotent: skipped if a Ruler is already at home here.
-  try {
-    const existingEmb = node.metadata instanceof Map
-      ? node.metadata.get("beings")
-      : node.metadata?.embodiments;
-    if (!existingEmb?.ruler?.beingId) {
-      const { createBeingWithHome } = await import("../../../seed/auth.js");
-      await createBeingWithHome({
-        operatingMode: "ai",
-        role:          "ruler",
-        homeNodeId:    String(nodeId),
-      });
-    }
-    // Augment the beings.ruler entry with governing's lineage info
-    // (when/why/how the promotion happened). The createBeingWithHome
-    // call above wrote the canonical { beingId, installedAt, installedBy }
-    // fields; this merge layers governing's own bookkeeping alongside.
-    const home = {
-      installedAt: data.acceptedAt,
-      installedBy: "governing",
-      from:        data.promotedFrom,
-    };
-    // Phase 3 migration: verb-surface merge of governing's lineage info
-    // into the existing metadata.beings.ruler entry written by
-    // createBeingWithHome.
-    await core.do(node, "set-meta", {
-      namespace: "beings",
-      data: { ruler: home },
-      merge: true,
-    });
+  // 2. Spawn the Ruler being at this node. Parent chain prefers explicit
+  //    parentBeingId (sub-Ruler dispatch), then the requesting being
+  //    (identity.beingId from the verb surface), then the tree's
+  //    delegate higher being (rootOwner for root rulerships).
+  const effectiveParentBeingId =
+    parentBeingId ||
+    identity?.beingId ||
+    data.delegateToHigherBeing?.beingId ||
+    null;
 
-    // Stamp the Ruler's open SUMMON policy: anyone — humans, citizens,
-    // federated visitors — can address the Ruler at this scope. The
-    // Ruler is the entry point for governance interactions; inner
-    // beings (Planner, Contractor, Foreman) inside the rulership get
-    // their own restrictive rules at their trio nodes.
-    // Phase 3 migration: verb-surface merge into the permissions
-    // namespace. The summon rule lets anyone address @ruler at this
-    // scope; inner beings (Planner/Contractor/Foreman) get tighter
-    // rules at their trio nodes.
-    await core.do(node, "set-meta", {
-      namespace: "permissions",
-      data: { summon: { "@ruler*": { requires: {} } } },
-      merge: true,
+  // createBeingWithHome handles both the parentBeingId stamp on the
+  // new being AND the $addToSet into the parent's children list, so
+  // no separate link write is needed here.
+  const { createBeingWithHome } = await import("../../../seed/auth.js");
+  const rulerCreated = await createBeingWithHome({
+    operatingMode: "ai",
+    role:          "ruler",
+    homeNodeId:    String(nodeId),
+    parentBeingId: effectiveParentBeingId,
+  });
+  const rulerBeingId = String(rulerCreated.being._id);
+
+  // 3. Spawn each inner being (Planner, Contractor, Foreman) as a
+  //    being-tree child of the Ruler. All live at the SAME node . no
+  //    more trio child nodes. The being tree carries the cognitive
+  //    hierarchy; the node tree stays clean.
+  const innerBeings = {};
+  for (const role of INNER_ROLES) {
+    const innerCreated = await createBeingWithHome({
+      operatingMode: "ai",
+      role,
+      homeNodeId:    String(nodeId),
+      parentBeingId: rulerBeingId,
     });
-  } catch (err) {
-    log.warn("Governing", `embodiments.ruler home/permissions write failed for ${String(nodeId).slice(0, 8)}: ${err.message}`);
+    innerBeings[role] = String(innerCreated.being._id);
   }
 
-  // Promotion is a load-bearing lifecycle event — surface it in logs
-  // so operators can see the moment a scope took authority for its
-  // domain. Fires only on actual transition; the idempotent re-call
-  // path above (already-ruler) returns early without logging.
+  // 4. Record the spawned beings on the node's governing namespace so
+  //    descriptor lookups / queries can find them by role without
+  //    walking the being tree every time.
+  const beingsRegistry = {
+    ruler:      { beingId: rulerBeingId,            installedAt: acceptedAt, installedBy: "governing", from: promotedFrom },
+    planner:    { beingId: innerBeings.planner,     installedAt: acceptedAt, installedBy: "governing" },
+    contractor: { beingId: innerBeings.contractor,  installedAt: acceptedAt, installedBy: "governing" },
+    foreman:    { beingId: innerBeings.foreman,     installedAt: acceptedAt, installedBy: "governing" },
+  };
+  await core.do(node, "set-meta", {
+    namespace: "beings",
+    data: beingsRegistry,
+    merge: true,
+  });
+
+  // 5. Stance permissions at the rulership node.
+  //
+  //    @ruler is the open entry point — humans, citizens, federated
+  //    visitors can all summon. Inner beings (planner / contractor /
+  //    foreman) are protected: only beings of governing roles whose
+  //    home is within this rulership's subtree can summon them.
+  await core.do(node, "set-meta", {
+    namespace: "permissions",
+    data: {
+      summon: {
+        "@ruler*":      { requires: {} },
+        "@planner*":    { requires: { role: ["ruler", "planner", "contractor", "foreman"], homeInDomain: String(nodeId) } },
+        "@contractor*": { requires: { role: ["ruler", "planner", "contractor", "foreman"], homeInDomain: String(nodeId) } },
+        "@foreman*":    { requires: { role: ["ruler", "planner", "contractor", "foreman"], homeInDomain: String(nodeId) } },
+      },
+    },
+    merge: true,
+  });
+
   log.info("Governing",
     `🤴 Node ${String(nodeId).slice(0, 8)} ("${node.name || "?"}") promoted to Ruler ` +
-    `(from=${promotedFrom}, reason="${(data.reason || "").slice(0, 80)}")`);
+    `(from=${promotedFrom}, parent=${effectiveParentBeingId ? String(effectiveParentBeingId).slice(0, 8) : "none"}) ` +
+    `+ spawned ${INNER_ROLES.length} inner beings`);
 
-  // Fire the lifecycle event. Subscribers (including future Pass 2
-  // courts) react here.
   try {
     const { hooks } = await import("../../../seed/hooks.js");
-    hooks.run("governing:rulerPromoted", { nodeId: String(nodeId), data }).catch(() => {});
+    hooks.run("governing:rulerPromoted", {
+      nodeId: String(nodeId),
+      data: { ...data, beings: { ruler: rulerBeingId, ...innerBeings } },
+    }).catch(() => {});
   } catch (err) {
     log.debug("Governing", `governing:rulerPromoted hook fire failed: ${err.message}`);
   }
 
-  return data;
+  return { ...data, beings: { ruler: rulerBeingId, ...innerBeings } };
 }
 
 /**

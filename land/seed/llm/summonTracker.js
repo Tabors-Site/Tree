@@ -111,15 +111,13 @@ function capContent(s) {
 /**
  * Phase 1: create the Summon record when a wake fires.
  *
- * Accepts legacy keyword names (sessionId, modeKey, parentSummonId,
- * treeContext, systemPrompt, enrichedContext, dispatchOrigin, source) for
- * backward compatibility with current callers, but only the slim shape is
- * persisted. Legacy fields are silently ignored; caller migration to the
- * new names is a follow-up phase.
+ * Persists the slim Summon shape (beingIn/beingOut, ibpAddress, activeRole,
+ * inReplyTo/rootCorrelation, start/end messages, llmProvider).
+ * Legacy field names (beingId, parentSummonId, rootSummonId, role) are
+ * accepted and mapped to the canonical names.
  */
 export async function startSummon(opts = {}) {
   const {
-    // New names (preferred)
     beingIn, beingOut = null,
     askerPosition = null, addresseePosition = null,
     message, source = "user",
@@ -130,11 +128,14 @@ export async function startSummon(opts = {}) {
     rootCorrelation = null,
     receivedAt = null,
 
-    // Legacy aliases — accepted, mapped, then dropped
+    // Aliases — accepted, mapped, then dropped
     beingId,                    // alias for beingIn
+    role = null,                // alias for activeRole (role.name)
     parentSummonId = null,      // alias for inReplyTo
     rootSummonId = null,        // alias for rootCorrelation
   } = opts;
+
+  const resolvedActiveRole = activeRole || role || null;
 
   const askerBeingId = beingIn || beingId;
   if (!askerBeingId) {
@@ -179,7 +180,7 @@ export async function startSummon(opts = {}) {
       beingIn: askerBeingId,
       beingOut: beingOut || null,
       ibpAddress,
-      activeRole: activeRole || null,
+      activeRole: resolvedActiveRole,
       inboxMessageId,
       inReplyTo: resolvedInReplyTo,
       rootCorrelation: resolvedRoot,

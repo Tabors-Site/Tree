@@ -6,8 +6,10 @@
 
 import log from "./log.js";
 import { hooks as hooksModule } from "./hooks.js";
-import { registerMode, setDefaultMode, setNodeMode } from "./modes/registry.js";
-import { registerOrchestrator, getOrchestrator } from "./orchestrators/registry.js";
+// Mode registry retired 2026-05-18. Roles are the unit of behavior; the
+// mode/role split was implementation drift. See [[project_role_subsumes_mode]]
+// and [[project_ibp_universal_grammar]].
+import { registerSeed, unregisterSeed, getSeed, listSeeds, plantSeed, unplantSeed, listPlantedAt } from "./seeds.js";
 import Being from "./models/being.js";
 import Node from "./models/node.js";
 import Did from "./models/did.js";
@@ -21,7 +23,7 @@ import {
   createSession, endSession, registerSession,
   touchSession, updateSessionMeta,
   getActiveNavigator, setActiveNavigator, clearActiveNavigator,
-  getSession, getSessionsForUser,
+  getSession, getSessionsForBeing,
   setSessionAbort, abortSession, clearSessionAbort,
   SESSION_TYPES, registerSessionType,
 } from "./ws/sessionRegistry.js";
@@ -32,29 +34,25 @@ import {
 } from "./llm/summonTracker.js";
 
 import {
-  getClientForUser, resolveRootLlmForMode, userHasLlm,
-  processMessage, switchMode, setRootId, getRootId, runChat,
-  setCurrentNodeId, getCurrentNodeId, getCurrentMode,
+  getClientForBeing, resolveRootLlmForRole, beingHasLlm,
+  processMessage, switchRole, setRootId, getRootId, runChat,
+  setCurrentNodeId, getCurrentNodeId, getCurrentRole,
   clearSession as clearConversationSession,
-  resetConversation, injectContext, registerModeAssignment, registerModeTimeout, registerModeRetries,
+  resetConversation, injectContext,
   registerFailoverResolver, LLM_PRIORITY,
 } from "./llm/conversation.js";
-import { runPipeline } from "./orchestrators/pipeline.js";
-
 import { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL } from "./ws/mcp.js";
-import { registerRootLlmSlot, registerUserLlmSlot } from "./llm/connections.js";
-import { emitNavigate, emitToUser, registerSocketHandler, unregisterSocketHandler, getIO, getHttpServer } from "./ws/websocket.js";
-import { OrchestratorRuntime } from "./orchestrators/runtime.js";
-import { acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks } from "./orchestrators/locks.js";
+import { registerRootLlmSlot, registerBeingLlmSlot } from "./llm/connections.js";
+import { emitNavigate, emitToBeing, registerSocketHandler, unregisterSocketHandler, getIO, getHttpServer } from "./ws/websocket.js";
 import { ok, error, sendOk, sendError, ERR, WS, CASCADE } from "./protocol.js";
 import { getExtMeta, readNs, setExtMeta, mergeExtMeta, incExtMeta, pushExtMeta, addToExtMetaSet, batchSetExtMeta, unsetExtMeta } from "./tree/extensionMetadata.js";
 import { getBeingMeta, readBeingNs, setBeingMeta, mergeBeingMeta, incBeingMeta, pushBeingMeta, addToBeingMetaSet, batchSetBeingMeta, unsetBeingMeta } from "./tree/beingMetadata.js";
 import { getArtifactMeta, readArtifactNs, setArtifactMeta, mergeArtifactMeta, incArtifactMeta, pushArtifactMeta, addToArtifactMetaSet, batchSetArtifactMeta, unsetArtifactMeta } from "./tree/artifactMetadata.js";
 import { deliverCascade } from "./tree/cascade.js";
-import { isUserRoot, getLandRootId } from "./landRoot.js";
+import { isBeingRoot, getLandRootId } from "./landRoot.js";
 import { createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType } from "./tree/treeManagement.js";
 import { createArtifact, editArtifact, deleteArtifactAndFile, transferArtifact, getArtifacts } from "./tree/artifacts.js";
-import { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, getExtensionAtScope, isToolReadOnly, getToolOwner, getModeOwner, getModesOwnedBy } from "./tree/extensionScope.js";
+import { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, getExtensionAtScope, isToolReadOnly, getToolOwner } from "./tree/extensionScope.js";
 import {
   addContributor, removeContributor,
   setOwner, removeOwner, transferOwnership,
@@ -92,7 +90,10 @@ import {
   registerRole as ibpRegisterRole,
   unregisterRole as ibpUnregisterRole,
 } from "../ibp/roles/registry.js";
-import { makeBridgeEmbodiment as ibpMakeBridgeRole } from "../ibp/roles/bridge.js";
+// Bridge-being factory retired 2026-05-18. Bridge beings were the
+// stopgap that routed SUMMONs to old mode keys. With roles as the unit
+// of behavior, every summonable being declares its own role spec via
+// registerRole. See [[project_role_subsumes_mode]].
 
 // The four-verb dispatcher (Phase 1: only `do` is registry-backed; the
 // other three throw with a "not yet implemented" message until later
@@ -119,7 +120,7 @@ const _allowedStrategyExtensions = new Set();
 
 const NOOP_WEBSOCKET = {
   emitNavigate: () => {},
-  emitToUser: () => {},
+  emitToBeing: () => {},
   registerSocketHandler: () => {},
   unregisterSocketHandler: () => {},
   getIO: () => null,
@@ -138,6 +139,16 @@ const NOOP_WEBSOCKET = {
  * @param {object} opts.overrides         - replace any service with a custom implementation
  * @returns {object} the core services bundle
  */
+// Last-built bundle, stashed so kernel-internal callers (e.g. the
+// plant-seed DO operation) can pass `core` to a seed's scaffold without
+// the caller having to thread the bundle through the dispatcher
+// signature. The loader runs buildCoreServices once and the bundle
+// stays stable for the process lifetime.
+let _lastBuiltCore = null;
+export function getCoreServices() {
+  return _lastBuiltCore;
+}
+
 export function buildCoreServices({ loadedExtensions = new Map(), overrides = {} } = {}) {
   const hasWebsocket = typeof emitNavigate === "function";
 
@@ -182,7 +193,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       createSession, endSession, registerSession,
       touchSession, updateSessionMeta,
       getActiveNavigator, setActiveNavigator, clearActiveNavigator,
-      getSession, getSessionsForUser,
+      getSession, getSessionsForBeing,
       setSessionAbort, abortSession, clearSessionAbort,
       SESSION_TYPES, registerSessionType,
     },
@@ -193,30 +204,48 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     },
 
     llm: {
-      getClientForUser, resolveRootLlmForMode, userHasLlm,
-      processMessage, switchMode, setRootId, getRootId, runChat, runPipeline,
-      setCurrentNodeId, getCurrentNodeId, getCurrentMode,
+      getClientForBeing, resolveRootLlmForRole, beingHasLlm,
+      processMessage, switchRole, setRootId, getRootId, runChat,
+      setCurrentNodeId, getCurrentNodeId, getCurrentRole,
       clearSession: clearConversationSession,
-      resetConversation, injectContext, registerModeAssignment, registerModeTimeout, registerModeRetries,
-      registerRootLlmSlot, registerUserLlmSlot, registerFailoverResolver,
+      resetConversation, injectContext,
+      registerRootLlmSlot, registerBeingLlmSlot, registerFailoverResolver,
       LLM_PRIORITY,
     },
 
     mcp: { connectToMCP, closeMCPClient, getMCPClient, MCP_SERVER_URL },
 
     websocket: hasWebsocket
-      ? { emitNavigate, emitToUser, registerSocketHandler, unregisterSocketHandler, getIO, getHttpServer }
+      ? { emitNavigate, emitToBeing, registerSocketHandler, unregisterSocketHandler, getIO, getHttpServer }
       : NOOP_WEBSOCKET,
 
-    orchestrator: { OrchestratorRuntime, acquireLock, releaseLock, forceReleaseLock, renewLock, isLocked, getLockInfo, listLocks },
+    // The `orchestrator` and `orchestrators` service surfaces retired
+    // 2026-05-18 with the substrate-driven SUMMON model. Pipelines and
+    // multi-step coordination emerge from beings reacting through
+    // inboxes, not from a kernel-level pipeline runtime. See
+    // [[project_tree_orchestrator_deleted]].
 
     // --- Shared models (core protocol, always available) ---
     models: { Being, Node, Did, Artifact },
 
     // --- Hook system ---
     hooks: hooksModule,
-    modes: { registerMode, setDefaultMode, setNodeMode },
-    orchestrators: { register: registerOrchestrator, get: getOrchestrator },
+
+    // --- Extension seeds (scaffolded shapes a land can plant) ---
+    // Extensions declare seeds via init() return { seeds: [...] } or
+    // manifest.provides.seeds; the loader registers them. Operators plant
+    // a seed at a node to bootstrap the extension's structure (Ruler,
+    // beings, sub-domain nodes, starter artifacts). See memory
+    // `extension-seeds`.
+    seeds: {
+      register: registerSeed,
+      unregister: unregisterSeed,
+      get: getSeed,
+      list: listSeeds,
+      plant: plantSeed,
+      unplant: unplantSeed,
+      listPlantedAt,
+    },
 
     // --- Ownership (contributor and rootOwner mutations, chain-validated) ---
     ownership: { addContributor, removeContributor, setOwner, removeOwner, transferOwnership },
@@ -227,7 +256,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       checkIntegrity,
       checkTreeHealth, tripTree, reviveTree, isTreeAlive,
       createNode, createNodeBranch, deleteNodeBranch, updateParentRelationship, editNodeName, editNodeType,
-      isUserRoot, getLandRootId,
+      isBeingRoot, getLandRootId,
     },
 
     // --- Artifacts (programmatic artifact CRUD) ---
@@ -253,7 +282,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     // even when X is blocked" hole. Prefer this over the legacy
     // getExtension(name) from the loader when you're already operating
     // at a known tree position.
-    scope: { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, getExtensionAtScope, isToolReadOnly, getToolOwner, getModeOwner, getModesOwnedBy },
+    scope: { isExtensionBlockedAtNode, getBlockedExtensionsAtNode, getExtensionAtScope, isToolReadOnly, getToolOwner },
 
     // --- Cascade (extensions call deliverCascade to propagate signals) ---
     cascade: { deliverCascade },
@@ -285,17 +314,12 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
       unscheduleAllForBeing:  ibpUnscheduleAllForBeing,
       setScheduleEmitter:     ibpSetScheduleEmitter,
       resetScheduleEmitter:   ibpResetScheduleEmitter,
-      // Being registry. Extensions register custom beings
-      // (code-cognition beings, custom LLM flows) without IBP needing
-      // to import from extensions/. Auth-being is the precedent; the
-      // intent extension is the first Slice 6c conversion using this.
+      // Role registry. Extensions register role specs (buildSystemPrompt,
+      // toolNames, permissions, summon) directly. The being acting in
+      // a role uses that spec to drive its LLM call or code cognition.
+      // See [[project_ibp_universal_grammar]].
       registerRole:     ibpRegisterRole,
       unregisterRole:   ibpUnregisterRole,
-      // Factory for the bridge role pattern — given a modeKey + zone,
-      // builds a role definition whose summon routes through `runChat`
-      // with that mode at the resolved nodeId. Extensions use this for
-      // LLM-cognition beings that already have a registered mode.
-      makeBridgeRole:   ibpMakeBridgeRole,
     },
 
     // --- Response protocol (shapes, error codes, event types) ---
@@ -311,6 +335,7 @@ export function buildCoreServices({ loadedExtensions = new Map(), overrides = {}
     }
   }
 
+  _lastBuiltCore = core;
   return core;
 }
 

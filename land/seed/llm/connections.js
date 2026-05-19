@@ -218,23 +218,23 @@ function validateConnectionId(connectionId) {
 // SLOT REGISTRATION
 // ─────────────────────────────────────────────────────────────────────────
 
-// Core user slots. Extensions register additional via registerUserLlmSlot().
-const CORE_USER_SLOTS = new Set(["main"]);
-const _extUserSlots = new Set();
+// Core user slots. Extensions register additional via registerBeingLlmSlot().
+const CORE_BEING_SLOTS = new Set(["main"]);
+const _extBeingSlots = new Set();
 
-export function registerUserLlmSlot(slot) {
+export function registerBeingLlmSlot(slot) {
   if (typeof slot !== "string" || !SLOT_NAME_PATTERN.test(slot) || slot.length > MAX_SLOT_NAME_LENGTH) {
     log.warn("LLM", `Invalid user LLM slot name rejected: ${String(slot).slice(0, 50)}`);
     return;
   }
-  _extUserSlots.add(slot);
+  _extBeingSlots.add(slot);
 }
 
 function isValidUserSlot(slot) {
-  return typeof slot === "string" && (CORE_USER_SLOTS.has(slot) || _extUserSlots.has(slot));
+  return typeof slot === "string" && (CORE_BEING_SLOTS.has(slot) || _extBeingSlots.has(slot));
 }
 
-export function getAllUserLlmSlots() { return [...CORE_USER_SLOTS, ..._extUserSlots]; }
+export function getAllBeingLlmSlots() { return [...CORE_BEING_SLOTS, ..._extBeingSlots]; }
 
 // Core tree slots. Extensions register additional via registerRootLlmSlot().
 // Only "default" is kernel. Extensions register their own slots during init.
@@ -260,10 +260,10 @@ export function getAllRootLlmSlots() { return [...CORE_ROOT_SLOTS, ..._extRootSl
 // ─────────────────────────────────────────────────────────────────────────
 
 export async function addLlmConnection(beingId, { name, baseUrl, apiKey, model }) {
-  const user = await Being.findById(beingId).select("_id isAdmin").lean();
-  if (!user) throw new Error("User not found");
+  const being = await Being.findById(beingId).select("_id roles").lean();
+  if (!being) throw new Error("Being not found");
 
-  const isAdmin = user.isAdmin === true;
+  const isAdmin = Array.isArray(being.roles) && being.roles.includes("admin");
 
   const count = await LlmConnection.countDocuments({ beingId });
   if (count >= MAX_CONNECTIONS_PER_USER) {
@@ -298,14 +298,14 @@ export async function addLlmConnection(beingId, { name, baseUrl, apiKey, model }
 }
 
 export async function updateLlmConnection(beingId, connectionId, { name, baseUrl, apiKey, model }) {
-  const user = await Being.findById(beingId).select("llmDefault metadata isAdmin").lean();
-  if (!user) throw new Error("User not found");
+  const being = await Being.findById(beingId).select("llmDefault metadata roles").lean();
+  if (!being) throw new Error("Being not found");
 
   const safeConnId = validateConnectionId(connectionId);
   const existing = await LlmConnection.findOne({ _id: safeConnId, beingId });
   if (!existing) throw new Error("Connection not found");
 
-  const isAdmin = user.isAdmin === true;
+  const isAdmin = Array.isArray(being.roles) && being.roles.includes("admin");
 
   const update = {};
 

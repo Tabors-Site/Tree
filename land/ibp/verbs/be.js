@@ -1,42 +1,45 @@
 // TreeOS IBP — BE verb handler.
 //
-// Envelope:
-//   { id, operation: "register" | "claim" | "release" | "switch",
-//     stance: "<stance>" OR land: "<land>",
-//     identity?: <token>,
-//     payload?: <operation-specific>,
-//     from?, to?    // for switch
-//   }
+// Consumes the unified envelope per [[project_ibp_wire_shape]]:
 //
-// BE addresses the land's auth-being. The `land` field is shorthand for
-// addressing `<land>/@auth` (the auth-being stance at the land root).
-// For `release` and `switch`, the address is the specific held stance.
-// The auth-being implementation is in roles/auth.js.
+//   { id, verb: "be", address (stance or land), payload, identity? }
+//
+// `payload.op` is one of "register" | "claim" | "release" | "switch".
+// Remaining payload fields carry operation-specific credentials/state:
+//
+//   register  { op, username, password, ... }
+//   claim     { op, username, password }                (from land/auth-being address)
+//   claim     { op }                                    (re-claim a held stance)
+//   release   { op }
+//   switch    { op, from }                              (address is the target stance)
+//
+// BE addresses the land's auth-being. A bare-land address (e.g.
+// "treeos.ai") is shorthand for the auth-being stance "treeos.ai/@auth".
+// For release/switch/token-reclaim the address is the held stance.
 
 import log from "../../seed/log.js";
 import { PortalError, PORTAL_ERR, isPortalError } from "../errors.js";
-import { extractStanceOrLand, ackOk, ackError } from "../envelope.js";
+import { ackOk, ackError } from "../envelope.js";
 import { authBeing } from "../roles/auth.js";
 import { getLandDomain } from "../address.js";
 import { authorize, getAuthConfig } from "../authorize.js";
 
 const VALID_OPERATIONS = new Set(["register", "claim", "release", "switch"]);
 
-export async function handleBe(socket, msg, ack) {
-  const id = msg?.id || null;
+export async function handleBe(socket, env, ack) {
+  const id = env?.id || null;
   try {
-    const operation = typeof msg?.operation === "string" ? msg.operation : null;
-    if (!operation || !VALID_OPERATIONS.has(operation)) {
+    const { address, addressKind, payload } = env;
+    const operation = payload?.op || payload?.operation;
+    if (typeof operation !== "string" || !VALID_OPERATIONS.has(operation)) {
       throw new PortalError(
         PORTAL_ERR.INVALID_INPUT,
-        `ibp:be requires \`operation\` to be one of: ${Array.from(VALID_OPERATIONS).join(", ")}`,
+        `ibp BE payload must include \`op\` (one of: ${[...VALID_OPERATIONS].join(", ")})`,
       );
     }
 
-    const address = extractStanceOrLand(msg, "ibp:be");
-
-    // Verify the address points at THIS land. Pass 1 only.
-    const targetLand = extractLandFromAddress(address);
+    // Verify the address points at THIS land.
+    const targetLand = extractLandFromAddress(address, addressKind);
     if (targetLand !== getLandDomain()) {
       throw new PortalError(
         PORTAL_ERR.NODE_NOT_FOUND,
@@ -49,18 +52,10 @@ export async function handleBe(socket, msg, ack) {
     if (operation === "register" || operation === "claim") {
       const authConfig = await getAuthConfig();
       if (operation === "register" && !authConfig.register_enabled) {
-        throw new PortalError(
-          PORTAL_ERR.FORBIDDEN,
-          "Registration is disabled on this land",
-          { operation: "register" },
-        );
+        throw new PortalError(PORTAL_ERR.FORBIDDEN, "Registration is disabled on this land", { operation: "register" });
       }
       if (operation === "claim" && !authConfig.claim_enabled) {
-        throw new PortalError(
-          PORTAL_ERR.FORBIDDEN,
-          "Claim is disabled on this land",
-          { operation: "claim" },
-        );
+        throw new PortalError(PORTAL_ERR.FORBIDDEN, "Claim is disabled on this land", { operation: "claim" });
       }
     }
 
@@ -76,14 +71,13 @@ export async function handleBe(socket, msg, ack) {
 
     // Stance Authorization gate. BE register/claim from arrival is the
     // bootstrap exception; the authorize function permits it inherently.
-    // For release/switch from an established identity, authorize confirms.
     const identityForAuth = socket.beingId
       ? { beingId: socket.beingId, username: socket.username }
       : null;
     const decision = await authorize({
       identity: identityForAuth,
       verb: "be",
-      target: { kind: address.kind, value: address.value },
+      target: { kind: addressKind, value: address },
       operation,
     });
     if (!decision.ok) {
@@ -94,34 +88,34 @@ export async function handleBe(socket, msg, ack) {
       );
     }
 
-    // Dispatch by operation. register/claim with credentials never need
-    // identity; release/switch require it; claim with stance + identity
-    // (token re-claim) returns a fresh token from the still-valid one.
+    // Strip op/operation from payload before handing it to auth-being.
+    // What remains is the operation-specific data (credentials, state).
+    const { op: _op, operation: _operation, identity: _identityField, ...opPayload } = payload;
+
     const ctx = {
       socket,
-      address,
-      identity: socket.beingId
-        ? { beingId: socket.beingId, username: socket.username }
-        : null,
+      address: { kind: addressKind, value: address },
+      identity: identityForAuth,
     };
 
     let result;
     switch (operation) {
       case "register":
-        result = await authBeing.register(msg.payload || {}, ctx);
+        result = await authBeing.register(opPayload, ctx);
         break;
       case "claim":
-        result = await handleClaim(address, msg.payload || {}, ctx);
+        result = await handleClaim({ kind: addressKind, value: address }, opPayload, ctx);
         break;
       case "release":
-        result = await authBeing.release(msg.payload || {}, ctx);
+        result = await authBeing.release(opPayload, ctx);
         break;
-      case "switch":
-        result = await authBeing.switch(
-          { from: msg.from, to: address.kind === "stance" ? address.value : null },
-          ctx,
-        );
+      case "switch": {
+        // `from` (current stance) lives in payload; `to` is the address.
+        const from = opPayload.from || env.payload?.from;
+        const to = addressKind === "stance" ? address : null;
+        result = await authBeing.switch({ from, to }, ctx);
         break;
+      }
     }
 
     return ackOk(ack, id, result);
@@ -129,12 +123,12 @@ export async function handleBe(socket, msg, ack) {
     if (isPortalError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
-    log.error("IBP", `ibp:be failed: ${err.message}`);
+    log.error("IBP", `ibp BE failed: ${err.message}`);
     return ackError(ack, id, PORTAL_ERR.INTERNAL, err.message || "Internal portal error");
   }
 }
 
-async function handleClaim(address, payload, ctx) {
+async function handleClaim(address, opPayload, ctx) {
   // Two claim modes:
   //   - credentials (address is land or <land>/@auth, payload has username+password)
   //   - token re-claim (address is a held stance, identity carries a valid token)
@@ -143,11 +137,10 @@ async function handleClaim(address, payload, ctx) {
     (address.kind === "stance" && /\/@auth$/.test(address.value));
 
   if (isAuthBeingAddress) {
-    return authBeing.claim(payload, ctx);
+    return authBeing.claim(opPayload, ctx);
   }
 
-  // Stance-based re-claim. The session must already hold the stance (carry
-  // a still-valid identity token whose user matches the stance).
+  // Stance-based re-claim. The session must already hold the stance.
   if (!ctx.identity) {
     throw new PortalError(
       PORTAL_ERR.UNAUTHORIZED,
@@ -162,8 +155,6 @@ async function handleClaim(address, payload, ctx) {
       { held: expectedStance, requested: address.value },
     );
   }
-  // Token re-claim is a no-op confirmation in Pass 1; the session already
-  // has a valid token. Return the same beingAddress.
   return {
     identityToken: null, // no new token issued; existing one stays valid
     beingAddress: expectedStance,
@@ -171,11 +162,10 @@ async function handleClaim(address, payload, ctx) {
   };
 }
 
-function extractLandFromAddress(address) {
-  if (address.kind === "land") return address.value;
-  // stance: "<land>/<path>@<being>". Split off everything after the
-  // first "/" to get the land.
-  const slashIndex = address.value.indexOf("/");
-  if (slashIndex === -1) return address.value;
-  return address.value.slice(0, slashIndex);
+function extractLandFromAddress(address, addressKind) {
+  if (addressKind === "land") return address;
+  // stance: "<land>/<path>@<being>". Split off everything after the first "/".
+  const slashIndex = address.indexOf("/");
+  if (slashIndex === -1) return address;
+  return address.slice(0, slashIndex);
 }

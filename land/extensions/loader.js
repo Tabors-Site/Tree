@@ -7,14 +7,10 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath, pathToFileURL } from "url";
 import { buildCoreServices } from "../seed/services.js";
-import { setExtensionToolResolver, registerMode, setModeRegistrationHook } from "../seed/modes/registry.js";
+import { setExtensionToolResolver } from "../seed/llm/conversation.js";
 import { hooks } from "../seed/hooks.js";
-import { registerOrchestrator, allowOrchestratorExtension } from "../seed/orchestrators/registry.js";
-import { registerModeOwner, registerToolOwner, getToolOwner, getModeOwner } from "../seed/tree/extensionScope.js";
+import { registerToolOwner, getToolOwner } from "../seed/tree/extensionScope.js";
 import log from "../seed/log.js";
-
-// Wire mode ownership tracking for spatial scoping
-setModeRegistrationHook(registerModeOwner);
 
 /** Convert a file path to a URL string for dynamic import (Windows compat) */
 function toImportURL(filePath) {
@@ -502,11 +498,6 @@ function buildScopedCore(manifest, fullCore) {
     scoped.hooks = fullCore.hooks;
   }
 
-  // Modes: always available (extensions register their own AI modes)
-  if (fullCore.modes) {
-    scoped.modes = fullCore.modes;
-  }
-
   // Metadata: always available (every extension reads/writes metadata)
   if (fullCore.metadata) {
     scoped.metadata = fullCore.metadata;
@@ -533,27 +524,6 @@ function buildScopedCore(manifest, fullCore) {
     scoped.auth = {
       ...scoped.auth,
       registerStrategy: (name, handler) => origRegister(name, handler, extName),
-    };
-  }
-
-  // Orchestrator binding: auto-inject extension name so the registry can validate.
-  if (scoped.orchestrators?.register) {
-    const extName = manifest.name;
-    const origRegister = scoped.orchestrators.register;
-    scoped.orchestrators = {
-      ...scoped.orchestrators,
-      register: (bigMode, handler) => origRegister(bigMode, handler, extName),
-    };
-  }
-
-  // Mode binding: auto-inject extension name to prevent impersonation.
-  // Extensions cannot register modes under another extension's identity.
-  if (scoped.modes?.registerMode) {
-    const extName = manifest.name;
-    const origRegister = scoped.modes.registerMode;
-    scoped.modes = {
-      ...scoped.modes,
-      registerMode: (key, handler) => origRegister(key, handler, extName),
     };
   }
 
@@ -784,11 +754,6 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Build scoped core: only inject what the manifest declares
       const scopedCore = buildScopedCore(manifest, coreServices);
 
-      // Pre-approve orchestrator registration if declared in manifest
-      if (manifest.provides?.orchestrator) {
-        allowOrchestratorExtension(manifest.name);
-      }
-
       // Initialize (with timeout to prevent a single extension from blocking boot)
       const INIT_TIMEOUT_MS = 10000;
       let instance;
@@ -897,7 +862,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Wire MCP tools and register in tool resolver
       if (instance.tools && mcpServer) {
-        const { registerToolDef } = await import("../seed/modes/tools.js");
+        const { registerToolDef } = await import("../seed/tools.js");
         const { zodToJsonSchema } = await import("zod-to-json-schema");
         const { z } = await import("zod");
 
@@ -1014,20 +979,38 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         }
       }
 
-      // Register custom modes (extensions can define entirely new AI modes)
-      if (instance.modes) {
-        for (const modeDef of instance.modes) {
-          if (modeDef.key && modeDef.handler) {
-            modeDef.handler._extName = manifest.name;
-            registerMode(modeDef.key, modeDef.handler, manifest.name);
+      // Register extension seeds (plantable scaffolds). Two intake paths:
+      //   1. instance.seeds: returned from init() — array of recipe objects
+      //      with local `name` (e.g. "rulership"); kernel namespaces it
+      //      as "<ext>:<name>".
+      //   2. manifest.provides.seeds: { "<local-name>": "./relative/path.js" }
+      // Either form accepted; both register under the extension owner so
+      // unload cleans them up. See seed/seeds.js for recipe shape.
+      if (instance.seeds || manifest.provides?.seeds) {
+        const { registerSeed } = await import("../seed/seeds.js");
+        const namespace = (localName) => `${manifest.name}:${localName}`;
+        // Path 1: returned from init
+        if (Array.isArray(instance.seeds)) {
+          for (const recipe of instance.seeds) {
+            if (recipe?.name) {
+              registerSeed(namespace(recipe.name), recipe, manifest.name);
+            }
           }
         }
-      }
-
-      // Register custom orchestrator (extensions can replace the conversation orchestrator)
-      if (instance.orchestrator && typeof instance.orchestrator.handle === "function") {
-        const bigMode = instance.orchestrator.bigMode || "tree";
-        registerOrchestrator(bigMode, instance.orchestrator, manifest.name);
+        // Path 2: declared in manifest with relative module paths
+        if (manifest.provides?.seeds && typeof manifest.provides.seeds === "object") {
+          for (const [localName, relPath] of Object.entries(manifest.provides.seeds)) {
+            try {
+              const resolved = path.resolve(dir, relPath);
+              const mod = await import(toImportURL(resolved));
+              const recipe = mod.default || mod;
+              if (recipe) registerSeed(namespace(localName), recipe, manifest.name);
+            } catch (err) {
+              log.warn("Loader",
+                `Failed to load seed "${localName}" from "${relPath}" in ${manifest.name}: ${err.message}`);
+            }
+          }
+        }
       }
 
       // Register jobs (extensions can provide startable/stoppable jobs)
@@ -1443,23 +1426,6 @@ export function flattenVocabulary(manifest) {
 }
 
 /**
- * Get classifier hints for a mode key.
- * Returns array of RegExp from the owning extension's manifest (merged from
- * legacy classifierHints and structured vocabulary), or null if empty.
- * Used by the tree orchestrator for extension routing (Path 2).
- */
-export function getClassifierHintsForMode(modeKey) {
-  try {
-    const extName = getModeOwner(modeKey);
-    if (!extName) return null;
-    const manifest = loaded.get(extName)?.manifest;
-    if (!manifest) return null;
-    const hints = flattenVocabulary(manifest);
-    return hints.length > 0 ? hints : null;
-  } catch { return null; }
-}
-
-/**
  * Get the extension's territory vocabulary split by part of speech.
  * Returns { verbs, nouns, adjectives } as RegExp arrays, or null if none.
  * Legacy classifierHints are bucketed as verbs by default since territory
@@ -1660,17 +1626,16 @@ export async function uninstallExtension(name) {
         mcpServerInstance.removeToolsByOwner(name, getToolOwner);
       }
       // Remove from tool definition registry
-      const { unregisterToolsForExtension } = await import("../seed/modes/tools.js");
+      const { unregisterToolsForExtension } = await import("../seed/tools.js");
       unregisterToolsForExtension(name, getToolOwner);
     } catch {}
     try {
-      const { unregisterModes } = await import("../seed/modes/registry.js");
-      unregisterModes(name);
+      const { unregisterSeedsFromExtension } = await import("../seed/seeds.js");
+      unregisterSeedsFromExtension(name);
     } catch {}
     try {
-      const { clearToolOwnersForExtension, clearModeOwnersForExtension } = await import("../seed/tree/extensionScope.js");
+      const { clearToolOwnersForExtension } = await import("../seed/tree/extensionScope.js");
       clearToolOwnersForExtension(name);
-      clearModeOwnersForExtension(name);
     } catch {}
     // Drop this extension's default permission rules from the registry
     // so authorize stops consulting them post-uninstall.

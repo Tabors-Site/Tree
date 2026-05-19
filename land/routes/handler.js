@@ -7,8 +7,13 @@ import user from "./api/user.js";
 
 import dids from "./api/dids.js";
 import cascade from "./api/cascade.js";
+import ibp from "./api/ibp.js";
 
-import orchestrate from "./api/orchestrate.js";
+// orchestrate.js retired 2026-05-18 with the central orchestrator
+// (see [[project_tree_orchestrator_deleted]]). HTTP /api/v1/orchestrate
+// route surface is gone; clients route chat through the WebSocket
+// SUMMON path. The unified-IBP-transport direction (see
+// [[unified-ibp-transport]]) will eventually fold all HTTP into IBP.
 // gateway webhooks loaded via extension system
 import landConfig from "./api/config.js";
 import llm from "./api/llm.js";
@@ -165,10 +170,16 @@ export default async function registerURLRoutes(app, opts = {}) {
   app.use("/api/v1", cascade);
   // values routes loaded via extension system
   app.use("/api/v1", node);
-  app.use("/api/v1", orchestrate);
+  // orchestrate routes retired 2026-05-18
   // gateway webhooks loaded via extension system
   app.use("/api/v1", landConfig);
   app.use("/api/v1", llm);
+
+  // IBP HTTP adapter: POST /api/v1/ibp/:verb/<encoded-address>
+  // Translates HTTP requests into the unified IBP dispatcher (same
+  // handler the WebSocket layer uses). See routes/api/ibp.js and
+  // [[project_protocol_transport_separation]].
+  app.use("/api/v1", ibp);
 
   // Canopy protocol stays at /canopy (not versioned with API)
   app.use("/", canopy);

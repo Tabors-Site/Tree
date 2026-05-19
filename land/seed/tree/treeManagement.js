@@ -15,7 +15,7 @@ import { NODE_STATUS, DELETED, ARTIFACT_ORIGIN, ERR, ProtocolError, SYSTEM_OWNER
 import { acquireNodeLock, releaseNodeLock, acquireMultiple, releaseMultiple } from "./nodeLocks.js";
 import { getLandConfigValue } from "../landConfig.js";
 
-async function getUserOrThrow(beingId) {
+async function getBeingOrThrow(beingId) {
   if (!beingId) {
     throw new Error("User ID is required");
   }
@@ -65,7 +65,7 @@ export async function createNode({
   if (!isRoot && !parentId) {
     throw new Error("Non-root nodes require a parentId");
   }
-  const user = validatedUser ?? (await getUserOrThrow(beingId));
+  const user = validatedUser ?? (await getBeingOrThrow(beingId));
 
   // beforeNodeCreate: extensions can modify or cancel.
   // parentType included so extensions can validate parent-child type compatibility.
@@ -217,7 +217,7 @@ export async function createNodeBranch(
   summonId = null,
   sessionId = null,
 ) {
-  const user = await getUserOrThrow(beingId);
+  const user = await getBeingOrThrow(beingId);
 
   return createNodeBranchInternal(
     nodeData,

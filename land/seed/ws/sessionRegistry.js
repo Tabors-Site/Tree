@@ -320,7 +320,7 @@ export function clearActiveNavigator(beingId) {
 // QUERY
 // ─────────────────────────────────────────────────────────────────────────
 
-export function getSessionsForUser(beingId) {
+export function getSessionsForBeing(beingId) {
   const uid = String(beingId);
   const userSet = userSessionIndex.get(uid);
   if (!userSet) return [];

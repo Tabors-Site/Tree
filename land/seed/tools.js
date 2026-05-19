@@ -1,24 +1,34 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai
-import log from "../log.js";
+import log from "./log.js";
 
 // Tool definition registry. Extensions register tool schemas via registerToolDef().
 // The kernel resolves tool names to schemas via resolveTools().
 //
-// Verb tagging (2026-05-18): every tool declares which IBP verb it fires —
-// "see" (read-only), "do" (substrate write), or "summon" (emits a SUMMON to
-// another being). The verb is stored in a sidecar map (kept outside the
-// OpenAI schema so MCP/LLM clients see only the standard tool shape). Roles
-// carry a `permissions` array; runChat filters resolved tools to the
-// intersection so a role acting in capacity X only sees tools fitting X.
+// **Internal tools and the IBP protocol share one shape.** Every tool
+// declares which IBP verb it fires — `see`, `do`, `summon`, or `be`.
+// Verb is REQUIRED on every registration; there is no permissive default.
+// Tools without a verb are rejected.
+//
+// The IBPA grammar (which the verb tag enforces at the address layer):
+//   SEE    `<leftStance> :: <position-or-stance>`  read anything
+//   DO     `<leftStance> :: <position-or-stance>`  write anything
+//   SUMMON `<leftStance> :: <stance>`              target must be a being
+//   BE     `<leftStance>`                          left-stance operations
+//                                                  (claim/release/switch
+//                                                  the identity itself —
+//                                                  no separate right target)
+//
+// Roles carry a `permissions: ("see"|"do"|"summon"|"be")[]` array;
+// `resolveTools` filters resolved tools by verb against the role's
+// permissions so a role acting in capacity X only sees tools fitting X.
 // Permissions belong to role identity, not envelopes — summoners can't
 // cripple a role by stripping its capabilities. See memory
 // `role-permissions-not-envelope`.
 const toolDefs = {};
-const toolVerbs = {};        // name → "see" | "do" | "summon"
-const _untaggedWarned = new Set();
+const toolVerbs = {};        // name → "see" | "do" | "summon" | "be"
 let MAX_TOOLS = 500;
 const TOOL_NAME_RE = /^[a-z][a-z0-9_-]{0,63}$/;
-const VALID_VERBS = new Set(["see", "do", "summon"]);
+const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
 
 export function setMaxTools(n) { MAX_TOOLS = Math.max(10, Number(n) || 500); }
 
@@ -28,10 +38,10 @@ export function setMaxTools(n) { MAX_TOOLS = Math.max(10, Number(n) || 500); }
  *
  * @param {string} name
  * @param {object} schema - OpenAI function tool shape
- * @param {object} [opts]
- * @param {"see"|"do"|"summon"} [opts.verb] - which IBP verb this tool
- *   fires. Used by runChat to filter tools against the active role's
- *   permissions. Untagged tools default to "do" with a warn-once.
+ * @param {object} opts
+ * @param {"see"|"do"|"summon"|"be"} opts.verb - REQUIRED. Which IBP verb
+ *   this tool fires. Internal tools and protocol verbs share one shape;
+ *   tools without a verb are rejected.
  */
 export function registerToolDef(name, schema, opts = {}) {
   // Validate name format
@@ -58,24 +68,20 @@ export function registerToolDef(name, schema, opts = {}) {
     log.error("Tools", `Tool "${name}" has malformed function schema (missing function.name). Rejected.`);
     return false;
   }
+  // Verb tag is REQUIRED. Every tool has a shape — internal and protocol
+  // share the same set of verbs ([[role-permissions-not-envelope]]).
+  // No permissive default; missing or invalid verb rejects registration.
+  const verb = opts.verb;
+  if (typeof verb !== "string" || !VALID_VERBS.has(verb)) {
+    log.error("Tools",
+      `Tool "${name}" rejected: missing or invalid verb (got ${JSON.stringify(verb)}). ` +
+      `Every tool must declare { verb: "see"|"do"|"summon"|"be" } at registration.`);
+    return false;
+  }
+
   // Freeze the schema to prevent post-registration mutation
   toolDefs[name] = Object.freeze(schema);
-
-  // Verb tag (sidecar registry, kept out of the OpenAI schema).
-  const verb = opts.verb;
-  if (typeof verb === "string" && VALID_VERBS.has(verb)) {
-    toolVerbs[name] = verb;
-  } else {
-    toolVerbs[name] = "do"; // permissive default
-    if (verb !== undefined) {
-      log.warn("Tools", `Tool "${name}": invalid verb "${verb}". Defaulting to "do". Use "see" | "do" | "summon".`);
-    } else if (!_untaggedWarned.has(name)) {
-      _untaggedWarned.add(name);
-      log.warn("Tools",
-        `Tool "${name}" registered without verb tag. Defaulting to "do". ` +
-        `Tag with { verb: "see"|"do"|"summon" } so role permission filtering can constrain it.`);
-    }
-  }
+  toolVerbs[name] = verb;
   return true;
 }
 
@@ -88,7 +94,6 @@ export function unregisterToolDef(name) {
     delete toolDefs[name];
     delete toolVerbs[name];
     _warnedTools.delete(name);
-    _untaggedWarned.delete(name);
     return true;
   }
   return false;
@@ -104,7 +109,6 @@ export function unregisterToolsForExtension(extName, getToolOwnerFn) {
       delete toolDefs[name];
       delete toolVerbs[name];
       _warnedTools.delete(name);
-      _untaggedWarned.delete(name);
     }
   }
 }
@@ -141,20 +145,19 @@ export function resolveTools(toolNames, permissions = null) {
       return null;
     }
     if (allowed) {
-      const verb = toolVerbs[name] || "do";
-      if (!allowed.has(verb)) return null;
+      const verb = toolVerbs[name];
+      if (!verb || !allowed.has(verb)) return null;
     }
     return def;
   }).filter(Boolean);
 }
 
 /**
- * Look up a tool's verb tag. Returns "do" for untagged tools (permissive
- * default — matches the legacy "every tool may write" model until callers
- * tag them explicitly).
+ * Look up a tool's verb tag. Returns null for unregistered tools.
+ * Every registered tool has a verb (registration without one is rejected).
  */
 export function getToolVerb(name) {
-  return toolVerbs[name] || "do";
+  return toolVerbs[name] || null;
 }
 
 /**
@@ -162,4 +165,12 @@ export function getToolVerb(name) {
  */
 export function getToolCount() {
   return Object.keys(toolDefs).length;
+}
+
+/**
+ * List every registered tool name. Used by configuration UIs that show
+ * the base set of tools available before per-node overlays apply.
+ */
+export function listToolNames() {
+  return Object.keys(toolDefs);
 }
