@@ -727,7 +727,7 @@ export async function buildArtifactEvidence(rulerNodeId) {
   try {
     const { getArtifacts } = await import("../../../seed/tree/artifacts.js");
     const got = await getArtifacts({ nodeId: String(node._id), limit: 50 });
-    scopeNotes = Array.isArray(got?.notes) ? got.notes : [];
+    scopeNotes = Array.isArray(got?.artifacts) ? got.artifacts : [];
   } catch (err) {
     log.debug("Governing/Evidence", `scope notes fetch failed: ${err.message}`);
   }
@@ -752,7 +752,7 @@ export async function buildArtifactEvidence(rulerNodeId) {
         let firstNotePreview = null;
         try {
           const got = await getArtifacts({ nodeId: cid, limit: 5 });
-          const notes = Array.isArray(got?.notes) ? got.notes : [];
+          const notes = Array.isArray(got?.artifacts) ? got.artifacts : [];
           noteCount = notes.length;
           // getNotes orders DESC by createdAt — most recent first.
           // The "first line" preview is the most recent note's opener.

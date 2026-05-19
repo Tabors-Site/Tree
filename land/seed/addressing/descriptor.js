@@ -24,6 +24,7 @@ import { getLandRootId } from "../landRoot.js";
 // metadata, not a universal kernel field. Descriptor queries no longer
 // filter on a node-level status.
 import { getArtifacts } from "../tree/artifacts.js";
+import Artifact from "../models/artifact.js";
 import { resolveTreeAccess } from "../tree/treeAccess.js";
 import { getInboxSummary } from "../scheduler/inbox.js";
 import { getRole, listRoles } from "../roles/registry.js";
@@ -705,25 +706,29 @@ async function listPublicTrees() {
 }
 
 // Read artifacts attached to the land root. Slim shape the 3D portal
-// renders directly: id, name, beingId (so clients can filter by which
-// being authored it), origin (so they know whether to embed an iframe,
-// fetch a file, etc.), and the content blob.
+// renders directly: id, name (the artifact's own name), beingId (so
+// clients can filter by which being authored it), origin (so they know
+// whether to embed an iframe, fetch a file, etc.), and the content blob.
+//
+// Queries the Artifact model directly instead of getArtifacts() because
+// that helper populates beingId and overwrites the artifact's `name` field
+// with the being's name. The land-root descriptor needs the artifact's
+// real name.
 async function readLandRootArtifacts(landRootId) {
-  try {
-    const list = await getArtifacts({ nodeId: String(landRootId), limit: 50 });
-    return list.map((a) => ({
-      artifactId: String(a._id),
-      name:       a.name || null,
-      beingId:    a.beingId ? String(a.beingId) : null,
-      origin:     a.origin || "ibp",
-      content:    a.content || null,
-      metadata:   a.metadata instanceof Map
-        ? Object.fromEntries(a.metadata)
-        : (a.metadata || {}),
-    }));
-  } catch {
-    return [];
-  }
+  const list = await Artifact.find({ nodeId: String(landRootId) })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
+  return list.map((a) => ({
+    artifactId: String(a._id),
+    name:       a.name || null,
+    beingId:    a.beingId ? String(a.beingId) : null,
+    origin:     a.origin || "ibp",
+    content:    a.content || null,
+    metadata:   a.metadata instanceof Map
+      ? Object.fromEntries(a.metadata)
+      : (a.metadata || {}),
+  }));
 }
 
 /**

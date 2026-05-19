@@ -69,10 +69,19 @@ async function main() {
     onBeingProximity: (being, inRange, distance) => onBeingProximity(being, inRange, distance),
     onBeingActivate: (being) => onBeingActivate(being),
     onArtifactEnded: (info) => onArtifactEnded(info),
+    onArtifactPlaybackTick: (info) => onArtifactPlaybackTick(info),
     isInputBlocked: isGameplayInputBlocked,
   });
   state.scene.setLandTimezone(state.discovery.timezone || null);
   state.scene.start();
+
+  // Best-effort flush on tab close: walk any live video meshes, grab
+  // their current time, and ship a save-playback via sendBeacon-style
+  // synchronous emit. The scene already flushes on _clearWorld() during
+  // navigations; this catches the close case.
+  window.addEventListener("beforeunload", () => {
+    state.scene?.flushPlaybackTicks?.();
+  });
 
   // Wire the address bar.
   initAddressBar({
@@ -244,6 +253,23 @@ async function onArtifactEnded({ artifactId }) {
   }
 }
 
+// Periodic playback-position update from the in-world video screen.
+// Fires every 5s while playing, on pause, and at unmount/navigate.
+// Persists to artifact.metadata.tutorial.playbackSeconds via a DO op
+// so revisits resume at the saved point across browsers and devices.
+async function onArtifactPlaybackTick({ artifactId, currentTime }) {
+  if (!state.client?.connected || !artifactId) return;
+  const land = state.discovery?.land;
+  if (!land) return;
+  try {
+    await state.client.do(`${land}/`, "llm-assigner:save-playback",
+      { artifactId, currentTime });
+  } catch (err) {
+    console.warn("[3D] save-playback failed:",
+      err?.code || "", err?.message || err);
+  }
+}
+
 // Spawn the llm-assigner intro tutorial artifact at the land root.
 // The DO op is idempotent server-side (marker on metadata.tutorial.purpose)
 // so calling it twice returns the existing artifact instead of creating
@@ -251,9 +277,6 @@ async function onArtifactEnded({ artifactId }) {
 // is false, the descriptor needs to refresh so the mesh shows for the
 // current session (a fresh tab won't have rendered it yet).
 async function spawnLlmAssignerTutorial() {
-  console.log("[3D] spawnLlmAssignerTutorial:",
-    { hasClient: !!state.client, hasToken: !!state.session?.token,
-      connected: !!state.client?.connected, land: state.discovery?.land });
   if (!state.client) throw new Error("Not connected");
   if (!state.session?.token) throw new Error("Not authenticated. Sign in via @auth first.");
   const land = state.discovery?.land;
@@ -263,7 +286,6 @@ async function spawnLlmAssignerTutorial() {
   // open before the socket is back. Give it a short window to reconnect
   // before failing the click.
   if (!state.client.connected) {
-    console.log("[3D] socket not connected — waiting up to 3s for reconnect");
     const deadline = Date.now() + 3000;
     while (!state.client.connected && Date.now() < deadline) {
       await new Promise(r => setTimeout(r, 100));
@@ -271,18 +293,13 @@ async function spawnLlmAssignerTutorial() {
     if (!state.client.connected) throw new Error("Portal socket not connected (after 3s)");
   }
 
-  const addr = `${land}/`;
-  console.log(`[3D] DO ${addr} llm-assigner:start-tutorial`);
-  const result = await state.client.do(addr, "llm-assigner:start-tutorial", {});
-  console.log("[3D] start-tutorial result:", result);
+  const result = await state.client.do(`${land}/`, "llm-assigner:start-tutorial", {});
 
   // Always re-fetch — even when created:false, the live descriptor
   // for this client may not have the artifact yet.
   if (state.currentAddress) {
     const desc = await state.client.see(state.currentAddress);
     state.descriptor = desc;
-    console.log("[3D] descriptor.artifacts:", desc?.artifacts?.length || 0,
-      "isLandRoot:", desc?.isLandRoot);
     state.scene.renderDescriptor(desc, {
       isAuthenticated: !!state.session?.token,
     });
@@ -413,14 +430,9 @@ function onBeingActivate(b) {
 }
 
 function openLlmAssignerPanel() {
-  console.log("[3D] openLlmAssignerPanel:",
-    { hasToken: !!state.session?.token,
-      land: state.discovery?.land,
-      currentAddress: state.currentAddress });
   // Requires an authenticated being (the server enforces this on every
   // op). If unauthenticated, bounce the user to the auth flow first.
   if (!state.session?.token) {
-    console.log("[3D] llm-assigner: not authenticated, opening auth instead");
     openAuthPanel();
     return;
   }

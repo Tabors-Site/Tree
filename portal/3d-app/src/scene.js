@@ -64,12 +64,13 @@ const VISUAL_PYRAMID = {
 };
 
 export class Scene {
-  constructor({ onGaze, onEnter, onBeingProximity, onBeingActivate, onArtifactEnded, isInputBlocked } = {}) {
+  constructor({ onGaze, onEnter, onBeingProximity, onBeingActivate, onArtifactEnded, onArtifactPlaybackTick, isInputBlocked } = {}) {
     this.onGaze = onGaze || (() => {});
     this.onEnter = onEnter || (() => {});
     this.onBeingProximity = onBeingProximity || (() => {});
     this.onBeingActivate = onBeingActivate || (() => {});
     this.onArtifactEnded = onArtifactEnded || (() => {});
+    this.onArtifactPlaybackTick = onArtifactPlaybackTick || (() => {});
     this.isInputBlocked = isInputBlocked || isTypingInUI;
     // Every being mesh by being. Proximity fires per-being; speech
     // bubbles anchor to the mesh for that being.
@@ -286,8 +287,6 @@ export class Scene {
     // userData carries a preview the gaze label can show on hover.
     this._artifactMeshes = new Map();
     const artifacts = desc?.artifacts || [];
-    console.log("[scene] renderDescriptor:",
-      { isLandRoot, isAuthenticated, arrival, artifacts: artifacts.length });
     if (!arrival) {
       artifacts.forEach((art, i) => {
         const id = art.artifactId || art.noteId || `art-${i}`;
@@ -313,10 +312,6 @@ export class Scene {
         }
         const mesh = this._makeArtifactMesh(art);
         mesh.position.set(x, 0, z);
-        // Video screens face the +Z direction (toward the player who
-        // starts at z=8 looking toward -Z). Rotate 180° so the iframe
-        // faces the camera.
-        if (isVideo) mesh.rotation.y = Math.PI;
         // Preserve existing userData (the video mesh has iframe + ids).
         mesh.userData = Object.assign({
           kind: "artifact",
@@ -679,6 +674,26 @@ export class Scene {
   }
 
   _clearWorld() {
+    // Detach any CSS3D iframes before tearing down the scene graph.
+    // CSS3DRenderer attaches DOM elements on first render but doesn't
+    // auto-remove them when objects leave the scene — without this step,
+    // iframes from the previous position linger on screen. Also flush
+    // a final playback tick + stop the tick interval + destroy the
+    // YT.Player so we don't leak timers or sockets.
+    this.world.traverse((obj) => {
+      const iframe = obj.userData?.iframe;
+      if (iframe) {
+        const player = obj.userData?.ytPlayer;
+        if (player) this._emitPlaybackTick(obj, player);
+        this._stopPlaybackTick(obj);
+        iframe.remove();
+        const id = obj.userData?.iframeId;
+        if (id && this._ytPlayers.has(id)) {
+          try { this._ytPlayers.get(id)?.destroy?.(); } catch {}
+          this._ytPlayers.delete(id);
+        }
+      }
+    });
     while (this.world.children.length) {
       const obj = this.world.children[0];
       this.world.remove(obj);
@@ -825,11 +840,13 @@ export class Scene {
     // The iframe wrapped in CSS3DObject. The Player API attaches to it
     // after the API script loads — we mount the iframe with the right
     // src (enablejsapi=1) so YT.Player(id) wraps it cleanly.
+    // Source resolution is 1920×1080 so the CSS3D rasterization stays
+    // crisp when the player walks up to the screen.
     const iframeId = `yt-${artifact.artifactId || Math.random().toString(36).slice(2)}`;
     const iframe = document.createElement("iframe");
     iframe.id     = iframeId;
-    iframe.width  = "640";
-    iframe.height = "360";
+    iframe.width  = "1920";
+    iframe.height = "1080";
     iframe.allow  = "autoplay; encrypted-media";
     iframe.allowFullscreen = true;
     iframe.style.border        = "0";
@@ -839,7 +856,7 @@ export class Scene {
       `?enablejsapi=1&autoplay=1&mute=1&modestbranding=1&rel=0`;
 
     const css = new CSS3DObject(iframe);
-    const scale = W / 640;
+    const scale = W / 1920;
     css.scale.set(scale, scale, scale);
     css.position.y = H / 2 + 0.4;
     css.position.z = 0.01;
@@ -851,16 +868,36 @@ export class Scene {
     group.userData.artifactId  = artifact.artifactId;
     group.userData.isVideoMesh = true;
 
-    // Attach the Player API once it's ready so we can listen for
-    // ENDED. Onstart of EVERY new video mesh we (lazy-)load the
-    // script and create a YT.Player.
+    // Resume position lives in the artifact's substrate metadata so it
+    // survives across browsers/devices. Persisted by emitPlaybackTick →
+    // llm-assigner:save-playback DO.
+    const resumeAt = Number(artifact?.metadata?.tutorial?.playbackSeconds);
+
+    // Attach the Player API once it's ready so we can listen for ENDED
+    // and tick the current time back to the substrate.
     this._loadYouTubeApi().then(() => {
       // eslint-disable-next-line no-undef
       const player = new YT.Player(iframeId, {
         events: {
+          onReady: () => {
+            if (Number.isFinite(resumeAt) && resumeAt > 0) {
+              try { player.seekTo(resumeAt, true); } catch { /* defensive */ }
+            }
+            // Autoplay may have already kicked PLAYING before the listener
+            // attached, so the state-change event got missed. Check the
+            // current state and start ticking if we're already playing.
+            try {
+              // eslint-disable-next-line no-undef
+              if (player.getPlayerState?.() === YT.PlayerState.PLAYING) {
+                this._startPlaybackTick(group, player);
+              }
+            } catch { /* defensive */ }
+          },
           onStateChange: (e) => {
             // eslint-disable-next-line no-undef
-            if (e.data === YT.PlayerState.ENDED) {
+            const S = YT.PlayerState;
+            if (e.data === S.ENDED) {
+              this._stopPlaybackTick(group);
               try {
                 this.onArtifactEnded({
                   artifactId: group.userData.artifactId,
@@ -869,16 +906,66 @@ export class Scene {
               } catch (err) {
                 console.warn("[3D] onArtifactEnded handler threw:", err);
               }
+              return;
+            }
+            if (e.data === S.PLAYING) {
+              this._startPlaybackTick(group, player);
+            }
+            if (e.data === S.PAUSED) {
+              // Capture the exact pause point, then stop ticking.
+              this._emitPlaybackTick(group, player);
+              this._stopPlaybackTick(group);
             }
           },
         },
       });
       this._ytPlayers.set(iframeId, player);
+      group.userData.ytPlayer = player;
     }).catch((err) => {
       console.warn("[3D] YouTube IFrame API failed to load:", err);
     });
 
     return group;
+  }
+
+  // Save the current playback position to substrate. Idempotent on the
+  // server side; safe to call as often as we like.
+  _emitPlaybackTick(group, player) {
+    try {
+      const t = player?.getCurrentTime?.();
+      if (!Number.isFinite(t) || t < 0) return;
+      this.onArtifactPlaybackTick({
+        artifactId:  group.userData.artifactId,
+        currentTime: t,
+      });
+    } catch (err) {
+      console.warn("[3D] playback tick failed:", err);
+    }
+  }
+
+  _startPlaybackTick(group, player) {
+    if (group.userData.tickTimer) return; // already ticking
+    group.userData.tickTimer = setInterval(
+      () => this._emitPlaybackTick(group, player),
+      5000,
+    );
+  }
+
+  _stopPlaybackTick(group) {
+    if (group.userData.tickTimer) {
+      clearInterval(group.userData.tickTimer);
+      group.userData.tickTimer = null;
+    }
+  }
+
+  // Public: flush a playback position for every live video mesh.
+  // Called from main.js on beforeunload; the DO call goes out best-effort
+  // and the browser may cut it short, but we try.
+  flushPlaybackTicks() {
+    this.world.traverse((obj) => {
+      const player = obj.userData?.ytPlayer;
+      if (player) this._emitPlaybackTick(obj, player);
+    });
   }
 
   _loadYouTubeApi() {
@@ -1427,15 +1514,20 @@ function beingUserData(b) {
   };
 }
 
-// Short, single-line label for an artifact's hover tag. We truncate so a
-// long note's preview doesn't fill the screen.
+// Short, single-line label for an artifact's hover tag. Prefer the
+// artifact's own name (always set by the server), then a preview snippet,
+// then a generic kind word. We truncate so a long preview doesn't fill
+// the screen.
 function artifactLabel(art) {
-  const kind = (art.kind || "note").toLowerCase();
+  const name = (art.name || "").trim();
+  if (name) return name;
   const preview = (art.preview || "").replace(/\s+/g, " ").trim();
-  if (!preview) return kind;
-  const max = 80;
-  const text = preview.length > max ? preview.slice(0, max) + "..." : preview;
-  return text;
+  if (preview) {
+    const max = 80;
+    return preview.length > max ? preview.slice(0, max) + "..." : preview;
+  }
+  if (art?.content?.contentType === "video/youtube") return "video";
+  return (art.kind || "note").toLowerCase();
 }
 
 // Walk the group and apply an emissive intensity to all child materials.

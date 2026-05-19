@@ -10,7 +10,7 @@ import Node from "../models/node.js";
 import { snapshotAncestors, resolveExtensionScopeFromChain, getAncestorChain } from "../tree/ancestorCache.js";
 import { isDbHealthy } from "../core/dbConfig.js";
 import { resolveTools } from "../core/tools.js";
-import { getNodeName } from "../tree/treeData.js";
+import { getNodeName } from "../tree/treeFetch.js";
 import { mcpClients, connectToMCP, MCP_SERVER_URL } from "./mcpClient.js";
 
 // How many recent messages to carry across role switches when the new

@@ -149,8 +149,6 @@ export function onListen() {
         toolResultMaxBytes:      { setter: setKernelConfig },
         maxConversationSessions: { setter: setKernelConfig },
         staleConversationTimeout:{ setter: setKernelConfig },
-        treeSummaryMaxDepth:     { load: () => import("./seed/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(v, null)) },
-        treeSummaryMaxNodes:     { load: () => import("./seed/tree/treeFetch.js").then(m => (v) => m.setTreeSummaryLimits(null, v)) },
         carryMessages:           { load: () => import("./seed/llm/runChat.js").then(m => m.setCarryMessages) },
         maxRegisteredTools:      { load: () => import("./seed/core/tools.js").then(m => m.setMaxTools) },
         sessionTTL:              { load: () => import("./seed/session/registry.js").then(m => (v) => m.setSessionTTL(v * 1000)) },

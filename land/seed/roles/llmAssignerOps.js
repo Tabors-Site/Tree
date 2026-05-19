@@ -38,6 +38,7 @@ export function registerLlmAssignerOps() {
     targets: ["node"],
     ownerExtension: OWNER,
     handler: async ({ target }) => {
+      log.info("llm-assigner", `start-tutorial hit at node=${String(target?._id || target?.nodeId || "?").slice(0, 8)}`);
       const nodeId = String(target?._id || target?.nodeId || target);
       if (!nodeId || nodeId === "[object Object]") {
         throw new Error("llm-assigner:start-tutorial: node target required");
@@ -95,6 +96,50 @@ export function registerLlmAssignerOps() {
     },
   });
 
+  // Persist YouTube playback position on the tutorial artifact so a
+  // page reload or navigation away/back resumes at the right spot.
+  // Idempotent overwrite; the marker check keeps this op scoped to the
+  // llm-assigner tutorial only.
+  registerOperation("llm-assigner:save-playback", {
+    targets: ["artifact", "node"],
+    ownerExtension: OWNER,
+    handler: async ({ target, params }) => {
+      log.info("llm-assigner", `save-playback hit: artifactId=${params?.artifactId} t=${params?.currentTime}`);
+      const artifactId = String(
+        params?.artifactId || target?._id || target?.artifactId || target,
+      );
+      const currentTime = Number(params?.currentTime);
+      if (!artifactId || artifactId === "[object Object]") {
+        throw new Error("llm-assigner:save-playback: artifactId required");
+      }
+      if (!Number.isFinite(currentTime) || currentTime < 0) {
+        throw new Error("llm-assigner:save-playback: currentTime (number, seconds) required");
+      }
+
+      const artifact = await Artifact.findById(artifactId).lean();
+      if (!artifact) throw new Error(`Artifact ${artifactId} not found`);
+
+      const llmAssigner = await Being.findOne({ name: "llm-assigner" })
+        .select("_id").lean();
+      const tutorialMeta = artifact.metadata instanceof Map
+        ? artifact.metadata.get("tutorial")
+        : artifact.metadata?.tutorial;
+      if (
+        String(artifact.beingId) !== String(llmAssigner?._id) ||
+        tutorialMeta?.purpose !== LLM_ASSIGNER_TUTORIAL_MARK
+      ) {
+        throw new Error("llm-assigner:save-playback only writes to llm-assigner tutorial artifacts");
+      }
+
+      const nextMeta = { ...(tutorialMeta || {}), playbackSeconds: currentTime };
+      await Artifact.updateOne(
+        { _id: artifactId },
+        { $set: { "metadata.tutorial": nextMeta } },
+      );
+      return { saved: true, artifactId, currentTime };
+    },
+  });
+
   // Consume the tutorial artifact when the user finishes watching.
   // Verifies the marker so the op stays narrowly scoped; calls
   // `deleteArtifactAndFile` internally acting as llm-assigner so the
@@ -103,6 +148,7 @@ export function registerLlmAssignerOps() {
     targets: ["artifact", "node"],
     ownerExtension: OWNER,
     handler: async ({ target, params }) => {
+      log.info("llm-assigner", `complete-tutorial hit: artifactId=${params?.artifactId}`);
       const artifactId = String(
         params?.artifactId || target?._id || target?.artifactId || target,
       );
@@ -137,5 +183,5 @@ export function registerLlmAssignerOps() {
     },
   });
 
-  log.verbose("llm-assigner", "registered 2 DO ops (start-tutorial, complete-tutorial)");
+  log.verbose("llm-assigner", "registered 3 DO ops (start-tutorial, save-playback, complete-tutorial)");
 }

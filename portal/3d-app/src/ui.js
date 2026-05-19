@@ -827,11 +827,9 @@ export function showLlmAssignerPanel({ client, land, currentNodeId, onClose, onS
   // and the caller's onSpawnTutorial refetches the descriptor — the
   // new artifact's video screen mounts in the 3D scene.
   const spawnLink = el.querySelector(".llm-spawn-tutorial");
-  console.log("[ui] llm-assigner panel mounted, spawn button bound:", !!spawnLink);
   spawnLink.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log("[ui] spawn click");
     const original = spawnLink.textContent;
     spawnLink.style.opacity = "0.5";
     spawnLink.textContent   = "spawning...";

@@ -27,7 +27,6 @@ import log from "../core/log.js";
 import path from "path";
 import fs from "fs";
 import Artifact from "../models/artifact.js";
-import Being from "../models/being.js";
 import Node from "../models/node.js";
 import Did from "../models/did.js";
 import { logDid } from "./dids.js";
@@ -55,7 +54,6 @@ function artifactMaxChars()    { return Math.max(100, Number(getLandConfigValue(
 function maxArtifactsPerNode() { return Math.max(1,   Number(getLandConfigValue("maxArtifactsPerNode")) || 1000); }
 function artifactQueryLimit()  { return Math.max(1,   Math.min(Number(getLandConfigValue("artifactQueryLimit"))  || 5000, 50000)); }
 function searchQueryLimit()    { return Math.max(1,   Math.min(Number(getLandConfigValue("artifactSearchLimit")) || 500, 10000)); }
-function subtreeNodeCap()      { return Math.max(100, Math.min(Number(getLandConfigValue("subtreeNodeCap")) || 10000, 100000)); }
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONTENT SHAPE HELPERS
@@ -318,33 +316,19 @@ async function getArtifacts({ nodeId, limit, offset, startDate, endDate }) {
     .lean();
 
   return {
-    message: artifacts.length > 0 ? "Artifacts retrieved successfully" : `No artifacts found for node ${nodeId}`,
     artifacts: artifacts.map(a => ({
-      _id: a._id,
-      origin: a.origin,
-      content: a.content,
-      name: a.beingId ? a.beingId.name : null,
-      beingId: a.beingId?._id?.toString(),
-      nodeId: a.nodeId,
-      metadata: a.metadata,
-      createdAt: a.createdAt,
-      updatedAt: a.updatedAt,
+      _id:        a._id,
+      origin:     a.origin,
+      content:    a.content,
+      name:       a.name ?? null,                       // artifact's own name
+      authorName: a.beingId?.name ?? null,              // populated from beingId
+      beingId:    a.beingId?._id ? String(a.beingId._id) : null,
+      nodeId:     a.nodeId,
+      metadata:   a.metadata,
+      createdAt:  a.createdAt,
+      updatedAt:  a.updatedAt,
     })),
   };
-}
-
-async function getAllArtifactsByUser(beingId, limit, startDate, endDate) {
-  if (!beingId) throw new Error("Missing required parameter: beingId");
-
-  const query = { beingId, ...validateDateRange(startDate, endDate) };
-  const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), artifactQueryLimit());
-
-  const artifacts = await Artifact.find(query)
-    .sort({ createdAt: -1 })
-    .limit(safeLimit)
-    .lean();
-
-  return { artifacts };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -423,85 +407,6 @@ async function deleteArtifactAndFile({
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// SEARCH
-// ─────────────────────────────────────────────────────────────────────────
-
-function wordify(str) {
-  return str.replace(/-/g, " ").replace(/[^\w\s]/g, "").trim();
-}
-
-async function searchArtifactsByUser({ beingId, query, limit, startDate, endDate }) {
-  if (!beingId) throw new Error("Missing required parameter: beingId");
-  if (!query || typeof query !== "string") throw new Error("Query must be a non-empty string");
-
-  const conditions = [];
-
-  const phraseMatch = query.match(/"(.*?)"/);
-  if (phraseMatch) {
-    conditions.push({ content: new RegExp(escapeRegex(phraseMatch[1]), "i") });
-  }
-
-  const cleaned = query.replace(/"(.*?)"/, "").trim();
-  if (cleaned.length > 0) {
-    const words = wordify(cleaned).split(/\s+/).filter(Boolean);
-    for (const w of words) {
-      conditions.push({ content: new RegExp(`\\b${escapeRegex(w)}\\b`, "i") });
-    }
-  }
-
-  if (query.includes("-")) {
-    conditions.push({ content: new RegExp(escapeRegex(query), "i") });
-  }
-
-  if (conditions.length === 0) {
-    return { message: "Search completed", artifacts: [] };
-  }
-
-  // Search only ibp-origin artifacts whose content is a plain string.
-  // Other origins have structured content (objects) and need
-  // origin-specific search handled by the bridging extension.
-  const mongoQuery = {
-    beingId,
-    origin: ARTIFACT_ORIGIN.IBP,
-    $and: conditions,
-    ...validateDateRange(startDate, endDate),
-  };
-
-  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), searchQueryLimit());
-
-  const artifacts = await Artifact.find(mongoQuery).sort({ createdAt: -1 }).limit(safeLimit).lean();
-  return { message: "Search completed", artifacts };
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────
-
-async function collectSubtreeNodeIds(rootId) {
-  const ids = [];
-  const stack = [rootId];
-  const cap = subtreeNodeCap();
-
-  while (stack.length && ids.length < cap) {
-    const currentId = stack.pop();
-    ids.push(currentId);
-
-    const node = await Node.findById(currentId, "children").lean();
-    if (!node) continue;
-
-    for (let i = node.children.length - 1; i >= 0; i--) {
-      stack.push(node.children[i]);
-    }
-  }
-
-  if (ids.length >= cap) {
-    log.warn("Artifacts", `collectSubtreeNodeIds capped at ${cap} for root ${rootId}`);
-  }
-
-  return ids;
-}
-
 async function transferArtifact({
   artifactId, targetNodeId, beingId,
   summonId = null, sessionId = null,
@@ -548,38 +453,134 @@ async function transferArtifact({
   return { message: "Artifact transferred successfully", artifactId: artifactId.toString(), from: { nodeId: sourceNodeId }, to: { nodeId: targetNodeId } };
 }
 
-async function getArtifactEditHistory(artifactId, limit = 100, offset = 0) {
-  if (!artifactId) throw new Error("Missing required parameter: artifactId");
+// ─────────────────────────────────────────────────────────────────────────
+// BEING-FACING QUERIES
+// ─────────────────────────────────────────────────────────────────────────
+//
+// Read primitives keyed by being rather than by node. Substrate surface
+// for "my artifacts" / "search my artifacts" / "edit history of this
+// artifact." Wire these through IBP DO operations or extension tools
+// when a UI needs them.
 
+/**
+ * Every artifact authored by a being, newest first.
+ *
+ * @param {object} opts
+ * @param {string} opts.beingId   author id (required)
+ * @param {number} [opts.limit]
+ * @param {Date|string} [opts.startDate]
+ * @param {Date|string} [opts.endDate]
+ * @returns {Promise<{ artifacts }>}
+ */
+async function getAllArtifactsByBeing({ beingId, limit, startDate, endDate } = {}) {
+  if (!beingId) throw new Error("getAllArtifactsByBeing: `beingId` is required");
+  const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), artifactQueryLimit());
+  const artifacts = await Artifact
+    .find({ beingId, ...validateDateRange(startDate, endDate) })
+    .sort({ createdAt: -1 })
+    .limit(safeLimit)
+    .lean();
+  return { artifacts };
+}
+
+/**
+ * Full-text search across a being's ibp-origin artifacts. Phrases in
+ * "double quotes" match as substrings; bare words match whole-word.
+ * Other origins (filesystem, web) carry structured content and need
+ * origin-specific search through the bridging extension.
+ *
+ * @param {object} opts
+ * @param {string} opts.beingId   author id (required)
+ * @param {string} opts.query     search expression (required)
+ * @param {number} [opts.limit]
+ * @param {Date|string} [opts.startDate]
+ * @param {Date|string} [opts.endDate]
+ * @returns {Promise<{ artifacts }>}
+ */
+async function searchArtifactsByBeing({ beingId, query, limit, startDate, endDate } = {}) {
+  if (!beingId) throw new Error("searchArtifactsByBeing: `beingId` is required");
+  if (!query || typeof query !== "string") {
+    throw new Error("searchArtifactsByBeing: `query` must be a non-empty string");
+  }
+
+  const conditions = buildSearchConditions(query);
+  if (conditions.length === 0) return { artifacts: [] };
+
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), searchQueryLimit());
+  const artifacts = await Artifact
+    .find({
+      beingId,
+      origin: ARTIFACT_ORIGIN.IBP,
+      $and: conditions,
+      ...validateDateRange(startDate, endDate),
+    })
+    .sort({ createdAt: -1 })
+    .limit(safeLimit)
+    .lean();
+  return { artifacts };
+}
+
+// Parse a search expression into a list of mongo content-regex
+// conditions. Quoted phrase = substring match; bare words = whole-word
+// match; literal hyphen = substring match against the whole query.
+function buildSearchConditions(expression) {
+  const conditions = [];
+  const phrase = expression.match(/"(.*?)"/)?.[1];
+  if (phrase) {
+    conditions.push({ content: new RegExp(escapeRegex(phrase), "i") });
+  }
+  const bare = expression.replace(/"(.*?)"/, "")
+    .replace(/-/g, " ")
+    .replace(/[^\w\s]/g, "")
+    .trim();
+  for (const w of bare.split(/\s+/).filter(Boolean)) {
+    conditions.push({ content: new RegExp(`\\b${escapeRegex(w)}\\b`, "i") });
+  }
+  if (expression.includes("-")) {
+    conditions.push({ content: new RegExp(escapeRegex(expression), "i") });
+  }
+  return conditions;
+}
+
+/**
+ * Edit history for an artifact, derived from the Did audit trail.
+ * Returns `add` + `edit` Dids oldest-first, each with the editor's
+ * being id and name as separate fields (no shadowing).
+ *
+ * @param {object} opts
+ * @param {string} opts.artifactId  required
+ * @param {number} [opts.limit]
+ * @param {number} [opts.offset]
+ */
+async function getArtifactEditHistory({ artifactId, limit = 100, offset = 0 } = {}) {
+  if (!artifactId) throw new Error("getArtifactEditHistory: `artifactId` is required");
   const safeLimit = Math.min(Math.max(1, Number(limit) || 100), 1000);
   const safeOffset = Math.max(0, Number(offset) || 0);
 
-  // Reads from the Did audit trail. When contributions are
-  // removed from the seed (deferred work), edit history becomes an
-  // extension concern and this function moves with it.
-  const contributions = await Did.find({
-    action: "artifact",
-    "artifactAction.artifactId": artifactId,
-    "artifactAction.action": { $in: ["add", "edit"] },
-  })
+  const dids = await Did
+    .find({
+      action: "artifact",
+      "artifactAction.artifactId": artifactId,
+      "artifactAction.action": { $in: ["add", "edit"] },
+    })
     .populate("beingId", "name")
     .sort({ date: 1 })
     .skip(safeOffset)
     .limit(safeLimit)
     .lean();
 
-  return contributions.map(c => ({
-    _id: c._id,
-    name: c.beingId?.name ?? "Unknown",
-    date: c.date,
-    content: c.artifactAction.content,
-    action: c.artifactAction.action,
+  return dids.map((d) => ({
+    _id:        d._id,
+    authorName: d.beingId?.name ?? null,
+    beingId:    d.beingId?._id ? String(d.beingId._id) : null,
+    date:       d.date,
+    content:    d.artifactAction?.content ?? null,
+    action:     d.artifactAction?.action ?? null,
   }));
 }
 
 export {
   createArtifact, editArtifact, getArtifacts, deleteArtifactAndFile,
-  transferArtifact, getAllArtifactsByUser, searchArtifactsByUser,
-  collectSubtreeNodeIds, getArtifactEditHistory,
-  assertArtifactTextWithinLimit,
+  transferArtifact,
+  getAllArtifactsByBeing, searchArtifactsByBeing, getArtifactEditHistory,
 };
